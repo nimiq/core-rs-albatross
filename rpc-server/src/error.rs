@@ -72,8 +72,8 @@ pub enum Error {
     #[error("Invalid hex: {0}")]
     HexError(#[from] hex::FromHexError),
 
-    #[error("{0}")]
-    Beserial(#[from] beserial::SerializingError),
+    #[error("Serialization error: {0}")]
+    Serialization(#[from] nimiq_serde::DeserializeError),
 
     #[error("{0}")]
     Argon2(#[from] nimiq_hash::argon2kdf::Argon2Error),

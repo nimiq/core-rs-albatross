@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use beserial::{Deserialize, Serialize};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
@@ -14,6 +13,7 @@ use nimiq_rpc_interface::{
     consensus::ConsensusInterface,
     types::{RPCResult, Transaction as RPCTransaction, ValidityStartHeight},
 };
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
     account::htlc_contract::{AnyHash, HashAlgorithm},
     SignatureProof, Transaction,

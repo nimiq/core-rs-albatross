@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use beserial::{Deserialize, Serialize};
 use nimiq_block::{MultiSignature, TendermintVote};
 use nimiq_bls::{AggregateSignature, SecretKey};
 use nimiq_collections::bitset::BitSet;
@@ -10,10 +9,10 @@ use nimiq_handel::{
 };
 use nimiq_hash::Blake2sHash;
 use nimiq_tendermint::Aggregation;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TendermintContribution {
-    #[beserial(len_type(u16))]
     pub contributions: BTreeMap<Option<Blake2sHash>, MultiSignature>,
 }
 
@@ -114,7 +113,7 @@ impl Aggregation<Blake2sHash> for TendermintContribution {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AggregateMessage(pub(crate) LevelUpdate<TendermintContribution>);
 
 impl Aggregation<Blake2sHash> for AggregateMessage {

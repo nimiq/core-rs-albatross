@@ -1,8 +1,9 @@
 #![allow(non_snake_case)]
 
+#[cfg(feature = "serde-derive")]
+use std::borrow::Cow;
 use std::{fmt, hash::Hash, io::Write};
 
-use beserial::{Deserialize, Serialize, SerializingError};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use curve25519_dalek::{
     constants,
@@ -13,10 +14,10 @@ use curve25519_dalek::{
 use log::debug;
 use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
 use nimiq_keys::{KeyPair, PublicKey};
+#[cfg(feature = "serde-derive")]
+use nimiq_macros::add_serialization_fns_typed_arr;
 use nimiq_macros::create_typed_array;
 use rand::{CryptoRng, RngCore};
-#[cfg(feature = "serde-derive")]
-use serde_big_array::BigArray;
 use sha2::{Digest, Sha256, Sha512};
 
 use crate::rng::Rng;
@@ -41,6 +42,8 @@ pub enum VrfUseCase {
 }
 
 create_typed_array!(VrfEntropy, u8, 32);
+#[cfg(feature = "serde-derive")]
+add_serialization_fns_typed_arr!(VrfEntropy, VrfEntropy::SIZE);
 
 impl VrfEntropy {
     pub fn rng(self, use_case: VrfUseCase) -> VrfRng {
@@ -58,6 +61,7 @@ impl std::fmt::Debug for VrfEntropy {
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde-derive", serde(transparent))]
 /// A struct containing a VRF Seed. It is simply the serialized output of the VXEdDSA algorithm.
 ///
 /// <https://www.signal.org/docs/specifications/xeddsa/#vxeddsa>
@@ -70,7 +74,7 @@ impl std::fmt::Debug for VrfEntropy {
 /// However, the entropy that we extract from the random seed is unique for a given message and
 /// public key.
 pub struct VrfSeed {
-    #[cfg_attr(feature = "serde-derive", serde(with = "BigArray"))]
+    #[cfg_attr(feature = "serde-derive", serde(with = "nimiq_serde::HexArray"))]
     pub(crate) signature: [u8; VrfSeed::SIZE],
 }
 
@@ -248,25 +252,6 @@ impl fmt::Debug for VrfSeed {
 impl fmt::Display for VrfSeed {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "{}", hex::encode(self.signature))
-    }
-}
-
-impl Serialize for VrfSeed {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        writer.write_all(&self.signature)?;
-        Ok(VrfSeed::SIZE)
-    }
-
-    fn serialized_size(&self) -> usize {
-        VrfSeed::SIZE
-    }
-}
-
-impl Deserialize for VrfSeed {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let mut bytes = [0; VrfSeed::SIZE];
-        reader.read_exact(&mut bytes[..VrfSeed::SIZE])?;
-        Ok(VrfSeed { signature: bytes })
     }
 }
 

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use beserial::Serialize;
 use nimiq_block::{Block, ForkProof, MacroBlock, MacroHeader, MicroBlock};
+use nimiq_serde::Serialize;
 
 #[derive(Default)]
 pub struct ForkProofPool {
@@ -61,9 +61,10 @@ impl ForkProofPool {
         let mut proofs = Vec::new();
         let mut size = 0;
         for proof in self.fork_proofs.iter() {
-            if size + proof.serialized_size() < max_size {
+            let proof_len = proof.serialized_size();
+            if size + proof_len < max_size {
                 proofs.push(proof.clone());
-                size += proof.serialized_size();
+                size += proof_len;
             }
         }
         proofs

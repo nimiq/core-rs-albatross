@@ -10,20 +10,21 @@ futures = { package = "futures-util", version = "0.3", features = ["sink"] }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 rand = "0.8"
+serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 tokio = { version = "1.29", features = ["rt", "time"] }
 tokio-stream = "0.1"
 
-beserial = { path = "../beserial", features = ["derive"] }
 nimiq-bls = { path = "../bls" }
 nimiq-collections = { path = "../collections" }
 nimiq-hash = { path = "../hash" }
 nimiq-macros = { path = "../macros" }
+nimiq-network-interface = { path = "../network-interface" }
+nimiq-primitives = { path = "../primitives", features = ["policy"] }
+nimiq-serde = { path = "../serde" }
 nimiq-utils = { path = "../utils", features = [
     "math",
 ] }
-nimiq-network-interface = { path = "../network-interface" }
-nimiq-primitives = { path = "../primitives", features = ["policy"] }
 
 [dev-dependencies]
 nimiq-network-interface = { path = "../network-interface" }

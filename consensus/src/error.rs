@@ -1,5 +1,5 @@
-use beserial::{Deserialize, Serialize};
 use nimiq_blockchain_interface::BlockchainError;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Error)]

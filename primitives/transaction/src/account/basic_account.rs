@@ -1,6 +1,6 @@
-use beserial::Deserialize;
 use log::error;
 use nimiq_primitives::account::AccountType;
+use nimiq_serde::Deserialize;
 
 use crate::{
     account::AccountTransactionVerification, SignatureProof, Transaction, TransactionError,
@@ -42,7 +42,7 @@ impl AccountTransactionVerification for BasicAccountVerifier {
 
         // Verify signer & signature.
         let signature_proof: SignatureProof =
-            Deserialize::deserialize(&mut &transaction.proof[..])?;
+            Deserialize::deserialize_from_vec(&transaction.proof[..])?;
 
         if !signature_proof.is_signed_by(&transaction.sender)
             || !signature_proof.verify(transaction.serialize_content().as_slice())

@@ -1,9 +1,9 @@
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
 use log::error;
 use nimiq_bls::{CompressedPublicKey as BlsPublicKey, CompressedSignature as BlsSignature};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{coin::Coin, policy::Policy};
+use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 
 use crate::{SignatureProof, Transaction, TransactionError};
 
@@ -31,7 +31,6 @@ use crate::{SignatureProof, Transaction, TransactionError};
 /// over the complete transaction with the `signature` field set to `Default::default()`.
 /// The field is populated only after computing the signature.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum IncomingStakingTransactionData {
     CreateValidator {
@@ -41,7 +40,6 @@ pub enum IncomingStakingTransactionData {
         signal_data: Option<Blake2bHash>,
         proof_of_knowledge: BlsSignature,
         // This proof is signed with the validator cold key, which will become the validator address.
-        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
     UpdateValidator {
@@ -51,29 +49,24 @@ pub enum IncomingStakingTransactionData {
         new_signal_data: Option<Option<Blake2bHash>>,
         new_proof_of_knowledge: Option<BlsSignature>,
         // This proof is signed with the validator cold key.
-        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
     DeactivateValidator {
         validator_address: Address,
         // This proof is signed with the validator warm key.
-        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
     ReactivateValidator {
         validator_address: Address,
         // This proof is signed with the validator warm key.
-        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
     RetireValidator {
         // This proof is signed with the validator cold key.
-        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
     CreateStaker {
         delegation: Option<Address>,
-        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
     AddStake {
@@ -81,7 +74,6 @@ pub enum IncomingStakingTransactionData {
     },
     UpdateStaker {
         new_delegation: Option<Address>,
-        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
 }
@@ -214,7 +206,7 @@ impl IncomingStakingTransactionData {
     pub fn set_signature_on_data(
         data: &[u8],
         signature_proof: SignatureProof,
-    ) -> Result<Vec<u8>, SerializingError> {
+    ) -> Result<Vec<u8>, DeserializeError> {
         let mut data: IncomingStakingTransactionData = Deserialize::deserialize_from_vec(data)?;
         data.set_signature(signature_proof);
         Ok(data.serialize_to_vec())
@@ -222,16 +214,13 @@ impl IncomingStakingTransactionData {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum OutgoingStakingTransactionProof {
     DeleteValidator {
-        #[cfg_attr(feature = "serde-derive", serde(skip))]
         // This proof is signed with the validator cold key.
         proof: SignatureProof,
     },
     RemoveStake {
-        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
 }
@@ -257,12 +246,11 @@ impl OutgoingStakingTransactionProof {
     }
 }
 
-pub fn full_parse<T: Deserialize>(mut data: &[u8]) -> Result<T, TransactionError> {
-    let reader = &mut data;
-    let data = Deserialize::deserialize(reader)?;
+pub fn full_parse<T: Deserialize>(data: &[u8]) -> Result<T, TransactionError> {
+    let (data, left_over) = T::deserialize_take(data)?;
 
     // Ensure that transaction data has been fully read.
-    if reader.read_u8().is_ok() {
+    if !left_over.is_empty() {
         return Err(TransactionError::InvalidData);
     }
 

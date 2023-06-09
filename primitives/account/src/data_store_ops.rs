@@ -1,5 +1,5 @@
-use beserial::Deserialize;
 use nimiq_primitives::key_nibbles::KeyNibbles;
+use nimiq_serde::Deserialize;
 
 /// Read Operations that a Data Store needs to implement to interact with
 /// contracts in the Accounts Trie.

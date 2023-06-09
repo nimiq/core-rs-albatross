@@ -8,8 +8,7 @@ use std::{
 
 use async_trait::async_trait;
 use base64::Engine;
-use beserial::{Deserialize, Serialize};
-use bytes::{Buf, Bytes};
+use bytes::Bytes;
 use futures::{ready, stream::BoxStream, Stream, StreamExt};
 #[cfg(not(feature = "tokio-time"))]
 use instant::Instant;
@@ -56,6 +55,7 @@ use nimiq_network_interface::{
     },
 };
 use nimiq_primitives::task_executor::TaskExecutor;
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_utils::time::OffsetTime;
 use nimiq_validator_network::validator_record::SignedValidatorRecord;
 use parking_lot::{Mutex, RwLock};
@@ -1476,12 +1476,7 @@ impl Network {
         let (output_tx, output_rx) = oneshot::channel();
         let (response_tx, response_rx) = oneshot::channel();
 
-        let mut buf = vec![];
-        if request.serialize_request(&mut buf).is_err() {
-            return Err(RequestError::OutboundRequest(
-                OutboundRequestError::SerializationError,
-            ));
-        }
+        let buf = request.serialize_request();
 
         if self
             .action_tx
@@ -1509,11 +1504,18 @@ impl Network {
                 )),
                 Ok(result) => {
                     let data = result?;
-                    if let Ok(message) =
-                        <Result<Req::Response, InboundRequestError> as Deserialize>::deserialize(
-                            &mut data.reader(),
-                        )
+                    if let Ok((message, left_over)) =
+                        <Result<Req::Response, InboundRequestError>>::deserialize_take(&data)
                     {
+                        if !left_over.is_empty() {
+                            warn!(
+                            %request_id,
+                            %peer_id,
+                            type_id = std::any::type_name::<Req::Response>(),
+                            unread_data_len = left_over.len(),
+                            "Unexpected content size deserializing",
+                            );
+                        }
                         // Check if there was an actual response from the application or a default response from
                         // the network. If the network replied with the default response, it was because there wasn't a
                         // receiver for the request
@@ -1619,7 +1621,7 @@ impl Network {
                 }
 
                 // Map the (data, peer) stream to (message, peer) by deserializing the messages.
-                match Req::deserialize_request(&mut data.reader()) {
+                match Req::deserialize_request(&data) {
                     Ok(message) => Some((message, request_id, peer_id)),
                     Err(e) => {
                         error!(
@@ -1865,14 +1867,11 @@ impl Network {
     {
         let (output_tx, output_rx) = oneshot::channel();
 
-        let mut buf = vec![];
-        item.serialize(&mut buf)?;
-
         self.action_tx
             .clone()
             .send(NetworkAction::Publish {
                 topic_name,
-                data: buf,
+                data: item.serialize_to_vec(),
                 output: output_tx,
             })
             .await?;
@@ -2078,14 +2077,11 @@ impl NetworkInterface for Network {
     {
         let (output_tx, output_rx) = oneshot::channel();
 
-        let mut buf = vec![];
-        v.serialize(&mut buf)?;
-
         self.action_tx
             .clone()
             .send(NetworkAction::DhtPut {
                 key: k.as_ref().to_owned(),
-                value: buf,
+                value: v.serialize_to_vec(),
                 output: output_tx,
             })
             .await?;
@@ -2149,18 +2145,16 @@ impl NetworkInterface for Network {
     ) -> Result<(), Self::Error> {
         let (output_tx, output_rx) = oneshot::channel();
 
-        let mut buf = vec![];
-
         // Encapsulate it in a `Result` to signal the network that this
         // was a successful response from the application.
         let response: Result<Req::Response, InboundRequestError> = Ok(response);
-        response.serialize(&mut buf)?;
+        let ser_response = response.serialize_to_vec();
 
         self.action_tx
             .clone()
             .send(NetworkAction::SendResponse {
                 request_id,
-                response: buf,
+                response: ser_response,
                 output: output_tx,
             })
             .await?;

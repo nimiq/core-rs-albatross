@@ -4,13 +4,10 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use beserial::{
-    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
-    SerializingError, WriteBytesExt,
-};
 use clear_on_drop::clear::Clear;
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::argon2kdf::{compute_argon2_kdf, Argon2Error};
+use nimiq_serde::{Deserialize, Serialize};
 use rand::{rngs::OsRng, RngCore};
 
 pub trait Verify {
@@ -134,6 +131,7 @@ impl<T: Clear + Deserialize + Serialize> Deref for Unlocked<T> {
 }
 
 // Locked container
+#[derive(Serialize, Deserialize)]
 pub struct Locked<T: Clear + Deserialize + Serialize> {
     lock: Vec<u8>,
     salt: Vec<u8>,
@@ -265,39 +263,6 @@ impl<T: Clear + Deserialize + Serialize + Verify> Locked<T> {
     }
 }
 
-impl<T: Clear + Deserialize + Serialize> Serialize for Locked<T> {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size = 0;
-        size += SerializeWithLength::serialize::<u32, _>(&self.lock, writer)?;
-        size += SerializeWithLength::serialize::<u16, _>(&self.salt, writer)?;
-        size += Serialize::serialize(&self.iterations, writer)?;
-        Ok(size)
-    }
-
-    #[inline]
-    fn serialized_size(&self) -> usize {
-        let mut size = 0;
-        size += SerializeWithLength::serialized_size::<u32>(&self.lock);
-        size += SerializeWithLength::serialized_size::<u16>(&self.salt);
-        size += Serialize::serialized_size(&self.iterations);
-        size
-    }
-}
-
-impl<T: Clear + Deserialize + Serialize> Deserialize for Locked<T> {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let lock: Vec<u8> = DeserializeWithLength::deserialize::<u32, _>(reader)?;
-        let salt: Vec<u8> = DeserializeWithLength::deserialize::<u16, _>(reader)?;
-        let iterations: u32 = Deserialize::deserialize(reader)?;
-        Ok(Locked {
-            lock,
-            salt,
-            iterations,
-            phantom: PhantomData,
-        })
-    }
-}
-
 impl<T: Default + Deserialize + Serialize> IntoDatabaseValue for Locked<T> {
     fn database_byte_size(&self) -> usize {
         self.serialized_size()
@@ -313,8 +278,8 @@ impl<T: Default + Deserialize + Serialize> FromDatabaseValue for Locked<T> {
     where
         Self: Sized,
     {
-        let mut cursor = io::Cursor::new(bytes);
-        Ok(Deserialize::deserialize(&mut cursor)?)
+        Deserialize::deserialize_from_vec(bytes)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 }
 

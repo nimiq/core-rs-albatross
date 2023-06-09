@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use beserial::{Deserialize, Serialize};
 use futures::{Stream, StreamExt};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
@@ -12,6 +11,7 @@ use nimiq_network_mock::MockHub;
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
+use serde::{Deserialize, Serialize};
 use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen_test::wasm_bindgen_test;
 

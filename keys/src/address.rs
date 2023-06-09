@@ -223,7 +223,11 @@ mod serde_derive {
         where
             S: Serializer,
         {
-            serializer.serialize_str(&self.to_user_friendly_address())
+            if serializer.is_human_readable() {
+                serializer.serialize_str(&self.to_user_friendly_address())
+            } else {
+                Serialize::serialize(&self.0, serializer)
+            }
         }
     }
 
@@ -232,8 +236,13 @@ mod serde_derive {
         where
             D: Deserializer<'de>,
         {
-            let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
-            Address::from_any_str(&s).map_err(Error::custom)
+            if deserializer.is_human_readable() {
+                let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
+                Address::from_any_str(&s).map_err(Error::custom)
+            } else {
+                let data: [u8; Self::SIZE] = Deserialize::deserialize(deserializer)?;
+                Ok(Address(data))
+            }
         }
     }
 }

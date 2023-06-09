@@ -1,9 +1,9 @@
 use std::io;
 
-use beserial::Serialize;
 use nimiq_hash::{HashOutput, SerializeContent};
 use nimiq_keys::KeyPair;
 use nimiq_primitives::account::AccountType;
+use nimiq_serde::Serialize;
 use nimiq_transaction::{SignatureProof, Transaction};
 
 use crate::proof::{

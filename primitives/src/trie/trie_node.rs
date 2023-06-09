@@ -1,12 +1,10 @@
-use std::{io, ops, ops::RangeFrom, slice};
+use std::{io, ops::RangeFrom, slice};
 
-use beserial::{
-    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
-    SerializingError, WriteBytesExt,
-};
+use byteorder::WriteBytesExt;
 use log::error;
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash, HashOutput, Hasher};
+use nimiq_serde::{Deserialize, SerRangeFrom, Serialize};
 
 use crate::{key_nibbles::KeyNibbles, trie::error::MerkleRadixTrieError};
 
@@ -24,9 +22,10 @@ pub struct TrieNode {
     pub children: [Option<TrieNodeChild>; 16],
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct RootData {
-    pub incomplete: Option<ops::RangeFrom<KeyNibbles>>,
+    pub incomplete: Option<SerRangeFrom<KeyNibbles>>,
     pub num_branches: u64,
     pub num_hybrids: u64,
     pub num_leaves: u64,
@@ -34,7 +33,8 @@ pub struct RootData {
 
 /// A struct representing the child of a node. It just contains the child's suffix (the part of the
 /// child's key that is different from its parent) and its hash.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct TrieNodeChild {
     /// The suffix of this child.
     pub suffix: KeyNibbles,
@@ -109,7 +109,7 @@ impl TrieNode {
             key: KeyNibbles::ROOT,
             root_data: Some(RootData {
                 incomplete: if incomplete {
-                    Some(KeyNibbles::ROOT..)
+                    Some(SerRangeFrom(KeyNibbles::ROOT..))
                 } else {
                     None
                 },
@@ -263,7 +263,7 @@ impl TrieNode {
                 }
                 (false, Some(val)) => {
                     hasher.write_u8(1).unwrap();
-                    val.serialize::<u16, _>(&mut hasher).unwrap();
+                    val.serialize(&mut hasher).unwrap();
                 }
                 (true, Some(val)) => {
                     hasher.write_u8(2).unwrap();
@@ -282,92 +282,6 @@ impl TrieNode {
     }
 }
 
-impl Deserialize for TrieNode {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let flags = reader.read_u8()?;
-        let has_root_data = flags & 0x1 != 0;
-        let has_value = flags & 0x2 != 0;
-
-        let root_data = if has_root_data {
-            Some(Deserialize::deserialize(reader)?)
-        } else {
-            None
-        };
-        let value = if has_value {
-            Some(DeserializeWithLength::deserialize::<u16, _>(reader)?)
-        } else {
-            None
-        };
-
-        let child_count: u8 = Deserialize::deserialize(reader)?;
-
-        let mut children = NO_CHILDREN;
-
-        for _ in 0..child_count {
-            let child: TrieNodeChild = Deserialize::deserialize(reader)?;
-
-            if let Some(i) = child.suffix.get(0) {
-                children[i] = Some(child);
-            } else {
-                return Err(io::Error::from(io::ErrorKind::InvalidData).into());
-            }
-        }
-
-        Ok(TrieNode {
-            // Make it clear that the key needs to be changed after deserialization.
-            key: KeyNibbles::BADBADBAD,
-            root_data,
-            value,
-            children,
-        })
-    }
-}
-
-impl Serialize for TrieNode {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let has_root_data = self.root_data.is_some();
-        let has_value = self.value.is_some();
-
-        let flags = (has_root_data as u8) | ((has_value as u8) << 1);
-
-        let mut size = 1;
-        writer.write_u8(flags)?;
-        if let Some(root_data) = &self.root_data {
-            size += root_data.serialize(writer)?;
-        }
-        if let Some(value) = &self.value {
-            size += value.serialize::<u16, _>(writer)?;
-        }
-
-        let child_count: u8 = self
-            .children
-            .iter()
-            .fold(0, |acc, child| acc + u8::from(!child.is_none()));
-        Serialize::serialize(&child_count, writer)?;
-
-        for child in self.children.iter().flatten() {
-            size += Serialize::serialize(&child, writer)?;
-        }
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = 1;
-        if let Some(root_data) = &self.root_data {
-            size += root_data.serialized_size();
-        }
-        if let Some(value) = &self.value {
-            size += value.serialized_size::<u16>();
-        }
-        size += 1; // count
-
-        for child in self.children.iter().flatten() {
-            size += Serialize::serialized_size(&child);
-        }
-        size
-    }
-}
-
 impl IntoDatabaseValue for TrieNode {
     fn database_byte_size(&self) -> usize {
         self.serialized_size()
@@ -383,8 +297,8 @@ impl FromDatabaseValue for TrieNode {
     where
         Self: Sized,
     {
-        let mut cursor = io::Cursor::new(bytes);
-        Ok(Deserialize::deserialize(&mut cursor)?)
+        Deserialize::deserialize_from_vec(bytes)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }
 
@@ -468,6 +382,114 @@ impl<'a> IntoIterator for &'a mut TrieNode {
     fn into_iter(self) -> IterMut<'a> {
         IterMut {
             it: self.children.iter_mut(),
+        }
+    }
+}
+
+#[cfg(feature = "serde-derive")]
+mod serde_derive {
+
+    use std::fmt;
+
+    use serde::{
+        de::{Deserialize, Deserializer, Error, SeqAccess, Unexpected, Visitor},
+        ser::{Serialize, SerializeStruct, Serializer},
+    };
+
+    use super::{KeyNibbles, RootData, TrieNode, TrieNodeChild};
+
+    struct TrieNodeVisitor;
+    const FIELDS: &[&str] = &["flags", "root_data", "value", "child_count", "children"];
+
+    impl<'de> Visitor<'de> for TrieNodeVisitor {
+        type Value = TrieNode;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("struct TrieNode")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let flags: u8 = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(0, &self))?;
+            let has_root_data = flags & 0x1 != 0;
+            let has_value = flags & 0x2 != 0;
+            let root_data: Option<RootData> = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+            if has_root_data != root_data.is_some() {
+                return Err(A::Error::invalid_value(
+                    Unexpected::Other("Flags mismatch for root data"),
+                    &self,
+                )); // Mismatch flags for root data
+            }
+            let value: Option<Vec<u8>> = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(2, &self))?;
+            if has_value != value.is_some() {
+                return Err(A::Error::invalid_value(
+                    Unexpected::Other("Flags mismatch for value"),
+                    &self,
+                )); // Mismatch flags for value
+            }
+            let exp_child_count: u8 = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(3, &self))?;
+            let children: [Option<TrieNodeChild>; 16] = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(4, &self))?;
+            let child_count: u8 = children
+                .iter()
+                .fold(0, |acc, child| acc + u8::from(!child.is_none()));
+            if exp_child_count != child_count {
+                return Err(A::Error::invalid_value(
+                    Unexpected::Other("Unexpected number of children"),
+                    &self,
+                )); // bytes length too high
+            }
+
+            Ok(TrieNode {
+                // Make it clear that the key needs to be changed after deserialization.
+                key: KeyNibbles::BADBADBAD,
+                root_data,
+                value,
+                children,
+            })
+        }
+    }
+
+    impl Serialize for TrieNode {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let has_root_data = self.root_data.is_some();
+            let has_value = self.value.is_some();
+            let flags = (has_root_data as u8) | ((has_value as u8) << 1);
+            let child_count: u8 = self
+                .children
+                .iter()
+                .fold(0, |acc, child| acc + u8::from(!child.is_none()));
+
+            let mut state = serializer.serialize_struct("TrieNode", FIELDS.len())?;
+            state.serialize_field(FIELDS[0], &flags)?;
+            state.serialize_field(FIELDS[1], &self.root_data)?;
+            state.serialize_field(FIELDS[2], &self.value)?;
+            state.serialize_field(FIELDS[3], &child_count)?;
+            state.serialize_field(FIELDS[4], &self.children)?;
+            state.end()
+        }
+    }
+
+    impl<'de> Deserialize<'de> for TrieNode {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            deserializer.deserialize_struct("TrieNode", FIELDS, TrieNodeVisitor)
         }
     }
 }

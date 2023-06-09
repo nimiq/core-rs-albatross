@@ -1,9 +1,10 @@
-use std::{cmp::Ordering, io};
+use std::cmp::Ordering;
 
-use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, Hash, HashOutput, SerializeContent};
+use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::{PublicKey as SchnorrPublicKey, Signature as SchnorrSignature};
 use nimiq_primitives::policy::Policy;
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_vrf::VrfSeed;
 
 use crate::MicroHeader;
@@ -11,7 +12,7 @@ use crate::MicroHeader;
 /// Struct representing a fork proof. A fork proof proves that a given validator created or
 /// continued a fork. For this it is enough to provide two different headers, with the same block
 /// number, signed by the same validator.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, SerializeContent)]
 pub struct ForkProof {
     /// Header number 1.
     pub header1: MicroHeader,
@@ -108,12 +109,6 @@ impl PartialOrd for ForkProof {
 impl Ord for ForkProof {
     fn cmp(&self, other: &Self) -> Ordering {
         self.hash::<Blake2bHash>().cmp(&other.hash::<Blake2bHash>())
-    }
-}
-
-impl SerializeContent for ForkProof {
-    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
-        Ok(self.serialize(writer)?)
     }
 }
 

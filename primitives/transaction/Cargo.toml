@@ -15,22 +15,23 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 bitflags = "1.0"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 num-traits = "0.2"
-serde = { version = "1.0", optional = true }
+serde = "1.0"
+serde_repr = "0.1"
 strum_macros = "0.24"
 thiserror = "1.0"
 tsify = { version = "0.4", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 
-beserial = { path = "../../beserial", features = ["derive"] }
 nimiq-bls = { path = "../../bls", features = ["serde-derive"] }
 nimiq-database-value = { path = "../../database/database-value"}
-nimiq-hash = { path = "../../hash", features = ["serde-derive"] }
+nimiq-hash = { path = "../../hash" }
 nimiq-hash_derive = { path = "../../hash/hash_derive" }
 nimiq-keys = { path = "../../keys", features = ["serde-derive"] }
 nimiq-macros = { path = "../../macros" }
-nimiq-mmr = { path = "../mmr" }
+nimiq-mmr = { path = "../mmr", features = ["serde-derive"] }
 nimiq-network-interface = { path = "../../network-interface" }
 nimiq-primitives = { path = "..", features = ["account", "coin", "networks", "policy", "serde-derive", "slots"] }
+nimiq-serde = { path = "../../serde" }
 nimiq-utils = { path = "../../utils", features = ["merkle"] }
 
 [dev-dependencies]
@@ -39,5 +40,4 @@ nimiq-test-log = { path = "../../test-log" }
 nimiq-test-utils = { path = "../../test-utils" }
 
 [features]
-serde-derive = ["serde"]
-ts-types = ["serde", "tsify", "wasm-bindgen"]
+ts-types = ["tsify", "wasm-bindgen"]

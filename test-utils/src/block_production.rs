@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use beserial::Deserialize;
 use nimiq_block::{
     Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
     SkipBlockProof, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
@@ -21,6 +20,7 @@ use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
 use nimiq_primitives::{
     key_nibbles::KeyNibbles, policy::Policy, trie::trie_chunk::TrieChunkWithStart,
 };
+use nimiq_serde::Deserialize;
 use nimiq_tendermint::ProposalMessage;
 use nimiq_transaction::Transaction;
 use nimiq_utils::time::OffsetTime;

@@ -1,21 +1,17 @@
 use std::collections::HashSet;
 
-use beserial::{Deserialize, Serialize};
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::Transaction;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[repr(u8)]
 pub enum Subscription {
-    #[beserial(discriminant = 0)]
     #[default]
     None,
-    #[beserial(discriminant = 1)]
     Any,
-    #[beserial(discriminant = 2)]
-    Addresses(#[beserial(len_type(u16))] HashSet<Address>),
-    #[beserial(discriminant = 3)]
+    Addresses(HashSet<Address>),
     MinFee(Coin), // Fee per byte
 }
 

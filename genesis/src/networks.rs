@@ -2,9 +2,6 @@ use std::env;
 #[cfg(feature = "genesis-override")]
 use std::path::Path;
 
-use beserial::Deserialize;
-#[cfg(feature = "genesis-override")]
-use beserial::{Serialize, SerializeWithLength};
 use nimiq_block::Block;
 #[cfg(feature = "genesis-override")]
 use nimiq_database::volatile::VolatileDatabase;
@@ -13,6 +10,7 @@ use nimiq_genesis_builder::{GenesisBuilder, GenesisBuilderError, GenesisInfo};
 use nimiq_hash::Blake2bHash;
 pub use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::trie::TrieItem;
+use nimiq_serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug)]
 struct GenesisData {
@@ -52,9 +50,7 @@ impl NetworkInfo {
 
     #[inline]
     pub fn genesis_accounts(&self) -> Vec<TrieItem> {
-        use beserial::DeserializeWithLength;
-
-        DeserializeWithLength::deserialize_from_vec::<u32>(self.genesis.accounts)
+        Deserialize::deserialize_from_vec(self.genesis.accounts)
             .expect("Failed to deserialize genesis accounts.")
     }
 
@@ -74,7 +70,7 @@ fn read_genesis_config(config: &Path) -> Result<GenesisData, GenesisBuilderError
     } = GenesisBuilder::from_config_file(config)?.generate(env)?;
 
     let block = block.serialize_to_vec();
-    let accounts = accounts.serialize_to_vec::<u32>();
+    let accounts = accounts.serialize_to_vec();
 
     Ok(GenesisData {
         block: Box::leak(block.into_boxed_slice()),

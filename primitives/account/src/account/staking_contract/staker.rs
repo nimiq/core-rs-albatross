@@ -1,8 +1,8 @@
-use beserial::{Deserialize, Serialize};
 use nimiq_keys::Address;
 #[cfg(feature = "interaction-traits")]
 use nimiq_primitives::account::AccountError;
 use nimiq_primitives::coin::Coin;
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "interaction-traits")]
 use crate::{
@@ -369,7 +369,7 @@ impl StakingContract {
                     staker
                 })
             })
-            .ok_or_else(|| AccountError::InvalidReceipt)?;
+            .ok_or(AccountError::InvalidReceipt)?;
 
         // Update the staker's balance.
         staker.balance += value;

@@ -21,15 +21,15 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 prometheus-client = { version = "0.19.0", optional = true }
 rand = "0.8"
+serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 tokio = { version = "1.29", features = ["sync"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 
-beserial = { path = "../beserial", features = ["derive"] }
 nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain-interface = { path = "../blockchain-interface" }
-nimiq-bls = { path = "../bls", features = ["beserial"] }
+nimiq-bls = { path = "../bls", features = ["serde-derive"] }
 nimiq-collections = { path = "../collections" }
 nimiq-database = { path = "../database" }
 nimiq-database-value = { path = "../database/database-value" }
@@ -38,6 +38,7 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-mmr = { path = "../primitives/mmr" }
 nimiq-primitives = { path = "../primitives" }
+nimiq-serde = { path = "../serde" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-utils = { path = "../utils", features = ["math", "time"] }
 nimiq-vrf = { path = "../vrf" }

@@ -13,14 +13,14 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
+thiserror = "1.0"
 
-beserial = { path = "../beserial" }
 nimiq-bls = { path = "../bls" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives" }
+nimiq-serde = { path = "../serde" }
 nimiq-transaction = { path = "../primitives/transaction" }
 
 [dev-dependencies]
@@ -32,4 +32,4 @@ nimiq-utils = { path = "../utils", features = ["otp", "key-rng"]}
 
 
 [features]
-serde-derive = ["serde", "nimiq-primitives/serde-derive", "nimiq-transaction/serde-derive"]
+serde-derive = ["serde", "nimiq-primitives/serde-derive"]

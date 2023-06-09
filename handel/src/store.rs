@@ -305,11 +305,11 @@ where
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use beserial::{Deserialize, Serialize};
     use nimiq_collections::BitSet;
     use nimiq_test_log::test;
     use parking_lot::RwLock;
     use rand::Rng;
+    use serde::{Deserialize, Serialize};
 
     use super::*;
     use crate::{

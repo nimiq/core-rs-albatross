@@ -1,6 +1,5 @@
 use std::convert::TryInto;
 
-use beserial::{Deserialize, Serialize};
 use nimiq_bls::{
     CompressedPublicKey as BlsPublicKey, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey,
 };
@@ -10,6 +9,7 @@ use nimiq_primitives::{
     account::AccountType, coin::Coin, networks::NetworkId, policy::Policy,
     transaction::TransactionError,
 };
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng::test_rng;
 use nimiq_transaction::{
@@ -92,15 +92,16 @@ fn create_validator() {
         None,
     );
 
-    let tx_hex = "01021300b300481ddd7af6be3cf5c123b7af2c21f87f4ac808c8b0e622eb85826124a844713c60858b5c72adcf8b72b4dbea959d042769dcc93a0190e4b8aec92283548138833950aa214d920c17d3d19de27f6176d9fb21620edae76ad398670e17d5eba2f494b9b6901d457592ea68f9d35380c857ba44856ae037aff272ad6c1900442b426dde0bc53431e9ce5807f7ec4a05e71ce4a1e7e7b2511891521c4d3fd975764e3031ef646d48fa881ad88240813d40e533788f0dac2bc4d4c25db7b108c67dd28b7ec4c240cdc044badcaed7860a5d3da42ef860ed25a6db9c07be000a7f504f6d1b24ac81642206d5996b20749a156d7b39f851e60f228b19eef3fb3547469f03fc9764f5f68bc88e187ffee0f43f169acde847c78ea88029cdb19b91dd9562d60b607dd0347d67a0e33286c8908e4e9579a42685da95f06a9201030303030303030303030303030303030303030300b7561c15e53da2c482bfafddbf404f28b14ee2743e5cfe451c860da378b2ac23a651b574183d1287e2cea109943a34c44a7df9eb2fe5067c70f1c02bde900828c232a3d7736a278e0e8ac679bc2a1669f660c3810980526b7890f6e17083817451b039e2f3fcafc3be7c6bd9e01fbc072c956a2b95a335cfb3cd3702335b5300a7bea13543b4c0e249ceb91862d949e9e334e6897bad5e3e23dd7114ff78cc3114443d6387406610ceb73026d28623ce61477dd46a610b22b2be7435520b29098c551fabc6e6e00c609c3f0313257ad7e835643c00000000000000000000000000000000000000000103000000003b9aca0000000000000000640000000104000061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd9105001499025e325bb0c31256bbf1ee2463b2e9601001bf471b7214a0a397caf2335369d7c375e5f22287d6b7918abd229de1aad69590224427957cdbb9689f126d0e";
-    let tx_size = 697;
+    let tx_hex = "01950400b300481ddd7af6be3cf5c123b7af2c21f87f4ac808c8b0e622eb85826124a844713c60858b5c72adcf8b72b4dbea959d042769dcc93a0190e4b8aec92283548138833950aa214d920c17d3d19de27f6176d9fb21620edae76ad398670e17d5eba2f494b9b6901d457592ea68f9d35380c857ba44856ae037aff272ad6c1900442b426dde0bc53431e9ce5807f7ec4a05e71ce4a1e7e7b2511891521c4d3fd975764e3031ef646d48fa881ad88240813d40e533788f0dac2bc4d4c25db7b108c67dd28b7ec4c240cdc044badcaed7860a5d3da42ef860ed25a6db9c07be000a7f504f6d1b24ac81642206d5996b20749a156d7b39f851e60f228b19eef3fb3547469f03fc9764f5f68bc88e187ffee0f43f169acde847c78ea88029cdb19b91dd9562d60b607dd0347d67a0e33286c8908e4e9579a42685da95f06a9201030303030303030303030303030303030303030300b7561c15e53da2c482bfafddbf404f28b14ee2743e5cfe451c860da378b2ac23a651b574183d1287e2cea109943a34c44a7df9eb2fe5067c70f1c02bde900828c232a3d7736a278e0e8ac679bc2a1669f660c3810980526b7890f6e17083817451b039e2f3fcafc3be7c6bd9e01fbc072c956a2b95a335cfb3cd3702335b53000000a9a1bf05b23a1b0580afd69a8640ee34810d0b4badc63c57a9869a8cb92c5b03fed3e6b8e44c938ef4584829610d9c72ae6c82bfa3b2254c537c8e0e5e5e830b8c551fabc6e6e00c609c3f0313257ad7e835643c00000000000000000000000000000000000000000103000000003b9aca00000000000000006400000001040063b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd9105000000db8dff9fb9f36cef3ae42663b60e5f6d0ee33d93077093d7617557391f10ca8d1e8dfb82b187757cb1636667ecbe1e78c55ce1cd52955b40a1b7b45623a7f30c";
+    let tx_size = 700;
 
     let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
     assert_eq!(tx_size, tx.serialized_size());
-    assert_eq!(tx_size, tx.serialize(&mut ser_tx).unwrap());
+    assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx =
+        Deserialize::deserialize_from_vec(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.
@@ -201,15 +202,16 @@ fn update_validator() {
         None,
     );
 
-    let tx_hex = "0102380101b300481ddd7af6be3cf5c123b7af2c21f87f4ac808c8b0e622eb85826124a84401713c60858b5c72adcf8b72b4dbea959d042769dcc93a0190e4b8aec92283548138833950aa214d920c17d3d19de27f6176d9fb21620edae76ad398670e17d5eba2f494b9b6901d457592ea68f9d35380c857ba44856ae037aff272ad6c1900442b426dde0bc53431e9ce5807f7ec4a05e71ce4a1e7e7b2511891521c4d3fd975764e3031ef646d48fa881ad88240813d40e533788f0dac2bc4d4c25db7b108c67dd28b7ec4c240cdc044badcaed7860a5d3da42ef860ed25a6db9c07be000a7f504f6d1b24ac81642206d5996b20749a156d7b39f851e60f228b19eef3fb3547469f03fc9764f5f68bc88e187ffee0f43f169acde847c78ea88029cdb19b91dd9562d60b607dd0347d67a0e33286c8908e4e9579a42685da95f06a92010103030303030303030303030303030303030303030101000000000000000000000000000000000000000000000000000000000000000001b7561c15e53da2c482bfafddbf404f28b14ee2743e5cfe451c860da378b2ac23a651b574183d1287e2cea109943a34c44a7df9eb2fe5067c70f1c02bde900828c232a3d7736a278e0e8ac679bc2a1669f660c3810980526b7890f6e17083817451b039e2f3fcafc3be7c6bd9e01fbc072c956a2b95a335cfb3cd3702335b53001559ac7b10db9f7e81159bb594d89f6e93e7cd177f16b3c203b5b16b9736f29d9fe830ea30a2fe7f0935153a23535f6e85c009c24c529e7189a73455bba6ff0e8c551fabc6e6e00c609c3f0313257ad7e835643c00000000000000000000000000000000000000000103000000000000000000000000000000640000000104020061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500eaa27fea875c4959126f4d4565beaa01e013a54a890e798d8189b84a3640726c09c3d1b9bb29cc421cc0deeb0a39c6776e99e90517cf7dc1eaf4bd568bf30e00";
-    let tx_size = 734;
+    let tx_hex = "01ba040101b300481ddd7af6be3cf5c123b7af2c21f87f4ac808c8b0e622eb85826124a84401713c60858b5c72adcf8b72b4dbea959d042769dcc93a0190e4b8aec92283548138833950aa214d920c17d3d19de27f6176d9fb21620edae76ad398670e17d5eba2f494b9b6901d457592ea68f9d35380c857ba44856ae037aff272ad6c1900442b426dde0bc53431e9ce5807f7ec4a05e71ce4a1e7e7b2511891521c4d3fd975764e3031ef646d48fa881ad88240813d40e533788f0dac2bc4d4c25db7b108c67dd28b7ec4c240cdc044badcaed7860a5d3da42ef860ed25a6db9c07be000a7f504f6d1b24ac81642206d5996b20749a156d7b39f851e60f228b19eef3fb3547469f03fc9764f5f68bc88e187ffee0f43f169acde847c78ea88029cdb19b91dd9562d60b607dd0347d67a0e33286c8908e4e9579a42685da95f06a92010103030303030303030303030303030303030303030101000000000000000000000000000000000000000000000000000000000000000001b7561c15e53da2c482bfafddbf404f28b14ee2743e5cfe451c860da378b2ac23a651b574183d1287e2cea109943a34c44a7df9eb2fe5067c70f1c02bde900828c232a3d7736a278e0e8ac679bc2a1669f660c3810980526b7890f6e17083817451b039e2f3fcafc3be7c6bd9e01fbc072c956a2b95a335cfb3cd3702335b5300000033949d8cf59d9cc1ca63731051672a17b7228f059710af637099e3600de1b2aac52706ef5570cc8625fc047605732d919f59e6a3e03c6e8acde8469a08ad8f0a8c551fabc6e6e00c609c3f0313257ad7e835643c000000000000000000000000000000000000000001030000000000000000000000000000006400000001040263b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd91050000003f4f5273a31f514d01e0e4ff730227b65017d9aabdfa45fb6c69de743b70c189db09759d3b214746b79fba4d170863fa547e9b80594256076a9d082ac24d700a";
+    let tx_size = 737;
 
     let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
     assert_eq!(tx_size, tx.serialized_size());
-    assert_eq!(tx_size, tx.serialize(&mut ser_tx).unwrap());
+    assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx =
+        Deserialize::deserialize_from_vec(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.
@@ -309,15 +311,16 @@ fn deactivate_validator() {
         None,
     );
 
-    let tx_hex = "0100760283fa05dbe31f85e719f4c4fd67ebdba2e444d9f8b300481ddd7af6be3cf5c123b7af2c21f87f4ac808c8b0e622eb85826124a84400ce20d687e65d0ff0794a0d58d16aae7dafe8cf7f173f7925e36a75206952d83ce60c68973c6f4474de3b04238bcccbbc0bdc6c84a7fe5c83a9b141141d2c64048c551fabc6e6e00c609c3f0313257ad7e835643c00000000000000000000000000000000000000000103000000000000000000000000000000640000000104020061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500d764fc837eaeac039fecc7297ccc75469996d9941ae7492a7c583f5a8f19424c9bed523ecba68d981b370d7c75d449935eef70d4eb6ec8b97b3149f24c921f05";
-    let tx_size = 284;
+    let tx_hex = "01780283fa05dbe31f85e719f4c4fd67ebdba2e444d9f8b300481ddd7af6be3cf5c123b7af2c21f87f4ac808c8b0e622eb85826124a8440000007702068ea6e94fd43e2e4ea10939f425c57d390b913499178bcc18482fa4e18be470ae2ab758928f5d4ad7e2683866eab57a4ef6c2dc147bef8966f43ed7b0098c551fabc6e6e00c609c3f0313257ad7e835643c000000000000000000000000000000000000000001030000000000000000000000000000006400000001040263b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd9105000000b360871f71cf8df07b7b19840717d57ffed0e27f07ca4ada6c57a1aa19eb6c989e9fb370f8a2084deabe8f6b0657adb9ffa3fdc75e3e9efb04d1fad8a033c502";
+    let tx_size = 286;
 
     let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
     assert_eq!(tx_size, tx.serialized_size());
-    assert_eq!(tx_size, tx.serialize(&mut ser_tx).unwrap());
+    assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx =
+        Deserialize::deserialize_from_vec(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.
@@ -366,15 +369,16 @@ fn reactivate_validator() {
         None,
     );
 
-    let tx_hex = "0100760383fa05dbe31f85e719f4c4fd67ebdba2e444d9f8b300481ddd7af6be3cf5c123b7af2c21f87f4ac808c8b0e622eb85826124a84400bfc5d6e28bc3029d6c6c76fd0af5ee7ddf1533038bb86de61d430194720e74251301749bbd32d4a77e16ac207412ca1183618dfb3be9f810b28a52139cca2f0c8c551fabc6e6e00c609c3f0313257ad7e835643c00000000000000000000000000000000000000000103000000000000000000000000000000640000000104020061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500eb450162e65cf615e43855974a15e5b10656df42dd86679bcf1441e56336fe80f4ac00d8b93268488b122823f522a19d58f5e54f96a191f907272d49056c3802";
-    let tx_size = 284;
+    let tx_hex = "01780383fa05dbe31f85e719f4c4fd67ebdba2e444d9f8b300481ddd7af6be3cf5c123b7af2c21f87f4ac808c8b0e622eb85826124a8440000009b7c37f603363656fc52b8215df91db2453d5196af687d2befbf09125febdeaf3dafc62ab5bbc0fc4a5a8cac99a726b54924b756a6acd43bfdf81f16ac4125058c551fabc6e6e00c609c3f0313257ad7e835643c000000000000000000000000000000000000000001030000000000000000000000000000006400000001040263b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd9105000000363fac6d9d4adabdfa62d2b39bb52fcb4c879ff46f4b42fd1e3e35899aa928b321588e15e8360bdbbf87c6636967a2099285f3a450b042d9f244fdc8153cd407";
+    let tx_size = 286;
 
     let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
     assert_eq!(tx_size, tx.serialized_size());
     assert_eq!(tx_size, tx.serialize(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx =
+        Deserialize::deserialize_from_vec(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.
@@ -422,15 +426,16 @@ fn retire_validator() {
         None,
     );
 
-    let tx_hex = "01006204b300481ddd7af6be3cf5c123b7af2c21f87f4ac808c8b0e622eb85826124a844001810f15f317bb33e23bad93dc3ffd1acee51b38820e95aa783740f9e335b5074449387ca47613e177683cbf5bc7dac3a95ab576a3e020f16f88f2399f35b54028c551fabc6e6e00c609c3f0313257ad7e835643c00000000000000000000000000000000000000000103000000000000000000000000000000640000000104020061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500ebaaf493c2d11908da9aefbb99a8ac687f183b408b2f7bdb82bfb1f1fcfe5968b539b8a429b4139d7ef886d493d64040030235a573f53ffe59c12247bd4c1d0b";
-    let tx_size = 264;
+    let tx_hex = "016404b300481ddd7af6be3cf5c123b7af2c21f87f4ac808c8b0e622eb85826124a8440000008b627d0985714a1e0940da28e1b2a00d1f02fa9cf8536e9c944fda48102b8c698afc707e40f270456ab75902105cf9a60eeb3877d70a01da76cce77c3000b7008c551fabc6e6e00c609c3f0313257ad7e835643c000000000000000000000000000000000000000001030000000000000000000000000000006400000001040263b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd9105000000a3c3cc099c6ead7b0a17f0e5fbbf53b1777b0f05c49bd6122e67074f0045225d9d3e798ee483afadc7b94f97919302e7d7b9473eb9123aa12223480ea232ff06";
+    let tx_size = 266;
 
     let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
     assert_eq!(tx_size, tx.serialized_size());
-    assert_eq!(tx_size, tx.serialize(&mut ser_tx).unwrap());
+    assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx =
+        Deserialize::deserialize_from_vec(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.
@@ -478,15 +483,16 @@ fn create_staker() {
         None,
     );
 
-    let tx_hex = "010077050183fa05dbe31f85e719f4c4fd67ebdba2e444d9f8b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500e7148694ef5ccb6d774ef46d3a5f94f6075ecb526c50bb9a9b9ab4056cecfbc86d3672608b6736f41dbf155d1d0fe4b3f76c628ec7184400ddf8fe53b6ed2d048c551fabc6e6e00c609c3f0313257ad7e835643c00000000000000000000000000000000000000000103000000000000006400000000000000640000000104000061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500fe297fbfa21f6aa595546a5cd50a5c7af3f95ef3d95e67167c35213baad5264e9548b570fff2cc75573ffe1d8c1acfc1858927ae985b1935b155c19d6f2d7b07";
-    let tx_size = 285;
+    let tx_hex = "0179050183fa05dbe31f85e719f4c4fd67ebdba2e444d9f8b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd9105000000354538daf6bd78fd32f213447d7920cbedf263c9dc54b1659a6fc8e08e0c4f0b28c0f18c8af5d9dd65ab7fc8a5e3bc20dca23aded182dedb60ce4e3ae65b490a8c551fabc6e6e00c609c3f0313257ad7e835643c000000000000000000000000000000000000000001030000000000000064000000000000006400000001040063b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd91050000008e14cc60f3502c508a20d3f5b554466874485d5e204a0d06b2c5e7da995a6939cd020c7db39008b4fb513b7277ec963d9a288064c7b015f0ed2d753538e28308";
+    let tx_size = 287;
 
     let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
     assert_eq!(tx_size, tx.serialized_size());
-    assert_eq!(tx_size, tx.serialize(&mut ser_tx).unwrap());
+    assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx =
+        Deserialize::deserialize_from_vec(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.
@@ -533,15 +539,16 @@ fn stake() {
         None,
     );
 
-    let tx_hex = "010015068c551fabc6e6e00c609c3f0313257ad7e835643c8c551fabc6e6e00c609c3f0313257ad7e835643c00000000000000000000000000000000000000000103000000000000006400000000000000640000000104000061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500ec9d59330a36169dc602dbdab7c4ec1a289b9a9b97938219db0585da337195b651def72d25b8a29c7b00936ac44a21f59db467c8e0646cfe9641b88e306f650d";
+    let tx_hex = "0115068c551fabc6e6e00c609c3f0313257ad7e835643c8c551fabc6e6e00c609c3f0313257ad7e835643c000000000000000000000000000000000000000001030000000000000064000000000000006400000001040063b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd9105000000a887927b90af2469bff456751f5850bdb2fdf3321e2892ac88f2def812eb15fe0ca5571a5badfa9732f53e33b8397c2ff45427020681ae4967044bd8aac46200";
     let tx_size = 187;
 
     let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
     assert_eq!(tx_size, tx.serialized_size());
-    assert_eq!(tx_size, tx.serialize(&mut ser_tx).unwrap());
+    assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx =
+        Deserialize::deserialize_from_vec(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.
@@ -564,15 +571,16 @@ fn update_staker() {
         None,
     );
 
-    let tx_hex = "010077070183fa05dbe31f85e719f4c4fd67ebdba2e444d9f8b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500912d064ba2b1497656f34918ba0f1e4c005269dac08867f7b96c3b259372dd808b8f4b72fbfe582054424dba778f8f2fad73f0751d62afcf6b1922d5d8e825038c551fabc6e6e00c609c3f0313257ad7e835643c00000000000000000000000000000000000000000103000000000000000000000000000000640000000104020061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd91050002380c4c37062c8c753fd7993c50c8cbb67b58e9c4c78e4d1873aeb0fc1810c4428fe4748658bf22ceb965b14c4734543b8f771928bf5a5802d50e0c3be39509";
-    let tx_size = 285;
+    let tx_hex = "0179070183fa05dbe31f85e719f4c4fd67ebdba2e444d9f8b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd9105000000b5ba97691f51803d57a58a35ef7a755d045a611d835abcab02e2960ccf0f40b639869282da13610655af32fbd2316c916821c4582c6c448cb96ee706cb2eae088c551fabc6e6e00c609c3f0313257ad7e835643c000000000000000000000000000000000000000001030000000000000000000000000000006400000001040263b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd9105000000ffb3e60d86b516f5aef19d8196c9183cf2403555b5d30a9bb51b0c3df9a43b1a1ff2e8d53805bb2b3218d7fc13368f9b5d66e000e5a521cd2f0e218fc1698901";
+    let tx_size = 287;
 
     let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
     assert_eq!(tx_size, tx.serialized_size());
-    assert_eq!(tx_size, tx.serialize(&mut ser_tx).unwrap());
+    assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx =
+        Deserialize::deserialize_from_vec(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.
@@ -610,15 +618,16 @@ fn delete_validator() {
     // Test serialization and deserialization.
     let tx = make_delete_validator_tx(Policy::VALIDATOR_DEPOSIT - 100, false);
 
-    let tx_hex = "0100000000000000000000000000000000000000000001038c551fabc6e6e00c609c3f0313257ad7e835643c00000000003b9ac99c00000000000000640000000104000062007451b039e2f3fcafc3be7c6bd9e01fbc072c956a2b95a335cfb3cd3702335b5300f4469ca005b396f7ef274aa872dc585d7a6ce33177ef5ea2c9208056a8cb16431c5756d62b58288b34c73966322dbf8555d9e346d8e545e4b34d273b5cb3240a";
+    let tx_hex = "01000000000000000000000000000000000000000001038c551fabc6e6e00c609c3f0313257ad7e835643c00000000003b9ac99c000000000000006400000001040064007451b039e2f3fcafc3be7c6bd9e01fbc072c956a2b95a335cfb3cd3702335b53000000f8bf2e05747d3938d7b1cde2632765527e95e2d5a683de900de9cbaac5b91ddb5c8060033f6159725f8be3ab463c174ad36425e81dc4c4f13848e9828cec1d04";
     let tx_size = 167;
 
     let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
     assert_eq!(tx_size, tx.serialized_size());
-    assert_eq!(tx_size, tx.serialize(&mut ser_tx).unwrap());
+    assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx =
+        Deserialize::deserialize_from_vec(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case (This assumes the delete_validator_tx function creates a tx with 100 fee)
@@ -648,15 +657,16 @@ fn unstake() {
     // Test serialization and deserialization.
     let tx = make_unstake_tx(false);
 
-    let tx_hex = "0100000000000000000000000000000000000000000001038c551fabc6e6e00c609c3f0313257ad7e835643c0000000000000003e800000000000000640000000104000062017451b039e2f3fcafc3be7c6bd9e01fbc072c956a2b95a335cfb3cd3702335b5300008cddeff67b3d9703b5d5ec1a6fe5165b27135fa7f14151fb43dd9c4948a76528c417ec13871779df77d4373d237c04d09b705962b812817d5f97d8109cdf0a";
+    let tx_hex = "01000000000000000000000000000000000000000001038c551fabc6e6e00c609c3f0313257ad7e835643c0000000000000003e8000000000000006400000001040064017451b039e2f3fcafc3be7c6bd9e01fbc072c956a2b95a335cfb3cd3702335b530000004117db88880fdf5886f1ea6cf160790852ddf54f7effedacc6d617cc91141c4657e4eb1ef9c3cf4cb0b9bcb4e235f21b8bb565d1ba28e996d83f0b1de4f9d600";
     let tx_size = 167;
 
     let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
     assert_eq!(tx_size, tx.serialized_size());
-    assert_eq!(tx_size, tx.serialize(&mut ser_tx).unwrap());
+    assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx =
+        Deserialize::deserialize_from_vec(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.

@@ -1,11 +1,11 @@
 use std::{cmp::Ordering, collections::HashSet, fmt, fmt::Debug, io};
 
-use beserial::{Deserialize, Serialize};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::{PublicKey, Signature};
 use nimiq_primitives::{policy::Policy, slots::Validators};
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{ExecutedTransaction, Transaction};
 use nimiq_vrf::VrfSeed;
 
@@ -114,7 +114,7 @@ impl IntoDatabaseValue for MicroBlock {
     }
 
     fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize(&self, &mut bytes).unwrap();
+        Serialize::serialize_to_writer(&self, &mut bytes).unwrap();
     }
 }
 
@@ -123,8 +123,8 @@ impl FromDatabaseValue for MicroBlock {
     where
         Self: Sized,
     {
-        let mut cursor = io::Cursor::new(bytes);
-        Ok(Deserialize::deserialize(&mut cursor)?)
+        Deserialize::deserialize_from_vec(bytes)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 }
 
@@ -136,8 +136,7 @@ impl fmt::Display for MicroBlock {
 
 /// Enumeration representing the justification for a Micro block
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
+#[serde(rename_all = "camelCase")]
 #[repr(u8)]
 pub enum MicroJustification {
     /// Regular micro block justification which is the signature of the block producer
@@ -170,7 +169,6 @@ pub struct MicroHeader {
     /// block (either micro or macro) using the validator key of the block producer.
     pub seed: VrfSeed,
     /// The extra data of the block. It is simply 32 raw bytes. No planned use.
-    #[beserial(len_type(u8, limit = 32))]
     pub extra_data: Vec<u8>,
     /// The root of the Merkle tree of the blockchain state. It just acts as a commitment to the
     /// state.
@@ -207,10 +205,8 @@ impl fmt::Display for MicroHeader {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
 pub struct MicroBody {
     /// A vector containing the fork proofs for this block. It might be empty.
-    #[beserial(len_type(u16))]
     pub fork_proofs: Vec<ForkProof>,
     /// A vector containing the transactions for this block. It might be empty.
-    #[beserial(len_type(u16))]
     pub transactions: Vec<ExecutedTransaction>,
 }
 

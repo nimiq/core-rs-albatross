@@ -1,6 +1,6 @@
-use beserial::Serialize;
 use nimiq_keys::Address;
 use nimiq_primitives::{account::AccountType, policy::Policy};
+use nimiq_serde::Serialize;
 use nimiq_transaction::account::{
     htlc_contract::CreationTransactionData as HtlcCreationData,
     staking_contract::IncomingStakingTransactionData,
@@ -219,7 +219,7 @@ impl Recipient {
         match self {
             Recipient::Basic { data, .. } => data.clone(),
             Recipient::HtlcCreation { data } => data.serialize_to_vec(),
-            Recipient::VestingCreation { data } => data.serialize_to_vec(),
+            Recipient::VestingCreation { data } => data.to_tx_data(),
             Recipient::Staking { data } => data.serialize_to_vec(),
         }
     }

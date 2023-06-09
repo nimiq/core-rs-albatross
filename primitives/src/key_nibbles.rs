@@ -4,10 +4,10 @@ use std::{
     fmt, io, ops, str, usize,
 };
 
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use log::error;
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_keys::Address;
+use nimiq_serde::{Deserialize, Serialize};
 
 /// A compact representation of a node's key. It stores the key in big endian. Each byte
 /// stores up to 2 nibbles. Internally, we assume that a key is represented in hexadecimal form.
@@ -357,8 +357,7 @@ impl ops::Add<&KeyNibbles> for &KeyNibbles {
 impl AsDatabaseBytes for KeyNibbles {
     fn as_database_bytes(&self) -> Cow<[u8]> {
         // TODO: Improve KeyNibbles, so that no serialization is needed.
-        let v = Serialize::serialize_to_vec(&self);
-        Cow::Owned(v)
+        Serialize::serialize_to_vec(self).into()
     }
 }
 
@@ -371,33 +370,79 @@ impl FromDatabaseValue for KeyNibbles {
     }
 }
 
-impl Serialize for KeyNibbles {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size = 1;
-        writer.write_u8(self.length)?;
-        size += writer.write(&self.bytes[..self.bytes_len()])?;
+#[cfg(feature = "serde-derive")]
+mod serde_derive {
 
-        Ok(size)
+    use std::fmt;
+
+    use serde::{
+        de::{Deserialize, Deserializer, Error, SeqAccess, Unexpected, Visitor},
+        ser::{Serialize, SerializeStruct, Serializer},
+    };
+
+    use super::KeyNibbles;
+
+    const FIELDS: &[&str] = &["length", "bytes"];
+    struct KeyNibblesVisitor;
+
+    impl<'de> Visitor<'de> for KeyNibblesVisitor {
+        type Value = KeyNibbles;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("struct MerklePath")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let length: u8 = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(0, &self))?;
+            if length > KeyNibbles::MAX_BYTES as u8 * 2 {
+                return Err(A::Error::invalid_length(length as usize, &self)); // length too high
+            }
+            let bytes_length = (length as usize + 1) / 2;
+            let bytes: Vec<u8> = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+            if bytes.len() > bytes_length {
+                return Err(A::Error::invalid_length(bytes_length, &self)); // bytes length too high
+            }
+            if length % 2 == 1 && bytes[bytes_length - 1] & 0x0f != 0 {
+                return Err(A::Error::invalid_value(
+                    Unexpected::Other("Unused nubble not zeroed"),
+                    &self,
+                ));
+            }
+            let mut nibble_bytes = [0u8; KeyNibbles::MAX_BYTES];
+            nibble_bytes[..bytes_length].copy_from_slice(&bytes);
+            Ok(KeyNibbles {
+                bytes: nibble_bytes,
+                length,
+            })
+        }
     }
 
-    fn serialized_size(&self) -> usize {
-        1 + self.bytes_len()
+    impl Serialize for KeyNibbles {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let mut state = serializer.serialize_struct("KeyNibbles", FIELDS.len())?;
+            state.serialize_field(FIELDS[0], &self.length)?;
+            state.serialize_field(FIELDS[1], &self.bytes[..self.bytes_len()])?;
+            state.end()
+        }
     }
-}
 
-impl Deserialize for KeyNibbles {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let length = reader.read_u8()?;
-        if length > KeyNibbles::MAX_BYTES as u8 * 2 {
-            return Err(SerializingError::InvalidValue); // length too high
+    impl<'de> Deserialize<'de> for KeyNibbles {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            deserializer.deserialize_struct("KeyNibbles", FIELDS, KeyNibblesVisitor)
         }
-        let bytes_length = (length as usize + 1) / 2;
-        let mut bytes = [0; KeyNibbles::MAX_BYTES];
-        reader.read_exact(&mut bytes[..bytes_length])?;
-        if length % 2 == 1 && bytes[bytes_length - 1] & 0x0f != 0 {
-            return Err(SerializingError::InvalidValue); // unused nibble not zeroed
-        }
-        Ok(KeyNibbles { bytes, length })
     }
 }
 

@@ -1,4 +1,3 @@
-use beserial::SerializingError;
 use nimiq_network_interface::{network::SendError, request::RequestError};
 use thiserror::Error;
 
@@ -10,10 +9,6 @@ pub enum NetworkError<TNetworkError>
 where
     TNetworkError: std::error::Error + 'static,
 {
-    /// Serialization or deserialization of the message failed
-    #[error("Serialization error: {0}")]
-    Serialization(SerializingError),
-
     /// Some of the peers were unreachable
     #[error("Unreachable")]
     Unreachable,

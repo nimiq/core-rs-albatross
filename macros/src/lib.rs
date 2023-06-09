@@ -1,11 +1,20 @@
 #[doc(hidden)]
 pub extern crate hex;
 
+#[doc(hidden)]
+pub extern crate serde;
+
+#[doc(hidden)]
+pub extern crate serde_big_array;
+
+#[doc(hidden)]
+pub extern crate nimiq_serde;
+
 #[macro_export]
 macro_rules! create_typed_array {
     ($name: ident, $t: ty, $len: expr) => {
         #[repr(C)]
-        #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+        #[derive(Clone, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
         pub struct $name(pub [$t; $len]);
 
         impl<'a> From<&'a [$t]> for $name {
@@ -18,30 +27,6 @@ macro_rules! create_typed_array {
                 let mut a = [0 as $t; $len];
                 a.clone_from_slice(&slice[0..$len]);
                 $name(a)
-            }
-        }
-
-        impl ::beserial::Deserialize for $name {
-            fn deserialize<R: ::beserial::ReadBytesExt>(
-                reader: &mut R,
-            ) -> Result<Self, ::beserial::SerializingError> {
-                let mut a = [0 as $t; $len];
-                reader.read_exact(&mut a[..])?;
-                Ok($name(a))
-            }
-        }
-
-        impl ::beserial::Serialize for $name {
-            fn serialize<W: ::beserial::WriteBytesExt>(
-                &self,
-                writer: &mut W,
-            ) -> Result<usize, ::beserial::SerializingError> {
-                writer.write_all(&self.0)?;
-                Ok($len)
-            }
-
-            fn serialized_size(&self) -> usize {
-                $len
             }
         }
 
@@ -78,6 +63,54 @@ macro_rules! create_typed_array {
 
             pub fn as_slice(&self) -> &[$t] {
                 &self.0
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! add_serialization_fns_typed_arr {
+    ($name: ident, $len: expr) => {
+        impl ::nimiq_macros::serde::Serialize for $name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: ::nimiq_macros::serde::Serializer,
+            {
+                if serializer.is_human_readable() {
+                    ::nimiq_macros::serde::Serialize::serialize(
+                        &::nimiq_macros::hex::encode(&self.0),
+                        serializer,
+                    )
+                } else {
+                    ::nimiq_macros::serde_big_array::BigArray::serialize(&self.0, serializer)
+                }
+            }
+        }
+
+        impl<'de> ::nimiq_macros::serde::Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: ::nimiq_macros::serde::de::Deserializer<'de>,
+            {
+                let data: [u8; $len] = if deserializer.is_human_readable() {
+                    let s: Cow<'de, str> =
+                        ::nimiq_macros::serde::Deserialize::deserialize(deserializer)?;
+                    ::nimiq_macros::hex::decode(&s[..])
+                        .map_err(|_| {
+                            <D::Error as ::nimiq_macros::serde::de::Error>::custom(
+                                "Could not parse hex string",
+                            )
+                        })?
+                        .try_into()
+                        .map_err(|_| {
+                            <D::Error as ::nimiq_macros::serde::de::Error>::custom(
+                                "Could not parse hex string: invalid length",
+                            )
+                        })?
+                } else {
+                    ::nimiq_macros::serde_big_array::BigArray::deserialize(deserializer)?
+                };
+                Ok($name(data))
             }
         }
     };

@@ -17,7 +17,7 @@ pub enum NetworkError {
     PeersNotFound,
 
     #[error("Serialization error: {0}")]
-    Serialization(#[from] beserial::SerializingError),
+    Serialization(#[from] nimiq_serde::DeserializeError),
 
     #[error("Network behaviour error: {0}")]
     Behaviour(#[from] NimiqNetworkBehaviourError),

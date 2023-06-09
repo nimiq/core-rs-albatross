@@ -1,6 +1,6 @@
-use beserial::Serialize;
 use nimiq_block::Block;
 use nimiq_primitives::policy::Policy;
+use nimiq_serde::Serialize;
 use serde::ser::SerializeStruct;
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;

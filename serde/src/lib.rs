@@ -1,25 +1,33 @@
-use std::error::Error;
-use std::fmt;
-use std::io;
-use std::io::Write;
-use std::ops;
+use std::{error::Error, fmt, io, io::Write, ops};
 
+pub use postcard::fixint;
 use serde::{
     de::{Deserializer, Error as _},
     ser::Serializer,
 };
 use serde_big_array::BigArray;
+pub use serde_derive::{Deserialize, Serialize};
 
-pub use postcard::fixint;
-pub use serde_derive::Deserialize;
-pub use serde_derive::Serialize;
-
+/// Deserialization Error. This error is a wrapper over `postcard::Error`.
 #[derive(Eq, PartialEq)]
 pub struct DeserializeError(postcard::Error);
 
 impl DeserializeError {
+    /// Returns a 'Bad enumeration' error
     pub fn bad_enum() -> DeserializeError {
         DeserializeError(postcard::Error::DeserializeBadEnum)
+    }
+    /// Returns an 'Unexpected end' error.
+    pub fn unexpected_end() -> DeserializeError {
+        DeserializeError(postcard::Error::DeserializeUnexpectedEnd)
+    }
+    /// Returns a 'Bad encoding' error.
+    pub fn bad_encoding() -> DeserializeError {
+        DeserializeError(postcard::Error::DeserializeBadEncoding)
+    }
+    /// Returns a 'Serde custom' error.
+    pub fn serde_custom() -> DeserializeError {
+        DeserializeError(postcard::Error::SerdeDeCustom)
     }
 }
 
@@ -118,7 +126,6 @@ pub trait Serialize: serde::Serialize {
         impl<'a, 'b, W: Write> postcard::ser_flavors::Flavor for Wrapper<'a, 'b, W> {
             type Output = ();
             fn try_push(&mut self, data: u8) -> postcard::Result<()> {
-                *self.written += 1;
                 self.try_extend(&[data])
             }
             fn try_extend(&mut self, data: &[u8]) -> postcard::Result<()> {
@@ -129,7 +136,7 @@ pub trait Serialize: serde::Serialize {
                     Err(e) => {
                         *self.error = Some(e);
                         Err(postcard::Error::SerializeBufferFull)
-                    },
+                    }
                 }
             }
             fn finalize(self) -> postcard::Result<()> {
@@ -145,8 +152,7 @@ pub trait Serialize: serde::Serialize {
         };
         match postcard::serialize_with_flavor(self, wrapper) {
             Ok(()) => Ok(written),
-            Err(postcard::Error::SerializeBufferFull) => Err(error.unwrap()),
-            Err(e) => panic!("unexpected error {}", e),
+            Err(e) => Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
         }
     }
     fn serialize<W: Write>(&self, writer: &mut W) -> io::Result<usize> {

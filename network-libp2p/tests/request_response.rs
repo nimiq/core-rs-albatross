@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use beserial::{Deserialize, Serialize};
 use futures::{future::join_all, StreamExt};
 use libp2p::{
     core::multiaddr::{multiaddr, Multiaddr},
@@ -22,6 +21,7 @@ use nimiq_network_libp2p::{
     discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact},
     Config, Network, PeerId,
 };
+use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_test_log::test;
 use nimiq_utils::time::OffsetTime;
 use rand::{thread_rng, Rng};
@@ -48,39 +48,23 @@ impl RequestCommon for TestRequest {
 
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_TEST_REQUEST;
 
-    fn serialize_request<W: beserial::WriteBytesExt>(
-        &self,
-        writer: &mut W,
-    ) -> Result<usize, beserial::SerializingError> {
-        let mut size = 0;
-        size += nimiq_network_interface::request::RequestType::from_request::<Self>()
-            .0
-            .serialize(writer)?;
-        size += self.serialize(writer)?;
-        Ok(size)
+    fn serialize_request(&self) -> Vec<u8> {
+        let mut data = Vec::with_capacity(self.serialized_request_size());
+        nimiq_network_interface::request::RequestType::from_request::<Self>()
+            .serialize_to_writer(&mut data)
+            .unwrap();
+        Serialize::serialize_to_writer(self, &mut data).unwrap();
+        data
     }
 
-    fn serialized_request_size(&self) -> usize {
-        let mut size = 0;
-        size += nimiq_network_interface::request::RequestType::from_request::<Self>()
-            .0
-            .serialized_size();
-        size += self.serialized_size();
-        size
-    }
-
-    fn deserialize_request<R: beserial::ReadBytesExt>(
-        reader: &mut R,
-    ) -> Result<Self, beserial::SerializingError> {
+    fn deserialize_request(buffer: &[u8]) -> Result<Self, DeserializeError> {
         // Check for correct type.
-        let ty: u16 = Deserialize::deserialize(reader)?;
+        let (ty, message_buf) = <u16>::deserialize_take(buffer)?;
         if ty != nimiq_network_interface::request::RequestType::from_request::<Self>().0 {
-            return Err(
-                std::io::Error::new(std::io::ErrorKind::InvalidData, "Wrong message type").into(),
-            );
+            return Err(DeserializeError::bad_encoding());
         }
 
-        let message: Self = Deserialize::deserialize(reader)?;
+        let message: Self = Deserialize::deserialize_from_vec(message_buf)?;
 
         Ok(message)
     }
@@ -121,7 +105,7 @@ impl RequestCommon for TestRequest3 {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 struct TestResponse3 {
-    response: u32,
+    response: [u8; 8],
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -461,56 +445,6 @@ async fn test_multiple_valid_requests_valid_responses() {
             Err(e) => assert!(false, "Response received with error: {:?}", e),
         };
     }
-}
-
-// Test that we can send a request and receive a `DeSerializationError` if the peer replied with
-// a message with the expected type ID but refers to a completely different type in reality
-#[test(tokio::test)]
-async fn test_valid_request_incorrect_response() {
-    let (net1, net2) = TestNetwork::create_connected_networks().await;
-
-    let test_request = TestRequest { request: 42 };
-    let incorrect_response = TestResponse3 { response: 43 };
-
-    let net1 = Arc::new(net1);
-
-    // Subscribe for receiving requests
-    tokio::spawn({
-        let net1 = Arc::clone(&net1);
-        let test_request = test_request.clone();
-        let incorrect_response = incorrect_response.clone();
-        async move {
-            respond_requests::<TestRequest3, TestRequest>(
-                net1,
-                Some(incorrect_response),
-                test_request,
-            )
-            .await
-        }
-    });
-
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
-    log::info!("Sending request");
-
-    // Send the request and get future for the response
-    let response = net2.request::<TestRequest>(test_request.clone(), net1.get_local_peer_id());
-
-    // Check the received response
-    let received_response = response.await;
-    log::info!(response = ?received_response, "Received response");
-
-    match received_response {
-        Ok(response) => {
-            assert!(false, "Received unexpected valid response: {:?}", response);
-        }
-        Err(e) => assert_eq!(
-            e,
-            RequestError::InboundRequest(InboundRequestError::DeSerializationError),
-            "Response received with error: {:?}",
-            e
-        ),
-    };
 }
 
 // Test that we can send a request and receive a timeout response if no response is

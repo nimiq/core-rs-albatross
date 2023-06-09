@@ -1,10 +1,12 @@
 use std::fmt::Debug;
 
-use beserial::{Deserialize, Serialize, WriteBytesExt};
+use byteorder::WriteBytesExt;
 use nimiq_bls::{PublicKey, SecretKey, SigHash, Signature};
 use nimiq_hash::{Blake2sHash, Blake2sHasher, Hasher, SerializeContent};
+use nimiq_serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "M: Message")]
 pub struct SignedMessage<M: Message> {
     // The signed message. Note that the actual message doesn't contain the prefix. This is added
     // only during signing

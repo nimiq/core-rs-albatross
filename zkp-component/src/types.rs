@@ -2,13 +2,7 @@ use std::{borrow::Cow, io, path::PathBuf, sync::Arc};
 
 use ark_groth16::Proof;
 use ark_mnt6_753::MNT6_753;
-use ark_serialize::{
-    CanonicalDeserialize, CanonicalSerialize, SerializationError as ArkSerializingError,
-};
-use beserial::{
-    Deserialize, DeserializeWithLength, Serialize, SerializeWithLength, SerializingError,
-    SerializingError as BeserialSerializingError,
-};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use nimiq_block::MacroBlock;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -17,6 +11,7 @@ use nimiq_network_interface::{
     network::{Network, Topic},
     request::{Handle, RequestCommon, RequestError, RequestMarker},
 };
+use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_zkp_primitives::NanoZKPError;
 use parking_lot::RwLock;
 use thiserror::Error;
@@ -79,58 +74,6 @@ impl ZKPState {
     }
 }
 
-/// The serialization of the ZKPState is unsafe over the network.
-/// It uses unchecked serialization of elliptic curve points for performance reasons.
-/// We only invoke it when transferring data from the proof generation process.
-impl Serialize for ZKPState {
-    fn serialize<W: beserial::WriteBytesExt>(
-        &self,
-        writer: &mut W,
-    ) -> Result<usize, beserial::SerializingError> {
-        let mut size = Serialize::serialize(&self.latest_block, writer)?;
-
-        size += Serialize::serialize(&self.latest_proof.is_some(), writer)?;
-        if let Some(ref latest_proof) = self.latest_proof {
-            CanonicalSerialize::serialize_uncompressed(latest_proof, writer)
-                .map_err(ark_to_bserial_error)?;
-            size += CanonicalSerialize::serialized_size(latest_proof, ark_serialize::Compress::No);
-        }
-        Ok(size)
-    }
-    fn serialized_size(&self) -> usize {
-        let mut size = Serialize::serialized_size(&self.latest_block);
-
-        size += Serialize::serialized_size(&self.latest_proof.is_some());
-        if let Some(ref latest_proof) = self.latest_proof {
-            size += CanonicalSerialize::serialized_size(latest_proof, ark_serialize::Compress::No);
-        }
-        size
-    }
-}
-
-/// The deserialization of the ZKPState is unsafe over the network.
-/// It uses unchecked deserialization of elliptic curve points for performance reasons.
-/// We only invoke it when transferring data from the proof generation process.
-impl Deserialize for ZKPState {
-    fn deserialize<R: beserial::ReadBytesExt>(
-        reader: &mut R,
-    ) -> Result<Self, BeserialSerializingError> {
-        let latest_block = Deserialize::deserialize(reader)?;
-        let is_some: bool = Deserialize::deserialize(reader)?;
-        let mut latest_proof = None;
-        if is_some {
-            latest_proof = Some(
-                CanonicalDeserialize::deserialize_uncompressed_unchecked(reader)
-                    .map_err(ark_to_bserial_error)?,
-            );
-        }
-        Ok(ZKPState {
-            latest_block,
-            latest_proof,
-        })
-    }
-}
-
 /// Contains the id of the source of the newly pushed proof. This object is sent through the network alongside the zk proof.
 #[derive(Copy, Debug)]
 pub enum ProofSource<N: Network> {
@@ -181,53 +124,6 @@ impl From<ZKPState> for ZKProof {
     }
 }
 
-impl Serialize for ZKProof {
-    fn serialize<W: beserial::WriteBytesExt>(
-        &self,
-        writer: &mut W,
-    ) -> Result<usize, beserial::SerializingError> {
-        let mut size = Serialize::serialize(&self.block_number, writer)?;
-        size += Serialize::serialize(&self.proof.is_some(), writer)?;
-        if let Some(ref latest_proof) = self.proof {
-            CanonicalSerialize::serialize_compressed(latest_proof, writer)
-                .map_err(ark_to_bserial_error)?;
-            size += CanonicalSerialize::serialized_size(latest_proof, ark_serialize::Compress::Yes);
-        }
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = Serialize::serialized_size(&self.block_number);
-        size += Serialize::serialized_size(&self.proof.is_some());
-        if let Some(ref latest_proof) = self.proof {
-            size += CanonicalSerialize::serialized_size(latest_proof, ark_serialize::Compress::Yes);
-        }
-        size
-    }
-}
-
-impl Deserialize for ZKProof {
-    fn deserialize<R: beserial::ReadBytesExt>(
-        reader: &mut R,
-    ) -> Result<Self, BeserialSerializingError> {
-        let block_number = Deserialize::deserialize(reader)?;
-        let is_some: bool = Deserialize::deserialize(reader)?;
-        let mut latest_proof = None;
-
-        if is_some {
-            latest_proof = Some(
-                CanonicalDeserialize::deserialize_compressed(reader)
-                    .map_err(ark_to_bserial_error)?,
-            );
-        }
-
-        Ok(ZKProof {
-            block_number,
-            proof: latest_proof,
-        })
-    }
-}
-
 impl AsDatabaseBytes for ZKProof {
     fn as_database_bytes(&self) -> Cow<[u8]> {
         let v = Serialize::serialize_to_vec(&self);
@@ -240,17 +136,8 @@ impl FromDatabaseValue for ZKProof {
     where
         Self: Sized,
     {
-        let mut cursor = io::Cursor::new(bytes);
-        Ok(Deserialize::deserialize(&mut cursor)?)
-    }
-}
-
-fn ark_to_bserial_error(error: ArkSerializingError) -> BeserialSerializingError {
-    match error {
-        ArkSerializingError::NotEnoughSpace => BeserialSerializingError::Overflow,
-        ArkSerializingError::InvalidData => BeserialSerializingError::InvalidValue,
-        ArkSerializingError::UnexpectedFlags => BeserialSerializingError::InvalidValue,
-        ArkSerializingError::IoError(e) => BeserialSerializingError::IoError(e),
+        Deserialize::deserialize_from_vec(bytes)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 }
 
@@ -262,88 +149,6 @@ pub struct ProofInput {
     pub final_block: MacroBlock,
     pub genesis_header_hash: [u8; 32],
     pub prover_keys_path: PathBuf,
-}
-
-/// The serialization of the ProofInput is unsafe over the network.
-/// It uses unchecked serialization of elliptic curve points for performance reasons.
-/// We only invoke it when transferring data to the proof generation process.
-impl Serialize for ProofInput {
-    fn serialize<W: beserial::WriteBytesExt>(
-        &self,
-        writer: &mut W,
-    ) -> Result<usize, beserial::SerializingError> {
-        let mut size = Serialize::serialize(&self.previous_block, writer)?;
-
-        size += Serialize::serialize(&self.previous_proof.is_some(), writer)?;
-        if let Some(ref latest_proof) = self.previous_proof {
-            CanonicalSerialize::serialize_uncompressed(latest_proof, writer.by_ref())
-                .map_err(ark_to_bserial_error)?;
-            size += CanonicalSerialize::serialized_size(latest_proof, ark_serialize::Compress::No);
-        }
-
-        size += Serialize::serialize(&self.final_block, writer)?;
-
-        size += Serialize::serialize(&self.genesis_header_hash, writer)?;
-
-        let path_buf = self.prover_keys_path.to_string_lossy().to_string();
-        size += SerializeWithLength::serialize::<u16, _>(&path_buf, writer)?;
-
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = Serialize::serialized_size(&self.previous_block);
-
-        size += Serialize::serialized_size(&self.previous_proof.is_some());
-        if let Some(ref previous_proof) = self.previous_proof {
-            size +=
-                CanonicalSerialize::serialized_size(previous_proof, ark_serialize::Compress::No);
-        }
-
-        size += Serialize::serialized_size(&self.final_block);
-
-        size += Serialize::serialized_size(&self.genesis_header_hash);
-
-        let path_buf = self.prover_keys_path.to_string_lossy().to_string();
-        size += SerializeWithLength::serialized_size::<u16>(&path_buf);
-
-        size
-    }
-}
-
-/// The deserialization of the ProofInput is unsafe over the network.
-/// It uses unchecked deserialization of elliptic curve points for performance reasons.
-/// We only invoke it when transferring data to the proof generation process.
-impl Deserialize for ProofInput {
-    fn deserialize<R: beserial::ReadBytesExt>(
-        reader: &mut R,
-    ) -> Result<Self, BeserialSerializingError> {
-        let previous_block = Deserialize::deserialize(reader)?;
-
-        let is_some: bool = Deserialize::deserialize(reader)?;
-        let mut previous_proof = None;
-
-        if is_some {
-            previous_proof = Some(
-                CanonicalDeserialize::deserialize_uncompressed_unchecked(reader.by_ref())
-                    .map_err(ark_to_bserial_error)?,
-            );
-        }
-
-        let final_block = Deserialize::deserialize(reader)?;
-
-        let genesis_header_hash = Deserialize::deserialize(reader)?;
-
-        let path_buf: String = DeserializeWithLength::deserialize::<u16, _>(reader)?;
-
-        Ok(ProofInput {
-            final_block,
-            previous_proof,
-            previous_block,
-            genesis_header_hash,
-            prover_keys_path: PathBuf::from(path_buf),
-        })
-    }
 }
 
 /// The topic for zkp gossiping.
@@ -380,10 +185,10 @@ pub enum Error {
 #[repr(u8)]
 pub enum ZKProofGenerationError {
     #[error("Nano Zkp Error: {0}")]
-    NanoZKP(#[beserial(len_type(u32))] String),
+    NanoZKP(String),
 
     #[error("Serialization Error: {0}")]
-    SerializingError(#[beserial(len_type(u16))] String),
+    SerializingError(String),
 
     #[error("Proof's blocks are not valid")]
     InvalidBlock,
@@ -392,11 +197,11 @@ pub enum ZKProofGenerationError {
     ChannelError,
 
     #[error("Process launching error: {0}")]
-    ProcessError(#[beserial(len_type(u16))] String),
+    ProcessError(String),
 }
 
-impl From<SerializingError> for ZKProofGenerationError {
-    fn from(e: SerializingError) -> Self {
+impl From<DeserializeError> for ZKProofGenerationError {
+    fn from(e: DeserializeError) -> Self {
         ZKProofGenerationError::SerializingError(e.to_string())
     }
 }
@@ -436,9 +241,7 @@ impl RequestCommon for RequestZKP {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum RequestZKPResponse {
-    #[beserial(discriminant = 1)]
     Proof(ZKProof, Option<MacroBlock>),
-    #[beserial(discriminant = 2)]
     Outdated(u32),
 }
 
@@ -479,5 +282,263 @@ impl<N: Network> Handle<N, RequestZKPResponse, Arc<ZKPStateEnvironment>> for Req
             None
         };
         RequestZKPResponse::Proof(zkp_proof, block)
+    }
+}
+
+mod serde_derive {
+
+    use std::fmt;
+
+    use ark_serialize::Write;
+    use serde::{
+        de::{Deserialize, Deserializer, Error as DesError, SeqAccess, Unexpected, Visitor},
+        ser::{Error as SerError, Serialize, SerializeStruct, Serializer},
+    };
+
+    use super::*;
+
+    const ZK_PROOF_FIELDS: &[&str] = &["block_number", "latest_proof"];
+    const ZKP_STATE_FIELDS: &[&str] = &["latest_block", "latest_proof"];
+    const PROOF_INPUT_FIELDS: &[&str] = &[
+        "previous_block",
+        "previous_proof",
+        "final_block",
+        "genesis_header_hash",
+        "prover_keys_path",
+    ];
+
+    struct ZKProofVisitor;
+    struct ZKPStateVisitor;
+    struct ProofInputVisitor;
+
+    impl<'de> Visitor<'de> for ZKProofVisitor {
+        type Value = ZKProof;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("struct ZKProof")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let block_number: [u8; 4] = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(0, &self))?;
+            let latest_ser_proof: Option<Vec<u8>> = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+
+            let latest_proof = if let Some(ser_proof) = latest_ser_proof {
+                Some(
+                    CanonicalDeserialize::deserialize_compressed(&*ser_proof).map_err(|_| {
+                        A::Error::invalid_value(Unexpected::Other("Invalid proof"), &self)
+                    })?,
+                )
+            } else {
+                None
+            };
+
+            Ok(ZKProof {
+                block_number: u32::from_be_bytes(block_number),
+                proof: latest_proof,
+            })
+        }
+    }
+
+    impl Serialize for ZKProof {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let mut state = serializer.serialize_struct("ZKProof", ZK_PROOF_FIELDS.len())?;
+            let ser_latest_proof = if let Some(ref latest_proof) = self.proof {
+                let mut writer = Vec::with_capacity(CanonicalSerialize::serialized_size(
+                    latest_proof,
+                    ark_serialize::Compress::Yes,
+                ));
+                CanonicalSerialize::serialize_compressed(latest_proof, writer.by_ref())
+                    .map_err(|e| S::Error::custom(format!("Could not serialize proof: {}", e)))?;
+                Some(writer)
+            } else {
+                None
+            };
+            state.serialize_field(ZK_PROOF_FIELDS[0], &self.block_number.to_be_bytes())?;
+            state.serialize_field(ZK_PROOF_FIELDS[1], &ser_latest_proof)?;
+            state.end()
+        }
+    }
+
+    impl<'de> Deserialize<'de> for ZKProof {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            deserializer.deserialize_struct("ZKProof", ZK_PROOF_FIELDS, ZKProofVisitor)
+        }
+    }
+
+    impl<'de> Visitor<'de> for ZKPStateVisitor {
+        type Value = ZKPState;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("struct ZKPState")
+        }
+
+        /// The deserialization of the ZKPState is unsafe over the network.
+        /// It uses unchecked deserialization of elliptic curve points for performance reasons.
+        /// We only invoke it when transferring data from the proof generation process.
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let latest_block: MacroBlock = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(0, &self))?;
+            let ser_latest_proof: Option<Vec<u8>> = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+
+            let latest_proof = if let Some(ser_proof) = ser_latest_proof {
+                Some(
+                    CanonicalDeserialize::deserialize_uncompressed_unchecked(&*ser_proof).map_err(
+                        |_| A::Error::invalid_value(Unexpected::Other("Invalid proof"), &self),
+                    )?,
+                )
+            } else {
+                None
+            };
+
+            Ok(ZKPState {
+                latest_block,
+                latest_proof,
+            })
+        }
+    }
+
+    /// The serialization of the ZKPState is unsafe over the network.
+    /// It uses unchecked serialization of elliptic curve points for performance reasons.
+    /// We only invoke it when transferring data from the proof generation process.
+    impl Serialize for ZKPState {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let ser_latest_proof = if let Some(ref latest_proof) = self.latest_proof {
+                let mut writer = Vec::with_capacity(CanonicalSerialize::serialized_size(
+                    latest_proof,
+                    ark_serialize::Compress::No,
+                ));
+                CanonicalSerialize::serialize_uncompressed(latest_proof, writer.by_ref())
+                    .map_err(|e| S::Error::custom(format!("Could not serialize proof: {}", e)))?;
+                Some(writer)
+            } else {
+                None
+            };
+            let mut state = serializer.serialize_struct("ZKPState", ZKP_STATE_FIELDS.len())?;
+            state.serialize_field(ZKP_STATE_FIELDS[0], &self.latest_block)?;
+            state.serialize_field(ZKP_STATE_FIELDS[1], &ser_latest_proof)?;
+            state.end()
+        }
+    }
+
+    impl<'de> Deserialize<'de> for ZKPState {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            deserializer.deserialize_struct("ZKPState", ZKP_STATE_FIELDS, ZKPStateVisitor)
+        }
+    }
+
+    impl<'de> Visitor<'de> for ProofInputVisitor {
+        type Value = ProofInput;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("struct ProofInput")
+        }
+
+        /// The deserialization of the ProofInput is unsafe over the network.
+        /// It uses unchecked deserialization of elliptic curve points for performance reasons.
+        /// We only invoke it when transferring data to the proof generation process.
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let previous_block: MacroBlock = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(0, &self))?;
+            let ser_previous_proof: Option<Vec<u8>> = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+            let final_block: MacroBlock = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(2, &self))?;
+            let genesis_header_hash: [u8; 32] = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(3, &self))?;
+            let path_buf: String = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(4, &self))?;
+
+            let previous_proof = if let Some(ser_proof) = ser_previous_proof {
+                Some(
+                    CanonicalDeserialize::deserialize_uncompressed_unchecked(&*ser_proof).map_err(
+                        |_| A::Error::invalid_value(Unexpected::Other("Invalid proof"), &self),
+                    )?,
+                )
+            } else {
+                None
+            };
+
+            Ok(ProofInput {
+                previous_block,
+                previous_proof,
+                final_block,
+                genesis_header_hash,
+                prover_keys_path: PathBuf::from(path_buf),
+            })
+        }
+    }
+
+    /// The serialization of the ProofInput is unsafe over the network.
+    /// It uses unchecked serialization of elliptic curve points for performance reasons.
+    /// We only invoke it when transferring data to the proof generation process.
+    impl Serialize for ProofInput {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let ser_previous_proof = if let Some(ref previous_proof) = self.previous_proof {
+                let mut writer = Vec::with_capacity(CanonicalSerialize::serialized_size(
+                    previous_proof,
+                    ark_serialize::Compress::No,
+                ));
+                CanonicalSerialize::serialize_uncompressed(previous_proof, writer.by_ref())
+                    .map_err(|e| S::Error::custom(format!("Could not serialize proof: {}", e)))?;
+                Some(writer)
+            } else {
+                None
+            };
+            let mut state = serializer.serialize_struct("ProofInput", PROOF_INPUT_FIELDS.len())?;
+            state.serialize_field(PROOF_INPUT_FIELDS[0], &self.previous_block)?;
+            state.serialize_field(PROOF_INPUT_FIELDS[1], &ser_previous_proof)?;
+            state.serialize_field(PROOF_INPUT_FIELDS[2], &self.final_block)?;
+            state.serialize_field(PROOF_INPUT_FIELDS[3], &self.genesis_header_hash)?;
+            state.serialize_field(
+                PROOF_INPUT_FIELDS[4],
+                &self.prover_keys_path.to_string_lossy().to_string(),
+            )?;
+            state.end()
+        }
+    }
+
+    impl<'de> Deserialize<'de> for ProofInput {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            deserializer.deserialize_struct("ProofInput", PROOF_INPUT_FIELDS, ProofInputVisitor)
+        }
     }
 }

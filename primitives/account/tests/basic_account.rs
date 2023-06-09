@@ -1,6 +1,5 @@
 use std::convert::TryInto;
 
-use beserial::{Deserialize, Serialize};
 use nimiq_account::{
     Account, Accounts, BasicAccount, BlockLogger, BlockState, Log, TransactionLog,
     TransactionOperationReceipt, TransactionReceipt,
@@ -8,6 +7,7 @@ use nimiq_account::{
 use nimiq_database::traits::Database;
 use nimiq_keys::{Address, KeyPair, PrivateKey, SecureGenerate};
 use nimiq_primitives::{account::AccountError, coin::Coin, networks::NetworkId};
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     accounts_revert::TestCommitRevert, test_rng::test_rng, transactions::TransactionsGenerator,

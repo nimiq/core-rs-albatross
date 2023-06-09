@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use beserial::Deserialize;
 use nimiq_block::{
     MacroBlock, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof,
     TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
@@ -16,6 +15,7 @@ use nimiq_primitives::{
     policy::Policy,
     slots::{Validator, Validators},
 };
+use nimiq_serde::Deserialize;
 use nimiq_test_log::test;
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfEntropy;

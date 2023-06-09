@@ -33,18 +33,19 @@ pin-project = "1.0"
 pin-project-lite = "0.2.9"
 prometheus-client = { version = "0.19.0", optional = true}
 rand = "0.8"
-serde = { version = "1.0", features = ["derive"], optional = true }
+serde = { version = "1.0", features = ["derive"] }
+serde-big-array = "0.5"
 thiserror = "1.0"
 tokio = { version = "1.29", features = ["macros", "rt", "tracing"] }
 tokio-stream = "0.1"
 wasm-timer = "0.2"
 
-beserial = { path = "../beserial", features = ["derive", "libp2p"] }
 nimiq-bls = { path = "../bls" }
 nimiq-macros = { path = "../macros" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-hash = { path = "../hash" }
+nimiq-serde = { path = "../serde" }
 nimiq-utils = { path = "../utils", features = [
     "tagged-signing",
     "serde-derive",
@@ -62,6 +63,7 @@ libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", default-feature
     "noise",
     "ping",
     "request-response",
+    "serde",
     "yamux",
 ] }
 
@@ -74,6 +76,7 @@ libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", default-feature
     "noise",
     "ping",
     "request-response",
+    "serde",
     "yamux",
     "wasm-bindgen",
 ] }
@@ -84,9 +87,7 @@ tokio = { version = "1.29", features = ["macros", "rt", "rt-multi-thread", "test
 nimiq-test-log = { path = "../test-log" }
 
 [features]
-default = ["peer-contact-book-persistence"]
 metrics = ["prometheus-client"]
-peer-contact-book-persistence = ["nimiq-network-interface/peer-contact-book-persistence", "serde"]
 tokio-time = ["tokio/time"]
 tokio-websocket = ["libp2p/dns", "libp2p/tcp", "libp2p/tokio", "libp2p/websocket"]
 wasm-websocket = ["libp2p-websys-transport"]

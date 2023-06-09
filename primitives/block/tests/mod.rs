@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use beserial::{Deserialize, Serialize};
 use nimiq_block::{MacroBlock, MacroBody, MacroHeader, MultiSignature};
 use nimiq_bls::{AggregateSignature, CompressedPublicKey, KeyPair};
 use nimiq_collections::bitset::BitSet;
@@ -8,6 +7,7 @@ use nimiq_handel::update::LevelUpdate;
 use nimiq_hash::{Blake2bHasher, Blake2sHash, Hasher};
 use nimiq_keys::{Address, PublicKey};
 use nimiq_primitives::slots::ValidatorsBuilder;
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_vrf::VrfSeed;
 
@@ -137,7 +137,7 @@ fn test_serialize_deserialize_level_update() {
     let update_2: LevelUpdate<MultiSignature> = Deserialize::deserialize_from_vec(&data).unwrap();
 
     assert_eq!(data.len(), update.serialized_size());
-    assert_eq!(update.serialized_size(), 108);
+    assert_eq!(update.serialized_size(), 101);
     // assert!(update_2.individual.is_none()); // not publicly accessible
     assert_eq!(update_2.level(), 2);
     assert_eq!(update_2.origin(), 3);
@@ -146,5 +146,5 @@ fn test_serialize_deserialize_level_update() {
 #[test]
 fn test_serialize_deserialize_with_message() {
     let update = LevelUpdate::new(create_multisig(), None, 2, 3);
-    assert_eq!(update.serialized_size(), 108);
+    assert_eq!(update.serialized_size(), 101);
 }

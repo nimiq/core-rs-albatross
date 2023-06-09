@@ -1,7 +1,7 @@
-use std::{fmt, io, sync::Arc, time::Duration};
+use std::{fmt, sync::Arc, time::Duration};
 
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use futures::{stream::BoxStream, Future, StreamExt};
+use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use thiserror::Error;
 
 // The max number of request to be processed per peerID and per request type.
@@ -11,7 +11,7 @@ pub const DEFAULT_MAX_REQUEST_RESPONSE_TIME_WINDOW: Duration = Duration::from_se
 
 use crate::network::Network;
 
-#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct RequestType(pub u16);
 
 impl fmt::Display for RequestType {
@@ -141,16 +141,15 @@ pub trait RequestCommon:
 
     /// Serializes a request.
     /// A serialized request is composed of:
-    /// - A 2 bytes (u16) for the Type ID of the request
+    /// - A varint for the Type ID of the request
     /// - Serialized content of the inner type.
-    fn serialize_request<W: WriteBytesExt>(
-        &self,
-        writer: &mut W,
-    ) -> Result<usize, SerializingError> {
-        let mut size = 0;
-        size += RequestType::from_request::<Self>().0.serialize(writer)?;
-        size += self.serialize(writer)?;
-        Ok(size)
+    fn serialize_request(&self) -> Vec<u8> {
+        let mut data = Vec::with_capacity(self.serialized_request_size());
+        RequestType::from_request::<Self>()
+            .serialize_to_writer(&mut data)
+            .unwrap();
+        Serialize::serialize_to_writer(self, &mut data).unwrap();
+        data
     }
 
     /// Computes the size in bytes of a serialized request.
@@ -166,18 +165,15 @@ pub trait RequestCommon:
 
     /// Deserializes a request
     /// A serialized request is composed of:
-    /// - A 2 bytes (u16) for the Type ID of the request
+    /// - A varint for the Type ID of the request
     /// - Serialized content of the inner type.
-    fn deserialize_request<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+    fn deserialize_request(buffer: &[u8]) -> Result<Self, DeserializeError> {
         // Check for correct type.
-        let ty: u16 = Deserialize::deserialize(reader)?;
+        let (ty, message_buf) = u16::deserialize_take(buffer)?;
         if ty != RequestType::from_request::<Self>().0 {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "Wrong message type").into());
+            return Err(DeserializeError::bad_enum());
         }
-
-        let message: Self = Deserialize::deserialize(reader)?;
-
-        Ok(message)
+        Self::deserialize_from_vec(message_buf)
     }
 }
 
@@ -187,7 +183,7 @@ pub trait Message: RequestCommon<Kind = MessageMarker, Response = ()> {}
 impl<T: RequestCommon<Kind = RequestMarker>> Request for T {}
 impl<T: RequestCommon<Kind = MessageMarker, Response = ()>> Message for T {}
 
-pub fn peek_type(buffer: &[u8]) -> Result<RequestType, SerializingError> {
+pub fn peek_type(buffer: &[u8]) -> Result<RequestType, DeserializeError> {
     let ty = u16::deserialize_from_vec(buffer)?;
     Ok(RequestType(ty))
 }

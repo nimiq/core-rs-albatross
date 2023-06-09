@@ -1,5 +1,5 @@
 use hex::FromHex;
-use nimiq_hash::{hmac::*, Sha512Hash};
+use nimiq_hash::{hmac::*, sha512::Sha512Hash};
 use nimiq_test_log::test;
 
 struct TestVector {

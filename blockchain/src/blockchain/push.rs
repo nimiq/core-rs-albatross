@@ -441,7 +441,7 @@ impl Blockchain {
                 let result = this
                     .state
                     .accounts
-                    .revert_chunk(&mut write_txn, prev_missing_range.start.clone());
+                    .revert_chunk(&mut write_txn, prev_missing_range.0.start.clone());
 
                 if let Err(e) = result {
                     // Check if the revert chunk failed.

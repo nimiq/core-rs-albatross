@@ -1,10 +1,11 @@
-use std::{borrow::Cow, cmp::Ordering, error, fmt, io, io::Write, ops::Deref};
+use std::{borrow::Cow, cmp::Ordering, error, fmt, io::Write, marker::PhantomData, ops::Deref};
 
-use beserial::{
-    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
-    SerializingError, WriteBytesExt,
-};
 use nimiq_hash::{Blake2bHash, HashOutput, Hasher, SerializeContent};
+use serde::{
+    de::{Error, SeqAccess, Visitor},
+    ser::SerializeStruct,
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 
 use crate::math::CeilingDiv;
 
@@ -54,10 +55,7 @@ pub struct MerklePath<H: HashOutput> {
     nodes: Vec<MerklePathNode<H>>,
 }
 
-impl<H> MerklePath<H>
-where
-    H: HashOutput,
-{
+impl<H: HashOutput> MerklePath<H> {
     pub fn empty() -> Self {
         MerklePath { nodes: Vec::new() }
     }
@@ -166,46 +164,116 @@ where
 }
 
 impl<H: HashOutput> Serialize for MerklePath<H> {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size: usize = 0;
-        size += Serialize::serialize(&(self.nodes.len() as u8), writer)?;
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("MerklePath", 3)?;
+        state.serialize_field("nodes_len", &(self.nodes.len() as u8))?;
         let compressed = self.compress();
-        size += writer.write(compressed.as_slice())?;
-
-        for node in self.nodes.iter() {
-            size += Serialize::serialize(&node.hash, writer)?;
-        }
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = /*count*/ 1;
-        size += self.nodes.len().ceiling_div(8);
-        size += self
-            .nodes
-            .iter()
-            .fold(0, |acc, node| acc + Serialize::serialized_size(&node.hash));
-        size
+        state.serialize_field("compressed", &compressed)?;
+        state.serialize_field(
+            "node_hashes",
+            &self
+                .nodes
+                .iter()
+                .map(|node| node.hash.clone())
+                .collect::<Vec<H>>(),
+        )?;
+        state.end()
     }
 }
 
-impl<H: HashOutput> Deserialize for MerklePath<H> {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let count: u8 = Deserialize::deserialize(reader)?;
+struct MerklePathVisitor<H: HashOutput> {
+    phantom: PhantomData<H>,
+}
+
+impl<'de, H: HashOutput> Visitor<'de> for MerklePathVisitor<H> {
+    type Value = MerklePath<H>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("struct MerklePath")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let count: u8 = seq
+            .next_element()?
+            .ok_or_else(|| A::Error::invalid_length(0, &self))?;
         let count = count as usize;
-
         let left_bits_size = count.ceiling_div(8);
-        let mut left_bits: Vec<u8> = vec![0; left_bits_size];
-        reader.read_exact(left_bits.as_mut_slice())?;
-
+        let left_bits: Vec<u8> = seq
+            .next_element()?
+            .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+        let node_hashes: Vec<H> = seq
+            .next_element()?
+            .ok_or_else(|| A::Error::invalid_length(2, &self))?;
+        if left_bits_size > left_bits.len() {
+            return Err(A::Error::invalid_length(left_bits.len(), &self));
+        }
+        if node_hashes.len() != count {
+            return Err(A::Error::invalid_length(node_hashes.len(), &self));
+        }
         let mut nodes: Vec<MerklePathNode<H>> = Vec::with_capacity(count);
-        for i in 0..count {
+        for (i, node_hash) in node_hashes.iter().enumerate().take(count) {
             nodes.push(MerklePathNode {
                 left: MerklePath::<H>::decompress(i, &left_bits),
-                hash: Deserialize::deserialize(reader)?,
+                hash: node_hash.clone(),
             });
         }
         Ok(MerklePath { nodes })
+    }
+}
+
+impl<'de, H: HashOutput> Deserialize<'de> for MerklePath<H> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &["nodes_len", "compressed", "node_hashes"];
+        deserializer.deserialize_struct(
+            "MerklePath",
+            FIELDS,
+            MerklePathVisitor {
+                phantom: PhantomData,
+            },
+        )
+    }
+}
+struct MerklePathNodesVisitor<H: HashOutput> {
+    left_bits: Vec<u8>,
+    count: usize,
+    phantom: PhantomData<H>,
+}
+
+impl<'de, H: HashOutput> Visitor<'de> for MerklePathNodesVisitor<H> {
+    type Value = Vec<MerklePathNode<H>>;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "a set Merkle Path nodes")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Vec<MerklePathNode<H>>, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let mut nodes: Vec<MerklePathNode<H>> = Vec::with_capacity(self.count);
+        let mut curr = 0usize;
+        while let Some(hash) = seq.next_element::<H>()? {
+            nodes.push(MerklePathNode {
+                left: MerklePath::<H>::decompress(curr, &self.left_bits),
+                hash,
+            });
+            curr += 1;
+            if curr > self.count {
+                return Err(A::Error::custom(
+                    "Size mismatch for a set of MerklePath nodes",
+                ));
+            }
+        }
+        Ok(nodes)
     }
 }
 
@@ -223,10 +291,7 @@ pub struct MerkleProof<H: HashOutput> {
     operations: Vec<MerkleProofOperation>,
 }
 
-impl<H> MerkleProof<H>
-where
-    H: HashOutput,
-{
+impl<H: HashOutput> MerkleProof<H> {
     pub fn new(hashes: &[H], hashes_to_proof: &[H]) -> Self {
         let mut nodes: Vec<H> = Vec::new();
         let mut operations: Vec<MerkleProofOperation> = Vec::new();
@@ -468,47 +533,72 @@ where
 }
 
 impl<H: HashOutput> Serialize for MerkleProof<H> {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size: usize = 0;
-        size += Serialize::serialize(&(self.operations.len() as u16), writer)?;
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("MerkleProof", 3)?;
+        state.serialize_field("operations_len", &(self.operations.len() as u16))?;
         let compressed = self.compress();
-        size += writer.write(compressed.as_slice())?;
-
-        size += SerializeWithLength::serialize::<u16, W>(&self.nodes, writer)?;
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = /*operations*/ 2;
-        size += self.operations.len().ceiling_div(4);
-        size += SerializeWithLength::serialized_size::<u16>(&self.nodes);
-        size
+        state.serialize_field("compressed", &compressed)?;
+        state.serialize_field("nodes", &self.nodes)?;
+        state.end()
     }
 }
 
-impl<H: HashOutput> Deserialize for MerkleProof<H> {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let count: u16 = Deserialize::deserialize(reader)?;
-        let count = count as usize;
+struct MerkleProofVisitor<H: HashOutput> {
+    phantom: PhantomData<H>,
+}
 
+impl<'de, H: HashOutput> Visitor<'de> for MerkleProofVisitor<H> {
+    type Value = MerkleProof<H>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("struct MerkleProof")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let count: u16 = seq
+            .next_element()?
+            .ok_or_else(|| A::Error::invalid_length(0, &self))?;
+        let count = count as usize;
         let operations_size = count.ceiling_div(4);
-        let mut operation_bits: Vec<u8> = vec![0; operations_size];
-        reader.read_exact(operation_bits.as_mut_slice())?;
+        let operation_bits: Vec<u8> = seq
+            .next_element()?
+            .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+        if operation_bits.len() > operations_size {
+            return Err(A::Error::invalid_length(operations_size, &self));
+        }
+        let nodes: Vec<H> = seq
+            .next_element()?
+            .ok_or_else(|| A::Error::invalid_length(2, &self))?;
         let operations = match MerkleProof::<H>::decompress(count, operation_bits) {
             Some(operations) => operations,
             None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    "invalid operation in bitvector",
-                )
-                .into())
+                return Err(Error::custom("invalid operation in bitvector"));
             }
         };
 
-        Ok(MerkleProof {
-            operations,
-            nodes: DeserializeWithLength::deserialize::<u16, R>(reader)?,
-        })
+        Ok(MerkleProof { operations, nodes })
+    }
+}
+
+impl<'de, H: HashOutput> Deserialize<'de> for MerkleProof<H> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &["operations_len", "compressed", "nodes"];
+        deserializer.deserialize_struct(
+            "MerkleProof",
+            FIELDS,
+            MerkleProofVisitor {
+                phantom: PhantomData,
+            },
+        )
     }
 }
 

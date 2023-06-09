@@ -1,10 +1,10 @@
 use std::{
     fs::OpenOptions,
-    io::{BufReader, BufWriter, Error as IoError, Write},
+    io::{BufWriter, Error as IoError, Read as _, Write},
     path::{Path, PathBuf},
 };
 
-use beserial::{Deserialize, Serialize, SerializingError};
+use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use thiserror::Error;
 
 pub struct FileStore {
@@ -20,9 +20,10 @@ impl FileStore {
 
     pub fn load<T: Deserialize>(&self) -> Result<T, Error> {
         log::debug!("Reading from: {}", self.path.display());
-        let file = OpenOptions::new().read(true).open(&self.path)?;
-        let mut buf_reader = BufReader::new(file);
-        let item = Deserialize::deserialize(&mut buf_reader)?;
+        let mut file = OpenOptions::new().read(true).open(&self.path)?;
+        let mut buffer = Vec::with_capacity(4000);
+        file.read_to_end(&mut buffer)?;
+        let item: T = Deserialize::deserialize_from_vec(&buffer)?;
         Ok(item)
     }
 
@@ -41,7 +42,7 @@ impl FileStore {
     }
 
     pub fn store<T: Serialize>(&self, item: &T) -> Result<(), Error> {
-        log::debug!("Writing to: {}", self.path.display());
+        log::debug!(path = ?self.path.display(), "Writing tof file");
         let file = OpenOptions::new()
             .write(true)
             .create(true)
@@ -56,7 +57,7 @@ impl FileStore {
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Serialization error: {0}")]
-    Serialization(#[from] SerializingError),
+    Serialization(#[from] DeserializeError),
 
     #[error("IO error: {0}")]
     IoError(#[from] IoError),

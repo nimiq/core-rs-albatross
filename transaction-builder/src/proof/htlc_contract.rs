@@ -1,6 +1,6 @@
-use beserial::Serialize;
 use nimiq_hash::{Blake2bHash, Sha256Hash};
 use nimiq_keys::KeyPair;
+use nimiq_serde::Serialize;
 use nimiq_transaction::{
     account::htlc_contract::{AnyHash, HashAlgorithm, OutgoingHTLCTransactionProof},
     SignatureProof, Transaction,

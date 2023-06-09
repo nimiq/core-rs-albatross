@@ -1,8 +1,8 @@
 use std::{error::Error, process};
 
-use beserial::Deserialize;
 use clap::{Arg, Command};
 use nimiq_keys::{Address, PrivateKey, PublicKey, SecureGenerate};
+use nimiq_serde::Deserialize;
 
 fn parse_private_key(s: &str) -> Result<PrivateKey, Box<dyn Error>> {
     Ok(PrivateKey::deserialize_from_vec(&hex::decode(s)?)?)

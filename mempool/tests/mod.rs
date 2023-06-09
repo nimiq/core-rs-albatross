@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
@@ -16,6 +15,7 @@ use nimiq_keys::{
 use nimiq_mempool::{config::MempoolConfig, mempool::Mempool, mempool_transactions::TxPriority};
 use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
 use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key},
@@ -43,7 +43,7 @@ const VALIDATOR_ADDRESS: &str = "NQ20 TSB0 DFSM UH9C 15GQ GAGJ TTE4 D3MA 859E";
 
 fn ed25519_key_pair(secret_key: &str) -> SchnorrKeyPair {
     let priv_key: SchnorrPrivateKey =
-        Deserialize::deserialize(&mut &hex::decode(secret_key).unwrap()[..]).unwrap();
+        Deserialize::deserialize_from_vec(&hex::decode(secret_key).unwrap()[..]).unwrap();
     priv_key.into()
 }
 

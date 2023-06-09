@@ -10,7 +10,7 @@ use std::{
     marker::PhantomData,
 };
 
-use beserial::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize};
 
 /// A trait for objects that can be signed. You have to choose an unique `TAG` that is used as prefix for
 /// the message that will be signed. This is used to avoid replay attacks.
@@ -35,7 +35,7 @@ pub trait TaggedSignable: Serialize {
 
         let tag = [Self::TAG; 1];
         buf.write_all(&tag).expect("Failed to write tag");
-        self.serialize(&mut buf)
+        self.serialize_to_writer(&mut buf)
             .expect("Failed to serialize message");
 
         buf.into_inner()
@@ -48,12 +48,9 @@ where
     TSignable: TaggedSignable,
     TScheme: TaggedKeypair,
 {
-    #[beserial(len_type(u8))]
     data: Vec<u8>,
 
-    #[beserial(skip)]
     _tagged: PhantomData<TSignable>,
-    #[beserial(skip)]
     _scheme: PhantomData<TScheme>,
 }
 
@@ -137,8 +134,8 @@ pub trait TaggedPublicKey {
 
 #[cfg(test)]
 mod tests {
-    use beserial::{Deserialize, Serialize};
     use nimiq_keys::{KeyPair, PublicKey, SecureGenerate, Signature};
+    use nimiq_serde::{Deserialize, Serialize};
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng::test_rng;
 
@@ -274,44 +271,6 @@ mod impl_for_keys {
     impl TaggedPublicKey for PublicKey {
         fn verify(&self, msg: &[u8], sig: &[u8]) -> bool {
             self.verify(&Signature::from_bytes(sig).unwrap(), msg)
-        }
-    }
-}
-
-#[cfg(feature = "serde-derive")]
-mod serde_tagged_signature {
-    use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
-
-    use super::{TaggedKeypair, TaggedSignable, TaggedSignature};
-
-    impl<TSignable, TScheme> Serialize for TaggedSignature<TSignable, TScheme>
-    where
-        TSignable: TaggedSignable,
-        TScheme: TaggedKeypair,
-    {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            let hex_encoded = hex::encode(&self.data);
-            Serialize::serialize(&hex_encoded, serializer)
-        }
-    }
-
-    impl<'de, TSignable, TScheme> Deserialize<'de> for TaggedSignature<TSignable, TScheme>
-    where
-        TSignable: TaggedSignable,
-        TScheme: TaggedKeypair,
-    {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            let hex_encoded: String = Deserialize::deserialize(deserializer)?;
-
-            let data = hex::decode(hex_encoded).map_err(D::Error::custom)?;
-
-            Ok(TaggedSignature::from_bytes(data))
         }
     }
 }

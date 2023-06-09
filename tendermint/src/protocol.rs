@@ -1,5 +1,6 @@
 use futures::{future::BoxFuture, stream::BoxStream};
 use nimiq_collections::BitSet;
+use serde::{Deserialize, Serialize};
 
 use crate::utils::Step;
 
@@ -34,7 +35,7 @@ pub struct SignedProposalMessage<Proposal, ProposalSignature> {
     pub signature: ProposalSignature,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TaggedAggregationMessage<AggregationMessage> {
     pub tag: (u32, Step),
     pub aggregation: AggregationMessage,

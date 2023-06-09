@@ -1,10 +1,6 @@
 use nimiq_hash::Blake2sHash;
 pub use types::*;
 
-// Implements several serialization-related types.
-#[cfg(feature = "beserial")]
-pub mod serialization;
-
 // Implements the LazyPublicKey type. Which is a faster, cached version of PublicKey.
 #[cfg(feature = "lazy")]
 pub mod lazy;

@@ -1,6 +1,7 @@
 use std::{
     fs,
     fs::{DirBuilder, File},
+    io::Read,
     path::Path,
 };
 
@@ -12,10 +13,10 @@ use ark_mnt4_753::{Fq as MNT4Fq, MNT4_753};
 use ark_mnt6_753::{Fq as MNT6Fq, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
-use beserial::{Deserialize, Serialize};
 use nimiq_block::MacroBlock;
 use nimiq_hash::{Blake2sHash, Hash};
 use nimiq_primitives::{policy::Policy, slots::PK_TREE_DEPTH};
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_zkp_circuits::{
     bits::BitVec,
     circuits::{
@@ -44,8 +45,11 @@ pub fn update_proof_cache(
     let metadata_file = proofs.join("meta_data.bin");
 
     if metadata_file.exists() {
-        let mut file = File::open(&metadata_file)?;
-        let meta_data_hash: [u8; 32] = Deserialize::deserialize(&mut file)?;
+        let file = File::open(&metadata_file)?;
+        let mut buf = vec![];
+        let mut reader = std::io::BufReader::new(file);
+        reader.read_to_end(&mut buf)?;
+        let meta_data_hash: [u8; 32] = Deserialize::deserialize_from_vec(&buf)?;
 
         // If the hash in the meta data matches, return.
         if &meta_data_hash == current_header_hash {
@@ -61,7 +65,7 @@ pub fn update_proof_cache(
     // Create a new meta data file.
     DirBuilder::new().recursive(true).create(&proofs)?;
     let mut file = File::create(&metadata_file)?;
-    current_header_hash.serialize(&mut file)?;
+    current_header_hash.serialize_to_writer(&mut file)?;
 
     Ok(())
 }

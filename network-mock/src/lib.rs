@@ -2,12 +2,12 @@ mod hub;
 mod network;
 mod observable_hash_map;
 
-use beserial::{Deserialize, Serialize};
 use derive_more::{Display, From, Into};
 pub use hub::MockHub;
 pub use network::{MockId, MockNetwork};
 use nimiq_network_interface::{multiaddr, Multiaddr};
 pub use observable_hash_map::ObservableHashMap;
+use serde::{Deserialize, Serialize};
 
 /// The address of a MockNetwork or a peer thereof. Peer IDs are always equal to their respective address, thus these
 /// can be converted between each other.
@@ -70,10 +70,10 @@ pub async fn create_mock_validator_network(n: usize, dial: bool) -> Vec<MockNetw
 
 #[cfg(test)]
 pub mod tests {
-    use beserial::{Deserialize, Serialize};
     use futures::{Stream, StreamExt};
     use nimiq_network_interface::network::{Network, NetworkEvent, SubscribeEvents, Topic};
     use nimiq_test_log::test;
+    use serde::{Deserialize, Serialize};
 
     use super::{network::MockNetworkError, MockHub, MockPeerId};
 

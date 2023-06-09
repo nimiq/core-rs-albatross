@@ -1,17 +1,15 @@
 use std::fmt::{self, Debug, Formatter};
 
-use beserial::{
-    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
-    SerializingError, WriteBytesExt,
-};
 use nimiq_hash::Blake2bHash;
-use nimiq_mmr::mmr::proof::{Proof, RangeProof};
+use nimiq_mmr::mmr::proof::RangeProof;
 use nimiq_transaction::extended_transaction::ExtendedTransaction;
+use serde::{Deserialize, Serialize};
 
 /// The chunk size used in our protocol.
 /// TODO: Update number.
 pub const CHUNK_SIZE: usize = 1024;
 
+#[derive(Serialize, Deserialize)]
 pub struct HistoryTreeChunk {
     pub(crate) proof: RangeProof<Blake2bHash>,
     pub history: Vec<ExtendedTransaction>,
@@ -38,45 +36,5 @@ impl HistoryTreeChunk {
         self.proof
             .verify_with_start(&expected_root, leaf_index, &self.history)
             .ok()
-    }
-}
-
-impl Serialize for HistoryTreeChunk {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size = Serialize::serialize(&self.proof.assume_previous, writer)?;
-        size += Serialize::serialize(&(self.proof.proof.mmr_size as u64), writer)?;
-        size += SerializeWithLength::serialize::<u32, _>(&self.proof.proof.nodes, writer)?;
-
-        size += SerializeWithLength::serialize::<u16, _>(&self.history, writer)?;
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = Serialize::serialized_size(&self.proof.assume_previous);
-        size += Serialize::serialized_size(&(self.proof.proof.mmr_size as u64));
-        size += SerializeWithLength::serialized_size::<u32>(&self.proof.proof.nodes);
-
-        size += SerializeWithLength::serialized_size::<u16>(&self.history);
-        size
-    }
-}
-
-impl Deserialize for HistoryTreeChunk {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let assume_previous: bool = Deserialize::deserialize(reader)?;
-        let mmr_size: u64 = Deserialize::deserialize(reader)?;
-
-        let proof = RangeProof {
-            proof: Proof {
-                mmr_size: mmr_size as usize,
-                nodes: DeserializeWithLength::deserialize::<u32, _>(reader)?,
-            },
-            assume_previous,
-        };
-
-        Ok(HistoryTreeChunk {
-            proof,
-            history: DeserializeWithLength::deserialize::<u16, _>(reader)?,
-        })
     }
 }

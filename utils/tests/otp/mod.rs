@@ -1,6 +1,6 @@
-use beserial::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_utils::otp::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize, Eq, PartialEq, Clone)]
 struct DummyU32 {
@@ -57,7 +57,7 @@ fn create_unlocked_checked() {
 
 #[test]
 fn create_locked_unchecked() {
-    let secret: u32 = 12345;
+    let secret = 12345u32.to_be_bytes();
     let password = "password";
     let wrong_password = "wrong_password";
 

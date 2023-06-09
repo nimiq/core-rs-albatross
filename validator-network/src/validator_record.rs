@@ -1,5 +1,5 @@
-use beserial::{Deserialize, Serialize};
 use nimiq_bls::{PublicKey, SecretKey, Signature};
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_utils::tagged_signing::TaggedSignable;
 
 // TODO: Use a tagged signature for validator records
@@ -11,6 +11,7 @@ where
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "TPeerId: Serialize + Deserialize")]
 pub struct ValidatorRecord<TPeerId>
 where
     TPeerId: Serialize + Deserialize,
@@ -39,6 +40,7 @@ where
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "TPeerId: Serialize + Deserialize")]
 pub struct SignedValidatorRecord<TPeerId>
 where
     TPeerId: Serialize + Deserialize,

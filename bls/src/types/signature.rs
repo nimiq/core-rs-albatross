@@ -135,7 +135,10 @@ impl From<G1Projective> for Signature {
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
     // TODO: Replace this with a generic serialization using `ToHex` and `FromHex`.
+    use std::io;
 
+    use nimiq_hash::SerializeContent;
+    use nimiq_serde::Serialize as NimiqSerialize;
     use serde::{
         de::{Deserialize, Deserializer, Error},
         ser::{Serialize, Serializer},
@@ -159,6 +162,12 @@ mod serde_derive {
         {
             let compressed: CompressedSignature = Deserialize::deserialize(deserializer)?;
             compressed.uncompress().map_err(Error::custom)
+        }
+    }
+
+    impl SerializeContent for Signature {
+        fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
+            self.serialize_to_writer(writer)
         }
     }
 }

@@ -19,19 +19,19 @@ ark-relations = "0.4"
 ark-r1cs-std = "0.4"
 ark-serialize = "0.4"
 ark-std = "0.4"
+hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 num-traits = "0.2"
 rand = { version = "0.8", features = ["small_rng"] }
 rayon = { version = "^1.7", optional = true }
+serde = { version = "1.0" }
 thiserror = "1.0"
 
-beserial = { path = "../beserial", features = ["derive"] }
 nimiq-bls = { path = "../bls" }
 nimiq-hash = { path = "../hash" }
 nimiq-pedersen-generators = { path = "pedersen-generators" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
-
-hex = "0.4"
+nimiq-serde = { path = "../serde" }
 
 [dev-dependencies]
 nimiq-block = { path = "../primitives/block" }

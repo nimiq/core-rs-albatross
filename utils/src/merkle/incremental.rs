@@ -1,8 +1,8 @@
 use std::mem;
 
-use beserial::{Deserialize, Serialize};
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, HashOutput, Hasher, SerializeContent};
+use nimiq_serde::{Deserialize, Serialize};
 
 use crate::math::CeilingDiv;
 
@@ -166,9 +166,9 @@ impl<H: HashOutput> IncrementalMerkleProofBuilder<H> {
 /// These proofs can only be verified incrementally, i.e., one has to start with the first chunk of data.
 /// The proof for the second chunk then takes as an input the result of the first chunk's proof and so on.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "H: HashOutput"))]
 pub struct IncrementalMerkleProof<H: HashOutput> {
     total_len: u32,
-    #[beserial(len_type(u16))]
     nodes: Vec<H>,
 }
 
@@ -199,10 +199,7 @@ impl<H: HashOutput> IncrementalMerkleProofResult<H> {
     }
 }
 
-impl<H> IncrementalMerkleProof<H>
-where
-    H: HashOutput,
-{
+impl<H: HashOutput> IncrementalMerkleProof<H> {
     pub fn empty(total_len: usize) -> Self {
         IncrementalMerkleProof {
             total_len: total_len as u32,

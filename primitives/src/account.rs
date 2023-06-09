@@ -1,6 +1,5 @@
 use std::convert::TryFrom;
 
-use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_keys::Address;
 use strum_macros::Display;
 use thiserror::Error;
@@ -11,11 +10,11 @@ use crate::{
     trie::error::MerkleRadixTrieError,
 };
 
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize, Display)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Display)]
 #[repr(u8)]
 #[cfg_attr(
     any(feature = "serde-derive", feature = "ts-types"),
-    derive(serde::Serialize, serde::Deserialize)
+    derive(nimiq_serde::Serialize, nimiq_serde::Deserialize)
 )]
 #[cfg_attr(feature = "serde-derive", serde(try_from = "u8", into = "u8"))]
 #[cfg_attr(
@@ -79,8 +78,8 @@ pub enum AccountError {
     InvalidForTarget,
     #[error("Invalid receipt")]
     InvalidReceipt,
-    #[error("Invalid serialization")]
-    InvalidSerialization(#[from] SerializingError),
+    #[error("Invalid serialization {0}")]
+    InvalidSerialization(#[from] nimiq_serde::DeserializeError),
     #[error("Invalid transaction")]
     InvalidTransaction(#[from] TransactionError),
     #[error("Invalid coin value")]
@@ -108,8 +107,11 @@ impl From<CoinUnderflowError> for AccountError {
     }
 }
 
-#[derive(Debug, Clone, Copy, Error, PartialEq, Eq, Serialize, Deserialize, Hash)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, Error, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde-derive",
+    derive(nimiq_serde::Serialize, nimiq_serde::Deserialize)
+)]
 #[repr(u8)]
 pub enum FailReason {
     #[error("Insufficient funds")]

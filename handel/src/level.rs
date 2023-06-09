@@ -178,10 +178,10 @@ impl Level {
 
 #[cfg(test)]
 mod test {
-    use beserial::{Deserialize, Serialize};
     use nimiq_collections::bitset::BitSet;
     use nimiq_test_log::test;
     use rand::Rng;
+    use serde::{Deserialize, Serialize};
 
     use super::*;
     use crate::contribution::ContributionError;

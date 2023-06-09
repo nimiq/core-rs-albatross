@@ -48,7 +48,7 @@ pub enum Error {
     Address(#[from] nimiq_keys::AddressParseError),
 
     #[error("Serializing Error: {0}")]
-    Serializing(#[from] beserial::SerializingError),
+    Serializing(#[from] nimiq_serde::DeserializeError),
 
     #[error("Nano ZKP Error: {0}")]
     NanoZKP(#[from] nimiq_zkp_primitives::NanoZKPError),

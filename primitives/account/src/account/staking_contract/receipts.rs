@@ -1,10 +1,10 @@
 use std::collections::BTreeSet;
 
-use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::account::AccountError;
+use nimiq_serde::{Deserialize, Serialize};
 
 use crate::{convert_receipt, AccountReceipt};
 
@@ -30,7 +30,6 @@ convert_receipt!(UpdateValidatorReceipt);
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ReactivateValidatorReceipt {
     pub was_inactive_since: u32,
-    #[beserial(len_type(u16))]
     pub current_epoch_disabled_slots: Option<BTreeSet<u16>>,
 }
 convert_receipt!(ReactivateValidatorReceipt);

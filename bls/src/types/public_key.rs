@@ -136,3 +136,43 @@ impl fmt::Display for PublicKey {
         write!(f, "{}", self.compress().to_hex())
     }
 }
+
+#[cfg(feature = "serde-derive")]
+mod serde_derive {
+    // TODO: Replace this with a generic serialization using `ToHex` and `FromHex`.
+    use std::io;
+
+    use nimiq_hash::SerializeContent;
+    use nimiq_serde::Serialize as NimiqSerialize;
+    use serde::{
+        de::{Deserialize, Deserializer, Error},
+        ser::{Serialize, Serializer},
+    };
+
+    use super::{CompressedPublicKey, PublicKey};
+
+    impl Serialize for PublicKey {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            Serialize::serialize(&self.compress(), serializer)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for PublicKey {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let compressed: CompressedPublicKey = Deserialize::deserialize(deserializer)?;
+            compressed.uncompress().map_err(Error::custom)
+        }
+    }
+
+    impl SerializeContent for PublicKey {
+        fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
+            self.serialize_to_writer(writer)
+        }
+    }
+}

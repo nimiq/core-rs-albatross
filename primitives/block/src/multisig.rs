@@ -1,7 +1,7 @@
-use beserial::{Deserialize, Serialize};
 use nimiq_bls::AggregateSignature;
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
+use serde::{Deserialize, Serialize};
 
 /*
 This does not really belong here, but as there would otherwise be a cyclic dependency it needs to be here for now.

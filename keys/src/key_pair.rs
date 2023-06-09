@@ -1,11 +1,13 @@
-use beserial::{Deserialize, Serialize};
 use ed25519_zebra::{SigningKey, VerificationKeyBytes};
 use nimiq_utils::key_rng::SecureGenerate;
 use rand_core::{CryptoRng, RngCore};
+#[cfg(feature = "serde-derive")]
+use serde::{Deserialize, Serialize};
 
 use crate::{PrivateKey, PublicKey, Signature};
 
-#[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde-derive", derive(Serialize, Deserialize))]
 pub struct KeyPair {
     pub public: PublicKey,
     pub private: PrivateKey,

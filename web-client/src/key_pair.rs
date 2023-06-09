@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use beserial::{Deserialize, Serialize};
 use nimiq_keys::SecureGenerate;
+use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 use crate::{
@@ -46,7 +46,7 @@ impl KeyPair {
     ///
     /// Throws when the byte array contains less than 64 bytes.
     pub fn unserialize(bytes: &[u8]) -> Result<KeyPair, JsError> {
-        let key_pair = nimiq_keys::KeyPair::deserialize(&mut &*bytes)?;
+        let key_pair = nimiq_keys::KeyPair::deserialize_from_vec(bytes)?;
         // TODO: Deserialize locked state if bytes remaining
         Ok(KeyPair::from_native(key_pair))
     }

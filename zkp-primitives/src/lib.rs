@@ -15,7 +15,6 @@ use std::io;
 
 use ark_relations::r1cs::SynthesisError;
 use ark_serialize::SerializationError;
-use beserial::SerializingError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -25,7 +24,7 @@ pub enum NanoZKPError {
     #[error("serialization error: {0}")]
     Serialization(#[from] SerializationError),
     #[error("serialization error: {0}")]
-    Serializing(#[from] SerializingError),
+    Serializing(#[from] nimiq_serde::DeserializeError),
     #[error("circuit error: {0}")]
     Circuit(#[from] SynthesisError),
     #[error("empty proof")]

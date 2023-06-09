@@ -20,14 +20,14 @@ futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 num-traits = "0.2"
-rand = "0.8"
-rand_chacha = "0.3.1"
 parking_lot = "0.12"
 paste = "1.0"
+rand = "0.8"
+rand_chacha = "0.3.1"
+serde = "1.0"
 tokio = { version = "1.29", features = ["rt", "time", "tracing"] }
 tokio-stream = "0.1"
 
-beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
@@ -47,6 +47,7 @@ nimiq-network-interface = { path = "../network-interface" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-network-mock = { path = "../network-mock" }
 nimiq-primitives = { path = "../primitives" }
+nimiq-serde = { path = "../serde" }
 nimiq-tendermint = { path = "../tendermint" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-transaction-builder = { path = "../transaction-builder" }

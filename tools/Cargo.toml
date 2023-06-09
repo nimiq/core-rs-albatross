@@ -30,10 +30,10 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 rand = "0.8"
 thiserror = "1.0"
 
-beserial = { path = "../beserial" }
 nimiq-bls = { path = "../bls" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-serde = { path = "../serde" }
 nimiq-utils = { path = "../utils" }

@@ -10,5 +10,13 @@ license = "Apache-2.0"
 categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
+[dependencies]
+serde = { version = "1.0", optional = true }
+
+nimiq-serde = { path = "../../serde", optional = true }
+
 [dev-dependencies]
 nimiq-test-log = { path = "../../test-log" }
+
+[features]
+serde-derive = ["nimiq-serde", "serde"]

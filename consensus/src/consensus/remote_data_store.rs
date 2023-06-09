@@ -3,7 +3,6 @@ use std::{
     sync::Arc,
 };
 
-use beserial::Deserialize;
 use nimiq_account::{
     Account, DataStoreReadOps, Staker, StakingContract, StakingContractStore, Tombstone, Validator,
 };
@@ -16,6 +15,7 @@ use nimiq_network_interface::{
     request::{OutboundRequestError, RequestError},
 };
 use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy};
+use nimiq_serde::Deserialize;
 
 use crate::messages::RequestTrieProof;
 

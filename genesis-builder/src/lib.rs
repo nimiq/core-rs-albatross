@@ -7,7 +7,6 @@ use std::{
     path::Path,
 };
 
-use beserial::{Serialize, SerializeWithLength, SerializingError};
 use nimiq_account::{
     Account, Accounts, BasicAccount, HashedTimeLockedContract, StakingContract,
     StakingContractStoreWrite, TransactionLog, VestingContract,
@@ -23,6 +22,7 @@ use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{
     account::AccountError, coin::Coin, key_nibbles::KeyNibbles, policy::Policy, trie::TrieItem,
 };
+use nimiq_serde::{DeserializeError, Serialize};
 use nimiq_vrf::VrfSeed;
 use thiserror::Error;
 use time::OffsetDateTime;
@@ -35,7 +35,7 @@ pub enum GenesisBuilderError {
     #[error("No VRF seed to generate genesis block")]
     NoVrfSeed,
     #[error("Serialization failed")]
-    SerializingError(#[from] SerializingError),
+    SerializingError(#[from] DeserializeError),
     #[error("I/O error")]
     IoError(#[from] IoError),
     #[error("Failed to parse TOML file")]
@@ -390,7 +390,7 @@ impl GenesisBuilder {
             .create(true)
             .write(true)
             .open(&block_path)?;
-        block.serialize(&mut file)?;
+        block.serialize_to_writer(&mut file)?;
 
         let accounts_path = directory.as_ref().join("accounts.dat");
         info!("Writing accounts to {}", accounts_path.display());
@@ -398,7 +398,7 @@ impl GenesisBuilder {
             .create(true)
             .write(true)
             .open(&accounts_path)?;
-        accounts.serialize::<u32, _>(&mut file)?;
+        accounts.serialize_to_writer(&mut file)?;
 
         Ok(hash)
     }

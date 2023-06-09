@@ -37,6 +37,10 @@ impl<H: Merge + Eq, T: Hash<H>> SizeProof<H, T> {
 
 /// A Merkle proof for a MMR.
 #[derive(Clone, Debug)]
+#[cfg_attr(
+    feature = "serde-derive",
+    derive(nimiq_serde::Serialize, nimiq_serde::Deserialize)
+)]
 pub struct Proof<H> {
     pub mmr_size: usize,
     pub nodes: Vec<H>,
@@ -208,6 +212,10 @@ impl<H: Merge + Clone + Eq> Proof<H> {
 
 /// A Merkle proof for a MMR. This is equal to the regular Merkle proof, but has the `assume_previous`
 /// flag which can be used when we are verifying consecutive range proofs.
+#[cfg_attr(
+    feature = "serde-derive",
+    derive(nimiq_serde::Serialize, nimiq_serde::Deserialize)
+)]
 pub struct RangeProof<H> {
     pub proof: Proof<H>,
     pub assume_previous: bool,

@@ -1,6 +1,5 @@
 use std::{sync::Arc, time::Duration};
 
-use beserial::{Deserialize, Serialize};
 use futures::{future, StreamExt};
 use nimiq_block::{MultiSignature, SignedSkipBlockInfo, SkipBlockInfo};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
@@ -24,6 +23,7 @@ use nimiq_test_utils::{
     },
 };
 use nimiq_validator::aggregation::skip_block::SignedSkipBlockMessage;
+use serde::{Deserialize, Serialize};
 use tokio::time;
 
 #[derive(Debug, Deserialize, Serialize)]

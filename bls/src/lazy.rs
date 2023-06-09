@@ -139,27 +139,28 @@ impl From<LazyPublicKey> for CompressedPublicKey {
     }
 }
 
-#[cfg(feature = "beserial")]
+#[cfg(feature = "serde-derive")]
 mod serialization {
-    use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+    use serde::{Deserialize, Serialize};
 
     use super::*;
 
     impl Serialize for LazyPublicKey {
-        fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-            self.compressed.serialize(writer)
-        }
-
-        fn serialized_size(&self) -> usize {
-            self.compressed.serialized_size()
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            Serialize::serialize(&self.compressed, serializer)
         }
     }
 
-    impl Deserialize for LazyPublicKey {
-        fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-            Ok(LazyPublicKey::from_compressed(&Deserialize::deserialize(
-                reader,
-            )?))
+    impl<'de> Deserialize<'de> for LazyPublicKey {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            let compressed: CompressedPublicKey = Deserialize::deserialize(deserializer)?;
+            Ok(LazyPublicKey::from_compressed(&compressed))
         }
     }
 }

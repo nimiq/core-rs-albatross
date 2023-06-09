@@ -15,10 +15,10 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-beserial = { path = "../beserial", features = ["derive"] }
 futures = { package = "futures-util", version = "0.3" }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
+serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 tokio-stream = { version = "0.1", features = ["sync"] }
 
@@ -26,4 +26,5 @@ nimiq-block = { path = "../primitives/block" }
 nimiq-database-value = { path = "../database/database-value" }
 nimiq-hash = { path = "../hash" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "key-nibbles", "policy"] }
+nimiq-serde = { path = "../serde" }
 nimiq-transaction = { path = "../primitives/transaction" }

@@ -1,10 +1,5 @@
-#[cfg(feature = "beserial")]
-use std::fmt;
-
 use ark_ff::{UniformRand, Zero};
 use ark_mnt6_753::{Fr, G1Projective};
-#[cfg(feature = "beserial")]
-use beserial::Serialize;
 use nimiq_hash::Hash;
 use nimiq_utils::key_rng::{CryptoRng, RngCore, SecureGenerate};
 
@@ -18,7 +13,7 @@ pub struct SecretKey {
 }
 
 impl SecretKey {
-    pub const SIZE: usize = 96;
+    pub const SIZE: usize = 95;
 
     /// Creates a signature given a message.
     pub fn sign<M: Hash>(&self, msg: &M) -> Signature {
@@ -62,16 +57,57 @@ impl PartialEq for SecretKey {
     }
 }
 
-#[cfg(feature = "beserial")]
-impl fmt::Debug for SecretKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "SecretKey({})", hex::encode(self.serialize_to_vec()))
-    }
-}
+#[cfg(feature = "serde-derive")]
+mod serde_derive {
+    // TODO: Replace this with a generic serialization using `ToHex` and `FromHex`.
+    use std::fmt;
 
-#[cfg(feature = "beserial")]
-impl fmt::Display for SecretKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{}", hex::encode(self.serialize_to_vec()))
+    use ark_mnt6_753::Fr;
+    use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+    use nimiq_serde::Serialize as NimiqSerialize;
+    use serde::{
+        de::{Deserialize, Deserializer, Error as SerializationError},
+        ser::{Error as DeSerializationError, Serialize, Serializer},
+    };
+    use serde_big_array::BigArray;
+
+    use super::SecretKey;
+
+    impl fmt::Display for SecretKey {
+        fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+            write!(f, "{}", hex::encode(self.serialize_to_vec()))
+        }
+    }
+
+    impl fmt::Debug for SecretKey {
+        fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+            write!(f, "SecretKey({})", hex::encode(self.serialize_to_vec()))
+        }
+    }
+
+    impl Serialize for SecretKey {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let mut compressed = [0u8; Self::SIZE];
+            self.secret_key
+                .serialize_uncompressed(&mut compressed[..])
+                .map_err(|_| S::Error::custom("Couldn't compress secret key"))?;
+            BigArray::serialize(&compressed, serializer)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for SecretKey {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let compressed: [u8; Self::SIZE] = BigArray::deserialize(deserializer)?;
+            Ok(SecretKey {
+                secret_key: Fr::deserialize_uncompressed(&*compressed.to_vec())
+                    .map_err(|_| D::Error::custom("Couldn't uncompress secret key"))?,
+            })
+        }
     }
 }

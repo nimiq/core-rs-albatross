@@ -4,8 +4,8 @@ use std::{
 };
 
 use async_trait::async_trait;
-use beserial::{Deserialize, Serialize, SerializingError};
 use futures::stream::BoxStream;
+use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use thiserror::Error;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
@@ -63,7 +63,7 @@ pub enum CloseReason {
 #[derive(Debug, Error)]
 pub enum SendError {
     #[error("{0}")]
-    Serialization(#[from] SerializingError),
+    Serialization(#[from] DeserializeError),
     #[error("Peer connection already closed")]
     AlreadyClosed,
 }

@@ -1,9 +1,9 @@
-use beserial::{Deserialize, Serialize};
 #[cfg(feature = "interaction-traits")]
 use nimiq_primitives::account::AccountError;
 use nimiq_primitives::{account::AccountType, coin::Coin};
 #[cfg(feature = "interaction-traits")]
 use nimiq_transaction::{inherent::Inherent, Transaction, TransactionFlags};
+use serde::{Deserialize, Serialize};
 
 use crate::account::{
     basic_account::BasicAccount, htlc_contract::HashedTimeLockedContract,

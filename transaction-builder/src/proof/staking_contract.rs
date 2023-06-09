@@ -1,5 +1,5 @@
-use beserial::{Deserialize, Serialize};
 use nimiq_keys::KeyPair;
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
     account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof},
     SignatureProof, Transaction,

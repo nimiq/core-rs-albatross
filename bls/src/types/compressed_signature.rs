@@ -1,5 +1,3 @@
-#[cfg(feature = "beserial")]
-use std::str::FromStr;
 use std::{
     cmp::Ordering,
     fmt,
@@ -9,11 +7,7 @@ use std::{
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_mnt6_753::{G1Affine, G1Projective};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-#[cfg(feature = "beserial")]
-use beserial::Deserialize;
 
-#[cfg(feature = "beserial")]
-use crate::ParseError;
 use crate::Signature;
 
 /// The serialized compressed form of a signature.
@@ -21,7 +15,9 @@ use crate::Signature;
 /// one bit indicating the sign of the y-coordinate
 /// and one bit indicating if it is the "point-at-infinity".
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct CompressedSignature {
+    #[cfg_attr(feature = "serde-derive", serde(with = "nimiq_serde::HexArray"))]
     pub signature: [u8; 95],
 }
 
@@ -86,19 +82,6 @@ impl fmt::Display for CompressedSignature {
     }
 }
 
-#[cfg(feature = "beserial")]
-impl FromStr for CompressedSignature {
-    type Err = ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let raw = hex::decode(s)?;
-        if raw.len() != CompressedSignature::SIZE {
-            return Err(ParseError::IncorrectLength(raw.len()));
-        }
-        Ok(CompressedSignature::deserialize_from_vec(&raw).unwrap())
-    }
-}
-
 impl From<G1Projective> for CompressedSignature {
     fn from(signature: G1Projective) -> Self {
         let mut buffer = [0u8; CompressedSignature::SIZE];
@@ -120,35 +103,40 @@ impl AsMut<[u8]> for CompressedSignature {
     }
 }
 
+impl std::hash::Hash for CompressedSignature {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(&self.signature.to_vec(), state);
+    }
+}
+
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
     // TODO: Replace this with a generic serialization using `ToHex` and `FromHex`.
 
-    use std::{borrow::Cow, str::FromStr};
+    use std::{io, str::FromStr};
 
-    use serde::{
-        de::{Deserialize, Deserializer, Error},
-        ser::{Serialize, Serializer},
-    };
+    use nimiq_hash::SerializeContent;
+    use nimiq_serde::{Deserialize, Serialize};
 
     use super::CompressedSignature;
+    use crate::ParseError;
 
-    impl Serialize for CompressedSignature {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            serializer.serialize_str(&self.to_hex())
+    impl FromStr for CompressedSignature {
+        type Err = ParseError;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            let raw = hex::decode(s)?;
+            if raw.len() != CompressedSignature::SIZE {
+                return Err(ParseError::IncorrectLength(raw.len()));
+            }
+            CompressedSignature::deserialize_from_vec(&raw)
+                .map_err(|_| ParseError::SerializationError)
         }
     }
 
-    impl<'de> Deserialize<'de> for CompressedSignature {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
-            CompressedSignature::from_str(&s).map_err(Error::custom)
+    impl SerializeContent for CompressedSignature {
+        fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
+            self.serialize_to_writer(writer)
         }
     }
 }

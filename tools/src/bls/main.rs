@@ -1,5 +1,5 @@
-use beserial::Serialize;
 use nimiq_bls::{PublicKey, SecretKey};
+use nimiq_serde::Serialize;
 use nimiq_utils::key_rng::SecureGenerate;
 
 fn main() {

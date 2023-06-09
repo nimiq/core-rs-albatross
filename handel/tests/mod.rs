@@ -1,7 +1,6 @@
 use std::{fmt::Formatter, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use beserial::{Deserialize, Serialize};
 use futures::{
     future::{BoxFuture, FutureExt},
     stream::StreamExt,
@@ -29,6 +28,7 @@ use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_test_log::test;
 use parking_lot::RwLock;
 use rand::{thread_rng, Rng};
+use serde::{Deserialize, Serialize};
 
 /// Dump Aggregate adding numbers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -132,6 +132,7 @@ impl std::fmt::Debug for Protocol {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "C: AggregatableContribution")]
 struct Update<C: AggregatableContribution>(pub LevelUpdate<C>);
 
 impl<C: AggregatableContribution + 'static> RequestCommon for Update<C> {

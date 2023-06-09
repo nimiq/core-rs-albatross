@@ -1,6 +1,6 @@
 use std::fmt::{self, Display};
 
-use beserial::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
 
@@ -23,7 +23,6 @@ pub struct TrieChunkWithStart {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrieItem {
     pub key: KeyNibbles,
-    #[beserial(len_type(u16))]
     pub value: Vec<u8>,
 }
 
@@ -39,7 +38,6 @@ pub struct TrieChunk {
     /// The end of the chunk. The end key is exclusive.
     /// When set to None it means that it is the last trie chunk.
     pub end_key: Option<KeyNibbles>,
-    #[beserial(len_type(u32))]
     pub items: Vec<TrieItem>,
     pub proof: TrieProof,
 }

@@ -11,6 +11,7 @@ license = "Apache-2.0"
 [dependencies]
 futures = { package = "futures-util", version = "0.3" }
 log = { package = "tracing", version = "0.1", features = ["log"] }
+serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 tokio = { version = "1.29", features = [
     "macros",
@@ -19,7 +20,6 @@ tokio = { version = "1.29", features = [
 ] }
 tokio-stream = "0.1"
 
-beserial = { path = "../beserial", features = ["derive"] }
 nimiq-block = { path = "../primitives/block" }
 nimiq-collections = { path = "../collections" }
 nimiq-hash = { path = "../hash" }

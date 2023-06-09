@@ -20,9 +20,9 @@ maintenance = { status = "experimental" }
 [dependencies]
 bitflags = "1.0"
 hex = "0.4"
+serde = { version = "1.0", features = ["derive"] }
 url = "2.3"
 
-beserial = { path = "../beserial", features = ["derive", "net"] }
 nimiq-block = { path = "../primitives/block" }
 nimiq-bls = { path = "../bls" }
 nimiq-database = { path = "../database", optional = true }
@@ -32,6 +32,7 @@ nimiq-hash_derive = { path = "../hash/hash_derive" }
 nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
+nimiq-serde = { path = "../serde" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-utils = { path = "../utils", features = ["time"] }
 

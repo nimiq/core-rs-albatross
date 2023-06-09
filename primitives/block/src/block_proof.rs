@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use beserial::{Deserialize, Serialize};
 use nimiq_primitives::policy::Policy;
 use nimiq_utils::math::log2;
+use serde::{Deserialize, Serialize};
 
 use crate::MacroBlock;
 
@@ -10,7 +10,6 @@ use crate::MacroBlock;
 // The proof consists of an interlink chain from the current election head down to the target block.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BlockInclusionProof {
-    #[beserial(len_type(u16))]
     pub proof: Vec<MacroBlock>,
 }
 

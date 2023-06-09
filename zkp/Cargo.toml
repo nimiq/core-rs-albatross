@@ -25,14 +25,15 @@ log = { package = "tracing", version = "0.1", features = ["log", "attributes"] }
 once_cell = "1.18"
 parking_lot = "0.12"
 rand = { version = "0.8", features = ["small_rng"] }
+serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 
-beserial = { path = "../beserial", features = ["derive"]}
 nimiq-block = { path = "../primitives/block" }
 nimiq-bls = { path = "../bls" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives", features = ["policy", "networks"] }
+nimiq-serde = { path = "../serde" }
 nimiq-zkp-circuits = { path = "../zkp-circuits" }
 nimiq-zkp-primitives = { path = "../zkp-primitives" }
 

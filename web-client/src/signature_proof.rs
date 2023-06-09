@@ -1,4 +1,4 @@
-use beserial::Serialize;
+use nimiq_serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 use crate::{address::Address, public_key::PublicKey, signature::Signature};

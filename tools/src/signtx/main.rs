@@ -1,12 +1,12 @@
 use std::{io::stdin, process::exit, str::FromStr};
 
 use anyhow::Error;
-use beserial::{Deserialize, Serialize};
 use clap::{
     crate_authors, crate_description, crate_version, value_parser, Arg, ArgAction, Command,
 };
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::Transaction;
 use thiserror::Error;
 

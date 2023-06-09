@@ -1,10 +1,10 @@
 use std::io;
 
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Hash, HashOutput, Sha256Hash};
 use nimiq_keys::{Address, KeyPair, PublicKey, SecureGenerate, Signature};
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_utils::otp::Verify;
 
@@ -13,7 +13,7 @@ pub const NIMIQ_SIGN_MESSAGE_PREFIX: &[u8] = b"\x16Nimiq Signed Message:\n";
 #[derive(Default, Debug, Clone, Serialize, Eq, PartialEq)]
 pub struct WalletAccount {
     pub key_pair: KeyPair,
-    #[beserial(skip)]
+    #[serde(skip)]
     pub address: Address,
 }
 
@@ -93,9 +93,12 @@ impl WalletAccount {
     }
 }
 
-impl Deserialize for WalletAccount {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let key_pair: KeyPair = Deserialize::deserialize(reader)?;
+impl<'de> serde::Deserialize<'de> for WalletAccount {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let key_pair: KeyPair = serde::Deserialize::deserialize(deserializer)?;
         Ok(WalletAccount::from(key_pair))
     }
 }
@@ -113,7 +116,7 @@ impl IntoDatabaseValue for WalletAccount {
     }
 
     fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize(&self, &mut bytes).unwrap();
+        Serialize::serialize_to_writer(&self, &mut bytes).unwrap();
     }
 }
 
@@ -122,7 +125,7 @@ impl FromDatabaseValue for WalletAccount {
     where
         Self: Sized,
     {
-        let mut cursor = io::Cursor::new(bytes);
-        Ok(Deserialize::deserialize(&mut cursor)?)
+        Deserialize::deserialize_from_vec(bytes)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 }

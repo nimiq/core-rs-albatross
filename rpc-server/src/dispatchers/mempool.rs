@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use beserial::Deserialize;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_mempool::{mempool::Mempool, mempool_transactions::TxPriority};
 use nimiq_rpc_interface::{
     mempool::MempoolInterface,
     types::{HashOrTx, MempoolInfo, RPCResult},
 };
+use nimiq_serde::Deserialize;
 use nimiq_transaction::Transaction;
 
 use crate::error::Error;

@@ -1,6 +1,5 @@
 use std::fmt::{Debug, Formatter};
 
-use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, BlockInclusionProof, MacroBlock};
 #[cfg(feature = "full")]
 use nimiq_blockchain::HistoryTreeChunk;
@@ -12,6 +11,7 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
 use nimiq_transaction::history_proof::HistoryTreeProof;
+use serde::{Deserialize, Serialize};
 
 use crate::error::SubscribeToAddressesError;
 
@@ -58,7 +58,6 @@ pub struct Checkpoint {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct MacroChain {
-    #[beserial(len_type(u16))]
     pub epochs: Option<Vec<Blake2bHash>>,
     pub checkpoint: Option<Checkpoint>,
 }
@@ -83,7 +82,6 @@ impl Debug for MacroChain {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestMacroChain {
-    #[beserial(len_type(u16, limit = 128))]
     pub locators: Vec<Blake2bHash>,
     pub max_epochs: u16,
 }
@@ -118,7 +116,6 @@ pub struct BatchSet {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BatchSetInfo {
     pub election_macro_block: Option<MacroBlock>,
-    #[beserial(len_type(u16, limit = 128))]
     pub batch_sets: Vec<BatchSet>,
     pub total_history_len: u64,
 }
@@ -177,7 +174,6 @@ impl RequestCommon for RequestBlock {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ResponseBlocks {
     // TODO: Set to sensible limit (2 * BATCH_SIZE for example).
-    #[beserial(len_type(u16, limit = 256))]
     pub blocks: Option<Vec<Block>>,
 }
 
@@ -202,7 +198,6 @@ impl Debug for ResponseBlocks {
 pub struct RequestMissingBlocks {
     pub target_hash: Blake2bHash,
     pub include_micro_bodies: bool,
-    #[beserial(len_type(u16, limit = 128))]
     pub locators: Vec<Blake2bHash>,
 }
 
@@ -231,7 +226,6 @@ pub struct ResponseTransactionsProof {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestTransactionsProof {
-    #[beserial(len_type(u16, limit = 512))]
     pub hashes: Vec<Blake2bHash>,
     pub block_number: Option<u32>,
 }
@@ -259,13 +253,11 @@ impl RequestCommon for RequestTransactionReceiptsByAddress {
 #[derive(Serialize, Deserialize)]
 pub struct ResponseTransactionReceiptsByAddress {
     /// Tuples of `(transaction_hash, block_number)`
-    #[beserial(len_type(u16, limit = 512))]
     pub receipts: Vec<(Blake2bHash, u32)>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestTrieProof {
-    #[beserial(len_type(u16, limit = 512))]
     /// Addresses for which the accounts trie proof is requested for
     pub keys: Vec<KeyNibbles>, //-> Accounts
 }
@@ -288,7 +280,6 @@ pub struct ResponseTrieProof {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestBlocksProof {
     pub election_head: u32,
-    #[beserial(len_type(u16))]
     pub blocks: Vec<u32>,
 }
 
@@ -320,7 +311,6 @@ pub struct RequestSubscribeToAddress {
     /// The type of operation that is needed by the peer
     pub operation: AddressSubscriptionOperation,
     /// The addresses which are interesting to the peer
-    #[beserial(len_type(u16, limit = 10))]
     pub addresses: Vec<Address>,
 }
 
@@ -353,7 +343,6 @@ pub struct AddressNotification {
     /// The Event that generated this notification
     pub event: NotificationEvent,
     /// Tuples of `(transaction_hash, block_number)`
-    #[beserial(len_type(u16, limit = 512))]
     pub receipts: Vec<(Blake2bHash, u32)>,
 }
 

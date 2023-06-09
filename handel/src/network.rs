@@ -161,11 +161,11 @@ impl<TNetwork: Network + Unpin> Stream for LevelUpdateSender<TNetwork> {
 mod test {
     use std::{sync::Arc, task::Context};
 
-    use beserial::{Deserialize, Serialize};
     use futures::{FutureExt, StreamExt};
     use nimiq_collections::BitSet;
     use nimiq_test_log::test;
     use parking_lot::Mutex;
+    use serde::{Deserialize, Serialize};
     use tokio::time;
 
     use crate::{

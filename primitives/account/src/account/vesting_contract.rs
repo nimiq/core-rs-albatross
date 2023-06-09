@@ -1,8 +1,8 @@
-use beserial::{Deserialize, Serialize};
 use nimiq_keys::Address;
 #[cfg(feature = "interaction-traits")]
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::{account::AccountError, coin::Coin};
+use nimiq_serde::{Deserialize, Serialize};
 #[cfg(feature = "interaction-traits")]
 use nimiq_transaction::{
     account::vesting_contract::CreationTransactionData, inherent::Inherent, SignatureProof,
@@ -26,7 +26,9 @@ use crate::{
 pub struct VestingContract {
     pub balance: Coin,
     pub owner: Address,
+    #[serde(with = "nimiq_serde::fixint::be")]
     pub start_time: u64,
+    #[serde(with = "nimiq_serde::fixint::be")]
     pub time_step: u64,
     pub step_amount: Coin,
     pub total_amount: Coin,
@@ -52,7 +54,7 @@ impl VestingContract {
 
         // Check transaction signer is contract owner.
         let signature_proof: SignatureProof =
-            Deserialize::deserialize(&mut &transaction.proof[..])?;
+            Deserialize::deserialize_from_vec(&transaction.proof[..])?;
 
         if !signature_proof.is_signed_by(&self.owner) {
             return Err(AccountError::InvalidSignature);

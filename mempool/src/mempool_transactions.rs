@@ -3,9 +3,9 @@ use std::{
     collections::HashMap,
 };
 
-use beserial::Serialize;
 use keyed_priority_queue::KeyedPriorityQueue;
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_serde::Serialize;
 use nimiq_transaction::Transaction;
 
 /// TxPriority that is used when adding transactions into the mempool

@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
 use ark_groth16::Proof;
-use beserial::{Deserialize, Serialize};
 use nimiq_block::MacroBlock;
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_utils::zkp_test_data::ZKP_TEST_KEYS_PATH;
 use nimiq_zkp_component::types::{ProofInput, ZKPState, ZKProof};
 

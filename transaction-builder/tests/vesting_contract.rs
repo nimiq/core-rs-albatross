@@ -1,8 +1,8 @@
 use std::convert::{TryFrom, TryInto};
 
-use beserial::{Deserialize, Serialize};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_transaction_builder::{Recipient, TransactionBuilder};
@@ -12,8 +12,8 @@ use nimiq_transaction_builder::{Recipient, TransactionBuilder};
 fn it_can_create_creation_transaction() {
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 8);
     let owner = Address::from([0u8; 20]);
-    Serialize::serialize(&owner, &mut data);
-    Serialize::serialize(&100u64, &mut data);
+    Serialize::serialize_to_writer(&owner, &mut data);
+    Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
 
     let mut transaction = Transaction::new_contract_creation(
         data,
@@ -46,10 +46,10 @@ fn it_can_create_creation_transaction() {
     // Valid
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 24);
     let sender = Address::from([0u8; 20]);
-    Serialize::serialize(&sender, &mut data);
-    Serialize::serialize(&100u64, &mut data);
-    Serialize::serialize(&100u64, &mut data);
-    Serialize::serialize(&Coin::try_from(100).unwrap(), &mut data);
+    Serialize::serialize_to_writer(&sender, &mut data);
+    Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
+    Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
+    Serialize::serialize_to_writer(&Coin::try_from(100).unwrap(), &mut data);
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
 
@@ -76,11 +76,11 @@ fn it_can_create_creation_transaction() {
     // Valid
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 32);
     let sender = Address::from([0u8; 20]);
-    Serialize::serialize(&sender, &mut data);
-    Serialize::serialize(&100u64, &mut data);
-    Serialize::serialize(&100u64, &mut data);
-    Serialize::serialize(&Coin::try_from(100).unwrap(), &mut data);
-    Serialize::serialize(&Coin::try_from(101).unwrap(), &mut data);
+    Serialize::serialize_to_writer(&sender, &mut data);
+    Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
+    Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
+    Serialize::serialize_to_writer(&Coin::try_from(100).unwrap(), &mut data);
+    Serialize::serialize_to_writer(&Coin::try_from(101).unwrap(), &mut data);
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
 

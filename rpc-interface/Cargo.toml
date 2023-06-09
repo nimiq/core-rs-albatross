@@ -20,29 +20,29 @@ maintenance = { status = "experimental" }
 ark-groth16 = { version = "0.4", default-features = false }
 ark-mnt6-753 = "0.4"
 async-trait = "0.1"
-hex = "0.4"
+clap = { version = "4.3", features = ["derive"] }
 futures = { package = "futures-util", version = "0.3" }
+hex = "0.4"
+parking_lot = "0.12"
 serde = { version = "1.0", features = ["derive"] }
 serde_with = "3.0"
 thiserror = "1.0"
-clap = { version = "4.3", features = ["derive"] }
-parking_lot = "0.12"
 
-beserial = { path = "../beserial" }
-nimiq-account = { path = "../primitives/account", features = ["serde-derive"] }
-nimiq-block = { path = "../primitives/block", features = ["serde-derive"] }
+nimiq-account = { path = "../primitives/account" }
+nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-blockchain-interface = { path = "../blockchain-interface" }
 nimiq-blockchain-proxy = { path = "../blockchain-proxy" }
 nimiq-bls = { path = "../bls", features = ["serde-derive"] }
 nimiq-collections = { path = "../collections" }
-nimiq-hash = { path = "../hash", features = ["serde-derive"] }
+nimiq-hash = { path = "../hash" }
+nimiq-jsonrpc-client = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-jsonrpc-derive = { git = "https://github.com/nimiq/jsonrpc.git" }
-nimiq-jsonrpc-client = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-keys = { path = "../keys", features = ["serde-derive"] }
 nimiq-primitives = { path = "../primitives", features = ["coin", "account", "serde-derive"] }
-nimiq-transaction = { path = "../primitives/transaction", features = ["serde-derive"] }
+nimiq-serde = { path = "../serde" }
+nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-vrf = { path = "../vrf", features = ["serde-derive"] }
 nimiq-zkp-component = { path = "../zkp-component" }
 

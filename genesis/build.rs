@@ -48,8 +48,8 @@ fn main() {
     let out_dir = Path::new(&env::var("OUT_DIR").unwrap()).join("genesis");
     let src_dir = Path::new("src").join("genesis");
 
-    log::info!("Taking genesis config files from: {}", src_dir.display());
-    log::info!("Writing genesis data to: {}", out_dir.display());
+    println!("Taking genesis config files from: {}", src_dir.display());
+    println!("Writing genesis data to: {}", out_dir.display());
     generate_albatross("dev-albatross", &out_dir, &src_dir);
     generate_albatross("test-albatross", &out_dir, &src_dir);
     generate_albatross("unit-albatross", &out_dir, &src_dir);

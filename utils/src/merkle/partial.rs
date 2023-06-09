@@ -1,7 +1,7 @@
 use std::{io::Write, ops::Range};
 
-use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, HashOutput, Hasher, SerializeContent};
+use nimiq_serde::{Deserialize, Serialize};
 
 use crate::math::CeilingDiv;
 
@@ -94,9 +94,9 @@ impl PartialMerkleProofBuilder {
 /// These proofs can only be verified incrementally, i.e., one has to start with the first chunk of data.
 /// The proof for the second chunk then takes as an input the result of the first chunk's proof and so on.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "H: HashOutput"))]
 pub struct PartialMerkleProof<H: HashOutput> {
     total_len: u32,
-    #[beserial(len_type(u16))]
     nodes: Vec<H>,
 }
 
@@ -127,10 +127,7 @@ impl<H: HashOutput> PartialMerkleProofResult<H> {
     }
 }
 
-impl<H> PartialMerkleProof<H>
-where
-    H: HashOutput,
-{
+impl<H: HashOutput> PartialMerkleProof<H> {
     pub fn empty(total_len: usize) -> Self {
         PartialMerkleProof {
             total_len: total_len as u32,

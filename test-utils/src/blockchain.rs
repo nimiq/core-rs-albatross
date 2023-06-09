@@ -1,6 +1,5 @@
 use std::{str::FromStr, sync::Arc, time::Instant};
 
-use beserial::Deserialize;
 use nimiq_block::{
     Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
     SkipBlockProof, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
@@ -15,6 +14,7 @@ use nimiq_keys::{
     Address, KeyPair as SchnorrKeyPair, KeyPair, PrivateKey as SchnorrPrivateKey, PrivateKey,
 };
 use nimiq_primitives::{coin::Coin, policy::Policy};
+use nimiq_serde::Deserialize;
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
 use parking_lot::RwLock;

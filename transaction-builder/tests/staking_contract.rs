@@ -1,10 +1,10 @@
 use std::convert::TryInto;
 
-use beserial::{Deserialize, Serialize};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_transaction::{
     account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof},
@@ -382,12 +382,12 @@ fn make_self_transaction(data: IncomingStakingTransactionData, key_pair: &KeyPai
 
 fn bls_key_pair() -> BlsKeyPair {
     BlsKeyPair::from_secret(
-        &Deserialize::deserialize(&mut &hex::decode(BLS_PRIVKEY).unwrap()[..]).unwrap(),
+        &Deserialize::deserialize_from_vec(&mut &hex::decode(BLS_PRIVKEY).unwrap()[..]).unwrap(),
     )
 }
 
 fn ed25519_key_pair() -> KeyPair {
     let priv_key: PrivateKey =
-        Deserialize::deserialize(&mut &hex::decode(PRIVATE_KEY).unwrap()[..]).unwrap();
+        Deserialize::deserialize_from_vec(&mut &hex::decode(PRIVATE_KEY).unwrap()[..]).unwrap();
     priv_key.into()
 }

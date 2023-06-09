@@ -20,6 +20,7 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 rand = { version = "0.8", features = ["small_rng"] }
 rand_chacha = "0.3.1"
 rayon = { version = "^1.7", optional = true }
+serde = { version = "1.0", features = ["derive"] }
 
 ark-crypto-primitives = { version = "0.4", features = ["crh", "prf", "r1cs"] }
 ark-ec = "0.4"
@@ -33,13 +34,13 @@ ark-r1cs-std = "0.4"
 ark-serialize = { version = "0.4", features = ["derive"] }
 ark-std = "0.4"
 
-beserial = { path = "../beserial", features = ["derive"] }
 nimiq-block = { path = "../primitives/block" }
 nimiq-bls = { path = "../bls" }
 nimiq-genesis = { path = "../genesis", default-features = false }
 nimiq-hash = { path = "../hash" }
 nimiq-pedersen-generators = { path = "../zkp-primitives/pedersen-generators" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
+nimiq-serde = { path = "../serde" }
 nimiq-zkp-primitives = { path = "../zkp-primitives" }
 nimiq-keys = { path = "../keys" }
 

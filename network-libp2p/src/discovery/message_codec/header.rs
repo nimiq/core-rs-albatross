@@ -1,9 +1,12 @@
-use beserial::{Deserialize, Serialize};
+use nimiq_serde::{fixint, Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Header {
+    #[serde(with = "fixint::be")]
     pub magic: u32,
+    #[serde(with = "fixint::be")]
     pub size: u32,
+    #[serde(with = "fixint::be")]
     pub checksum: u32,
 }
 

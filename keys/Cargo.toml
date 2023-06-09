@@ -18,19 +18,20 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 curve25519-dalek = "3"
-ed25519-zebra = "3.1"
 data-encoding = "2.4"
-thiserror = "1.0"
+ed25519-zebra = "3.1"
 hex = "0.4"
-rand_core = "0.6"
 rand = "0.8"
-sha2 = "0.9"
+rand_core = "0.6"
 serde = { version = "1.0", optional = true }
+serde-big-array = { version = "0.5", optional = true }
+sha2 = "0.9"
+thiserror = "1.0"
 
-beserial = { path = "../beserial", features = ["derive"] }
 nimiq-database-value = { path = "../database/database-value" }
 nimiq-hash = { path = "../hash" }
 nimiq-macros = { path = "../macros" }
+nimiq-serde = { path = "../serde", optional = true }
 nimiq-utils = { path = "../utils", features = ["key-rng"] }
 
 [dev-dependencies]
@@ -38,4 +39,4 @@ nimiq-test-log = { path = "../test-log" }
 nimiq-test-utils = { path = "../test-utils" }
 
 [features]
-serde-derive = ["serde"]
+serde-derive = ["nimiq-serde", "serde", "serde-big-array"]

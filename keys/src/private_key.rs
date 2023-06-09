@@ -1,14 +1,11 @@
 use std::{
     convert::{TryFrom, TryInto},
     fmt::{Debug, Error, Formatter},
-    io,
     str::FromStr,
 };
 
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use curve25519_dalek::scalar::Scalar;
 use hex::FromHex;
-use nimiq_hash::SerializeContent;
 use nimiq_utils::key_rng::SecureGenerate;
 use rand_core::{CryptoRng, RngCore};
 use sha2::{Digest as _, Sha512};
@@ -74,31 +71,6 @@ impl Clone for PrivateKey {
     }
 }
 
-impl Deserialize for PrivateKey {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let mut buf = [0u8; PrivateKey::SIZE];
-        reader.read_exact(&mut buf)?;
-        Ok(PrivateKey::from(&buf))
-    }
-}
-
-impl Serialize for PrivateKey {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        writer.write_all(self.as_bytes())?;
-        Ok(self.serialized_size())
-    }
-
-    fn serialized_size(&self) -> usize {
-        PrivateKey::SIZE
-    }
-}
-
-impl SerializeContent for PrivateKey {
-    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
-        Ok(self.serialize(writer)?)
-    }
-}
-
 impl std::hash::Hash for PrivateKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         std::hash::Hash::hash(self.as_bytes(), state);
@@ -144,8 +116,10 @@ impl Default for PrivateKey {
 
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
-    use std::borrow::Cow;
+    use std::{borrow::Cow, io};
 
+    use nimiq_hash::SerializeContent;
+    use nimiq_serde::Serialize as NimiqSerialize;
     use serde::{
         de::{Deserialize, Deserializer, Error},
         ser::{Serialize, Serializer},
@@ -158,7 +132,11 @@ mod serde_derive {
         where
             S: Serializer,
         {
-            serializer.serialize_str(&self.to_hex())
+            if serializer.is_human_readable() {
+                serializer.serialize_str(&self.to_hex())
+            } else {
+                Serialize::serialize(&self.as_bytes(), serializer)
+            }
         }
     }
 
@@ -167,8 +145,19 @@ mod serde_derive {
         where
             D: Deserializer<'de>,
         {
-            let data: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
-            data.parse().map_err(Error::custom)
+            if deserializer.is_human_readable() {
+                let data: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
+                data.parse().map_err(Error::custom)
+            } else {
+                let buf: [u8; PrivateKey::SIZE] = Deserialize::deserialize(deserializer)?;
+                Ok(PrivateKey::from(&buf))
+            }
+        }
+    }
+
+    impl SerializeContent for PrivateKey {
+        fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
+            self.serialize_to_writer(writer)
         }
     }
 }

@@ -13,12 +13,13 @@ keywords = ["nimiq", "cryptocurrency", "blockchain"]
 [dependencies]
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
+serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 
-beserial = { path = "../../beserial", features = ["derive"] }
 nimiq-database = { path = "../../database" }
 nimiq-hash = { path = "../../hash" }
-nimiq-primitives = { path = "..", features = ["key-nibbles", "trie"] }
+nimiq-primitives = { path = "..", features = ["key-nibbles", "serde-derive", "trie"] }
+nimiq-serde = { path = "../../serde" }
 
 [dev-dependencies]
 nimiq-test-log = { path = "../../test-log" }

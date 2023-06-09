@@ -4,9 +4,9 @@ use std::{
     task::{Context, Poll},
 };
 
-use beserial::{Deserialize, SerializingError};
-use bytes::{Buf, BytesMut};
+use bytes::BytesMut;
 use futures::{AsyncRead, Stream};
+use nimiq_serde::{Deserialize, DeserializeError};
 use pin_project::pin_project;
 
 use super::header::Header;
@@ -115,10 +115,8 @@ impl<R, M> MessageReader<R, M> {
     }
 }
 
-fn unexpected_eof<T>() -> Poll<Option<Result<T, SerializingError>>> {
-    Poll::Ready(Some(Err(SerializingError::from(std::io::Error::from(
-        std::io::ErrorKind::UnexpectedEof,
-    )))))
+fn unexpected_eof<T>() -> Poll<Option<Result<T, DeserializeError>>> {
+    Poll::Ready(Some(Err(DeserializeError::unexpected_end())))
 }
 
 impl<R, M> Stream for MessageReader<R, M>
@@ -126,7 +124,7 @@ where
     R: AsyncRead,
     M: Deserialize + std::fmt::Debug,
 {
-    type Item = Result<M, SerializingError>;
+    type Item = Result<M, DeserializeError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let self_projected = self.project();
@@ -147,7 +145,7 @@ where
                     Poll::Ready(Err(e)) => {
                         return {
                             error!(error = %e, "Inner AsyncRead returned an error");
-                            Poll::Ready(Some(Err(e.into())))
+                            Poll::Ready(Some(Err(DeserializeError::unexpected_end())))
                         }
                     }
 
@@ -189,7 +187,9 @@ where
                     Poll::Pending => return Poll::Pending,
 
                     // An error occurred.
-                    Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e.into()))),
+                    Poll::Ready(Err(_)) => {
+                        return Poll::Ready(Some(Err(DeserializeError::unexpected_end())))
+                    }
 
                     // EOF while reading the data.
                     Poll::Ready(Ok(false)) => return unexpected_eof(),
@@ -199,8 +199,7 @@ where
                 }
 
                 // Decode the message, the read position of the buffer is already at the start of the message.
-                let message: M = match Deserialize::deserialize(&mut self_projected.buffer.reader())
-                {
+                let message: M = match Deserialize::deserialize_from_vec(self_projected.buffer) {
                     Ok(message) => message,
                     Err(e) => return Poll::Ready(Some(Err(e))),
                 };
@@ -228,9 +227,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use beserial::{Deserialize, Serialize};
+
     use bytes::{BufMut, BytesMut};
     use futures::{io::Cursor, StreamExt};
+    use nimiq_serde::{Deserialize, Serialize};
     use nimiq_test_log::test;
 
     use super::{Header, MessageReader};
@@ -238,7 +238,6 @@ mod tests {
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
     struct TestMessage {
         pub foo: u32,
-        #[beserial(len_type(u8))]
         pub bar: String,
     }
 
@@ -248,9 +247,8 @@ mod tests {
         let header = Header::new(n as u32);
 
         let mut w = buf.writer();
-
-        header.serialize(&mut w).unwrap();
-        message.serialize(&mut w).unwrap();
+        header.serialize_to_writer(&mut w).unwrap();
+        message.serialize_to_writer(&mut w).unwrap();
     }
 
     #[test(tokio::test)]

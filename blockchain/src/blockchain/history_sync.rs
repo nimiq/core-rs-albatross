@@ -1,6 +1,5 @@
 use std::error::Error;
 
-use beserial::Serialize;
 use nimiq_account::{BlockLogger, BlockState};
 use nimiq_block::{Block, BlockError};
 use nimiq_blockchain_interface::{
@@ -8,6 +7,7 @@ use nimiq_blockchain_interface::{
 };
 use nimiq_database::{traits::WriteTransaction, WriteTransactionProxy};
 use nimiq_primitives::{coin::Coin, policy::Policy};
+use nimiq_serde::Serialize;
 use nimiq_transaction::{
     extended_transaction::{ExtTxData, ExtendedTransaction},
     inherent::Inherent,

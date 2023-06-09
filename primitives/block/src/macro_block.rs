@@ -1,7 +1,6 @@
 use std::fmt;
 
 use ark_ec::Group;
-use beserial::{Deserialize, Serialize, SerializeWithLength};
 use nimiq_bls::{G2Projective, PublicKey as BlsPublicKey};
 use nimiq_collections::bitset::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput, Hasher, SerializeContent};
@@ -10,6 +9,7 @@ use nimiq_primitives::{
     policy::Policy,
     slots::{Validators, ValidatorsBuilder},
 };
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::reward::RewardTransaction;
 use nimiq_vrf::VrfSeed;
 use thiserror::Error;
@@ -173,7 +173,6 @@ pub struct MacroHeader {
     /// The hash of the header of the preceding election macro block.
     pub parent_election_hash: Blake2bHash,
     /// Hashes of the last blocks dividable by 2^x
-    #[beserial(len_type(u8))]
     pub interlink: Option<Vec<Blake2bHash>>,
     /// The seed of the block. This is the BLS signature of the seed of the immediately preceding
     /// block (either micro or macro) using the validator key of the block proposer.
@@ -183,7 +182,6 @@ pub struct MacroHeader {
     /// It encodes the initial supply in the genesis block, as a big-endian `u64`.
     ///
     /// No planned use otherwise.
-    #[beserial(len_type(u8, limit = 32))]
     pub extra_data: Vec<u8>,
     /// The root of the Merkle tree of the blockchain state. It just acts as a commitment to the
     /// state.
@@ -215,26 +213,24 @@ impl SerializeContent for MacroHeader {
         writer: &mut W,
     ) -> std::io::Result<usize> {
         let mut size = 0;
-        size += self.version.serialize(writer)?;
-        size += self.block_number.serialize(writer)?;
-        size += self.round.serialize(writer)?;
-        let mut a = vec![];
-        self.round.serialize(&mut a)?;
+        size += self.version.to_be_bytes().serialize_to_writer(writer)?;
+        size += self.block_number.to_be_bytes().serialize(writer)?;
+        size += self.round.to_be_bytes().serialize_to_writer(writer)?;
 
-        size += self.timestamp.serialize(writer)?;
-        size += self.parent_hash.serialize(writer)?;
-        size += self.parent_election_hash.serialize(writer)?;
+        size += self.timestamp.to_be_bytes().serialize_to_writer(writer)?;
+        size += self.parent_hash.serialize_to_writer(writer)?;
+        size += self.parent_election_hash.serialize_to_writer(writer)?;
 
         let interlink_hash = H::Builder::default()
-            .chain(&self.interlink.serialize_to_vec::<u8>())
+            .chain(&self.interlink.serialize_to_vec())
             .finish();
-        size += interlink_hash.serialize(writer)?;
+        size += interlink_hash.serialize_to_writer(writer)?;
 
-        size += self.seed.serialize(writer)?;
-        size += self.extra_data.serialize::<u8, _>(writer)?;
-        size += self.state_root.serialize(writer)?;
-        size += self.body_root.serialize(writer)?;
-        size += self.history_root.serialize(writer)?;
+        size += self.seed.serialize_to_writer(writer)?;
+        size += self.extra_data.serialize_to_writer(writer)?;
+        size += self.state_root.serialize_to_writer(writer)?;
+        size += self.body_root.serialize_to_writer(writer)?;
+        size += self.history_root.serialize_to_writer(writer)?;
 
         Ok(size)
     }
@@ -255,7 +251,6 @@ pub struct MacroBody {
     /// reward distribution.
     pub disabled_set: BitSet,
     /// The reward related transactions of this block.
-    #[beserial(len_type(u16))]
     pub transactions: Vec<RewardTransaction>,
 }
 
@@ -278,15 +273,15 @@ impl SerializeContent for MacroBody {
         // PITODO: do we need to hash something if None?
         if let Some(ref validators) = self.validators {
             let pk_tree_root = validators.hash::<H>();
-            size += pk_tree_root.serialize(writer)?;
+            size += pk_tree_root.serialize_to_writer(writer)?;
         } else {
-            size += 0u8.serialize(writer)?;
+            size += 0u8.serialize_to_writer(writer)?;
         }
-        size += self.lost_reward_set.serialize(writer)?;
-        size += self.disabled_set.serialize(writer)?;
+        size += self.lost_reward_set.serialize_to_writer(writer)?;
+        size += self.disabled_set.serialize_to_writer(writer)?;
 
-        let transactions_hash = self.transactions.serialize_to_vec::<u16>().hash::<H>();
-        size += transactions_hash.serialize(writer)?;
+        let transactions_hash = self.transactions.serialize_to_vec().hash::<H>();
+        size += transactions_hash.serialize_to_writer(writer)?;
 
         Ok(size)
     }

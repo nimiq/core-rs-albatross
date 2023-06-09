@@ -7,7 +7,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use beserial::{Deserialize, Serialize};
 use futures::{stream::BoxStream, StreamExt};
 use nimiq_network_interface::{
     network::{
@@ -19,6 +18,7 @@ use nimiq_network_interface::{
         RequestKind, RequestType,
     },
 };
+use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use parking_lot::{Mutex, RwLock};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -32,7 +32,7 @@ use crate::{
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum MockNetworkError {
     #[error("Serialization error: {0}")]
-    Serialization(#[from] beserial::SerializingError),
+    Serialization(#[from] DeserializeError),
 
     #[error("Can't connect to peer: {0}")]
     CantConnect(MockAddress),
@@ -222,8 +222,7 @@ impl MockNetwork {
             (sender, request_id)
         };
 
-        let mut data = Vec::with_capacity(request.serialized_request_size());
-        request.serialize_request(&mut data).unwrap();
+        let data = request.serialize_request();
 
         let request = (data, request_id, sender_id);
         if let Err(e) = sender.send(request).await {
@@ -243,7 +242,7 @@ impl MockNetwork {
         let hub = Arc::clone(&self.hub);
         let result = tokio::time::timeout(MockNetwork::REQUEST_TIMEOUT, rx).await;
         match result {
-            Ok(Ok(data)) => match Req::Response::deserialize(&mut &data[..]) {
+            Ok(Ok(data)) => match Req::Response::deserialize_from_vec(&data[..]) {
                 Ok(message) => Ok(message),
                 Err(_) => Err(RequestError::InboundRequest(
                     InboundRequestError::DeSerializationError,
@@ -278,7 +277,7 @@ impl MockNetwork {
 
         ReceiverStream::new(rx)
             .filter_map(|(data, request_id, sender)| async move {
-                match Req::deserialize_request(&mut &data[..]) {
+                match Req::deserialize_request(&data) {
                     Ok(message) => Some((message, request_id, sender)),
                     Err(e) => {
                         log::warn!("Failed to deserialize request: {}", e);

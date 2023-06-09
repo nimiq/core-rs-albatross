@@ -1,23 +1,17 @@
 use std::{
     convert::TryFrom,
-    fmt, io,
+    fmt,
     iter::Sum,
     ops::{Add, AddAssign, Div, Rem, Sub, SubAssign},
     str::FromStr,
     sync::OnceLock,
 };
 
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use num_traits::{identities::Zero, SaturatingAdd, SaturatingSub};
 use regex::Regex;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Default, Hash)]
-#[cfg_attr(
-    feature = "serde-derive",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(transparent)
-)]
 pub struct Coin(u64);
 
 impl Coin {
@@ -200,33 +194,6 @@ impl fmt::Display for Coin {
     }
 }
 
-impl Deserialize for Coin {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let value: u64 = Deserialize::deserialize(reader)?;
-
-        // Check that the value does not exceed Javascript's Number.MAX_SAFE_INTEGER.
-        if value <= Coin::MAX_SAFE_VALUE {
-            Ok(Coin(value))
-        } else {
-            Err(io::Error::new(io::ErrorKind::InvalidData, "Coin value out of bounds").into())
-        }
-    }
-}
-
-impl Serialize for Coin {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        if self.0 <= Coin::MAX_SAFE_VALUE {
-            Ok(Serialize::serialize(&self.0, writer)?)
-        } else {
-            Err(SerializingError::Overflow)
-        }
-    }
-
-    fn serialized_size(&self) -> usize {
-        Serialize::serialized_size(&self.0)
-    }
-}
-
 #[derive(Debug, Error)]
 #[error("Can't parse Coin value: '{0}'")]
 pub struct CoinParseError(String);
@@ -273,5 +240,44 @@ impl FromStr for Coin {
         let coin = Coin::try_from(int_part * Coin::LUNAS_PER_COIN + frac_part).map_err(|_| e())?;
 
         Ok(coin)
+    }
+}
+
+#[cfg(feature = "serde-derive")]
+mod serialization {
+    use serde::{
+        de::{Error as DeError, Unexpected},
+        ser::Error as SerError,
+        Deserialize, Deserializer, Serialize, Serializer,
+    };
+
+    use super::*;
+
+    impl Serialize for Coin {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            if self.0 <= Coin::MAX_SAFE_VALUE {
+                nimiq_serde::fixint::be::serialize(&self.0, serializer)
+            } else {
+                Err(S::Error::custom("Overflow detected for a Coin value"))
+            }
+        }
+    }
+
+    impl<'de> Deserialize<'de> for Coin {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let value: u64 = nimiq_serde::fixint::be::deserialize(deserializer)?;
+            Coin::try_from(value).map_err(|_| {
+                D::Error::invalid_value(
+                    Unexpected::Unsigned(value),
+                    &"An u64 below the Coin maximum value",
+                )
+            })
+        }
     }
 }

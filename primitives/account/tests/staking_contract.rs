@@ -3,7 +3,6 @@ use std::{
     convert::TryInto,
 };
 
-use beserial::{Deserialize, Serialize};
 use nimiq_account::*;
 use nimiq_bls::{
     CompressedPublicKey as BlsPublicKey, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey,
@@ -19,6 +18,7 @@ use nimiq_primitives::{
     policy::Policy,
     slots::SlashedSlot,
 };
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng::test_rng;
 use nimiq_transaction::{

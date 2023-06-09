@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
-#[cfg(feature = "primitives")]
-use beserial::Serialize;
+use nimiq_serde::Serialize;
 use wasm_bindgen::prelude::*;
 #[cfg(feature = "primitives")]
 use wasm_bindgen_derive::TryFromJsValue;

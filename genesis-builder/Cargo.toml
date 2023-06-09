@@ -12,13 +12,13 @@ time = { version = "0.3", features = ["parsing"] }
 toml = "0.7"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
-nimiq-bls = { path = "../bls" }
+nimiq-bls = { path = "../bls", features = ["serde-derive"] }
 nimiq-database = { path = "../database" }
 nimiq-hash = { path = "../hash" }
-nimiq-keys = { path = "../keys" }
+nimiq-serde = { path = "../serde" }
+nimiq-keys = { path = "../keys", features = ["serde-derive"] }
 nimiq-primitives = { path = "../primitives" }
 nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-vrf = { path = "../vrf" }
+nimiq-vrf = { path = "../vrf", features = ["serde-derive"] }

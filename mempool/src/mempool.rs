@@ -3,7 +3,6 @@ use std::{
     sync::{atomic::AtomicU32, Arc},
 };
 
-use beserial::Serialize;
 use futures::{
     future::{AbortHandle, Abortable},
     lock::{Mutex, MutexGuard},
@@ -16,6 +15,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_network_interface::network::{Network, Topic};
+use nimiq_serde::Serialize;
 use nimiq_transaction::{ControlTransactionTopic, Transaction, TransactionTopic};
 use parking_lot::RwLock;
 use tokio_metrics::TaskMonitor;

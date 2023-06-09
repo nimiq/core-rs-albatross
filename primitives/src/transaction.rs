@@ -1,4 +1,3 @@
-use beserial::SerializingError;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -22,5 +21,5 @@ pub enum TransactionError {
     #[error("Invalid transaction data")]
     InvalidData,
     #[error("Invalid serialization: {0}")]
-    InvalidSerialization(#[from] SerializingError),
+    InvalidSerialization(#[from] nimiq_serde::DeserializeError),
 }

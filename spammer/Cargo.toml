@@ -22,10 +22,11 @@ clap = { version = "4.3", features = ["derive"] }
 futures = { package = "futures-util", version = "0.3" }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 rand = "0.8.5"
+serde = "1.0"
 tokio = { version = "1.29", features = ["rt-multi-thread", "time", "tracing"] }
 tokio-metrics = { version = "0.1" }
 toml = "0.7"
-serde = "1.0.164"
+
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-blockchain-interface = { path = "../blockchain-interface" }

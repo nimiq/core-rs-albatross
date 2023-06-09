@@ -1,5 +1,3 @@
-#[cfg(feature = "beserial")]
-use std::str::FromStr;
 use std::{
     cmp::Ordering,
     fmt,
@@ -9,11 +7,7 @@ use std::{
 use ark_ec::AffineRepr;
 use ark_mnt6_753::G2Affine;
 use ark_serialize::CanonicalDeserialize;
-#[cfg(feature = "beserial")]
-use beserial::Deserialize;
 
-#[cfg(feature = "beserial")]
-use crate::ParseError;
 use crate::PublicKey;
 
 /// The serialized compressed form of a public key.
@@ -21,7 +15,10 @@ use crate::PublicKey;
 /// one bit indicating the sign of the y-coordinate
 /// and one bit indicating if it is the "point-at-infinity".
 #[derive(Clone)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde-derive", serde(transparent))]
 pub struct CompressedPublicKey {
+    #[cfg_attr(feature = "serde-derive", serde(with = "nimiq_serde::HexArray"))]
     pub public_key: [u8; 285],
 }
 
@@ -82,16 +79,9 @@ impl fmt::Debug for CompressedPublicKey {
     }
 }
 
-#[cfg(feature = "beserial")]
-impl FromStr for CompressedPublicKey {
-    type Err = ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let raw = hex::decode(s)?;
-        if raw.len() != CompressedPublicKey::SIZE {
-            return Err(ParseError::IncorrectLength(raw.len()));
-        }
-        Ok(CompressedPublicKey::deserialize_from_vec(&raw).unwrap())
+impl std::hash::Hash for CompressedPublicKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(&self.public_key.to_vec(), state);
     }
 }
 
@@ -99,31 +89,30 @@ impl FromStr for CompressedPublicKey {
 mod serde_derive {
     // TODO: Replace this with a generic serialization using `ToHex` and `FromHex`.
 
-    use std::{borrow::Cow, str::FromStr};
+    use std::{io, str::FromStr};
 
-    use serde::{
-        de::{Deserialize, Deserializer, Error},
-        ser::{Serialize, Serializer},
-    };
+    use nimiq_hash::SerializeContent;
+    use nimiq_serde::{Deserialize, Serialize};
 
     use super::CompressedPublicKey;
+    use crate::ParseError;
 
-    impl Serialize for CompressedPublicKey {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            serializer.serialize_str(&self.to_hex())
+    impl FromStr for CompressedPublicKey {
+        type Err = ParseError;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            let raw = hex::decode(s)?;
+            if raw.len() != CompressedPublicKey::SIZE {
+                return Err(ParseError::IncorrectLength(raw.len()));
+            }
+            CompressedPublicKey::deserialize_from_vec(&raw)
+                .map_err(|_| ParseError::SerializationError)
         }
     }
 
-    impl<'de> Deserialize<'de> for CompressedPublicKey {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
-            CompressedPublicKey::from_str(&s).map_err(Error::custom)
+    impl SerializeContent for CompressedPublicKey {
+        fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
+            self.serialize_to_writer(writer)
         }
     }
 }

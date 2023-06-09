@@ -1,6 +1,5 @@
 use std::{convert::TryInto, sync::Arc};
 
-use beserial::Deserialize;
 use nimiq_block::{Block, ForkProof, MicroJustification};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
@@ -14,6 +13,7 @@ use nimiq_keys::{
     PublicKey as SchnorrPublicKey, SecureGenerate,
 };
 use nimiq_primitives::{coin::Coin, policy::Policy};
+use nimiq_serde::Deserialize;
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{
@@ -1234,6 +1234,6 @@ fn it_can_revert_basic_and_create_contracts_txns() {
 
 fn ed25519_key_pair(secret_key: &str) -> SchnorrKeyPair {
     let priv_key: SchnorrPrivateKey =
-        Deserialize::deserialize(&mut &hex::decode(secret_key).unwrap()[..]).unwrap();
+        Deserialize::deserialize_from_vec(&mut &hex::decode(secret_key).unwrap()[..]).unwrap();
     priv_key.into()
 }

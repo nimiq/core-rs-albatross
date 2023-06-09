@@ -15,11 +15,10 @@ hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 rand = "0.8"
-serde = { version = "1.0", features = ["derive"], optional = true }
+serde = { version = "1.0", features = ["derive"] }
 strum_macros = "0.24"
 thiserror = "1.0"
 
-beserial = { path = "../../beserial", features = ["derive"] }
 nimiq-bls = { path = "../../bls" }
 nimiq-collections = { path = "../../collections" }
 nimiq-database = { path = "../../database", optional = true }
@@ -28,7 +27,8 @@ nimiq-hash = { path = "../../hash" }
 nimiq-keys = { path = "../../keys", features = ["serde-derive"] }
 nimiq-macros = { path = "../../macros" }
 nimiq-primitives = { path = "..", features = ["coin", "policy", "serde-derive", "slots", "trie"] }
-nimiq-transaction = { path = "../transaction", features = ["serde-derive"] }
+nimiq-serde = { path = "../../serde" }
+nimiq-transaction = { path = "../transaction" }
 nimiq-trie = { path = "../trie", optional = true }
 nimiq-utils = { path = "../../utils", features = ["key-rng"] }
 nimiq-vrf = { path = "../../vrf" }
@@ -45,4 +45,3 @@ nimiq-test-utils = { path = "../../test-utils" }
 accounts = ["interaction-traits", "nimiq-database", "nimiq-trie"]
 default = ["accounts", "interaction-traits"]
 interaction-traits = ["nimiq-database"]
-serde-derive = ["serde"]

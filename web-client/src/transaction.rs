@@ -1,10 +1,10 @@
 use std::str::FromStr;
 
-use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, Hash};
 #[cfg(feature = "client")]
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
+use nimiq_serde::{Deserialize, Serialize};
 #[cfg(feature = "client")]
 use nimiq_transaction::extended_transaction::ExtendedTransaction;
 use nimiq_transaction::{

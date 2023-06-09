@@ -1,8 +1,9 @@
 use std::io;
 
-use beserial::{Deserialize, Serialize, SerializeWithLength, WriteBytesExt};
+use byteorder::WriteBytesExt;
 use log::error;
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
+use nimiq_serde::{Deserialize, Serialize};
 
 use crate::{
     key_nibbles::KeyNibbles,
@@ -37,9 +38,9 @@ pub struct TrieProofNode {
 #[repr(u8)]
 enum ProofValue {
     None,
-    LeafValue(#[beserial(len_type(u16))] Vec<u8>),
+    LeafValue(Vec<u8>),
     HybridHash(Blake2bHash),
-    HybridValue(#[beserial(len_type(u16))] Vec<u8>),
+    HybridValue(Vec<u8>),
 }
 
 impl From<TrieNode> for TrieProofNode {
@@ -120,7 +121,7 @@ impl SerializeContent for TrieProofNode {
             }
             ProofValue::LeafValue(val) => {
                 writer.write_u8(1).unwrap();
-                size += val.serialize::<u16, _>(writer).unwrap();
+                size += val.serialize(writer).unwrap();
             }
             ProofValue::HybridHash(val_hash) => {
                 writer.write_u8(2).unwrap();

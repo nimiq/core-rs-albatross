@@ -1,9 +1,12 @@
-use beserial::{Deserialize, ReadBytesExt, Serialize};
+use std::borrow::Cow;
+
 use log::error;
 use nimiq_hash::{Blake2bHasher, Hasher, Sha256Hasher};
 use nimiq_keys::Address;
-use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
+use nimiq_macros::{add_hex_io_fns_typed_arr, add_serialization_fns_typed_arr, create_typed_array};
 use nimiq_primitives::account::AccountType;
+use nimiq_serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use strum_macros::Display;
 
 use crate::{
@@ -69,17 +72,16 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
     Copy,
     Debug,
     Default,
-    Deserialize,
+    Deserialize_repr,
     Display,
     Eq,
     Ord,
     PartialEq,
     PartialOrd,
-    Serialize,
+    Serialize_repr,
     Hash,
 )]
 #[repr(u8)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub enum HashAlgorithm {
     #[default]
     Blake2b = 1,
@@ -88,6 +90,7 @@ pub enum HashAlgorithm {
 
 create_typed_array!(AnyHash, u8, 32);
 add_hex_io_fns_typed_arr!(AnyHash, AnyHash::SIZE);
+add_serialization_fns_typed_arr!(AnyHash, AnyHash::SIZE);
 
 impl AnyHash {
     pub fn as_bytes(&self) -> &[u8] {
@@ -96,19 +99,19 @@ impl AnyHash {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct CreationTransactionData {
     pub sender: Address,
     pub recipient: Address,
     pub hash_algorithm: HashAlgorithm,
     pub hash_root: AnyHash,
     pub hash_count: u8,
+    #[serde(with = "nimiq_serde::fixint::be")]
     pub timeout: u64,
 }
 
 impl CreationTransactionData {
     pub fn parse(transaction: &Transaction) -> Result<Self, TransactionError> {
-        Ok(Deserialize::deserialize(&mut &transaction.data[..])?)
+        Ok(Deserialize::deserialize_from_vec(&transaction.data[..])?)
     }
 
     pub fn verify(&self) -> Result<(), TransactionError> {
@@ -137,7 +140,6 @@ impl CreationTransactionData {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum OutgoingHTLCTransactionProof {
-    #[beserial(discriminant = 1)]
     RegularTransfer {
         hash_algorithm: HashAlgorithm,
         hash_depth: u8,
@@ -145,12 +147,10 @@ pub enum OutgoingHTLCTransactionProof {
         pre_image: AnyHash,
         signature_proof: SignatureProof,
     },
-    #[beserial(discriminant = 2)]
     EarlyResolve {
         signature_proof_recipient: SignatureProof,
         signature_proof_sender: SignatureProof,
     },
-    #[beserial(discriminant = 3)]
     TimeoutResolve {
         signature_proof_sender: SignatureProof,
     },
@@ -159,10 +159,10 @@ pub enum OutgoingHTLCTransactionProof {
 impl OutgoingHTLCTransactionProof {
     pub fn parse(transaction: &Transaction) -> Result<Self, TransactionError> {
         let reader = &mut &transaction.proof[..];
-        let data = Deserialize::deserialize(reader)?;
+        let (data, left_over) = Self::deserialize_take(reader)?;
 
         // Ensure that transaction data has been fully read.
-        if reader.read_u8().is_ok() {
+        if !left_over.is_empty() {
             warn!("Over-long proof for the transaction");
             return Err(TransactionError::InvalidProof);
         }

@@ -1,8 +1,8 @@
 use std::{cmp::Ordering, collections::BTreeMap};
 
-use beserial::{Deserialize, Serialize};
 use log::error;
 use nimiq_hash::{Blake2bHash, Hash};
+use serde::{Deserialize, Serialize};
 
 use crate::{key_nibbles::KeyNibbles, trie::trie_proof_node::TrieProofNode};
 
@@ -33,9 +33,7 @@ use crate::{key_nibbles::KeyNibbles, trie::trie_proof_node::TrieProofNode};
 /// 2. The nodes are always returned in post-order.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TrieProof {
-    #[beserial(len_type(u16))]
     pub nodes: Vec<TrieProofNode>,
-    #[beserial(len_type(u16))]
     missing_proven_by: BTreeMap<KeyNibbles, KeyNibbles>,
 }
 

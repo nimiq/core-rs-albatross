@@ -1,10 +1,10 @@
 use std::{collections::BTreeMap, fmt::Debug, io};
 
-use beserial::{Deserialize, DeserializeWithLength, Serialize, SerializeWithLength};
 use nimiq_block::{MacroBody, MacroHeader};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::Blake2sHash;
 use nimiq_keys::Signature as SchnorrSignature;
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_tendermint::{State as TendermintState, Step};
 use nimiq_validator_network::ValidatorNetwork;
 
@@ -14,7 +14,7 @@ use super::{
 };
 use crate::tendermint::TendermintProtocol;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct MacroState {
     pub(crate) block_number: u32,
     round_number: u32,
@@ -158,141 +158,13 @@ where
     }
 }
 
-impl Serialize for MacroState {
-    fn serialize<W: beserial::WriteBytesExt>(
-        &self,
-        writer: &mut W,
-    ) -> Result<usize, beserial::SerializingError> {
-        let mut size = 0;
-
-        size += Serialize::serialize(&self.block_number, writer)?;
-        size += Serialize::serialize(&self.round_number, writer)?;
-        size += Serialize::serialize(&(self.step as u8), writer)?;
-        size += SerializeWithLength::serialize::<u32, _>(&self.known_proposals, writer)?;
-        size += Serialize::serialize(&(self.round_proposals.len() as u32), writer)?;
-        for (round, proposals) in self.round_proposals.iter() {
-            size += Serialize::serialize(round, writer)?;
-            size += SerializeWithLength::serialize::<u32, _>(proposals, writer)?;
-        }
-        size += Serialize::serialize(&(self.votes.len() as u32), writer)?;
-        for ((round, step), vote) in self.votes.iter() {
-            size += Serialize::serialize(round, writer)?;
-            size += Serialize::serialize(&(*step as u8), writer)?;
-            size += Serialize::serialize(vote, writer)?;
-        }
-        size += Serialize::serialize(&(self.best_votes.len() as u32), writer)?;
-        for ((round, step), vote) in self.best_votes.iter() {
-            size += Serialize::serialize(round, writer)?;
-            size += Serialize::serialize(&(*step as u8), writer)?;
-            size += Serialize::serialize(vote, writer)?;
-        }
-        size += SerializeWithLength::serialize::<u32, _>(&self.inherents, writer)?;
-        size += Serialize::serialize(&self.locked, writer)?;
-        size += Serialize::serialize(&self.valid, writer)?;
-
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        // (height is u32) + (round is u32) + (step is u8) + 3 * (BTreeMap.len() is u32)
-        let mut size = Serialize::serialized_size(&self.block_number)
-            + Serialize::serialized_size(&self.round_number)
-            + 1; // = Serialize::serialized_size(&self.step as u8)
-
-        size += SerializeWithLength::serialized_size::<u32>(&self.known_proposals);
-
-        size += 4; // = Serialize::serialized_size(&self.round_proposals.len() as u32)
-        for (_round, proposals) in self.round_proposals.iter() {
-            // round is u32
-            size += 4 + SerializeWithLength::serialized_size::<u32>(proposals);
-        }
-
-        size += 4; // = Serialize::serialized_size(&self.votes.len() as u32)
-        for ((_round, _step), vote) in self.votes.iter() {
-            // round is u32, step is u8
-            size += 5 + Serialize::serialized_size(vote);
-        }
-
-        size += 4; // = Serialize::serialized_size(&self.best_votes.len() as u32)
-        for ((_round, _step), vote) in self.best_votes.iter() {
-            // round is u32, step is u8
-            size += 5 + Serialize::serialized_size(vote);
-        }
-
-        size += Serialize::serialized_size(&self.locked);
-        size += Serialize::serialized_size(&self.valid);
-
-        size
-    }
-}
-
-impl Deserialize for MacroState {
-    fn deserialize<R: beserial::ReadBytesExt>(
-        reader: &mut R,
-    ) -> Result<Self, beserial::SerializingError> {
-        let block_number = Deserialize::deserialize(reader)?;
-
-        let round_number = Deserialize::deserialize(reader)?;
-        let step: u8 = Deserialize::deserialize(reader)?;
-        let step = Step::try_from(step).map_err(|_| beserial::SerializingError::InvalidValue)?;
-        let known_proposals = DeserializeWithLength::deserialize::<u32, _>(reader)?;
-
-        let num_round_proposals: u32 = Deserialize::deserialize(reader)?;
-        let mut round_proposals = BTreeMap::new();
-        for _ in 0..num_round_proposals {
-            let key = Deserialize::deserialize(reader)?;
-            let value = DeserializeWithLength::deserialize::<u32, _>(reader)?;
-            round_proposals.insert(key, value);
-        }
-
-        let num_votes: u32 = Deserialize::deserialize(reader)?;
-        let mut votes = BTreeMap::new();
-        for _ in 0..num_votes {
-            let round = Deserialize::deserialize(reader)?;
-            let step: u8 = Deserialize::deserialize(reader)?;
-            let step =
-                Step::try_from(step).map_err(|_| beserial::SerializingError::InvalidValue)?;
-            let value = Deserialize::deserialize(reader)?;
-            votes.insert((round, step), value);
-        }
-        let num_best_votes: u32 = Deserialize::deserialize(reader)?;
-        let mut best_votes = BTreeMap::new();
-        for _ in 0..num_best_votes {
-            let round = Deserialize::deserialize(reader)?;
-            let step: u8 = Deserialize::deserialize(reader)?;
-            let step =
-                Step::try_from(step).map_err(|_| beserial::SerializingError::InvalidValue)?;
-            let value = Deserialize::deserialize(reader)?;
-            best_votes.insert((round, step), value);
-        }
-        let inherents = DeserializeWithLength::deserialize::<u32, _>(reader)?;
-        let locked = Deserialize::deserialize(reader)?;
-        let valid = Deserialize::deserialize(reader)?;
-
-        let state = MacroState {
-            block_number,
-            round_number,
-            step,
-            known_proposals,
-            round_proposals,
-            votes,
-            best_votes,
-            inherents,
-            locked,
-            valid,
-        };
-
-        Ok(state)
-    }
-}
-
 impl IntoDatabaseValue for MacroState {
     fn database_byte_size(&self) -> usize {
         self.serialized_size()
     }
 
     fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize(&self, &mut bytes).unwrap();
+        Serialize::serialize_to_writer(&self, &mut bytes).unwrap();
     }
 }
 
@@ -301,7 +173,7 @@ impl FromDatabaseValue for MacroState {
     where
         Self: Sized,
     {
-        let mut cursor = io::Cursor::new(bytes);
-        Ok(Deserialize::deserialize(&mut cursor)?)
+        Deserialize::deserialize_from_vec(bytes)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 }

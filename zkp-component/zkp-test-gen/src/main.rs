@@ -1,6 +1,5 @@
 use std::{io, path::Path, sync::Arc, time::Instant};
 
-use beserial::Serialize;
 use log::metadata::LevelFilter;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
@@ -13,6 +12,7 @@ use nimiq_primitives::{
     networks::NetworkId,
     policy::{Policy, TEST_POLICY},
 };
+use nimiq_serde::Serialize;
 use nimiq_test_utils::{
     blockchain::{signing_key, voting_key},
     blockchain_with_rng::produce_macro_blocks_with_rng,

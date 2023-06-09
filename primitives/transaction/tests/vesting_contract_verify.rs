@@ -1,8 +1,8 @@
-use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{
     account::AccountType, coin::Coin, networks::NetworkId, transaction::TransactionError,
 };
+use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_transaction::{
     account::{vesting_contract::CreationTransactionData, AccountTransactionVerification},
     SignatureProof, Transaction, TransactionFlags,
@@ -19,8 +19,8 @@ fn key_pair() -> KeyPair {
 fn it_can_verify_creation_transaction() {
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 8);
     let owner = Address::from([0u8; 20]);
-    Serialize::serialize(&owner, &mut data);
-    Serialize::serialize(&100u64, &mut data);
+    Serialize::serialize_to_writer(&owner, &mut data);
+    Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
 
     let mut transaction = Transaction::new_contract_creation(
         vec![],
@@ -65,10 +65,10 @@ fn it_can_verify_creation_transaction() {
     // Valid
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 24);
     let sender = Address::from([0u8; 20]);
-    Serialize::serialize(&sender, &mut data);
-    Serialize::serialize(&100u64, &mut data);
-    Serialize::serialize(&100u64, &mut data);
-    Serialize::serialize(&Coin::try_from(100).unwrap(), &mut data);
+    Serialize::serialize_to_writer(&sender, &mut data);
+    Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
+    Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
+    Serialize::serialize_to_writer(&Coin::try_from(100).unwrap(), &mut data);
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
@@ -79,11 +79,11 @@ fn it_can_verify_creation_transaction() {
     // Valid
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 32);
     let sender = Address::from([0u8; 20]);
-    Serialize::serialize(&sender, &mut data);
-    Serialize::serialize(&100u64, &mut data);
-    Serialize::serialize(&100u64, &mut data);
-    Serialize::serialize(&Coin::try_from(100).unwrap(), &mut data);
-    Serialize::serialize(&Coin::try_from(100).unwrap(), &mut data);
+    Serialize::serialize_to_writer(&sender, &mut data);
+    Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
+    Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
+    Serialize::serialize_to_writer(&Coin::try_from(100).unwrap(), &mut data);
+    Serialize::serialize_to_writer(&Coin::try_from(100).unwrap(), &mut data);
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
@@ -121,12 +121,12 @@ fn it_can_verify_outgoing_transactions() {
     );
     tx.sender_type = AccountType::Vesting;
 
-    assert!(matches!(
+    assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
         Err(TransactionError::InvalidSerialization(
-            SerializingError::IoError(_)
+            DeserializeError::unexpected_end()
         ))
-    ));
+    );
 
     let signature = key_pair.sign(&tx.serialize_content()[..]);
     let signature_proof = SignatureProof::from(key_pair.public, signature);

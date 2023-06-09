@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use beserial::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 use crate::{address::Address, private_key::PrivateKey, signature::Signature};
@@ -27,7 +27,7 @@ impl PublicKey {
     ///
     /// Throws when the byte array contains less than 32 bytes.
     pub fn unserialize(bytes: &[u8]) -> Result<PublicKey, JsError> {
-        let key = nimiq_keys::PublicKey::deserialize(&mut &*bytes)?;
+        let key = nimiq_keys::PublicKey::deserialize_from_vec(bytes)?;
         Ok(PublicKey::from_native(key))
     }
 

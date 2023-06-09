@@ -1,9 +1,11 @@
-use beserial::{Deserialize, Serialize, SerializingError};
+use std::borrow::Cow;
+
 use futures::{future, AsyncRead, AsyncWrite};
 use libp2p::{core::UpgradeInfo, identity::Keypair, InboundUpgrade, Multiaddr, OutboundUpgrade};
 use nimiq_hash::Blake2bHash;
-use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
+use nimiq_macros::{add_hex_io_fns_typed_arr, add_serialization_fns_typed_arr, create_typed_array};
 use nimiq_network_interface::peer_info::Services;
+use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_utils::tagged_signing::{TaggedSignable, TaggedSignature};
 use rand::{thread_rng, RngCore};
 
@@ -15,6 +17,7 @@ use crate::DISCOVERY_PROTOCOL;
 
 create_typed_array!(ChallengeNonce, u8, 32);
 add_hex_io_fns_typed_arr!(ChallengeNonce, ChallengeNonce::SIZE);
+add_serialization_fns_typed_arr!(ChallengeNonce, ChallengeNonce::SIZE);
 
 impl ChallengeNonce {
     pub fn generate() -> Self {
@@ -33,10 +36,8 @@ impl TaggedSignable for ChallengeNonce {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum DiscoveryMessage {
-    #[beserial(discriminant = 1)]
     Handshake {
         /// The addresses of the receiver as observed by the sender.
-        #[beserial(len_type(u8))]
         observed_addresses: Vec<Multiaddr>,
 
         /// The challenge that the receiver must use for the response in `HandshakeAck`.
@@ -52,11 +53,9 @@ pub enum DiscoveryMessage {
         services: Services,
 
         /// User agent string of the sender.
-        #[beserial(len_type(u8))]
         user_agent: String,
     },
 
-    #[beserial(discriminant = 2)]
     HandshakeAck {
         /// Peer contact of the sender
         peer_contact: SignedPeerContact,
@@ -69,13 +68,10 @@ pub enum DiscoveryMessage {
         update_interval: Option<u64>,
 
         /// Initial set of peer contacts.
-        #[beserial(len_type(u16))]
         peer_contacts: Vec<SignedPeerContact>,
     },
 
-    #[beserial(discriminant = 3)]
     PeerAddresses {
-        #[beserial(len_type(u16))]
         peer_contacts: Vec<SignedPeerContact>,
     },
 }
@@ -103,7 +99,7 @@ where
     C: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
     type Output = MessageReader<C, DiscoveryMessage>;
-    type Error = SerializingError;
+    type Error = DeserializeError;
     type Future = future::Ready<Result<Self::Output, Self::Error>>;
 
     fn upgrade_inbound(self, socket: C, _info: Self::Info) -> Self::Future {
@@ -116,7 +112,7 @@ where
     C: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
     type Output = MessageWriter<C, DiscoveryMessage>;
-    type Error = SerializingError;
+    type Error = DeserializeError;
     type Future = future::Ready<Result<Self::Output, Self::Error>>;
 
     fn upgrade_outbound(self, socket: C, _info: Self::Info) -> Self::Future {

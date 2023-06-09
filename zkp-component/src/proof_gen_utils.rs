@@ -6,8 +6,8 @@ use std::{
 
 use ark_groth16::Proof;
 use ark_mnt6_753::MNT6_753;
-use beserial::{Deserialize, Serialize};
 use nimiq_block::MacroBlock;
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_zkp::prove::prove;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},

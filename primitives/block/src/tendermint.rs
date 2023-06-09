@@ -1,10 +1,11 @@
 use std::io;
 
-use beserial::{Deserialize, Serialize};
 use log::error;
 use nimiq_bls::AggregatePublicKey;
 use nimiq_hash::{Blake2sHash, SerializeContent};
 use nimiq_primitives::{policy::Policy, slots::Validators};
+use nimiq_serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::{
     signed::{PREFIX_TENDERMINT_COMMIT, PREFIX_TENDERMINT_PREPARE, PREFIX_TENDERMINT_PROPOSAL},
@@ -75,7 +76,9 @@ impl TendermintProof {
 
 /// Internal representation of nimiq_tendermint::Step struct. It needs to be Serializable and must not contain Proposal
 /// thus the additional type.
-#[derive(Serialize, Deserialize, Debug, Clone, Ord, PartialOrd, PartialEq, Eq, Hash, Copy)]
+#[derive(
+    Serialize_repr, Deserialize_repr, Debug, Clone, Ord, PartialOrd, PartialEq, Eq, Hash, Copy,
+)]
 #[repr(u8)]
 pub enum TendermintStep {
     PreVote = PREFIX_TENDERMINT_PREPARE,
@@ -130,16 +133,24 @@ pub struct TendermintVote {
 impl SerializeContent for TendermintVote {
     fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
         // First of all serialize step as this also serves as the unique prefix for this message type.
-        let mut size = self.id.step.serialize(writer)?;
+        let mut size = self.id.step.serialize_to_writer(writer)?;
 
         // serialize the round number
-        size += self.id.round_number.serialize(writer)?;
+        size += self
+            .id
+            .round_number
+            .to_be_bytes()
+            .serialize_to_writer(writer)?;
 
         // serialize the block number
-        size += self.id.block_number.serialize(writer)?;
+        size += self
+            .id
+            .block_number
+            .to_be_bytes()
+            .serialize_to_writer(writer)?;
 
         // serialize the proposal hash
-        size += self.proposal_hash.serialize(writer)?;
+        size += self.proposal_hash.serialize_to_writer(writer)?;
 
         // And return the size
         Ok(size)

@@ -31,12 +31,13 @@ hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 rand = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde-big-array = "0.5"
 thiserror = "1.0"
 tokio = { version = "1.29", features = ["macros", "rt", "sync"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 tracing-subscriber = { version = "0.3", optional = true }
 
-beserial = { path = "../beserial", features = ["derive"] }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain", optional = true }
 nimiq-blockchain-interface = { path = "../blockchain-interface" }
@@ -50,6 +51,7 @@ nimiq-log = { path = "../log", optional = true }
 nimiq-macros = { path = "../macros" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
+nimiq-serde = { path = "../serde" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-utils = { path = "../utils", features = [
     "math",

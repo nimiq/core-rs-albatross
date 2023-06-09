@@ -4,9 +4,9 @@ use std::{
     task::{Context, Poll},
 };
 
-use beserial::{Serialize, SerializingError};
 use bytes::{Buf, BufMut, BytesMut};
 use futures::{ready, AsyncWrite, Sink};
+use nimiq_serde::Serialize;
 use pin_project::pin_project;
 
 use super::header::Header;
@@ -15,7 +15,7 @@ fn write_from_buf<W>(
     inner: &mut W,
     buffer: &mut BytesMut,
     cx: &mut Context,
-) -> Poll<Result<(), SerializingError>>
+) -> Poll<Result<(), std::io::Error>>
 where
     W: AsyncWrite + Unpin,
 {
@@ -23,9 +23,7 @@ where
         match Pin::new(inner).poll_write(cx, buffer.chunk()) {
             Poll::Ready(Ok(0)) => {
                 warn!("MessageWriter: write_from_buf: Unexpected EOF.");
-                Poll::Ready(Err(SerializingError::from(std::io::Error::from(
-                    std::io::ErrorKind::UnexpectedEof,
-                ))))
+                Poll::Ready(Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof)))
             }
 
             Poll::Ready(Ok(n)) => {
@@ -38,7 +36,7 @@ where
                 }
             }
 
-            Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
 
             Poll::Pending => Poll::Pending,
         }
@@ -73,7 +71,7 @@ where
     W: AsyncWrite + Unpin,
     M: Serialize + std::fmt::Debug,
 {
-    type Error = SerializingError;
+    type Error = std::io::Error;
 
     fn poll_ready(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
         let self_projected = self.project();
@@ -91,9 +89,7 @@ where
 
         if !self_projected.buffer.is_empty() {
             warn!("MessageWriter: Trying to send while buffer is not empty");
-            return Err(SerializingError::from(std::io::Error::from(
-                std::io::ErrorKind::WouldBlock,
-            )));
+            return Err(std::io::Error::from(std::io::ErrorKind::WouldBlock));
         }
 
         // Reserve space for the header and message.
@@ -105,10 +101,10 @@ where
         let mut w = self_projected.buffer.writer();
 
         // Write header
-        Serialize::serialize(&header, &mut w)?;
+        Serialize::serialize_to_writer(&header, &mut w)?;
 
         // Serialize the message into the buffer.
-        Serialize::serialize(item, &mut w)?;
+        Serialize::serialize_to_writer(item, &mut w)?;
 
         Ok(())
     }
@@ -122,9 +118,7 @@ where
             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
             Poll::Ready(Ok(())) => {
                 // Finished writing the message. Flush the underlying `AsyncWrite`.
-                Poll::Ready(
-                    ready!(Pin::new(self_projected.inner).poll_flush(cx)).map_err(|e| e.into()),
-                )
+                Poll::Ready(ready!(Pin::new(self_projected.inner).poll_flush(cx)))
             }
         }
     }
@@ -138,9 +132,7 @@ where
             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
             Poll::Ready(Ok(())) => {
                 // Finished writing the message. Close the underlying `AsyncWrite`.
-                Poll::Ready(
-                    ready!(Pin::new(self_projected.inner).poll_close(cx)).map_err(|e| e.into()),
-                )
+                Poll::Ready(ready!(Pin::new(self_projected.inner).poll_close(cx)))
             }
         }
     }
@@ -148,8 +140,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use beserial::{Deserialize, Serialize};
     use futures::SinkExt;
+    use nimiq_serde::{Deserialize, Serialize};
     use nimiq_test_log::test;
 
     use super::{Header, MessageWriter};
@@ -157,7 +149,6 @@ mod tests {
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
     struct TestMessage {
         pub foo: u32,
-        #[beserial(len_type(u8))]
         pub bar: String,
     }
 

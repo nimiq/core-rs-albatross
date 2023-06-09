@@ -1,7 +1,7 @@
-use beserial::Serialize;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, SecureGenerate};
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
+use nimiq_serde::Serialize;
 use nimiq_transaction::{SignatureProof, Transaction};
 use rand::{CryptoRng, Rng};
 

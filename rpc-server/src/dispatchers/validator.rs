@@ -1,9 +1,9 @@
 use std::sync::atomic::Ordering;
 
 use async_trait::async_trait;
-use beserial::Serialize;
 use nimiq_keys::Address;
 use nimiq_rpc_interface::{types::RPCResult, validator::ValidatorInterface};
+use nimiq_serde::Serialize;
 use nimiq_validator::validator::ValidatorProxy;
 
 use crate::error::Error;

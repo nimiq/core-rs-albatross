@@ -1,6 +1,5 @@
 use std::{convert::TryFrom, time::Instant};
 
-use beserial::{Deserialize, Serialize};
 use log::info;
 use nimiq_account::{
     Account, Accounts, BasicAccount, BlockLogger, BlockState, InherentOperationReceipt, Log,
@@ -21,6 +20,7 @@ use nimiq_primitives::{
     policy::Policy,
     slots::SlashedSlot,
 };
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     accounts_revert::TestCommitRevert,

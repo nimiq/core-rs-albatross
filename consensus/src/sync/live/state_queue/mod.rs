@@ -9,7 +9,6 @@ use std::{
     task::{Context, Poll},
 };
 
-use beserial::{Deserialize, Serialize};
 use futures::{stream::BoxStream, Stream, StreamExt};
 use nimiq_block::Block;
 use nimiq_blockchain::Blockchain;
@@ -21,6 +20,7 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy, trie::trie_chunk::TrieChunk};
 use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
 
 use self::chunk_request_component::ChunkRequestComponent;
 use super::{
@@ -61,9 +61,7 @@ impl Display for Chunk {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum ResponseChunk {
-    #[beserial(discriminant = 1)]
     Chunk(Chunk),
-    #[beserial(discriminant = 2)]
     IncompleteState,
 }
 

@@ -15,8 +15,6 @@ use tracing_subscriber::{
 };
 
 pub static NIMIQ_MODULES: &[&str] = &[
-    "beserial",
-    "beserial_derive",
     "nimiq_account",
     "nimiq_block",
     "nimiq_block_production",

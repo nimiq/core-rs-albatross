@@ -1,7 +1,7 @@
-use beserial::{Deserialize, Serialize};
 use nimiq_database::{TransactionProxy, WriteTransactionProxy};
 use nimiq_keys::Address;
 use nimiq_primitives::key_nibbles::KeyNibbles;
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_trie::trie::TrieNodeIter;
 
 use crate::{

@@ -1,7 +1,7 @@
-use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_hash::{Blake2bHasher, Hasher, Sha256Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{account::AccountType, networks::NetworkId, transaction::TransactionError};
+use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_transaction::{
     account::{
         htlc_contract::{
@@ -108,7 +108,7 @@ fn it_can_verify_creation_transaction() {
     assert_eq!(
         AccountType::verify_incoming_transaction(&transaction),
         Err(TransactionError::InvalidSerialization(
-            SerializingError::InvalidValue
+            DeserializeError::serde_custom()
         ))
     );
     transaction.data[40] = 1;
@@ -164,7 +164,7 @@ fn it_can_verify_regular_transfer() {
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
         Err(TransactionError::InvalidSerialization(
-            SerializingError::InvalidValue
+            DeserializeError::serde_custom()
         ))
     );
     tx.proof[1] = HashAlgorithm::Sha256 as u8;

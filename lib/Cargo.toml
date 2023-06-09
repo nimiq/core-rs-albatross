@@ -43,7 +43,6 @@ tracing-loki = { version = "0.2.1", optional = true }
 tracing-subscriber = { version = "0.3", optional = true }
 tracing-web = { version = "0.1", optional = true}
 
-beserial = { path = "../beserial" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain", optional = true }
 nimiq-blockchain-interface = { path = "../blockchain-interface" }
@@ -63,6 +62,7 @@ nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["networks"] }
 nimiq-rpc-server = { path = "../rpc-server", optional = true }
+nimiq-serde = { path = "../serde" }
 nimiq-utils = { path = "../utils", features = ["time", "key-store"] }
 nimiq-validator = { path = "../validator", optional = true, features = ["trusted_push"] }
 nimiq-validator-network = { path = "../validator-network", optional = true }

@@ -1,11 +1,11 @@
 use std::{fmt::Debug, io};
 
-use beserial::{Deserialize, Serialize};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_primitives::account::FailReason;
+use nimiq_serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AccountReceipt(#[beserial(len_type(u16))] pub Vec<u8>);
+pub struct AccountReceipt(pub Vec<u8>);
 
 impl From<Vec<u8>> for AccountReceipt {
     fn from(val: Vec<u8>) -> Self {
@@ -28,7 +28,7 @@ macro_rules! convert_receipt {
             type Error = AccountError;
 
             fn try_from(value: &AccountReceipt) -> Result<Self, Self::Error> {
-                Self::deserialize(&mut &value.0[..])
+                Self::deserialize_from_vec(&value.0[..])
                     .map_err(|e| AccountError::InvalidSerialization(e))
             }
         }
@@ -51,6 +51,7 @@ pub struct TransactionReceipt {
 pub type InherentReceipt = Option<AccountReceipt>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(bound = "T: Clone + Debug + Serialize + Deserialize")]
 #[repr(u8)]
 pub enum OperationReceipt<T: Clone + Debug + Serialize + Deserialize> {
     Ok(T),
@@ -62,9 +63,7 @@ pub type InherentOperationReceipt = OperationReceipt<InherentReceipt>;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Receipts {
-    #[beserial(len_type(u16))]
     pub transactions: Vec<TransactionOperationReceipt>,
-    #[beserial(len_type(u16))]
     pub inherents: Vec<InherentOperationReceipt>,
 }
 
@@ -76,7 +75,7 @@ impl IntoDatabaseValue for Receipts {
     }
 
     fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize(&self, &mut bytes).unwrap();
+        self.serialize_to_writer(&mut bytes).unwrap();
     }
 }
 
@@ -85,7 +84,7 @@ impl FromDatabaseValue for Receipts {
     where
         Self: Sized,
     {
-        let mut cursor = io::Cursor::new(bytes);
-        Ok(Deserialize::deserialize(&mut cursor)?)
+        Deserialize::deserialize_from_vec(bytes)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 }

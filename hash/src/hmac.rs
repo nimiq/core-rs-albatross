@@ -1,4 +1,7 @@
-use super::{Hasher, Sha512Hash, Sha512Hasher, SHA512_LENGTH};
+use crate::{
+    sha512::{Sha512Hash, Sha512Hasher, SHA512_LENGTH},
+    Hasher,
+};
 
 enum Key<'a> {
     Borrowed(&'a [u8]),

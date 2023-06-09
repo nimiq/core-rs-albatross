@@ -1,4 +1,3 @@
-use beserial::Serialize;
 use log::debug;
 use nimiq_account::{
     Account, Accounts, BasicAccount, BlockState, HashedTimeLockedContract,
@@ -11,6 +10,7 @@ use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_primitives::{
     account::AccountType, coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy,
 };
+use nimiq_serde::Serialize;
 use nimiq_transaction::{
     account::{
         htlc_contract::{

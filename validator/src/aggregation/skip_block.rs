@@ -6,7 +6,6 @@ use std::{
     time::Duration,
 };
 
-use beserial::{Deserialize, Serialize};
 use futures::{
     future::FutureExt,
     ready,
@@ -31,6 +30,7 @@ use nimiq_network_interface::request::{MessageMarker, RequestCommon};
 use nimiq_primitives::{policy, slots::Validators};
 use nimiq_validator_network::ValidatorNetwork;
 use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 

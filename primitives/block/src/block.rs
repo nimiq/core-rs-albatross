@@ -1,6 +1,5 @@
 use std::{convert::TryFrom, fmt, io};
 
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use bitflags::bitflags;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
@@ -9,6 +8,7 @@ use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::PublicKey;
 use nimiq_network_interface::network::Topic;
 use nimiq_primitives::{coin::Coin, policy::Policy, slots::Validators};
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::ExecutedTransaction;
 use nimiq_vrf::VrfSeed;
 
@@ -62,7 +62,7 @@ impl BlockType {
 
 /// The enum representing a block. Blocks can either be Micro blocks or Macro blocks (which includes
 /// both checkpoint and election blocks).
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Block {
     Macro(MacroBlock),
     Micro(MicroBlock),
@@ -554,39 +554,6 @@ impl Block {
     }
 }
 
-impl Serialize for Block {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size = 0;
-        size += self.ty().serialize(writer)?;
-        size += match self {
-            Block::Macro(block) => block.serialize(writer)?,
-            Block::Micro(block) => block.serialize(writer)?,
-        };
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = 0;
-        size += self.ty().serialized_size();
-        size += match self {
-            Block::Macro(block) => block.serialized_size(),
-            Block::Micro(block) => block.serialized_size(),
-        };
-        size
-    }
-}
-
-impl Deserialize for Block {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let ty: BlockType = Deserialize::deserialize(reader)?;
-        let block = match ty {
-            BlockType::Macro => Block::Macro(Deserialize::deserialize(reader)?),
-            BlockType::Micro => Block::Micro(Deserialize::deserialize(reader)?),
-        };
-        Ok(block)
-    }
-}
-
 impl fmt::Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
@@ -602,7 +569,7 @@ impl IntoDatabaseValue for Block {
     }
 
     fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize(&self, &mut bytes).unwrap();
+        Serialize::serialize_to_writer(&self, &mut bytes).unwrap();
     }
 }
 
@@ -611,14 +578,14 @@ impl FromDatabaseValue for Block {
     where
         Self: Sized,
     {
-        let mut cursor = io::Cursor::new(bytes);
-        Ok(Deserialize::deserialize(&mut cursor)?)
+        Deserialize::deserialize_from_vec(bytes)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 }
 
 /// The enum representing a block header. Blocks can either be Micro blocks or Macro blocks (which
 /// includes both checkpoint and election blocks).
-#[derive(Clone, Debug, Eq, PartialEq, SerializeContent)]
+#[derive(Clone, Debug, Eq, PartialEq, SerializeContent, Serialize, Deserialize)]
 pub enum BlockHeader {
     Micro(MicroHeader),
     Macro(MacroHeader),
@@ -801,39 +768,6 @@ impl BlockHeader {
     }
 }
 
-impl Serialize for BlockHeader {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size = 0;
-        size += self.ty().serialize(writer)?;
-        size += match self {
-            BlockHeader::Macro(header) => header.serialize(writer)?,
-            BlockHeader::Micro(header) => header.serialize(writer)?,
-        };
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = 0;
-        size += self.ty().serialized_size();
-        size += match self {
-            BlockHeader::Macro(header) => header.serialized_size(),
-            BlockHeader::Micro(header) => header.serialized_size(),
-        };
-        size
-    }
-}
-
-impl Deserialize for BlockHeader {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let ty: BlockType = Deserialize::deserialize(reader)?;
-        let header = match ty {
-            BlockType::Macro => BlockHeader::Macro(Deserialize::deserialize(reader)?),
-            BlockType::Micro => BlockHeader::Micro(Deserialize::deserialize(reader)?),
-        };
-        Ok(header)
-    }
-}
-
 impl fmt::Display for BlockHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
@@ -844,7 +778,7 @@ impl fmt::Display for BlockHeader {
 }
 
 /// Struct representing the justification of a block.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum BlockJustification {
     Micro(MicroJustification),
     Macro(TendermintProof),
@@ -860,41 +794,8 @@ impl BlockJustification {
     }
 }
 
-impl Serialize for BlockJustification {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size = 0;
-        size += self.ty().serialize(writer)?;
-        size += match self {
-            BlockJustification::Macro(justification) => justification.serialize(writer)?,
-            BlockJustification::Micro(justification) => justification.serialize(writer)?,
-        };
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = 0;
-        size += self.ty().serialized_size();
-        size += match self {
-            BlockJustification::Macro(justification) => justification.serialized_size(),
-            BlockJustification::Micro(justification) => justification.serialized_size(),
-        };
-        size
-    }
-}
-
-impl Deserialize for BlockJustification {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let ty: BlockType = Deserialize::deserialize(reader)?;
-        let justification = match ty {
-            BlockType::Macro => BlockJustification::Macro(Deserialize::deserialize(reader)?),
-            BlockType::Micro => BlockJustification::Micro(Deserialize::deserialize(reader)?),
-        };
-        Ok(justification)
-    }
-}
-
 /// Struct representing the body of a block.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum BlockBody {
     Micro(MicroBody),
     Macro(MacroBody),
@@ -933,39 +834,6 @@ impl BlockBody {
         } else {
             unreachable!()
         }
-    }
-}
-
-impl Serialize for BlockBody {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size = 0;
-        size += self.ty().serialize(writer)?;
-        size += match self {
-            BlockBody::Macro(extrinsics) => extrinsics.serialize(writer)?,
-            BlockBody::Micro(extrinsics) => extrinsics.serialize(writer)?,
-        };
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = 0;
-        size += self.ty().serialized_size();
-        size += match self {
-            BlockBody::Macro(extrinsics) => extrinsics.serialized_size(),
-            BlockBody::Micro(extrinsics) => extrinsics.serialized_size(),
-        };
-        size
-    }
-}
-
-impl Deserialize for BlockBody {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let ty: BlockType = Deserialize::deserialize(reader)?;
-        let extrinsics = match ty {
-            BlockType::Macro => BlockBody::Macro(Deserialize::deserialize(reader)?),
-            BlockType::Micro => BlockBody::Micro(Deserialize::deserialize(reader)?),
-        };
-        Ok(extrinsics)
     }
 }
 

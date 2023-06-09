@@ -13,12 +13,14 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-beserial = { path = "../beserial", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+
 nimiq-database = { path = "../database" }
 nimiq-database-value = { path = "../database/database-value" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives" }
+nimiq-serde = { path = "../serde" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-utils = { path = "../utils", features = ["otp"]}
 

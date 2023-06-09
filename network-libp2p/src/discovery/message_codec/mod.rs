@@ -12,16 +12,15 @@ pub use self::{reader::MessageReader, writer::MessageWriter};
 
 #[cfg(test)]
 mod tests {
-    use beserial::{Deserialize, Serialize};
     use futures::{io::Cursor, SinkExt, StreamExt};
     use nimiq_test_log::test;
+    use serde::{Deserialize, Serialize};
 
     use super::{MessageReader, MessageWriter};
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
     struct TestMessage {
         pub foo: u32,
-        #[beserial(len_type(u8))]
         pub bar: String,
     }
 

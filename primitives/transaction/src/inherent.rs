@@ -1,8 +1,8 @@
-use beserial::{Deserialize, Serialize};
 use nimiq_hash::SerializeContent;
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::Address;
 use nimiq_primitives::{coin::Coin, policy::Policy, slots::SlashedSlot};
+use nimiq_serde::{Deserialize, Serialize};
 
 use crate::reward::RewardTransaction;
 

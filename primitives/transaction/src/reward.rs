@@ -1,6 +1,6 @@
-use beserial::{Deserialize, Serialize};
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 #[repr(C)]

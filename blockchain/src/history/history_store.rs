@@ -3,7 +3,6 @@ use std::{
     collections::{HashSet, VecDeque},
 };
 
-use beserial::Serialize;
 use nimiq_database::{
     traits::{Database, ReadCursor, ReadTransaction, WriteCursor, WriteTransaction},
     DatabaseProxy, TableFlags, TableProxy, TransactionProxy, WriteTransactionProxy,
@@ -22,6 +21,7 @@ use nimiq_mmr::{
     store::memory::MemoryStore,
 };
 use nimiq_primitives::policy::Policy;
+use nimiq_serde::Serialize;
 use nimiq_transaction::{
     extended_transaction::{ExtTxData, ExtendedTransaction},
     history_proof::HistoryTreeProof,

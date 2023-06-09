@@ -1,6 +1,5 @@
 use std::convert::TryInto;
 
-use beserial::{Deserialize, Serialize};
 use nimiq_account::{
     Account, AccountPruningInteraction, Accounts, BasicAccount, BlockState,
     HashedTimeLockedContract, Log, TransactionLog,
@@ -12,6 +11,7 @@ use nimiq_primitives::{
     coin::Coin,
     networks::NetworkId,
 };
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     accounts_revert::TestCommitRevert, test_rng::test_rng, transactions::TransactionsGenerator,
@@ -41,14 +41,15 @@ fn create_serialized_contract() {
         total_amount: Coin::from_u64_unchecked(1),
     };
     let mut bytes: Vec<u8> = Vec::with_capacity(contract.serialized_size());
-    contract.serialize(&mut bytes).unwrap();
+    contract.serialize_to_writer(&mut bytes).unwrap();
     assert_eq!(HTLC, hex::encode(bytes));
 }
 
 #[test]
 fn it_can_deserialize_a_htlc() {
     let bytes: Vec<u8> = hex::decode(HTLC).unwrap();
-    let htlc: HashedTimeLockedContract = Deserialize::deserialize(&mut &bytes[..]).unwrap();
+    let htlc: HashedTimeLockedContract =
+        Deserialize::deserialize_from_vec(&mut &bytes[..]).unwrap();
     assert_eq!(htlc.balance, Coin::ZERO);
     assert_eq!(htlc.hash_algorithm, HashAlgorithm::Sha256);
     assert_eq!(htlc.hash_count, 1);
@@ -71,9 +72,10 @@ fn it_can_deserialize_a_htlc() {
 #[test]
 fn it_can_serialize_a_htlc() {
     let bytes: Vec<u8> = hex::decode(HTLC).unwrap();
-    let htlc: HashedTimeLockedContract = Deserialize::deserialize(&mut &bytes[..]).unwrap();
+    let htlc: HashedTimeLockedContract =
+        Deserialize::deserialize_from_vec(&mut &bytes[..]).unwrap();
     let mut bytes2: Vec<u8> = Vec::with_capacity(htlc.serialized_size());
-    let size = htlc.serialize(&mut bytes2).unwrap();
+    let size = htlc.serialize_to_writer(&mut bytes2).unwrap();
     assert_eq!(size, htlc.serialized_size());
     assert_eq!(hex::encode(bytes2), HTLC);
 }

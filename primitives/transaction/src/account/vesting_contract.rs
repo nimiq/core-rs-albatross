@@ -1,7 +1,7 @@
-use beserial::{Deserialize, Serialize, SerializingError, WriteBytesExt};
 use log::error;
 use nimiq_keys::Address;
 use nimiq_primitives::{account::AccountType, coin::Coin};
+use nimiq_serde::{Deserialize, Serialize};
 
 use crate::{
     account::AccountTransactionVerification, SignatureProof, Transaction, TransactionError,
@@ -43,8 +43,9 @@ impl AccountTransactionVerification for VestingContractVerifier {
         let allowed_sizes = [Address::SIZE + 8, Address::SIZE + 24, Address::SIZE + 32];
         if !allowed_sizes.contains(&transaction.data.len()) {
             warn!(
-                "Invalid data length for this transaction:\n{:?}",
-                transaction
+                len = transaction.data.len(),
+                ?transaction,
+                "Invalid data length for this transaction",
             );
             return Err(TransactionError::InvalidData);
         }
@@ -57,7 +58,7 @@ impl AccountTransactionVerification for VestingContractVerifier {
 
         // Verify signature.
         let signature_proof: SignatureProof =
-            Deserialize::deserialize(&mut &transaction.proof[..])?;
+            Deserialize::deserialize_from_vec(&transaction.proof[..])?;
 
         if !signature_proof.verify(transaction.serialize_content().as_slice()) {
             warn!("Invalid signature for this transaction:\n{:?}", transaction);
@@ -68,11 +69,12 @@ impl AccountTransactionVerification for VestingContractVerifier {
     }
 }
 
-#[derive(Default, Clone, Debug)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct CreationTransactionData {
     pub owner: Address,
+    #[serde(with = "nimiq_serde::fixint::be")]
     pub start_time: u64,
+    #[serde(with = "nimiq_serde::fixint::be")]
     pub time_step: u64,
     pub step_amount: Coin,
     pub total_amount: Coin,
@@ -81,39 +83,39 @@ pub struct CreationTransactionData {
 impl CreationTransactionData {
     pub fn parse(transaction: &Transaction) -> Result<Self, TransactionError> {
         let reader = &mut &transaction.data[..];
-        let owner = Deserialize::deserialize(reader)?;
+        let (owner, left_over) = Deserialize::deserialize_take(reader)?;
 
         if transaction.data.len() == Address::SIZE + 8 {
             // Only timestamp: vest full amount at that time
-            let time_step = Deserialize::deserialize(reader)?;
+            let (time_step, _) = <[u8; 8]>::deserialize_take(left_over)?;
             Ok(CreationTransactionData {
                 owner,
                 start_time: 0,
-                time_step,
+                time_step: u64::from_be_bytes(time_step),
                 step_amount: transaction.value,
                 total_amount: transaction.value,
             })
         } else if transaction.data.len() == Address::SIZE + 24 {
-            let start_time = Deserialize::deserialize(reader)?;
-            let time_step = Deserialize::deserialize(reader)?;
-            let step_amount = Deserialize::deserialize(reader)?;
+            let (start_time, left_over) = <[u8; 8]>::deserialize_take(left_over)?;
+            let (time_step, left_over) = <[u8; 8]>::deserialize_take(left_over)?;
+            let (step_amount, _) = Deserialize::deserialize_take(left_over)?;
             Ok(CreationTransactionData {
                 owner,
-                start_time,
-                time_step,
+                start_time: u64::from_be_bytes(start_time),
+                time_step: u64::from_be_bytes(time_step),
                 step_amount,
                 total_amount: transaction.value,
             })
         } else if transaction.data.len() == Address::SIZE + 32 {
             // Create a vesting account with some instantly vested funds or additional funds considered.
-            let start_time = Deserialize::deserialize(reader)?;
-            let time_step = Deserialize::deserialize(reader)?;
-            let step_amount = Deserialize::deserialize(reader)?;
-            let total_amount = Deserialize::deserialize(reader)?;
+            let (start_time, left_over) = <[u8; 8]>::deserialize_take(left_over)?;
+            let (time_step, left_over) = <[u8; 8]>::deserialize_take(left_over)?;
+            let (step_amount, left_over) = Deserialize::deserialize_take(left_over)?;
+            let (total_amount, _) = Deserialize::deserialize_take(left_over)?;
             Ok(CreationTransactionData {
                 owner,
-                start_time,
-                time_step,
+                start_time: u64::from_be_bytes(start_time),
+                time_step: u64::from_be_bytes(time_step),
                 step_amount,
                 total_amount,
             })
@@ -121,40 +123,25 @@ impl CreationTransactionData {
             Err(TransactionError::InvalidData)
         }
     }
-}
 
-impl Serialize for CreationTransactionData {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size = 0;
-        size += self.owner.serialize(writer)?;
+    pub fn to_tx_data(&self) -> Vec<u8> {
+        let mut data = self.owner.serialize_to_vec();
 
         if self.step_amount == self.total_amount {
             if self.start_time == 0 {
-                size += self.time_step.serialize(writer)?;
+                data.append(&mut self.time_step.to_be_bytes().serialize_to_vec());
             } else {
-                size += self.start_time.serialize(writer)?;
-                size += self.time_step.serialize(writer)?;
-                size += self.step_amount.serialize(writer)?;
+                data.append(&mut self.start_time.to_be_bytes().serialize_to_vec());
+                data.append(&mut self.time_step.to_be_bytes().serialize_to_vec());
+                data.append(&mut self.step_amount.serialize_to_vec());
             }
         } else {
-            size += self.start_time.serialize(writer)?;
-            size += self.time_step.serialize(writer)?;
-            size += self.step_amount.serialize(writer)?;
-            size += self.total_amount.serialize(writer)?;
+            data.append(&mut self.start_time.to_be_bytes().serialize_to_vec());
+            data.append(&mut self.time_step.to_be_bytes().serialize_to_vec());
+            data.append(&mut self.step_amount.serialize_to_vec());
+            data.append(&mut self.total_amount.serialize_to_vec());
         }
 
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        if self.step_amount == self.total_amount {
-            if self.start_time == 0 {
-                Address::SIZE + 8
-            } else {
-                Address::SIZE + 24
-            }
-        } else {
-            Address::SIZE + 32
-        }
+        data
     }
 }

@@ -1,4 +1,3 @@
-use beserial::SerializingError;
 use thiserror::Error;
 
 /// An enum containing possible errors that can happen in the Merkle Radix Trie.
@@ -15,7 +14,7 @@ pub enum MerkleRadixTrieError {
     #[error("Tried to store a value at the root node.")]
     RootCantHaveValue,
     #[error("Failed to (de)serialize a value.")]
-    SerializationFailed(SerializingError),
+    SerializationFailed,
     #[error("Tree is already complete.")]
     TrieAlreadyComplete,
     #[error("Chunk does not match tree state.")]
@@ -26,10 +25,6 @@ pub enum MerkleRadixTrieError {
     InvalidChunk(&'static str),
     #[error("Trie is not complete")]
     IncompleteTrie,
-}
-
-impl From<SerializingError> for MerkleRadixTrieError {
-    fn from(err: SerializingError) -> Self {
-        MerkleRadixTrieError::SerializationFailed(err)
-    }
+    #[error("Serialization error")]
+    Serialization(#[from] nimiq_serde::DeserializeError),
 }

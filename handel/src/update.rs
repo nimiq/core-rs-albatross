@@ -1,11 +1,13 @@
 use std::fmt::Debug;
 
-use beserial::{Deserialize, Serialize};
+use nimiq_serde::fixint;
+use serde::{Deserialize, Serialize};
 
 use crate::contribution::AggregatableContribution;
 /// The max number of LevelUpdateMessages requests per peer.
 pub const MAX_REQUEST_RESPONSE_LEVEL_UPDATE_MESSAGE: u32 = 1000;
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "C: AggregatableContribution")]
 pub struct LevelUpdate<C: AggregatableContribution> {
     /// The updated multi-signature for this level
     pub aggregate: C,
@@ -20,6 +22,7 @@ pub struct LevelUpdate<C: AggregatableContribution> {
     ///
     /// NOTE: It's safe to just send your own validator ID, since everything critical is authenticated
     /// by signatures anyway.
+    #[serde(with = "fixint::be")]
     pub(crate) origin: u16,
 }
 

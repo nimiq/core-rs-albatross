@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use beserial::{Serialize, WriteBytesExt};
+use byteorder::WriteBytesExt;
 use futures::{
     future::{self, FutureExt},
     stream::{BoxStream, StreamExt},
@@ -17,6 +17,7 @@ use nimiq_handel::{aggregation::Aggregation, identity::IdentityRegistry};
 use nimiq_hash::{Blake2sHash, Blake2sHasher, Hash, Hasher, SerializeContent};
 use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_primitives::{policy::Policy, slots::Validators};
+use nimiq_serde::Serialize;
 use nimiq_tendermint::{
     Proposal, ProposalError, ProposalMessage, Protocol, SignedProposalMessage, Step,
     TaggedAggregationMessage,
@@ -165,16 +166,16 @@ where
             .expect("Must be able to serialize content of the proposal to hasher");
         proposal_msg
             .round
-            .serialize(&mut h)
+            .serialize_to_writer(&mut h)
             .expect("Must be able to serialize content of the round to hasher ");
         proposal_msg
             .valid_round
-            .serialize(&mut h)
+            .serialize_to_writer(&mut h)
             .expect("Must be able to serialize content of the valid_round to hasher ");
 
         let mut v = vec![];
         h.finish()
-            .serialize(&mut v)
+            .serialize_to_writer(&mut v)
             .expect("Must be able to serialize the hash.");
 
         v

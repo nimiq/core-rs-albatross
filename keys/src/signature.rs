@@ -1,6 +1,5 @@
 use std::{convert::TryFrom, fmt, str::FromStr};
 
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use hex::FromHex;
 
 use crate::errors::{KeysError, ParseError};
@@ -72,25 +71,6 @@ impl From<[u8; Self::SIZE]> for Signature {
     }
 }
 
-impl Deserialize for Signature {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let mut buf = [0u8; Signature::SIZE];
-        reader.read_exact(&mut buf)?;
-        Self::from_bytes(&buf).map_err(|_| SerializingError::InvalidValue)
-    }
-}
-
-impl Serialize for Signature {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        writer.write_all(&self.to_bytes())?;
-        Ok(self.serialized_size())
-    }
-
-    fn serialized_size(&self) -> usize {
-        Self::SIZE
-    }
-}
-
 impl FromStr for Signature {
     type Err = ParseError;
 
@@ -115,7 +95,11 @@ mod serde_derive {
         where
             S: Serializer,
         {
-            serializer.serialize_str(&self.to_hex())
+            if serializer.is_human_readable() {
+                serializer.serialize_str(&self.to_hex())
+            } else {
+                serde_big_array::BigArray::serialize(&self.to_bytes(), serializer)
+            }
         }
     }
 
@@ -124,8 +108,14 @@ mod serde_derive {
         where
             D: Deserializer<'de>,
         {
-            let data: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
-            data.parse().map_err(Error::custom)
+            if deserializer.is_human_readable() {
+                let data: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
+                data.parse().map_err(Error::custom)
+            } else {
+                let buf: [u8; Signature::SIZE] =
+                    serde_big_array::BigArray::deserialize(deserializer)?;
+                Self::from_bytes(&buf).map_err(|_| D::Error::custom("Invalid signature"))
+            }
         }
     }
 }

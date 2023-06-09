@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use beserial::{Deserialize, Serialize};
 use futures::{future, StreamExt};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::KeyPair as BlsKeyPair;
@@ -11,6 +10,7 @@ use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, SecureGenerate};
 use nimiq_mempool::config::MempoolConfig;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_validator::validator::Validator;
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 use rand::{rngs::StdRng, SeedableRng};
