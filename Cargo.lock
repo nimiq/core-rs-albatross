@@ -239,6 +239,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
 
 [[package]]
+name = "ark-bls12-381"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c775f0d12169cba7aae4caeb547bb6a50781c7449a8aa53793827c9ec4abf488"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
+]
+
+[[package]]
 name = "ark-crypto-primitives"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -380,7 +392,7 @@ dependencies = [
 [[package]]
 name = "ark-r1cs-std"
 version = "0.4.0"
-source = "git+https://github.com/paberr/r1cs-std?branch=pb/fix-pedersen#052e094d4920367188ea5ff9471da78cf0987c5d"
+source = "git+https://github.com/paberr/r1cs-std?branch=iipb/non-native#d4dd0d20f5798af41148da012667b9cd142a19cf"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -3611,6 +3623,7 @@ dependencies = [
 name = "nimiq-bls"
 version = "0.1.0"
 dependencies = [
+ "ark-bls12-381",
  "ark-crypto-primitives",
  "ark-ec",
  "ark-ff",
@@ -3618,6 +3631,7 @@ dependencies = [
  "ark-mnt6-753",
  "ark-serialize",
  "ark-std",
+ "bencher",
  "beserial",
  "blake2",
  "blake2-rfc",
@@ -4736,6 +4750,7 @@ dependencies = [
 name = "nimiq-zkp-circuits"
 version = "0.1.0"
 dependencies = [
+ "ark-bls12-381",
  "ark-crypto-primitives",
  "ark-ec",
  "ark-ff",

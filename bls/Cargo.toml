@@ -8,6 +8,10 @@ homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"
 edition = "2021"
 
+[[bench]]
+name = "bls"
+harness = false
+
 [dependencies]
 blake2-rfc = "0.2"
 blake2 = "0.10"
@@ -32,6 +36,9 @@ nimiq-hash = { path = "../hash" }
 nimiq-utils = { path = "../utils", features = ["key-rng"] }
 
 [dev-dependencies]
+ark-bls12-381 = "0.4"
+bencher = "0.1.5"
+
 nimiq-test-log = { path = "../test-log" }
 nimiq-test-utils = { path = "../test-utils" }
 

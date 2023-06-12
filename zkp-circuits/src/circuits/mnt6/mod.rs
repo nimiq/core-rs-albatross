@@ -10,3 +10,4 @@ pub mod macro_block;
 pub mod merger;
 pub mod pk_tree_leaf;
 pub mod pk_tree_node;
+pub mod test;
