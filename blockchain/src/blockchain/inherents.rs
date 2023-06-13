@@ -162,7 +162,7 @@ impl Blockchain {
             state
                 .current_slots
                 .as_ref()
-                .expect("Slots for last batch are missing")
+                .expect("Slots for current batch are missing")
         };
 
         // Calculate the slots that will receive rewards.
@@ -170,14 +170,13 @@ impl Blockchain {
         // lost_rewards_set (clears on batch end) makes rewards being lost for at least one batch
         // disabled_set (clears on epoch end) makes rewards being lost further if validator doesn't unpark
         let lost_rewards_set = staking_contract.previous_batch_lost_rewards();
-        let disabled_set =
-            if Policy::is_election_block_at(Policy::last_macro_block(macro_header.block_number)) {
-                // Use the previous epoch disabled slots for the first batch of the epoch
-                staking_contract.previous_epoch_disabled_slots()
-            } else {
-                // Use the current epoch disabled slots for the rest of the batches
-                staking_contract.current_disabled_slots()
-            };
+        let disabled_set = if Policy::first_batch_of_epoch(macro_header.block_number) {
+            // Use the previous epoch's disabled slots for the first batch of the epoch
+            staking_contract.previous_epoch_disabled_slots()
+        } else {
+            // Use the current epoch's disabled slots for the rest of the batches
+            staking_contract.current_disabled_slots()
+        };
         let slashed_set = lost_rewards_set | disabled_set;
 
         // Total reward for the previous batch
@@ -271,7 +270,7 @@ impl Blockchain {
                 debug!(
                     target_address = %tx.recipient,
                     reward = %tx.value,
-                    "Can't accept epoch reward"
+                    "Can't accept batch reward"
                 );
                 burned_reward += reward;
             }
