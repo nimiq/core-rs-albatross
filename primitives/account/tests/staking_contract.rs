@@ -487,9 +487,6 @@ fn unpark_validator_works() {
     staking_contract
         .current_disabled_slots
         .insert(validator_address.clone(), slots.clone());
-    staking_contract
-        .previous_epoch_disabled_slots
-        .insert(validator_address.clone(), slots.clone());
 
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
@@ -511,17 +508,13 @@ fn unpark_validator_works() {
         .expect("Failed to commit transaction");
 
     let expected_receipt = UnparkValidatorReceipt {
-        current_disabled_slots: Some(slots.clone()),
-        previous_disabled_slots: Some(slots),
+        current_disabled_slots: Some(slots),
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
     assert!(!staking_contract.parked_set.contains(&validator_address));
     assert!(!staking_contract
         .current_disabled_slots
-        .contains_key(&validator_address));
-    assert!(!staking_contract
-        .previous_epoch_disabled_slots
         .contains_key(&validator_address));
 
     // Try with an already unparked validator.
@@ -557,9 +550,6 @@ fn unpark_validator_works() {
     assert!(staking_contract.parked_set.contains(&validator_address));
     assert!(staking_contract
         .current_disabled_slots
-        .contains_key(&validator_address));
-    assert!(staking_contract
-        .previous_epoch_disabled_slots
         .contains_key(&validator_address));
 
     // Try with a non-existent validator.

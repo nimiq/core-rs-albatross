@@ -31,8 +31,6 @@ convert_receipt!(UpdateValidatorReceipt);
 pub struct UnparkValidatorReceipt {
     #[beserial(len_type(u16))]
     pub current_disabled_slots: Option<BTreeSet<u16>>,
-    #[beserial(len_type(u16))]
-    pub previous_disabled_slots: Option<BTreeSet<u16>>,
 }
 convert_receipt!(UnparkValidatorReceipt);
 
