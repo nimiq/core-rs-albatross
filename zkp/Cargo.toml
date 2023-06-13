@@ -58,3 +58,8 @@ required-features = ["zkp-prover", "parallel"]
 name = "prove"
 path = "examples/prover/prove.rs"
 required-features = ["zkp-prover", "parallel"]
+
+[[example]]
+name = "test"
+path = "examples/prover/test.rs"
+required-features = ["zkp-prover", "parallel"]
