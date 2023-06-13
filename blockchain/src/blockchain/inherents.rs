@@ -169,8 +169,8 @@ impl Blockchain {
         // Rewards are for the previous batch (to give validators time to report misbehavior)
         // lost_rewards_set (clears on batch end) makes rewards being lost for at least one batch
         // disabled_set (clears on epoch end) makes rewards being lost further if validator doesn't unpark
-        let lost_rewards_set = staking_contract.previous_lost_rewards();
-        let disabled_set = staking_contract.previous_disabled_slots();
+        let lost_rewards_set = staking_contract.previous_batch_lost_rewards();
+        let disabled_set = staking_contract.previous_epoch_disabled_slots();
         let slashed_set = lost_rewards_set | disabled_set;
 
         // Total reward for the previous batch

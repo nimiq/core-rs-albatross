@@ -304,7 +304,7 @@ impl StakingContract {
 
         // Clear the validators current and previous disabled slots.
         let current_disabled_slots = self.current_disabled_slots.remove(validator_address);
-        let previous_disabled_slots = self.previous_disabled_slots.remove(validator_address);
+        let previous_disabled_slots = self.previous_epoch_disabled_slots.remove(validator_address);
 
         tx_logger.push_log(Log::UnparkValidator {
             validator_address: validator_address.clone(),
@@ -333,7 +333,7 @@ impl StakingContract {
                 .insert(validator_address.clone(), slots);
         }
         if let Some(slots) = receipt.previous_disabled_slots {
-            self.previous_disabled_slots
+            self.previous_epoch_disabled_slots
                 .insert(validator_address.clone(), slots);
         }
 

@@ -703,7 +703,7 @@ where
                 .current_disabled_slots
                 .contains_key(&validator_address)
             || staking_contract
-                .previous_disabled_slots
+                .previous_epoch_disabled_slots
                 .contains_key(&validator_address)
         {
             return ValidatorStakingState::Parked;

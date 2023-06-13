@@ -65,11 +65,11 @@ fn generate_contract_2() {
     current_lost_rewards.insert(0);
     current_lost_rewards.insert(10);
 
-    let mut previous_lost_rewards = BitSet::new();
-    previous_lost_rewards.insert(100);
-    previous_lost_rewards.insert(101);
-    previous_lost_rewards.insert(102);
-    previous_lost_rewards.insert(104);
+    let mut previous_batch_lost_rewards = BitSet::new();
+    previous_batch_lost_rewards.insert(100);
+    previous_batch_lost_rewards.insert(101);
+    previous_batch_lost_rewards.insert(102);
+    previous_batch_lost_rewards.insert(104);
 
     let mut b_set = BTreeSet::new();
     b_set.insert(0);
@@ -82,17 +82,17 @@ fn generate_contract_2() {
     b_set.insert(101);
     b_set.insert(102);
     b_set.insert(104);
-    let mut previous_disabled_slots = BTreeMap::new();
-    previous_disabled_slots.insert(Address::from([2u8; 20]), b_set);
+    let mut previous_epoch_disabled_slots = BTreeMap::new();
+    previous_epoch_disabled_slots.insert(Address::from([2u8; 20]), b_set);
 
     let contract = StakingContract {
         balance: Coin::from_u64_unchecked(300_000_000),
         active_validators,
         parked_set,
         current_lost_rewards,
-        previous_lost_rewards,
+        previous_batch_lost_rewards,
         current_disabled_slots,
-        previous_disabled_slots,
+        previous_epoch_disabled_slots,
     };
 
     assert_eq!(&hex::encode(contract.serialize_to_vec()), "");
@@ -123,9 +123,9 @@ fn it_can_de_serialize_a_staking_contract() {
     assert_eq!(contract_1.active_validators.len(), 0);
     assert_eq!(contract_1.parked_set.len(), 0);
     assert_eq!(contract_1.current_lost_rewards.len(), 0);
-    assert_eq!(contract_1.previous_lost_rewards.len(), 0);
+    assert_eq!(contract_1.previous_batch_lost_rewards.len(), 0);
     assert_eq!(contract_1.current_disabled_slots.len(), 0);
-    assert_eq!(contract_1.previous_disabled_slots.len(), 0);
+    assert_eq!(contract_1.previous_epoch_disabled_slots.len(), 0);
 
     let mut bytes_1_out = Vec::<u8>::with_capacity(contract_1.serialized_size());
     let size_1_out = contract_1.serialize(&mut bytes_1_out).unwrap();
@@ -140,9 +140,9 @@ fn it_can_de_serialize_a_staking_contract() {
     assert_eq!(contract_2.active_validators.len(), 1);
     assert_eq!(contract_2.parked_set.len(), 1);
     assert_eq!(contract_2.current_lost_rewards.len(), 2);
-    assert_eq!(contract_2.previous_lost_rewards.len(), 4);
+    assert_eq!(contract_2.previous_batch_lost_rewards.len(), 4);
     assert_eq!(contract_2.current_disabled_slots.len(), 1);
-    assert_eq!(contract_2.previous_disabled_slots.len(), 1);
+    assert_eq!(contract_2.previous_epoch_disabled_slots.len(), 1);
 
     let mut bytes_2_out = Vec::<u8>::with_capacity(contract_2.serialized_size());
     let size_2_out = contract_2.serialize(&mut bytes_2_out).unwrap();
@@ -488,7 +488,7 @@ fn unpark_validator_works() {
         .current_disabled_slots
         .insert(validator_address.clone(), slots.clone());
     staking_contract
-        .previous_disabled_slots
+        .previous_epoch_disabled_slots
         .insert(validator_address.clone(), slots.clone());
 
     // Works in the valid case.
@@ -521,7 +521,7 @@ fn unpark_validator_works() {
         .current_disabled_slots
         .contains_key(&validator_address));
     assert!(!staking_contract
-        .previous_disabled_slots
+        .previous_epoch_disabled_slots
         .contains_key(&validator_address));
 
     // Try with an already unparked validator.
@@ -559,7 +559,7 @@ fn unpark_validator_works() {
         .current_disabled_slots
         .contains_key(&validator_address));
     assert!(staking_contract
-        .previous_disabled_slots
+        .previous_epoch_disabled_slots
         .contains_key(&validator_address));
 
     // Try with a non-existent validator.
@@ -1031,7 +1031,7 @@ fn retire_validator_works() {
         .current_disabled_slots
         .contains_key(&validator_address));
     assert!(!staking_contract
-        .previous_disabled_slots
+        .previous_epoch_disabled_slots
         .contains_key(&validator_address));
 
     // Try with an already retired validator.
@@ -2199,7 +2199,7 @@ fn slash_inherents_work() {
         .current_lost_rewards
         .contains(slot.slot as usize));
     assert!(!staking_contract
-        .previous_lost_rewards
+        .previous_batch_lost_rewards
         .contains(slot.slot as usize));
     assert!(staking_contract
         .current_disabled_slots
@@ -2207,7 +2207,7 @@ fn slash_inherents_work() {
         .unwrap()
         .contains(&slot.slot));
     assert!(staking_contract
-        .previous_disabled_slots
+        .previous_epoch_disabled_slots
         .get(&validator_address)
         .is_none());
 
@@ -2263,7 +2263,7 @@ fn slash_inherents_work() {
         .current_lost_rewards
         .contains(slot.slot as usize));
     assert!(staking_contract
-        .previous_lost_rewards
+        .previous_batch_lost_rewards
         .contains(slot.slot as usize));
     assert!(staking_contract
         .current_disabled_slots
@@ -2271,7 +2271,7 @@ fn slash_inherents_work() {
         .unwrap()
         .contains(&slot.slot));
     assert!(staking_contract
-        .previous_disabled_slots
+        .previous_epoch_disabled_slots
         .get(&validator_address)
         .is_none());
 
@@ -2327,14 +2327,14 @@ fn slash_inherents_work() {
         .current_lost_rewards
         .contains(slot.slot as usize));
     assert!(staking_contract
-        .previous_lost_rewards
+        .previous_batch_lost_rewards
         .contains(slot.slot as usize));
     assert!(staking_contract
         .current_disabled_slots
         .get(&validator_address)
         .is_none());
     assert!(staking_contract
-        .previous_disabled_slots
+        .previous_epoch_disabled_slots
         .get(&validator_address)
         .is_none());
 
@@ -2361,7 +2361,7 @@ fn finalize_batch_inherents_works() {
 
     // Prepare the staking contract.
     staking_contract.current_lost_rewards.insert(0);
-    staking_contract.previous_lost_rewards.insert(1);
+    staking_contract.previous_batch_lost_rewards.insert(1);
 
     // Works in the valid case.
     let inherent = Inherent::FinalizeBatch;
@@ -2382,9 +2382,9 @@ fn finalize_batch_inherents_works() {
 
     assert!(staking_contract.parked_set.is_empty());
     assert!(staking_contract.current_lost_rewards.is_empty());
-    assert!(staking_contract.previous_lost_rewards.contains(0));
+    assert!(staking_contract.previous_batch_lost_rewards.contains(0));
     assert!(staking_contract.current_disabled_slots.is_empty());
-    assert!(staking_contract.previous_disabled_slots.is_empty());
+    assert!(staking_contract.previous_epoch_disabled_slots.is_empty());
 
     // Cannot revert the inherent.
     assert_eq!(
@@ -2416,7 +2416,7 @@ fn finalize_epoch_inherents_works() {
         .parked_set
         .insert(validator_address.clone());
     staking_contract.current_lost_rewards.insert(0);
-    staking_contract.previous_lost_rewards.insert(1);
+    staking_contract.previous_batch_lost_rewards.insert(1);
     let mut set_c = BTreeSet::new();
     set_c.insert(0);
     staking_contract
@@ -2425,7 +2425,7 @@ fn finalize_epoch_inherents_works() {
     let mut set_p = BTreeSet::new();
     set_p.insert(1);
     staking_contract
-        .previous_disabled_slots
+        .previous_epoch_disabled_slots
         .insert(validator_address.clone(), set_p);
 
     // Works in the valid case.
@@ -2459,12 +2459,12 @@ fn finalize_epoch_inherents_works() {
     assert!(staking_contract.current_lost_rewards.is_empty());
     let mut bitset = BitSet::new();
     bitset.insert(0);
-    assert_eq!(staking_contract.previous_lost_rewards, bitset);
+    assert_eq!(staking_contract.previous_batch_lost_rewards, bitset);
 
     assert!(staking_contract.current_disabled_slots.is_empty());
     assert_eq!(
         staking_contract
-            .previous_disabled_slots
+            .previous_epoch_disabled_slots
             .get(&validator_address)
             .unwrap(),
         &set_c
@@ -2695,14 +2695,14 @@ fn revert_slash_inherent(
         .current_lost_rewards
         .contains(slot as usize));
     assert!(!staking_contract
-        .previous_lost_rewards
+        .previous_batch_lost_rewards
         .contains(slot as usize));
     assert!(staking_contract
         .current_disabled_slots
         .get(validator_address)
         .is_none());
     assert!(staking_contract
-        .previous_disabled_slots
+        .previous_epoch_disabled_slots
         .get(validator_address)
         .is_none());
 }

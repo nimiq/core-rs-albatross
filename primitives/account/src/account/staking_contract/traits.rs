@@ -643,16 +643,20 @@ impl AccountInherentInteraction for StakingContract {
                 let newly_lost_rewards;
 
                 if Policy::epoch_at(slot.event_block) < Policy::epoch_at(block_state.number) {
-                    newly_lost_rewards = !self.previous_lost_rewards.contains(slot.slot as usize);
+                    newly_lost_rewards = !self
+                        .previous_batch_lost_rewards
+                        .contains(slot.slot as usize);
 
-                    self.previous_lost_rewards.insert(slot.slot as usize);
+                    self.previous_batch_lost_rewards.insert(slot.slot as usize);
 
                     newly_disabled = false;
                 } else if Policy::batch_at(slot.event_block) < Policy::batch_at(block_state.number)
                 {
-                    newly_lost_rewards = !self.previous_lost_rewards.contains(slot.slot as usize);
+                    newly_lost_rewards = !self
+                        .previous_batch_lost_rewards
+                        .contains(slot.slot as usize);
 
-                    self.previous_lost_rewards.insert(slot.slot as usize);
+                    self.previous_batch_lost_rewards.insert(slot.slot as usize);
 
                     newly_disabled = self
                         .current_disabled_slots
@@ -697,14 +701,14 @@ impl AccountInherentInteraction for StakingContract {
             }
             Inherent::FinalizeBatch => {
                 // Clear the lost rewards set.
-                self.previous_lost_rewards = mem::take(&mut self.current_lost_rewards);
+                self.previous_batch_lost_rewards = mem::take(&mut self.current_lost_rewards);
 
                 // Since finalized batches cannot be reverted, we don't need any receipts.
                 Ok(None)
             }
             Inherent::FinalizeEpoch => {
                 // Clear the lost rewards set.
-                self.previous_lost_rewards = mem::take(&mut self.current_lost_rewards);
+                self.previous_batch_lost_rewards = mem::take(&mut self.current_lost_rewards);
 
                 // Parking set and disabled slots are cleared on epoch changes.
                 // But first, retire all validators that have been parked this epoch.
@@ -728,7 +732,7 @@ impl AccountInherentInteraction for StakingContract {
 
                 // And the disabled slots.
                 // Optimization: We actually only need the old slots for the first batch of the epoch.
-                self.previous_disabled_slots = mem::take(&mut self.current_disabled_slots);
+                self.previous_epoch_disabled_slots = mem::take(&mut self.current_disabled_slots);
 
                 // Since finalized epochs cannot be reverted, we don't need any receipts.
                 Ok(None)
@@ -794,7 +798,7 @@ impl AccountInherentInteraction for StakingContract {
                     if Policy::epoch_at(slot.event_block) < Policy::epoch_at(block_state.number)
                         || Policy::batch_at(slot.event_block) < Policy::batch_at(block_state.number)
                     {
-                        self.previous_lost_rewards.remove(slot.slot as usize);
+                        self.previous_batch_lost_rewards.remove(slot.slot as usize);
                     } else {
                         self.current_lost_rewards.remove(slot.slot as usize);
                     }

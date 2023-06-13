@@ -69,13 +69,13 @@ pub struct StakingContract {
     pub current_lost_rewards: BitSet,
     // The validator slots that lost rewards (i.e. are not eligible to receive rewards) during
     // the previous batch.
-    pub previous_lost_rewards: BitSet,
+    pub previous_batch_lost_rewards: BitSet,
     // The validator slots, searchable by the validator address, that are disabled (i.e. are no
     // longer eligible to produce blocks) currently.
     pub current_disabled_slots: BTreeMap<Address, BTreeSet<u16>>,
     // The validator slots, searchable by the validator address, that were disabled (i.e. are no
-    // longer eligible to produce blocks) during the previous batch.
-    pub previous_disabled_slots: BTreeMap<Address, BTreeSet<u16>>,
+    // longer eligible to produce blocks) during the previous epoch.
+    pub previous_epoch_disabled_slots: BTreeMap<Address, BTreeSet<u16>>,
 }
 
 impl StakingContract {
@@ -165,8 +165,8 @@ impl StakingContract {
     }
 
     /// Returns a BitSet of slots that lost its rewards in the previous batch.
-    pub fn previous_lost_rewards(&self) -> BitSet {
-        self.previous_lost_rewards.clone()
+    pub fn previous_batch_lost_rewards(&self) -> BitSet {
+        self.previous_batch_lost_rewards.clone()
     }
 
     /// Returns a BitSet of slots that lost its rewards in the current batch.
@@ -174,10 +174,10 @@ impl StakingContract {
         self.current_lost_rewards.clone()
     }
 
-    /// Returns a BitSet of slots that were marked as disabled in the previous batch.
-    pub fn previous_disabled_slots(&self) -> BitSet {
+    /// Returns a BitSet of slots that were marked as disabled in the previous epoch.
+    pub fn previous_epoch_disabled_slots(&self) -> BitSet {
         let mut bitset = BitSet::new();
-        for slots in self.previous_disabled_slots.values() {
+        for slots in self.previous_epoch_disabled_slots.values() {
             for &slot in slots {
                 bitset.insert(slot as usize);
             }
@@ -185,7 +185,7 @@ impl StakingContract {
         bitset
     }
 
-    /// Returns a BitSet of slots that were marked as disabled in the current batch.
+    /// Returns a BitSet of slots that were marked as disabled in the current epoch.
     pub fn current_disabled_slots(&self) -> BitSet {
         let mut bitset = BitSet::new();
         for slots in self.current_disabled_slots.values() {
@@ -213,15 +213,15 @@ impl Serialize for StakingContract {
         size += SerializeWithLength::serialize::<u32, _>(&self.parked_set, writer)?;
 
         size += Serialize::serialize(&self.current_lost_rewards, writer)?;
-        size += Serialize::serialize(&self.previous_lost_rewards, writer)?;
+        size += Serialize::serialize(&self.previous_batch_lost_rewards, writer)?;
 
         size += Serialize::serialize(&(self.current_disabled_slots.len() as u16), writer)?;
         for (key, slots) in self.current_disabled_slots.iter() {
             size += Serialize::serialize(key, writer)?;
             size += SerializeWithLength::serialize::<u16, _>(slots, writer)?;
         }
-        size += Serialize::serialize(&(self.previous_disabled_slots.len() as u16), writer)?;
-        for (key, slots) in self.previous_disabled_slots.iter() {
+        size += Serialize::serialize(&(self.previous_epoch_disabled_slots.len() as u16), writer)?;
+        for (key, slots) in self.previous_epoch_disabled_slots.iter() {
             size += Serialize::serialize(key, writer)?;
             size += SerializeWithLength::serialize::<u16, _>(slots, writer)?;
         }
@@ -238,15 +238,15 @@ impl Serialize for StakingContract {
         size += SerializeWithLength::serialized_size::<u32>(&self.parked_set);
 
         size += Serialize::serialized_size(&self.current_lost_rewards);
-        size += Serialize::serialized_size(&self.previous_lost_rewards);
+        size += Serialize::serialized_size(&self.previous_batch_lost_rewards);
 
         size += Serialize::serialized_size(&(self.current_disabled_slots.len() as u16));
         for (key, slots) in self.current_disabled_slots.iter() {
             size += Serialize::serialized_size(key);
             size += SerializeWithLength::serialized_size::<u16>(slots);
         }
-        size += Serialize::serialized_size(&(self.previous_disabled_slots.len() as u16));
-        for (key, slots) in self.previous_disabled_slots.iter() {
+        size += Serialize::serialized_size(&(self.previous_epoch_disabled_slots.len() as u16));
+        for (key, slots) in self.previous_epoch_disabled_slots.iter() {
             size += Serialize::serialized_size(key);
             size += SerializeWithLength::serialized_size::<u16>(slots);
         }
@@ -264,7 +264,7 @@ impl Deserialize for StakingContract {
         let parked_set = DeserializeWithLength::deserialize::<u32, _>(reader)?;
 
         let current_lost_rewards = Deserialize::deserialize(reader)?;
-        let previous_lost_rewards = Deserialize::deserialize(reader)?;
+        let previous_batch_lost_rewards = Deserialize::deserialize(reader)?;
 
         let num_current_disabled_slots: u16 = Deserialize::deserialize(reader)?;
         let mut current_disabled_slots = BTreeMap::new();
@@ -274,12 +274,12 @@ impl Deserialize for StakingContract {
             current_disabled_slots.insert(key, value);
         }
 
-        let num_previous_disabled_slots: u16 = Deserialize::deserialize(reader)?;
-        let mut previous_disabled_slots = BTreeMap::new();
-        for _ in 0..num_previous_disabled_slots {
+        let num_previous_epoch_disabled_slots: u16 = Deserialize::deserialize(reader)?;
+        let mut previous_epoch_disabled_slots = BTreeMap::new();
+        for _ in 0..num_previous_epoch_disabled_slots {
             let key: Address = Deserialize::deserialize(reader)?;
             let value = DeserializeWithLength::deserialize::<u16, _>(reader)?;
-            previous_disabled_slots.insert(key, value);
+            previous_epoch_disabled_slots.insert(key, value);
         }
 
         Ok(StakingContract {
@@ -287,9 +287,9 @@ impl Deserialize for StakingContract {
             active_validators,
             parked_set,
             current_lost_rewards,
-            previous_lost_rewards,
+            previous_batch_lost_rewards,
             current_disabled_slots,
-            previous_disabled_slots,
+            previous_epoch_disabled_slots,
         })
     }
 }

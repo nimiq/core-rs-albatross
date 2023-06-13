@@ -560,8 +560,8 @@ impl BlockchainInterface for BlockchainDispatcher {
             Ok(RPCData::with_blockchain(
                 SlashedSlots {
                     block_number,
-                    lost_rewards: staking_contract.previous_lost_rewards(),
-                    disabled: staking_contract.previous_disabled_slots(),
+                    lost_rewards: staking_contract.previous_batch_lost_rewards(),
+                    disabled: staking_contract.previous_epoch_disabled_slots(),
                 },
                 &blockchain_proxy,
             ))

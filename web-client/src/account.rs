@@ -101,7 +101,7 @@ impl PlainAccount {
                     .map(|address| address.to_user_friendly_address())
                     .collect(),
                 current_lost_rewards: acc.current_lost_rewards.to_string(),
-                previous_lost_rewards: acc.previous_lost_rewards.to_string(),
+                previous_lost_rewards: acc.previous_batch_lost_rewards.to_string(),
                 current_disabled_slots: acc
                     .current_disabled_slots
                     .iter()
@@ -113,7 +113,7 @@ impl PlainAccount {
                     })
                     .collect(),
                 previous_disabled_slots: acc
-                    .previous_disabled_slots
+                    .previous_epoch_disabled_slots
                     .iter()
                     .map(|(address, slots)| {
                         (
