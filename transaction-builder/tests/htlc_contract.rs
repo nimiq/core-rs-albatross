@@ -11,15 +11,16 @@ use nimiq_transaction::{
     },
     SignatureProof, Transaction,
 };
-use nimiq_transaction_builder::{Recipient, TransactionBuilder};
+use nimiq_transaction_builder::{Recipient, Sender, TransactionBuilder};
 
 #[test]
 fn it_can_create_creation_transaction() {
-    let sender = Address::from([0u8; 20]);
+    let sender_addr = Address::from([0u8; 20]);
+    let sender = Sender::new_basic(sender_addr.clone());
     let recipient = Address::from([0u8; 20]);
 
     let data = CreationTransactionData {
-        sender: sender.clone(),
+        sender: sender_addr.clone(),
         recipient: recipient.clone(),
         hash_root: AnyHash::Blake2b(AnyHash32([0u8; 32])),
         hash_count: 2,
@@ -27,10 +28,11 @@ fn it_can_create_creation_transaction() {
     };
 
     let transaction = Transaction::new_contract_creation(
-        data.serialize_to_vec(),
-        sender.clone(),
+        sender_addr.clone(),
         AccountType::Basic,
+        vec![],
         AccountType::HTLC,
+        data.serialize_to_vec(),
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
@@ -39,7 +41,7 @@ fn it_can_create_creation_transaction() {
 
     let mut htlc_builder = Recipient::new_htlc_builder();
     htlc_builder
-        .with_sender(sender.clone())
+        .with_sender(sender_addr.clone())
         .with_recipient(recipient)
         .with_blake2b_hash(Blake2bHash::from([0u8; 32]), 2)
         .with_timeout(1000);
@@ -91,11 +93,12 @@ fn prepare_outgoing_transaction() -> (
     let tx = Transaction::new_extended(
         Address::from([0u8; 20]),
         AccountType::HTLC,
+        vec![],
         Address::from([1u8; 20]),
         AccountType::Basic,
+        vec![],
         1000.try_into().unwrap(),
         0.try_into().unwrap(),
-        vec![],
         1,
         NetworkId::Dummy,
     );
@@ -133,8 +136,7 @@ fn it_can_create_regular_transfer() {
 
     let mut builder = TransactionBuilder::new();
     builder
-        .with_sender(Address::from([0u8; 20]))
-        .with_sender_type(AccountType::HTLC)
+        .with_sender(Sender::new_htlc(Address::from([0u8; 20])))
         .with_recipient(Recipient::new_basic(Address::from([1u8; 20])))
         .with_value(1000.try_into().unwrap())
         .with_fee(0.try_into().unwrap())
@@ -174,8 +176,7 @@ fn it_can_create_early_resolve() {
 
     let mut builder = TransactionBuilder::new();
     builder
-        .with_sender(Address::from([0u8; 20]))
-        .with_sender_type(AccountType::HTLC)
+        .with_sender(Sender::new_htlc(Address::from([0u8; 20])))
         .with_recipient(Recipient::new_basic(Address::from([1u8; 20])))
         .with_value(1000.try_into().unwrap())
         .with_fee(0.try_into().unwrap())
@@ -208,8 +209,7 @@ fn it_can_create_timeout_resolve() {
 
     let mut builder = TransactionBuilder::new();
     builder
-        .with_sender(Address::from([0u8; 20]))
-        .with_sender_type(AccountType::HTLC)
+        .with_sender(Sender::new_htlc(Address::from([0u8; 20])))
         .with_recipient(Recipient::new_basic(Address::from([1u8; 20])))
         .with_value(1000.try_into().unwrap())
         .with_fee(0.try_into().unwrap())

@@ -23,10 +23,11 @@ fn it_can_verify_creation_transaction() {
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
 
     let mut transaction = Transaction::new_contract_creation(
-        vec![],
         owner,
         AccountType::Basic,
+        vec![],
         AccountType::Vesting,
+        vec![],
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
@@ -38,7 +39,7 @@ fn it_can_verify_creation_transaction() {
         AccountType::verify_incoming_transaction(&transaction),
         Err(TransactionError::InvalidData)
     );
-    transaction.data = data;
+    transaction.recipient_data = data;
 
     // Invalid recipient
     assert_eq!(
@@ -69,7 +70,7 @@ fn it_can_verify_creation_transaction() {
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
     Serialize::serialize_to_writer(&Coin::try_from(100).unwrap(), &mut data);
-    transaction.data = data;
+    transaction.recipient_data = data;
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
         AccountType::verify_incoming_transaction(&transaction),
@@ -84,7 +85,7 @@ fn it_can_verify_creation_transaction() {
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
     Serialize::serialize_to_writer(&Coin::try_from(100).unwrap(), &mut data);
     Serialize::serialize_to_writer(&Coin::try_from(100).unwrap(), &mut data);
-    transaction.data = data;
+    transaction.recipient_data = data;
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
         AccountType::verify_incoming_transaction(&transaction),
@@ -99,7 +100,7 @@ fn it_can_verify_creation_transaction() {
         step_amount: Coin::try_from(1000).unwrap(),
         total_amount: Coin::try_from(100).unwrap(),
     };
-    transaction.data = data.serialize_to_vec();
+    transaction.recipient_data = data.serialize_to_vec();
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
         AccountType::verify_incoming_transaction(&transaction),

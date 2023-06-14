@@ -177,10 +177,10 @@ impl Log {
             from: transaction.sender.clone(),
             to: transaction.recipient.clone(),
             amount: transaction.value,
-            data: if !transaction.data.is_empty()
+            data: if !transaction.recipient_data.is_empty()
                 && transaction.recipient_type == AccountType::Basic
             {
-                Some(transaction.data.clone())
+                Some(transaction.recipient_data.clone())
             } else {
                 None
             },

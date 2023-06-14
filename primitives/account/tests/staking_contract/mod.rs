@@ -1,3 +1,5 @@
+use std::vec;
+
 use nimiq_account::{DataStoreWrite, StakingContract, StakingContractStoreWrite, TransactionLog};
 use nimiq_bls::{
     CompressedPublicKey as BlsPublicKey, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey,
@@ -6,8 +8,7 @@ use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
-    account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof},
-    SignatureProof, Transaction,
+    account::staking_contract::IncomingStakingTransactionData, SignatureProof, Transaction,
 };
 
 mod punished_slots;
@@ -112,11 +113,12 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
         | IncomingStakingTransactionData::AddStake { .. } => Transaction::new_extended(
             non_existent_address(),
             AccountType::Basic,
+            vec![],
             Policy::STAKING_CONTRACT_ADDRESS,
             AccountType::Staking,
+            data.serialize_to_vec(),
             value.try_into().unwrap(),
             100.try_into().unwrap(),
-            data.serialize_to_vec(),
             1,
             NetworkId::Dummy,
         ),
@@ -145,7 +147,9 @@ fn make_signed_incoming_transaction(
         in_key_pair.sign(&tx.serialize_content()),
     );
 
-    tx.data = IncomingStakingTransactionData::set_signature_on_data(&tx.data, in_proof).unwrap();
+    tx.recipient_data =
+        IncomingStakingTransactionData::set_signature_on_data(&tx.recipient_data, in_proof)
+            .unwrap();
 
     let out_private_key =
         PrivateKey::deserialize_from_vec(&hex::decode(NON_EXISTENT_PRIVATE_KEY).unwrap()).unwrap();

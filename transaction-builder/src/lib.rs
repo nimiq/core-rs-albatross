@@ -1,17 +1,18 @@
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, KeyPair, PublicKey};
-use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
+use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_transaction::{
     account::htlc_contract::{AnyHash, PreImage},
     SignatureProof, Transaction,
 };
 use thiserror::Error;
 
-pub use crate::{proof::TransactionProofBuilder, recipient::Recipient};
+pub use crate::{proof::TransactionProofBuilder, recipient::Recipient, sender::Sender};
 
 pub mod proof;
 pub mod recipient;
+pub mod sender;
 
 /// Building a transaction can fail if mandatory fields are not set.
 /// In these cases, a `TransactionBuilderError` is returned.
@@ -91,8 +92,7 @@ pub enum TransactionBuilderError {
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct TransactionBuilder {
-    sender: Option<Address>,
-    sender_type: Option<AccountType>,
+    sender: Option<Sender>,
     value: Option<Coin>,
     fee: Option<Coin>,
     recipient: Option<Recipient>,
@@ -125,12 +125,13 @@ impl TransactionBuilder {
     /// # Examples
     ///
     /// ```
-    /// use nimiq_transaction_builder::{TransactionBuilder, Recipient};
+    /// use nimiq_transaction_builder::{TransactionBuilder, Recipient, Sender};
     /// use nimiq_keys::Address;
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
     ///
-    /// let sender = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
+    /// let sender_address = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
+    /// let sender = Sender::new_basic(sender_address);
     /// let recipient = Recipient::new_basic(
     ///     Address::from_any_str("NQ25 B7NR A1HC V4R2 YRKD 20PR RPGS MNV7 D812").unwrap()
     /// );
@@ -144,10 +145,10 @@ impl TransactionBuilder {
     ///
     /// let proof_builder = builder.generate().unwrap();
     /// let transaction = proof_builder.preliminary_transaction();
-    /// assert_eq!(transaction.sender, sender);
+    /// assert_eq!(transaction.sender, sender.address());
     /// ```
     pub fn with_required(
-        sender: Address,
+        sender: Sender,
         recipient: Recipient,
         value: Coin,
         validity_start_height: u32,
@@ -200,17 +201,17 @@ impl TransactionBuilder {
     /// # Examples
     ///
     /// ```
-    /// use nimiq_transaction_builder::{TransactionBuilder, Recipient};
+    /// use nimiq_transaction_builder::{TransactionBuilder, Recipient, Sender};
     /// use nimiq_keys::Address;
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
     ///
-    /// let sender = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
+    /// let sender = Sender::new_basic(Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap());
     /// let recipient = Recipient::new_basic(
     ///     Address::from_any_str("NQ25 B7NR A1HC V4R2 YRKD 20PR RPGS MNV7 D812").unwrap()
     /// );
     /// let mut builder = TransactionBuilder::with_required(
-    ///     sender.clone(),
+    ///     sender,
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,
@@ -234,70 +235,16 @@ impl TransactionBuilder {
     /// # Examples
     ///
     /// ```
-    /// use nimiq_transaction_builder::TransactionBuilder;
+    /// use nimiq_transaction_builder::{Sender, TransactionBuilder};
     /// use nimiq_keys::Address;
     /// use nimiq_primitives::coin::Coin;
     ///
+    /// let sender = Sender::new_basic(Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap());
     /// let mut builder = TransactionBuilder::new();
-    /// builder.with_sender(
-    ///     Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap()
-    /// );
+    /// builder.with_sender(sender);
     /// ```
-    pub fn with_sender(&mut self, sender: Address) -> &mut Self {
+    pub fn with_sender(&mut self, sender: Sender) -> &mut Self {
         self.sender = Some(sender);
-        self
-    }
-
-    /// Sets the `sender_type`, which describes the account type of the sender.
-    ///
-    /// This field is optional and will default to `AccountType::Basic`.
-    ///
-    /// Since the sender type determines the type of proof required for the transaction,
-    /// it is essential to set it to the correct type.
-    ///
-    /// The proof builder can be determined as follows:
-    /// 1. If the transaction is a `signaling transaction`, it will be a [`SignalingProofBuilder`].
-    /// 2. Otherwise, the following mapping holds depending on `sender_type`:
-    ///   - `AccountType::Basic`: [`BasicProofBuilder`]
-    ///   - `AccountType::Vesting`: [`BasicProofBuilder`]
-    ///   - `AccountType::HTLC`: [`HtlcProofBuilder`]
-    ///   - `AccountType::Staking`: [`StakingProofBuilder`]
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nimiq_transaction_builder::{TransactionBuilder, Recipient};
-    /// use nimiq_keys::Address;
-    /// use nimiq_primitives::coin::Coin;
-    /// use nimiq_primitives::networks::NetworkId;
-    /// use nimiq_primitives::account::AccountType;
-    ///
-    /// let sender = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
-    /// let recipient = Recipient::new_basic(
-    ///     Address::from_any_str("NQ25 B7NR A1HC V4R2 YRKD 20PR RPGS MNV7 D812").unwrap()
-    /// );
-    /// let mut builder = TransactionBuilder::with_required(
-    ///     sender.clone(),
-    ///     recipient,
-    ///     Coin::from_u64_unchecked(100),
-    ///     1,
-    ///     NetworkId::Main
-    /// );
-    /// builder.with_sender_type(AccountType::HTLC);
-    ///
-    /// let proof_builder = builder.generate().unwrap();
-    /// let transaction = proof_builder.preliminary_transaction();
-    /// assert_eq!(transaction.sender_type, AccountType::HTLC);
-    ///
-    /// // A HTLC sender type will result in a HtlcProofBuilder.
-    /// let htlc_proof_builder = proof_builder.unwrap_htlc();
-    /// ```
-    ///
-    /// [`BasicProofBuilder`]: proof::BasicProofBuilder
-    /// [`HtlcProofBuilder`]: proof::htlc_contract::HtlcProofBuilder
-    /// [`StakingProofBuilder`]: proof::staking_contract::StakingProofBuilder
-    pub fn with_sender_type(&mut self, sender_type: AccountType) -> &mut Self {
-        self.sender_type = Some(sender_type);
         self
     }
 
@@ -310,12 +257,12 @@ impl TransactionBuilder {
     /// # Examples
     ///
     /// ```
-    /// use nimiq_transaction_builder::{TransactionBuilder, Recipient};
+    /// use nimiq_transaction_builder::{TransactionBuilder, Recipient, Sender};
     /// use nimiq_keys::Address;
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
     ///
-    /// let sender = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
+    /// let sender = Sender::new_basic(Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap());
     /// let recipient = Recipient::new_basic(
     ///     Address::from_any_str("NQ25 B7NR A1HC V4R2 YRKD 20PR RPGS MNV7 D812").unwrap()
     /// );
@@ -390,17 +337,16 @@ impl TransactionBuilder {
     /// # Examples
     ///
     /// ```
-    /// use nimiq_transaction_builder::{TransactionBuilder, Recipient};
+    /// use nimiq_transaction_builder::{TransactionBuilder, Recipient, Sender};
     /// use nimiq_keys::Address;
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
     ///
-    /// let sender = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
-    /// let recipient = Recipient::new_basic(
-    ///     Address::from_any_str("NQ25 B7NR A1HC V4R2 YRKD 20PR RPGS MNV7 D812").unwrap()
-    /// );
+    /// let sender = Sender::new_basic(Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap());
+    /// let recipient = Recipient::new_basic(Address::from_any_str("NQ25 B7NR A1HC V4R2 YRKD 20PR RPGS MNV7 D812").unwrap());
+    ///
     /// let mut builder = TransactionBuilder::with_required(
-    ///     sender.clone(),
+    ///     sender,
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,
@@ -433,10 +379,11 @@ impl TransactionBuilder {
         // Currently, the flags for creation & signaling can never occur at the same time.
         let tx = if recipient.is_creation() {
             Transaction::new_contract_creation(
-                recipient.data(),
-                sender,
-                self.sender_type.unwrap_or(AccountType::Basic),
+                sender.address(),
+                sender.account_type(),
+                vec![],
                 recipient.account_type(),
+                recipient.data(),
                 value,
                 self.fee.unwrap_or(Coin::ZERO),
                 validity_start_height,
@@ -444,8 +391,8 @@ impl TransactionBuilder {
             )
         } else if recipient.is_signaling() {
             Transaction::new_signaling(
-                sender,
-                self.sender_type.unwrap_or(AccountType::Basic),
+                sender.address(),
+                sender.account_type(),
                 recipient.address().unwrap(), // For non-creation recipients, this should never return None.
                 recipient.account_type(),
                 self.fee.unwrap_or(Coin::ZERO),
@@ -455,13 +402,14 @@ impl TransactionBuilder {
             )
         } else {
             Transaction::new_extended(
-                sender,
-                self.sender_type.unwrap_or(AccountType::Basic),
+                sender.address(),
+                sender.account_type(),
+                sender.data(),
                 recipient.address().unwrap(), // For non-creation recipients, this should never return None.
                 recipient.account_type(),
+                recipient.data(),
                 value,
                 self.fee.unwrap_or(Coin::ZERO),
-                recipient.data(),
                 validity_start_height,
                 network_id,
             )
@@ -498,10 +446,9 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
-        let sender = Address::from(key_pair);
         let mut builder = Self::new();
         builder
-            .with_sender(sender)
+            .with_sender(Sender::new_basic(Address::from(key_pair)))
             .with_recipient(Recipient::new_basic(recipient))
             .with_value(value)
             .with_fee(fee)
@@ -545,11 +492,9 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
-        let sender = Address::from(key_pair);
-
         let mut builder = Self::new();
         builder
-            .with_sender(sender)
+            .with_sender(Sender::new_basic(Address::from(key_pair)))
             .with_recipient(Recipient::new_basic_with_data(recipient, data))
             .with_value(value)
             .with_fee(fee)
@@ -604,7 +549,7 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(Address::from(key_pair))
+            .with_sender(Sender::new_basic(Address::from(key_pair)))
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
             .with_fee(fee)
@@ -649,8 +594,7 @@ impl TransactionBuilder {
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut builder = Self::new();
         builder
-            .with_sender(contract_address)
-            .with_sender_type(AccountType::Vesting)
+            .with_sender(Sender::new_vesting(contract_address))
             .with_recipient(Recipient::new_basic(recipient))
             .with_value(value)
             .with_fee(fee)
@@ -711,7 +655,7 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(Address::from(key_pair))
+            .with_sender(Sender::new_basic(Address::from(key_pair)))
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
             .with_fee(fee)
@@ -768,8 +712,7 @@ impl TransactionBuilder {
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut builder = Self::new();
         builder
-            .with_sender(contract_address)
-            .with_sender_type(AccountType::HTLC)
+            .with_sender(Sender::new_htlc(contract_address))
             .with_recipient(Recipient::new_basic(recipient))
             .with_value(value)
             .with_fee(fee)
@@ -817,8 +760,7 @@ impl TransactionBuilder {
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut builder = Self::new();
         builder
-            .with_sender(contract_address)
-            .with_sender_type(AccountType::HTLC)
+            .with_sender(Sender::new_htlc(contract_address))
             .with_recipient(Recipient::new_basic(recipient))
             .with_value(value)
             .with_fee(fee)
@@ -869,8 +811,7 @@ impl TransactionBuilder {
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut builder = Self::new();
         builder
-            .with_sender(contract_address)
-            .with_sender_type(AccountType::HTLC)
+            .with_sender(Sender::new_htlc(contract_address))
             .with_recipient(Recipient::new_basic(recipient))
             .with_value(value)
             .with_fee(fee)
@@ -918,8 +859,7 @@ impl TransactionBuilder {
     ) -> Result<SignatureProof, TransactionBuilderError> {
         let mut builder = Self::new();
         builder
-            .with_sender(contract_address)
-            .with_sender_type(AccountType::HTLC)
+            .with_sender(Sender::new_htlc(contract_address))
             .with_recipient(Recipient::new_basic(recipient))
             .with_value(value)
             .with_fee(fee)
@@ -966,7 +906,7 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(Address::from(key_pair))
+            .with_sender(Sender::new_basic(Address::from(key_pair)))
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
             .with_fee(fee)
@@ -1016,7 +956,7 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(Address::from(key_pair))
+            .with_sender(Sender::new_basic(Address::from(key_pair)))
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
             .with_fee(fee)
@@ -1078,34 +1018,22 @@ impl TransactionBuilder {
 
         match key_pair {
             None => {
-                builder
-                    .with_sender(Policy::STAKING_CONTRACT_ADDRESS)
-                    .with_sender_type(AccountType::Staking);
+                builder.with_sender(Sender::new_basic(Address::from(staker_key_pair)));
             }
             Some(key) => {
-                builder.with_sender(Address::from(key));
+                builder.with_sender(Sender::new_basic(Address::from(key)));
             }
         }
 
         let proof_builder = builder.generate()?;
-        match proof_builder {
-            TransactionProofBuilder::InStaking(mut builder) => {
-                builder.sign_with_key_pair(staker_key_pair);
-                match key_pair {
-                    None => {
-                        let mut builder = builder.generate().unwrap().unwrap_out_staking();
-                        builder.unstake(staker_key_pair);
-                        Ok(builder.generate().unwrap())
-                    }
-                    Some(key) => {
-                        let mut builder = builder.generate().unwrap().unwrap_basic();
-                        builder.sign_with_key_pair(key);
-                        Ok(builder.generate().unwrap())
-                    }
-                }
-            }
-            _ => unreachable!(),
-        }
+        let mut staking_data_builder = proof_builder.unwrap_in_staking();
+        staking_data_builder.sign_with_key_pair(staker_key_pair);
+        let mut builder = staking_data_builder.generate().unwrap().unwrap_basic();
+        match key_pair {
+            None => builder.sign_with_key_pair(staker_key_pair),
+            Some(key) => builder.sign_with_key_pair(key),
+        };
+        Ok(builder.generate().unwrap())
     }
 
     /// Creates a set inactive stake transaction for a given staker.
@@ -1152,34 +1080,22 @@ impl TransactionBuilder {
 
         match key_pair {
             None => {
-                builder
-                    .with_sender(Policy::STAKING_CONTRACT_ADDRESS)
-                    .with_sender_type(AccountType::Staking);
+                builder.with_sender(Sender::new_basic(Address::from(staker_key_pair)));
             }
             Some(key) => {
-                builder.with_sender(Address::from(key));
+                builder.with_sender(Sender::new_basic(Address::from(key)));
             }
         }
 
         let proof_builder = builder.generate()?;
-        match proof_builder {
-            TransactionProofBuilder::InStaking(mut builder) => {
-                builder.sign_with_key_pair(staker_key_pair);
-                match key_pair {
-                    None => {
-                        let mut builder = builder.generate().unwrap().unwrap_out_staking();
-                        builder.unstake(staker_key_pair);
-                        Ok(builder.generate().unwrap())
-                    }
-                    Some(key) => {
-                        let mut builder = builder.generate().unwrap().unwrap_basic();
-                        builder.sign_with_key_pair(key);
-                        Ok(builder.generate().unwrap())
-                    }
-                }
-            }
-            _ => unreachable!(),
-        }
+        let mut staking_data_builder = proof_builder.unwrap_in_staking();
+        staking_data_builder.sign_with_key_pair(staker_key_pair);
+        let mut builder = staking_data_builder.generate().unwrap().unwrap_basic();
+        match key_pair {
+            None => builder.sign_with_key_pair(staker_key_pair),
+            Some(key) => builder.sign_with_key_pair(key),
+        };
+        Ok(builder.generate().unwrap())
     }
 
     /// Creates a transaction to move stake of a given staker from the staking contract to a
@@ -1207,12 +1123,15 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
+        let sender = Sender::new_staking_builder()
+            .remove_stake()
+            .generate()
+            .unwrap();
         let recipient = Recipient::new_basic(recipient);
 
         let mut builder = Self::new();
         builder
-            .with_sender(Policy::STAKING_CONTRACT_ADDRESS)
-            .with_sender_type(AccountType::Staking)
+            .with_sender(sender)
             .with_recipient(recipient)
             .with_value(value)
             .with_fee(fee)
@@ -1222,7 +1141,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::OutStaking(mut builder) => {
-                builder.unstake(key_pair);
+                builder.sign_with_key_pair(key_pair);
                 Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
@@ -1265,7 +1184,7 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(Address::from(key_pair))
+            .with_sender(Sender::new_basic(Address::from(key_pair)))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT))
             .with_fee(fee)
@@ -1329,7 +1248,7 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(Address::from(key_pair))
+            .with_sender(Sender::new_basic(Address::from(key_pair)))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(fee)
@@ -1382,7 +1301,7 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(Address::from(key_pair))
+            .with_sender(Sender::new_basic(Address::from(key_pair)))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(fee)
@@ -1435,7 +1354,7 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(Address::from(key_pair))
+            .with_sender(Sender::new_basic(Address::from(key_pair)))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(fee)
@@ -1486,7 +1405,7 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(Address::from(key_pair))
+            .with_sender(Sender::new_basic(Address::from(key_pair)))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(fee)
@@ -1533,8 +1452,12 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(Policy::STAKING_CONTRACT_ADDRESS)
-            .with_sender_type(AccountType::Staking)
+            .with_sender(
+                Sender::new_staking_builder()
+                    .delete_validator()
+                    .generate()
+                    .unwrap(),
+            )
             .with_recipient(recipient)
             .with_value(value)
             .with_fee(fee)
@@ -1544,7 +1467,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::OutStaking(mut builder) => {
-                builder.delete_validator(cold_key_pair);
+                builder.sign_with_key_pair(cold_key_pair);
                 Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),

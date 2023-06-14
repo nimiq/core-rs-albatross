@@ -7,7 +7,7 @@ use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, po
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_transaction::{
-    account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof},
+    account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionData},
     SignatureProof, Transaction,
 };
 use nimiq_transaction_builder::{TransactionBuilder, TransactionBuilderError};
@@ -88,15 +88,6 @@ fn it_can_create_staker_transactions() {
     .unwrap();
 
     assert_eq!(tx, tx2);
-
-    // Update (fees from staker account)
-    let tx = make_self_transaction(
-        IncomingStakingTransactionData::UpdateStaker {
-            new_delegation: None,
-            proof: Default::default(),
-        },
-        &key_pair,
-    );
 
     let tx2 = TransactionBuilder::new_update_staker(
         None,
@@ -280,11 +271,12 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
         | IncomingStakingTransactionData::CreateValidator { .. } => Transaction::new_extended(
             Address::from_any_str(ADDRESS).unwrap(),
             AccountType::Basic,
+            vec![],
             Policy::STAKING_CONTRACT_ADDRESS,
             AccountType::Staking,
+            data.serialize_to_vec(),
             value.try_into().unwrap(),
             100.try_into().unwrap(),
-            data.serialize_to_vec(),
             1,
             NetworkId::Dummy,
         ),
@@ -307,8 +299,8 @@ fn make_signed_incoming_transaction(
     key_pair: &KeyPair,
 ) -> Transaction {
     let mut tx = make_incoming_transaction(data, value);
-    tx.data = IncomingStakingTransactionData::set_signature_on_data(
-        &tx.data,
+    tx.recipient_data = IncomingStakingTransactionData::set_signature_on_data(
+        &tx.recipient_data,
         SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())),
     )
     .unwrap();
@@ -322,18 +314,16 @@ fn make_unstake_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
     let mut tx = Transaction::new_extended(
         Policy::STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
+        OutgoingStakingTransactionData::RemoveStake.serialize_to_vec(),
         Address::from_any_str(ADDRESS).unwrap(),
         AccountType::Basic,
+        vec![],
         value.try_into().unwrap(),
         100.try_into().unwrap(),
-        vec![],
         1,
         NetworkId::Dummy,
     );
-    let proof = OutgoingStakingTransactionProof::RemoveStake {
-        proof: SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())),
-    };
-    tx.proof = proof.serialize_to_vec();
+    tx.proof = key_pair.sign(&tx.serialize_content()).serialize_to_vec();
     tx
 }
 
@@ -342,41 +332,16 @@ fn make_delete_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
     let mut tx = Transaction::new_extended(
         Policy::STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
+        OutgoingStakingTransactionData::DeleteValidator.serialize_to_vec(),
         Address::from_any_str(ADDRESS).unwrap(),
         AccountType::Basic,
+        vec![],
         value.try_into().unwrap(),
         100.try_into().unwrap(),
-        vec![],
         1,
         NetworkId::Dummy,
     );
-    let proof = OutgoingStakingTransactionProof::DeleteValidator {
-        proof: SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())),
-    };
-    tx.proof = proof.serialize_to_vec();
-    tx
-}
-
-fn make_self_transaction(data: IncomingStakingTransactionData, key_pair: &KeyPair) -> Transaction {
-    let mut tx = Transaction::new_signaling(
-        Policy::STAKING_CONTRACT_ADDRESS,
-        AccountType::Staking,
-        Policy::STAKING_CONTRACT_ADDRESS,
-        AccountType::Staking,
-        100.try_into().unwrap(),
-        data.serialize_to_vec(),
-        1,
-        NetworkId::Dummy,
-    );
-    tx.data = IncomingStakingTransactionData::set_signature_on_data(
-        &tx.data,
-        SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())),
-    )
-    .unwrap();
-    let proof = OutgoingStakingTransactionProof::RemoveStake {
-        proof: SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())),
-    };
-    tx.proof = proof.serialize_to_vec();
+    tx.proof = key_pair.sign(&tx.serialize_content()).serialize_to_vec();
     tx
 }
 

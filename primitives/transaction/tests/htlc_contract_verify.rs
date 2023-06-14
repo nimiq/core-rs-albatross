@@ -28,10 +28,11 @@ fn prepare_outgoing_transaction() -> (Transaction, AnyHash, SignatureProof, Sign
     let pre_image = AnyHash::Blake2b(AnyHash32::from([1u8; 32]));
 
     let tx = Transaction::new_contract_creation(
-        vec![],
         Address::from([0u8; 20]),
         AccountType::HTLC,
+        vec![],
         AccountType::Basic,
+        vec![],
         1000.try_into().unwrap(),
         0.try_into().unwrap(),
         1,
@@ -63,10 +64,11 @@ fn it_can_verify_creation_transaction() {
     };
 
     let mut transaction = Transaction::new_contract_creation(
-        vec![],
         data.sender.clone(),
         AccountType::Basic,
+        vec![],
         AccountType::HTLC,
+        vec![],
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
@@ -78,7 +80,7 @@ fn it_can_verify_creation_transaction() {
         AccountType::verify_incoming_transaction(&transaction),
         Err(TransactionError::InvalidData)
     );
-    transaction.data = data.serialize_to_vec();
+    transaction.recipient_data = data.serialize_to_vec();
 
     // Invalid recipient
     assert_eq!(
@@ -103,7 +105,7 @@ fn it_can_verify_creation_transaction() {
     transaction.flags = TransactionFlags::CONTRACT_CREATION;
 
     // Invalid hash algorithm
-    transaction.data[40] = 200;
+    transaction.recipient_data[40] = 200;
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
         AccountType::verify_incoming_transaction(&transaction),
@@ -111,10 +113,10 @@ fn it_can_verify_creation_transaction() {
             DeserializeError::serde_custom()
         ))
     );
-    transaction.data[40] = 1;
+    transaction.recipient_data[40] = 1;
 
     // Invalid zero hash count
-    transaction.data[73] = 0;
+    transaction.recipient_data[73] = 0;
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
         AccountType::verify_incoming_transaction(&transaction),

@@ -8,7 +8,8 @@ use nimiq_keys::Address;
 use nimiq_primitives::{account::AccountError, coin::Coin, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_transaction::{
-    account::staking_contract::IncomingStakingTransactionData, SignatureProof,
+    account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionData},
+    SignatureProof,
 };
 
 use super::*;
@@ -32,11 +33,12 @@ fn make_unstake_transaction(value: u64) -> Transaction {
     let mut tx = Transaction::new_extended(
         Policy::STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
+        OutgoingStakingTransactionData::RemoveStake.serialize_to_vec(),
         staker_address(),
         AccountType::Basic,
+        vec![],
         (value - 100).try_into().unwrap(),
         100.try_into().unwrap(),
-        vec![],
         1,
         NetworkId::Dummy,
     );
@@ -45,12 +47,9 @@ fn make_unstake_transaction(value: u64) -> Transaction {
         PrivateKey::deserialize_from_vec(&hex::decode(STAKER_PRIVATE_KEY).unwrap()).unwrap();
 
     let key_pair = KeyPair::from(private_key);
+    let signature = key_pair.sign(&tx.serialize_content());
 
-    let sig = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content()));
-
-    let proof = OutgoingStakingTransactionProof::RemoveStake { proof: sig };
-
-    tx.proof = proof.serialize_to_vec();
+    tx.proof = SignatureProof::from(key_pair.public, signature).serialize_to_vec();
 
     tx
 }

@@ -4,10 +4,11 @@ use nimiq_primitives::{
     coin::Coin,
     policy::Policy,
 };
+use nimiq_serde::Deserialize;
 use nimiq_transaction::{
-    account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof},
+    account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionData},
     inherent::Inherent,
-    Transaction,
+    SignatureProof, Transaction,
 };
 
 use crate::{
@@ -307,12 +308,14 @@ impl AccountTransactionInteraction for StakingContract {
         let mut store = StakingContractStoreWrite::new(&mut data_store);
 
         // Parse transaction proof.
-        let proof = OutgoingStakingTransactionProof::parse(transaction)?;
+        let data = OutgoingStakingTransactionData::parse(transaction)?;
+        let proof: SignatureProof = Deserialize::deserialize_from_vec(&transaction.proof[..])?;
+
         tx_logger.push_log(Log::pay_fee_log(transaction));
         tx_logger.push_log(Log::transfer_log(transaction));
 
-        match proof {
-            OutgoingStakingTransactionProof::DeleteValidator { proof } => {
+        match data {
+            OutgoingStakingTransactionData::DeleteValidator => {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
 
@@ -325,7 +328,7 @@ impl AccountTransactionInteraction for StakingContract {
                 )
                 .map(|receipt| Some(receipt.into()))
             }
-            OutgoingStakingTransactionProof::RemoveStake { proof } => {
+            OutgoingStakingTransactionData::RemoveStake => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
@@ -352,10 +355,11 @@ impl AccountTransactionInteraction for StakingContract {
         let mut store = StakingContractStoreWrite::new(&mut data_store);
 
         // Parse transaction data.
-        let data = OutgoingStakingTransactionProof::parse(transaction)?;
+        let data = OutgoingStakingTransactionData::parse(transaction)?;
+        let proof: SignatureProof = Deserialize::deserialize_from_vec(&transaction.proof[..])?;
 
         let result = match data {
-            OutgoingStakingTransactionProof::DeleteValidator { proof } => {
+            OutgoingStakingTransactionData::DeleteValidator => {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
 
@@ -369,7 +373,7 @@ impl AccountTransactionInteraction for StakingContract {
                     tx_logger,
                 )
             }
-            OutgoingStakingTransactionProof::RemoveStake { proof } => {
+            OutgoingStakingTransactionData::RemoveStake => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
@@ -401,7 +405,8 @@ impl AccountTransactionInteraction for StakingContract {
         let mut store = StakingContractStoreWrite::new(&mut data_store);
 
         // Parse transaction proof.
-        let data = OutgoingStakingTransactionProof::parse(transaction)?;
+        let data = OutgoingStakingTransactionData::parse(transaction)?;
+        let proof: SignatureProof = Deserialize::deserialize_from_vec(&transaction.proof[..])?;
 
         tx_logger.push_log(Log::pay_fee_log(transaction));
 
@@ -409,7 +414,7 @@ impl AccountTransactionInteraction for StakingContract {
             // In the case of a failed Delete Validator we will:
             // 1. Pay the fee from the validator deposit
             // 2. If the deposit reaches 0, we delete the validator
-            OutgoingStakingTransactionProof::DeleteValidator { proof } => {
+            OutgoingStakingTransactionData::DeleteValidator => {
                 let validator_address = proof.compute_signer();
 
                 let mut validator = store.expect_validator(&validator_address)?;
@@ -450,7 +455,7 @@ impl AccountTransactionInteraction for StakingContract {
 
                 receipt
             }
-            OutgoingStakingTransactionProof::RemoveStake { proof } => {
+            OutgoingStakingTransactionData::RemoveStake => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
@@ -490,10 +495,11 @@ impl AccountTransactionInteraction for StakingContract {
         let mut store = StakingContractStoreWrite::new(&mut data_store);
 
         // Parse transaction data.
-        let data = OutgoingStakingTransactionProof::parse(transaction)?;
+        let data = OutgoingStakingTransactionData::parse(transaction)?;
+        let proof: SignatureProof = Deserialize::deserialize_from_vec(&transaction.proof[..])?;
 
         let result = match data {
-            OutgoingStakingTransactionProof::DeleteValidator { proof } => {
+            OutgoingStakingTransactionData::DeleteValidator => {
                 let validator_address = proof.compute_signer();
                 tx_logger.push_log(Log::ValidatorFeeDeduction {
                     validator_address: validator_address.clone(),
@@ -533,7 +539,7 @@ impl AccountTransactionInteraction for StakingContract {
 
                 Ok(())
             }
-            OutgoingStakingTransactionProof::RemoveStake { proof } => {
+            OutgoingStakingTransactionData::RemoveStake => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
                 tx_logger.push_log(Log::StakerFeeDeduction {
@@ -568,10 +574,11 @@ impl AccountTransactionInteraction for StakingContract {
         let store = StakingContractStoreRead::new(&data_store);
 
         // Parse transaction proof.
-        let proof = OutgoingStakingTransactionProof::parse(transaction)?;
+        let data = OutgoingStakingTransactionData::parse(transaction)?;
+        let proof: SignatureProof = Deserialize::deserialize_from_vec(&transaction.proof[..])?;
 
-        match proof {
-            OutgoingStakingTransactionProof::DeleteValidator { proof } => {
+        match data {
+            OutgoingStakingTransactionData::DeleteValidator => {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
 
@@ -587,7 +594,7 @@ impl AccountTransactionInteraction for StakingContract {
                     transaction.total_value(),
                 )
             }
-            OutgoingStakingTransactionProof::RemoveStake { proof } => {
+            OutgoingStakingTransactionData::RemoveStake => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
@@ -609,16 +616,17 @@ impl AccountTransactionInteraction for StakingContract {
         _data_store: DataStoreRead,
     ) -> Result<(), AccountError> {
         // Parse transaction proof.
-        let proof = OutgoingStakingTransactionProof::parse(transaction)?;
+        let data = OutgoingStakingTransactionData::parse(transaction)?;
+        let proof: SignatureProof = Deserialize::deserialize_from_vec(&transaction.proof[..])?;
 
-        match proof {
-            OutgoingStakingTransactionProof::DeleteValidator { proof } => {
+        match data {
+            OutgoingStakingTransactionData::DeleteValidator => {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
 
                 reserved_balance.release_for(&validator_address, transaction.total_value());
             }
-            OutgoingStakingTransactionProof::RemoveStake { proof } => {
+            OutgoingStakingTransactionData::RemoveStake => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 

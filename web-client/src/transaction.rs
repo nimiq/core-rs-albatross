@@ -10,7 +10,7 @@ use nimiq_transaction::extended_transaction::ExtendedTransaction;
 use nimiq_transaction::{
     account::{
         htlc_contract::CreationTransactionData as HtlcCreationTransactionData,
-        staking_contract::IncomingStakingTransactionData,
+        staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionData},
         vesting_contract::CreationTransactionData as VestingCreationTransactionData,
     },
     TransactionFlags, TransactionFormat,
@@ -79,11 +79,12 @@ impl Transaction {
     pub fn new(
         sender: &Address,
         sender_type: Option<u8>,
+        sender_data: Option<Vec<u8>>,
         recipient: &Address,
         recipient_type: Option<u8>,
+        recipient_data: Option<Vec<u8>>,
         value: u64,
         fee: u64,
-        data: Option<Vec<u8>>,
         flags: Option<u8>,
         validity_start_height: u32,
         network_id: u8,
@@ -95,20 +96,22 @@ impl Transaction {
             nimiq_transaction::Transaction::new_extended(
                 sender.native_ref().clone(),
                 AccountType::try_from(sender_type.unwrap_or(0))?,
+                sender_data.unwrap_or(Vec::new()),
                 recipient.native_ref().clone(),
                 AccountType::try_from(recipient_type.unwrap_or(0))?,
+                recipient_data.unwrap_or(Vec::new()),
                 Coin::try_from(value)?,
                 Coin::try_from(fee)?,
-                data.unwrap_or(Vec::new()),
                 validity_start_height,
                 to_network_id(network_id)?,
             )
         } else if flags.contains(TransactionFlags::CONTRACT_CREATION) {
             nimiq_transaction::Transaction::new_contract_creation(
-                data.unwrap_throw(),
                 sender.native_ref().clone(),
                 AccountType::try_from(sender_type.unwrap_or(0))?,
+                vec![],
                 AccountType::try_from(recipient_type.unwrap_throw())?,
+                recipient_data.unwrap_throw(),
                 Coin::try_from(value)?,
                 Coin::try_from(fee)?,
                 validity_start_height,
@@ -121,7 +124,7 @@ impl Transaction {
                 recipient.native_ref().clone(),
                 AccountType::try_from(recipient_type.unwrap_or(3))?,
                 Coin::try_from(fee)?,
-                data.unwrap_throw(),
+                recipient_data.unwrap_throw(),
                 validity_start_height,
                 to_network_id(network_id)?,
             )
@@ -177,12 +180,7 @@ impl Transaction {
                 // builder.generate().unwrap()
             }
             TransactionProofBuilder::OutStaking(mut builder) => {
-                // There is no way to distinguish between an unstaking and validator-deletion transaction
-                // from the transaction itself.
-                // Validator-deletion transactions are thus not supported.
-                // builder.delete_validator(key_pair.native_ref());
-
-                builder.unstake(key_pair.native_ref());
+                builder.sign_with_key_pair(key_pair.native_ref());
                 builder.generate().unwrap()
             }
             TransactionProofBuilder::InStaking(mut builder) => {
@@ -314,8 +312,14 @@ impl Transaction {
 
     /// The transaction's data as a byte array.
     #[wasm_bindgen(getter)]
-    pub fn data(&self) -> Vec<u8> {
-        self.inner.data.clone()
+    pub fn recipient_data(&self) -> Vec<u8> {
+        self.inner.recipient_data.clone()
+    }
+
+    /// The transaction's data as a byte array.
+    #[wasm_bindgen(getter)]
+    pub fn sender_data(&self) -> Vec<u8> {
+        self.inner.sender_data.clone()
     }
 
     /// The transaction's signature proof as a byte array.
@@ -423,27 +427,46 @@ impl Transaction {
                 .to_string()
                 .to_lowercase(),
             flags: self.flags(),
-            data: {
+            sender_data: {
+                let raw_data = PlainRawData {
+                    raw: hex::encode(self.recipient_data()),
+                };
+
+                if self.inner.recipient_type == AccountType::Staking {
+                    let data = OutgoingStakingTransactionData::parse(&self.inner).unwrap();
+                    match data {
+                        OutgoingStakingTransactionData::DeleteValidator => {
+                            PlainTransactionSenderData::DeleteValidator(raw_data)
+                        }
+                        OutgoingStakingTransactionData::RemoveStake => {
+                            PlainTransactionSenderData::RemoveStake(raw_data)
+                        }
+                    }
+                } else {
+                    PlainTransactionSenderData::Raw(PlainRawData { raw: raw_data.raw })
+                }
+            },
+            recipient_data: {
                 if self.inner.recipient_type == AccountType::Staking {
                     // Parse transaction data
                     let data = IncomingStakingTransactionData::parse(&self.inner).unwrap();
                     match data {
                         IncomingStakingTransactionData::CreateStaker { delegation, .. } => {
-                            PlainTransactionData::CreateStaker(PlainCreateStakerData {
-                                raw: hex::encode(self.data()),
+                            PlainTransactionRecipientData::CreateStaker(PlainCreateStakerData {
+                                raw: hex::encode(self.recipient_data()),
                                 delegation: delegation
                                     .map(|address| address.to_user_friendly_address()),
                             })
                         }
                         IncomingStakingTransactionData::AddStake { staker_address } => {
-                            PlainTransactionData::AddStake(PlainAddStakeData {
-                                raw: hex::encode(self.data()),
+                            PlainTransactionRecipientData::AddStake(PlainAddStakeData {
+                                raw: hex::encode(self.recipient_data()),
                                 staker: staker_address.to_user_friendly_address(),
                             })
                         }
                         IncomingStakingTransactionData::UpdateStaker { new_delegation, .. } => {
-                            PlainTransactionData::UpdateStaker(PlainUpdateStakerData {
-                                raw: hex::encode(self.data()),
+                            PlainTransactionRecipientData::UpdateStaker(PlainUpdateStakerData {
+                                raw: hex::encode(self.recipient_data()),
                                 new_delegation: new_delegation
                                     .map(|address| address.to_user_friendly_address()),
                             })
@@ -455,14 +478,16 @@ impl Transaction {
                             signal_data,
                             proof_of_knowledge,
                             ..
-                        } => PlainTransactionData::CreateValidator(PlainCreateValidatorData {
-                            raw: hex::encode(self.data()),
-                            signing_key: signing_key.to_hex(),
-                            voting_key: voting_key.to_hex(),
-                            reward_address: reward_address.to_user_friendly_address(),
-                            signal_data: signal_data.map(hex::encode),
-                            proof_of_knowledge: proof_of_knowledge.to_hex(),
-                        }),
+                        } => PlainTransactionRecipientData::CreateValidator(
+                            PlainCreateValidatorData {
+                                raw: hex::encode(self.recipient_data()),
+                                signing_key: signing_key.to_hex(),
+                                voting_key: voting_key.to_hex(),
+                                reward_address: reward_address.to_user_friendly_address(),
+                                signal_data: signal_data.map(hex::encode),
+                                proof_of_knowledge: proof_of_knowledge.to_hex(),
+                            },
+                        ),
                         IncomingStakingTransactionData::UpdateValidator {
                             new_signing_key,
                             new_voting_key,
@@ -470,18 +495,22 @@ impl Transaction {
                             new_signal_data,
                             new_proof_of_knowledge,
                             ..
-                        } => PlainTransactionData::UpdateValidator(PlainUpdateValidatorData {
-                            raw: hex::encode(self.data()),
-                            new_signing_key: new_signing_key
-                                .map(|signing_key| signing_key.to_hex()),
-                            new_voting_key: new_voting_key.map(|voting_key| voting_key.to_hex()),
-                            new_reward_address: new_reward_address
-                                .map(|reward_address| reward_address.to_user_friendly_address()),
-                            new_signal_data: new_signal_data
-                                .map(|signal_data| signal_data.map(hex::encode)),
-                            new_proof_of_knowledge: new_proof_of_knowledge
-                                .map(|proof_of_knowledge| proof_of_knowledge.to_hex()),
-                        }),
+                        } => PlainTransactionRecipientData::UpdateValidator(
+                            PlainUpdateValidatorData {
+                                raw: hex::encode(self.recipient_data()),
+                                new_signing_key: new_signing_key
+                                    .map(|signing_key| signing_key.to_hex()),
+                                new_voting_key: new_voting_key
+                                    .map(|voting_key| voting_key.to_hex()),
+                                new_reward_address: new_reward_address.map(|reward_address| {
+                                    reward_address.to_user_friendly_address()
+                                }),
+                                new_signal_data: new_signal_data
+                                    .map(|signal_data| signal_data.map(hex::encode)),
+                                new_proof_of_knowledge: new_proof_of_knowledge
+                                    .map(|proof_of_knowledge| proof_of_knowledge.to_hex()),
+                            },
+                        ),
                         IncomingStakingTransactionData::DeactivateValidator {
                             validator_address,
                             ..
@@ -489,28 +518,30 @@ impl Transaction {
                         | IncomingStakingTransactionData::ReactivateValidator {
                             validator_address,
                             ..
-                        } => PlainTransactionData::GenericValidator(PlainValidatorData {
-                            raw: hex::encode(self.data()),
+                        } => PlainTransactionRecipientData::GenericValidator(PlainValidatorData {
+                            raw: hex::encode(self.recipient_data()),
                             validator: validator_address.to_user_friendly_address(),
                         }),
                         IncomingStakingTransactionData::RetireValidator { .. } => {
-                            PlainTransactionData::Raw(PlainRawData {
-                                raw: hex::encode(self.data()),
+                            PlainTransactionRecipientData::Raw(PlainRawData {
+                                raw: hex::encode(self.recipient_data()),
                             })
                         }
                         IncomingStakingTransactionData::SetInactiveStake {
                             new_inactive_balance,
                             ..
-                        } => PlainTransactionData::SetInactiveStake(PlainSetInactiveStakeData {
-                            raw: hex::encode(self.data()),
-                            new_inactive_balance: new_inactive_balance.into(),
-                        }),
+                        } => PlainTransactionRecipientData::SetInactiveStake(
+                            PlainSetInactiveStakeData {
+                                raw: hex::encode(self.recipient_data()),
+                                new_inactive_balance: new_inactive_balance.into(),
+                            },
+                        ),
                     }
                     // In the future we might add other staking notifications
                 } else if self.inner.recipient_type == AccountType::Vesting {
                     let data = VestingCreationTransactionData::parse(&self.inner).unwrap();
-                    PlainTransactionData::Vesting(PlainVestingData {
-                        raw: hex::encode(self.data()),
+                    PlainTransactionRecipientData::Vesting(PlainVestingData {
+                        raw: hex::encode(self.recipient_data()),
                         owner: data.owner.to_user_friendly_address(),
                         start_time: data.start_time,
                         step_amount: data.step_amount.into(),
@@ -518,8 +549,8 @@ impl Transaction {
                     })
                 } else if self.inner.recipient_type == AccountType::HTLC {
                     let data = HtlcCreationTransactionData::parse(&self.inner).unwrap();
-                    PlainTransactionData::Htlc(PlainHtlcData {
-                        raw: hex::encode(self.data()),
+                    PlainTransactionRecipientData::Htlc(PlainHtlcData {
+                        raw: hex::encode(self.recipient_data()),
                         sender: data.sender.to_user_friendly_address(),
                         recipient: data.recipient.to_user_friendly_address(),
                         hash_algorithm: match data.hash_root {
@@ -548,8 +579,8 @@ impl Transaction {
                         timeout: data.timeout,
                     })
                 } else {
-                    PlainTransactionData::Raw(PlainRawData {
-                        raw: hex::encode(self.data()),
+                    PlainTransactionRecipientData::Raw(PlainRawData {
+                        raw: hex::encode(self.recipient_data()),
                     })
                 }
             },
@@ -565,22 +596,27 @@ impl Transaction {
         let mut tx = Transaction::new(
             &Address::from_string(&plain.sender)?,
             Some(plain.sender_type.into()),
+            Some(hex::decode(match plain.sender_data {
+                PlainTransactionSenderData::Raw(ref data) => &data.raw,
+                PlainTransactionSenderData::RemoveStake(ref data) => &data.raw,
+                PlainTransactionSenderData::DeleteValidator(ref data) => &data.raw,
+            })?),
             &Address::from_string(&plain.recipient)?,
             Some(plain.recipient_type.into()),
+            Some(hex::decode(match plain.recipient_data {
+                PlainTransactionRecipientData::Raw(ref data) => &data.raw,
+                PlainTransactionRecipientData::Vesting(ref data) => &data.raw,
+                PlainTransactionRecipientData::Htlc(ref data) => &data.raw,
+                PlainTransactionRecipientData::CreateValidator(ref data) => &data.raw,
+                PlainTransactionRecipientData::UpdateValidator(ref data) => &data.raw,
+                PlainTransactionRecipientData::GenericValidator(ref data) => &data.raw,
+                PlainTransactionRecipientData::CreateStaker(ref data) => &data.raw,
+                PlainTransactionRecipientData::AddStake(ref data) => &data.raw,
+                PlainTransactionRecipientData::UpdateStaker(ref data) => &data.raw,
+                PlainTransactionRecipientData::SetInactiveStake(ref data) => &data.raw,
+            })?),
             plain.value,
             plain.fee,
-            Some(hex::decode(match plain.data {
-                PlainTransactionData::Raw(ref data) => &data.raw,
-                PlainTransactionData::Vesting(ref data) => &data.raw,
-                PlainTransactionData::Htlc(ref data) => &data.raw,
-                PlainTransactionData::CreateValidator(ref data) => &data.raw,
-                PlainTransactionData::UpdateValidator(ref data) => &data.raw,
-                PlainTransactionData::GenericValidator(ref data) => &data.raw,
-                PlainTransactionData::CreateStaker(ref data) => &data.raw,
-                PlainTransactionData::AddStake(ref data) => &data.raw,
-                PlainTransactionData::UpdateStaker(ref data) => &data.raw,
-                PlainTransactionData::SetInactiveStake(ref data) => &data.raw,
-            })?),
             Some(plain.flags),
             plain.validity_start_height,
             from_network_id(NetworkId::from_str(&plain.network)?),
@@ -591,10 +627,18 @@ impl Transaction {
     }
 }
 
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(untagged)]
+pub enum PlainTransactionSenderData {
+    Raw(PlainRawData),
+    DeleteValidator(PlainRawData),
+    RemoveStake(PlainRawData),
+}
+
 /// Placeholder struct to serialize data of transactions as hex strings in the style of the Nimiq 1.0 library.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(untagged)]
-pub enum PlainTransactionData {
+pub enum PlainTransactionRecipientData {
     Raw(PlainRawData),
     Vesting(PlainVestingData),
     Htlc(PlainHtlcData),
@@ -738,12 +782,15 @@ pub struct PlainTransaction {
     /// Any flags that this transaction carries. `0b1 = 1` means it's a contract-creation transaction, `0b10 = 2`
     /// means it's a signalling transaction with 0 value.
     pub flags: u8,
-    /// The `data` field of a transaction serves different purposes based on the transaction's recipient type.
+    /// The `recipient_data` field of a transaction serves different purposes based on the transaction's recipient type.
     /// For transactions to "basic" address types, this field can contain up to 64 bytes of unstructured data.
     /// For transactions that create contracts or interact with the staking contract, the format of this field
     /// must follow a fixed structure and defines the new contracts' properties or how the staking contract is
     /// changed.
-    pub data: PlainTransactionData,
+    pub recipient_data: PlainTransactionRecipientData,
+    /// The `sender_data` field serves a purpose based on the transaction's recipient type.
+    /// It is currently only used for extra information in transactions from the staking contract.
+    pub sender_data: PlainTransactionSenderData,
     /// The `proof` field contains the signature of the eligible signer. The proof field's structure depends on
     /// the transaction's sender type. For transactions from contracts it can also contain additional structured
     /// data before the signature.
@@ -827,7 +874,7 @@ impl serde::Serialize for PlainTransactionDetails {
         )?;
         plain.serialize_field("network", &self.transaction.network)?;
         plain.serialize_field("flags", &self.transaction.flags)?;
-        plain.serialize_field("data", &self.transaction.data)?;
+        plain.serialize_field("data", &self.transaction.recipient_data)?;
         plain.serialize_field("proof", &self.transaction.proof)?;
         plain.serialize_field("size", &self.transaction.size)?;
         plain.serialize_field("valid", &self.transaction.valid)?;

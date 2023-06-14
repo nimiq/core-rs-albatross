@@ -54,8 +54,8 @@ use crate::{
         ClientConfiguration, PlainClientConfiguration, PlainClientConfigurationType,
     },
     transaction::{
-        PlainTransactionData, PlainTransactionDetails, PlainTransactionDetailsArrayType,
-        PlainTransactionDetailsType, PlainTransactionReceipt, PlainTransactionReceiptArrayType,
+        PlainTransactionDetails, PlainTransactionDetailsArrayType, PlainTransactionDetailsType,
+        PlainTransactionReceipt, PlainTransactionReceiptArrayType, PlainTransactionRecipientData,
         Transaction, TransactionAnyType, TransactionState,
     },
     utils::from_network_id,
@@ -1036,8 +1036,8 @@ impl Client {
                             let _ = sender.send(details.clone());
                         }
 
-                        let staker_address = if let PlainTransactionData::AddStake(data) =
-                            &details.transaction.data
+                        let staker_address = if let PlainTransactionRecipientData::AddStake(data) =
+                            &details.transaction.recipient_data
                         {
                             Some(
                                 nimiq_keys::Address::from_user_friendly_address(&data.staker)

@@ -1,5 +1,5 @@
-use nimiq_primitives::{account::AccountType, coin::Coin, policy::Policy};
-use nimiq_transaction_builder::Recipient;
+use nimiq_primitives::coin::Coin;
+use nimiq_transaction_builder::{Recipient, Sender};
 use wasm_bindgen::prelude::*;
 
 use crate::{address::Address, transaction::Transaction, utils::to_network_id};
@@ -28,7 +28,7 @@ impl TransactionBuilder {
     ) -> Result<Transaction, JsError> {
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(sender.native_ref().clone())
+            .with_sender(Sender::new_basic(sender.native_ref().clone()))
             .with_recipient(Recipient::new_basic(recipient.native_ref().clone()))
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
@@ -58,7 +58,7 @@ impl TransactionBuilder {
     ) -> Result<Transaction, JsError> {
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(sender.native_ref().clone())
+            .with_sender(Sender::new_basic(sender.native_ref().clone()))
             .with_recipient(Recipient::new_basic_with_data(
                 recipient.native_ref().clone(),
                 data,
@@ -107,7 +107,7 @@ impl TransactionBuilder {
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(sender.native_ref().clone())
+            .with_sender(Sender::new_basic(sender.native_ref().clone()))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
@@ -139,7 +139,7 @@ impl TransactionBuilder {
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(sender.native_ref().clone())
+            .with_sender(Sender::new_basic(sender.native_ref().clone()))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
@@ -170,7 +170,7 @@ impl TransactionBuilder {
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(sender.native_ref().clone())
+            .with_sender(Sender::new_basic(sender.native_ref().clone()))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
@@ -196,12 +196,15 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
+        let sender = Sender::new_staking_builder()
+            .remove_stake()
+            .generate()
+            .unwrap();
         let recipient = Recipient::new_basic(recipient.native_ref().clone());
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(Policy::STAKING_CONTRACT_ADDRESS)
-            .with_sender_type(AccountType::Staking)
+            .with_sender(sender)
             .with_recipient(recipient)
             .with_value(Coin::try_from(value)?)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)
@@ -232,7 +235,7 @@ impl TransactionBuilder {
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder
-            .with_sender(sender.native_ref().clone())
+            .with_sender(Sender::new_basic(sender.native_ref().clone()))
             .with_recipient(recipient.generate().unwrap())
             .with_value(Coin::ZERO)
             .with_fee(Coin::try_from(fee.unwrap_or(0))?)

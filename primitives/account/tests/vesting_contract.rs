@@ -115,10 +115,11 @@ fn it_can_create_contract_from_transaction() {
     Serialize::serialize_to_writer(&1000u64.to_be_bytes(), &mut data);
 
     let mut tx = Transaction::new_contract_creation(
-        data,
         owner.clone(),
         AccountType::Basic,
+        vec![],
         AccountType::Vesting,
+        data,
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
@@ -168,7 +169,7 @@ fn it_can_create_contract_from_transaction() {
     Serialize::serialize_to_writer(&0u64.to_be_bytes(), &mut data);
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
     Serialize::serialize_to_writer(&Coin::try_from(50).unwrap(), &mut data);
-    tx.data = data;
+    tx.recipient_data = data;
     tx.recipient = tx.contract_creation_address();
 
     let mut tx_logger = TransactionLog::empty();
@@ -203,7 +204,7 @@ fn it_can_create_contract_from_transaction() {
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
     Serialize::serialize_to_writer(&Coin::try_from(50).unwrap(), &mut data);
     Serialize::serialize_to_writer(&Coin::try_from(150).unwrap(), &mut data);
-    tx.data = data;
+    tx.recipient_data = data;
     tx.recipient = tx.contract_creation_address();
 
     let mut tx_logger = TransactionLog::empty();
@@ -230,9 +231,9 @@ fn it_can_create_contract_from_transaction() {
     assert_eq!(contract.total_amount, 150.try_into().unwrap());
 
     // Transaction 4: invalid data
-    tx.data = Vec::with_capacity(Address::SIZE + 2);
-    Serialize::serialize_to_writer(&owner, &mut tx.data);
-    Serialize::serialize_to_writer(&0u16.to_be_bytes(), &mut tx.data);
+    tx.recipient_data = Vec::with_capacity(Address::SIZE + 2);
+    Serialize::serialize_to_writer(&owner, &mut tx.recipient_data);
+    Serialize::serialize_to_writer(&0u16.to_be_bytes(), &mut tx.recipient_data);
     tx.recipient = tx.contract_creation_address();
 
     let mut tx_logger = TransactionLog::empty();

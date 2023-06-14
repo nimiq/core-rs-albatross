@@ -97,7 +97,7 @@ impl IncomingStakingTransactionData {
     }
 
     pub fn parse(transaction: &Transaction) -> Result<Self, TransactionError> {
-        full_parse(&transaction.data[..])
+        full_parse(&transaction.recipient_data[..])
     }
 
     pub fn verify(&self, transaction: &Transaction) -> Result<(), TransactionError> {
@@ -226,36 +226,16 @@ impl IncomingStakingTransactionData {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 #[repr(u8)]
-pub enum OutgoingStakingTransactionProof {
-    DeleteValidator {
-        // This proof is signed with the validator cold key.
-        proof: SignatureProof,
-    },
-    RemoveStake {
-        proof: SignatureProof,
-    },
+pub enum OutgoingStakingTransactionData {
+    DeleteValidator,
+    RemoveStake,
 }
 
-impl OutgoingStakingTransactionProof {
+impl OutgoingStakingTransactionData {
     pub fn parse(transaction: &Transaction) -> Result<Self, TransactionError> {
-        full_parse(&transaction.proof[..])
-    }
-
-    pub fn verify(&self, transaction: &Transaction) -> Result<(), TransactionError> {
-        match self {
-            OutgoingStakingTransactionProof::DeleteValidator { proof } => {
-                // Check that the signature is correct.
-                verify_transaction_signature(transaction, proof, false)?
-            }
-            OutgoingStakingTransactionProof::RemoveStake { proof } => {
-                // Check that the signature is correct.
-                verify_transaction_signature(transaction, proof, false)?
-            }
-        }
-
-        Ok(())
+        full_parse(&transaction.sender_data[..])
     }
 }
 
@@ -280,8 +260,8 @@ pub fn verify_transaction_signature(
     let tx = if incoming {
         let mut tx_without_sig = transaction.clone();
 
-        tx_without_sig.data = IncomingStakingTransactionData::set_signature_on_data(
-            &tx_without_sig.data,
+        tx_without_sig.recipient_data = IncomingStakingTransactionData::set_signature_on_data(
+            &tx_without_sig.recipient_data,
             SignatureProof::default(),
         )?;
 

@@ -24,7 +24,7 @@ use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng::test_rng;
 use nimiq_transaction::{
-    account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof},
+    account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionData},
     inherent::Inherent,
     SignatureProof, Transaction,
 };
@@ -36,11 +36,12 @@ fn make_delete_validator_transaction() -> Transaction {
     let mut tx = Transaction::new_extended(
         Policy::STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
+        OutgoingStakingTransactionData::DeleteValidator.serialize_to_vec(),
         non_existent_address(),
         AccountType::Basic,
+        vec![],
         (Policy::VALIDATOR_DEPOSIT - 100).try_into().unwrap(),
         100.try_into().unwrap(),
-        vec![],
         1,
         NetworkId::Dummy,
     );
@@ -49,12 +50,8 @@ fn make_delete_validator_transaction() -> Transaction {
         PrivateKey::deserialize_from_vec(&hex::decode(VALIDATOR_PRIVATE_KEY).unwrap()).unwrap();
 
     let key_pair = KeyPair::from(private_key);
-
-    let sig = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content()));
-
-    let proof = OutgoingStakingTransactionProof::DeleteValidator { proof: sig };
-
-    tx.proof = proof.serialize_to_vec();
+    let signature = key_pair.sign(&tx.serialize_content());
+    tx.proof = SignatureProof::from(key_pair.public, signature).serialize_to_vec();
 
     tx
 }
@@ -1623,7 +1620,7 @@ fn delete_jail_interaction() {
     );
     assert_eq!(result, Err(AccountError::InvalidForSender));
 
-    // // Should work after jail release.
+    // Should work after jail release.
     let result = jailed_setup.staking_contract.commit_outgoing_transaction(
         &delete_tx,
         &jailed_setup.jail_release_block_state,

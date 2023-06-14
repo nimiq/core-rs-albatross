@@ -16,7 +16,7 @@ use nimiq_transaction::{
         htlc_contract::{
             AnyHash, AnyHash32, CreationTransactionData as HTLCCreationTransactionData, PreImage,
         },
-        staking_contract::IncomingStakingTransactionData,
+        staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionData},
         vesting_contract::CreationTransactionData as VestingCreationTransactionData,
     },
     SignatureProof, Transaction,
@@ -225,6 +225,14 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             value = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
         }
 
+        let sender_data = if matches!(sender, OutgoingType::RemoveStake) {
+            OutgoingStakingTransactionData::RemoveStake.serialize_to_vec()
+        } else if matches!(sender, OutgoingType::DeleteValidator) {
+            OutgoingStakingTransactionData::DeleteValidator.serialize_to_vec()
+        } else {
+            vec![]
+        };
+
         let sender_account =
             self.ensure_outgoing_account(sender, value, fee, block_state, fail_sender);
         let recipient_account = self.ensure_incoming_account(recipient, value, fail_recipient);
@@ -234,29 +242,32 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             IncomingAccountData::Basic { ref address } => Transaction::new_extended(
                 sender_account.sender_address(),
                 sender.into(),
+                sender_data,
                 address.clone(),
                 recipient.into(),
+                vec![],
                 value,
                 fee,
-                vec![],
                 block_state.number,
                 self.network_id,
             ),
             IncomingAccountData::Vesting { ref parameters } => Transaction::new_contract_creation(
-                parameters.serialize_to_vec(),
                 sender_account.sender_address(),
                 sender.into(),
+                sender_data,
                 recipient.into(),
+                parameters.serialize_to_vec(),
                 value,
                 fee,
                 block_state.number,
                 self.network_id,
             ),
             IncomingAccountData::Htlc { ref parameters } => Transaction::new_contract_creation(
-                parameters.serialize_to_vec(),
                 sender_account.sender_address(),
                 sender.into(),
+                sender_data,
                 recipient.into(),
+                parameters.serialize_to_vec(),
                 value,
                 fee,
                 block_state.number,
@@ -282,11 +293,12 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                     Transaction::new_extended(
                         sender_account.sender_address(),
                         sender.into(),
+                        sender_data,
                         Policy::STAKING_CONTRACT_ADDRESS.clone(),
                         recipient.into(),
+                        parameters.serialize_to_vec(),
                         value,
                         fee,
-                        parameters.serialize_to_vec(),
                         block_state.number,
                         self.network_id,
                     )
@@ -367,13 +379,12 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 ..
             } => {
                 let mut out_staking_proof_builder = proof_builder.unwrap_out_staking();
-
                 match sender {
                     OutgoingType::DeleteValidator => {
-                        out_staking_proof_builder.delete_validator(&validator_key_pair)
+                        out_staking_proof_builder.sign_with_key_pair(&validator_key_pair);
                     }
                     OutgoingType::RemoveStake => {
-                        out_staking_proof_builder.unstake(&staker_key_pair)
+                        out_staking_proof_builder.sign_with_key_pair(&staker_key_pair);
                     }
                     _ => unreachable!(),
                 };

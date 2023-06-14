@@ -47,11 +47,11 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
             return Err(TransactionError::InvalidForRecipient);
         }
 
-        if transaction.data.len() != (20 * 2 + 1 + 32 + 1 + 8)
-            && transaction.data.len() != (20 * 2 + 1 + 64 + 1 + 8)
+        if transaction.recipient_data.len() != (20 * 2 + 1 + 32 + 1 + 8)
+            && transaction.recipient_data.len() != (20 * 2 + 1 + 64 + 1 + 8)
         {
             warn!(
-                data_len = transaction.data.len(),
+                data_len = transaction.recipient_data.len(),
                 ?transaction,
                 "Invalid data length. For the following transaction",
             );
@@ -187,7 +187,9 @@ pub struct CreationTransactionData {
 
 impl CreationTransactionData {
     pub fn parse(transaction: &Transaction) -> Result<Self, TransactionError> {
-        Ok(Deserialize::deserialize_from_vec(&transaction.data[..])?)
+        Ok(Deserialize::deserialize_from_vec(
+            &transaction.recipient_data[..],
+        )?)
     }
 
     pub fn verify(&self) -> Result<(), TransactionError> {

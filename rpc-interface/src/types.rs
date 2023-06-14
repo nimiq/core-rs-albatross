@@ -443,7 +443,7 @@ pub struct Transaction {
     pub value: Coin,
     pub fee: Coin,
     #[serde(with = "crate::serde_helpers::hex")]
-    pub data: Vec<u8>,
+    pub recipient_data: Vec<u8>,
     pub flags: u8,
     pub validity_start_height: u32,
     #[serde(with = "crate::serde_helpers::hex")]
@@ -488,7 +488,7 @@ impl Transaction {
             value: transaction.value,
             fee: transaction.fee,
             flags: transaction.flags.bits(),
-            data: transaction.data,
+            recipient_data: transaction.recipient_data,
             validity_start_height: transaction.validity_start_height,
             proof: transaction.proof,
         }

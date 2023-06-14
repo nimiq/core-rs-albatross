@@ -1,8 +1,7 @@
 use nimiq_keys::KeyPair;
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
-    account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof},
-    SignatureProof, Transaction,
+    account::staking_contract::IncomingStakingTransactionData, SignatureProof, Transaction,
 };
 
 use crate::proof::TransactionProofBuilder;
@@ -33,7 +32,7 @@ impl StakingDataBuilder {
     pub fn sign_with_key_pair(&mut self, key_pair: &KeyPair) -> &mut Self {
         // Deserialize the data.
         let mut data: IncomingStakingTransactionData =
-            Deserialize::deserialize_from_vec(&self.transaction.data[..]).unwrap();
+            Deserialize::deserialize_from_vec(&self.transaction.recipient_data[..]).unwrap();
 
         // If this is a stake transaction, we don't need to sign it.
         match data {
@@ -54,7 +53,7 @@ impl StakingDataBuilder {
     /// Otherwise, it returns `None`.
     pub fn generate(self) -> Option<TransactionProofBuilder> {
         let mut tx = self.transaction;
-        tx.data = self.data?.serialize_to_vec();
+        tx.recipient_data = self.data?.serialize_to_vec();
         Some(TransactionProofBuilder::without_in_staking(tx))
     }
 }
@@ -68,7 +67,7 @@ impl StakingDataBuilder {
 #[derive(Clone, Debug)]
 pub struct StakingProofBuilder {
     pub transaction: Transaction,
-    proof: Option<OutgoingStakingTransactionProof>,
+    proof: Option<SignatureProof>,
 }
 
 impl StakingProofBuilder {
@@ -80,21 +79,11 @@ impl StakingProofBuilder {
         }
     }
 
-    /// This methods sets the action to delete a validator and builds the corresponding proof
-    /// from a validator's `key_pair`.
-    pub fn delete_validator(&mut self, key_pair: &KeyPair) -> &mut Self {
+    /// This method sets the required `signature` proof by signing the transaction
+    /// using a key pair `key_pair`.
+    pub fn sign_with_key_pair(&mut self, key_pair: &KeyPair) -> &mut Self {
         let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
-        let proof = SignatureProof::from(key_pair.public, signature);
-        self.proof = Some(OutgoingStakingTransactionProof::DeleteValidator { proof });
-        self
-    }
-
-    /// This methods sets the action to unstake and builds the corresponding proof
-    /// from a staker's `key_pair`.
-    pub fn unstake(&mut self, key_pair: &KeyPair) -> &mut Self {
-        let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
-        let proof = SignatureProof::from(key_pair.public, signature);
-        self.proof = Some(OutgoingStakingTransactionProof::RemoveStake { proof });
+        self.proof = Some(SignatureProof::from(key_pair.public, signature));
         self
     }
 

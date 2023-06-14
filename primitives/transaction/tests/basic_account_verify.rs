@@ -7,10 +7,11 @@ fn it_does_not_allow_creation() {
     let owner = Address::from([0u8; 20]);
 
     let transaction = Transaction::new_contract_creation(
-        vec![],
         owner,
         AccountType::Basic,
+        vec![],
         AccountType::Basic,
+        vec![],
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,

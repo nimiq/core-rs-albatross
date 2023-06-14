@@ -41,9 +41,9 @@ impl AccountTransactionVerification for VestingContractVerifier {
         }
 
         let allowed_sizes = [Address::SIZE + 8, Address::SIZE + 24, Address::SIZE + 32];
-        if !allowed_sizes.contains(&transaction.data.len()) {
+        if !allowed_sizes.contains(&transaction.recipient_data.len()) {
             warn!(
-                len = transaction.data.len(),
+                len = transaction.recipient_data.len(),
                 ?transaction,
                 "Invalid data length for this transaction",
             );
@@ -82,10 +82,10 @@ pub struct CreationTransactionData {
 
 impl CreationTransactionData {
     pub fn parse(transaction: &Transaction) -> Result<Self, TransactionError> {
-        let reader = &mut &transaction.data[..];
+        let reader = &mut &transaction.recipient_data[..];
         let (owner, left_over) = Deserialize::deserialize_take(reader)?;
 
-        if transaction.data.len() == Address::SIZE + 8 {
+        if transaction.recipient_data.len() == Address::SIZE + 8 {
             // Only timestamp: vest full amount at that time
             let (time_step, _) = <[u8; 8]>::deserialize_take(left_over)?;
             Ok(CreationTransactionData {
@@ -95,7 +95,7 @@ impl CreationTransactionData {
                 step_amount: transaction.value,
                 total_amount: transaction.value,
             })
-        } else if transaction.data.len() == Address::SIZE + 24 {
+        } else if transaction.recipient_data.len() == Address::SIZE + 24 {
             let (start_time, left_over) = <[u8; 8]>::deserialize_take(left_over)?;
             let (time_step, left_over) = <[u8; 8]>::deserialize_take(left_over)?;
             let (step_amount, _) = Deserialize::deserialize_take(left_over)?;
@@ -106,7 +106,7 @@ impl CreationTransactionData {
                 step_amount,
                 total_amount: transaction.value,
             })
-        } else if transaction.data.len() == Address::SIZE + 32 {
+        } else if transaction.recipient_data.len() == Address::SIZE + 32 {
             // Create a vesting account with some instantly vested funds or additional funds considered.
             let (start_time, left_over) = <[u8; 8]>::deserialize_take(left_over)?;
             let (time_step, left_over) = <[u8; 8]>::deserialize_take(left_over)?;

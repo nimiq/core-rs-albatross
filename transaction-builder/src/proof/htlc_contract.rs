@@ -32,7 +32,7 @@ impl HtlcProofBuilder {
     ///
     /// ```
     /// # use nimiq_keys::{Address, KeyPair};
-    /// use nimiq_transaction_builder::{Recipient, TransactionBuilder};
+    /// use nimiq_transaction_builder::{Recipient, TransactionBuilder, Sender};
     /// use nimiq_hash::{Blake2bHasher, Hasher, HashOutput};
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
@@ -42,19 +42,16 @@ impl HtlcProofBuilder {
     /// # let key_pair_sender = KeyPair::generate_default_csprng();
     /// # let key_pair_recipient = KeyPair::generate_default_csprng();
     ///
-    /// let sender_address = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
-    /// let recipient = Recipient::new_basic(
-    ///     Address::from(&key_pair_recipient)
-    /// );
+    /// let sender = Sender::new_htlc(Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap());
+    /// let recipient = Recipient::new_basic(Address::from(&key_pair_recipient));
     ///
     /// let mut builder = TransactionBuilder::with_required(
-    ///     sender_address,
+    ///     sender,
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,
     ///     NetworkId::Main
     /// );
-    /// builder.with_sender_type(AccountType::HTLC);
     ///
     /// let proof_builder = builder.generate().unwrap();
     /// let mut htlc_proof_builder = proof_builder.unwrap_htlc();
@@ -81,7 +78,7 @@ impl HtlcProofBuilder {
     ///
     /// ```
     /// # use nimiq_keys::{Address, KeyPair};
-    /// use nimiq_transaction_builder::{Recipient, TransactionBuilder};
+    /// use nimiq_transaction_builder::{Recipient, TransactionBuilder, Sender};
     /// use nimiq_hash::{Blake2bHasher, Hasher, HashOutput};
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
@@ -90,19 +87,16 @@ impl HtlcProofBuilder {
     ///
     /// # let key_pair = KeyPair::generate_default_csprng();
     ///
-    /// let sender_address = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
-    /// let recipient = Recipient::new_basic(
-    ///     Address::from(&key_pair)
-    /// );
+    /// let sender = Sender::new_htlc(Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap());
+    /// let recipient = Recipient::new_basic(Address::from(&key_pair));
     ///
     /// let mut builder = TransactionBuilder::with_required(
-    ///     sender_address,
+    ///     sender,
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,
     ///     NetworkId::Main
     /// );
-    /// builder.with_sender_type(AccountType::HTLC);
     ///
     /// let proof_builder = builder.generate().unwrap();
     /// let mut htlc_proof_builder = proof_builder.unwrap_htlc();
@@ -132,7 +126,7 @@ impl HtlcProofBuilder {
     ///
     /// ```
     /// # use nimiq_keys::{Address, KeyPair};
-    /// use nimiq_transaction_builder::{Recipient, TransactionBuilder};
+    /// use nimiq_transaction_builder::{Recipient, TransactionBuilder, Sender};
     /// use nimiq_hash::{Blake2bHasher, Hasher, HashOutput};
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
@@ -142,19 +136,16 @@ impl HtlcProofBuilder {
     /// # let key_pair_sender = KeyPair::generate_default_csprng();
     /// # let key_pair_recipient = KeyPair::generate_default_csprng();
     ///
-    /// let sender_address = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
-    /// let recipient = Recipient::new_basic(
-    ///     Address::from(&key_pair_recipient)
-    /// );
+    /// let sender = Sender::new_htlc(Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap());
+    /// let recipient = Recipient::new_basic(Address::from(&key_pair_recipient));
     ///
     /// let mut builder = TransactionBuilder::with_required(
-    ///     sender_address,
+    ///     sender,
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,
     ///     NetworkId::Main
     /// );
-    /// builder.with_sender_type(AccountType::HTLC);
     ///
     /// let proof_builder = builder.generate().unwrap();
     /// let mut htlc_proof_builder = proof_builder.unwrap_htlc();
@@ -222,7 +213,7 @@ impl HtlcProofBuilder {
     ///
     /// ```
     /// # use nimiq_keys::{Address, KeyPair};
-    /// use nimiq_transaction_builder::{Recipient, TransactionBuilder};
+    /// use nimiq_transaction_builder::{Recipient, TransactionBuilder, Sender};
     /// use nimiq_hash::{Sha256Hasher, Hasher, HashOutput};
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
@@ -242,19 +233,16 @@ impl HtlcProofBuilder {
     ///     hash_root = Sha256Hasher::default().digest(hash_root.as_bytes());
     /// }
     ///
-    /// let sender_address = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
-    /// let recipient = Recipient::new_basic(
-    ///     Address::from(&key_pair)
-    /// );
+    /// let sender = Sender::new_htlc(Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap());
+    /// let recipient = Recipient::new_basic(Address::from(&key_pair));
     ///
     /// let mut builder = TransactionBuilder::with_required(
-    ///     sender_address,
+    ///     sender,
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,
     ///     NetworkId::Main
     /// );
-    /// builder.with_sender_type(AccountType::HTLC);
     ///
     /// let proof_builder = builder.generate().unwrap();
     /// let mut htlc_proof_builder = proof_builder.unwrap_htlc();
@@ -297,7 +285,7 @@ impl HtlcProofBuilder {
     ///
     /// ```
     /// # use nimiq_keys::{Address, KeyPair};
-    /// use nimiq_transaction_builder::{Recipient, TransactionBuilder};
+    /// use nimiq_transaction_builder::{Recipient, TransactionBuilder, Sender};
     /// use nimiq_hash::{Blake2bHasher, Hasher, HashOutput};
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
@@ -317,19 +305,16 @@ impl HtlcProofBuilder {
     ///     hash_root = Blake2bHasher::default().digest(hash_root.as_bytes());
     /// }
     ///
-    /// let sender_address = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
-    /// let recipient = Recipient::new_basic(
-    ///     Address::from(&key_pair)
-    /// );
+    /// let sender = Sender::new_htlc(Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap());
+    /// let recipient = Recipient::new_basic(Address::from(&key_pair));
     ///
     /// let mut builder = TransactionBuilder::with_required(
-    ///     sender_address,
+    ///     sender,
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,
     ///     NetworkId::Main
     /// );
-    /// builder.with_sender_type(AccountType::HTLC);
     ///
     /// let proof_builder = builder.generate().unwrap();
     /// let mut htlc_proof_builder = proof_builder.unwrap_htlc();

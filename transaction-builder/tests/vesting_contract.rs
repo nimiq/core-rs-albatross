@@ -5,7 +5,7 @@ use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_transaction::{SignatureProof, Transaction};
-use nimiq_transaction_builder::{Recipient, TransactionBuilder};
+use nimiq_transaction_builder::{Recipient, Sender, TransactionBuilder};
 
 #[test]
 #[allow(unused_must_use)]
@@ -16,10 +16,11 @@ fn it_can_create_creation_transaction() {
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
 
     let mut transaction = Transaction::new_contract_creation(
-        data,
         owner.clone(),
         AccountType::Basic,
+        vec![],
         AccountType::Vesting,
+        data,
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
@@ -29,10 +30,11 @@ fn it_can_create_creation_transaction() {
     // Valid
     let mut recipient = Recipient::new_vesting_builder(owner.clone());
     recipient.with_steps(Coin::from_u64_unchecked(100), 0, 100, 1);
+    let sender = Sender::new_basic(owner.clone());
 
     let mut builder = TransactionBuilder::new();
     builder
-        .with_sender(owner.clone())
+        .with_sender(sender.clone())
         .with_recipient(recipient.generate().unwrap())
         .with_value(100.try_into().unwrap())
         .with_validity_start_height(0)
@@ -45,12 +47,12 @@ fn it_can_create_creation_transaction() {
 
     // Valid
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 24);
-    let sender = Address::from([0u8; 20]);
-    Serialize::serialize_to_writer(&sender, &mut data);
+    let sender = Sender::new_basic(Address::from([0u8; 20]));
+    Serialize::serialize_to_writer(&sender.address(), &mut data);
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
     Serialize::serialize_to_writer(&Coin::try_from(100).unwrap(), &mut data);
-    transaction.data = data;
+    transaction.recipient_data = data;
     transaction.recipient = transaction.contract_creation_address();
 
     let mut recipient = Recipient::new_vesting_builder(owner.clone());
@@ -62,7 +64,7 @@ fn it_can_create_creation_transaction() {
 
     let mut builder = TransactionBuilder::new();
     builder
-        .with_sender(owner.clone())
+        .with_sender(sender.clone())
         .with_recipient(recipient.generate().unwrap())
         .with_value(100.try_into().unwrap())
         .with_validity_start_height(0)
@@ -75,13 +77,12 @@ fn it_can_create_creation_transaction() {
 
     // Valid
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 32);
-    let sender = Address::from([0u8; 20]);
-    Serialize::serialize_to_writer(&sender, &mut data);
+    Serialize::serialize_to_writer(&sender.address(), &mut data);
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
     Serialize::serialize_to_writer(&Coin::try_from(100).unwrap(), &mut data);
     Serialize::serialize_to_writer(&Coin::try_from(101).unwrap(), &mut data);
-    transaction.data = data;
+    transaction.recipient_data = data;
     transaction.recipient = transaction.contract_creation_address();
 
     let mut recipient = Recipient::new_vesting_builder(owner.clone());
@@ -93,7 +94,7 @@ fn it_can_create_creation_transaction() {
 
     let mut builder = TransactionBuilder::new();
     builder
-        .with_sender(owner)
+        .with_sender(sender)
         .with_recipient(recipient.generate().unwrap())
         .with_value(100.try_into().unwrap())
         .with_validity_start_height(0)
@@ -129,8 +130,7 @@ fn it_can_create_outgoing_transactions() {
 
     let mut builder = TransactionBuilder::new();
     builder
-        .with_sender(Address::from([1u8; 20]))
-        .with_sender_type(AccountType::Vesting)
+        .with_sender(Sender::new_vesting(Address::from([1u8; 20])))
         .with_recipient(Recipient::new_basic(Address::from([2u8; 20])))
         .with_value(1.try_into().unwrap())
         .with_fee(1000.try_into().unwrap())

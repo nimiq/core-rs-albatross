@@ -186,13 +186,15 @@ impl ExecutedTransaction {
 }
 
 #[derive(Clone, Eq, Debug)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub struct Transaction {
-    pub data: Vec<u8>,
     pub sender: Address,
     pub sender_type: AccountType,
+    pub sender_data: Vec<u8>,
     pub recipient: Address,
     pub recipient_type: AccountType,
+    pub recipient_data: Vec<u8>,
     pub value: Coin,
     pub fee: Coin,
     pub validity_start_height: u32,
@@ -215,11 +217,12 @@ impl Transaction {
         network_id: NetworkId,
     ) -> Self {
         Self {
-            data: Vec::new(),
             sender,
             sender_type: AccountType::Basic,
+            sender_data: Vec::new(),
             recipient,
             recipient_type: AccountType::Basic,
+            recipient_data: Vec::new(),
             value,
             fee,
             validity_start_height,
@@ -233,20 +236,22 @@ impl Transaction {
     pub fn new_extended(
         sender: Address,
         sender_type: AccountType,
+        sender_data: Vec<u8>,
         recipient: Address,
         recipient_type: AccountType,
+        recipient_data: Vec<u8>,
         value: Coin,
         fee: Coin,
-        data: Vec<u8>,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Self {
         Self {
-            data,
             sender,
             sender_type,
+            sender_data,
             recipient,
             recipient_type,
+            recipient_data,
             value,
             fee,
             validity_start_height,
@@ -263,16 +268,17 @@ impl Transaction {
         recipient: Address,
         recipient_type: AccountType,
         fee: Coin,
-        data: Vec<u8>,
+        recipient_data: Vec<u8>,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Self {
         Self {
-            data,
             sender,
             sender_type,
+            sender_data: Vec::new(),
             recipient,
             recipient_type,
+            recipient_data,
             value: Coin::ZERO,
             fee,
             validity_start_height,
@@ -284,21 +290,23 @@ impl Transaction {
     }
 
     pub fn new_contract_creation(
-        data: Vec<u8>,
         sender: Address,
         sender_type: AccountType,
+        sender_data: Vec<u8>,
         recipient_type: AccountType,
+        recipient_data: Vec<u8>,
         value: Coin,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Self {
         let mut tx = Self {
-            data,
             sender,
             sender_type,
+            sender_data,
             recipient: Address::from([0u8; Address::SIZE]),
             recipient_type,
+            recipient_data,
             value,
             fee,
             validity_start_height,
@@ -314,7 +322,7 @@ impl Transaction {
     pub fn format(&self) -> TransactionFormat {
         if self.sender_type == AccountType::Basic
             && self.recipient_type == AccountType::Basic
-            && self.data.is_empty()
+            && self.recipient_data.is_empty()
             && self.flags.is_empty()
         {
             if let Ok(signature_proof) = SignatureProof::deserialize_from_vec(&self.proof) {
@@ -422,10 +430,12 @@ impl Transaction {
     }
 
     pub fn serialize_content(&self) -> Vec<u8> {
-        // Serialize data as in PoW (2 bytes for the length and then the data)
-        // for backwards compatibility
-        let mut res: Vec<u8> = (self.data.len() as u16).to_be_bytes().serialize_to_vec();
-        res.append(&mut self.data.clone());
+        // Serialize data as in PoW (2 bytes for the length and then the data
+        // which in PoS is the recipient data) for backwards compatibility
+        let mut res: Vec<u8> = (self.recipient_data.len() as u16)
+            .to_be_bytes()
+            .serialize_to_vec();
+        res.append(&mut self.recipient_data.clone());
         res.append(&mut self.sender.serialize_to_vec());
         res.append(&mut self.sender_type.serialize_to_vec());
         res.append(&mut self.recipient.serialize_to_vec());
@@ -435,6 +445,11 @@ impl Transaction {
         res.append(&mut self.validity_start_height.to_be_bytes().serialize_to_vec());
         res.append(&mut self.network_id.serialize_to_vec());
         res.append(&mut self.flags.serialize_to_vec());
+        // Only serialize the sender data if the network ID is a PoS one for
+        // backwards compatibility
+        if self.network_id.is_albatross() {
+            res.append(&mut self.sender_data.serialize_to_vec());
+        }
         res
     }
 
@@ -475,7 +490,8 @@ impl PartialEq for Transaction {
             && self.validity_start_height == other.validity_start_height
             && self.network_id == other.network_id
             && self.flags == other.flags
-            && self.data == other.data
+            && self.recipient_data == other.recipient_data
+            && self.sender_data == other.sender_data
     }
 }
 
@@ -496,8 +512,10 @@ impl Ord for Transaction {
             .then_with(|| self.recipient_type.cmp(&other.recipient_type))
             .then_with(|| self.sender_type.cmp(&other.sender_type))
             .then_with(|| self.flags.cmp(&other.flags))
-            .then_with(|| self.data.len().cmp(&other.data.len()))
-            .then_with(|| self.data.cmp(&other.data))
+            .then_with(|| self.recipient_data.len().cmp(&other.recipient_data.len()))
+            .then_with(|| self.recipient_data.cmp(&other.recipient_data))
+            .then_with(|| self.sender_data.len().cmp(&other.sender_data.len()))
+            .then_with(|| self.sender_data.cmp(&other.sender_data))
     }
 }
 
@@ -523,11 +541,12 @@ mod serde_derive {
         "signature",
     ];
     const EXTENDED_FIELDS: &[&str] = &[
-        "data",
         "sender",
         "sender_type",
+        "sender_data",
         "recipient",
         "recipient_type",
+        "recipient_data",
         "value",
         "fee",
         "validity_start_height",
@@ -572,20 +591,21 @@ mod serde_derive {
                         VARIANTS[1],
                         EXTENDED_FIELDS.len(),
                     )?;
-                    sv.serialize_field(EXTENDED_FIELDS[0], &self.data)?;
-                    sv.serialize_field(EXTENDED_FIELDS[1], &self.sender)?;
-                    sv.serialize_field(EXTENDED_FIELDS[2], &self.sender_type)?;
+                    sv.serialize_field(EXTENDED_FIELDS[0], &self.sender)?;
+                    sv.serialize_field(EXTENDED_FIELDS[1], &self.sender_type)?;
+                    sv.serialize_field(EXTENDED_FIELDS[2], &self.sender_data)?;
                     sv.serialize_field(EXTENDED_FIELDS[3], &self.recipient)?;
                     sv.serialize_field(EXTENDED_FIELDS[4], &self.recipient_type)?;
-                    sv.serialize_field(EXTENDED_FIELDS[5], &self.value)?;
-                    sv.serialize_field(EXTENDED_FIELDS[6], &self.fee)?;
+                    sv.serialize_field(EXTENDED_FIELDS[5], &self.recipient_data)?;
+                    sv.serialize_field(EXTENDED_FIELDS[6], &self.value)?;
+                    sv.serialize_field(EXTENDED_FIELDS[7], &self.fee)?;
                     sv.serialize_field(
-                        EXTENDED_FIELDS[7],
+                        EXTENDED_FIELDS[8],
                         &self.validity_start_height.to_be_bytes(),
                     )?;
-                    sv.serialize_field(EXTENDED_FIELDS[8], &self.network_id)?;
-                    sv.serialize_field(EXTENDED_FIELDS[9], &self.flags)?;
-                    sv.serialize_field(EXTENDED_FIELDS[10], &self.proof)?;
+                    sv.serialize_field(EXTENDED_FIELDS[9], &self.network_id)?;
+                    sv.serialize_field(EXTENDED_FIELDS[10], &self.flags)?;
+                    sv.serialize_field(EXTENDED_FIELDS[11], &self.proof)?;
                     sv.end()
                 }
             }
@@ -654,11 +674,12 @@ mod serde_derive {
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(6, &self))?;
             Ok(Transaction {
-                data: vec![],
                 sender: Address::from(&public_key),
                 sender_type: AccountType::Basic,
+                sender_data: vec![],
                 recipient,
                 recipient_type: AccountType::Basic,
+                recipient_data: vec![],
                 value,
                 fee,
                 validity_start_height: u32::from_be_bytes(validity_start_height),
@@ -681,21 +702,24 @@ mod serde_derive {
         where
             A: SeqAccess<'de>,
         {
-            let data: Vec<u8> = seq
-                .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
             let sender: Address = seq
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
             let sender_type: AccountType = seq
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
+            let sender_data: Vec<u8> = seq
+                .next_element()?
+                .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
             let recipient: Address = seq
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
             let recipient_type: AccountType = seq
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(4, &self))?;
+            let recipient_data: Vec<u8> = seq
+                .next_element()?
+                .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
             let value: Coin = seq
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(5, &self))?;
@@ -715,11 +739,12 @@ mod serde_derive {
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(10, &self))?;
             Ok(Transaction {
-                data,
                 sender,
                 sender_type,
+                sender_data,
                 recipient,
                 recipient_type,
+                recipient_data,
                 value,
                 fee,
                 validity_start_height: u32::from_be_bytes(validity_start_height),

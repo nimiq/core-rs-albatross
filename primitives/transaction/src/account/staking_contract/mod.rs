@@ -1,9 +1,11 @@
 use log::error;
 use nimiq_primitives::account::AccountType;
+use nimiq_serde::Deserialize;
 
 pub use self::structs::*;
 use crate::{
-    account::AccountTransactionVerification, Transaction, TransactionError, TransactionFlags,
+    account::AccountTransactionVerification, SignatureProof, Transaction, TransactionError,
+    TransactionFlags,
 };
 
 pub mod structs;
@@ -47,9 +49,13 @@ impl AccountTransactionVerification for StakingContractVerifier {
     fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
         assert_eq!(transaction.sender_type, AccountType::Staking);
 
-        let proof = OutgoingStakingTransactionProof::parse(transaction)?;
+        // Verify signature.
+        let proof: SignatureProof = Deserialize::deserialize_from_vec(&transaction.proof[..])?;
 
-        proof.verify(transaction)?;
+        if !proof.verify(transaction.serialize_content().as_slice()) {
+            warn!("Invalid signature for this transaction:\n{:?}", transaction);
+            return Err(TransactionError::InvalidProof);
+        }
 
         Ok(())
     }

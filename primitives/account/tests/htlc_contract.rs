@@ -90,10 +90,11 @@ fn it_can_create_contract_from_transaction() {
     };
 
     let transaction = Transaction::new_contract_creation(
-        data.serialize_to_vec(),
         data.sender.clone(),
         AccountType::Basic,
+        vec![],
         AccountType::HTLC,
+        data.serialize_to_vec(),
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
@@ -491,10 +492,11 @@ fn prepare_outgoing_transaction() -> (
     };
 
     let tx = Transaction::new_contract_creation(
-        vec![],
         Address::from([0u8; 20]),
         AccountType::HTLC,
+        vec![],
         AccountType::Basic,
+        vec![],
         1000.try_into().unwrap(),
         0.try_into().unwrap(),
         1,
