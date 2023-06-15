@@ -270,36 +270,8 @@ impl BlockProducer {
             history_root: Blake2bHash::default(),
         };
 
-        // Get the staking contract PRIOR to any state changes.
-        let staking_contract = blockchain.get_staking_contract();
-
-        // Calculate the disabled set for the current validator set.
-        let disabled_set = staking_contract.current_disabled_slots();
-
-        // Calculate the lost reward set for the current validator set.
-        let lost_reward_set = staking_contract.current_lost_rewards();
-
-        // Get the state.
-        let state = blockchain.state();
-
-        // Calculate the reward transactions.
-        let reward_transactions =
-            blockchain.create_reward_transactions(state, &header, &staking_contract);
-
-        // If this is an election block, calculate the validator set for the next epoch.
-        let validators = if Policy::is_election_block_at(block_number) {
-            Some(blockchain.next_validators(&header.seed))
-        } else {
-            None
-        };
-
         // Create the body for the macro block.
-        let body = MacroBody {
-            validators,
-            lost_reward_set,
-            disabled_set,
-            transactions: reward_transactions,
-        };
+        let body = Self::next_macro_body(blockchain, &header);
 
         // Add the root of the body to the header.
         header.body_root = body.hash();
@@ -315,7 +287,8 @@ impl BlockProducer {
 
         // Update the state and add the state root to the header.
         let block_state = BlockState::new(block_number, timestamp);
-        let (root, _) = state
+        let (root, _) = blockchain
+            .state()
             .accounts
             .exercise_transactions(&[], &inherents, &block_state)
             .expect("Failed to compute accounts hash during block production.");
@@ -342,6 +315,38 @@ impl BlockProducer {
 
         txn.abort();
         macro_block
+    }
+
+    pub fn next_macro_body(blockchain: &Blockchain, macro_header: &MacroHeader) -> MacroBody {
+        // Get the staking contract PRIOR to any state changes.
+        let staking_contract = blockchain.get_staking_contract();
+
+        // Calculate the disabled set for the current validator set.
+        let disabled_set = staking_contract.current_disabled_slots();
+
+        // Calculate the lost reward set for the current validator set.
+        let lost_reward_set = staking_contract.current_lost_rewards();
+
+        // Calculate the reward transactions.
+        let reward_transactions = blockchain.create_reward_transactions(
+            blockchain.state(),
+            macro_header,
+            &staking_contract,
+        );
+
+        // If this is an election block, calculate the validator set for the next epoch.
+        let validators = match Policy::is_election_block_at(macro_header.block_number) {
+            true => Some(blockchain.next_validators(&macro_header.seed)),
+            false => None,
+        };
+
+        // Create the body for the macro block.
+        MacroBody {
+            validators,
+            lost_reward_set,
+            disabled_set,
+            transactions: reward_transactions,
+        }
     }
 }
 

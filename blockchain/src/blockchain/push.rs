@@ -679,7 +679,7 @@ impl Blockchain {
         })?;
 
         // Verify the state against the block.
-        if let Err(e) = self.verify_block_state(state, block, Some(txn)) {
+        if let Err(e) = self.verify_block_state(state, block, txn) {
             warn!(%block, reason = "bad state", error = &e as &dyn Error, "Rejecting block");
             return Err(e);
         }

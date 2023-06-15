@@ -13,7 +13,6 @@ use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_collections::BitSet;
-use nimiq_database::traits::WriteTransaction;
 use nimiq_handel::{aggregation::Aggregation, identity::IdentityRegistry};
 use nimiq_hash::{Blake2sHash, Blake2sHasher, Hash, Hasher, SerializeContent};
 use nimiq_keys::Signature as SchnorrSignature;
@@ -329,16 +328,19 @@ where
         proposal: &SignedProposalMessage<Self::Proposal, Self::ProposalSignature>,
         precalculated_inherent: Option<Self::Inherent>,
         signature_only: bool,
-    ) -> Result<Self::Inherent, nimiq_tendermint::ProposalError> {
+    ) -> Result<Self::Inherent, ProposalError> {
         // No inherent was given, but signature verification is the only required step, independent from
         // the result this can never work, as the inherent would have to be returned.
         if precalculated_inherent.is_none() && signature_only {
             return Err(ProposalError::Other);
         }
-        // get the hash of the proposal
-        let data = Self::hash_proposal(&proposal.message);
 
+        // Abort if the blockchain is not in the correct state anymore.
         let blockchain = self.blockchain.read();
+        if !blockchain.state().accounts.is_complete(None) {
+            return Err(ProposalError::Other);
+        }
+
         // Get best block for preceding micro block.
         // The best block might change, thus the vrf is not stored in separation
         let vrf_seed =
@@ -361,8 +363,9 @@ where
             .validator
             .signing_key;
 
-        // Verify the signature. The proposal is signed by the proposer of the round the proposal is used in
-        if !proposer.verify(&proposal.signature.0, data.as_slice()) {
+        // Verify the signature. The proposal is signed by the proposer of the round the proposal is used in.
+        let proposal_hash = Self::hash_proposal(&proposal.message);
+        if !proposer.verify(&proposal.signature.0, proposal_hash.as_slice()) {
             return Err(ProposalError::InvalidSignature);
         }
 
@@ -372,9 +375,15 @@ where
             return Ok(precalculated_inherent.unwrap());
         }
 
+        // Construct the block from the proposal and our local state.
+        let header = proposal.message.proposal.0.clone();
+        let body = match precalculated_inherent {
+            Some(body) => body.0,
+            None => BlockProducer::next_macro_body(&blockchain, &header),
+        };
         let block = Block::Macro(MacroBlock {
-            header: proposal.message.proposal.0.clone(),
-            body: precalculated_inherent.clone().map(|body| body.0),
+            header,
+            body: Some(body),
             justification: None,
         });
 
@@ -395,16 +404,16 @@ where
             .map_err(|_| ProposalError::Other)?;
 
         if let Err(error) = block.header().verify(false) {
-            debug!(%error, "Tendermint - await_proposal: Invalid block header");
+            debug!(%error, %block, "Tendermint - await_proposal: Invalid block header");
             Err(ProposalError::InvalidProposal)
         } else if let Err(error) = block.verify_immediate_successor(&predecessor) {
-            debug!(%error, "Tendermint - await_proposal: Invalid block header for blockchain head");
+            debug!(%error, %block, "Tendermint - await_proposal: Invalid block header for blockchain head");
             Err(ProposalError::InvalidProposal)
         } else if let Err(error) = block.verify_macro_successor(&blockchain.macro_head()) {
-            debug!(%error, "Tendermint - await_proposal: Invalid block header for blockchain macro head");
+            debug!(%error, %block, "Tendermint - await_proposal: Invalid block header for blockchain macro head");
             Err(ProposalError::InvalidProposal)
         } else if let Err(error) = block.verify_proposer(&proposer, predecessor.seed()) {
-            debug!(%error, "Tendermint - await_proposal: Invalid block header, VRF seed verification failed");
+            debug!(%error, %block, "Tendermint - await_proposal: Invalid block header, VRF seed verification failed");
             Err(ProposalError::InvalidProposal)
         } else {
             // Get the blockchain state.
@@ -414,35 +423,31 @@ where
             // anything out.
             let mut txn = blockchain.write_transaction();
 
+            // Verify macro block state before committing accounts.
+            if let Err(error) = blockchain.verify_macro_block_state(state, &block, &txn) {
+                debug!(%error, %block, "Tendermint - await_proposal: Invalid macro block state");
+                return Err(ProposalError::InvalidProposal);
+            }
+
             // Update our blockchain state using the received proposal. If we can't update the state, we
             // return a proposal timeout.
-            if blockchain
-                .commit_accounts(state, &block, &mut txn, &mut BlockLogger::empty())
-                .is_err()
+            if let Err(error) =
+                blockchain.commit_accounts(state, &block, &mut txn, &mut BlockLogger::empty())
             {
-                txn.abort();
-                debug!("Tendermint - await_proposal: Can't update state");
+                debug!(%error, %block, "Tendermint - await_proposal: Failed to commit accounts");
                 return Err(ProposalError::InvalidProposal);
             }
 
             // Check the validity of the block against our state. If it is invalid, we return a proposal
             // timeout. This also returns the block body that matches the block header
             // (assuming that the block is valid).
-            if let Err(error) = blockchain.verify_block_state(state, &block, Some(&txn)) {
-                log::debug!(?error, "Invalid block state");
+            if let Err(error) = blockchain.verify_block_state(state, &block, &txn) {
+                log::debug!(%error, %block, "Tendermint - await_proposal: Invalid block state");
                 return Err(ProposalError::InvalidProposal);
             }
 
-            let verification_result = blockchain.verify_macro_block_state(state, &block, &txn);
-            txn.abort();
-            match verification_result {
-                Ok(Some(inherent)) => Ok(Body(inherent)),
-                Ok(None) => Ok(precalculated_inherent.unwrap()),
-                Err(error) => {
-                    log::debug!(?error, "Invalid block state");
-                    Err(ProposalError::InvalidProposal)
-                }
-            }
+            // Return the body of the macro block so it can be cached.
+            Ok(Body(block.unwrap_macro().body.unwrap()))
         }
     }
 

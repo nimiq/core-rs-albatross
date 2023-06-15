@@ -10,6 +10,7 @@ use crate::{blockchain_state::BlockchainState, Blockchain};
 /// Implements methods to handle the accounts.
 impl Blockchain {
     /// Updates the accounts given a block.
+    /// Expects a full block with body.
     pub fn commit_accounts(
         &self,
         state: &BlockchainState,
@@ -64,7 +65,10 @@ impl Blockchain {
             }
             Block::Micro(ref micro_block) => {
                 // Get the body of the block.
-                let body = micro_block.body.as_ref().unwrap();
+                let body = micro_block
+                    .body
+                    .as_ref()
+                    .expect("Block body must be present");
 
                 let skip_block_info = SkipBlockInfo::from_micro_block(micro_block);
 

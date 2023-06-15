@@ -1,7 +1,6 @@
-use nimiq_block::{Block, BlockError, BlockHeader, MacroBody};
+use nimiq_block::{Block, BlockError, BlockHeader};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
 use nimiq_database::TransactionProxy as DBTransaction;
-use nimiq_hash::{Blake2sHash, Hash};
 
 use crate::{blockchain_state::BlockchainState, Blockchain};
 
@@ -122,22 +121,12 @@ impl Blockchain {
         &self,
         state: &BlockchainState,
         block: &Block,
-        txn_opt: Option<&DBTransaction>,
+        txn: &DBTransaction,
     ) -> Result<(), PushError> {
         let accounts = &state.accounts;
 
-        // Use a common read transaction for the whole function if none was given.
-        let read_txn;
-        let txn_opt = Some(match txn_opt {
-            Some(txn) => txn,
-            None => {
-                read_txn = self.read_transaction();
-                &read_txn
-            }
-        });
-
         // Verify accounts hash if the tree is complete or changes only happened in the complete part.
-        if let Some(accounts_hash) = accounts.get_root_hash(txn_opt) {
+        if let Some(accounts_hash) = accounts.get_root_hash(Some(txn)) {
             if *block.state_root() != accounts_hash {
                 warn!(
                     %block,
@@ -154,7 +143,7 @@ impl Blockchain {
         if state.can_verify_history {
             let real_history_root = self
                 .history_store
-                .get_history_tree_root(block.epoch_number(), txn_opt)
+                .get_history_tree_root(block.epoch_number(), Some(txn))
                 .ok_or_else(|| {
                     error!(
                         %block,
@@ -183,98 +172,91 @@ impl Blockchain {
     /// Verifies a block against the blockchain state BEFORE changes to the accounts tree and thus to the staking contract.
     /// Some fields in the staking contract are cleared using the FinalizeBatch and FinalizeEpoch Inherents in preparation for the next batch.
     /// Thus, we need to compare the respective fields in the block before clearing the staking contract.
-    /// The checks we perform vary a little depending if we provide a block with a body:
-    /// - With body: we check each field of the body against the same field calculated from our current state.
-    /// - Without body: we construct a body using fields calculated from our current state and
-    ///   compare its hash with the body hash in the header. In this case we return the calculated body.
     pub fn verify_macro_block_state(
         &self,
         state: &BlockchainState,
         block: &Block,
         txn: &DBTransaction,
-    ) -> Result<Option<MacroBody>, PushError> {
-        if let Block::Macro(macro_block) = block {
-            if let Some(staking_contract) = self.get_staking_contract_if_complete(Some(txn)) {
-                // Check the real values against the block.
-                // Get the validators.
-                let real_validators = if macro_block.is_election_block() {
-                    Some(self.next_validators(&macro_block.header.seed))
-                } else {
-                    None
-                };
+    ) -> Result<(), PushError> {
+        // We don't need to perform any checks if the given block is not a macro block.
+        let macro_block = match block {
+            Block::Macro(macro_block) => macro_block,
+            _ => return Ok(()),
+        };
 
-                let real_reward_transactions =
-                    self.create_reward_transactions(state, &macro_block.header, &staking_contract);
+        // If we don't have the staking contract, there is nothing we can check.
+        let staking_contract = match self.get_staking_contract_if_complete(Some(txn)) {
+            Some(staking_contract) => staking_contract,
+            None => return Ok(()),
+        };
 
-                // Get the lost rewards and disabled sets.
-                let real_lost_rewards = staking_contract.current_lost_rewards();
-                let real_disabled_slots = staking_contract.current_disabled_slots();
+        let body = macro_block
+            .body
+            .as_ref()
+            .expect("Block body must be present");
 
-                if let Some(body) = &macro_block.body {
-                    // If we were given a body, then check each value against the corresponding value in
-                    // the body.
-                    if real_lost_rewards != body.lost_reward_set {
-                        warn!(
-                            %macro_block,
-                            reason = "lost rewards set doesn't match real lost rewards set",
-                            "Rejecting block"
-                        );
-                        return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
-                    }
-                    if real_disabled_slots != body.disabled_set {
-                        warn!(
-                            %macro_block,
-                            reason = "Disabled set doesn't match real disabled set",
-                            "Rejecting block"
-                        );
-                        return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
-                    }
-                    if real_validators != body.validators {
-                        warn!(
-                            %macro_block,
-                            reason = "Validators don't match real validators",
-                            "Rejecting block"
-                        );
-                        return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
-                    }
-                    if real_reward_transactions != body.transactions {
-                        warn!(
-                            %macro_block,
-                            reason = "Reward transactions do not match",
-                            "Rejecting block"
-                        );
-                        return Err(PushError::InvalidBlock(
-                            BlockError::InvalidRewardTransactions,
-                        ));
-                    }
-                } else {
-                    // We don't need to check the zkp_hash here since it was already checked in the
-                    // `verify_block_body` method.
-
-                    let real_body = MacroBody {
-                        validators: real_validators,
-                        lost_reward_set: real_lost_rewards,
-                        disabled_set: real_disabled_slots,
-                        transactions: real_reward_transactions,
-                    };
-
-                    let real_body_hash = real_body.hash::<Blake2sHash>();
-                    if macro_block.header.body_root != real_body_hash {
-                        warn!(
-                            %macro_block,
-                            header_root = %macro_block.header.body_root,
-                            body_hash   = %real_body_hash,
-                            reason = "Header body hash doesn't match real body hash",
-                            "Rejecting block"
-                        );
-                        return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
-                    }
-
-                    // Since we were not given a body, we return the body that we already calculated.
-                    return Ok(Some(real_body));
-                }
-            }
+        // Verify validators.
+        let validators = match macro_block.is_election_block() {
+            true => Some(self.next_validators(&macro_block.header.seed)),
+            false => None,
+        };
+        if body.validators != validators {
+            warn!(
+                %macro_block,
+                given_validators = ?body.validators,
+                expected_validators = ?validators,
+                reason = "Invalid validators",
+                "Rejecting block"
+            );
+            return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
         }
-        Ok(None)
+
+        // Verify lost_rewards.
+        if body.lost_reward_set != staking_contract.current_lost_rewards() {
+            warn!(
+                %macro_block,
+                given_lost_rewards = ?body.lost_reward_set,
+                expected_lost_rewards = ?staking_contract.current_lost_rewards(),
+                reason = "Invalid lost rewards",
+                "Rejecting block"
+            );
+            return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+        }
+
+        // Verify disabled_slots.
+        if body.disabled_set != staking_contract.current_disabled_slots() {
+            warn!(
+                %macro_block,
+                given_disabled_slots = ?body.disabled_set,
+                expected_disabled_slots = ?staking_contract.current_disabled_slots(),
+                reason = "Invalid disabled slots",
+                "Rejecting block"
+            );
+            return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+        }
+
+        // Verify reward transactions only if we have the complete accounts state as
+        // `create_reward_transactions` expects the full state to be present.
+        if !state.accounts.is_complete(Some(txn)) {
+            return Ok(());
+        }
+
+        let reward_transactions =
+            self.create_reward_transactions(state, &macro_block.header, &staking_contract);
+
+        if body.transactions != reward_transactions {
+            warn!(
+                %macro_block,
+                given_reward_transactions = ?body.transactions,
+                expected_reward_transactions = ?reward_transactions,
+                reason = "Invalid reward transactions",
+                "Rejecting block"
+            );
+            return Err(PushError::InvalidBlock(
+                BlockError::InvalidRewardTransactions,
+            ));
+        }
+
+        Ok(())
     }
 }
