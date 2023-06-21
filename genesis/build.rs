@@ -1,14 +1,23 @@
-use std::{env, fs, path::Path};
+use std::{env, fmt::Write, fs, path::Path};
 
 use nimiq_database::volatile::VolatileDatabase;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_hash::Blake2bHash;
 
 fn write_genesis_rs(directory: &Path, name: &str, genesis_hash: &Blake2bHash) {
+    let hash = {
+        let mut hash = String::new();
+        write!(&mut hash, "0x{:02x}", genesis_hash.0[0]).unwrap();
+        for &byte in &genesis_hash.0[1..] {
+            write!(&mut hash, ", 0x{:02x}", byte).unwrap();
+        }
+        hash
+    };
+
     let genesis_rs = format!(
         r#"GenesisData {{
             block: include_bytes!(concat!(env!("OUT_DIR"), "/genesis/{name}/block.dat")),
-            hash: "{genesis_hash}".into(),
+            hash: Blake2bHash([{hash}]),
             accounts: include_bytes!(concat!(env!("OUT_DIR"), "/genesis/{name}/accounts.dat")),
     }}"#,
     );

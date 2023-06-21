@@ -24,5 +24,4 @@ nimiq-utils = { path = "../utils", features = ["otp"]}
 
 [dev-dependencies]
 hex = "0.4"
-lazy_static = "1.3"
 nimiq-test-log = { path = "../test-log" }

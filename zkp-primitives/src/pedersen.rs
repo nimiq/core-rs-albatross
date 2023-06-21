@@ -1,14 +1,16 @@
+use std::sync::OnceLock;
+
 use ark_crypto_primitives::crh::{
     pedersen::{Window, CRH},
     CRHScheme,
 };
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_mnt6_753::G1Projective;
-use lazy_static::lazy_static;
 use nimiq_pedersen_generators::{default, DefaultWindow, PedersenParameters};
 
-lazy_static! {
-    pub static ref PEDERSEN_PARAMETERS: PedersenParameters<G1Projective> = default();
+pub fn pedersen_parameters() -> &'static PedersenParameters<G1Projective> {
+    static CACHE: OnceLock<PedersenParameters<G1Projective>> = OnceLock::new();
+    CACHE.get_or_init(default)
 }
 
 /// Calculates the Pedersen hash. Given a vector of bits b_i we divide the vector into chunks
@@ -18,7 +20,7 @@ lazy_static! {
 /// H = G_0 + s_1 * G_1 + ... + s_n * G_n
 /// where G_0 is a generator that is used as a blinding factor.
 pub fn default_pedersen_hash(input: &[u8]) -> G1Projective {
-    pedersen_hash::<_, DefaultWindow>(input, &PEDERSEN_PARAMETERS)
+    pedersen_hash::<_, DefaultWindow>(input, pedersen_parameters())
 }
 
 pub fn pedersen_hash<C: CurveGroup, W: Window>(

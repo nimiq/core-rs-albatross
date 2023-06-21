@@ -16,8 +16,6 @@ is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
 is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 clap = { version = "4.3", features = ["derive"] }
 console-subscriber = { version = "0.1", features = ["parking_lot"], optional = true }

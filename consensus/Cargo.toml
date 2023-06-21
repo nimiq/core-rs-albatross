@@ -22,7 +22,6 @@ futures = { package = "futures-util", version = "0.3" }
 futures-executor = { version = "0.3" }
 gloo-timers = { version = "0.2.6", features = [ "futures" ]}
 instant = { version = "0.1", features = [ "wasm-bindgen" ] }
-lazy_static = "1.4.0"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 pin-project = "1.0"

@@ -10,7 +10,6 @@ use std::{
 };
 
 use futures::{FutureExt, Stream, StreamExt};
-use lazy_static::lazy_static;
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain::{Blockchain, HistoryTreeChunk, CHUNK_SIZE};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
@@ -88,9 +87,7 @@ impl From<PendingBatchSet> for BatchSet {
     }
 }
 
-lazy_static! {
-    static ref SYNC_CLUSTER_ID: AtomicUsize = AtomicUsize::default();
-}
+static SYNC_CLUSTER_ID: AtomicUsize = AtomicUsize::new(0);
 
 pub struct SyncCluster<TNetwork: Network> {
     pub id: usize,

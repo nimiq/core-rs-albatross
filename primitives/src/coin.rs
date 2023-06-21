@@ -4,10 +4,10 @@ use std::{
     iter::Sum,
     ops::{Add, AddAssign, Div, Rem, Sub, SubAssign},
     str::FromStr,
+    sync::OnceLock,
 };
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use lazy_static::lazy_static;
 use num_traits::{identities::Zero, SaturatingAdd, SaturatingSub};
 use regex::Regex;
 use thiserror::Error;
@@ -239,20 +239,20 @@ impl PartialEq for CoinParseError {
     }
 }
 
-lazy_static! {
-    static ref COIN_PARSE_REGEX: Regex = {
-        let r = r"^(?P<int_part>\d+)(.(?P<frac_part>\d{1,5})0*)?$";
-        Regex::new(r).unwrap_or_else(|e| panic!("Failed to compile regex: {r}: {e}"))
-    };
-}
-
 impl FromStr for Coin {
     type Err = CoinParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let e = || CoinParseError(s.to_owned());
 
-        let captures = COIN_PARSE_REGEX.captures(s).ok_or_else(e)?;
+        static REGEX: OnceLock<Regex> = OnceLock::new();
+        let captures = REGEX
+            .get_or_init(|| {
+                let r = r"^(?P<int_part>\d+)(.(?P<frac_part>\d{1,5})0*)?$";
+                Regex::new(r).unwrap_or_else(|e| panic!("Failed to compile regex: {r}: {e}"))
+            })
+            .captures(s)
+            .ok_or_else(e)?;
 
         let int_part = captures
             .name("int_part")

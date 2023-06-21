@@ -3,7 +3,7 @@ use ark_mnt6_753::{constraints::PairingVar, Fq as MNT6Fq, MNT6_753};
 use ark_r1cs_std::{alloc::AllocVar, uint8::UInt8};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use nimiq_pedersen_generators::DefaultWindow;
-use nimiq_zkp_primitives::PEDERSEN_PARAMETERS;
+use nimiq_zkp_primitives::pedersen_parameters;
 
 use super::DefaultPedersenParametersVar;
 use crate::gadgets::{pedersen::PedersenHashGadget, serialize::SerializeGadget};
@@ -26,7 +26,7 @@ impl VKCommitmentGadget {
     ) -> Result<Vec<UInt8<MNT6Fq>>, SynthesisError> {
         let pedersen_generators = DefaultPedersenParametersVar::new_constant(
             cs.clone(),
-            PEDERSEN_PARAMETERS.sub_window::<VkCommitmentWindow>(),
+            pedersen_parameters().sub_window::<VkCommitmentWindow>(),
         )?;
 
         // Initialize Boolean vector.
