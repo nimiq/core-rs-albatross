@@ -3777,6 +3777,7 @@ dependencies = [
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-primitives",
+ "nimiq-transaction",
  "nimiq-vrf",
  "serde",
  "thiserror",

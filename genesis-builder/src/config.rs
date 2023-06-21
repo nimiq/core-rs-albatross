@@ -4,6 +4,7 @@ use beserial::Deserialize as BDeserialize;
 use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::coin::Coin;
+use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
 use nimiq_vrf::VrfSeed;
 use serde::{de::Error, Deserialize, Deserializer};
 use time::OffsetDateTime;
@@ -26,7 +27,13 @@ pub struct GenesisConfig {
     pub stakers: Vec<GenesisStaker>,
 
     #[serde(default)]
-    pub accounts: Vec<GenesisAccount>,
+    pub basic_accounts: Vec<GenesisAccount>,
+
+    #[serde(default)]
+    pub vesting_accounts: Vec<GenesisVestingContract>,
+
+    #[serde(default)]
+    pub htlc_accounts: Vec<GenesisHTLC>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -63,6 +70,40 @@ pub struct GenesisAccount {
 
     #[serde(deserialize_with = "deserialize_coin")]
     pub balance: Coin,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct GenesisVestingContract {
+    #[serde(deserialize_with = "deserialize_nimiq_address")]
+    pub address: Address,
+    #[serde(deserialize_with = "deserialize_nimiq_address")]
+    pub owner: Address,
+    #[serde(deserialize_with = "deserialize_coin")]
+    pub balance: Coin,
+    pub start_time: u64,
+    pub time_step: u64,
+    #[serde(deserialize_with = "deserialize_coin")]
+    pub step_amount: Coin,
+    #[serde(deserialize_with = "deserialize_coin")]
+    pub total_amount: Coin,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct GenesisHTLC {
+    #[serde(deserialize_with = "deserialize_nimiq_address")]
+    pub address: Address,
+    #[serde(deserialize_with = "deserialize_nimiq_address")]
+    pub sender: Address,
+    #[serde(deserialize_with = "deserialize_nimiq_address")]
+    pub recipient: Address,
+    #[serde(deserialize_with = "deserialize_coin")]
+    pub balance: Coin,
+
+    pub hash_algorithm: HashAlgorithm,
+    pub hash_root: AnyHash,
+    pub hash_count: u8,
+    pub timeout: u64,
+    pub total_amount: Coin,
 }
 
 pub fn deserialize_nimiq_address<'de, D>(deserializer: D) -> Result<Address, D::Error>

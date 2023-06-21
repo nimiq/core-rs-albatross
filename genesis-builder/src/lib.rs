@@ -9,7 +9,8 @@ use std::{
 
 use beserial::{Serialize, SerializeWithLength, SerializingError};
 use nimiq_account::{
-    Account, Accounts, BasicAccount, StakingContract, StakingContractStoreWrite, TransactionLog,
+    Account, Accounts, BasicAccount, HashedTimeLockedContract, StakingContract,
+    StakingContractStoreWrite, TransactionLog, VestingContract,
 };
 use nimiq_block::{Block, MacroBlock, MacroBody, MacroHeader};
 use nimiq_bls::PublicKey as BlsPublicKey;
@@ -56,7 +57,9 @@ pub struct GenesisBuilder {
     pub vrf_seed: Option<VrfSeed>,
     pub validators: Vec<config::GenesisValidator>,
     pub stakers: Vec<config::GenesisStaker>,
-    pub accounts: Vec<config::GenesisAccount>,
+    pub basic_accounts: Vec<config::GenesisAccount>,
+    pub vesting_accounts: Vec<config::GenesisVestingContract>,
+    pub htlc_accounts: Vec<config::GenesisHTLC>,
 }
 
 impl Default for GenesisBuilder {
@@ -75,7 +78,9 @@ impl GenesisBuilder {
             vrf_seed: None,
             validators: vec![],
             stakers: vec![],
-            accounts: vec![],
+            basic_accounts: vec![],
+            vesting_accounts: vec![],
+            htlc_accounts: vec![],
         }
     }
 
@@ -136,7 +141,7 @@ impl GenesisBuilder {
     }
 
     pub fn with_basic_account(&mut self, address: Address, balance: Coin) -> &mut Self {
-        self.accounts
+        self.basic_accounts
             .push(config::GenesisAccount { address, balance });
         self
     }
@@ -151,14 +156,18 @@ impl GenesisBuilder {
             vrf_seed,
             mut validators,
             mut stakers,
-            mut accounts,
+            mut basic_accounts,
+            mut vesting_accounts,
+            mut htlc_accounts,
         } = toml::from_str(&read_to_string(path)?)?;
         vrf_seed.map(|vrf_seed| self.with_vrf_seed(vrf_seed));
         seed_message.map(|msg| self.with_seed_message(msg));
         timestamp.map(|t| self.with_timestamp(t));
         self.validators.append(&mut validators);
         self.stakers.append(&mut stakers);
-        self.accounts.append(&mut accounts);
+        self.basic_accounts.append(&mut basic_accounts);
+        self.vesting_accounts.append(&mut vesting_accounts);
+        self.htlc_accounts.append(&mut htlc_accounts);
 
         Ok(self)
     }
@@ -174,11 +183,51 @@ impl GenesisBuilder {
         let mut txn = env.write_transaction();
 
         debug!("Genesis accounts");
-        for genesis_account in &self.accounts {
+        for genesis_account in &self.basic_accounts {
             let key = KeyNibbles::from(&genesis_account.address);
 
             let account = Account::Basic(BasicAccount {
                 balance: genesis_account.balance,
+            });
+
+            accounts
+                .tree
+                .put(&mut txn, &key, account)
+                .expect("Failed to store account");
+        }
+
+        debug!("Vesting contracts");
+        for vesting_contract in &self.vesting_accounts {
+            let key = KeyNibbles::from(&vesting_contract.address);
+
+            let account = Account::Vesting(VestingContract {
+                balance: vesting_contract.balance,
+                owner: vesting_contract.owner.clone(),
+                start_time: vesting_contract.start_time,
+                step_amount: vesting_contract.step_amount,
+                time_step: vesting_contract.time_step,
+                total_amount: vesting_contract.total_amount,
+            });
+
+            accounts
+                .tree
+                .put(&mut txn, &key, account)
+                .expect("Failed to store account");
+        }
+
+        debug!("HTLC contracts");
+        for htlc_contract in &self.htlc_accounts {
+            let key = KeyNibbles::from(&htlc_contract.address);
+
+            let account = Account::HTLC(HashedTimeLockedContract {
+                balance: htlc_contract.balance,
+                sender: htlc_contract.sender.clone(),
+                recipient: htlc_contract.recipient.clone(),
+                hash_algorithm: htlc_contract.hash_algorithm,
+                hash_count: htlc_contract.hash_count,
+                hash_root: htlc_contract.hash_root.clone(),
+                timeout: htlc_contract.timeout,
+                total_amount: htlc_contract.total_amount,
             });
 
             accounts
