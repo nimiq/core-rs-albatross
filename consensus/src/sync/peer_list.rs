@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ops::Index, slice::SliceIndex};
+use std::{collections::HashSet, fmt, ops::Index, slice::SliceIndex};
 
 use nimiq_network_interface::network::Network;
 
@@ -9,6 +9,46 @@ use nimiq_network_interface::network::Network;
 pub struct PeerList<N: Network> {
     peers_set: HashSet<N::PeerId>,
     peers: Vec<N::PeerId>,
+}
+
+/// Stores an index into a [`PeerList`].
+///
+/// [`PeerLists`] can change at any time, this index can be used with
+/// [`PeerList::increment_and_get`] to get varying peers.
+#[derive(Clone)]
+pub struct PeerListIndex {
+    index: usize,
+}
+
+impl Default for PeerListIndex {
+    fn default() -> PeerListIndex {
+        PeerListIndex {
+            // This works because `usize::MAX.wrapping_add(1)` is `0`.
+            index: usize::MAX,
+        }
+    }
+}
+
+impl fmt::Debug for PeerListIndex {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.index == usize::MAX {
+            "none".fmt(f)
+        } else {
+            self.index.fmt(f)
+        }
+    }
+}
+
+impl fmt::Display for PeerListIndex {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
+}
+
+impl PeerListIndex {
+    pub fn increment(&mut self) {
+        self.index = self.index.wrapping_add(1);
+    }
 }
 
 impl<N: Network> Default for PeerList<N> {
@@ -64,6 +104,14 @@ impl<N: Network> PeerList<N> {
             return true;
         }
         false
+    }
+
+    pub fn increment_and_get(&self, peer_index: &mut PeerListIndex) -> Option<N::PeerId> {
+        if self.peers.is_empty() {
+            return None;
+        }
+        peer_index.index = peer_index.index.wrapping_add(1) % self.peers.len();
+        Some(self.peers[peer_index.index])
     }
 }
 

@@ -16,6 +16,7 @@ use nimiq_macros::store_waker;
 use nimiq_network_interface::network::Network;
 use parking_lot::RwLock;
 use pin_project::pin_project;
+use crate::sync::peer_list::PeerListIndex;
 
 use super::peer_list::PeerList;
 
@@ -26,7 +27,7 @@ struct OrderWrapper<TId, TOutput> {
     #[pin]
     data: TOutput, // A future or a future's output
     index: usize,
-    peer: usize,      // The peer the data is requested from
+    peer: PeerListIndex, // The peer the data is requested from
     num_tries: usize, // The number of tries this id has been requested
 }
 
@@ -36,7 +37,7 @@ impl<TId: Clone, TOutput: Future> Future for OrderWrapper<TId, TOutput> {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let id = self.id.clone();
         let index = self.index;
-        let peer = self.peer;
+        let peer = self.peer.clone();
         let num_tries = self.num_tries;
         self.project().data.poll(cx).map(|output| OrderWrapper {
             id,
@@ -83,7 +84,7 @@ pub struct SyncQueue<TNetwork: Network, TId, TOutput: 'static> {
     queued_outputs: BinaryHeap<QueuedOutput<TOutput>>,
     next_incoming_index: usize,
     next_outgoing_index: usize,
-    current_peer_index: usize,
+    current_peer_index: PeerListIndex,
     request_fn: fn(TId, Arc<TNetwork>, TNetwork::PeerId) -> BoxFuture<'static, Option<TOutput>>,
     waker: Option<Waker>,
 }
@@ -117,20 +118,10 @@ where
             queued_outputs: BinaryHeap::new(),
             next_incoming_index: 0,
             next_outgoing_index: 0,
-            current_peer_index: 0,
+            current_peer_index: PeerListIndex::default(),
             request_fn,
             waker: None,
         }
-    }
-
-    fn get_next_peer(&mut self, start_index: usize) -> Option<TNetwork::PeerId> {
-        let peers = self.peers.read();
-        if !peers.is_empty() {
-            let index = start_index % peers.len();
-            // TODO: Maybe check if the peer connection is closed.
-            return Some(peers[index]);
-        }
-        None
     }
 
     fn try_push_futures(&mut self) {
@@ -148,25 +139,23 @@ where
             let id = self.ids_to_request.pop_front().unwrap();
 
             // Get next peer in line. If there are no more peers, simulate a failed request.
-            let wrapper = match self.get_next_peer(self.current_peer_index) {
+            let wrapper = match self.peers.read().increment_and_get(&mut self.current_peer_index) {
                 Some(peer_id) => {
                     log::trace!(
-                        "Requesting {:?} @ {} from peer {}",
+                        %peer_id,
+                        current_peer_index = %self.current_peer_index,
+                        "Requesting {:?} @ {}",
                         id,
                         self.next_incoming_index,
-                        self.current_peer_index
                     );
 
                     let wrapper = OrderWrapper {
                         data: (self.request_fn)(id.clone(), Arc::clone(&self.network), peer_id),
                         id,
                         index: self.next_incoming_index,
-                        peer: self.current_peer_index,
+                        peer: self.current_peer_index.clone(),
                         num_tries: 1,
                     };
-
-                    self.current_peer_index =
-                        (self.current_peer_index + 1) % self.peers.read().len();
 
                     wrapper
                 }
@@ -174,7 +163,7 @@ where
                     data: future::ready(None).boxed(),
                     id,
                     index: self.next_incoming_index,
-                    peer: 0,
+                    peer: PeerListIndex::default(),
                     num_tries: 1,
                 },
             };
@@ -266,7 +255,7 @@ where
 
         loop {
             match ready!(self.pending_futures.poll_next_unpin(cx)) {
-                Some(result) => {
+                Some(mut result) => {
                     match result.data {
                         Some(output) => {
                             if result.index == self.next_outgoing_index {
@@ -287,17 +276,17 @@ where
                             }
 
                             // Re-request from different peer. Return an error if there are no more peers.
-                            let next_peer = (result.peer + 1) % self.peers.read().len();
-                            let peer = match self.get_next_peer(next_peer) {
+                            let peer = match self.peers.read().increment_and_get(&mut result.peer) {
                                 Some(peer) => peer,
                                 None => return Poll::Ready(Some(Err(result.id))),
                             };
 
                             log::debug!(
-                                "Re-requesting {:?} @ {} from peer {}",
+                                peer_id = %peer,
+                                current_peer_index = %self.current_peer_index,
+                                "Re-requesting {:?} @ {}",
                                 result.id,
                                 result.index,
-                                next_peer
                             );
 
                             let wrapper = OrderWrapper {
@@ -308,7 +297,7 @@ where
                                 ),
                                 id: result.id,
                                 index: result.index,
-                                peer: next_peer,
+                                peer: result.peer,
                                 num_tries: result.num_tries + 1,
                             };
 

@@ -7,12 +7,13 @@ use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_diff::TrieDiff, TreeP
 use parking_lot::RwLock;
 
 use super::{RequestPartialDiff, ResponsePartialDiff};
-use crate::sync::peer_list::PeerList;
+use crate::sync::peer_list::{PeerList, PeerListIndex};
 
 /// Peer Tracking & Diff Request component.
 pub struct DiffRequestComponent<N: Network> {
     network: Arc<N>,
     peers: Arc<RwLock<PeerList<N>>>,
+    current_peer_index: PeerListIndex,
     network_event_rx: SubscribeEvents<N::PeerId>,
 }
 
@@ -25,6 +26,7 @@ impl<N: Network> DiffRequestComponent<N> {
         DiffRequestComponent {
             network,
             peers,
+            current_peer_index: PeerListIndex::default(),
             network_event_rx,
         }
     }
@@ -54,46 +56,54 @@ impl<N: Network> DiffRequestComponent<N> {
     }
 
     pub fn request_diff2(
-        &self,
+        &mut self,
         range: ops::RangeTo<KeyNibbles>,
     ) -> impl FnMut(&Block) -> BoxFuture<'static, Result<TrieDiff, ()>> {
         let peers = Arc::clone(&self.peers);
+        let mut starting_peer_index = self.current_peer_index.clone();
+        self.current_peer_index.increment();
         let network = Arc::clone(&self.network);
         move |block| {
             let peers = Arc::clone(&peers);
+            let mut current_peer_index = starting_peer_index.clone();
+            starting_peer_index.increment();
             let network = Arc::clone(&network);
             let range = range.clone();
             let block_hash = block.hash();
             let block_diff_root = block.diff_root().clone();
             Box::pin(async move {
-                let peer_id = {
-                    let peers = peers.read();
-                    // TODO: select peer
-                    peers.peers()[0]
-                };
-                match network
-                    .request(RequestPartialDiff { block_hash, range }, peer_id)
-                    .await
-                {
-                    Ok(ResponsePartialDiff::PartialDiff(diff)) => {
-                        if TreeProof::new(diff.0.iter()).root_hash() != block_diff_root {
-                            error!("couldn't fetch diff: invalid diff");
+                let mut num_tries = 0;
+                loop {
+                    let peer_id = match peers.read().increment_and_get(&mut current_peer_index) {
+                        Some(peer_id) => peer_id,
+                        None => {
+                            error!("couldn't fetch diff: no peers");
                             return Err(());
                         }
-                        Ok(diff)
+                    };
+                    match network
+                        .request(RequestPartialDiff {
+                            block_hash: block_hash.clone(),
+                            range: range.clone(),
+                        }, peer_id)
+                        .await
+                    {
+                        Ok(ResponsePartialDiff::PartialDiff(diff)) => {
+                            if TreeProof::new(diff.0.iter()).root_hash() != block_diff_root {
+                                error!("couldn't fetch diff: invalid diff");
+                            }
+                            return Ok(diff);
+                        }
+                        // TODO: remove peer, retry elsewhere
+                        Ok(ResponsePartialDiff::IncompleteState) => error!("couldn't fetch diff: incomplete state"),
+                        Ok(ResponsePartialDiff::UnknownBlockHash) => error!("couldn't fetch diff: unknown block hash"),
+                        Err(e) => error!("couldn't fetch diff: {}", e),
                     }
-                    // TODO: remove peer, retry elsewhere
-                    Ok(ResponsePartialDiff::IncompleteState) => {
-                        error!("couldn't fetch diff: incomplete state");
-                        Err(())
-                    }
-                    Ok(ResponsePartialDiff::UnknownBlockHash) => {
-                        error!("couldn't fetch diff: unknown block hash");
-                        Err(())
-                    }
-                    Err(e) => {
-                        error!("couldn't fetch diff: {}", e);
-                        Err(())
+                    num_tries += 1;
+                    let max_tries = peers.read().len();
+                    if num_tries >= max_tries {
+                        error!(%num_tries, %max_tries, "couldn't fetch diff: maximum tries reached");
+                        return Err(());
                     }
                 }
             })
