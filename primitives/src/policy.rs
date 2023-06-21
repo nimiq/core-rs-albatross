@@ -93,6 +93,9 @@ impl Policy {
     /// in proof-of-work.
     pub const VALIDATOR_DEPOSIT: u64 = 1_000_000_000;
 
+    /// The number of epochs a validator is put in jail for. The jailing only happens for severe offenses.
+    pub const SLASH_JAIL_EPOCHS: u32 = 8;
+
     /// Total supply in units.
     pub const TOTAL_SUPPLY: u64 = 2_100_000_000_000_000;
 

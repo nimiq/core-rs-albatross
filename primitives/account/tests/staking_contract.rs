@@ -620,7 +620,7 @@ fn reactivate_validator_works() {
     let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let block_state = BlockState::new(2, 2);
+    let mut block_state = BlockState::new(2, 2);
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
@@ -732,7 +732,8 @@ fn reactivate_validator_works() {
             SlashReceipt {
                 newly_deactivated: true,
                 newly_disabled: true,
-                newly_lost_rewards: true
+                newly_lost_rewards: true,
+                old_jail_release: None,
             }
             .into()
         )
@@ -747,6 +748,11 @@ fn reactivate_validator_works() {
                 newly_disabled: true,
                 newly_deactivated: true
             },
+            Log::JailValidator {
+                validator_address: validator_address.clone(),
+                jail_release: block_state.number
+                    + Policy::blocks_per_epoch() * Policy::SLASH_JAIL_EPOCHS,
+            },
             Log::DeactivateValidator {
                 validator_address: validator_address.clone(),
             }
@@ -757,6 +763,7 @@ fn reactivate_validator_works() {
         .active_validators
         .contains_key(&validator_address));
 
+    block_state.number += Policy::blocks_per_epoch() * Policy::SLASH_JAIL_EPOCHS;
     let mut tx_logger = TransactionLog::empty();
     let receipt = staking_contract
         .commit_incoming_transaction(
@@ -1143,6 +1150,7 @@ fn delete_validator_works() {
         reward_address: reward_address.clone(),
         signal_data: None,
         inactive_since: 2,
+        jail_release: None,
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
@@ -2119,6 +2127,7 @@ fn slash_inherents_work() {
         newly_deactivated: true,
         newly_disabled: true,
         newly_lost_rewards: true,
+        old_jail_release: None,
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
@@ -2132,9 +2141,14 @@ fn slash_inherents_work() {
                 newly_disabled: true,
                 newly_deactivated: true,
             },
-            Log::DeactivateValidator {
-                validator_address: slot.validator_address.clone(),
+            Log::JailValidator {
+                validator_address: validator_address.clone(),
+                jail_release: block_state.number
+                    + Policy::blocks_per_epoch() * Policy::SLASH_JAIL_EPOCHS,
             },
+            Log::DeactivateValidator {
+                validator_address: validator_address.clone(),
+            }
         ]
     );
 
@@ -2182,6 +2196,7 @@ fn slash_inherents_work() {
         newly_deactivated: true,
         newly_disabled: true,
         newly_lost_rewards: true,
+        old_jail_release: None,
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
@@ -2194,6 +2209,11 @@ fn slash_inherents_work() {
                 slot: slot.slot,
                 newly_disabled: true,
                 newly_deactivated: true,
+            },
+            Log::JailValidator {
+                validator_address: slot.validator_address.clone(),
+                jail_release: block_state.number
+                    + Policy::blocks_per_epoch() * Policy::SLASH_JAIL_EPOCHS,
             },
             Log::DeactivateValidator {
                 validator_address: slot.validator_address.clone(),
@@ -2245,6 +2265,7 @@ fn slash_inherents_work() {
         newly_deactivated: true,
         newly_disabled: false,
         newly_lost_rewards: true,
+        old_jail_release: None,
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
@@ -2257,6 +2278,11 @@ fn slash_inherents_work() {
                 slot: slot.slot,
                 newly_disabled: false,
                 newly_deactivated: true
+            },
+            Log::JailValidator {
+                validator_address: slot.validator_address.clone(),
+                jail_release: block_state.number
+                    + Policy::blocks_per_epoch() * Policy::SLASH_JAIL_EPOCHS,
             },
             Log::DeactivateValidator {
                 validator_address: slot.validator_address,
@@ -2384,7 +2410,8 @@ fn finalize_epoch_inherents_works() {
             SlashReceipt {
                 newly_deactivated: true,
                 newly_disabled: true,
-                newly_lost_rewards: true
+                newly_lost_rewards: true,
+                old_jail_release: None,
             }
             .into()
         )
@@ -2398,6 +2425,11 @@ fn finalize_epoch_inherents_works() {
                 slot: 1,
                 newly_disabled: true,
                 newly_deactivated: true
+            },
+            Log::JailValidator {
+                validator_address: validator_address.clone(),
+                jail_release: block_state.number
+                    + Policy::blocks_per_epoch() * Policy::SLASH_JAIL_EPOCHS,
             },
             Log::DeactivateValidator {
                 validator_address: validator_address.clone(),
@@ -2657,6 +2689,11 @@ fn revert_slash_inherent(
         vec![
             Log::DeactivateValidator {
                 validator_address: validator_address.clone(),
+            },
+            Log::JailValidator {
+                validator_address: validator_address.clone(),
+                jail_release: block_state.number
+                    + Policy::blocks_per_epoch() * Policy::SLASH_JAIL_EPOCHS,
             },
             Log::Slash {
                 validator_address: validator_address.clone(),

@@ -86,6 +86,12 @@ pub enum Log {
     DeactivateValidator { validator_address: Address },
 
     #[serde(rename_all = "camelCase")]
+    JailValidator {
+        validator_address: Address,
+        jail_release: u32,
+    },
+
+    #[serde(rename_all = "camelCase")]
     ReactivateValidator { validator_address: Address },
 
     #[serde(rename_all = "camelCase")]
@@ -210,7 +216,12 @@ impl Log {
                         .map(|new_reward_address| new_reward_address == address)
                         .unwrap_or(false)
             }
-            Log::DeactivateValidator { validator_address } => validator_address == address,
+            Log::DeactivateValidator {
+                validator_address, ..
+            }
+            | Log::JailValidator {
+                validator_address, ..
+            } => validator_address == address,
             Log::ReactivateValidator { validator_address } => validator_address == address,
             Log::CreateStaker {
                 staker_address,

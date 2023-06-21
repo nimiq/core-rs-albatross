@@ -1,6 +1,5 @@
 use std::{collections::BTreeSet, mem};
 
-use nimiq_keys::Address;
 use nimiq_primitives::{
     account::{AccountError, AccountType},
     coin::Coin,
@@ -139,8 +138,14 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the signer's address from the proof.
                 let signer = proof.compute_signer();
 
-                self.reactivate_validator(&mut store, &validator_address, &signer, tx_logger)
-                    .map(|receipt| Some(receipt.into()))
+                self.reactivate_validator(
+                    &mut store,
+                    &validator_address,
+                    &signer,
+                    block_state.number,
+                    tx_logger,
+                )
+                .map(|receipt| Some(receipt.into()))
             }
             IncomingStakingTransactionData::RetireValidator { proof } => {
                 // Get the validator address from the proof.
@@ -663,23 +668,24 @@ impl AccountInherentInteraction for StakingContract {
                         newly_deactivated,
                     });
                 }
-                if newly_deactivated {
-                    let mut tx_logger = TransactionLog::empty();
-                    self.deactivate_validator(
-                        &mut store,
-                        &slot.validator_address,
-                        &Address::from(&validator.signing_key),
-                        block_state.number,
-                        &mut tx_logger,
-                    )?;
-                    inherent_logger.push_tx_logger(tx_logger);
-                }
+
+                let mut tx_logger = TransactionLog::empty();
+                let receipt = self.jail_validator(
+                    &mut store,
+                    &slot.validator_address,
+                    block_state.number,
+                    block_state.number + Policy::blocks_per_epoch() * Policy::SLASH_JAIL_EPOCHS,
+                    &mut tx_logger,
+                )?;
+                let old_jail_release = receipt.old_jail_release;
+                inherent_logger.push_tx_logger(tx_logger);
 
                 Ok(Some(
                     SlashReceipt {
                         newly_deactivated,
                         newly_disabled,
                         newly_lost_rewards,
+                        old_jail_release,
                     }
                     .into(),
                 ))
@@ -720,17 +726,15 @@ impl AccountInherentInteraction for StakingContract {
                 let receipt: SlashReceipt =
                     receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
-                // Only remove if it was not already slashed.
-                if receipt.newly_deactivated {
-                    let mut tx_logger = TransactionLog::empty();
-                    self.revert_deactivate_validator(
-                        &mut StakingContractStoreWrite::new(&mut data_store),
-                        &slot.validator_address,
-                        &mut tx_logger,
-                    )?;
+                let mut tx_logger = TransactionLog::empty();
+                self.revert_jail_validator(
+                    &mut StakingContractStoreWrite::new(&mut data_store),
+                    &slot.validator_address,
+                    receipt.into(),
+                    &mut tx_logger,
+                )?;
 
-                    inherent_logger.push_tx_logger(tx_logger);
-                }
+                inherent_logger.push_tx_logger(tx_logger);
 
                 // Fork proof from previous epoch should affect:
                 // - previous_lost_rewards

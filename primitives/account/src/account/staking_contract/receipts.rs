@@ -15,6 +15,7 @@ pub struct SlashReceipt {
     pub newly_deactivated: bool,
     pub newly_disabled: bool,
     pub newly_lost_rewards: bool,
+    pub old_jail_release: Option<u32>,
 }
 convert_receipt!(SlashReceipt);
 
@@ -26,6 +27,22 @@ pub struct UpdateValidatorReceipt {
     pub old_signal_data: Option<Blake2bHash>,
 }
 convert_receipt!(UpdateValidatorReceipt);
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct JailValidatorReceipt {
+    pub newly_deactivated: bool,
+    pub old_jail_release: Option<u32>,
+}
+convert_receipt!(JailValidatorReceipt);
+
+impl From<SlashReceipt> for JailValidatorReceipt {
+    fn from(value: SlashReceipt) -> Self {
+        Self {
+            newly_deactivated: value.newly_deactivated,
+            old_jail_release: value.old_jail_release,
+        }
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ReactivateValidatorReceipt {
@@ -47,6 +64,7 @@ pub struct DeleteValidatorReceipt {
     pub reward_address: Address,
     pub signal_data: Option<Blake2bHash>,
     pub inactive_since: u32,
+    pub jail_release: Option<u32>,
 }
 convert_receipt!(DeleteValidatorReceipt);
 

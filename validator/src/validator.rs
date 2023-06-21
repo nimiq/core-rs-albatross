@@ -52,7 +52,7 @@ use crate::{
 #[derive(PartialEq)]
 enum ValidatorStakingState {
     Active,
-    Inactive,
+    Inactive(Option<u32>),
     NoStake,
     Unknown,
 }
@@ -278,7 +278,7 @@ where
             let tx_validity_window_start = validator_state.inactive_tx_validity_window_start;
             // Check that the transaction was sent in the validity window
             let staking_state = self.get_staking_state(&blockchain);
-            if (staking_state == ValidatorStakingState::Inactive)
+            if (matches!(staking_state, ValidatorStakingState::Inactive(..)))
                 && blockchain.block_number()
                     >= tx_validity_window_start + Policy::blocks_per_epoch()
                 && !blockchain.tx_in_validity_window(
@@ -696,7 +696,7 @@ where
             .map_or(
                 ValidatorStakingState::NoStake,
                 |validator| match validator.inactive_since {
-                    Some(_) => ValidatorStakingState::Inactive,
+                    Some(_) => ValidatorStakingState::Inactive(validator.jail_release),
                     None => ValidatorStakingState::Active,
                 },
             )
@@ -856,8 +856,11 @@ where
                         info!("Automatically reactivated.");
                     }
                 }
-                ValidatorStakingState::Inactive => {
+                ValidatorStakingState::Inactive(jail_release) => {
                     if self.validator_state.is_none()
+                        && jail_release
+                            .map(|jail_release| blockchain.block_number() >= jail_release)
+                            .unwrap_or(true)
                         && self.automatic_reactivate.load(Ordering::Acquire)
                     {
                         let inactivity_state = self.reactivate(&blockchain);

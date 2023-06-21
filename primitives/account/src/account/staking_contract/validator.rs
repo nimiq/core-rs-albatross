@@ -6,6 +6,7 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::{account::AccountError, policy::Policy};
 use serde::{Deserialize, Serialize};
 
+use crate::JailValidatorReceipt;
 #[cfg(feature = "interaction-traits")]
 use crate::{
     account::staking_contract::{
@@ -35,16 +36,17 @@ use crate::{
 ///           +-+--+---+                            +----+----+
 ///             |  ^                                     ^
 ///             |  |                                     |
-///             |  | reactivate                          |
-/// slashing    |  | (*optional) automatically           |  retire
-/// or          |  |              +----------+           |
-/// deactivate  |  +--------------+          |           |
-///             |                 | inactive +-----------+
-///             +---------------->+          |
+///    jail     |  | reactivate (*)                      |
+///     or      |  | (**) optional automatic             |  retire
+///  deactivate |  |              +----------+           |
+///             |  +--------------+ inactive |           |
+///             |                 |    or    +-----------+
+///             +---------------->+  jailed  |
 ///                               +----------+
-///
-/// (*optional) The validator my be set to automatically reactivate itself upon inactivation.
-///             If this setting is not enabled the state change can only be triggered manually.
+/// (*)  A validator can only reactivate itself if it has been released from jail or if it was not jailed
+///      in the first place.
+/// (**) The validator my be set to automatically reactivate itself upon inactivation.
+///      If this setting is not enabled the state change can only be triggered manually.
 ///
 /// Create, Update, Deactivate, Retire and Re-activate are incoming transactions to the staking contract.
 /// Delete is an outgoing transaction from the staking contract.
@@ -75,6 +77,9 @@ pub struct Validator {
     /// An option indicating if the validator is inactive. If it is inactive, then it contains the
     /// block height at which it became inactive.
     pub inactive_since: Option<u32>,
+    /// An option indicating if the validator is jailed and when it can be reactivated.
+    /// If it is jailed, then it contains the block height at which it can be reactivated.
+    pub jail_release: Option<u32>,
     /// A flag indicating if the validator is retired.
     pub retired: bool,
 }
@@ -113,11 +118,16 @@ impl StakingContract {
                 address: validator_address.clone(),
             });
         }
+        // Fail if validator existed already.
+        let tombstone = store.get_tombstone(validator_address);
+        if tombstone.is_some() {
+            return Err(AccountError::InvalidForRecipient);
+        }
 
         // All checks passed, not allowed to fail from here on!
 
         // Initialize validator.
-        let mut validator = Validator {
+        let validator = Validator {
             address: validator_address.clone(),
             signing_key,
             voting_key,
@@ -127,17 +137,9 @@ impl StakingContract {
             deposit,
             num_stakers: 0,
             inactive_since: None,
+            jail_release: None,
             retired: false,
         };
-
-        // If a tombstone exists for this validator, restore total_stake and num_stakers from it.
-        // Also delete the tombstone.
-        if let Some(tombstone) = store.get_tombstone(validator_address) {
-            validator.total_stake += tombstone.remaining_stake;
-            validator.num_stakers += tombstone.num_remaining_stakers;
-
-            store.remove_tombstone(validator_address);
-        }
 
         // Update our balance.
         self.balance += deposit;
@@ -340,12 +342,98 @@ impl StakingContract {
         Ok(())
     }
 
+    /// Deactivates a validator. It is necessary to retire a validator before dropping it.
+    pub fn jail_validator(
+        &mut self,
+        store: &mut StakingContractStoreWrite,
+        validator_address: &Address,
+        block_number: u32,
+        jail_release: u32,
+        tx_logger: &mut TransactionLog,
+    ) -> Result<JailValidatorReceipt, AccountError> {
+        // Get the validator.
+        let mut validator = store.expect_validator(validator_address)?;
+
+        // All checks passed, not allowed to fail from here on!
+        let old_jail_release = validator.jail_release;
+        let newly_deactivated = validator.is_active();
+
+        // Mark validator as inactive.
+        if newly_deactivated {
+            validator.inactive_since = Some(block_number);
+
+            // Remove validator from active_validators.
+            // We expect the validator to be present since we checked that it is not inactive above.
+            self.active_validators
+                .remove(validator_address)
+                .expect("inconsistent contract state");
+        }
+
+        // Jail validator.
+        validator.jail_release = Some(jail_release);
+
+        // Update validator entry.
+        store.put_validator(validator_address, validator);
+
+        tx_logger.push_log(Log::JailValidator {
+            validator_address: validator_address.clone(),
+            jail_release,
+        });
+        tx_logger.push_log(Log::DeactivateValidator {
+            validator_address: validator_address.clone(),
+        });
+
+        Ok(JailValidatorReceipt {
+            newly_deactivated,
+            old_jail_release,
+        })
+    }
+
+    /// Reverts inactivating a validator.
+    pub fn revert_jail_validator(
+        &mut self,
+        store: &mut StakingContractStoreWrite,
+        validator_address: &Address,
+        receipt: JailValidatorReceipt,
+        tx_logger: &mut TransactionLog,
+    ) -> Result<(), AccountError> {
+        // Get the validator.
+        let mut validator = store.expect_validator(validator_address)?;
+
+        // Mark validator as active.
+        if receipt.newly_deactivated {
+            validator.inactive_since = None;
+
+            // Re-add validator to active_validators.
+            self.active_validators
+                .insert(validator_address.clone(), validator.total_stake);
+        }
+
+        // Reset jail release.
+        let jail_release = validator.jail_release.expect("must have jail release");
+        validator.jail_release = receipt.old_jail_release;
+
+        // Update validator entry.
+        store.put_validator(validator_address, validator);
+
+        tx_logger.push_log(Log::DeactivateValidator {
+            validator_address: validator_address.clone(),
+        });
+        tx_logger.push_log(Log::JailValidator {
+            validator_address: validator_address.clone(),
+            jail_release,
+        });
+
+        Ok(())
+    }
+
     /// Reactivates a validator.
     pub fn reactivate_validator(
         &mut self,
         store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         signer: &Address,
+        block_number: u32,
         tx_logger: &mut TransactionLog,
     ) -> Result<ReactivateValidatorReceipt, AccountError> {
         // Get the validator.
@@ -361,6 +449,17 @@ impl StakingContract {
         if validator.retired {
             debug!("Validator {} is retired", validator_address);
             return Err(AccountError::InvalidForRecipient);
+        }
+
+        // Check that the validator is not retired.
+        if let Some(jail_release) = validator.jail_release {
+            if block_number < jail_release {
+                debug!(
+                    "Validator {} is jailed until {}",
+                    validator_address, jail_release
+                );
+                return Err(AccountError::InvalidForRecipient);
+            }
         }
 
         // Check that the signer is correct.
@@ -605,6 +704,7 @@ impl StakingContract {
             reward_address: validator.reward_address,
             signal_data: validator.signal_data,
             inactive_since: validator.inactive_since.unwrap(), // we checked above that this is Some
+            jail_release: validator.jail_release,
         })
     }
 
@@ -631,6 +731,7 @@ impl StakingContract {
             deposit: transaction_total_value,
             num_stakers: 0,
             inactive_since: Some(receipt.inactive_since),
+            jail_release: receipt.jail_release,
             retired: true,
         };
 
