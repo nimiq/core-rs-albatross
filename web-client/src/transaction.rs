@@ -498,6 +498,13 @@ impl Transaction {
                                 raw: hex::encode(self.data()),
                             })
                         }
+                        IncomingStakingTransactionData::SetInactiveStake {
+                            new_inactive_balance,
+                            ..
+                        } => PlainTransactionData::SetInactiveStake(PlainSetInactiveStakeData {
+                            raw: hex::encode(self.data()),
+                            new_inactive_balance: new_inactive_balance.into(),
+                        }),
                     }
                     // In the future we might add other staking notifications
                 } else if self.inner.recipient_type == AccountType::Vesting {
@@ -572,6 +579,7 @@ impl Transaction {
                 PlainTransactionData::CreateStaker(ref data) => &data.raw,
                 PlainTransactionData::AddStake(ref data) => &data.raw,
                 PlainTransactionData::UpdateStaker(ref data) => &data.raw,
+                PlainTransactionData::SetInactiveStake(ref data) => &data.raw,
             })?),
             Some(plain.flags),
             plain.validity_start_height,
@@ -596,6 +604,7 @@ pub enum PlainTransactionData {
     CreateStaker(PlainCreateStakerData),
     AddStake(PlainAddStakeData),
     UpdateStaker(PlainUpdateStakerData),
+    SetInactiveStake(PlainSetInactiveStakeData),
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
@@ -674,6 +683,13 @@ pub struct PlainAddStakeData {
 pub struct PlainUpdateStakerData {
     pub raw: String,
     pub new_delegation: Option<String>,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainSetInactiveStakeData {
+    pub raw: String,
+    pub new_inactive_balance: u64,
 }
 
 /// Placeholder struct to serialize proofs of transactions as hex strings in the style of the Nimiq 1.0 library.

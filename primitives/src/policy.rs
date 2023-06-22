@@ -310,6 +310,12 @@ impl Policy {
         Self::epoch_index_at(block_number) < Self::blocks_per_batch()
     }
 
+    /// Returns the block height for the end of the reporting window of a given block number.
+    #[inline]
+    pub fn end_of_reporting_window(block_number: u32) -> u32 {
+        Self::election_block_after(block_number) + Self::blocks_per_batch()
+    }
+
     /// Returns the supply at a given time (as Unix time) in Lunas (1 NIM = 100,000 Lunas). It is
     /// calculated using the following formula:
     /// Supply (t) = Genesis_supply + Initial_supply_velocity / Supply_decay * (1 - e^(- Supply_decay * t))

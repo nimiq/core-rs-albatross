@@ -912,6 +912,7 @@ fn can_revert_transactions() {
             IncomingType::CreateStaker,
             IncomingType::AddStake,
             IncomingType::UpdateStaker,
+            IncomingType::SetInactiveStake,
         ] {
             // Don't send from the staking contract to the staking contract.
             if matches!(
@@ -927,6 +928,7 @@ fn can_revert_transactions() {
                     | IncomingType::CreateStaker
                     | IncomingType::AddStake
                     | IncomingType::UpdateStaker
+                    | IncomingType::SetInactiveStake
             ) {
                 continue;
             }
@@ -947,6 +949,7 @@ fn can_revert_transactions() {
                             | IncomingType::DeactivateValidator
                             | IncomingType::ReactivateValidator
                             | IncomingType::UpdateStaker
+                            | IncomingType::SetInactiveStake
                     )
                 {
                     continue;
@@ -1013,8 +1016,11 @@ fn can_revert_inherents() {
     let receipts = accounts.test(&[], &[inherent], &block_state);
     assert!(matches!(receipts.inherents[..], [OperationReceipt::Ok(_)]));
 
-    let (validator_key_pair, _, _) =
-        generator.create_validator_and_staker(Coin::from_u64_unchecked(10), ValidatorState::Active);
+    let (validator_key_pair, _, _) = generator.create_validator_and_staker(
+        Coin::from_u64_unchecked(10),
+        ValidatorState::Active,
+        false,
+    );
 
     info!("Testing inherent Slash");
     let inherent = Inherent::Slash {

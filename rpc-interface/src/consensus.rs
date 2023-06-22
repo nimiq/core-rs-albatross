@@ -267,6 +267,24 @@ pub trait ConsensusInterface {
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
+    async fn create_set_inactive_stake_transaction(
+        &mut self,
+        sender_wallet: Option<Address>,
+        staker_wallet: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error>;
+
+    async fn send_set_inactive_stake_transaction(
+        &mut self,
+        sender_wallet: Option<Address>,
+        staker_wallet: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error>;
+
     async fn create_unstake_transaction(
         &mut self,
         staker_wallet: Address,

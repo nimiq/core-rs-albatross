@@ -1,3 +1,4 @@
+use nimiq_primitives::coin::Coin;
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 
@@ -139,11 +140,20 @@ impl PlainAccount {
 #[derive(serde::Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainStaker {
-    /// The staker's balance.
+    /// The staker's active balance.
     balance: u64,
     /// The address of the validator for which the staker is delegating its stake for. If it is not
     /// delegating to any validator, this will be set to None.
     delegation: Option<String>,
+    /// The staker's inactive balance. Only released inactive balance can be withdrawn from the staking contract.
+    /// Stake can only be re-delegated if the whole balance of the staker is inactive and released
+    /// (or if there was no prior delegation). For inactive balance to be released, the maximum of
+    /// the `inactive_release` and the validator's `jail_release` must have passed.
+    inactive_balance: Coin,
+    /// The earliest block number at which the inactive balance is released for withdrawal or re-delegation.
+    /// If the stake is currently delegated to a jailed validator, the maximum of its jail release
+    /// and the inactive release is taken. Re-delegation requires the whole balance of the staker to be inactive.
+    inactive_release: Option<u32>,
 }
 
 impl PlainStaker {
@@ -154,6 +164,8 @@ impl PlainStaker {
                 .as_ref()
                 .map(|address| address.to_user_friendly_address()),
             balance: staker.balance.into(),
+            inactive_balance: staker.inactive_balance,
+            inactive_release: staker.inactive_release,
         }
     }
 }
@@ -185,6 +197,9 @@ pub struct PlainValidator {
     pub inactive_since: Option<u32>,
     /// A flag indicating if the validator is retired.
     pub retired: bool,
+    /// An option indication if the validator is jailed. If it is jailed, then it contains the
+    /// block height at which the jail period ends.
+    pub jail_release: Option<u32>,
 }
 
 impl PlainValidator {
@@ -199,6 +214,7 @@ impl PlainValidator {
             num_stakers: validator.num_stakers,
             inactive_since: validator.inactive_since,
             retired: validator.retired,
+            jail_release: validator.jail_release,
         }
     }
 }

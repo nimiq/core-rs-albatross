@@ -105,6 +105,27 @@ pub enum TransactionCommand {
         tx_commons: TxCommon,
     },
 
+    /// Sends a `set_inactive_stake` transaction to the network. You can pay the transaction fee from a basic
+    /// account (by providing the sender wallet) or from the staker account's balance (by not
+    /// providing a sender wallet).
+    /// Note: If there already is an inactive balance, it will be modified and the lock-up period restarts.
+    /// The inactive balance is only released after the end of the lock-up period.
+    SetInactiveStake {
+        /// The fee will be payed by this wallet if any is provided. In such case the sender wallet must be unlocked prior to this action.
+        /// If absent the fee is payed by the stakers account.
+        #[clap(long)]
+        sender_wallet: Option<Address>,
+
+        /// Destination address for the update. This wallet must be already unlocked.
+        staker_wallet: Address,
+
+        /// The new amount of inactive stake.
+        new_inactive_stake: Coin,
+
+        #[clap(flatten)]
+        tx_commons: TxCommon,
+    },
+
     /// Sends a `unstake` transaction to the network. The transaction fee will be paid from the funds
     /// being unstaked.
     Unstake {
@@ -415,6 +436,38 @@ impl HandleSubcommand for TransactionCommand {
                             sender_wallet,
                             staker_wallet,
                             new_delegation,
+                            tx_commons.fee,
+                            tx_commons.validity_start_height,
+                        )
+                        .await?;
+                    println!("{txid:#?}");
+                }
+            }
+            TransactionCommand::SetInactiveStake {
+                sender_wallet,
+                staker_wallet,
+                new_inactive_stake,
+                tx_commons,
+            } => {
+                if tx_commons.dry {
+                    let tx = client
+                        .consensus
+                        .create_set_inactive_stake_transaction(
+                            sender_wallet,
+                            staker_wallet,
+                            new_inactive_stake,
+                            tx_commons.fee,
+                            tx_commons.validity_start_height,
+                        )
+                        .await?;
+                    println!("{tx:#?}");
+                } else {
+                    let txid = client
+                        .consensus
+                        .send_set_inactive_stake_transaction(
+                            sender_wallet,
+                            staker_wallet,
+                            new_inactive_stake,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
                         )

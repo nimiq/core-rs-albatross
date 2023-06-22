@@ -688,6 +688,8 @@ pub struct Staker {
     pub balance: Coin,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delegation: Option<Address>,
+    pub inactive_balance: Coin,
+    pub inactive_release: Option<u32>,
 }
 
 impl Staker {
@@ -696,6 +698,8 @@ impl Staker {
             address: staker.address.clone(),
             balance: staker.balance,
             delegation: staker.delegation.clone(),
+            inactive_balance: staker.inactive_balance,
+            inactive_release: staker.inactive_release,
         }
     }
 }
@@ -713,6 +717,9 @@ pub struct Validator {
     pub num_stakers: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inactivity_flag: Option<u32>,
+    pub retired: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jail_release: Option<u32>,
 }
 
 impl Validator {
@@ -726,6 +733,8 @@ impl Validator {
             balance: validator.total_stake,
             num_stakers: validator.num_stakers,
             inactivity_flag: validator.inactive_since,
+            retired: validator.retired,
+            jail_release: validator.jail_release,
         }
     }
 }
@@ -848,6 +857,7 @@ pub enum LogType {
     RetireValidator,
     DeleteValidator,
     Unstake,
+    SetInactiveStake,
     PayoutReward,
     Slash,
     RevertContract,
@@ -896,6 +906,7 @@ impl LogType {
             Log::RetireValidator { .. } => Self::RetireValidator,
             Log::DeleteValidator { .. } => Self::DeleteValidator,
             Log::Unstake { .. } => Self::Unstake,
+            Log::SetInactiveStake { .. } => Self::SetInactiveStake,
             Log::PayoutReward { .. } => Self::PayoutReward,
             Log::Slash { .. } => Self::Slash,
             Log::RevertContract { .. } => Self::RevertContract,

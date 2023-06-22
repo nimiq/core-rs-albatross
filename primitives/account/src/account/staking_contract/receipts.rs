@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
-use nimiq_primitives::account::AccountError;
+use nimiq_primitives::{account::AccountError, coin::Coin};
 use nimiq_serde::{Deserialize, Serialize};
 
 use crate::{convert_receipt, AccountReceipt};
@@ -73,3 +73,17 @@ pub struct StakerReceipt {
     pub delegation: Option<Address>,
 }
 convert_receipt!(StakerReceipt);
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct SetInactiveStakeReceipt {
+    pub old_inactive_release: Option<u32>,
+    pub old_active_balance: Coin,
+}
+convert_receipt!(SetInactiveStakeReceipt);
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct RemoveStakeReceipt {
+    pub delegation: Option<Address>,
+    pub inactive_release: Option<u32>,
+}
+convert_receipt!(RemoveStakeReceipt);

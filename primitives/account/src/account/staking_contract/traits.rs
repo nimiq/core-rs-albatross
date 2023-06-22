@@ -182,8 +182,30 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
-                self.update_staker(&mut store, &staker_address, new_delegation, tx_logger)
-                    .map(|receipt| Some(receipt.into()))
+                self.update_staker(
+                    &mut store,
+                    &staker_address,
+                    new_delegation,
+                    block_state.number,
+                    tx_logger,
+                )
+                .map(|receipt| Some(receipt.into()))
+            }
+            IncomingStakingTransactionData::SetInactiveStake {
+                new_inactive_balance,
+                proof,
+            } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
+
+                self.set_inactive_stake(
+                    &mut store,
+                    &staker_address,
+                    new_inactive_balance,
+                    block_state.number,
+                    tx_logger,
+                )
+                .map(|receipt| Some(receipt.into()))
             }
         }
     }
@@ -256,6 +278,23 @@ impl AccountTransactionInteraction for StakingContract {
 
                 self.revert_update_staker(&mut store, &staker_address, receipt, tx_logger)
             }
+            IncomingStakingTransactionData::SetInactiveStake {
+                new_inactive_balance,
+                proof,
+            } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
+
+                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
+
+                self.revert_set_inactive_stake(
+                    &mut store,
+                    &staker_address,
+                    new_inactive_balance,
+                    receipt,
+                    tx_logger,
+                )
+            }
         }
     }
 
@@ -295,9 +334,10 @@ impl AccountTransactionInteraction for StakingContract {
                     &mut store,
                     &staker_address,
                     transaction.total_value(),
+                    block_state.number,
                     tx_logger,
                 )
-                .map(|receipt| receipt.map(|receipt| receipt.into()))
+                .map(|receipt| Some(receipt.into()))
             }
         }
     }
@@ -334,10 +374,7 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
-                let receipt = match receipt {
-                    Some(receipt) => Some(receipt.try_into()?),
-                    None => None,
-                };
+                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
                 self.revert_remove_stake(
                     &mut store,
@@ -426,9 +463,10 @@ impl AccountTransactionInteraction for StakingContract {
                         &mut store,
                         &staker_address,
                         transaction.fee,
+                        block_state.number,
                         &mut TransactionLog::empty(),
                     )
-                    .map(|receipt| receipt.map(|receipt| receipt.into()))?;
+                    .map(|receipt| Some(receipt.into()))?;
 
                 tx_logger.push_log(Log::StakerFeeDeduction {
                     staker_address,
@@ -504,10 +542,7 @@ impl AccountTransactionInteraction for StakingContract {
                     fee: transaction.fee,
                 });
 
-                let receipt = match receipt {
-                    Some(receipt) => Some(receipt.try_into()?),
-                    None => None,
-                };
+                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
                 self.revert_remove_stake(
                     &mut store,

@@ -1035,15 +1035,13 @@ impl TransactionBuilder {
         }
     }
 
-    /// Creates an update staker transaction for a given staker that changes the delegation. It can
-    /// pay fees from the staker's balance.
+    /// Creates an update staker transaction for a given staker that changes the delegation.
     ///
     /// # Arguments
     ///
     ///  - `key_pair`:              The optional key pair used to sign the outgoing transaction. If
     ///                             it is given, the fee will be paid from the basic account
-    ///                             belonging to this key pair. Otherwise, it will be deducted from
-    ///                             the staker's balance.
+    ///                             belonging to this key pair.
     ///  - `staker_key_pair`:       The key pair used to sign the incoming transaction. The staker
     ///                             address will be derived from this key pair.
     ///  - `delegation`:            The new delegation.
@@ -1069,6 +1067,80 @@ impl TransactionBuilder {
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
         recipient.update_staker(new_delegation);
+
+        let mut builder = Self::new();
+        builder
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(Coin::ZERO)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        match key_pair {
+            None => {
+                builder
+                    .with_sender(Policy::STAKING_CONTRACT_ADDRESS)
+                    .with_sender_type(AccountType::Staking);
+            }
+            Some(key) => {
+                builder.with_sender(Address::from(key));
+            }
+        }
+
+        let proof_builder = builder.generate()?;
+        match proof_builder {
+            TransactionProofBuilder::InStaking(mut builder) => {
+                builder.sign_with_key_pair(staker_key_pair);
+                match key_pair {
+                    None => {
+                        let mut builder = builder.generate().unwrap().unwrap_out_staking();
+                        builder.unstake(staker_key_pair);
+                        Ok(builder.generate().unwrap())
+                    }
+                    Some(key) => {
+                        let mut builder = builder.generate().unwrap().unwrap_basic();
+                        builder.sign_with_key_pair(key);
+                        Ok(builder.generate().unwrap())
+                    }
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a set inactive stake transaction for a given staker.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The optional key pair used to sign the outgoing transaction. If
+    ///                             it is given, the fee will be paid from the basic account
+    ///                             belonging to this key pair.
+    ///  - `staker_key_pair`:       The key pair used to sign the incoming transaction. The staker
+    ///                             address will be derived from this key pair.
+    ///  - `value`:                 The value of the stake to be inactivated. This is moved from the
+    ///                             active balance of the staker.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    /// # Note
+    ///
+    /// This is a *signaling transaction*.
+    ///
+    pub fn new_set_inactive_stake(
+        key_pair: Option<&KeyPair>,
+        staker_key_pair: &KeyPair,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Result<Transaction, TransactionBuilderError> {
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.set_inactive_stake(value);
 
         let mut builder = Self::new();
         builder

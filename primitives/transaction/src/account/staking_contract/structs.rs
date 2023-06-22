@@ -76,6 +76,11 @@ pub enum IncomingStakingTransactionData {
         new_delegation: Option<Address>,
         proof: SignatureProof,
     },
+    SetInactiveStake {
+        new_inactive_balance: Coin,
+        #[cfg_attr(feature = "serde-derive", serde(skip))]
+        proof: SignatureProof,
+    },
 }
 
 impl IncomingStakingTransactionData {
@@ -87,6 +92,7 @@ impl IncomingStakingTransactionData {
                 | IncomingStakingTransactionData::ReactivateValidator { .. }
                 | IncomingStakingTransactionData::RetireValidator { .. }
                 | IncomingStakingTransactionData::UpdateStaker { .. }
+                | IncomingStakingTransactionData::SetInactiveStake { .. }
         )
     }
 
@@ -171,6 +177,10 @@ impl IncomingStakingTransactionData {
                 // Check that the signature is correct.
                 verify_transaction_signature(transaction, proof, true)?
             }
+            IncomingStakingTransactionData::SetInactiveStake { proof, .. } => {
+                // Check that the signature is correct.
+                verify_transaction_signature(transaction, proof, true)?
+            }
         }
 
         Ok(())
@@ -197,6 +207,9 @@ impl IncomingStakingTransactionData {
                 *proof = signature_proof;
             }
             IncomingStakingTransactionData::UpdateStaker { proof, .. } => {
+                *proof = signature_proof;
+            }
+            IncomingStakingTransactionData::SetInactiveStake { proof, .. } => {
                 *proof = signature_proof;
             }
             _ => {}
