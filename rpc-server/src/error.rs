@@ -54,6 +54,12 @@ pub enum Error {
     #[error("No validator with address: {0}")]
     ValidatorNotFound(Address),
 
+    #[error("Validator with address {0} is already {1}")]
+    ValidatorAlreadyInState(Address, String),
+
+    #[error("Validator with address {0} is retired thus cannot be reactivated")]
+    ValidatorRetired(Address),
+
     #[error("No staker with address: {0}")]
     StakerNotFound(Address),
 

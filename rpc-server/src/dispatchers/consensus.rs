@@ -3,6 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use beserial::{Deserialize, Serialize};
 use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_consensus::ConsensusProxy;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -1014,6 +1015,28 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
+        // If the node is in the position of having a full state, it can check upfront if this transaction makes sense
+        if let BlockchainReadProxy::Full(blockchain) = self.consensus.blockchain.read() {
+            let staking_contract = blockchain.get_staking_contract();
+            let data_store = blockchain.get_staking_contract_store();
+            let db_txn = blockchain.read_transaction();
+            let validator =
+                staking_contract.get_validator(&data_store.read(&db_txn), &validator_address);
+
+            if let Some(validator) = validator {
+                if validator.retired {
+                    return Err(Error::ValidatorRetired(validator_address.clone()));
+                } else if validator.is_active() {
+                    return Err(Error::ValidatorAlreadyInState(
+                        validator_address.clone(),
+                        "active".into(),
+                    ));
+                }
+            } else {
+                return Err(Error::ValidatorNotFound(validator_address.clone()));
+            }
+        }
+
         let raw_tx = self
             .create_reactivate_validator_transaction(
                 sender_wallet,
@@ -1056,6 +1079,26 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
+        // If the node is in the position of having a full state, it can check upfront if this transaction makes sense
+        if let BlockchainReadProxy::Full(blockchain) = self.consensus.blockchain.read() {
+            let staking_contract = blockchain.get_staking_contract();
+            let data_store = blockchain.get_staking_contract_store();
+            let db_txn = blockchain.read_transaction();
+            let validator =
+                staking_contract.get_validator(&data_store.read(&db_txn), &validator_wallet);
+
+            if let Some(validator) = validator {
+                if validator.retired {
+                    return Err(Error::ValidatorAlreadyInState(
+                        validator_wallet.clone(),
+                        "retired".into(),
+                    ));
+                }
+            } else {
+                return Err(Error::ValidatorNotFound(validator_wallet.clone()));
+            }
+        }
+
         let raw_tx = self
             .create_retire_validator_transaction(
                 sender_wallet,
