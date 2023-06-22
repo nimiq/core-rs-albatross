@@ -46,6 +46,8 @@ nimiq-vrf = { path = "../vrf" }
 nimiq-zkp = { path = "../zkp" }
 
 [dev-dependencies]
+rand_chacha = "0.3.1"
+
 nimiq-block-production = { path = "../block-production", features = ["test-utils"] }
 nimiq-test-log = { path = "../test-log" }
 nimiq-transaction-builder = { path = "../transaction-builder" }

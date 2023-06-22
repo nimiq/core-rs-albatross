@@ -1,4 +1,6 @@
-use nimiq_blockchain_interface::{ChunksPushError, ChunksPushResult, PushResult};
+use nimiq_blockchain_interface::{
+    AbstractBlockchain, ChunksPushError, ChunksPushResult, PushResult,
+};
 use nimiq_genesis::NetworkId;
 use nimiq_keys::{Address, KeyPair, PrivateKey, SecureGenerate};
 use nimiq_primitives::{
@@ -14,6 +16,8 @@ use nimiq_primitives::{
 use nimiq_serde::Deserialize;
 use nimiq_test_utils::{block_production::TemporaryBlockProducer, test_rng::test_rng};
 use nimiq_transaction_builder::TransactionBuilder;
+use rand::SeedableRng;
+use rand_chacha::ChaCha20Rng;
 
 macro_rules! check_invalid_chunk {
     ($f: expr, $pattern: pat_param) => {
@@ -407,6 +411,74 @@ fn can_partially_apply_blocks() {
             .accounts
             .get_root_hash_assert(None)
     );
+}
+
+#[test]
+fn can_converge_with_changes_in_staking_contract() {
+    let mut rng = ChaCha20Rng::seed_from_u64(0);
+    let key_pair = key_pair_with_funds();
+    let mut random_transactions = |height| -> Vec<_> {
+        (0..10)
+            .map(|_| {
+                TransactionBuilder::new_create_staker(
+                    &key_pair,
+                    &KeyPair::generate(&mut rng),
+                    None,
+                    100.try_into().unwrap(),
+                    Coin::ZERO,
+                    height,
+                    NetworkId::UnitAlbatross,
+                )
+                .unwrap()
+            })
+            .collect()
+    };
+
+    let temp_producer1 = TemporaryBlockProducer::new();
+    let temp_producer2 = TemporaryBlockProducer::new_incomplete();
+
+    let mut chunk_start = KeyNibbles::ROOT;
+    let mut i = 0;
+    loop {
+        let height = temp_producer1.blockchain.read().head().block_number();
+        let (block, diff) =
+            temp_producer1.next_block_and_diff_with_txs(vec![], false, random_transactions(height));
+        let chunk = temp_producer1.get_chunk(chunk_start, 3);
+        let chunk_end = chunk.chunk.end_key.clone();
+        assert_eq!(
+            temp_producer2.push_with_chunks(block, diff, vec![chunk]),
+            Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 0))))
+        );
+        println!("{} {:?}", i, chunk_end);
+        i += 1;
+        assert_eq!(
+            temp_producer2
+                .blockchain
+                .read()
+                .state
+                .accounts
+                .get_root_hash(None),
+            temp_producer1
+                .blockchain
+                .read()
+                .state
+                .accounts
+                .get_root_hash(None),
+        );
+        assert_eq!(
+            temp_producer2
+                .blockchain
+                .read()
+                .state
+                .accounts
+                .is_complete(None),
+            chunk_end.is_none(),
+        );
+        match chunk_end {
+            Some(key) => chunk_start = key,
+            None => break,
+        }
+    }
 }
 
 #[test]
