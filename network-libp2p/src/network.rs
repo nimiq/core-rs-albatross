@@ -2050,7 +2050,6 @@ impl NetworkInterface for Network {
     {
         self.validate_tx
             .send(ValidateMessage::new::<T>(pubsub_id, acceptance))
-            .ok()
             .expect("Failed to send reported message validation result: receiver hung up");
     }
 
