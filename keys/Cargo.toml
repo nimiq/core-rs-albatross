@@ -19,7 +19,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 curve25519-dalek = "3"
 ed25519-zebra = "3.1"
-data-encoding = "2.3"
+data-encoding = "2.4"
 thiserror = "1.0"
 hex = "0.4"
 rand_core = "0.6"
