@@ -11,7 +11,7 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 rand = "0.8"
 thiserror = "1.0"
-tokio = { version = "1.28", features = ["rt", "time"] }
+tokio = { version = "1.29", features = ["rt", "time"] }
 tokio-stream = "0.1"
 
 beserial = { path = "../beserial", features = ["derive"] }
@@ -30,4 +30,4 @@ nimiq-network-interface = { path = "../network-interface" }
 nimiq-network-mock = { path = "../network-mock" }
 nimiq-test-log = { path = "../test-log" }
 
-tokio = { version = "1.28", features = ["rt", "time", "macros"] }
+tokio = { version = "1.29", features = ["rt", "time", "macros"] }

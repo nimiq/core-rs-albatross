@@ -17,4 +17,4 @@ syn = { version = "2.0", features = ["full"] }
 
 [dev-dependencies]
 nimiq-test-log = { path = ".." }
-tokio = { version = "1.28", features = ["macros", "rt"] }
+tokio = { version = "1.29", features = ["macros", "rt"] }
