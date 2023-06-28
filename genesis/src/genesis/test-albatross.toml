@@ -91,14 +91,14 @@ staker_address = "NQ53 LC70 JHGH UEMV 2CAB DFQL JKHQ 21FS D3AY"
 balance = 10_000_000_00000
 delegation = "NQ84 3NMP N7X3 90XQ G8PB 48V3 M15Y B9V0 6C41"
 
-[[accounts]]
+[[basic_accounts]]
 address = "NQ37 7C3V VMN8 FRPN FXS9 PLAG JMRE 8SC6 KUSQ"
 balance = 1_000_000_000_00000
 
-[[accounts]]
+[[basic_accounts]]
 address = "NQ21 CHG8 N0CF 8P8U R037 C6K4 AMS7 HET4 QM90"
 balance = 1_000_000_000_00000
 
-[[accounts]]
+[[basic_accounts]]
 address = "NQ16 LLBY 5GJM HJDA 8KL6 J4PY RV4B BSQF 93R0"
 balance = 1_000_000_000_00000
