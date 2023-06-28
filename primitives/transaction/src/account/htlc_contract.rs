@@ -1,13 +1,14 @@
 use std::borrow::Cow;
 
 use log::error;
-use nimiq_hash::{Blake2bHasher, Hasher, Sha256Hasher};
+use nimiq_hash::{
+    sha512::{Sha512Hash, Sha512Hasher},
+    Blake2bHash, Blake2bHasher, Hasher, Sha256Hash, Sha256Hasher,
+};
 use nimiq_keys::Address;
 use nimiq_macros::{add_hex_io_fns_typed_arr, add_serialization_fns_typed_arr, create_typed_array};
 use nimiq_primitives::account::AccountType;
 use nimiq_serde::{Deserialize, Serialize};
-use serde_repr::{Deserialize_repr, Serialize_repr};
-use strum_macros::Display;
 
 use crate::{
     account::AccountTransactionVerification, SignatureProof, Transaction, TransactionError,
@@ -46,10 +47,13 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
             return Err(TransactionError::InvalidForRecipient);
         }
 
-        if transaction.data.len() != (20 * 2 + 1 + 32 + 1 + 8) {
+        if transaction.data.len() != (20 * 2 + 1 + 32 + 1 + 8)
+            && transaction.data.len() != (20 * 2 + 1 + 64 + 1 + 8)
+        {
             warn!(
-                "Invalid data length. For the following transaction:\n{:?}",
-                transaction
+                data_len = transaction.data.len(),
+                ?transaction,
+                "Invalid data length. For the following transaction",
             );
             return Err(TransactionError::InvalidData);
         }
@@ -67,42 +71,61 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
     }
 }
 
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Default,
-    Deserialize_repr,
-    Display,
-    Eq,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize_repr,
-    Hash,
-)]
+#[derive(Clone, Debug, Deserialize, Serialize, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[serde(tag = "algorithm", content = "hash", rename_all = "lowercase")]
 #[repr(u8)]
-pub enum HashAlgorithm {
-    #[default]
-    Blake2b = 1,
-    Sha256 = 3,
+pub enum AnyHash {
+    Blake2b(AnyHash32) = 1,
+    Sha256(AnyHash32) = 3,
+    Sha512(AnyHash64) = 4,
 }
 
-create_typed_array!(AnyHash, u8, 32);
-add_hex_io_fns_typed_arr!(AnyHash, AnyHash::SIZE);
-add_serialization_fns_typed_arr!(AnyHash, AnyHash::SIZE);
+impl Default for AnyHash {
+    fn default() -> Self {
+        AnyHash::Blake2b(AnyHash32::default())
+    }
+}
+
+impl From<Blake2bHash> for AnyHash {
+    fn from(value: Blake2bHash) -> Self {
+        AnyHash::Blake2b(AnyHash32(value.into()))
+    }
+}
+
+impl From<Sha256Hash> for AnyHash {
+    fn from(value: Sha256Hash) -> Self {
+        AnyHash::Sha256(AnyHash32(value.into()))
+    }
+}
+
+impl From<Sha512Hash> for AnyHash {
+    fn from(value: Sha512Hash) -> Self {
+        AnyHash::Sha512(AnyHash64(value.into()))
+    }
+}
 
 impl AnyHash {
     pub fn as_bytes(&self) -> &[u8] {
-        &self.0
+        match self {
+            AnyHash::Blake2b(hash) => &hash.0,
+            AnyHash::Sha256(hash) => &hash.0,
+            AnyHash::Sha512(hash) => &hash.0,
+        }
     }
 }
+
+create_typed_array!(AnyHash32, u8, 32);
+add_hex_io_fns_typed_arr!(AnyHash32, AnyHash32::SIZE);
+add_serialization_fns_typed_arr!(AnyHash32, AnyHash32::SIZE);
+
+create_typed_array!(AnyHash64, u8, 64);
+add_hex_io_fns_typed_arr!(AnyHash64, AnyHash64::SIZE);
+add_serialization_fns_typed_arr!(AnyHash64, AnyHash64::SIZE);
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct CreationTransactionData {
     pub sender: Address,
     pub recipient: Address,
-    pub hash_algorithm: HashAlgorithm,
     pub hash_root: AnyHash,
     pub hash_count: u8,
     #[serde(with = "nimiq_serde::fixint::be")]
@@ -141,7 +164,6 @@ impl CreationTransactionData {
 #[repr(u8)]
 pub enum OutgoingHTLCTransactionProof {
     RegularTransfer {
-        hash_algorithm: HashAlgorithm,
         hash_depth: u8,
         hash_root: AnyHash,
         pre_image: AnyHash,
@@ -177,7 +199,6 @@ impl OutgoingHTLCTransactionProof {
 
         match self {
             OutgoingHTLCTransactionProof::RegularTransfer {
-                hash_algorithm,
                 hash_depth,
                 hash_root,
                 pre_image,
@@ -185,15 +206,18 @@ impl OutgoingHTLCTransactionProof {
             } => {
                 let mut tmp_hash = pre_image.clone();
                 for _ in 0..*hash_depth {
-                    match hash_algorithm {
-                        HashAlgorithm::Blake2b => {
-                            tmp_hash = AnyHash(
-                                Blake2bHasher::default().digest(tmp_hash.as_bytes()).into(),
-                            );
-                        }
-                        HashAlgorithm::Sha256 => {
+                    match tmp_hash {
+                        AnyHash::Blake2b(_) => {
                             tmp_hash =
-                                AnyHash(Sha256Hasher::default().digest(tmp_hash.as_bytes()).into());
+                                AnyHash::from(Blake2bHasher::default().digest(tmp_hash.as_bytes()));
+                        }
+                        AnyHash::Sha256(_) => {
+                            tmp_hash =
+                                AnyHash::from(Sha256Hasher::default().digest(tmp_hash.as_bytes()));
+                        }
+                        AnyHash::Sha512(_) => {
+                            tmp_hash =
+                                AnyHash::from(Sha512Hasher::default().digest(tmp_hash.as_bytes()));
                         }
                     }
                 }
@@ -254,9 +278,9 @@ mod serde_derive {
         ser::{Serialize, Serializer},
     };
 
-    use super::AnyHash;
+    use super::{AnyHash32, AnyHash64};
 
-    impl Serialize for AnyHash {
+    impl Serialize for AnyHash32 {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
@@ -265,7 +289,26 @@ mod serde_derive {
         }
     }
 
-    impl<'de> Deserialize<'de> for AnyHash {
+    impl<'de> Deserialize<'de> for AnyHash32 {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let data: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
+            data.parse().map_err(Error::custom)
+        }
+    }
+
+    impl Serialize for AnyHash64 {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            serializer.serialize_str(&self.to_hex())
+        }
+    }
+
+    impl<'de> Deserialize<'de> for AnyHash64 {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: Deserializer<'de>,

@@ -69,15 +69,28 @@ impl PlainAccount {
                 balance: acc.balance.into(),
                 sender: acc.sender.to_user_friendly_address(),
                 recipient: acc.recipient.to_user_friendly_address(),
-                hash_algorithm: match acc.hash_algorithm {
-                    nimiq_transaction::account::htlc_contract::HashAlgorithm::Blake2b => {
+                hash_algorithm: match acc.hash_root {
+                    nimiq_transaction::account::htlc_contract::AnyHash::Blake2b(_) => {
                         "blake2b".to_string()
                     }
-                    nimiq_transaction::account::htlc_contract::HashAlgorithm::Sha256 => {
+                    nimiq_transaction::account::htlc_contract::AnyHash::Sha256(_) => {
                         "sha256".to_string()
                     }
+                    nimiq_transaction::account::htlc_contract::AnyHash::Sha512(_) => {
+                        "sha512".to_string()
+                    }
                 },
-                hash_root: acc.hash_root.to_hex(),
+                hash_root: match &acc.hash_root {
+                    nimiq_transaction::account::htlc_contract::AnyHash::Blake2b(hash) => {
+                        hash.to_hex()
+                    }
+                    nimiq_transaction::account::htlc_contract::AnyHash::Sha256(hash) => {
+                        hash.to_hex()
+                    }
+                    nimiq_transaction::account::htlc_contract::AnyHash::Sha512(hash) => {
+                        hash.to_hex()
+                    }
+                },
                 hash_count: acc.hash_count,
                 timeout: acc.timeout,
                 total_amount: acc.total_amount.into(),

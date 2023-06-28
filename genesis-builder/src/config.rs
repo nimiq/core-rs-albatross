@@ -3,7 +3,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_serde::Deserialize;
-use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
+use nimiq_transaction::account::htlc_contract::AnyHash;
 use nimiq_vrf::VrfSeed;
 use time::OffsetDateTime;
 
@@ -100,8 +100,6 @@ pub struct GenesisHTLC {
     pub recipient: Address,
     /// HTLC coin balance
     pub balance: Coin,
-    /// HTLC hashing algorithm
-    pub hash_algorithm: HashAlgorithm,
     /// HTLC hash root
     pub hash_root: AnyHash,
     /// HTLC hash count

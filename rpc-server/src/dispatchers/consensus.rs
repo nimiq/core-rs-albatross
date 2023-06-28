@@ -14,10 +14,7 @@ use nimiq_rpc_interface::{
     types::{RPCResult, Transaction as RPCTransaction, ValidityStartHeight},
 };
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_transaction::{
-    account::htlc_contract::{AnyHash, HashAlgorithm},
-    SignatureProof, Transaction,
-};
+use nimiq_transaction::{account::htlc_contract::AnyHash, SignatureProof, Transaction};
 use nimiq_transaction_builder::TransactionBuilder;
 use parking_lot::RwLock;
 
@@ -295,7 +292,6 @@ impl ConsensusInterface for ConsensusDispatcher {
         htlc_recipient: Address,
         hash_root: AnyHash,
         hash_count: u8,
-        hash_algorithm: HashAlgorithm,
         timeout: u64,
         value: Coin,
         fee: Coin,
@@ -307,7 +303,6 @@ impl ConsensusInterface for ConsensusDispatcher {
             htlc_recipient,
             hash_root,
             hash_count,
-            hash_algorithm,
             timeout,
             value,
             fee,
@@ -326,7 +321,6 @@ impl ConsensusInterface for ConsensusDispatcher {
         htlc_recipient: Address,
         hash_root: AnyHash,
         hash_count: u8,
-        hash_algorithm: HashAlgorithm,
         timeout: u64,
         value: Coin,
         fee: Coin,
@@ -339,7 +333,6 @@ impl ConsensusInterface for ConsensusDispatcher {
                 htlc_recipient,
                 hash_root,
                 hash_count,
-                hash_algorithm,
                 timeout,
                 value,
                 fee,
@@ -360,7 +353,6 @@ impl ConsensusInterface for ConsensusDispatcher {
         pre_image: AnyHash,
         hash_root: AnyHash,
         hash_count: u8,
-        hash_algorithm: HashAlgorithm,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -372,7 +364,6 @@ impl ConsensusInterface for ConsensusDispatcher {
             pre_image,
             hash_root,
             hash_count,
-            hash_algorithm,
             value,
             fee,
             self.validity_start_height(validity_start_height),
@@ -392,7 +383,6 @@ impl ConsensusInterface for ConsensusDispatcher {
         pre_image: AnyHash,
         hash_root: AnyHash,
         hash_count: u8,
-        hash_algorithm: HashAlgorithm,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -405,7 +395,6 @@ impl ConsensusInterface for ConsensusDispatcher {
                 pre_image,
                 hash_root,
                 hash_count,
-                hash_algorithm,
                 value,
                 fee,
                 validity_start_height,

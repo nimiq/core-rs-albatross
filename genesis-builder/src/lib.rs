@@ -265,7 +265,6 @@ impl GenesisBuilder {
                 balance: htlc_contract.balance,
                 sender: htlc_contract.sender.clone(),
                 recipient: htlc_contract.recipient.clone(),
-                hash_algorithm: htlc_contract.hash_algorithm,
                 hash_count: htlc_contract.hash_count,
                 hash_root: htlc_contract.hash_root.clone(),
                 timeout: htlc_contract.timeout,

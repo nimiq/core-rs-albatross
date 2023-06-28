@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
-use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
+use nimiq_transaction::account::htlc_contract::AnyHash;
 
 use crate::types::{RPCResult, Transaction, ValidityStartHeight};
 
@@ -114,7 +114,6 @@ pub trait ConsensusInterface {
         htlc_recipient: Address,
         hash_root: AnyHash,
         hash_count: u8,
-        hash_algorithm: HashAlgorithm,
         timeout: u64,
         value: Coin,
         fee: Coin,
@@ -128,7 +127,6 @@ pub trait ConsensusInterface {
         htlc_recipient: Address,
         hash_root: AnyHash,
         hash_count: u8,
-        hash_algorithm: HashAlgorithm,
         timeout: u64,
         value: Coin,
         fee: Coin,
@@ -143,7 +141,6 @@ pub trait ConsensusInterface {
         pre_image: AnyHash,
         hash_root: AnyHash,
         hash_count: u8,
-        hash_algorithm: HashAlgorithm,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -157,7 +154,6 @@ pub trait ConsensusInterface {
         pre_image: AnyHash,
         hash_root: AnyHash,
         hash_count: u8,
-        hash_algorithm: HashAlgorithm,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,

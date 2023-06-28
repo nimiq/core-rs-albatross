@@ -18,7 +18,7 @@ use nimiq_test_utils::{
 };
 use nimiq_transaction::{
     account::htlc_contract::{
-        AnyHash, CreationTransactionData, HashAlgorithm, OutgoingHTLCTransactionProof,
+        AnyHash, AnyHash32, CreationTransactionData, OutgoingHTLCTransactionProof,
     },
     SignatureProof, Transaction,
 };
@@ -32,10 +32,9 @@ fn create_serialized_contract() {
         balance: Coin::ZERO,
         sender: "1b215589344cf570d36bec770825eae30b732139".parse().unwrap(),
         recipient: "24786862babbdb05e7c4430612135eb2a8368123".parse().unwrap(),
-        hash_algorithm: HashAlgorithm::Sha256,
-        hash_root: AnyHash::from(
+        hash_root: AnyHash::Sha256(AnyHash32::from(
             "daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f",
-        ),
+        )),
         hash_count: 1,
         timeout: 169525,
         total_amount: Coin::from_u64_unchecked(1),
@@ -51,11 +50,12 @@ fn it_can_deserialize_a_htlc() {
     let htlc: HashedTimeLockedContract =
         Deserialize::deserialize_from_vec(&mut &bytes[..]).unwrap();
     assert_eq!(htlc.balance, Coin::ZERO);
-    assert_eq!(htlc.hash_algorithm, HashAlgorithm::Sha256);
     assert_eq!(htlc.hash_count, 1);
     assert_eq!(
         htlc.hash_root,
-        AnyHash::from("daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f")
+        AnyHash::Sha256(AnyHash32::from(
+            "daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f"
+        ))
     );
     assert_eq!(
         htlc.sender,
@@ -86,8 +86,7 @@ fn it_can_create_contract_from_transaction() {
     let data = CreationTransactionData {
         sender: Address::from([0u8; 20]),
         recipient: Address::from([0u8; 20]),
-        hash_algorithm: HashAlgorithm::Blake2b,
-        hash_root: AnyHash::from([0u8; 32]),
+        hash_root: AnyHash::Blake2b(AnyHash32::from([0u8; 32])),
         hash_count: 2,
         timeout: 1000,
     };
@@ -126,7 +125,7 @@ fn it_can_create_contract_from_transaction() {
     assert_eq!(htlc.balance, 100.try_into().unwrap());
     assert_eq!(htlc.sender, data.sender);
     assert_eq!(htlc.recipient, data.recipient);
-    assert_eq!(htlc.hash_root, AnyHash::from([0u8; 32]));
+    assert_eq!(htlc.hash_root, AnyHash::Blake2b(AnyHash32::from([0u8; 32])));
     assert_eq!(htlc.hash_count, 2);
     assert_eq!(htlc.timeout, 1000);
     assert_eq!(
@@ -135,7 +134,6 @@ fn it_can_create_contract_from_transaction() {
             contract_address: transaction.contract_creation_address(),
             sender: htlc.sender,
             recipient: htlc.recipient,
-            hash_algorithm: htlc.hash_algorithm,
             hash_root: htlc.hash_root,
             hash_count: htlc.hash_count,
             timeout: htlc.timeout,
@@ -184,7 +182,6 @@ fn it_can_apply_and_revert_regular_transfer() {
 
     // regular transfer
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
-        hash_algorithm: HashAlgorithm::Blake2b,
         hash_depth: 2,
         hash_root: htlc.hash_root.clone(),
         pre_image: pre_image.clone(),
@@ -311,7 +308,6 @@ fn it_refuses_invalid_transactions() {
 
     // regular transfer: timeout passed
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
-        hash_algorithm: HashAlgorithm::Blake2b,
         hash_depth: 2,
         hash_root: start_contract.hash_root.clone(),
         pre_image: pre_image.clone(),
@@ -336,9 +332,8 @@ fn it_refuses_invalid_transactions() {
 
     // regular transfer: hash mismatch
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
-        hash_algorithm: HashAlgorithm::Blake2b,
         hash_depth: 2,
-        hash_root: AnyHash::from([1u8; 32]),
+        hash_root: AnyHash::Blake2b(AnyHash32([1u8; 32])),
         pre_image: pre_image.clone(),
         signature_proof: recipient_signature_proof.clone(),
     };
@@ -359,7 +354,6 @@ fn it_refuses_invalid_transactions() {
 
     // regular transfer: invalid signature
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
-        hash_algorithm: HashAlgorithm::Blake2b,
         hash_depth: 2,
         hash_root: start_contract.hash_root.clone(),
         pre_image: pre_image.clone(),
@@ -380,12 +374,9 @@ fn it_refuses_invalid_transactions() {
 
     // regular transfer: underflow
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
-        hash_algorithm: HashAlgorithm::Blake2b,
         hash_depth: 1,
         hash_root: start_contract.hash_root.clone(),
-        pre_image: AnyHash::from(<[u8; 32]>::from(
-            Blake2bHasher::default().digest(&(<[u8; 32]>::from(pre_image))),
-        )),
+        pre_image: AnyHash::from(Blake2bHasher::default().digest(pre_image.as_bytes())),
         signature_proof: recipient_signature_proof.clone(),
     };
     tx.proof = proof.serialize_to_vec();
@@ -482,20 +473,19 @@ fn prepare_outgoing_transaction() -> (
     let recipient_key_pair = KeyPair::from(recipient_priv_key);
     let sender = Address::from(&sender_key_pair.public);
     let recipient = Address::from(&recipient_key_pair.public);
-    let pre_image = AnyHash::from([1u8; 32]);
-    let hash_root = AnyHash::from(<[u8; 32]>::from(
+    let pre_image = AnyHash::Blake2b(AnyHash32::from([1u8; 32]));
+    let hash_root = AnyHash::from(
         Blake2bHasher::default().digest(
             Blake2bHasher::default()
                 .digest(pre_image.as_bytes())
                 .as_bytes(),
         ),
-    ));
+    );
 
     let start_contract = HashedTimeLockedContract {
         balance: 1000.try_into().unwrap(),
         sender,
         recipient,
-        hash_algorithm: HashAlgorithm::Blake2b,
         hash_root,
         hash_count: 2,
         timeout: 100,

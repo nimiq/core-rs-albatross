@@ -2,7 +2,7 @@ use nimiq_hash::{Blake2bHash, Sha256Hash};
 use nimiq_keys::KeyPair;
 use nimiq_serde::Serialize;
 use nimiq_transaction::{
-    account::htlc_contract::{AnyHash, HashAlgorithm, OutgoingHTLCTransactionProof},
+    account::htlc_contract::{AnyHash, OutgoingHTLCTransactionProof},
     SignatureProof, Transaction,
 };
 
@@ -194,14 +194,12 @@ impl HtlcProofBuilder {
     /// [`signature_with_key_pair`]: struct.HtlcProofBuilder.html#method.signature_with_key_pair
     pub fn regular_transfer(
         &mut self,
-        hash_algorithm: HashAlgorithm,
         pre_image: AnyHash,
         hash_count: u8,
         hash_root: AnyHash,
         recipient_signature: SignatureProof,
     ) -> &mut Self {
         self.proof = Some(OutgoingHTLCTransactionProof::RegularTransfer {
-            hash_algorithm,
             hash_depth: hash_count,
             hash_root,
             pre_image,
@@ -277,10 +275,7 @@ impl HtlcProofBuilder {
         hash_root: Sha256Hash,
         recipient_signature: SignatureProof,
     ) -> &mut Self {
-        let pre_image: [u8; 32] = pre_image.into();
-        let hash_root: [u8; 32] = hash_root.into();
         self.regular_transfer(
-            HashAlgorithm::Sha256,
             pre_image.into(),
             hash_count,
             hash_root.into(),
@@ -355,10 +350,7 @@ impl HtlcProofBuilder {
         hash_root: Blake2bHash,
         recipient_signature: SignatureProof,
     ) -> &mut Self {
-        let pre_image: [u8; 32] = pre_image.into();
-        let hash_root: [u8; 32] = hash_root.into();
         self.regular_transfer(
-            HashAlgorithm::Blake2b,
             pre_image.into(),
             hash_count,
             hash_root.into(),

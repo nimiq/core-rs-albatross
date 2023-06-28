@@ -2,10 +2,7 @@ use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, KeyPair, PublicKey};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
-use nimiq_transaction::{
-    account::htlc_contract::{AnyHash, HashAlgorithm},
-    SignatureProof, Transaction,
-};
+use nimiq_transaction::{account::htlc_contract::AnyHash, SignatureProof, Transaction};
 use thiserror::Error;
 
 pub use crate::{proof::TransactionProofBuilder, recipient::Recipient};
@@ -678,8 +675,6 @@ impl TransactionBuilder {
     ///  - `htlc_recipient`:        The address of the recipient in the HTLC contract.
     ///  - `hash_root`,
     ///    `hash_count`,
-    ///    `hash_algorithm`:        The `hash_root` is the result of hashing the pre-image
-    ///                             `hash_count` times using `hash_algorithm`.
     ///  - `timeout`:               Sets the blockchain height at which the `htlc_sender`
     ///                             automatically gains control over the funds.
     ///  - `value`:                 The value for the vesting contract. This is sent from the
@@ -698,7 +693,6 @@ impl TransactionBuilder {
         htlc_recipient: Address,
         hash_root: AnyHash,
         hash_count: u8,
-        hash_algorithm: HashAlgorithm,
         timeout: u64,
         value: Coin,
         fee: Coin,
@@ -709,7 +703,7 @@ impl TransactionBuilder {
         recipient
             .with_sender(htlc_sender)
             .with_recipient(htlc_recipient)
-            .with_hash(hash_root, hash_count, hash_algorithm)
+            .with_hash(hash_root, hash_count)
             .with_timeout(timeout);
 
         let mut builder = Self::new();
@@ -748,8 +742,6 @@ impl TransactionBuilder {
     ///  - `pre_image`,
     ///    `hash_root`,
     ///    `hash_count`,
-    ///    `hash_algorithm`:        The `hash_root` is the result of hashing the `pre_image`
-    ///                             `hash_count` times using `hash_algorithm`.
     ///  - `value`:                 The value that will be sent to the recipient account.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
@@ -766,7 +758,6 @@ impl TransactionBuilder {
         pre_image: AnyHash,
         hash_root: AnyHash,
         hash_count: u8,
-        hash_algorithm: HashAlgorithm,
         value: Coin,
         fee: Coin,
         validity_start_height: u32,
@@ -786,7 +777,7 @@ impl TransactionBuilder {
         match proof_builder {
             TransactionProofBuilder::Htlc(mut builder) => {
                 let sig = builder.signature_with_key_pair(key_pair);
-                builder.regular_transfer(hash_algorithm, pre_image, hash_count, hash_root, sig);
+                builder.regular_transfer(pre_image, hash_count, hash_root, sig);
                 Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),

@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use anyhow::Error;
 use async_trait::async_trait;
 use clap::{Args, Parser};
@@ -7,7 +9,7 @@ use nimiq_rpc_interface::{
     consensus::ConsensusInterface,
     types::{HashAlgorithm, ValidityStartHeight},
 };
-use nimiq_transaction::account::htlc_contract::AnyHash;
+use nimiq_transaction::account::htlc_contract::{AnyHash, AnyHash32, AnyHash64};
 
 use super::accounts_subcommands::HandleSubcommand;
 use crate::Client;
@@ -168,7 +170,7 @@ pub enum TransactionCommand {
         htlc_recipient: Address,
 
         /// The result of hashing the pre-image hash `hash_count` times.
-        hash_root: AnyHash,
+        hash_root: String,
 
         /// Number of times the pre-image was hashed.
         hash_count: u8,
@@ -197,10 +199,10 @@ pub enum TransactionCommand {
         /// The address of the basic account that will receive the funds.
         htlc_recipient: Address,
 
-        pre_image: AnyHash,
+        pre_image: String,
 
         /// The result of hashing the pre-image hash `hash_count` times.
-        hash_root: AnyHash,
+        hash_root: String,
 
         /// Number of times the pre-image was hashed.
         hash_count: u8,
@@ -276,6 +278,16 @@ pub enum TransactionCommand {
         #[clap(short, long, default_value_t)]
         validity_start_height: ValidityStartHeight,
     },
+}
+
+impl TransactionCommand {
+    fn parse_hash(hash_algorithm: &HashAlgorithm, hash_str: String) -> Result<AnyHash, Error> {
+        match hash_algorithm {
+            HashAlgorithm::Blake2b => Ok(AnyHash::Blake2b(AnyHash32::from_str(&hash_str)?)),
+            HashAlgorithm::Sha256 => Ok(AnyHash::Sha256(AnyHash32::from_str(&hash_str)?)),
+            HashAlgorithm::Sha512 => Ok(AnyHash::Sha512(AnyHash64::from_str(&hash_str)?)),
+        }
+    }
 }
 
 #[async_trait]
@@ -534,9 +546,8 @@ impl HandleSubcommand for TransactionCommand {
                             sender_wallet,
                             htlc_sender,
                             htlc_recipient,
-                            hash_root,
+                            Self::parse_hash(&hash_algorithm, hash_root)?,
                             hash_count,
-                            hash_algorithm.into(),
                             timeout,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
@@ -551,9 +562,8 @@ impl HandleSubcommand for TransactionCommand {
                             sender_wallet,
                             htlc_sender,
                             htlc_recipient,
-                            hash_root,
+                            Self::parse_hash(&hash_algorithm, hash_root)?,
                             hash_count,
-                            hash_algorithm.into(),
                             timeout,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
@@ -580,10 +590,9 @@ impl HandleSubcommand for TransactionCommand {
                             sender_wallet,
                             contract_address,
                             htlc_recipient,
-                            pre_image,
-                            hash_root,
+                            Self::parse_hash(&hash_algorithm, pre_image)?,
+                            Self::parse_hash(&hash_algorithm, hash_root)?,
                             hash_count,
-                            hash_algorithm.into(),
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
                             tx_commons.common_tx_fields.validity_start_height,
@@ -597,10 +606,9 @@ impl HandleSubcommand for TransactionCommand {
                             sender_wallet,
                             contract_address,
                             htlc_recipient,
-                            pre_image,
-                            hash_root,
+                            Self::parse_hash(&hash_algorithm, pre_image)?,
+                            Self::parse_hash(&hash_algorithm, hash_root)?,
                             hash_count,
-                            hash_algorithm.into(),
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
                             tx_commons.common_tx_fields.validity_start_height,

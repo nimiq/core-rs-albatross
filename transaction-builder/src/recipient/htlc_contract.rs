@@ -1,7 +1,7 @@
 use nimiq_hash::{Blake2bHash, Sha256Hash};
 use nimiq_keys::Address;
 use nimiq_transaction::account::htlc_contract::{
-    AnyHash, CreationTransactionData as HtlcCreationData, HashAlgorithm,
+    AnyHash, CreationTransactionData as HtlcCreationData,
 };
 use thiserror::Error;
 
@@ -63,7 +63,6 @@ pub enum HtlcRecipientBuilderError {
 pub struct HtlcRecipientBuilder {
     sender: Option<Address>,
     recipient: Option<Address>,
-    hash_algorithm: Option<HashAlgorithm>,
     hash_root: Option<AnyHash>,
     hash_count: u8,
     timeout: Option<u64>,
@@ -107,15 +106,9 @@ impl HtlcRecipientBuilder {
 
     /// Sets the hash data for the HTLC.
     /// The `hash_root` is the result of hashing the pre-image hash `hash_count` times.
-    pub fn with_hash(
-        &mut self,
-        hash_root: AnyHash,
-        hash_count: u8,
-        hash_algorithm: HashAlgorithm,
-    ) -> &mut Self {
+    pub fn with_hash(&mut self, hash_root: AnyHash, hash_count: u8) -> &mut Self {
         self.hash_root = Some(hash_root);
         self.hash_count = hash_count;
-        self.hash_algorithm = Some(hash_algorithm);
         self
     }
 
@@ -143,10 +136,8 @@ impl HtlcRecipientBuilder {
     /// recipient_builder.with_sha256_hash(hash_root, hash_count);
     /// ```
     pub fn with_sha256_hash(&mut self, hash_root: Sha256Hash, hash_count: u8) -> &mut Self {
-        let hash: [u8; 32] = hash_root.into();
-        self.hash_root = Some(AnyHash::from(hash));
+        self.hash_root = Some(AnyHash::from(hash_root));
         self.hash_count = hash_count;
-        self.hash_algorithm = Some(HashAlgorithm::Sha256);
         self
     }
 
@@ -174,10 +165,8 @@ impl HtlcRecipientBuilder {
     /// recipient_builder.with_blake2b_hash(hash_root, hash_count);
     /// ```
     pub fn with_blake2b_hash(&mut self, hash_root: Blake2bHash, hash_count: u8) -> &mut Self {
-        let hash: [u8; 32] = hash_root.into();
-        self.hash_root = Some(AnyHash::from(hash));
+        self.hash_root = Some(AnyHash::from(hash_root));
         self.hash_count = hash_count;
-        self.hash_algorithm = Some(HashAlgorithm::Blake2b);
         self
     }
 
@@ -231,9 +220,6 @@ impl HtlcRecipientBuilder {
                 recipient: self
                     .recipient
                     .ok_or(HtlcRecipientBuilderError::NoRecipient)?,
-                hash_algorithm: self
-                    .hash_algorithm
-                    .ok_or(HtlcRecipientBuilderError::NoHash)?,
                 hash_root: self.hash_root.ok_or(HtlcRecipientBuilderError::NoHash)?,
                 hash_count: self.hash_count,
                 timeout: self.timeout.ok_or(HtlcRecipientBuilderError::NoTimeout)?,

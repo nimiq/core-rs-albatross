@@ -18,13 +18,11 @@ use nimiq_keys::{Address, PublicKey};
 use nimiq_primitives::{coin::Coin, policy::Policy, slots::Validators};
 use nimiq_serde::Serialize as NimiqSerialize;
 use nimiq_transaction::{
-    account::htlc_contract::{AnyHash, HashAlgorithm as HTLCContractHashAlgorithm},
-    inherent::Inherent as BaseInherent,
-    reward::RewardTransaction,
+    account::htlc_contract::AnyHash, inherent::Inherent as BaseInherent, reward::RewardTransaction,
 };
 use nimiq_vrf::VrfSeed;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, SerializeDisplay};
+use serde_with::{serde_as, DeserializeFromStr, SerializeDisplay};
 
 use crate::error::Error;
 
@@ -95,16 +93,7 @@ impl FromStr for ValidityStartHeight {
 pub enum HashAlgorithm {
     Blake2b = 1,
     Sha256 = 3,
-}
-
-#[allow(clippy::from_over_into)]
-impl Into<HTLCContractHashAlgorithm> for HashAlgorithm {
-    fn into(self) -> HTLCContractHashAlgorithm {
-        match self {
-            HashAlgorithm::Blake2b => HTLCContractHashAlgorithm::Blake2b,
-            HashAlgorithm::Sha256 => HTLCContractHashAlgorithm::Sha256,
-        }
-    }
+    Sha512 = 4,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -619,8 +608,7 @@ pub enum AccountAdditionalFields {
         sender: Address,
         /// User friendly address (NQ-address) of the recipient of the HTLC.
         recipient: Address,
-        /// Hex-encoded 32 byte hash root.
-        #[serde_as(as = "DisplayFromStr")]
+        /// Hash algorithm and Hex-encoded hash root.
         hash_root: AnyHash,
         /// Number of hashes this HTLC is split into
         hash_count: u8,

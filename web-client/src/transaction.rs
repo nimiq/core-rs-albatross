@@ -515,15 +515,28 @@ impl Transaction {
                         raw: hex::encode(self.data()),
                         sender: data.sender.to_user_friendly_address(),
                         recipient: data.recipient.to_user_friendly_address(),
-                        hash_algorithm: match data.hash_algorithm {
-                            nimiq_transaction::account::htlc_contract::HashAlgorithm::Blake2b => {
+                        hash_algorithm: match data.hash_root {
+                            nimiq_transaction::account::htlc_contract::AnyHash::Blake2b(_) => {
                                 "blake2b".to_string()
                             }
-                            nimiq_transaction::account::htlc_contract::HashAlgorithm::Sha256 => {
+                            nimiq_transaction::account::htlc_contract::AnyHash::Sha256(_) => {
                                 "sha256".to_string()
                             }
+                            nimiq_transaction::account::htlc_contract::AnyHash::Sha512(_) => {
+                                "sha512".to_string()
+                            }
                         },
-                        hash_root: hex::encode(data.hash_root),
+                        hash_root: match data.hash_root {
+                            nimiq_transaction::account::htlc_contract::AnyHash::Blake2b(hash) => {
+                                hash.to_hex()
+                            }
+                            nimiq_transaction::account::htlc_contract::AnyHash::Sha256(hash) => {
+                                hash.to_hex()
+                            }
+                            nimiq_transaction::account::htlc_contract::AnyHash::Sha512(hash) => {
+                                hash.to_hex()
+                            }
+                        },
                         hash_count: data.hash_count,
                         timeout: data.timeout,
                     })

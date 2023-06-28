@@ -5,9 +5,7 @@ use nimiq_primitives::{account::AccountError, coin::Coin};
 use nimiq_serde::{Deserialize, Serialize};
 #[cfg(feature = "interaction-traits")]
 use nimiq_transaction::account::htlc_contract::CreationTransactionData;
-use nimiq_transaction::account::htlc_contract::{
-    AnyHash, HashAlgorithm, OutgoingHTLCTransactionProof,
-};
+use nimiq_transaction::account::htlc_contract::{AnyHash, OutgoingHTLCTransactionProof};
 #[cfg(feature = "interaction-traits")]
 use nimiq_transaction::{inherent::Inherent, Transaction};
 
@@ -30,7 +28,6 @@ pub struct HashedTimeLockedContract {
     pub balance: Coin,
     pub sender: Address,
     pub recipient: Address,
-    pub hash_algorithm: HashAlgorithm,
     pub hash_root: AnyHash,
     pub hash_count: u8,
     #[serde(with = "nimiq_serde::fixint::be")]
@@ -52,7 +49,6 @@ impl HashedTimeLockedContract {
 
         match proof {
             OutgoingHTLCTransactionProof::RegularTransfer {
-                hash_algorithm,
                 hash_depth,
                 hash_root,
                 pre_image,
@@ -65,7 +61,7 @@ impl HashedTimeLockedContract {
                 }
 
                 // Check that the provided hash_root is correct.
-                if hash_algorithm != self.hash_algorithm || hash_root != self.hash_root {
+                if hash_root != self.hash_root {
                     warn!("HTLC hash mismatch");
                     return Err(AccountError::InvalidForSender);
                 }
@@ -154,7 +150,6 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             contract_address: transaction.recipient.clone(),
             sender: data.sender.clone(),
             recipient: data.recipient.clone(),
-            hash_algorithm: data.hash_algorithm,
             hash_root: data.hash_root.clone(),
             hash_count: data.hash_count,
             timeout: data.timeout,
@@ -165,7 +160,6 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             balance: initial_balance + transaction.value,
             sender: data.sender,
             recipient: data.recipient,
-            hash_algorithm: data.hash_algorithm,
             hash_root: data.hash_root,
             hash_count: data.hash_count,
             timeout: data.timeout,
@@ -186,7 +180,6 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             contract_address: transaction.recipient.clone(),
             sender: self.sender.clone(),
             recipient: self.recipient.clone(),
-            hash_algorithm: self.hash_algorithm,
             hash_root: self.hash_root.clone(),
             hash_count: self.hash_count,
             timeout: self.timeout,
@@ -398,7 +391,6 @@ impl AccountPruningInteraction for HashedTimeLockedContract {
 struct PrunedHashedTimeLockContract {
     pub sender: Address,
     pub recipient: Address,
-    pub hash_algorithm: HashAlgorithm,
     pub hash_root: AnyHash,
     pub hash_count: u8,
     pub timeout: u64,
@@ -410,7 +402,6 @@ impl From<HashedTimeLockedContract> for PrunedHashedTimeLockContract {
         PrunedHashedTimeLockContract {
             sender: contract.sender,
             recipient: contract.recipient,
-            hash_algorithm: contract.hash_algorithm,
             hash_root: contract.hash_root,
             hash_count: contract.hash_count,
             timeout: contract.timeout,
@@ -425,7 +416,6 @@ impl From<PrunedHashedTimeLockContract> for HashedTimeLockedContract {
             balance: Coin::ZERO,
             sender: receipt.sender,
             recipient: receipt.recipient,
-            hash_algorithm: receipt.hash_algorithm,
             hash_root: receipt.hash_root,
             hash_count: receipt.hash_count,
             timeout: receipt.timeout,

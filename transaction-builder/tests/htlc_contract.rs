@@ -7,7 +7,7 @@ use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_transaction::{
     account::htlc_contract::{
-        AnyHash, CreationTransactionData, HashAlgorithm, OutgoingHTLCTransactionProof,
+        AnyHash, AnyHash32, CreationTransactionData, OutgoingHTLCTransactionProof,
     },
     SignatureProof, Transaction,
 };
@@ -21,8 +21,7 @@ fn it_can_create_creation_transaction() {
     let data = CreationTransactionData {
         sender: sender.clone(),
         recipient: recipient.clone(),
-        hash_algorithm: HashAlgorithm::Blake2b,
-        hash_root: AnyHash::from([0u8; 32]),
+        hash_root: AnyHash::Blake2b(AnyHash32([0u8; 32])),
         hash_count: 2,
         timeout: 1000,
     };
@@ -80,14 +79,14 @@ fn prepare_outgoing_transaction() -> (
 
     let sender_key_pair = KeyPair::from(sender_priv_key);
     let recipient_key_pair = KeyPair::from(recipient_priv_key);
-    let pre_image = AnyHash::from([1u8; 32]);
-    let hash_root = AnyHash::from(<[u8; 32]>::from(
+    let pre_image = AnyHash::Blake2b(AnyHash32([1u8; 32]));
+    let hash_root = AnyHash::from(
         Blake2bHasher::default().digest(
             Blake2bHasher::default()
                 .digest(pre_image.as_bytes())
                 .as_bytes(),
         ),
-    ));
+    );
 
     let tx = Transaction::new_extended(
         Address::from([0u8; 20]),
@@ -125,7 +124,6 @@ fn it_can_create_regular_transfer() {
 
     // regular: valid Blake-2b
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
-        hash_algorithm: HashAlgorithm::Blake2b,
         hash_depth: 1,
         hash_root: hash_root.clone(),
         pre_image: pre_image.clone(),
@@ -147,7 +145,7 @@ fn it_can_create_regular_transfer() {
         .expect("Builder should be able to create transaction");
     let mut proof_builder = proof_builder.unwrap_htlc();
     let proof = proof_builder.signature_with_key_pair(&recipient_key_pair);
-    proof_builder.regular_transfer(HashAlgorithm::Blake2b, pre_image, 1, hash_root, proof);
+    proof_builder.regular_transfer(pre_image, 1, hash_root, proof);
     let tx2 = proof_builder
         .generate()
         .expect("Builder should be able to create proof");

@@ -5,10 +5,7 @@ use nimiq_primitives::{
     coin::Coin,
 };
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_transaction::{
-    account::htlc_contract::{AnyHash, HashAlgorithm},
-    Transaction,
-};
+use nimiq_transaction::{account::htlc_contract::AnyHash, Transaction};
 
 use crate::TransactionOperationReceipt;
 
@@ -36,7 +33,6 @@ pub enum Log {
         contract_address: Address,
         sender: Address,
         recipient: Address,
-        hash_algorithm: HashAlgorithm,
         hash_root: AnyHash,
         hash_count: u8,
         timeout: u64,

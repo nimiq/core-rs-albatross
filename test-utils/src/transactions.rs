@@ -13,9 +13,7 @@ use nimiq_primitives::{
 use nimiq_serde::Serialize;
 use nimiq_transaction::{
     account::{
-        htlc_contract::{
-            AnyHash, CreationTransactionData as HTLCCreationTransactionData, HashAlgorithm,
-        },
+        htlc_contract::{AnyHash, CreationTransactionData as HTLCCreationTransactionData},
         staking_contract::IncomingStakingTransactionData,
         vesting_contract::CreationTransactionData as VestingCreationTransactionData,
     },
@@ -336,7 +334,6 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
 
                 match sender {
                     OutgoingType::HTLCRegularTransfer => htlc_proof_builder.regular_transfer(
-                        HashAlgorithm::Blake2b,
                         pre_image,
                         1,
                         hash_root,
@@ -452,13 +449,11 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
 
                 // HTLC account.
                 let pre_image = Blake2bHash(self.rng.gen());
-                let hash_root =
-                    AnyHash::from(Blake2bHasher::default().chain(&pre_image).finish().0);
+                let hash_root = AnyHash::from(Blake2bHasher::default().chain(&pre_image).finish());
                 let account = Account::HTLC(HashedTimeLockedContract {
                     balance,
                     sender: Address::from(&sender_key_pair),
                     recipient: Address::from(&recipient_key_pair),
-                    hash_algorithm: HashAlgorithm::Blake2b,
                     hash_root: hash_root.clone(),
                     hash_count: 1,
                     timeout,
@@ -472,7 +467,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                     contract_address,
                     sender_key_pair,
                     recipient_key_pair,
-                    pre_image: AnyHash::from(pre_image.0),
+                    pre_image: AnyHash::from(pre_image),
                     hash_root,
                 }
             }
@@ -519,7 +514,6 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 parameters: HTLCCreationTransactionData {
                     sender: Address(self.rng.gen()),
                     recipient: Address(self.rng.gen()),
-                    hash_algorithm: HashAlgorithm::Blake2b,
                     hash_root: AnyHash::default(),
                     hash_count: 1,
                     timeout: 100,

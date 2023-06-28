@@ -14,7 +14,7 @@ pub extern crate nimiq_serde;
 macro_rules! create_typed_array {
     ($name: ident, $t: ty, $len: expr) => {
         #[repr(C)]
-        #[derive(Clone, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
         pub struct $name(pub [$t; $len]);
 
         impl<'a> From<&'a [$t]> for $name {
@@ -27,6 +27,12 @@ macro_rules! create_typed_array {
                 let mut a = [0 as $t; $len];
                 a.clone_from_slice(&slice[0..$len]);
                 $name(a)
+            }
+        }
+
+        impl Default for $name {
+            fn default() -> Self {
+                $name([<$t>::default(); $len])
             }
         }
 

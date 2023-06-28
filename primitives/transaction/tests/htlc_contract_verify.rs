@@ -1,11 +1,11 @@
-use nimiq_hash::{Blake2bHasher, Hasher, Sha256Hasher};
+use nimiq_hash::{sha512::Sha512Hasher, Blake2bHasher, Hasher, Sha256Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{account::AccountType, networks::NetworkId, transaction::TransactionError};
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_transaction::{
     account::{
         htlc_contract::{
-            AnyHash, CreationTransactionData, HashAlgorithm, OutgoingHTLCTransactionProof,
+            AnyHash, AnyHash32, AnyHash64, CreationTransactionData, OutgoingHTLCTransactionProof,
         },
         AccountTransactionVerification,
     },
@@ -24,7 +24,7 @@ fn prepare_outgoing_transaction() -> (Transaction, AnyHash, SignatureProof, Sign
 
     let sender_key_pair = KeyPair::from(sender_priv_key);
     let recipient_key_pair = KeyPair::from(recipient_priv_key);
-    let pre_image = AnyHash::from([1u8; 32]);
+    let pre_image = AnyHash::Blake2b(AnyHash32::from([1u8; 32]));
 
     let tx = Transaction::new_contract_creation(
         vec![],
@@ -56,8 +56,7 @@ fn it_can_verify_creation_transaction() {
     let data = CreationTransactionData {
         sender: Address::from([0u8; 20]),
         recipient: Address::from([0u8; 20]),
-        hash_algorithm: HashAlgorithm::Blake2b,
-        hash_root: AnyHash::from([0u8; 32]),
+        hash_root: AnyHash::Blake2b(AnyHash32::from([0u8; 32])),
         hash_count: 2,
         timeout: 1000,
     };
@@ -128,12 +127,19 @@ fn it_can_verify_regular_transfer() {
 
     // regular: valid Blake-2b
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
-        hash_algorithm: HashAlgorithm::Blake2b,
         hash_depth: 1,
-        hash_root: AnyHash::from(<[u8; 32]>::from(
-            Blake2bHasher::default().digest(&[0u8; 32]),
-        )),
-        pre_image: AnyHash::from([0u8; 32]),
+        hash_root: AnyHash::from(Blake2bHasher::default().digest(&[0u8; 32])),
+        pre_image: AnyHash::Blake2b(AnyHash32::from([0u8; 32])),
+        signature_proof: recipient_signature_proof.clone(),
+    };
+    tx.proof = proof.serialize_to_vec();
+    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
+
+    // regular: valid SHA-512
+    let proof = OutgoingHTLCTransactionProof::RegularTransfer {
+        hash_depth: 1,
+        hash_root: AnyHash::from(Sha512Hasher::default().digest(&[0u8; 64])),
+        pre_image: AnyHash::Sha512(AnyHash64::from([0u8; 64])),
         signature_proof: recipient_signature_proof.clone(),
     };
     tx.proof = proof.serialize_to_vec();
@@ -141,44 +147,43 @@ fn it_can_verify_regular_transfer() {
 
     // regular: valid SHA-256
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
-        hash_algorithm: HashAlgorithm::Sha256,
         hash_depth: 1,
-        hash_root: AnyHash::from(<[u8; 32]>::from(Sha256Hasher::default().digest(&[0u8; 32]))),
-        pre_image: AnyHash::from([0u8; 32]),
+        hash_root: AnyHash::from(Sha256Hasher::default().digest(&[0u8; 32])),
+        pre_image: AnyHash::Sha256(AnyHash32::from([0u8; 32])),
         signature_proof: recipient_signature_proof.clone(),
     };
     tx.proof = proof.serialize_to_vec();
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
 
     // regular: invalid hash
-    let bak = tx.proof[35];
-    tx.proof[35] = bak % 250 + 1;
+    let bak = tx.proof[36];
+    tx.proof[36] = bak % 250 + 1;
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
         Err(TransactionError::InvalidProof)
     );
-    tx.proof[35] = bak;
+    tx.proof[36] = bak;
 
     // regular: invalid algorithm
-    tx.proof[1] = 99;
+    tx.proof[2] = 99;
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
         Err(TransactionError::InvalidSerialization(
             DeserializeError::serde_custom()
         ))
     );
-    tx.proof[1] = HashAlgorithm::Sha256 as u8;
+    tx.proof[2] = 3 as u8; // 3 -> Sha256
 
     // regular: invalid signature
     // Proof is not a valid point, so Deserialize will result in an error.
-    tx.proof[72] = tx.proof[72] % 250 + 1;
+    tx.proof[73] = tx.proof[73] % 250 + 1;
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
         Err(TransactionError::InvalidProof)
     );
 
     // regular: invalid signature
-    tx.proof[72] = tx.proof[72] % 250 + 2;
+    tx.proof[73] = tx.proof[73] % 250 + 2;
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
         Err(TransactionError::InvalidProof)
@@ -186,12 +191,9 @@ fn it_can_verify_regular_transfer() {
 
     // regular: invalid over-long
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
-        hash_algorithm: HashAlgorithm::Blake2b,
         hash_depth: 1,
-        hash_root: AnyHash::from(<[u8; 32]>::from(
-            Blake2bHasher::default().digest(&[0u8; 32]),
-        )),
-        pre_image: AnyHash::from([0u8; 32]),
+        hash_root: AnyHash::from(Blake2bHasher::default().digest(&[0u8; 32])),
+        pre_image: AnyHash::Blake2b(AnyHash32::from([0u8; 32])),
         signature_proof: recipient_signature_proof,
     };
     tx.proof = proof.serialize_to_vec();
