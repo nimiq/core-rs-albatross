@@ -72,37 +72,54 @@ pub struct GenesisAccount {
     pub balance: Coin,
 }
 
+/// Struct that represents a vesting contract in the toml file that is used to generate the genesis
 #[derive(Clone, Debug, Deserialize)]
 pub struct GenesisVestingContract {
+    /// Vesting contract account address
     #[serde(deserialize_with = "deserialize_nimiq_address")]
     pub address: Address,
+    /// The one who owns the vesting contract
     #[serde(deserialize_with = "deserialize_nimiq_address")]
     pub owner: Address,
+    /// Vesting contract balance
     #[serde(deserialize_with = "deserialize_coin")]
     pub balance: Coin,
+    /// Vesting contract start time
     pub start_time: u64,
+    /// Vesting contract time step
     pub time_step: u64,
     #[serde(deserialize_with = "deserialize_coin")]
+    /// Vesting contract step amount
     pub step_amount: Coin,
+    /// Vesting contract total amount
     #[serde(deserialize_with = "deserialize_coin")]
     pub total_amount: Coin,
 }
 
+/// Struct that represents an HTLC in the toml file that is used to generate the genesis
 #[derive(Clone, Debug, Deserialize)]
 pub struct GenesisHTLC {
+    /// HTLC account address
     #[serde(deserialize_with = "deserialize_nimiq_address")]
     pub address: Address,
+    /// The one who sent the HTLC
     #[serde(deserialize_with = "deserialize_nimiq_address")]
     pub sender: Address,
+    /// The recipient of the HTLC
     #[serde(deserialize_with = "deserialize_nimiq_address")]
     pub recipient: Address,
+    /// HTLC coin balance
     #[serde(deserialize_with = "deserialize_coin")]
     pub balance: Coin,
-
+    /// HTLC hashing algorithm
     pub hash_algorithm: HashAlgorithm,
+    /// HTLC hash root
     pub hash_root: AnyHash,
+    /// HTLC hash count
     pub hash_count: u8,
+    /// HTLC timeout
     pub timeout: u64,
+    /// HTLC total amount
     pub total_amount: Coin,
 }
 

@@ -18,22 +18,22 @@ staker_address = "{{ validator['reward_address'] }}"
 balance = 1_000_000
 delegation = "{{ validator['validator_address'] }}"
 
-[[accounts]]
+[[basic_accounts]]
 address = "{{ validator['reward_address'] }}"
 balance = 10_000_000_00000
 {% endfor %}
 
-[[accounts]]
+[[basic_accounts]]
 address = "NQ37 7C3V VMN8 FRPN FXS9 PLAG JMRE 8SC6 KUSQ"
 balance = 10_000_000_00000
 
-[[accounts]]
+[[basic_accounts]]
 address = "NQ87 HKRC JYGR PJN5 KQYQ 5TM1 26XX 7TNG YT27"
 # private_key = "3336f25f5b4272a280c8eb8c1288b39bd064dfb32ebc799459f707a0e88c4e5f"
 balance = 10_000_000_00000
 
 {% for spammer in spammers %}
-[[accounts]]
+[[basic_accounts]]
 address = "{{ spammer['address'] }}"
 balance = 10_000_000_000_000
 {% endfor %}
