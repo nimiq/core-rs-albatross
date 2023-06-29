@@ -5,8 +5,9 @@ use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    address::Address, private_key::PrivateKey, public_key::PublicKey, signature::Signature,
-    signature_proof::SignatureProof, transaction::Transaction,
+    address::Address, primitives::private_key::PrivateKey, primitives::public_key::PublicKey,
+    primitives::signature::Signature, primitives::signature_proof::SignatureProof,
+    transaction::Transaction,
 };
 
 /// A keypair represents a private key and its respective public key.

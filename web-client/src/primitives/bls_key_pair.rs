@@ -2,7 +2,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_keys::SecureGenerate;
 use wasm_bindgen::prelude::*;
 
-use super::{public_key::BLSPublicKey, secret_key::BLSSecretKey};
+use super::{bls_public_key::BLSPublicKey, bls_secret_key::BLSSecretKey};
 
 /// A BLS keypair
 /// It is used by validators to vote during Tendermint rounds.

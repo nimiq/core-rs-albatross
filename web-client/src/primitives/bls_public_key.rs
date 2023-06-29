@@ -1,7 +1,7 @@
 use beserial::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-use super::secret_key::BLSSecretKey;
+use super::bls_secret_key::BLSSecretKey;
 
 /// The public part of the BLS keypair.
 /// This is specified in the staking contract to verify votes from Validators.

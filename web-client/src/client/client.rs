@@ -40,16 +40,16 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys::MessageEvent;
 
 use crate::{
-    account::{
+    client::account::{
         PlainAccount, PlainAccountArrayType, PlainAccountType, PlainStaker, PlainStakerArrayType,
         PlainStakerType, PlainValidator, PlainValidatorArrayType, PlainValidatorType,
     },
     address::{Address, AddressAnyArrayType, AddressAnyType},
-    block::{PlainBlock, PlainBlockType},
-    client_configuration::{
+    client::block::{PlainBlock, PlainBlockType},
+    client::client_configuration::{
         ClientConfiguration, PlainClientConfiguration, PlainClientConfigurationType,
     },
-    peer_info::PlainPeerInfo,
+    client::peer_info::PlainPeerInfo,
     transaction::{
         PlainTransactionData, PlainTransactionDetails, PlainTransactionDetailsArrayType,
         PlainTransactionDetailsType, PlainTransactionReceipt, PlainTransactionReceiptArrayType,

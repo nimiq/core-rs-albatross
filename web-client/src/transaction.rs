@@ -25,7 +25,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_derive::TryFromJsValue;
 
 #[cfg(feature = "primitives")]
-use crate::key_pair::KeyPair;
+use crate::primitives::key_pair::KeyPair;
 use crate::{
     address::Address,
     utils::{from_network_id, to_network_id},
