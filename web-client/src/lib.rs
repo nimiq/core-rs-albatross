@@ -5,6 +5,8 @@ mod account;
 mod address;
 #[cfg(feature = "client")]
 mod block;
+#[cfg(feature = "primitives")]
+mod bls;
 #[cfg(feature = "client")]
 mod client;
 mod client_configuration;

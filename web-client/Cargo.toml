@@ -37,6 +37,7 @@ nimiq-account = { path = "../primitives/account", default-features = false }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain-interface = { path = "../blockchain-interface" }
 nimiq-blockchain-proxy = { path = "../blockchain-proxy", default-features = false }
+nimiq-bls = {path = "../bls"}
 nimiq-consensus = { path = "../consensus", default-features = false }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
