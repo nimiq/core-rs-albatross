@@ -99,7 +99,7 @@ where
         let mut diffs = diffs.try_collect::<Vec<_>>().await?;
         // Sort the diffs by index again.
         diffs.sort_unstable_by_key(|&(i, _)| i);
-        assert!(blocks.len() == diffs.len());
+        assert_eq!(blocks.len(), diffs.len());
         Ok(diffs)
     }
     Ok(match block {
@@ -111,7 +111,7 @@ where
             let diffs =
                 get_multiple_diffs(&blocks.iter().map(|(b, _)| b).collect::<Vec<_>>(), get_diff)
                     .await?;
-            assert!(blocks.len() == diffs.len());
+            assert_eq!(blocks.len(), diffs.len());
             QueuedDiff::Buffered(
                 blocks
                     .into_iter()
@@ -121,7 +121,7 @@ where
         }
         QueuedBlock::Missing(blocks) => {
             let diffs = get_multiple_diffs(&blocks.iter().collect::<Vec<_>>(), get_diff).await?;
-            assert!(blocks.len() == diffs.len());
+            assert_eq!(blocks.len(), diffs.len());
             QueuedDiff::Missing(
                 blocks
                     .into_iter()

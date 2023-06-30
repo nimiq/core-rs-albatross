@@ -310,9 +310,9 @@ impl Accounts {
         txn: &mut WriteTransactionProxy,
         diff: TrieDiff,
     ) -> Result<TrieDiff, AccountError> {
-        let receipts = self.tree.apply_diff(txn, diff)?;
+        let diff = self.tree.apply_diff(txn, diff)?;
         self.tree.update_root(txn).ok();
-        Ok(receipts)
+        Ok(diff)
     }
 
     pub fn commit_batch(
