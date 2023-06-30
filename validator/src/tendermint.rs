@@ -375,15 +375,11 @@ where
             return Ok(precalculated_inherent.unwrap());
         }
 
-        // Construct the block from the proposal and our local state.
-        let header = proposal.message.proposal.0.clone();
-        let body = match precalculated_inherent {
-            Some(body) => body.0,
-            None => BlockProducer::next_macro_body(&blockchain, &header),
-        };
-        let block = Block::Macro(MacroBlock {
-            header,
-            body: Some(body),
+        // Construct the block from the proposal.
+        // We add the block body later once the proposal has been verified.
+        let mut block = Block::Macro(MacroBlock {
+            header: proposal.message.proposal.0.clone(),
+            body: None,
             justification: None,
         });
 
@@ -418,6 +414,14 @@ where
         } else {
             // Get the blockchain state.
             let state = blockchain.state();
+
+            // Compute block body if it is not cached.
+            let mut macro_block = block.unwrap_macro_ref_mut();
+            let body = match precalculated_inherent {
+                Some(body) => body.0,
+                None => BlockProducer::next_macro_body(&blockchain, &macro_block.header),
+            };
+            macro_block.body = Some(body);
 
             // Get a write transaction to the database, even if we don't intend to actually write
             // anything out.

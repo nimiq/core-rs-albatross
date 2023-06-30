@@ -272,6 +272,24 @@ impl Block {
         }
     }
 
+    /// Unwraps the block and returns a mutable reference to the underlying Macro block.
+    pub fn unwrap_macro_ref_mut(&mut self) -> &mut MacroBlock {
+        if let Block::Macro(ref mut block) = self {
+            block
+        } else {
+            unreachable!()
+        }
+    }
+
+    /// Unwraps the block and returns a mutable reference to the underlying Micro block.
+    pub fn unwrap_micro_ref_mut(&mut self) -> &mut MicroBlock {
+        if let Block::Micro(ref mut block) = self {
+            block
+        } else {
+            unreachable!()
+        }
+    }
+
     /// Unwraps the block and returns the underlying Macro block.
     pub fn unwrap_macro(self) -> MacroBlock {
         if let Block::Macro(block) = self {
