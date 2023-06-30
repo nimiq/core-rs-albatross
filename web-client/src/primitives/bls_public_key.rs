@@ -1,4 +1,4 @@
-use beserial::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 use super::bls_secret_key::BLSSecretKey;
@@ -19,7 +19,7 @@ impl BLSPublicKey {
 
     /// Deserializes a public key from a byte array.
     pub fn unserialize(bytes: &[u8]) -> Result<BLSPublicKey, JsError> {
-        let key = nimiq_bls::PublicKey::deserialize(&mut &*bytes)?;
+        let key = nimiq_bls::PublicKey::deserialize_from_vec(bytes)?;
         Ok(BLSPublicKey::from_native(key))
     }
 
@@ -45,7 +45,7 @@ impl BLSPublicKey {
     /// Formats the public key into a hex string.
     #[wasm_bindgen(js_name = toHex)]
     pub fn to_hex(&self) -> String {
-        let vec = BLSPublicKey::serialize(&self);
+        let vec = BLSPublicKey::serialize(self);
         hex::encode(vec)
     }
 }

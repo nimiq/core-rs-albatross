@@ -1,5 +1,5 @@
-use beserial::{Deserialize, Serialize};
 use nimiq_keys::SecureGenerate;
+use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 /// The secret part of the BLS keypair.
@@ -18,7 +18,7 @@ impl BLSSecretKey {
 
     /// Deserializes a private key from a byte array.
     pub fn unserialize(bytes: &[u8]) -> Result<BLSSecretKey, JsError> {
-        let key = nimiq_bls::SecretKey::deserialize(&mut &*bytes)?;
+        let key = nimiq_bls::SecretKey::deserialize_from_vec(bytes)?;
         Ok(BLSSecretKey::from_native(key))
     }
 
@@ -40,10 +40,8 @@ impl BLSSecretKey {
     #[wasm_bindgen(js_name = fromHex)]
     pub fn from_hex(hex: &str) -> Result<BLSSecretKey, JsError> {
         let raw = hex::decode(hex)?;
-        // 95 and 96 byres are valid sizes.
-        if !(raw.len() == nimiq_bls::SecretKey::SIZE
-            || raw.len() + 1 as usize == nimiq_bls::SecretKey::SIZE)
-        {
+
+        if raw.len() != nimiq_bls::SecretKey::SIZE {
             return Err(JsError::new(
                 format!("BLS Secret key primitive: Invalid length: {}", raw.len()).as_str(),
             ));
@@ -55,7 +53,7 @@ impl BLSSecretKey {
     /// Formats the private key into a hex string.
     #[wasm_bindgen(js_name = toHex)]
     pub fn to_hex(&self) -> String {
-        let vec = BLSSecretKey::serialize(&self);
+        let vec = BLSSecretKey::serialize(self);
         hex::encode(vec)
     }
 }
