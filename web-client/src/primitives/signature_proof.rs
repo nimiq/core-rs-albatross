@@ -2,7 +2,8 @@ use nimiq_serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    address::Address, primitives::public_key::PublicKey, primitives::signature::Signature,
+    address::Address,
+    primitives::{public_key::PublicKey, signature::Signature},
 };
 
 /// A signature proof represents a signature together with its public key and the public key's merkle path.
