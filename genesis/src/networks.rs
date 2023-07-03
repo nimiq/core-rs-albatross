@@ -10,7 +10,9 @@ use nimiq_genesis_builder::{GenesisBuilder, GenesisBuilderError, GenesisInfo};
 use nimiq_hash::Blake2bHash;
 pub use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::trie::TrieItem;
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::Deserialize;
+#[cfg(feature = "genesis-override")]
+use nimiq_serde::Serialize;
 
 #[derive(Clone, Debug)]
 struct GenesisData {

@@ -1,4 +1,4 @@
-use std::{fs, io, sync::Arc};
+use std::{fs, sync::Arc};
 
 use nimiq_block::Block;
 #[cfg(feature = "full-consensus")]
@@ -45,6 +45,7 @@ use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
 use nimiq_zkp_component::zkp_component::{
     ZKPComponent as AbstractZKPComponent, ZKPComponentProxy as AbstractZKPComponentProxy,
 };
+#[cfg(feature = "zkp-prover")]
 use nimiq_zkp_primitives::NanoZKPError;
 use parking_lot::{Mutex, RwLock};
 #[cfg(feature = "zkp-prover")]
@@ -179,10 +180,9 @@ impl ClientInner {
                 "Proving keys missing, please place them in this folder: {:?}.",
                 config.zkp.prover_keys_path
             );
-            return Err(Error::NanoZKP(NanoZKPError::Filesystem(io::Error::new(
-                io::ErrorKind::Other,
-                "Proving keys do not exist.",
-            ))));
+            return Err(Error::NanoZKP(NanoZKPError::Filesystem(
+                std::io::Error::new(std::io::ErrorKind::Other, "Proving keys do not exist."),
+            )));
         }
 
         // Initialize clock

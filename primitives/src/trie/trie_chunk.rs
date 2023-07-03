@@ -1,6 +1,6 @@
 use std::fmt::{self, Display};
 
-use serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize};
 
 use crate::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
 

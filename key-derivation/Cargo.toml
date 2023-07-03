@@ -22,7 +22,7 @@ regex = "1"
 serde = "1.0"
 
 nimiq-hash = { path = "../hash" }
-nimiq-keys = { path = "../keys" }
+nimiq-keys = { path = "../keys", features = ["serde-derive"] }
 nimiq-serde = { path = "../serde" }
 
 [dev-dependencies]

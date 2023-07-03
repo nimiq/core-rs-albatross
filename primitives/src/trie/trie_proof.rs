@@ -2,7 +2,7 @@ use std::{cmp::Ordering, collections::BTreeMap};
 
 use log::error;
 use nimiq_hash::{Blake2bHash, Hash};
-use serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize};
 
 use crate::{key_nibbles::KeyNibbles, trie::trie_proof_node::TrieProofNode};
 
