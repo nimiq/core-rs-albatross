@@ -59,6 +59,7 @@ impl Config {
             // to avoid duplicated messages
             .message_id_fn(|message| {
                 let mut s = DefaultHasher::new();
+                message.topic.hash(&mut s);
                 message.data.hash(&mut s);
                 MessageId::from(s.finish().to_string())
             })
