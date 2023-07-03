@@ -30,35 +30,59 @@ use toml::de::Error as TomlError;
 
 mod config;
 
+/// Errors that can be reported building the genesis
 #[derive(Debug, Error)]
 pub enum GenesisBuilderError {
+    /// No VRF seed to generate the genesis block.
     #[error("No VRF seed to generate genesis block")]
     NoVrfSeed,
+    /// Serialization failed.
     #[error("Serialization failed")]
     SerializingError(#[from] DeserializeError),
+    /// I/O error
     #[error("I/O error")]
     IoError(#[from] IoError),
+    /// Failure at parsing TOML file
     #[error("Failed to parse TOML file")]
     TomlError(#[from] TomlError),
+    /// Failure at staking
     #[error("Failed to stake")]
     StakingError(#[from] AccountError),
 }
 
+/// Output of the Genesis builder that represents the Genesis block and its
+/// state.
 #[derive(Clone)]
 pub struct GenesisInfo {
+    /// The genesis block.
     pub block: Block,
+    /// The genesis block hash.
     pub hash: Blake2bHash,
+    /// The genesis accounts Trie.
     pub accounts: Vec<TrieItem>,
 }
 
+/// Auxiliary struct for generating `GenesisInfo`.
 pub struct GenesisBuilder {
+    /// The genesis seed message.
     pub seed_message: Option<String>,
+    /// The genesis block timestamp.
     pub timestamp: Option<OffsetDateTime>,
+    /// The genesis block VRF seed.
     pub vrf_seed: Option<VrfSeed>,
+    /// The parent hash of the genesis block.
+    pub parent_hash: Option<Blake2bHash>,
+    /// The parent election hash of the genesis block.
+    pub parent_election_hash: Option<Blake2bHash>,
+    /// The set of validators for the genesis state.
     pub validators: Vec<config::GenesisValidator>,
+    /// The set of stakers for the genesis state.
     pub stakers: Vec<config::GenesisStaker>,
+    /// The set of basic accounts for the genesis state.
     pub basic_accounts: Vec<config::GenesisAccount>,
+    /// The set of vesting accounts for the genesis state.
     pub vesting_accounts: Vec<config::GenesisVestingContract>,
+    /// The set of HTLC accounts for the genesis state.
     pub htlc_accounts: Vec<config::GenesisHTLC>,
 }
 
@@ -76,6 +100,8 @@ impl GenesisBuilder {
             seed_message: None,
             timestamp: None,
             vrf_seed: None,
+            parent_election_hash: None,
+            parent_hash: None,
             validators: vec![],
             stakers: vec![],
             basic_accounts: vec![],
@@ -107,6 +133,16 @@ impl GenesisBuilder {
 
     pub fn with_vrf_seed(&mut self, vrf_seed: VrfSeed) -> &mut Self {
         self.vrf_seed = Some(vrf_seed);
+        self
+    }
+
+    pub fn with_parent_election_hash(&mut self, hash: Blake2bHash) -> &mut Self {
+        self.parent_election_hash = Some(hash);
+        self
+    }
+
+    pub fn with_parent_hash(&mut self, hash: Blake2bHash) -> &mut Self {
+        self.parent_hash = Some(hash);
         self
     }
 
@@ -154,6 +190,8 @@ impl GenesisBuilder {
             seed_message,
             timestamp,
             vrf_seed,
+            parent_election_hash,
+            parent_hash,
             mut validators,
             mut stakers,
             mut basic_accounts,
@@ -163,6 +201,8 @@ impl GenesisBuilder {
         vrf_seed.map(|vrf_seed| self.with_vrf_seed(vrf_seed));
         seed_message.map(|msg| self.with_seed_message(msg));
         timestamp.map(|t| self.with_timestamp(t));
+        parent_election_hash.map(|hash| self.with_parent_election_hash(hash));
+        parent_hash.map(|hash| self.with_parent_hash(hash));
         self.validators.append(&mut validators);
         self.stakers.append(&mut stakers);
         self.basic_accounts.append(&mut basic_accounts);
@@ -175,6 +215,8 @@ impl GenesisBuilder {
     pub fn generate(&self, env: DatabaseProxy) -> Result<GenesisInfo, GenesisBuilderError> {
         // Initialize the environment.
         let timestamp = self.timestamp.unwrap_or_else(OffsetDateTime::now_utc);
+        let parent_election_hash = self.parent_election_hash.clone().unwrap_or_default();
+        let parent_hash = self.parent_hash.clone().unwrap_or_default();
 
         // Initialize the accounts.
         let accounts = Accounts::new(env.clone());
@@ -295,8 +337,8 @@ impl GenesisBuilder {
             block_number: 0,
             round: 0,
             timestamp: timestamp.unix_timestamp() as u64 * 1000,
-            parent_hash: [0u8; 32].into(),
-            parent_election_hash: [0u8; 32].into(),
+            parent_hash,
+            parent_election_hash,
             interlink: Some(vec![]),
             seed,
             extra_data: supply.serialize_to_vec(),

@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 
 use nimiq_bls::PublicKey as BlsPublicKey;
+use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
@@ -8,28 +9,44 @@ use nimiq_vrf::VrfSeed;
 use serde::{de::Error, Deserialize, Deserializer};
 use time::OffsetDateTime;
 
+/// Struct that defines the genesis configuration that is going to be parsed
+/// from the genesis TOML files.
 #[derive(Clone, Debug, Deserialize)]
 pub struct GenesisConfig {
+    /// Seed message.
     #[serde(default)]
     pub seed_message: Option<String>,
 
+    /// VRF seed for the genesis block.
     pub vrf_seed: Option<VrfSeed>,
 
+    /// Hash of the parent election block for the genesis block.
+    pub parent_election_hash: Option<Blake2bHash>,
+
+    /// Hash of the parent block for the genesis block.
+    pub parent_hash: Option<Blake2bHash>,
+
+    /// Timestamp for the genesis block.
     #[serde(deserialize_with = "deserialize_timestamp")]
     pub timestamp: Option<OffsetDateTime>,
 
+    /// The set of validators for the genesis state.
     #[serde(default)]
     pub validators: Vec<GenesisValidator>,
 
+    /// The set of stakers for the genesis state.
     #[serde(default)]
     pub stakers: Vec<GenesisStaker>,
 
+    /// Set of basic accounts for the genesis state.
     #[serde(default)]
     pub basic_accounts: Vec<GenesisAccount>,
 
+    /// Set of vesting accounts for the genesis state.
     #[serde(default)]
     pub vesting_accounts: Vec<GenesisVestingContract>,
 
+    /// Set of HTLC accounts for the genesis state.
     #[serde(default)]
     pub htlc_accounts: Vec<GenesisHTLC>,
 }
