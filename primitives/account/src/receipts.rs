@@ -62,33 +62,33 @@ pub type TransactionOperationReceipt = OperationReceipt<TransactionReceipt>;
 pub type InherentOperationReceipt = OperationReceipt<InherentReceipt>;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct CompleteReceipts {
+pub struct Receipts {
     pub transactions: Vec<TransactionOperationReceipt>,
     pub inherents: Vec<InherentOperationReceipt>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[repr(u8)]
-pub enum Receipts {
-    Complete(CompleteReceipts),
-    Incomplete(TrieDiff),
+pub enum RevertInfo {
+    Receipts(Receipts),
+    Diff(TrieDiff),
 }
 
-impl From<CompleteReceipts> for Receipts {
-    fn from(receipts: CompleteReceipts) -> Receipts {
-        Receipts::Complete(receipts)
+impl From<Receipts> for RevertInfo {
+    fn from(receipts: Receipts) -> RevertInfo {
+        RevertInfo::Receipts(receipts)
     }
 }
 
-impl From<TrieDiff> for Receipts {
-    fn from(diff: TrieDiff) -> Receipts {
-        Receipts::Incomplete(diff)
+impl From<TrieDiff> for RevertInfo {
+    fn from(diff: TrieDiff) -> RevertInfo {
+        RevertInfo::Diff(diff)
     }
 }
 
 // TODO Implement sparse serialization for Receipts
 
-impl IntoDatabaseValue for Receipts {
+impl IntoDatabaseValue for RevertInfo {
     fn database_byte_size(&self) -> usize {
         self.serialized_size()
     }
@@ -98,7 +98,7 @@ impl IntoDatabaseValue for Receipts {
     }
 }
 
-impl FromDatabaseValue for Receipts {
+impl FromDatabaseValue for RevertInfo {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
     where
         Self: Sized,

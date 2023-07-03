@@ -23,8 +23,8 @@ use nimiq_trie::{
 
 use crate::{
     Account, AccountInherentInteraction, AccountPruningInteraction, AccountReceipt,
-    AccountTransactionInteraction, BlockLogger, BlockState, CompleteReceipts, DataStore,
-    InherentLogger, InherentOperationReceipt, OperationReceipt, Receipts, ReservedBalance,
+    AccountTransactionInteraction, BlockLogger, BlockState, DataStore, InherentLogger,
+    InherentOperationReceipt, OperationReceipt, Receipts, ReservedBalance, RevertInfo,
     TransactionLog, TransactionOperationReceipt, TransactionReceipt,
 };
 
@@ -298,7 +298,7 @@ impl Accounts {
         inherents: &[Inherent],
         block_state: &BlockState,
         block_logger: &mut BlockLogger,
-    ) -> Result<CompleteReceipts, AccountError> {
+    ) -> Result<Receipts, AccountError> {
         let receipts =
             self.commit_batch(txn, transactions, inherents, block_state, block_logger)?;
         self.tree.update_root(txn).expect("Tree must be complete");
@@ -322,9 +322,9 @@ impl Accounts {
         inherents: &[Inherent],
         block_state: &BlockState,
         block_logger: &mut BlockLogger,
-    ) -> Result<CompleteReceipts, AccountError> {
+    ) -> Result<Receipts, AccountError> {
         assert!(self.is_complete(Some(txn)), "Tree must be complete");
-        let mut receipts = CompleteReceipts::default();
+        let mut receipts = Receipts::default();
 
         for transaction in transactions {
             let receipt = self.commit_transaction(
@@ -546,11 +546,11 @@ impl Accounts {
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_state: &BlockState,
-        receipts: Receipts,
+        revert_info: RevertInfo,
         block_logger: &mut BlockLogger,
     ) -> Result<(), AccountError> {
-        match receipts {
-            Receipts::Complete(receipts) => {
+        match revert_info {
+            RevertInfo::Receipts(receipts) => {
                 self.revert_batch(
                     txn,
                     transactions,
@@ -560,7 +560,7 @@ impl Accounts {
                     block_logger,
                 )?;
             }
-            Receipts::Incomplete(diff) => {
+            RevertInfo::Diff(diff) => {
                 self.revert_diff(txn, diff)?;
             }
         }
@@ -583,7 +583,7 @@ impl Accounts {
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_state: &BlockState,
-        receipts: CompleteReceipts,
+        receipts: Receipts,
         block_logger: &mut BlockLogger,
     ) -> Result<(), AccountError> {
         // Revert inherents in reverse order.

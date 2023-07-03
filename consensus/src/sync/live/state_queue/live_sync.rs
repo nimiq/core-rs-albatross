@@ -232,16 +232,12 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
         }
     }
 
-    fn num_peers(&self) -> usize {
-        self.diff_queue.num_peers()
-    }
-
-    fn include_micro_bodies(&self) -> bool {
-        true
-    }
-
     fn peers(&self) -> Vec<N::PeerId> {
         self.diff_queue.peers()
+    }
+
+    fn num_peers(&self) -> usize {
+        self.diff_queue.num_peers()
     }
 
     fn add_peer(&self, peer_id: N::PeerId) {
@@ -254,6 +250,10 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
         S: Stream<Item = (Block, N::PeerId, Option<N::PubsubId>)> + Send + 'static,
     {
         self.diff_queue.add_block_stream(block_stream)
+    }
+
+    fn include_micro_bodies(&self) -> bool {
+        true
     }
 
     fn state_complete(&self) -> bool {

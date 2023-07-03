@@ -119,7 +119,7 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
                 self.on_block_processed(&hash);
                 if result == PushResult::Extended || result == PushResult::Rebranched {
                     return Some(LiveSyncEvent::PushEvent(
-                        LiveSyncPushEvent::AcceptedBufferedBlock(hash, self.buffered_blocks_len()),
+                        LiveSyncPushEvent::AcceptedBufferedBlock(hash, self.num_buffered_blocks()),
                     ));
                 }
             }
@@ -153,16 +153,12 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
         None
     }
 
-    fn num_peers(&self) -> usize {
-        self.request_component.num_peers()
-    }
-
-    fn include_micro_bodies(&self) -> bool {
-        self.config.include_micro_bodies
-    }
-
     fn peers(&self) -> Vec<N::PeerId> {
         self.request_component.peers()
+    }
+
+    fn num_peers(&self) -> usize {
+        self.request_component.num_peers()
     }
 
     fn add_peer(&self, peer_id: N::PeerId) {
@@ -177,5 +173,9 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
         // We need to safely remove the old block stream first.
         let prev_block_stream = mem::replace(&mut self.block_stream, empty().boxed());
         self.block_stream = select(prev_block_stream, block_stream).boxed();
+    }
+
+    fn include_micro_bodies(&self) -> bool {
+        self.config.include_micro_bodies
     }
 }

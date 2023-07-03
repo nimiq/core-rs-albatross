@@ -8,6 +8,7 @@ use std::{
     task::{Context, Poll},
 };
 
+use crate::sync::peer_list::PeerList;
 use futures::{stream::BoxStream, Stream, StreamExt};
 use nimiq_block::{Block, BlockHeaderTopic, BlockTopic};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction, ForkEvent};
@@ -15,6 +16,7 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId};
 use nimiq_primitives::policy::Policy;
+use parking_lot::RwLock;
 
 use self::block_request_component::BlockRequestComponent;
 use super::{
@@ -53,7 +55,7 @@ pub struct BlockQueue<N: Network> {
     network: Arc<N>,
 
     /// The Peer Tracking and Request Component.
-    pub(crate) request_component: BlockRequestComponent<N>,
+    request_component: BlockRequestComponent<N>,
 
     /// A stream of blocks.
     /// This includes blocks received via gossipsub, but can also include other sources.
@@ -112,11 +114,8 @@ impl<N: Network> BlockQueue<N> {
         let current_macro_height = Policy::last_macro_block(blockchain.read().block_number());
         let blockchain_rx = blockchain.read().notifier_as_stream();
         let fork_rx = blockchain.read().fork_notifier_as_stream();
-        let request_component = BlockRequestComponent::new(
-            network.subscribe_events(),
-            Arc::clone(&network),
-            config.include_micro_bodies,
-        );
+        let request_component =
+            BlockRequestComponent::new(Arc::clone(&network), config.include_micro_bodies);
 
         Self {
             config,
@@ -130,20 +129,6 @@ impl<N: Network> BlockQueue<N> {
             blocks_pending_push: BTreeSet::new(),
             current_macro_height,
         }
-    }
-
-    /// Returns an iterator over the buffered blocks
-    pub fn buffered_blocks(&self) -> impl Iterator<Item = (u32, Vec<&Block>)> {
-        self.buffer.iter().map(|(block_number, blocks)| {
-            (
-                *block_number,
-                blocks.values().map(|(block, _pubsub_id)| block).collect(),
-            )
-        })
-    }
-
-    pub fn buffered_blocks_len(&self) -> usize {
-        self.buffer.len()
     }
 
     pub fn on_block_processed(&mut self, block_hash: &Blake2bHash) {
@@ -584,6 +569,26 @@ impl<N: Network> BlockQueue<N> {
                     .validate_message::<BlockHeaderTopic>(id, acceptance);
             }
         }
+    }
+
+    /// Returns an iterator over the buffered blocks
+    pub fn buffered_blocks(&self) -> impl Iterator<Item = (u32, Vec<&Block>)> {
+        self.buffer.iter().map(|(block_number, blocks)| {
+            (
+                *block_number,
+                blocks.values().map(|(block, _pubsub_id)| block).collect(),
+            )
+        })
+    }
+
+    /// Returns the number of buffered blocks.
+    pub(crate) fn num_buffered_blocks(&self) -> usize {
+        self.buffer.len()
+    }
+
+    /// Returns the list of peers tracked by this component.
+    pub(crate) fn peer_list(&self) -> Arc<RwLock<PeerList<N>>> {
+        self.request_component.peer_list()
     }
 }
 

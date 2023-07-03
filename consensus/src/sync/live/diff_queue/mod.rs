@@ -1,7 +1,7 @@
+use std::ops::RangeTo;
 use std::{
     collections::HashSet,
     future::Future,
-    ops,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -9,14 +9,16 @@ use std::{
 
 use futures::{
     future::BoxFuture,
-    stream::{BoxStream, FuturesOrdered, FuturesUnordered},
+    stream::{FuturesOrdered, FuturesUnordered},
     Stream, StreamExt, TryStreamExt,
 };
 use parking_lot::RwLock;
 
+use crate::sync::live::block_queue::live_sync::PushOpResult;
+use crate::sync::live::queue::LiveSyncQueue;
+use crate::sync::peer_list::PeerList;
+use crate::sync::syncer::LiveSyncEvent;
 use nimiq_block::Block;
-use nimiq_blockchain::Blockchain;
-use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
     network::Network,
@@ -30,7 +32,6 @@ use super::block_queue::{BlockAndId, BlockQueue, QueuedBlock};
 use self::diff_request_component::DiffRequestComponent;
 
 pub mod diff_request_component;
-pub mod live_sync;
 
 /// The max number of partial trie diffs requests per peer.
 pub const MAX_REQUEST_RESPONSE_PARTIAL_DIFFS: u32 = 100;
@@ -39,7 +40,7 @@ pub const MAX_REQUEST_RESPONSE_PARTIAL_DIFFS: u32 = 100;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestPartialDiff {
     pub block_hash: Blake2bHash,
-    pub range: ops::RangeTo<KeyNibbles>,
+    pub range: RangeTo<KeyNibbles>,
 }
 
 /// The response for trie diff requests.
@@ -135,54 +136,66 @@ where
 }
 
 pub struct DiffQueue<N: Network> {
-    /// Reference to the blockchain.
-    blockchain: Arc<RwLock<Blockchain>>,
-
     /// The BlockQueue component.
     block_queue: BlockQueue<N>,
 
     /// The chunk request component.
     /// We use it to request chunks from up-to-date peers
-    pub(crate) diff_request_component: DiffRequestComponent<N>,
+    diff_request_component: DiffRequestComponent<N>,
 
+    /// The pending TreeDiff requests to peers.
     diffs: FuturesOrdered<BoxFuture<'static, Result<QueuedDiff<N>, ()>>>,
-
-    blockchain_rx: BoxStream<'static, BlockchainEvent>,
 }
 
 impl<N: Network> DiffQueue<N> {
-    pub fn with_block_queue(
-        network: Arc<N>,
-        blockchain: Arc<RwLock<Blockchain>>,
-        block_queue: BlockQueue<N>,
-    ) -> Self {
-        let blockchain_rx = blockchain.read().notifier_as_stream();
-
-        let diff_request_component = DiffRequestComponent::new(
-            Arc::clone(&network),
-            network.subscribe_events(),
-            block_queue.request_component.peer_list(),
-        );
+    pub fn with_block_queue(network: Arc<N>, block_queue: BlockQueue<N>) -> Self {
+        let diff_request_component =
+            DiffRequestComponent::new(Arc::clone(&network), block_queue.peer_list());
         Self {
-            blockchain,
             block_queue,
             diff_request_component,
             diffs: FuturesOrdered::new(),
-            blockchain_rx,
         }
     }
 
-    pub fn remove_invalid_blocks(&mut self, invalid_blocks: &mut HashSet<Blake2bHash>) {
+    pub(crate) fn remove_invalid_blocks(&mut self, invalid_blocks: &mut HashSet<Blake2bHash>) {
         // We remove invalid blocks from the block queue.
         self.block_queue.remove_invalid_blocks(invalid_blocks);
     }
 
-    pub fn on_block_processed(&mut self, hash: &Blake2bHash) {
-        self.block_queue.on_block_processed(hash)
+    pub(crate) fn process_push_result(
+        &mut self,
+        item: PushOpResult<N>,
+    ) -> Option<LiveSyncEvent<N::PeerId>> {
+        self.block_queue.process_push_result(item)
     }
 
-    pub fn buffered_blocks_len(&self) -> usize {
-        self.block_queue.buffered_blocks_len()
+    pub(crate) fn peers(&self) -> Vec<N::PeerId> {
+        self.block_queue.peers()
+    }
+
+    pub(crate) fn peer_list(&self) -> Arc<RwLock<PeerList<N>>> {
+        self.block_queue.peer_list()
+    }
+
+    pub(crate) fn num_peers(&self) -> usize {
+        self.block_queue.num_peers()
+    }
+
+    pub(crate) fn add_peer(&self, peer_id: N::PeerId) {
+        self.block_queue.add_peer(peer_id)
+    }
+
+    /// Adds an additional block stream by replacing the current block stream with a `select` of both streams.
+    pub(crate) fn add_block_stream<S>(&mut self, block_stream: S)
+    where
+        S: Stream<Item = (Block, N::PeerId, Option<N::PubsubId>)> + Send + 'static,
+    {
+        self.block_queue.add_block_stream(block_stream)
+    }
+
+    pub(crate) fn num_buffered_blocks(&self) -> usize {
+        self.block_queue.num_buffered_blocks()
     }
 }
 
@@ -190,46 +203,13 @@ impl<N: Network> Stream for DiffQueue<N> {
     type Item = QueuedDiff<N>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        // Poll the blockchain stream and set key start to complete if the accounts trie is
-        // complete and we have passed a macro block.
-        // Reset on a rebranch (since we potentially revert to an incomplete state).
-        while let Poll::Ready(Some(event)) = self.blockchain_rx.poll_next_unpin(cx) {
-            match event {
-                BlockchainEvent::Finalized(_) | BlockchainEvent::EpochFinalized(_) => {
-                    /*
-                    let blockchain_state_complete =
-                        self.blockchain.read().state.accounts.is_complete(None);
-                    if !self.start_key.is_complete() && blockchain_state_complete {
-                        // Mark state sync as complete after passing a macro block.
-                        info!("Finished state sync, trie complete.");
-                        self.start_key = ChunkRequestState::Complete;
-                        self.buffer.clear();
-                        self.buffer_size = 0;
-                    } else if self.start_key.is_complete() && !blockchain_state_complete {
-                        // Start state sync if the blockchain state was reinitialized after pushing a macro block.
-                        info!("Trie incomplete, starting state sync.");
-                        self.start_key = ChunkRequestState::Reset;
-                    }
-                    */
-                }
-                BlockchainEvent::Rebranched(_, _) => {
-                    if !self.blockchain.read().state.accounts.is_complete(None) {
-                        info!("Reset due to rebranch.");
-                    }
-                }
-                _ => {}
-            }
-        }
-
         let mut block_queue_done = false;
 
-        // 1. Receive blocks from BlockQueue.
+        // Receive blocks from BlockQueue.
         loop {
             match self.block_queue.poll_next_unpin(cx) {
                 Poll::Ready(Some(block)) => {
-                    let get_diff = self
-                        .diff_request_component
-                        .request_diff2(..KeyNibbles::ROOT);
+                    let get_diff = self.diff_request_component.request_diff(..KeyNibbles::ROOT);
                     self.diffs
                         .push_back(Box::pin(augment_block(block, get_diff)));
                 }
@@ -241,7 +221,7 @@ impl<N: Network> Stream for DiffQueue<N> {
             }
         }
 
-        // 2. Check for blocks augmented with diffs.
+        // Check for blocks augmented with diffs.
         loop {
             match self.diffs.poll_next_unpin(cx) {
                 Poll::Ready(Some(Ok(diff))) => return Poll::Ready(Some(diff)),

@@ -324,6 +324,7 @@ impl<N: Network> Handle<N, ResponsePartialDiff, Arc<RwLock<Blockchain>>> for Req
         _peer_id: N::PeerId,
         context: &Arc<RwLock<Blockchain>>,
     ) -> ResponsePartialDiff {
+        // TODO return the requested range only
         let blockchain = context.read();
         let txn = blockchain.read_transaction();
         match blockchain

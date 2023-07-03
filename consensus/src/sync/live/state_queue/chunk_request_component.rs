@@ -5,10 +5,7 @@ use std::{
 };
 
 use futures::{FutureExt, Stream, StreamExt};
-use nimiq_network_interface::{
-    network::{Network, NetworkEvent, SubscribeEvents},
-    request::RequestError,
-};
+use nimiq_network_interface::{network::Network, request::RequestError};
 use nimiq_primitives::key_nibbles::KeyNibbles;
 use parking_lot::RwLock;
 
@@ -31,17 +28,12 @@ pub struct ChunkRequestComponent<N: Network> {
     sync_queue: SyncQueue<N, RequestChunk, (ResponseChunk, RequestChunk, N::PeerId)>,
     // These peers will be shared across the block request component and this component.
     peers: Arc<RwLock<PeerList<N>>>,
-    network_event_rx: SubscribeEvents<N::PeerId>,
 }
 
 impl<N: Network> ChunkRequestComponent<N> {
     const NUM_PENDING_CHUNKS: usize = 1;
 
-    pub fn new(
-        network: Arc<N>,
-        network_event_rx: SubscribeEvents<N::PeerId>,
-        peers: Arc<RwLock<PeerList<N>>>,
-    ) -> Self {
+    pub fn new(network: Arc<N>, peers: Arc<RwLock<PeerList<N>>>) -> Self {
         let sync_queue = SyncQueue::new(
             network,
             vec![],
@@ -58,31 +50,11 @@ impl<N: Network> ChunkRequestComponent<N> {
             },
         );
 
-        ChunkRequestComponent {
-            sync_queue,
-            peers,
-            network_event_rx,
-        }
-    }
-
-    pub fn add_peer(&mut self, peer_id: N::PeerId) -> bool {
-        self.peers.write().add_peer(peer_id)
+        ChunkRequestComponent { sync_queue, peers }
     }
 
     pub fn remove_peer(&mut self, peer_id: &N::PeerId) {
         self.peers.write().remove_peer(peer_id);
-    }
-
-    pub fn num_peers(&self) -> usize {
-        self.peers.read().len()
-    }
-
-    pub fn len(&self) -> usize {
-        self.peers.read().len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
     }
 
     pub fn has_pending_requests(&self) -> bool {
@@ -106,15 +78,7 @@ impl<N: Network> Stream for ChunkRequestComponent<N> {
     type Item = (ResponseChunk, KeyNibbles, N::PeerId);
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        // 1. Poll network events to remove peers.
-        while let Poll::Ready(Some(result)) = self.network_event_rx.poll_next_unpin(cx) {
-            if let Ok(NetworkEvent::PeerLeft(peer_id)) = result {
-                // Remove peers that left.
-                self.peers.write().remove_peer(&peer_id);
-            }
-        }
-
-        // 2. Poll self.sync_queue, return results.
+        // Poll self.sync_queue, return results.
         while let Poll::Ready(Some(result)) = self.sync_queue.poll_next_unpin(cx) {
             match result {
                 Ok((response, request, peer_id)) => {

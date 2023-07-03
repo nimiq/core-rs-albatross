@@ -117,8 +117,7 @@ impl<N: Network> SyncerProxy<N> {
             BlockchainProxy::Light(_) => unreachable!(),
         };
 
-        let diff_queue =
-            DiffQueue::with_block_queue(Arc::clone(&network), Arc::clone(&blockchain), block_queue);
+        let diff_queue = DiffQueue::with_block_queue(Arc::clone(&network), block_queue);
 
         let state_queue = StateQueue::with_diff_queue(
             Arc::clone(&network),

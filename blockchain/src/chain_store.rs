@@ -1,4 +1,4 @@
-use nimiq_account::Receipts;
+use nimiq_account::RevertInfo;
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{BlockchainError, ChainInfo, Direction};
 use nimiq_database::{
@@ -18,8 +18,8 @@ pub struct ChainStore {
     block_table: TableProxy,
     /// A database of block hashes indexed by their block number.
     height_idx: TableProxy,
-    /// A database of the transaction receipts for a block, by their corresponding block hashes.
-    receipt_table: TableProxy,
+    /// A database of revert infos indexed by their corresponding block hashes.
+    revert_table: TableProxy,
     /// A database of accounts trie diffs for a block.
     accounts_diff_table: TableProxy,
 }
@@ -28,7 +28,7 @@ impl ChainStore {
     const CHAIN_DB_NAME: &'static str = "ChainData";
     const BLOCK_DB_NAME: &'static str = "Block";
     const HEIGHT_IDX_NAME: &'static str = "HeightIndex";
-    const RECEIPT_DB_NAME: &'static str = "Receipts";
+    const REVERT_DB_NAME: &'static str = "Receipts";
     const ACCOUNTS_DIFF_DB_NAME: &'static str = "AccountsDiff";
 
     const HEAD_KEY: &'static str = "head";
@@ -40,15 +40,15 @@ impl ChainStore {
             Self::HEIGHT_IDX_NAME.to_string(),
             TableFlags::DUPLICATE_KEYS | TableFlags::DUP_FIXED_SIZE_VALUES | TableFlags::UINT_KEYS,
         );
-        let receipt_table =
-            db.open_table_with_flags(Self::RECEIPT_DB_NAME.to_string(), TableFlags::UINT_KEYS);
+        let revert_table =
+            db.open_table_with_flags(Self::REVERT_DB_NAME.to_string(), TableFlags::UINT_KEYS);
         let accounts_diff_table = db.open_table(Self::ACCOUNTS_DIFF_DB_NAME.to_string());
         ChainStore {
             db,
             chain_table,
             block_table,
             height_idx,
-            receipt_table,
+            revert_table,
             accounts_diff_table,
         }
     }
@@ -57,7 +57,7 @@ impl ChainStore {
         txn.clear_database(&self.chain_table);
         txn.clear_database(&self.block_table);
         txn.clear_database(&self.height_idx);
-        txn.clear_database(&self.receipt_table);
+        txn.clear_database(&self.revert_table);
         txn.clear_database(&self.accounts_diff_table);
     }
 
@@ -570,20 +570,20 @@ impl ChainStore {
         }
     }
 
-    pub fn put_receipts(
+    pub fn put_revert_info(
         &self,
         txn: &mut WriteTransactionProxy,
         block_height: u32,
-        receipts: &Receipts,
+        receipts: &RevertInfo,
     ) {
-        txn.put_reserve(&self.receipt_table, &block_height, receipts);
+        txn.put_reserve(&self.revert_table, &block_height, receipts);
     }
 
-    pub fn get_receipts(
+    pub fn get_revert_info(
         &self,
         block_height: u32,
         txn_option: Option<&TransactionProxy>,
-    ) -> Option<Receipts> {
+    ) -> Option<RevertInfo> {
         let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -593,12 +593,12 @@ impl ChainStore {
             }
         };
 
-        txn.get(&self.receipt_table, &block_height)
+        txn.get(&self.revert_table, &block_height)
     }
 
-    pub fn clear_receipts(&self, txn: &mut WriteTransactionProxy) {
-        let mut cursor = WriteTransaction::cursor(txn, &self.receipt_table);
-        let mut pos: Option<(u32, Receipts)> = cursor.first();
+    pub fn clear_revert_infos(&self, txn: &mut WriteTransactionProxy) {
+        let mut cursor = WriteTransaction::cursor(txn, &self.revert_table);
+        let mut pos: Option<(u32, RevertInfo)> = cursor.first();
 
         while pos.is_some() {
             cursor.remove();

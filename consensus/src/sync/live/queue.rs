@@ -80,11 +80,9 @@ pub trait LiveSyncQueue<N: Network>: Stream<Item = Self::QueueResult> + Send + U
 
     fn process_push_result(&mut self, item: Self::PushResult) -> Option<LiveSyncEvent<N::PeerId>>;
 
-    fn num_peers(&self) -> usize;
-
-    fn include_micro_bodies(&self) -> bool;
-
     fn peers(&self) -> Vec<N::PeerId>;
+
+    fn num_peers(&self) -> usize;
 
     fn add_peer(&self, peer_id: N::PeerId);
 
@@ -92,6 +90,8 @@ pub trait LiveSyncQueue<N: Network>: Stream<Item = Self::QueueResult> + Send + U
     fn add_block_stream<S>(&mut self, block_stream: S)
     where
         S: Stream<Item = (Block, N::PeerId, Option<N::PubsubId>)> + Send + 'static;
+
+    fn include_micro_bodies(&self) -> bool;
 
     fn state_complete(&self) -> bool {
         true

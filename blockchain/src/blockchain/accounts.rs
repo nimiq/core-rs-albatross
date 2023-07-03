@@ -1,5 +1,5 @@
 use nimiq_account::{
-    Account, Accounts, BlockLogger, BlockState, Receipts, TransactionOperationReceipt,
+    Account, Accounts, BlockLogger, BlockState, RevertInfo, TransactionOperationReceipt,
 };
 use nimiq_block::{Block, BlockError, SkipBlockInfo};
 use nimiq_blockchain_interface::PushError;
@@ -46,27 +46,18 @@ impl Blockchain {
                 // Initialize a vector to store the inherents.
                 let inherents = self.create_macro_block_inherents(macro_block);
 
-                // Commit block to AccountsTree and create the receipts.
-                let receipts: Result<Receipts, _> = if accounts.is_complete(Some(txn)) {
-                    accounts
-                        .commit(txn, &[], &inherents, &block_state, block_logger)
-                        .map(Into::into)
+                // Commit block to AccountsTree.
+                if accounts.is_complete(Some(txn)) {
+                    accounts.commit(txn, &[], &inherents, &block_state, block_logger)?;
+                } else if let Some(diff) = diff {
+                    accounts.commit_incomplete(txn, diff)?;
                 } else {
-                    if let Some(diff) = diff {
-                        accounts.commit_incomplete(txn, diff).map(Into::into)
-                    } else {
-                        return Err(PushError::MissingAccountsTrieDiff);
-                    }
-                };
-
-                // Check if the receipts contain an error.
-                if let Err(e) = receipts {
-                    return Err(PushError::AccountsError(e));
+                    return Err(PushError::MissingAccountsTrieDiff);
                 }
 
                 // Macro blocks are final and receipts for the previous batch are no longer necessary
                 // as rebranching across this block is not possible.
-                self.chain_store.clear_receipts(txn.raw());
+                self.chain_store.clear_revert_infos(txn.raw());
 
                 // Store the transactions and the inherents into the History tree.
                 let mut total_tx_size = 0;
@@ -101,7 +92,7 @@ impl Blockchain {
                     self.create_slash_inherents(&body.fork_proofs, skip_block_info, Some(txn));
 
                 // Commit block to AccountsTree and create the receipts.
-                let receipts: Result<Receipts, _> = if accounts.is_complete(Some(txn)) {
+                let revert_info: RevertInfo = if accounts.is_complete(Some(txn)) {
                     accounts
                         .commit(
                             txn,
@@ -109,25 +100,16 @@ impl Blockchain {
                             &inherents,
                             &block_state,
                             block_logger,
-                        )
-                        .map(Into::into)
+                        )?
+                        .into()
+                } else if let Some(diff) = diff {
+                    accounts.commit_incomplete(txn, diff)?.into()
                 } else {
-                    // We should not emit logs when syncing.
-                    if let Some(diff) = diff {
-                        accounts.commit_incomplete(txn, diff).map(Into::into)
-                    } else {
-                        return Err(PushError::MissingAccountsTrieDiff);
-                    }
-                };
-
-                // Check if the receipts contain an error.
-                let receipts = match receipts {
-                    Err(e) => return Err(PushError::AccountsError(e)),
-                    Ok(receipts) => receipts,
+                    return Err(PushError::MissingAccountsTrieDiff);
                 };
 
                 // Check that the transaction results match the ones in the block.
-                if let Receipts::Complete(receipts) = &receipts {
+                if let RevertInfo::Receipts(receipts) = &revert_info {
                     assert_eq!(receipts.transactions.len(), body.transactions.len());
                     for (index, receipt) in receipts.transactions.iter().enumerate() {
                         let matches = match receipt {
@@ -146,11 +128,11 @@ impl Blockchain {
                     }
                 }
 
-                // Store receipts.
-                self.chain_store.put_receipts(
+                // Store revert info.
+                self.chain_store.put_revert_info(
                     txn.raw(),
                     micro_block.header.block_number,
-                    &receipts,
+                    &revert_info,
                 );
 
                 // Store the transactions and the inherents into the History tree.
@@ -212,11 +194,11 @@ impl Blockchain {
         let skip_block_info = SkipBlockInfo::from_micro_block(block);
         let inherents = self.create_slash_inherents(&body.fork_proofs, skip_block_info, Some(txn));
 
-        // Get the receipts for this block.
-        let receipts = self
+        // Get the revert info for this block.
+        let revert_info = self
             .chain_store
-            .get_receipts(block.block_number(), Some(txn))
-            .expect("Failed to revert - missing receipts");
+            .get_revert_info(block.block_number(), Some(txn))
+            .expect("Failed to revert - missing revert info");
 
         // Revert the block from AccountsTree.
         let block_state = BlockState::new(block.block_number(), block.header.timestamp);
@@ -225,7 +207,7 @@ impl Blockchain {
             &body.get_raw_transactions(),
             &inherents,
             &block_state,
-            receipts,
+            revert_info,
             block_logger,
         );
         if let Err(e) = result {

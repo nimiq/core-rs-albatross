@@ -95,11 +95,7 @@ fn get_incomplete_live_sync(
         QueueConfig::default(),
     );
 
-    let diff_queue = DiffQueue::with_block_queue(
-        Arc::clone(&network),
-        Arc::clone(&incomplete_blockchain),
-        block_queue,
-    );
+    let diff_queue = DiffQueue::with_block_queue(Arc::clone(&network), block_queue);
 
     let state_queue = StateQueue::with_diff_queue(
         Arc::clone(&network),
@@ -331,8 +327,8 @@ async fn can_sync_state() {
         ),
         "Should immediately receive block"
     );
-    assert_eq!(live_sync.queue().buffered_chunks_len(), 0);
-    assert_eq!(live_sync.queue().buffered_blocks_len(), 0);
+    assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
     let size = mock_node.blockchain.read().state.accounts.size();
     let num_chunks = size.ceiling_div(Policy::state_chunks_max_size() as u64);
@@ -350,8 +346,8 @@ async fn can_sync_state() {
             ),
             "Should receive and accept chunks"
         );
-        assert_eq!(live_sync.queue().buffered_chunks_len(), 0);
-        assert_eq!(live_sync.queue().buffered_blocks_len(), 0);
+        assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
+        assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
         let blockchain_rg = incomplete_blockchain.read();
         log::info!(
@@ -386,8 +382,8 @@ async fn can_sync_state() {
         ),
         "Should receive missing blocks"
     );
-    assert_eq!(live_sync.queue().buffered_chunks_len(), 0);
-    assert_eq!(live_sync.queue().buffered_blocks_len(), 1);
+    assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 1);
 
     // Will apply the buffered block.
     assert!(
@@ -402,8 +398,8 @@ async fn can_sync_state() {
         ),
         "Should apply buffered block"
     );
-    assert_eq!(live_sync.queue().buffered_chunks_len(), 0);
-    assert_eq!(live_sync.queue().buffered_blocks_len(), 0);
+    assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
     push_micro_block(&producer, &mock_node.blockchain);
     gossip_head_block(&block_tx, mock_id.clone(), &mock_node.blockchain).await;
@@ -421,8 +417,8 @@ async fn can_sync_state() {
         ),
         "Should apply announced block"
     );
-    assert_eq!(live_sync.queue().buffered_chunks_len(), 0);
-    assert_eq!(live_sync.queue().buffered_blocks_len(), 0);
+    assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
     let blockchain_rg = incomplete_blockchain.read();
     assert!(blockchain_rg.state.accounts.is_complete(None));
@@ -485,8 +481,8 @@ async fn revert_chunks_for_state_live_sync() {
         ),
         "Should immediately receive block"
     );
-    assert_eq!(live_sync.queue().buffered_chunks_len(), 0);
-    assert_eq!(live_sync.queue().buffered_blocks_len(), 0);
+    assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
     info!("Applying chunk #{}", 0);
     assert!(
@@ -501,8 +497,8 @@ async fn revert_chunks_for_state_live_sync() {
         ),
         "Should receive and accept chunks"
     );
-    assert_eq!(live_sync.queue().buffered_chunks_len(), 0);
-    assert_eq!(live_sync.queue().buffered_blocks_len(), 0);
+    assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
     let blockchain_rg = incomplete_blockchain.read();
     log::info!(
@@ -545,8 +541,8 @@ async fn revert_chunks_for_state_live_sync() {
         ),
         "Should immediately receive block"
     );
-    assert_eq!(live_sync.queue().buffered_chunks_len(), 1);
-    assert_eq!(live_sync.queue().buffered_blocks_len(), 1);
+    assert_eq!(live_sync.queue().num_buffered_chunks(), 1);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 1);
 
     info!("Applying chunk #{}", 2);
     assert!(
@@ -561,8 +557,8 @@ async fn revert_chunks_for_state_live_sync() {
         ),
         "Should receive and accept chunks"
     );
-    assert_eq!(live_sync.queue().buffered_chunks_len(), 0);
-    assert_eq!(live_sync.queue().buffered_blocks_len(), 0);
+    assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
     info!("Applying chunk #{}", 3);
     assert!(
@@ -801,8 +797,8 @@ async fn can_remove_chunks_related_to_invalid_blocks() {
     );
 
     // Check buffer cleared.
-    assert_eq!(live_sync.queue().buffered_chunks_len(), 0);
-    assert_eq!(live_sync.queue().buffered_blocks_len(), 0);
+    assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 }
 
 // Buffer clearing after macro blocks
@@ -889,8 +885,8 @@ async fn clears_buffer_after_macro_block() {
     );
 
     // Check buffer.
-    assert_eq!(live_sync.queue().buffered_chunks_len(), 1);
-    assert_eq!(live_sync.queue().buffered_blocks_len(), 0);
+    assert_eq!(live_sync.queue().num_buffered_chunks(), 1);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
     produce_macro_blocks(&producer, &mock_node.blockchain, 1);
     gossip_head_block(&block_tx, mock_id.clone(), &mock_node.blockchain).await;
@@ -912,8 +908,8 @@ async fn clears_buffer_after_macro_block() {
     );
 
     // Check buffer.
-    assert_eq!(live_sync.queue().buffered_chunks_len(), 1);
-    assert_eq!(live_sync.queue().buffered_blocks_len(), 1);
+    assert_eq!(live_sync.queue().num_buffered_chunks(), 1);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 1);
 
     assert!(
         matches!(
@@ -944,8 +940,8 @@ async fn clears_buffer_after_macro_block() {
     );
 
     // Check buffer.
-    assert_eq!(live_sync.queue().buffered_chunks_len(), 0);
-    assert_eq!(live_sync.queue().buffered_blocks_len(), 0);
+    assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 }
 
 // Check correct reply for incomplete nodes

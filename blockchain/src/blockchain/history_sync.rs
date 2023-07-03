@@ -252,7 +252,7 @@ impl Blockchain {
 
         // Macro blocks are final and receipts for the previous batch are no longer necessary
         // as rebranching across this block is not possible.
-        this.chain_store.clear_receipts(&mut txn);
+        this.chain_store.clear_revert_infos(&mut txn);
 
         // Store the new extended transactions into the History tree.
         this.history_store.add_to_history(

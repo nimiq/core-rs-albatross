@@ -175,11 +175,8 @@ impl<N: Network> StateQueue<N> {
         diff_queue: DiffQueue<N>,
         config: QueueConfig,
     ) -> Self {
-        let chunk_request_component = ChunkRequestComponent::new(
-            Arc::clone(&network),
-            network.subscribe_events(),
-            diff_queue.diff_request_component.peer_list(),
-        );
+        let chunk_request_component =
+            ChunkRequestComponent::new(Arc::clone(&network), diff_queue.peer_list());
         let current_macro_height = Policy::last_macro_block(blockchain.read().block_number());
         let blockchain_rx = blockchain.read().notifier_as_stream();
 
@@ -231,22 +228,6 @@ impl<N: Network> StateQueue<N> {
     /// When reset this component uses the blockchain state missing range start key.
     pub fn reset_chunk_request_chain(&mut self) {
         self.start_key = ChunkRequestState::Reset;
-    }
-
-    pub fn on_block_processed(&mut self, hash: &Blake2bHash) {
-        self.diff_queue.on_block_processed(hash)
-    }
-
-    pub fn buffered_chunks_len(&self) -> usize {
-        self.buffer_size
-    }
-
-    pub fn buffered_blocks_len(&self) -> usize {
-        self.diff_queue.buffered_blocks_len()
-    }
-
-    pub fn chunk_request_state(&self) -> &ChunkRequestState {
-        &self.start_key
     }
 
     /// Requests a chunk from the peers starting at the starting key from this queue.
@@ -475,6 +456,18 @@ impl<N: Network> StateQueue<N> {
             self.start_key = ChunkRequestState::with_key_start(start_key);
         }
     }
+
+    pub fn num_buffered_chunks(&self) -> usize {
+        self.buffer_size
+    }
+
+    pub fn num_buffered_blocks(&self) -> usize {
+        self.diff_queue.num_buffered_blocks()
+    }
+
+    pub fn chunk_request_state(&self) -> &ChunkRequestState {
+        &self.start_key
+    }
 }
 
 impl<N: Network> Stream for StateQueue<N> {
@@ -511,7 +504,7 @@ impl<N: Network> Stream for StateQueue<N> {
             }
         }
 
-        // 1. Receive chunks from ChunkRequestComponent.
+        // Receive chunks from ChunkRequestComponent.
         loop {
             match self.chunk_request_component.poll_next_unpin(cx) {
                 Poll::Ready(Some((chunk, start_key, peer_id))) => {
@@ -525,12 +518,12 @@ impl<N: Network> Stream for StateQueue<N> {
             }
         }
 
-        // 2. Request chunks via ChunkRequestComponent.
+        // Request chunks via ChunkRequestComponent.
         if !self.chunk_request_component.has_pending_requests() && self.num_peers() > 0 {
             self.request_chunk();
         }
 
-        // 3. Receive blocks with diffs from DiffQueue.
+        // Receive blocks with diffs from DiffQueue.
         match self.diff_queue.poll_next_unpin(cx) {
             Poll::Ready(Some(queued_block)) => {
                 return Poll::Ready(Some(self.on_blocks_received(queued_block)));

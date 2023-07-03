@@ -2,7 +2,7 @@ use std::{fmt::Debug, ops::Deref};
 
 use nimiq_account::{
     Account, AccountInherentInteraction, AccountReceipt, AccountTransactionInteraction, Accounts,
-    BlockLog, BlockLogger, BlockState, CompleteReceipts, DataStore, InherentLogger, TransactionLog,
+    BlockLog, BlockLogger, BlockState, DataStore, InherentLogger, Receipts, TransactionLog,
 };
 use nimiq_database::{
     traits::{Database, WriteTransaction},
@@ -133,7 +133,7 @@ impl TestCommitRevert {
         inherents: &[Inherent],
         block_state: &BlockState,
         block_logger: &mut BlockLogger,
-    ) -> Result<CompleteReceipts, AccountError> {
+    ) -> Result<Receipts, AccountError> {
         self.commit_revert(transactions, inherents, block_state, block_logger, true)
     }
 
@@ -144,7 +144,7 @@ impl TestCommitRevert {
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_state: &BlockState,
-    ) -> CompleteReceipts {
+    ) -> Receipts {
         self.commit_revert(
             transactions,
             inherents,
@@ -162,7 +162,7 @@ impl TestCommitRevert {
         block_state: &BlockState,
         block_logger: &mut BlockLogger,
         keep_commit: bool,
-    ) -> Result<CompleteReceipts, AccountError> {
+    ) -> Result<Receipts, AccountError> {
         let mut raw_txn = self.accounts.env.write_transaction();
         let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
 

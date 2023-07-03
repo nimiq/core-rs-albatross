@@ -39,7 +39,7 @@ pub enum BlockRequestComponentEvent {
 pub struct BlockRequestComponent<N: Network> {
     sync_queue:
         SyncQueue<N, (u32, Blake2bHash, Vec<Blake2bHash>, bool), (u32, Blake2bHash, Vec<Block>)>, // requesting missing blocks from peers
-    pub(crate) peers: Arc<RwLock<PeerList<N>>>,
+    peers: Arc<RwLock<PeerList<N>>>,
     network_event_rx: SubscribeEvents<N::PeerId>,
     include_micro_bodies: bool,
 }
@@ -47,12 +47,9 @@ pub struct BlockRequestComponent<N: Network> {
 impl<N: Network> BlockRequestComponent<N> {
     const NUM_PENDING_BLOCKS: usize = 5;
 
-    pub fn new(
-        network_event_rx: SubscribeEvents<N::PeerId>,
-        network: Arc<N>,
-        include_micro_bodies: bool,
-    ) -> Self {
+    pub fn new(network: Arc<N>, include_micro_bodies: bool) -> Self {
         let peers = Arc::new(RwLock::new(PeerList::default()));
+        let network_event_rx = network.subscribe_events();
         Self {
             sync_queue: SyncQueue::new(
                 network,
@@ -148,7 +145,7 @@ impl<N: Network> Stream for BlockRequestComponent<N> {
     type Item = BlockRequestComponentEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        // 1. Poll network events to remove peers.
+        // Poll network events to remove peers.
         while let Poll::Ready(Some(result)) = self.network_event_rx.poll_next_unpin(cx) {
             if let Ok(NetworkEvent::PeerLeft(peer_id)) = result {
                 // Remove peers that left.
@@ -156,7 +153,7 @@ impl<N: Network> Stream for BlockRequestComponent<N> {
             }
         }
 
-        // 3. Poll self.sync_queue, return results.
+        // Poll self.sync_queue, return results.
         while let Poll::Ready(Some(result)) = self.sync_queue.poll_next_unpin(cx) {
             match result {
                 Ok((target_block_number, target_hash, blocks)) => {
