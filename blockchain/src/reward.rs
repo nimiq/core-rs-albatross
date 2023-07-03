@@ -6,8 +6,6 @@ use nimiq_primitives::{coin::Coin, policy::Policy};
 /// Parses the genesis supply and timestamp from the genesis block. We require both values to
 /// calculate the block rewards.
 pub fn genesis_parameters(genesis_block: &MacroHeader) -> (Coin, u64) {
-    assert_eq!(genesis_block.block_number, 0);
-
     let extra_data = &genesis_block.extra_data;
 
     // Try reading supply from genesis block.

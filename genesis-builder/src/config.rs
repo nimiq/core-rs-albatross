@@ -24,6 +24,10 @@ pub struct GenesisConfig {
     /// Hash of the parent block for the genesis block.
     pub parent_hash: Option<Blake2bHash>,
 
+    /// The genesis block number.
+    #[serde(default)]
+    pub block_number: u32,
+
     /// Timestamp for the genesis block.
     #[serde(with = "time::serde::rfc3339::option")]
     pub timestamp: Option<OffsetDateTime>,

@@ -56,6 +56,8 @@ pub struct Blockchain {
     pub(crate) genesis_supply: Coin,
     /// The timestamp at the genesis block. This is needed to calculate the rewards.
     pub(crate) genesis_timestamp: u64,
+    /// The Genesis block number
+    pub(crate) genesis_block_number: u32,
 }
 
 /// Contains various blockchain configuration knobs
@@ -107,6 +109,14 @@ impl Blockchain {
         genesis_block: Block,
         genesis_accounts: Vec<TrieItem>,
     ) -> Result<Self, BlockchainError> {
+        if !Policy::is_election_block_at(genesis_block.block_number()) {
+            log::error!(
+                genesis_block_number = genesis_block.block_number(),
+                "The genesis block number must correspond to an election block"
+            );
+            return Err(BlockchainError::InvalidGenesisBlock);
+        }
+
         let chain_store = ChainStore::new(env.clone());
         let history_store = HistoryStore::new(env.clone());
 
@@ -154,6 +164,8 @@ impl Blockchain {
         {
             return Err(BlockchainError::InvalidGenesisBlock);
         }
+
+        let genesis_block_number = genesis_block.block_number();
 
         let (genesis_supply, genesis_timestamp) =
             genesis_parameters(&genesis_block.unwrap_macro().header);
@@ -271,6 +283,7 @@ impl Blockchain {
             metrics: Arc::new(BlockchainMetrics::default()),
             genesis_supply,
             genesis_timestamp,
+            genesis_block_number,
         })
     }
 
@@ -289,6 +302,7 @@ impl Blockchain {
         let head_hash = genesis_block.hash();
 
         let genesis_macro_block = genesis_block.unwrap_macro_ref().clone();
+        let genesis_block_number = genesis_block.block_number();
         let current_slots = genesis_macro_block.get_validators().expect("Slots missing");
         let (genesis_supply, genesis_timestamp) = genesis_parameters(&genesis_macro_block.header);
 
@@ -335,11 +349,16 @@ impl Blockchain {
             metrics: Arc::new(BlockchainMetrics::default()),
             genesis_supply,
             genesis_timestamp,
+            genesis_block_number,
         })
     }
 
     pub fn get_genesis_parameters(&self) -> (Coin, u64) {
         (self.genesis_supply, self.genesis_timestamp)
+    }
+
+    pub fn get_genesis_block_number(&self) -> u32 {
+        self.genesis_block_number
     }
 
     pub fn read_transaction(&self) -> TransactionProxy {

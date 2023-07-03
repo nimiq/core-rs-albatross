@@ -73,7 +73,10 @@ fn it_can_produce_micro_blocks() {
         Ok(PushResult::Extended)
     );
 
-    assert_eq!(blockchain.read().block_number(), 1);
+    assert_eq!(
+        blockchain.read().block_number(),
+        1 + blockchain.read().get_genesis_block_number()
+    );
 
     // Create fork at #1.0
     let fork_proof = {
@@ -112,7 +115,10 @@ fn it_can_produce_micro_blocks() {
         Ok(PushResult::Extended)
     );
 
-    assert_eq!(blockchain.read().block_number(), 2);
+    assert_eq!(
+        blockchain.read().block_number(),
+        2 + blockchain.read().get_genesis_block_number()
+    );
 
     // #2.1: Empty micro block (wrong prev_hash)
     let bc = blockchain.upgradable_read();
@@ -130,7 +136,10 @@ fn it_can_produce_micro_blocks() {
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
     );
-    assert_eq!(blockchain.read().block_number(), 3);
+    assert_eq!(
+        blockchain.read().block_number(),
+        3 + blockchain.read().get_genesis_block_number()
+    );
 
     // #2.2: Empty micro block
     let bc = blockchain.upgradable_read();
@@ -146,7 +155,10 @@ fn it_can_produce_micro_blocks() {
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
     );
-    assert_eq!(blockchain.read().block_number(), 4);
+    assert_eq!(
+        blockchain.read().block_number(),
+        4 + blockchain.read().get_genesis_block_number()
+    );
 }
 
 #[test]
@@ -398,7 +410,10 @@ fn it_can_revert_create_staker_transaction() {
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
     );
-    assert_eq!(blockchain.read().block_number(), 1);
+    assert_eq!(
+        blockchain.read().block_number(),
+        1 + blockchain.read().get_genesis_block_number()
+    );
 
     let bc = blockchain.upgradable_read();
 
@@ -417,7 +432,10 @@ fn it_can_revert_create_staker_transaction() {
         Ok(PushResult::Extended)
     );
 
-    assert_eq!(blockchain.read().block_number(), 2);
+    assert_eq!(
+        blockchain.read().block_number(),
+        2 + blockchain.read().get_genesis_block_number()
+    );
 
     // One block with staking transactions
 
@@ -431,7 +449,7 @@ fn it_can_revert_create_staker_transaction() {
         Some(address),
         100_000_000.try_into().unwrap(),
         100.try_into().unwrap(),
-        1,
+        blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -455,7 +473,10 @@ fn it_can_revert_create_staker_transaction() {
         Ok(PushResult::Extended)
     );
 
-    assert_eq!(blockchain.read().block_number(), 3);
+    assert_eq!(
+        blockchain.read().block_number(),
+        3 + blockchain.read().get_genesis_block_number()
+    );
 
     let bc = blockchain.upgradable_read();
 
@@ -505,7 +526,10 @@ fn it_can_revert_failed_transactions() {
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
     );
-    assert_eq!(blockchain.read().block_number(), 1);
+    assert_eq!(
+        blockchain.read().block_number(),
+        1 + blockchain.read().get_genesis_block_number()
+    );
 
     let bc = blockchain.upgradable_read();
 
@@ -524,7 +548,10 @@ fn it_can_revert_failed_transactions() {
         Ok(PushResult::Extended)
     );
 
-    assert_eq!(blockchain.read().block_number(), 2);
+    assert_eq!(
+        blockchain.read().block_number(),
+        2 + blockchain.read().get_genesis_block_number()
+    );
 
     // One block with staking transactions
 
@@ -538,7 +565,7 @@ fn it_can_revert_failed_transactions() {
         Some(address.clone()),
         100_000_000.try_into().unwrap(),
         200.try_into().unwrap(),
-        1,
+        blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -552,7 +579,7 @@ fn it_can_revert_failed_transactions() {
         Some(address),
         100_000_000.try_into().unwrap(),
         100.try_into().unwrap(),
-        1,
+        blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -593,7 +620,10 @@ fn it_can_revert_failed_transactions() {
         Coin::from_u64_unchecked(999899999700)
     );
 
-    assert_eq!(bc.block_number(), 3);
+    assert_eq!(
+        bc.block_number(),
+        3 + blockchain.read().get_genesis_block_number()
+    );
 
     let mut txn = bc.write_transaction();
     let result = bc.revert_blocks(3, &mut txn);
@@ -639,7 +669,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
         1,
         Coin::from_u64_unchecked(1000),
         Coin::from_u64_unchecked(100),
-        1,
+        blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -658,7 +688,10 @@ fn it_can_revert_failed_vesting_contract_transaction() {
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
     );
-    assert_eq!(blockchain.read().block_number(), 1);
+    assert_eq!(
+        blockchain.read().block_number(),
+        1 + blockchain.read().get_genesis_block_number()
+    );
 
     // Now we need to verify the contract was created and it has the right balance
     let bc = blockchain.read();
@@ -701,7 +734,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
         address,
         Coin::from_u64_unchecked(2000),
         Coin::from_u64_unchecked(100),
-        1,
+        blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -723,7 +756,10 @@ fn it_can_revert_failed_vesting_contract_transaction() {
         Ok(PushResult::Extended)
     );
 
-    assert_eq!(blockchain.read().block_number(), 2);
+    assert_eq!(
+        blockchain.read().block_number(),
+        2 + blockchain.read().get_genesis_block_number()
+    );
 
     let block_transactions = block.body.unwrap().transactions;
 
@@ -800,7 +836,7 @@ fn it_can_revert_reactivate_transaction() {
         address.clone(),
         &signing_key_pair,
         100.try_into().unwrap(),
-        1,
+        blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -828,7 +864,10 @@ fn it_can_revert_reactivate_transaction() {
         Ok(PushResult::Extended)
     );
 
-    assert_eq!(blockchain.read().block_number(), 1);
+    assert_eq!(
+        blockchain.read().block_number(),
+        1 + blockchain.read().get_genesis_block_number()
+    );
 
     //Now create the reactivate transaction
 
@@ -838,7 +877,7 @@ fn it_can_revert_reactivate_transaction() {
         address,
         &signing_key_pair,
         100.try_into().unwrap(),
-        1,
+        blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -862,7 +901,10 @@ fn it_can_revert_reactivate_transaction() {
         Ok(PushResult::Extended)
     );
 
-    assert_eq!(blockchain.read().block_number(), 2);
+    assert_eq!(
+        blockchain.read().block_number(),
+        2 + blockchain.read().get_genesis_block_number()
+    );
 
     let bc = blockchain.upgradable_read();
 
@@ -901,7 +943,7 @@ fn it_can_consume_all_validator_deposit() {
         Address::from([0u8; 20]),
         None,
         Coin::ZERO,
-        1,
+        blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -911,7 +953,7 @@ fn it_can_consume_all_validator_deposit() {
         &key_pair,
         &cold_key_pair,
         Coin::ZERO,
-        1,
+        blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -925,7 +967,7 @@ fn it_can_consume_all_validator_deposit() {
         10,
         Coin::from_u64_unchecked(1000),
         Coin::ZERO,
-        1,
+        blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -1109,7 +1151,7 @@ fn it_can_revert_failed_delete_validator() {
         Address::from([0u8; 20]),
         None,
         Coin::ZERO,
-        1,
+        blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -1119,7 +1161,7 @@ fn it_can_revert_failed_delete_validator() {
         &key_pair,
         &cold_key_pair,
         Coin::ZERO,
-        1,
+        blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -1133,7 +1175,7 @@ fn it_can_revert_failed_delete_validator() {
         10,
         Coin::from_u64_unchecked(1000),
         Coin::ZERO,
-        1,
+        blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -1273,7 +1315,7 @@ fn it_can_revert_basic_and_create_contracts_txns() {
         address,
         100.try_into().unwrap(),
         Coin::ZERO,
-        1,
+        blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -1288,7 +1330,7 @@ fn it_can_revert_basic_and_create_contracts_txns() {
         1,
         Coin::from_u64_unchecked(1000),
         Coin::from_u64_unchecked(100),
-        1,
+        blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -1303,7 +1345,7 @@ fn it_can_revert_basic_and_create_contracts_txns() {
         address,
         100.try_into().unwrap(),
         Coin::ZERO,
-        1,
+        blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
     )
     .unwrap();

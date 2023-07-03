@@ -70,6 +70,8 @@ pub struct GenesisBuilder {
     pub seed_message: Option<String>,
     /// The genesis block timestamp.
     pub timestamp: Option<OffsetDateTime>,
+    /// The genesis block number.
+    pub block_number: u32,
     /// The genesis block VRF seed.
     pub vrf_seed: Option<VrfSeed>,
     /// The parent hash of the genesis block.
@@ -109,6 +111,7 @@ impl GenesisBuilder {
             basic_accounts: vec![],
             vesting_accounts: vec![],
             htlc_accounts: vec![],
+            block_number: 0,
         }
     }
 
@@ -194,6 +197,7 @@ impl GenesisBuilder {
             vrf_seed,
             parent_election_hash,
             parent_hash,
+            block_number,
             mut validators,
             mut stakers,
             mut basic_accounts,
@@ -210,7 +214,7 @@ impl GenesisBuilder {
         self.basic_accounts.append(&mut basic_accounts);
         self.vesting_accounts.append(&mut vesting_accounts);
         self.htlc_accounts.append(&mut htlc_accounts);
-
+        self.block_number = block_number;
         Ok(self)
     }
 
@@ -336,7 +340,7 @@ impl GenesisBuilder {
         // The header
         let header = MacroHeader {
             version: 1,
-            block_number: 0,
+            block_number: self.block_number,
             round: 0,
             timestamp: timestamp.unix_timestamp() as u64 * 1000,
             parent_hash,
