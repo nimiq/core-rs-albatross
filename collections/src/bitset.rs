@@ -5,7 +5,7 @@ use std::{
 };
 
 use serde::{
-    de::{SeqAccess, Visitor},
+    de::{Error as _, SeqAccess, Visitor},
     ser::SerializeSeq,
     Deserialize, Deserializer, Serialize, Serializer,
 };
@@ -375,13 +375,19 @@ impl Serialize for BitSet {
     where
         S: Serializer,
     {
-        let mut seq = serializer.serialize_seq(Some(self.store.len()))?;
-
-        for elem in self.store.iter() {
-            seq.serialize_element(elem)?;
+        if serializer.is_human_readable() {
+            let mut seq = serializer.serialize_seq(Some(self.len()))?;
+            for elem in self.iter() {
+                seq.serialize_element(&elem)?;
+            }
+            seq.end()
+        } else {
+            let mut seq = serializer.serialize_seq(Some(self.store.len()))?;
+            for elem in &self.store {
+                seq.serialize_element(elem)?;
+            }
+            seq.end()
         }
-
-        seq.end()
     }
 }
 
@@ -390,7 +396,44 @@ impl<'de> Deserialize<'de> for BitSet {
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_seq(BitSetVisitor)
+        if deserializer.is_human_readable() {
+            deserializer.deserialize_seq(BitSetVisitorHumanReadable)
+        } else {
+            deserializer.deserialize_seq(BitSetVisitor)
+        }
+    }
+}
+
+struct BitSetVisitorHumanReadable;
+
+impl<'de> Visitor<'de> for BitSetVisitorHumanReadable {
+    type Value = BitSet;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "an array of non-duplicate unsigned integers")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<BitSet, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let mut result = BitSet::new();
+        while let Some(elem) = seq.next_element::<usize>()? {
+            if elem > 65536 {
+                return Err(A::Error::custom(format!(
+                    "bitset element {} too large",
+                    elem,
+                )));
+            }
+            if result.contains(elem) {
+                return Err(A::Error::custom(format!(
+                    "duplicate bitset element {}",
+                    elem,
+                )));
+            }
+            result.insert(elem);
+        }
+        Ok(result)
     }
 }
 
@@ -451,6 +494,43 @@ mod tests {
         let set = BitSet::deserialize_from_vec(&bin).unwrap();
         assert_eq!(19, set.len());
         assert_eq!(sample_bitset(), set);
+    }
+
+    #[test]
+    fn it_can_correctly_serialize_human_readably() {
+        assert_eq!(serde_json::to_string(&BitSet::new()).unwrap(), "[]");
+        assert_eq!(
+            serde_json::to_string(&sample_bitset()).unwrap(),
+            "[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,70]",
+        );
+    }
+
+    #[test]
+    fn it_can_correctly_deserialize_human_readably() {
+        assert_eq!(serde_json::from_str::<BitSet>("[]").unwrap(), BitSet::new());
+        assert_eq!(
+            serde_json::from_str::<BitSet>("[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,70]")
+                .unwrap(),
+            sample_bitset(),
+        );
+        assert_eq!(
+            serde_json::from_str::<BitSet>("[70,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]")
+                .unwrap(),
+            sample_bitset(),
+        );
+        assert_eq!(
+            serde_json::from_str::<BitSet>("[70,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1]")
+                .unwrap(),
+            sample_bitset(),
+        );
+    }
+
+    #[test]
+    fn it_can_error_on_human_readable_deserialization() {
+        assert!(serde_json::from_str::<BitSet>("1").is_err()); // invalid type
+        assert!(serde_json::from_str::<BitSet>("\"1\"").is_err()); // invalid type
+        assert!(serde_json::from_str::<BitSet>("[1,1]").is_err()); // duplicate element
+        assert!(serde_json::from_str::<BitSet>("[1000000000]").is_err()); // too large element
     }
 
     #[test]
