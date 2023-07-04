@@ -8,7 +8,7 @@ hex = "0.4"
 log = { package = "tracing", version = "0.1" }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
-time = { version = "0.3", features = ["parsing"] }
+time = { version = "0.3", features = ["parsing", "serde"] }
 toml = "0.7"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
@@ -19,6 +19,6 @@ nimiq-database = { path = "../database" }
 nimiq-hash = { path = "../hash" }
 nimiq-serde = { path = "../serde" }
 nimiq-keys = { path = "../keys", features = ["serde-derive"] }
-nimiq-primitives = { path = "../primitives" }
+nimiq-primitives = { path = "../primitives", features = ["serde-derive"] }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-vrf = { path = "../vrf", features = ["serde-derive"] }
