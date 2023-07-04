@@ -3,6 +3,7 @@ use std::{
     cmp::Ordering,
     fmt::{Debug, Error, Formatter},
     io, str,
+    io::Write as _,
 };
 
 use blake2_rfc::{blake2b::Blake2b, blake2s::Blake2s};
@@ -179,16 +180,18 @@ impl FromDatabaseValue for Blake2bHash {
 impl Merge for Blake2bHash {
     /// Hashes just a prefix.
     fn empty(prefix: u64) -> Self {
-        let message = prefix.to_be_bytes().to_vec();
-        message.hash()
+        let mut hasher = Blake2bHasher::new();
+        hasher.write_all(&prefix.to_be_bytes()).unwrap();
+        hasher.finish()
     }
 
     /// Hashes a prefix and two Blake2b hashes together.
     fn merge(&self, other: &Self, prefix: u64) -> Self {
-        let mut message = prefix.to_be_bytes().to_vec();
-        message.append(&mut self.serialize_to_vec());
-        message.append(&mut other.serialize_to_vec());
-        message.hash()
+        let mut hasher = Blake2bHasher::new();
+        hasher.write_all(&prefix.to_be_bytes()).unwrap();
+        self.serialize_to_writer(&mut hasher).unwrap();
+        other.serialize_to_writer(&mut hasher).unwrap();
+        hasher.finish()
     }
 }
 
