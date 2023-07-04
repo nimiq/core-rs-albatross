@@ -636,7 +636,7 @@ impl StakingContract {
         let inactive_since = validator
             .inactive_since
             .expect("Validator is retired so it must be inactive");
-        let wait_until = Policy::election_block_after(inactive_since) + Policy::blocks_per_batch();
+        let wait_until = Policy::last_block_of_reporting_window(inactive_since);
         if block_number <= wait_until {
             debug!("Tried to delete validator {} too soon", validator.address);
             return Err(AccountError::InvalidForSender);

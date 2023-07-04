@@ -1825,7 +1825,7 @@ mod tests {
         let key_4 = "413b391".parse().unwrap();
         let key_5 = "412324".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileDatabase::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileDatabase::new(20).unwrap();
         let trie = MerkleRadixTrie::new(env.clone(), "database");
 
         let mut raw_txn = env.write_transaction();

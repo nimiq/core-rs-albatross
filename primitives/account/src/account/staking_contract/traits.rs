@@ -709,7 +709,7 @@ impl AccountInherentInteraction for StakingContract {
                     &mut store,
                     &slot.validator_address,
                     block_state.number,
-                    block_state.number + Policy::blocks_per_epoch() * Policy::SLASH_JAIL_EPOCHS,
+                    Policy::block_after_jail(block_state.number),
                     &mut tx_logger,
                 )?;
                 let old_jail_release = receipt.old_jail_release;

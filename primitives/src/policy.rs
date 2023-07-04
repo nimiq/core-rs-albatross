@@ -310,10 +310,22 @@ impl Policy {
         Self::epoch_index_at(block_number) < Self::blocks_per_batch()
     }
 
-    /// Returns the block height for the end of the reporting window of a given block number.
+    /// Returns the block height for the last block of the reporting window of a given block number.
     #[inline]
-    pub fn end_of_reporting_window(block_number: u32) -> u32 {
+    pub fn last_block_of_reporting_window(block_number: u32) -> u32 {
         Self::election_block_after(block_number) + Self::blocks_per_batch()
+    }
+
+    /// Returns the first block after the reporting window of a given block number has ended.
+    #[inline]
+    pub fn block_after_reporting_window(block_number: u32) -> u32 {
+        Self::last_block_of_reporting_window(block_number) + 1
+    }
+
+    /// Returns the first block after the jail period of a given block number has ended.
+    #[inline]
+    pub fn block_after_jail(block_number: u32) -> u32 {
+        block_number + Self::blocks_per_epoch() * Self::SLASH_JAIL_EPOCHS + 1
     }
 
     /// Returns the supply at a given time (as Unix time) in Lunas (1 NIM = 100,000 Lunas). It is

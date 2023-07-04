@@ -394,13 +394,18 @@ impl StakingContract {
         // Update the staker's balance.
         staker.balance = new_active_balance;
         staker.inactive_balance = new_inactive_balance;
-        staker.inactive_release = Some(Policy::end_of_reporting_window(block_number));
+        staker.inactive_release = if new_inactive_balance.is_zero() {
+            None
+        } else {
+            // We release after the end of the reporting window.
+            Some(Policy::block_after_reporting_window(block_number))
+        };
 
         tx_logger.push_log(Log::SetInactiveStake {
             staker_address: staker_address.clone(),
             validator_address: staker.delegation.clone(),
             value: new_inactive_balance,
-            inactive_release: staker.inactive_release.unwrap(),
+            inactive_release: staker.inactive_release,
         });
 
         // Update the staker entry.
@@ -427,7 +432,7 @@ impl StakingContract {
         let total_balance = staker.balance + staker.inactive_balance;
 
         // Keep the old values.
-        let old_inactive_release = staker.inactive_release.unwrap();
+        let old_inactive_release = staker.inactive_release;
         let old_balance = staker.balance;
 
         // Restore the previous inactive release and balances.
