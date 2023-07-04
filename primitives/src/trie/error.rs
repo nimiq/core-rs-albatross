@@ -13,8 +13,6 @@ pub enum MerkleRadixTrieError {
     ChildIsStump,
     #[error("Tried to store a value at the root node.")]
     RootCantHaveValue,
-    #[error("Failed to (de)serialize a value.")]
-    SerializationFailed,
     #[error("Tree is already complete.")]
     TrieAlreadyComplete,
     #[error("Chunk does not match tree state.")]
