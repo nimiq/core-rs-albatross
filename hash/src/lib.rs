@@ -1,9 +1,13 @@
+#[doc(hidden)]
+pub extern crate nimiq_serde;
+
 use std::{
     borrow::Cow,
     cmp::Ordering,
     fmt::{Debug, Error, Formatter},
-    io, str,
+    io,
     io::Write as _,
+    str,
 };
 
 use blake2_rfc::{blake2b::Blake2b, blake2s::Blake2s};
@@ -24,9 +28,9 @@ pub mod sha512;
 macro_rules! add_hash_trait_arr {
     ($t: ty) => {
         impl SerializeContent for $t {
-            fn serialize_content<W: io::Write, H>(&self, state: &mut W) -> io::Result<usize> {
+            fn serialize_content<W: io::Write, H>(&self, state: &mut W) -> io::Result<()> {
                 state.write_all(&self[..])?;
-                return Ok(self.len());
+                Ok(())
             }
         }
     };
@@ -36,9 +40,9 @@ macro_rules! add_hash_trait_arr {
 macro_rules! hash_typed_array {
     ($name: ident) => {
         impl ::nimiq_hash::SerializeContent for $name {
-            fn serialize_content<W: io::Write, H>(&self, state: &mut W) -> io::Result<usize> {
+            fn serialize_content<W: io::Write, H>(&self, state: &mut W) -> io::Result<()> {
                 state.write_all(&self.0[..])?;
-                return Ok(Self::SIZE);
+                Ok(())
             }
         }
     };
@@ -66,7 +70,7 @@ pub trait Hasher: Default + io::Write {
 }
 
 pub trait SerializeContent {
-    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<usize>;
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()>;
 }
 
 pub trait Hash {
@@ -105,9 +109,9 @@ impl<Hash> SerializeContent for Hash
 where
     Hash: HashOutput,
 {
-    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
         writer.write_all(self.as_bytes())?;
-        Ok(Self::len())
+        Ok(())
     }
 }
 
@@ -372,24 +376,24 @@ add_hash_trait_arr!([u8; 64]);
 add_hash_trait_arr!([u8]);
 add_hash_trait_arr!(Vec<u8>);
 impl<'a> SerializeContent for &'a [u8] {
-    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
         writer.write_all(self)?;
-        Ok(self.len())
+        Ok(())
     }
 }
 
 impl<'a> SerializeContent for &'a str {
-    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
         let b = self.as_bytes();
         writer.write_all(b)?;
-        Ok(b.len())
+        Ok(())
     }
 }
 
 impl SerializeContent for String {
-    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
         let b = self.as_bytes();
         writer.write_all(b)?;
-        Ok(b.len())
+        Ok(())
     }
 }

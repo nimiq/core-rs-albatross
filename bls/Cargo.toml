@@ -29,6 +29,7 @@ ark-crypto-primitives = { version = "0.4", features = ["prf"] }
 ark-serialize = "0.4"
 
 nimiq-hash = { path = "../hash" }
+nimiq-hash_derive = { path = "../hash/hash_derive" }
 nimiq-serde = { path = "../serde", optional = true }
 nimiq-utils = { path = "../utils", features = ["key-rng"] }
 

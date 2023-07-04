@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use nimiq_hash::{Blake2bHash, Hash, HashOutput, SerializeContent};
+use nimiq_hash::{Blake2bHash, Hash, HashOutput};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::{PublicKey as SchnorrPublicKey, Signature as SchnorrSignature};
 use nimiq_primitives::policy::Policy;

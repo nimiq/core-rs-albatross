@@ -450,19 +450,18 @@ impl Transaction {
 }
 
 impl SerializeContent for Transaction {
-    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
-        let mut size = 0;
-        size += Serialize::serialize_to_writer(&self.data, writer)?;
-        size += Serialize::serialize_to_writer(&self.sender, writer)?;
-        size += Serialize::serialize_to_writer(&self.sender_type, writer)?;
-        size += Serialize::serialize_to_writer(&self.recipient, writer)?;
-        size += Serialize::serialize_to_writer(&self.recipient_type, writer)?;
-        size += Serialize::serialize_to_writer(&self.value, writer)?;
-        size += Serialize::serialize_to_writer(&self.fee, writer)?;
-        size += Serialize::serialize_to_writer(&self.validity_start_height, writer)?;
-        size += Serialize::serialize_to_writer(&self.network_id, writer)?;
-        size += Serialize::serialize_to_writer(&self.flags, writer)?;
-        Ok(size)
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
+        Serialize::serialize_to_writer(&self.data, writer)?;
+        Serialize::serialize_to_writer(&self.sender, writer)?;
+        Serialize::serialize_to_writer(&self.sender_type, writer)?;
+        Serialize::serialize_to_writer(&self.recipient, writer)?;
+        Serialize::serialize_to_writer(&self.recipient_type, writer)?;
+        Serialize::serialize_to_writer(&self.value, writer)?;
+        Serialize::serialize_to_writer(&self.fee, writer)?;
+        Serialize::serialize_to_writer(&self.validity_start_height, writer)?;
+        Serialize::serialize_to_writer(&self.network_id, writer)?;
+        Serialize::serialize_to_writer(&self.flags, writer)?;
+        Ok(())
     }
 }
 

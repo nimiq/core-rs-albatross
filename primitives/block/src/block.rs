@@ -3,7 +3,7 @@ use std::{convert::TryFrom, fmt, io};
 use bitflags::bitflags;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::PublicKey;
 use nimiq_network_interface::network::Topic;

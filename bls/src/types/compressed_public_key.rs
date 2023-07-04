@@ -15,7 +15,14 @@ use crate::PublicKey;
 /// one bit indicating the sign of the y-coordinate
 /// and one bit indicating if it is the "point-at-infinity".
 #[derive(Clone)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde-derive",
+    derive(
+        nimiq_hash_derive::SerializeContent,
+        nimiq_serde::Serialize,
+        nimiq_serde::Deserialize,
+    )
+)]
 #[cfg_attr(feature = "serde-derive", serde(transparent))]
 pub struct CompressedPublicKey {
     #[cfg_attr(feature = "serde-derive", serde(with = "nimiq_serde::HexArray"))]
@@ -89,10 +96,9 @@ impl std::hash::Hash for CompressedPublicKey {
 mod serde_derive {
     // TODO: Replace this with a generic serialization using `ToHex` and `FromHex`.
 
-    use std::{io, str::FromStr};
+    use std::str::FromStr;
 
-    use nimiq_hash::SerializeContent;
-    use nimiq_serde::{Deserialize, Serialize};
+    use nimiq_serde::Deserialize;
 
     use super::CompressedPublicKey;
     use crate::ParseError;
@@ -107,12 +113,6 @@ mod serde_derive {
             }
             CompressedPublicKey::deserialize_from_vec(&raw)
                 .map_err(|_| ParseError::SerializationError)
-        }
-    }
-
-    impl SerializeContent for CompressedPublicKey {
-        fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
-            self.serialize_to_writer(writer)
         }
     }
 }

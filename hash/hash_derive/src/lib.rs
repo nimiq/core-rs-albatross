@@ -14,10 +14,11 @@ fn impl_serialize_content(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
 
     let gen = quote! {
-        impl SerializeContent for #name where #name: Serialize {
+        impl ::nimiq_hash::SerializeContent for #name where #name: ::nimiq_hash::nimiq_serde::Serialize {
             #[allow(unused_mut,unused_variables)]
-            fn serialize_content<W: ::std::io::Write, H>(&self, writer: &mut W) -> ::std::io::Result<usize> {
-                self.serialize_to_writer(writer)
+            fn serialize_content<W: ::std::io::Write, H>(&self, writer: &mut W) -> ::std::io::Result<()> {
+                ::nimiq_hash::nimiq_serde::Serialize::serialize_to_writer(self, writer)?;
+                Ok(())
             }
         }
     };

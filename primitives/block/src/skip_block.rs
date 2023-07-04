@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 
 use nimiq_bls::AggregatePublicKey;
-use nimiq_hash::SerializeContent;
 use nimiq_hash_derive::SerializeContent;
 use nimiq_primitives::{policy::Policy, slots::Validators};
 use nimiq_serde::{Deserialize, Serialize};

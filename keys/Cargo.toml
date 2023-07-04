@@ -30,6 +30,7 @@ thiserror = "1.0"
 
 nimiq-database-value = { path = "../database/database-value" }
 nimiq-hash = { path = "../hash" }
+nimiq-hash_derive = { path = "../hash/hash_derive" }
 nimiq-macros = { path = "../macros" }
 nimiq-serde = { path = "../serde", optional = true }
 nimiq-utils = { path = "../utils", features = ["key-rng"] }

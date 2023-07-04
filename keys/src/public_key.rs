@@ -13,6 +13,7 @@ use crate::{
 };
 
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "serde-derive", derive(nimiq_hash_derive::SerializeContent))]
 pub struct PublicKey(pub ed25519_zebra::VerificationKeyBytes);
 
 impl PublicKey {
@@ -131,10 +132,8 @@ impl std::hash::Hash for PublicKey {
 
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
-    use std::{borrow::Cow, io};
+    use std::borrow::Cow;
 
-    use nimiq_hash::SerializeContent;
-    use nimiq_serde::Serialize as NimiqSerialize;
     use serde::{
         de::{Deserialize, Deserializer, Error},
         ser::{Serialize, Serializer},
@@ -167,12 +166,6 @@ mod serde_derive {
                 let buf: [u8; PublicKey::SIZE] = Deserialize::deserialize(deserializer)?;
                 PublicKey::from_bytes(&buf).map_err(|_| D::Error::custom("Invalid public key"))
             }
-        }
-    }
-
-    impl SerializeContent for PublicKey {
-        fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
-            self.serialize_to_writer(writer)
         }
     }
 }

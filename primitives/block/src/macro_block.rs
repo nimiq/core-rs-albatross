@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, io};
 
 use ark_ec::Group;
 use nimiq_bls::{G2Projective, PublicKey as BlsPublicKey};
@@ -208,31 +208,27 @@ impl fmt::Display for MacroHeader {
 }
 
 impl SerializeContent for MacroHeader {
-    fn serialize_content<W: std::io::Write, H: HashOutput>(
-        &self,
-        writer: &mut W,
-    ) -> std::io::Result<usize> {
-        let mut size = 0;
-        size += self.version.to_be_bytes().serialize_to_writer(writer)?;
-        size += self.block_number.to_be_bytes().serialize(writer)?;
-        size += self.round.to_be_bytes().serialize_to_writer(writer)?;
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
+        self.version.to_be_bytes().serialize_to_writer(writer)?;
+        self.block_number.to_be_bytes().serialize(writer)?;
+        self.round.to_be_bytes().serialize_to_writer(writer)?;
 
-        size += self.timestamp.to_be_bytes().serialize_to_writer(writer)?;
-        size += self.parent_hash.serialize_to_writer(writer)?;
-        size += self.parent_election_hash.serialize_to_writer(writer)?;
+        self.timestamp.to_be_bytes().serialize_to_writer(writer)?;
+        self.parent_hash.serialize_to_writer(writer)?;
+        self.parent_election_hash.serialize_to_writer(writer)?;
 
         let interlink_hash = H::Builder::default()
             .chain(&self.interlink.serialize_to_vec())
             .finish();
-        size += interlink_hash.serialize_to_writer(writer)?;
+        interlink_hash.serialize_to_writer(writer)?;
 
-        size += self.seed.serialize_to_writer(writer)?;
-        size += self.extra_data.serialize_to_writer(writer)?;
-        size += self.state_root.serialize_to_writer(writer)?;
-        size += self.body_root.serialize_to_writer(writer)?;
-        size += self.history_root.serialize_to_writer(writer)?;
+        self.seed.serialize_to_writer(writer)?;
+        self.extra_data.serialize_to_writer(writer)?;
+        self.state_root.serialize_to_writer(writer)?;
+        self.body_root.serialize_to_writer(writer)?;
+        self.history_root.serialize_to_writer(writer)?;
 
-        Ok(size)
+        Ok(())
     }
 }
 
@@ -265,25 +261,21 @@ impl MacroBody {
 }
 
 impl SerializeContent for MacroBody {
-    fn serialize_content<W: std::io::Write, H: HashOutput>(
-        &self,
-        writer: &mut W,
-    ) -> std::io::Result<usize> {
-        let mut size = 0;
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
         // PITODO: do we need to hash something if None?
         if let Some(ref validators) = self.validators {
             let pk_tree_root = validators.hash::<H>();
-            size += pk_tree_root.serialize_to_writer(writer)?;
+            pk_tree_root.serialize_to_writer(writer)?;
         } else {
-            size += 0u8.serialize_to_writer(writer)?;
+            0u8.serialize_to_writer(writer)?;
         }
-        size += self.lost_reward_set.serialize_to_writer(writer)?;
-        size += self.disabled_set.serialize_to_writer(writer)?;
+        self.lost_reward_set.serialize_to_writer(writer)?;
+        self.disabled_set.serialize_to_writer(writer)?;
 
         let transactions_hash = self.transactions.serialize_to_vec().hash::<H>();
-        size += transactions_hash.serialize_to_writer(writer)?;
+        transactions_hash.serialize_to_writer(writer)?;
 
-        Ok(size)
+        Ok(())
     }
 }
 

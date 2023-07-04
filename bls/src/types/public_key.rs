@@ -11,6 +11,7 @@ use nimiq_hash::Hash;
 use crate::{CompressedPublicKey, SecretKey, SigHash, Signature};
 
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "serde-derive", derive(nimiq_hash_derive::SerializeContent))]
 pub struct PublicKey {
     /// The projective form is the longer one, with three coordinates. The affine form is the shorter one, with only two coordinates. Calculation is faster with the projective form.
     /// We can't use the affine form since the Algebra library doesn't support arithmetic with it.
@@ -140,10 +141,6 @@ impl fmt::Display for PublicKey {
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
     // TODO: Replace this with a generic serialization using `ToHex` and `FromHex`.
-    use std::io;
-
-    use nimiq_hash::SerializeContent;
-    use nimiq_serde::Serialize as NimiqSerialize;
     use serde::{
         de::{Deserialize, Deserializer, Error},
         ser::{Serialize, Serializer},
@@ -167,12 +164,6 @@ mod serde_derive {
         {
             let compressed: CompressedPublicKey = Deserialize::deserialize(deserializer)?;
             compressed.uncompress().map_err(Error::custom)
-        }
-    }
-
-    impl SerializeContent for PublicKey {
-        fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
-            self.serialize_to_writer(writer)
         }
     }
 }

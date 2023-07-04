@@ -304,10 +304,7 @@ impl TransactionProofBuilder {
 }
 
 impl SerializeContent for TransactionProofBuilder {
-    fn serialize_content<W: io::Write, H: HashOutput>(
-        &self,
-        writer: &mut W,
-    ) -> Result<usize, io::Error> {
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
         match self {
             TransactionProofBuilder::Basic(builder) => {
                 SerializeContent::serialize_content::<_, H>(&builder.transaction, writer)

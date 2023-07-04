@@ -131,28 +131,25 @@ pub struct TendermintVote {
 /// * step byte, which is also the message prefix always comes first
 /// * options have the same byte length when they are None as when they are Some(x) to prevent overflowing one option into the other.
 impl SerializeContent for TendermintVote {
-    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
         // First of all serialize step as this also serves as the unique prefix for this message type.
-        let mut size = self.id.step.serialize_to_writer(writer)?;
+        self.id.step.serialize_to_writer(writer)?;
 
         // serialize the round number
-        size += self
-            .id
+        self.id
             .round_number
             .to_be_bytes()
             .serialize_to_writer(writer)?;
 
         // serialize the block number
-        size += self
-            .id
+        self.id
             .block_number
             .to_be_bytes()
             .serialize_to_writer(writer)?;
 
         // serialize the proposal hash
-        size += self.proposal_hash.serialize_to_writer(writer)?;
+        self.proposal_hash.serialize_to_writer(writer)?;
 
-        // And return the size
-        Ok(size)
+        Ok(())
     }
 }

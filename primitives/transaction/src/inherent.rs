@@ -1,4 +1,3 @@
-use nimiq_hash::SerializeContent;
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::Address;
 use nimiq_primitives::{coin::Coin, policy::Policy, slots::SlashedSlot};

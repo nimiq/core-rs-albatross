@@ -111,29 +111,27 @@ impl TrieProofNode {
 }
 
 impl SerializeContent for TrieProofNode {
-    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<usize> {
-        let mut size = 0;
-        size += self.key.serialize(writer).unwrap();
-        size += 1;
+    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
+        self.key.serialize(writer).unwrap();
         match &self.value {
             ProofValue::None => {
                 writer.write_u8(0).unwrap();
             }
             ProofValue::LeafValue(val) => {
                 writer.write_u8(1).unwrap();
-                size += val.serialize(writer).unwrap();
+                val.serialize(writer).unwrap();
             }
             ProofValue::HybridHash(val_hash) => {
                 writer.write_u8(2).unwrap();
-                size += val_hash.serialize(writer).unwrap();
+                val_hash.serialize(writer).unwrap();
             }
             ProofValue::HybridValue(val) => {
                 writer.write_u8(2).unwrap();
-                size += val.hash::<Blake2bHash>().serialize(writer).unwrap();
+                val.hash::<Blake2bHash>().serialize(writer).unwrap();
             }
         }
-        size += self.children.serialize(writer).unwrap();
-        Ok(size)
+        self.children.serialize(writer).unwrap();
+        Ok(())
     }
 }
 
