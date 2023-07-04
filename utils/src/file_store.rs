@@ -1,6 +1,7 @@
 use std::{
+    fs,
     fs::OpenOptions,
-    io::{BufWriter, Error as IoError, Read as _, Write},
+    io::{BufWriter, Error as IoError, Write},
     path::{Path, PathBuf},
 };
 
@@ -20,11 +21,7 @@ impl FileStore {
 
     pub fn load<T: Deserialize>(&self) -> Result<T, Error> {
         log::debug!("Reading from: {}", self.path.display());
-        let mut file = OpenOptions::new().read(true).open(&self.path)?;
-        let mut buffer = Vec::with_capacity(4000);
-        file.read_to_end(&mut buffer)?;
-        let item: T = Deserialize::deserialize_from_vec(&buffer)?;
-        Ok(item)
+        Ok(Deserialize::deserialize_from_vec(&fs::read(&self.path)?)?)
     }
 
     pub fn load_or_store<T, F>(&self, mut f: F) -> Result<T, Error>

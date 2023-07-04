@@ -1,7 +1,6 @@
 use std::{
     fs,
     fs::{DirBuilder, File},
-    io::Read,
     path::Path,
 };
 
@@ -45,11 +44,8 @@ pub fn update_proof_cache(
     let metadata_file = proofs.join("meta_data.bin");
 
     if metadata_file.exists() {
-        let file = File::open(&metadata_file)?;
-        let mut buf = vec![];
-        let mut reader = std::io::BufReader::new(file);
-        reader.read_to_end(&mut buf)?;
-        let meta_data_hash: [u8; 32] = Deserialize::deserialize_from_vec(&buf)?;
+        let meta_data_hash: [u8; 32] =
+            Deserialize::deserialize_from_vec(&fs::read(&metadata_file)?)?;
 
         // If the hash in the meta data matches, return.
         if &meta_data_hash == current_header_hash {
