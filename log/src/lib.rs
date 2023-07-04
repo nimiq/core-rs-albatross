@@ -51,6 +51,7 @@ pub static NIMIQ_MODULES: &[&str] = &[
     "nimiq_rpc_client",
     "nimiq_rpc_interface",
     "nimiq_rpc_server",
+    "nimiq_serde",
     "nimiq_spammer",
     "nimiq_subscription",
     "nimiq_tendermint",
