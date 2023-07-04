@@ -30,7 +30,6 @@ rand = "0.8"
 rand_chacha = "0.3.1"
 rustls-pemfile = "1.0"
 serde = "1.0"
-serde_derive = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"], optional = true }
 signal-hook = { version = "0.3", optional = true }
 strum_macros = "0.24"

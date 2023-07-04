@@ -28,7 +28,7 @@ nimiq-zkp = { path = "../zkp" }
 
 [dev-dependencies]
 nimiq-block-production = { path = "../block-production", features = ["test-utils"] }
-nimiq-blockchain ={path="../blockchain"}
+nimiq-blockchain = { path="../blockchain" }
 nimiq-test-utils = { path= "../test-utils" }
 nimiq-test-log = { path = "../test-log" }
 rand = "^0.8"

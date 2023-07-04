@@ -22,9 +22,8 @@ futures = { package = "futures-util", version = "0.3" }
 hex = "0.4.2"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
-serde = { version = "1.0", features = ["derive"] }
+serde = "1.0"
 serde_json = "1.0"
-serde_with = "3.0"
 thiserror = "1.0"
 tokio = "1.29"
 tokio-stream = "0.1"

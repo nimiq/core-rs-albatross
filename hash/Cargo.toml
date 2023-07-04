@@ -21,7 +21,7 @@ blake2-rfc = "0.2"
 byteorder = "1.2"
 hex = "0.4"
 rust-argon2 = "1.0"
-serde = { version = "1.0", features = ["derive"] }
+serde = "1.0"
 sha2 = "0.9"
 
 nimiq-database-value = { path = "../database/database-value" }

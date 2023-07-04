@@ -15,7 +15,7 @@ hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 rand = "0.8"
-serde = { version = "1.0", features = ["derive"] }
+serde = "1.0"
 strum_macros = "0.24"
 thiserror = "1.0"
 

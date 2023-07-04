@@ -18,7 +18,7 @@ maintenance = { status = "experimental" }
 futures = { package = "futures-util", version = "0.3" }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
-serde = { version = "1.0", features = ["derive"] }
+serde = "1.0"
 thiserror = "1.0"
 tokio-stream = { version = "0.1", features = ["sync"] }
 

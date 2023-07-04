@@ -9,7 +9,7 @@ use nimiq_mempool::{
 };
 use nimiq_network_interface::Multiaddr;
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
-use serde_derive::Deserialize;
+use nimiq_serde::Deserialize;
 use thiserror::Error;
 use url::Url;
 

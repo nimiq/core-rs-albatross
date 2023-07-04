@@ -25,7 +25,7 @@ log = { package = "tracing", version = "0.1", optional = true, features = ["log"
 parking_lot = "0.12"
 rand = { version = "0.8", optional = true }
 rand_core = { version = "0.6", optional = true }
-serde = { version = "1.0", features = ["derive"], optional = true }
+serde = { version = "1.0", optional = true }
 thiserror = { version = "1.0", optional = true }
 
 nimiq-collections = { path = "../collections", optional = true }

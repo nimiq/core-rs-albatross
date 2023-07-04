@@ -26,7 +26,7 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 pin-project = "1.0"
 rand = "0.8"
-serde = { version = "1.0", features = ["derive"] }
+serde = "1.0"
 thiserror = "1.0"
 tokio = { version = "1.29", features = ["rt", "sync", "time"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
