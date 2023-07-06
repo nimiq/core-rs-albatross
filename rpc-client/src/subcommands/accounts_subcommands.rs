@@ -92,6 +92,9 @@ pub enum AccountCommand {
         is_hex: bool,
     },
 
+    /// Queries all accounts in the accounts tree
+    GetAll {},
+
     /// Queries the account state (e.g. account balance for basic accounts).
     Get {
         /// The account's address.
@@ -174,6 +177,10 @@ impl HandleSubcommand for AccountCommand {
                     "{:#?}",
                     client.blockchain.get_account_by_address(address).await?
                 );
+            }
+
+            AccountCommand::GetAll {} => {
+                println!("{:#?}", client.blockchain.get_accounts().await?);
             }
         }
 

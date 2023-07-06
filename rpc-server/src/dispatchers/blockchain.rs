@@ -5,7 +5,7 @@ use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_blockchain_proxy::{BlockchainProxy, BlockchainReadProxy};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy};
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
     types::{
@@ -479,12 +479,33 @@ impl BlockchainInterface for BlockchainDispatcher {
             let account = blockchain
                 .get_account_if_complete(&address)
                 .ok_or(Error::NoConsensus)?;
-            Account::try_from_account(
+            Ok(Account::from_account_with_state(
                 address,
                 account,
                 BlockchainState::new(blockchain.block_number(), blockchain.head_hash()),
-            )
-            .map_err(Error::Core)
+            ))
+        } else {
+            Err(Error::NotSupportedForLightBlockchain)
+        }
+    }
+
+    /// Fetches all accounts in the accounts tree.
+    /// IMPORTANT: This operation iterates over all accounts in the accounts tree
+    /// and thus is extremely computationally expensive.
+    async fn get_accounts(&mut self) -> RPCResult<Vec<Account>, BlockchainState, Self::Error> {
+        let blockchain_proxy = self.blockchain.read();
+        if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
+            let db_txn = blockchain.read_transaction();
+            let mut start = Some(KeyNibbles::default());
+            let mut accounts = vec![];
+            while start.is_some() {
+                let chunk = blockchain.get_accounts_chunk(Some(&db_txn), start.unwrap(), 1000);
+                start = chunk.end_key;
+                for account in chunk.accounts {
+                    accounts.push(Account::from_account(account.0, account.1));
+                }
+            }
+            Ok(RPCData::with_blockchain(accounts, &blockchain_proxy))
         } else {
             Err(Error::NotSupportedForLightBlockchain)
         }

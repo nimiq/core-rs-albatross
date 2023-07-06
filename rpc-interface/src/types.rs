@@ -24,8 +24,6 @@ use nimiq_vrf::VrfSeed;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DeserializeFromStr, SerializeDisplay};
 
-use crate::error::Error;
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum HashOrTx {
@@ -623,57 +621,54 @@ pub enum AccountAdditionalFields {
 }
 
 impl Account {
-    pub fn try_from_account(
+    /// Maps an account to the RPC account type
+    pub fn from_account(address: Address, account: nimiq_account::Account) -> Self {
+        match account {
+            nimiq_account::Account::Basic(basic) => Account {
+                address,
+                balance: basic.balance,
+                account_additional_fields: AccountAdditionalFields::Basic {},
+            },
+            nimiq_account::Account::Vesting(vesting) => Account {
+                address,
+                balance: vesting.balance,
+                account_additional_fields: AccountAdditionalFields::Vesting {
+                    owner: vesting.owner,
+                    vesting_start: vesting.start_time,
+                    vesting_step_blocks: vesting.time_step,
+                    vesting_step_amount: vesting.step_amount,
+                    vesting_total_amount: vesting.total_amount,
+                },
+            },
+            nimiq_account::Account::HTLC(htlc) => Account {
+                address,
+                balance: htlc.balance,
+                account_additional_fields: AccountAdditionalFields::HTLC {
+                    sender: htlc.sender,
+                    recipient: htlc.recipient,
+                    hash_root: htlc.hash_root,
+                    hash_count: htlc.hash_count,
+                    timeout: htlc.timeout,
+                    total_amount: htlc.total_amount,
+                },
+            },
+            nimiq_account::Account::Staking(staking) => Account {
+                address,
+                balance: staking.balance,
+                account_additional_fields: AccountAdditionalFields::Staking {},
+            },
+        }
+    }
+
+    /// Maps an account to the RPC account type with blockchain state
+    pub fn from_account_with_state(
         address: Address,
         account: nimiq_account::Account,
         blockchain_state: BlockchainState,
-    ) -> Result<RPCData<Self, BlockchainState>, Error> {
-        match account {
-            nimiq_account::Account::Basic(basic) => Ok(RPCData {
-                data: Account {
-                    address,
-                    balance: basic.balance,
-                    account_additional_fields: AccountAdditionalFields::Basic {},
-                },
-                metadata: blockchain_state,
-            }),
-            nimiq_account::Account::Vesting(vesting) => Ok(RPCData {
-                data: Account {
-                    address,
-                    balance: vesting.balance,
-                    account_additional_fields: AccountAdditionalFields::Vesting {
-                        owner: vesting.owner,
-                        vesting_start: vesting.start_time,
-                        vesting_step_blocks: vesting.time_step,
-                        vesting_step_amount: vesting.step_amount,
-                        vesting_total_amount: vesting.total_amount,
-                    },
-                },
-                metadata: blockchain_state,
-            }),
-            nimiq_account::Account::HTLC(htlc) => Ok(RPCData {
-                data: Account {
-                    address,
-                    balance: htlc.balance,
-                    account_additional_fields: AccountAdditionalFields::HTLC {
-                        sender: htlc.sender,
-                        recipient: htlc.recipient,
-                        hash_root: htlc.hash_root,
-                        hash_count: htlc.hash_count,
-                        timeout: htlc.timeout,
-                        total_amount: htlc.total_amount,
-                    },
-                },
-                metadata: blockchain_state,
-            }),
-            nimiq_account::Account::Staking(staking) => Ok(RPCData {
-                data: Account {
-                    address,
-                    balance: staking.balance,
-                    account_additional_fields: AccountAdditionalFields::Staking {},
-                },
-                metadata: blockchain_state,
-            }),
+    ) -> RPCData<Self, BlockchainState> {
+        RPCData {
+            data: Self::from_account(address, account),
+            metadata: blockchain_state,
         }
     }
 

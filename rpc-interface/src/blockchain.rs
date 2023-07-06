@@ -85,6 +85,11 @@ pub trait BlockchainInterface {
         address: Address,
     ) -> RPCResult<Account, BlockchainState, Self::Error>;
 
+    /// Fetches all accounts in the accounts tree.
+    /// IMPORTANT: This operation iterates over all accounts in the accounts tree
+    /// and thus is extremely computationally expensive.
+    async fn get_accounts(&mut self) -> RPCResult<Vec<Account>, BlockchainState, Self::Error>;
+
     async fn get_active_validators(
         &mut self,
     ) -> RPCResult<Vec<Validator>, BlockchainState, Self::Error>;

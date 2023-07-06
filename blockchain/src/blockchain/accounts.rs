@@ -1,11 +1,22 @@
-use nimiq_account::{Accounts, BlockLogger, BlockState, TransactionOperationReceipt};
+use nimiq_account::{Account, Accounts, BlockLogger, BlockState, TransactionOperationReceipt};
 use nimiq_block::{Block, BlockError, SkipBlockInfo};
 use nimiq_blockchain_interface::PushError;
-use nimiq_database::{traits::Database, WriteTransactionProxy};
+use nimiq_database::{traits::Database, TransactionProxy, WriteTransactionProxy};
+use nimiq_keys::Address;
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
+use nimiq_serde::Deserialize;
 use nimiq_transaction::extended_transaction::ExtendedTransaction;
 
 use crate::{blockchain_state::BlockchainState, Blockchain};
+
+/// Subset of the accounts in the accounts tree
+pub struct AccountsChunk {
+    /// The end of the chunk. The end key is exclusive.
+    /// When set to None it means that it is the last trie chunk.
+    pub end_key: Option<KeyNibbles>,
+    /// The set of accounts retrieved.
+    pub accounts: Vec<(Address, Account)>,
+}
 
 /// Implements methods to handle the accounts.
 impl Blockchain {
@@ -210,5 +221,28 @@ impl Blockchain {
         let txn = self.env.read_transaction();
 
         self.state().accounts.get_proof(Some(&txn), keys).ok()
+    }
+
+    /// Gets an accounts chunk given a start key and a limit
+    pub fn get_accounts_chunk(
+        &self,
+        txn_option: Option<&TransactionProxy>,
+        start: KeyNibbles,
+        limit: usize,
+    ) -> AccountsChunk {
+        let trie_chunk = self.state().accounts.get_chunk(start, limit, txn_option);
+        let end_key = trie_chunk.end_key;
+        let accounts = trie_chunk
+            .items
+            .into_iter()
+            .filter(|item| item.key.to_address().is_some())
+            .map(|item| {
+                (
+                    item.key.to_address().unwrap(),
+                    Account::deserialize_from_vec(&item.value).unwrap(),
+                )
+            })
+            .collect();
+        AccountsChunk { end_key, accounts }
     }
 }
