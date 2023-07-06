@@ -14,7 +14,10 @@ use nimiq_rpc_interface::{
     types::{RPCResult, Transaction as RPCTransaction, ValidityStartHeight},
 };
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_transaction::{account::htlc_contract::AnyHash, SignatureProof, Transaction};
+use nimiq_transaction::{
+    account::htlc_contract::{AnyHash, PreImage},
+    SignatureProof, Transaction,
+};
 use nimiq_transaction_builder::TransactionBuilder;
 use parking_lot::RwLock;
 
@@ -350,7 +353,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         wallet: Address,
         contract_address: Address,
         recipient: Address,
-        pre_image: AnyHash,
+        pre_image: PreImage,
         hash_root: AnyHash,
         hash_count: u8,
         value: Coin,
@@ -380,7 +383,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         wallet: Address,
         contract_address: Address,
         recipient: Address,
-        pre_image: AnyHash,
+        pre_image: PreImage,
         hash_root: AnyHash,
         hash_count: u8,
         value: Coin,

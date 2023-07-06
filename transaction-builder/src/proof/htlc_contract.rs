@@ -2,7 +2,7 @@ use nimiq_hash::{Blake2bHash, Sha256Hash};
 use nimiq_keys::KeyPair;
 use nimiq_serde::Serialize;
 use nimiq_transaction::{
-    account::htlc_contract::{AnyHash, OutgoingHTLCTransactionProof},
+    account::htlc_contract::{AnyHash, OutgoingHTLCTransactionProof, PreImage},
     SignatureProof, Transaction,
 };
 
@@ -194,7 +194,7 @@ impl HtlcProofBuilder {
     /// [`signature_with_key_pair`]: struct.HtlcProofBuilder.html#method.signature_with_key_pair
     pub fn regular_transfer(
         &mut self,
-        pre_image: AnyHash,
+        pre_image: PreImage,
         hash_count: u8,
         hash_root: AnyHash,
         recipient_signature: SignatureProof,

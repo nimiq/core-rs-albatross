@@ -7,7 +7,7 @@ use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_transaction::{
     account::htlc_contract::{
-        AnyHash, AnyHash32, CreationTransactionData, OutgoingHTLCTransactionProof,
+        AnyHash, AnyHash32, CreationTransactionData, OutgoingHTLCTransactionProof, PreImage,
     },
     SignatureProof, Transaction,
 };
@@ -61,7 +61,7 @@ fn it_can_create_creation_transaction() {
 
 fn prepare_outgoing_transaction() -> (
     Transaction,
-    AnyHash,
+    PreImage,
     AnyHash,
     KeyPair,
     SignatureProof,
@@ -79,7 +79,7 @@ fn prepare_outgoing_transaction() -> (
 
     let sender_key_pair = KeyPair::from(sender_priv_key);
     let recipient_key_pair = KeyPair::from(recipient_priv_key);
-    let pre_image = AnyHash::Blake2b(AnyHash32([1u8; 32]));
+    let pre_image = PreImage::PreImage32(AnyHash32([1u8; 32]));
     let hash_root = AnyHash::from(
         Blake2bHasher::default().digest(
             Blake2bHasher::default()

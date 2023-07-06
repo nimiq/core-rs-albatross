@@ -2,7 +2,10 @@ use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, KeyPair, PublicKey};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
-use nimiq_transaction::{account::htlc_contract::AnyHash, SignatureProof, Transaction};
+use nimiq_transaction::{
+    account::htlc_contract::{AnyHash, PreImage},
+    SignatureProof, Transaction,
+};
 use thiserror::Error;
 
 pub use crate::{proof::TransactionProofBuilder, recipient::Recipient};
@@ -755,7 +758,7 @@ impl TransactionBuilder {
         key_pair: &KeyPair,
         contract_address: Address,
         recipient: Address,
-        pre_image: AnyHash,
+        pre_image: PreImage,
         hash_root: AnyHash,
         hash_count: u8,
         value: Coin,

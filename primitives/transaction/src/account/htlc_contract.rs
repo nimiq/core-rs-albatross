@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, str::FromStr};
 
 use log::error;
 use nimiq_hash::{
@@ -71,13 +71,12 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Ord, PartialOrd, Eq, PartialEq, Hash)]
-#[serde(tag = "algorithm", content = "hash", rename_all = "lowercase")]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
 #[repr(u8)]
 pub enum AnyHash {
-    Blake2b(AnyHash32) = 1,
-    Sha256(AnyHash32) = 3,
-    Sha512(AnyHash64) = 4,
+    Blake2b(AnyHash32),
+    Sha256(AnyHash32),
+    Sha512(AnyHash64),
 }
 
 impl Default for AnyHash {
@@ -110,6 +109,60 @@ impl AnyHash {
             AnyHash::Blake2b(hash) => &hash.0,
             AnyHash::Sha256(hash) => &hash.0,
             AnyHash::Sha512(hash) => &hash.0,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[repr(u8)]
+pub enum PreImage {
+    PreImage32(AnyHash32),
+    PreImage64(AnyHash64),
+}
+
+impl Default for PreImage {
+    fn default() -> Self {
+        PreImage::PreImage32(AnyHash32::default())
+    }
+}
+
+impl From<Blake2bHash> for PreImage {
+    fn from(value: Blake2bHash) -> Self {
+        PreImage::PreImage32(AnyHash32(value.into()))
+    }
+}
+
+impl From<Sha256Hash> for PreImage {
+    fn from(value: Sha256Hash) -> Self {
+        PreImage::PreImage32(AnyHash32(value.into()))
+    }
+}
+
+impl From<Sha512Hash> for PreImage {
+    fn from(value: Sha512Hash) -> Self {
+        PreImage::PreImage64(AnyHash64(value.into()))
+    }
+}
+
+impl FromStr for PreImage {
+    type Err = nimiq_macros::hex::FromHexError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() == AnyHash32::SIZE * 2 {
+            Ok(PreImage::PreImage32(AnyHash32::from_str(s)?))
+        } else if s.len() == AnyHash64::SIZE * 2 {
+            Ok(PreImage::PreImage64(AnyHash64::from_str(s)?))
+        } else {
+            Err(nimiq_macros::hex::FromHexError::InvalidStringLength)
+        }
+    }
+}
+
+impl PreImage {
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            PreImage::PreImage32(hash) => &hash.0,
+            PreImage::PreImage64(hash) => &hash.0,
         }
     }
 }
@@ -166,7 +219,7 @@ pub enum OutgoingHTLCTransactionProof {
     RegularTransfer {
         hash_depth: u8,
         hash_root: AnyHash,
-        pre_image: AnyHash,
+        pre_image: PreImage,
         signature_proof: SignatureProof,
     },
     EarlyResolve {
@@ -206,23 +259,24 @@ impl OutgoingHTLCTransactionProof {
             } => {
                 let mut tmp_hash = pre_image.clone();
                 for _ in 0..*hash_depth {
-                    match tmp_hash {
+                    match &hash_root {
                         AnyHash::Blake2b(_) => {
-                            tmp_hash =
-                                AnyHash::from(Blake2bHasher::default().digest(tmp_hash.as_bytes()));
+                            tmp_hash = PreImage::from(
+                                Blake2bHasher::default().digest(tmp_hash.as_bytes()),
+                            );
                         }
                         AnyHash::Sha256(_) => {
                             tmp_hash =
-                                AnyHash::from(Sha256Hasher::default().digest(tmp_hash.as_bytes()));
+                                PreImage::from(Sha256Hasher::default().digest(tmp_hash.as_bytes()));
                         }
                         AnyHash::Sha512(_) => {
                             tmp_hash =
-                                AnyHash::from(Sha512Hasher::default().digest(tmp_hash.as_bytes()));
+                                PreImage::from(Sha512Hasher::default().digest(tmp_hash.as_bytes()));
                         }
                     }
                 }
 
-                if hash_root != &tmp_hash {
+                if hash_root.as_bytes() != tmp_hash.as_bytes() {
                     warn!(
                         "Hash algorithm mismatch for the following transaction:\n{:?}",
                         transaction
@@ -269,52 +323,219 @@ impl OutgoingHTLCTransactionProof {
     }
 }
 
-#[cfg(feature = "serde-derive")]
 mod serde_derive {
-    use std::borrow::Cow;
+    use std::{borrow::Cow, fmt};
 
     use serde::{
-        de::{Deserialize, Deserializer, Error},
-        ser::{Serialize, Serializer},
+        de::{Deserialize, Deserializer, Error, SeqAccess, Visitor},
+        ser::{Serialize, SerializeStruct, Serializer},
     };
 
-    use super::{AnyHash32, AnyHash64};
+    use super::{AnyHash, AnyHash32, AnyHash64, PreImage};
 
-    impl Serialize for AnyHash32 {
+    const ANYHASH_FIELDS: &[&str] = &["algorithm", "hash"];
+    const PREIMAGE_FIELDS: &[&str] = &["type", "pre_image"];
+
+    struct PreImageVisitor;
+    struct AnyHashVisitor {
+        human_readable: bool,
+    }
+
+    impl Serialize for AnyHash {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
         {
-            serializer.serialize_str(&self.to_hex())
+            let human_readable = serializer.is_human_readable();
+            let mut state = serializer.serialize_struct("AnyHash", ANYHASH_FIELDS.len())?;
+            match self {
+                AnyHash::Blake2b(hash) => {
+                    if human_readable {
+                        state.serialize_field(ANYHASH_FIELDS[0], &"blake2b")?;
+                    } else {
+                        state.serialize_field(ANYHASH_FIELDS[0], &1u8)?;
+                    }
+                    state.serialize_field(ANYHASH_FIELDS[1], hash)?;
+                }
+                AnyHash::Sha256(hash) => {
+                    if human_readable {
+                        state.serialize_field(ANYHASH_FIELDS[0], &"sha256")?;
+                    } else {
+                        state.serialize_field(ANYHASH_FIELDS[0], &3u8)?;
+                    }
+                    state.serialize_field(ANYHASH_FIELDS[1], hash)?;
+                }
+                AnyHash::Sha512(hash) => {
+                    if human_readable {
+                        state.serialize_field(ANYHASH_FIELDS[0], &"sha512")?;
+                    } else {
+                        state.serialize_field(ANYHASH_FIELDS[0], &4u8)?;
+                    }
+                    state.serialize_field(ANYHASH_FIELDS[1], hash)?;
+                }
+            }
+            state.end()
         }
     }
 
-    impl<'de> Deserialize<'de> for AnyHash32 {
+    impl<'de> Visitor<'de> for AnyHashVisitor {
+        type Value = AnyHash;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("enum AnyHash")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            if self.human_readable {
+                let algorithm: &str = seq
+                    .next_element()?
+                    .ok_or_else(|| A::Error::invalid_length(0, &self))?;
+                match algorithm {
+                    "blake2b" => {
+                        let hash: AnyHash32 = seq
+                            .next_element()?
+                            .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+                        Ok(AnyHash::Blake2b(hash))
+                    }
+                    "sha256" => {
+                        let hash: AnyHash32 = seq
+                            .next_element()?
+                            .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+                        Ok(AnyHash::Sha256(hash))
+                    }
+                    "sha512" => {
+                        let hash: AnyHash64 = seq
+                            .next_element()?
+                            .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+                        Ok(AnyHash::Sha512(hash))
+                    }
+                    _ => Err(A::Error::invalid_value(
+                        serde::de::Unexpected::Str(algorithm),
+                        &"an AnyHash variant",
+                    )),
+                }
+            } else {
+                let algorithm: u8 = seq
+                    .next_element()?
+                    .ok_or_else(|| A::Error::invalid_length(0, &self))?;
+                match algorithm {
+                    1u8 => {
+                        let hash: AnyHash32 = seq
+                            .next_element()?
+                            .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+                        Ok(AnyHash::Blake2b(hash))
+                    }
+                    3u8 => {
+                        let hash: AnyHash32 = seq
+                            .next_element()?
+                            .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+                        Ok(AnyHash::Sha256(hash))
+                    }
+                    4u8 => {
+                        let hash: AnyHash64 = seq
+                            .next_element()?
+                            .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+                        Ok(AnyHash::Sha512(hash))
+                    }
+                    _ => Err(A::Error::invalid_value(
+                        serde::de::Unexpected::Unsigned(algorithm as u64),
+                        &"an AnyHash variant",
+                    )),
+                }
+            }
+        }
+    }
+
+    impl<'de> Deserialize<'de> for AnyHash {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: Deserializer<'de>,
         {
-            let data: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
-            data.parse().map_err(Error::custom)
+            let human_readable = deserializer.is_human_readable();
+            deserializer.deserialize_struct(
+                "AnyHash",
+                ANYHASH_FIELDS,
+                AnyHashVisitor { human_readable },
+            )
         }
     }
 
-    impl Serialize for AnyHash64 {
+    impl Serialize for PreImage {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
         {
-            serializer.serialize_str(&self.to_hex())
+            if serializer.is_human_readable() {
+                match self {
+                    PreImage::PreImage32(hash) => Serialize::serialize(hash, serializer),
+                    PreImage::PreImage64(hash) => Serialize::serialize(hash, serializer),
+                }
+            } else {
+                let mut state = serializer.serialize_struct("PreImage", PREIMAGE_FIELDS.len())?;
+                match self {
+                    PreImage::PreImage32(pre_image) => {
+                        state.serialize_field(PREIMAGE_FIELDS[0], &32u8)?;
+                        state.serialize_field(PREIMAGE_FIELDS[1], pre_image)?;
+                    }
+                    PreImage::PreImage64(pre_image) => {
+                        state.serialize_field(PREIMAGE_FIELDS[0], &64u8)?;
+                        state.serialize_field(PREIMAGE_FIELDS[1], pre_image)?;
+                    }
+                }
+                state.end()
+            }
         }
     }
 
-    impl<'de> Deserialize<'de> for AnyHash64 {
+    impl<'de> Visitor<'de> for PreImageVisitor {
+        type Value = PreImage;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("enum PreImage")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let pre_image_type: u8 = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(0, &self))?;
+            match pre_image_type {
+                32u8 => {
+                    let pre_image: AnyHash32 = seq
+                        .next_element()?
+                        .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+                    Ok(PreImage::PreImage32(pre_image))
+                }
+                64u8 => {
+                    let pre_image: AnyHash64 = seq
+                        .next_element()?
+                        .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+                    Ok(PreImage::PreImage64(pre_image))
+                }
+                _ => Err(A::Error::invalid_value(
+                    serde::de::Unexpected::Unsigned(pre_image_type as u64),
+                    &"a PreImage variant",
+                )),
+            }
+        }
+    }
+
+    impl<'de> Deserialize<'de> for PreImage {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: Deserializer<'de>,
         {
-            let data: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
-            data.parse().map_err(Error::custom)
+            if deserializer.is_human_readable() {
+                let data: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
+                data.parse().map_err(Error::custom)
+            } else {
+                deserializer.deserialize_struct("PreImage", PREIMAGE_FIELDS, PreImageVisitor)
+            }
         }
     }
 }

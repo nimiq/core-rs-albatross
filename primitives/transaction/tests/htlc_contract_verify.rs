@@ -6,6 +6,7 @@ use nimiq_transaction::{
     account::{
         htlc_contract::{
             AnyHash, AnyHash32, AnyHash64, CreationTransactionData, OutgoingHTLCTransactionProof,
+            PreImage,
         },
         AccountTransactionVerification,
     },
@@ -129,7 +130,7 @@ fn it_can_verify_regular_transfer() {
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
         hash_depth: 1,
         hash_root: AnyHash::from(Blake2bHasher::default().digest(&[0u8; 32])),
-        pre_image: AnyHash::Blake2b(AnyHash32::from([0u8; 32])),
+        pre_image: PreImage::PreImage32(AnyHash32::from([0u8; 32])),
         signature_proof: recipient_signature_proof.clone(),
     };
     tx.proof = proof.serialize_to_vec();
@@ -139,7 +140,7 @@ fn it_can_verify_regular_transfer() {
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
         hash_depth: 1,
         hash_root: AnyHash::from(Sha512Hasher::default().digest(&[0u8; 64])),
-        pre_image: AnyHash::Sha512(AnyHash64::from([0u8; 64])),
+        pre_image: PreImage::PreImage64(AnyHash64::from([0u8; 64])),
         signature_proof: recipient_signature_proof.clone(),
     };
     tx.proof = proof.serialize_to_vec();
@@ -149,7 +150,7 @@ fn it_can_verify_regular_transfer() {
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
         hash_depth: 1,
         hash_root: AnyHash::from(Sha256Hasher::default().digest(&[0u8; 32])),
-        pre_image: AnyHash::Sha256(AnyHash32::from([0u8; 32])),
+        pre_image: PreImage::PreImage32(AnyHash32::from([0u8; 32])),
         signature_proof: recipient_signature_proof.clone(),
     };
     tx.proof = proof.serialize_to_vec();
@@ -193,7 +194,7 @@ fn it_can_verify_regular_transfer() {
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
         hash_depth: 1,
         hash_root: AnyHash::from(Blake2bHasher::default().digest(&[0u8; 32])),
-        pre_image: AnyHash::Blake2b(AnyHash32::from([0u8; 32])),
+        pre_image: PreImage::PreImage32(AnyHash32::from([0u8; 32])),
         signature_proof: recipient_signature_proof,
     };
     tx.proof = proof.serialize_to_vec();

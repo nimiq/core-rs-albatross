@@ -5,7 +5,7 @@ use nimiq_account::{
 };
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::traits::{Database, WriteTransaction};
-use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
+use nimiq_hash::{Blake2bHasher, Hasher};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_primitives::{
     account::AccountType, coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy,
@@ -13,7 +13,9 @@ use nimiq_primitives::{
 use nimiq_serde::Serialize;
 use nimiq_transaction::{
     account::{
-        htlc_contract::{AnyHash, CreationTransactionData as HTLCCreationTransactionData},
+        htlc_contract::{
+            AnyHash, AnyHash32, CreationTransactionData as HTLCCreationTransactionData, PreImage,
+        },
         staking_contract::IncomingStakingTransactionData,
         vesting_contract::CreationTransactionData as VestingCreationTransactionData,
     },
@@ -129,7 +131,7 @@ enum OutgoingAccountData {
         contract_address: Address,
         sender_key_pair: KeyPair,
         recipient_key_pair: KeyPair,
-        pre_image: AnyHash,
+        pre_image: PreImage,
         hash_root: AnyHash,
     },
     Staking {
@@ -448,8 +450,12 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 };
 
                 // HTLC account.
-                let pre_image = Blake2bHash(self.rng.gen());
-                let hash_root = AnyHash::from(Blake2bHasher::default().chain(&pre_image).finish());
+                let pre_image = PreImage::PreImage32(AnyHash32(self.rng.gen()));
+                let hash_root = AnyHash::from(
+                    Blake2bHasher::default()
+                        .chain(&pre_image.as_bytes())
+                        .finish(),
+                );
                 let account = Account::HTLC(HashedTimeLockedContract {
                     balance,
                     sender: Address::from(&sender_key_pair),
@@ -467,7 +473,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                     contract_address,
                     sender_key_pair,
                     recipient_key_pair,
-                    pre_image: AnyHash::from(pre_image),
+                    pre_image,
                     hash_root,
                 }
             }

@@ -18,7 +18,7 @@ use nimiq_test_utils::{
 };
 use nimiq_transaction::{
     account::htlc_contract::{
-        AnyHash, AnyHash32, CreationTransactionData, OutgoingHTLCTransactionProof,
+        AnyHash, AnyHash32, CreationTransactionData, OutgoingHTLCTransactionProof, PreImage,
     },
     SignatureProof, Transaction,
 };
@@ -376,7 +376,7 @@ fn it_refuses_invalid_transactions() {
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
         hash_depth: 1,
         hash_root: start_contract.hash_root.clone(),
-        pre_image: AnyHash::from(Blake2bHasher::default().digest(pre_image.as_bytes())),
+        pre_image: PreImage::from(Blake2bHasher::default().digest(pre_image.as_bytes())),
         signature_proof: recipient_signature_proof.clone(),
     };
     tx.proof = proof.serialize_to_vec();
@@ -456,7 +456,7 @@ fn it_refuses_invalid_transactions() {
 fn prepare_outgoing_transaction() -> (
     HashedTimeLockedContract,
     Transaction,
-    AnyHash,
+    PreImage,
     SignatureProof,
     SignatureProof,
 ) {
@@ -473,7 +473,7 @@ fn prepare_outgoing_transaction() -> (
     let recipient_key_pair = KeyPair::from(recipient_priv_key);
     let sender = Address::from(&sender_key_pair.public);
     let recipient = Address::from(&recipient_key_pair.public);
-    let pre_image = AnyHash::Blake2b(AnyHash32::from([1u8; 32]));
+    let pre_image = PreImage::PreImage32(AnyHash32::from([1u8; 32]));
     let hash_root = AnyHash::from(
         Blake2bHasher::default().digest(
             Blake2bHasher::default()

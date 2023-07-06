@@ -5,7 +5,10 @@ use nimiq_primitives::{
     coin::Coin,
 };
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_transaction::{account::htlc_contract::AnyHash, Transaction};
+use nimiq_transaction::{
+    account::htlc_contract::{AnyHash, PreImage},
+    Transaction,
+};
 
 use crate::TransactionOperationReceipt;
 
@@ -45,7 +48,7 @@ pub enum Log {
     #[serde(rename_all = "camelCase")]
     HTLCRegularTransfer {
         contract_address: Address,
-        pre_image: AnyHash,
+        pre_image: PreImage,
         hash_depth: u8,
     },
 

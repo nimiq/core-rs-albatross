@@ -16,7 +16,6 @@ bitflags = "1.0"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 num-traits = "0.2"
 serde = "1.0"
-serde_repr = "0.1"
 strum_macros = "0.24"
 thiserror = "1.0"
 tsify = { version = "0.4", optional = true }

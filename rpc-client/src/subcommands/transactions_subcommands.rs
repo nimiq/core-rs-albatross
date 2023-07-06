@@ -9,7 +9,7 @@ use nimiq_rpc_interface::{
     consensus::ConsensusInterface,
     types::{HashAlgorithm, ValidityStartHeight},
 };
-use nimiq_transaction::account::htlc_contract::{AnyHash, AnyHash32, AnyHash64};
+use nimiq_transaction::account::htlc_contract::{AnyHash, AnyHash32, AnyHash64, PreImage};
 
 use super::accounts_subcommands::HandleSubcommand;
 use crate::Client;
@@ -199,7 +199,7 @@ pub enum TransactionCommand {
         /// The address of the basic account that will receive the funds.
         htlc_recipient: Address,
 
-        pre_image: String,
+        pre_image: PreImage,
 
         /// The result of hashing the pre-image hash `hash_count` times.
         hash_root: String,
@@ -590,7 +590,7 @@ impl HandleSubcommand for TransactionCommand {
                             sender_wallet,
                             contract_address,
                             htlc_recipient,
-                            Self::parse_hash(&hash_algorithm, pre_image)?,
+                            pre_image,
                             Self::parse_hash(&hash_algorithm, hash_root)?,
                             hash_count,
                             tx_commons.value,
@@ -606,7 +606,7 @@ impl HandleSubcommand for TransactionCommand {
                             sender_wallet,
                             contract_address,
                             htlc_recipient,
-                            Self::parse_hash(&hash_algorithm, pre_image)?,
+                            pre_image,
                             Self::parse_hash(&hash_algorithm, hash_root)?,
                             hash_count,
                             tx_commons.value,
