@@ -75,6 +75,13 @@ impl<'read, T: DataStoreReadOps + DataStoreIterOps> StakingContractStoreRead<'re
             &StakingContractStore::staker_key(&Address::END_ADDRESS),
         )
     }
+
+    pub(crate) fn iter_validators(&self) -> impl Iterator<Item = Validator> {
+        self.0.iter(
+            &StakingContractStore::validator_key(&Address::START_ADDRESS),
+            &StakingContractStore::validator_key(&Address::END_ADDRESS),
+        )
+    }
 }
 
 #[cfg(feature = "interaction-traits")]

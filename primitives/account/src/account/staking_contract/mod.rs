@@ -120,6 +120,17 @@ impl StakingContract {
         vec![]
     }
 
+    /// Get a list containing all validators
+    /// IMPORTANT: This is a very expensive operation, iterating over all existing validators in the contract.
+    pub fn get_validators<T: DataStoreReadOps + DataStoreIterOps>(
+        &self,
+        data_store: &T,
+    ) -> Vec<Validator> {
+        StakingContractStoreRead::new(data_store)
+            .iter_validators()
+            .collect()
+    }
+
     /// Given a seed, it randomly distributes the validator slots across all validators. It is
     /// used to select the validators for the next epoch.
     pub fn select_validators<T: DataStoreReadOps>(

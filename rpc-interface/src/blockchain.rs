@@ -102,6 +102,11 @@ pub trait BlockchainInterface {
         address: Address,
     ) -> RPCResult<Validator, BlockchainState, Self::Error>;
 
+    /// Fetches all validators in the staking contract.
+    /// IMPORTANT: This operation iterates over all validators in the staking contract
+    /// and thus is extremely computationally expensive.
+    async fn get_validators(&mut self) -> RPCResult<Vec<Validator>, BlockchainState, Self::Error>;
+
     /// Fetches all stakers for a given validator.
     /// IMPORTANT: This operation iterates over all stakers of the staking contract
     /// and thus is extremely computationally expensive.

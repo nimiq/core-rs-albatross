@@ -575,6 +575,30 @@ impl BlockchainInterface for BlockchainDispatcher {
         get_validator_by_address(&self.blockchain.read(), &address)
     }
 
+    /// Fetches all validators in the staking contract.
+    /// IMPORTANT: This operation iterates over all validators in the staking contract
+    /// and thus is extremely computationally expensive.
+    /// This function requires the read lock acquisition prior to its execution.
+    async fn get_validators(&mut self) -> RPCResult<Vec<Validator>, BlockchainState, Self::Error> {
+        let blockchain_proxy = self.blockchain.read();
+
+        if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
+            let staking_contract = blockchain
+                .get_staking_contract_if_complete(None)
+                .ok_or(Error::NoConsensus)?;
+            let data_store = blockchain.get_staking_contract_store();
+            let db_txn = blockchain.read_transaction();
+            let validators = staking_contract.get_validators(&data_store.read(&db_txn));
+
+            Ok(RPCData::with_blockchain(
+                validators.iter().map(Validator::from_validator).collect(),
+                &blockchain_proxy,
+            ))
+        } else {
+            Err(Error::NotSupportedForLightBlockchain)
+        }
+    }
+
     /// Fetches all stakers for a given validator.
     /// IMPORTANT: This operation iterates over all stakers of the staking contract
     /// and thus is extremely computationally expensive.

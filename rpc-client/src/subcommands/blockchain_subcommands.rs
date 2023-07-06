@@ -123,6 +123,10 @@ pub enum BlockchainCommand {
         address: Address,
     },
 
+    /// Tries to fetch all validators in the staking contract.
+    /// IMPORTANT: This is a very expensive operation, iterating over all existing validators in the contract.
+    Validators {},
+
     /// Tries to fetch all stakers of a given validator.
     /// IMPORTANT: This is a very expensive operation, iterating over all existing stakers in the contract.
     StakersByValidator {
@@ -298,6 +302,10 @@ impl HandleSubcommand for BlockchainCommand {
                 "{:#?}",
                 client.blockchain.get_validator_by_address(address).await?
             ),
+
+            BlockchainCommand::Validators {} => {
+                println!("{:#?}", client.blockchain.get_validators().await?)
+            }
 
             BlockchainCommand::StakersByValidator { address } => println!(
                 "{:#?}",
