@@ -204,9 +204,11 @@ impl Blockchain {
         Ok(total_size)
     }
 
+    /// Produces a Merkle proof of the inclusion of the given keys in the
+    /// Merkle Radix Trie.
     pub fn get_accounts_proof(&self, keys: Vec<&KeyNibbles>) -> Option<TrieProof> {
         let txn = self.env.read_transaction();
 
-        self.state().accounts.tree.get_proof(&txn, keys).ok()
+        self.state().accounts.get_proof(Some(&txn), keys).ok()
     }
 }

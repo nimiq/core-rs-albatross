@@ -9,6 +9,7 @@ use nimiq_primitives::{
     key_nibbles::KeyNibbles,
     trie::{
         trie_chunk::{TrieChunk, TrieChunkPushResult},
+        trie_proof::TrieProof,
         TrieItem,
     },
 };
@@ -911,6 +912,19 @@ impl Accounts {
                 self.tree
                     .get_chunk_with_proof(&self.env.read_transaction(), start_key.., limit)
             }
+        }
+    }
+
+    /// Produces a Merkle proof of the inclusion of the given keys in the
+    /// Merkle Radix Trie.
+    pub fn get_proof(
+        &self,
+        txn_option: Option<&DBTransaction>,
+        keys: Vec<&KeyNibbles>,
+    ) -> Result<TrieProof, IncompleteTrie> {
+        match txn_option {
+            Some(txn) => self.tree.get_proof(txn, keys),
+            None => self.tree.get_proof(&self.env.read_transaction(), keys),
         }
     }
 }
