@@ -295,24 +295,24 @@ fn test_verify_micro_block_body_fork_proofs() {
     let mut micro_header_2 = micro_header_1.clone();
     micro_header_2.block_number += 1;
 
-    let fork_proof_1 = ForkProof {
-        header1: micro_header.clone(),
-        header2: micro_header_1.clone(),
-        justification1: Signature::default(),
-        justification2: Signature::default(),
-        prev_vrf_seed: VrfSeed::default(),
-    };
+    let fork_proof_1 = ForkProof::new(
+        micro_header.clone(),
+        Signature::default(),
+        micro_header_1.clone(),
+        Signature::default(),
+        VrfSeed::default(),
+    );
 
     let mut fork_proof_2 = fork_proof_1.clone();
-    fork_proof_2.header2 = micro_header_2;
+    fork_proof_2.header1 = micro_header_2;
 
     let mut fork_proof_3 = fork_proof_2.clone();
-    fork_proof_3.header1 = micro_header_1;
+    fork_proof_3.header2 = micro_header_1;
 
     let micro_justification = MicroJustification::Micro(Signature::default());
 
     let mut fork_proofs = vec![fork_proof_1, fork_proof_2, fork_proof_3];
-    fork_proofs.sort();
+    fork_proofs.sort_by_key(ForkProof::sort_key);
     fork_proofs.reverse();
     let micro_body = MicroBody {
         fork_proofs: fork_proofs.clone(),
@@ -331,7 +331,7 @@ fn test_verify_micro_block_body_fork_proofs() {
     assert_eq!(block.verify(), Err(BlockError::ForkProofsNotOrdered));
 
     // Sort fork proofs and re-build block
-    fork_proofs.sort();
+    fork_proofs.sort_by_key(ForkProof::sort_key);
     let micro_body = MicroBody {
         fork_proofs: fork_proofs.clone(),
         transactions: [].to_vec(),
@@ -365,8 +365,9 @@ fn test_verify_micro_block_body_fork_proofs() {
     // Now modify the block height of the first header of the first fork proof
     let mut fork_proof = fork_proofs.pop().unwrap();
     fork_proof.header1.block_number = Policy::blocks_per_epoch() + genesis_block_number;
+    fork_proof.header2.block_number = Policy::blocks_per_epoch() + genesis_block_number + 1;
     fork_proofs.push(fork_proof);
-    fork_proofs.sort();
+    fork_proofs.sort_by_key(ForkProof::sort_key);
 
     let micro_body = MicroBody {
         fork_proofs: fork_proofs.clone(),

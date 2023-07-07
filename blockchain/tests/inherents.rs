@@ -322,21 +322,21 @@ fn it_correctly_creates_inherents_from_fork_proof() {
     let mut reporting_micro_block = reporting_micro_block.unwrap_micro();
 
     // Produce and add the fork proof.
-    let fork_proof = ForkProof {
-        header1: micro_block_fork1.header.clone(),
-        header2: micro_block_fork2.header.clone(),
-        justification1: micro_block_fork1
+    let fork_proof = ForkProof::new(
+        micro_block_fork1.header.clone(),
+        micro_block_fork1
             .justification
             .clone()
             .unwrap()
             .unwrap_micro(),
-        justification2: micro_block_fork2
+        micro_block_fork2.header.clone(),
+        micro_block_fork2
             .justification
             .clone()
             .unwrap()
             .unwrap_micro(),
-        prev_vrf_seed: micro_block_fork2.header.seed.clone(),
-    };
+        micro_block_fork2.header.seed.clone(),
+    );
     reporting_micro_block
         .body
         .as_mut()
@@ -407,21 +407,21 @@ fn it_correctly_creates_inherents_in_next_epoch_from_fork_proof() {
     );
 
     // Produce and add the fork proof.
-    let fork_proof = ForkProof {
-        header1: micro_block_fork1.header.clone(),
-        header2: micro_block_fork2.header.clone(),
-        justification1: micro_block_fork1
+    let fork_proof = ForkProof::new(
+        micro_block_fork1.header.clone(),
+        micro_block_fork1
             .justification
             .clone()
             .unwrap()
             .unwrap_micro(),
-        justification2: micro_block_fork2
+        micro_block_fork2.header.clone(),
+        micro_block_fork2
             .justification
             .clone()
             .unwrap()
             .unwrap_micro(),
-        prev_vrf_seed: micro_block_fork2.header.seed.clone(),
-    };
+        micro_block_fork2.header.seed.clone(),
+    );
     reporting_micro_block
         .body
         .as_mut()

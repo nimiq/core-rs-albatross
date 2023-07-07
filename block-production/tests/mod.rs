@@ -91,13 +91,13 @@ fn it_can_produce_micro_blocks() {
         header2.timestamp += 1;
         let hash2 = header2.hash::<Blake2bHash>();
         let justification2 = signing_key().sign(hash2.as_slice());
-        ForkProof {
+        ForkProof::new(
             header1,
-            header2,
             justification1,
+            header2,
             justification2,
             prev_vrf_seed,
-        }
+        )
     };
 
     let bc = blockchain.upgradable_read();

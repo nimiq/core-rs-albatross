@@ -255,7 +255,7 @@ impl MicroBody {
 
             // Check proof ordering and uniqueness.
             if let Some(previous) = previous_proof {
-                match previous.cmp(proof) {
+                match previous.sort_key().cmp(&proof.sort_key()) {
                     Ordering::Equal => {
                         return Err(BlockError::DuplicateForkProof);
                     }

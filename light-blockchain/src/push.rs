@@ -424,13 +424,13 @@ impl LightBlockchain {
                     .expect("Missing justification")
                     .unwrap_micro();
 
-                let proof = ForkProof {
-                    header1: block.header.clone(),
-                    header2: micro_block.header,
+                let proof = ForkProof::new(
+                    block.header.clone(),
                     justification1,
+                    micro_block.header,
                     justification2,
-                    prev_vrf_seed: prev_vrf_seed.clone(),
-                };
+                    prev_vrf_seed.clone(),
+                );
 
                 // We shouldn't log errors if there are no listeners.
                 _ = self.fork_notifier.send(ForkEvent::Detected(proof));
