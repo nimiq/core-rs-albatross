@@ -4,7 +4,7 @@ use byteorder::WriteBytesExt;
 use log::error;
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash, HashOutput, Hasher};
-use nimiq_serde::{Deserialize, SerRangeFrom, Serialize};
+use nimiq_serde::{Deserialize, Serialize};
 
 use crate::{key_nibbles::KeyNibbles, trie::error::MerkleRadixTrieError};
 
@@ -25,7 +25,7 @@ pub struct TrieNode {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct RootData {
-    pub incomplete: Option<SerRangeFrom<KeyNibbles>>,
+    pub incomplete: Option<RangeFrom<KeyNibbles>>,
     pub num_branches: u64,
     pub num_hybrids: u64,
     pub num_leaves: u64,
@@ -109,7 +109,7 @@ impl TrieNode {
             key: KeyNibbles::ROOT,
             root_data: Some(RootData {
                 incomplete: if incomplete {
-                    Some(SerRangeFrom(KeyNibbles::ROOT..))
+                    Some(KeyNibbles::ROOT..)
                 } else {
                     None
                 },

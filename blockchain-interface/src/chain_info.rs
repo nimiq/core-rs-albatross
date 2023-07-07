@@ -4,7 +4,7 @@ use nimiq_block::Block;
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{coin::Coin, key_nibbles::KeyNibbles, policy::Policy};
-use nimiq_serde::{Deserialize, SerRangeFrom, Serialize};
+use nimiq_serde::{Deserialize, Serialize};
 
 /// Struct that, for each block, keeps information relative to the chain the block is on.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -25,7 +25,7 @@ pub struct ChainInfo {
     /// A boolean stating if this block can be pruned.
     pub prunable: bool,
     /// Missing range of the accounts before this block.
-    pub prev_missing_range: Option<SerRangeFrom<KeyNibbles>>,
+    pub prev_missing_range: Option<RangeFrom<KeyNibbles>>,
 }
 
 impl ChainInfo {
@@ -72,7 +72,7 @@ impl ChainInfo {
             cum_ext_tx_size: 0,
             history_tree_len: 0,
             prunable,
-            prev_missing_range: prev_missing_range.map(SerRangeFrom),
+            prev_missing_range,
         }
     }
 

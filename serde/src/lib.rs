@@ -1,4 +1,4 @@
-use std::{error::Error, fmt, io, io::Write, ops};
+use std::{error::Error, fmt, io, io::Write};
 
 pub use postcard::fixint;
 use serde::{
@@ -90,29 +90,6 @@ impl<'de, const N: usize> HexArray<'de> for [u8; N] {
         } else {
             BigArray::deserialize(deserializer)
         }
-    }
-}
-
-/// The Nimiq wrapper for serializing std::ops::RangeFrom
-#[derive(Clone, Debug)]
-pub struct SerRangeFrom<T>(pub ops::RangeFrom<T>);
-
-impl<T: Serialize> serde::Serialize for SerRangeFrom<T> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serde::Serialize::serialize(&self.0.start, serializer)
-    }
-}
-
-impl<'de, T: Deserialize> serde::Deserialize<'de> for SerRangeFrom<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let start: T = serde::Deserialize::deserialize(deserializer)?;
-        Ok(Self(std::ops::RangeFrom { start }))
     }
 }
 

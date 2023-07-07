@@ -23,7 +23,7 @@ use nimiq_primitives::{
         trie_proof_node::TrieProofNode,
     },
 };
-use nimiq_serde::{Deserialize, SerRangeFrom, Serialize};
+use nimiq_serde::{Deserialize, Serialize};
 
 /// A Merkle Radix Trie is a hybrid between a Merkle tree and a Radix trie. Like a Merkle tree each
 /// node contains the hashes of all its children. That creates a tree that is resistant to
@@ -218,8 +218,7 @@ impl MerkleRadixTrie {
             .root_data
             .clone()
             .expect("root node needs root data")
-            .incomplete
-            .map(|range| range.0);
+            .incomplete;
         let mut stack = vec![root];
 
         while let Some(item) = stack.pop() {
@@ -567,8 +566,7 @@ impl MerkleRadixTrie {
             .root_data
             .clone()
             .expect("root node needs root data")
-            .incomplete
-            .map(|range| range.0);
+            .incomplete;
 
         // And initialize the root path.
         let mut root_path: Vec<TrieNode> = vec![];
@@ -749,14 +747,7 @@ impl MerkleRadixTrie {
         chunk: TrieChunk,
         expected_hash: Blake2bHash,
     ) -> Result<TrieChunkPushResult, MerkleRadixTrieError> {
-        match self
-            .get_root(txn)
-            .unwrap()
-            .root_data
-            .unwrap()
-            .incomplete
-            .map(|range| range.0)
-        {
+        match self.get_root(txn).unwrap().root_data.unwrap().incomplete {
             Some(i) if i.start == start_key => {}
             Some(_) => return Ok(TrieChunkPushResult::Ignored),
             None => return Err(MerkleRadixTrieError::TrieAlreadyComplete),
@@ -863,8 +854,7 @@ impl MerkleRadixTrie {
         }
 
         let mut root_node = self.get_root(txn).unwrap();
-        root_node.root_data.as_mut().unwrap().incomplete =
-            chunk.end_key.clone().map(|end| SerRangeFrom(end..));
+        root_node.root_data.as_mut().unwrap().incomplete = chunk.end_key.clone().map(|end| end..);
         self.put_node(txn, &root_node);
 
         Ok(TrieChunkPushResult::Applied)
@@ -917,7 +907,7 @@ impl MerkleRadixTrie {
 
         let mut root_node = self.get_root(txn).unwrap();
         root_node.root_data.as_mut().unwrap().incomplete =
-            Some(SerRangeFrom(ops::RangeFrom { start: start_key }));
+            Some(ops::RangeFrom { start: start_key });
         self.put_node(txn, &root_node);
 
         Ok(())
@@ -1244,7 +1234,6 @@ impl MerkleRadixTrie {
             .root_data
             .expect("root node needs root data")
             .incomplete
-            .map(|range| range.0)
     }
 
     /// Returns the root node, if there is one.
@@ -1338,8 +1327,7 @@ impl MerkleRadixTrie {
             .root_data
             .clone()
             .expect("root node needs root data")
-            .incomplete
-            .map(|range| range.0);
+            .incomplete;
 
         // First, find the node.
         loop {
@@ -1428,8 +1416,7 @@ impl MerkleRadixTrie {
             .root_data
             .clone()
             .expect("root node needs root data")
-            .incomplete
-            .map(|range| range.0);
+            .incomplete;
 
         let mut stack = vec![root];
 
