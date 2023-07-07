@@ -9,7 +9,7 @@ use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::{
     networks::NetworkId,
     policy::Policy,
-    slots::{Validator, Validators},
+    slots_allocation::{Validator, Validators},
 };
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::{Rng, VrfEntropy, VrfUseCase};

@@ -146,7 +146,7 @@ pub enum Log {
     PayoutReward { to: Address, value: Coin },
 
     #[serde(rename_all = "camelCase")]
-    Slash {
+    Penalize {
         validator_address: Address,
         event_block: u32,
         slot: u16,
@@ -290,7 +290,7 @@ impl Log {
                         .unwrap_or(false)
             }
             Log::PayoutReward { to, .. } => to == address,
-            Log::Slash {
+            Log::Penalize {
                 validator_address, ..
             } => validator_address == address,
             Log::RevertContract { contract_address } => contract_address == address,

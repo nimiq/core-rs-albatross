@@ -13,7 +13,7 @@ use nimiq_transaction::{
 
 use crate::{
     account::staking_contract::{
-        receipts::SlashReceipt,
+        receipts::PenalizeReceipt,
         store::{
             StakingContractStoreRead, StakingContractStoreReadOps, StakingContractStoreReadOpsExt,
             StakingContractStoreWrite,
@@ -640,8 +640,12 @@ impl AccountInherentInteraction for StakingContract {
         inherent_logger: &mut InherentLogger,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         match inherent {
-            Inherent::Slash { slot } => {
-                // Check that the slashed validator does exist.
+            Inherent::Slash { validator } => {
+                // PITODO
+                Ok(None)
+            }
+            Inherent::Penalize { slot } => {
+                // Check that the penalized validator does exist.
                 let mut store = StakingContractStoreWrite::new(&mut data_store);
                 let validator = store.expect_validator(&slot.validator_address)?;
 
@@ -695,7 +699,7 @@ impl AccountInherentInteraction for StakingContract {
                 }
 
                 if newly_lost_rewards {
-                    inherent_logger.push_log(Log::Slash {
+                    inherent_logger.push_log(Log::Penalize {
                         validator_address: slot.validator_address.clone(),
                         event_block: slot.event_block,
                         slot: slot.slot,
@@ -716,7 +720,7 @@ impl AccountInherentInteraction for StakingContract {
                 inherent_logger.push_tx_logger(tx_logger);
 
                 Ok(Some(
-                    SlashReceipt {
+                    PenalizeReceipt {
                         newly_deactivated,
                         newly_disabled,
                         newly_lost_rewards,
@@ -757,8 +761,12 @@ impl AccountInherentInteraction for StakingContract {
         inherent_logger: &mut InherentLogger,
     ) -> Result<(), AccountError> {
         match inherent {
-            Inherent::Slash { slot } => {
-                let receipt: SlashReceipt =
+            Inherent::Slash { validator } => {
+                // PITODO
+                Ok(())
+            }
+            Inherent::Penalize { slot } => {
+                let receipt: PenalizeReceipt =
                     receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
                 let mut tx_logger = TransactionLog::empty();
@@ -807,7 +815,7 @@ impl AccountInherentInteraction for StakingContract {
                         self.current_batch_lost_rewards.remove(slot.slot as usize);
                     }
 
-                    inherent_logger.push_log(Log::Slash {
+                    inherent_logger.push_log(Log::Penalize {
                         validator_address: slot.validator_address.clone(),
                         event_block: slot.event_block,
                         slot: slot.slot,

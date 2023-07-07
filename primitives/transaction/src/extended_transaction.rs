@@ -43,7 +43,7 @@ impl error::Error for IntoTransactionError {}
 impl ExtendedTransaction {
     /// Convert a set of inherents and basic transactions (together with a network id, a block
     /// number and a block timestamp) into a vector of extended transactions.
-    /// We only want to store slash and reward inherents, so we ignore the other inherent types.
+    /// We only want to store punishments and reward inherents, so we ignore the other inherent types.
     pub fn from(
         network_id: NetworkId,
         block_number: u32,
@@ -64,7 +64,7 @@ impl ExtendedTransaction {
 
         for inherent in inherents {
             match inherent {
-                Inherent::Slash { .. } | Inherent::Reward { .. } => {
+                Inherent::Penalize { .. } | Inherent::Reward { .. } => {
                     ext_txs.push(ExtendedTransaction {
                         network_id,
                         block_number,

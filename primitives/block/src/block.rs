@@ -7,7 +7,7 @@ use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::PublicKey;
 use nimiq_network_interface::network::Topic;
-use nimiq_primitives::{coin::Coin, policy::Policy, slots::Validators};
+use nimiq_primitives::{coin::Coin, policy::Policy, slots_allocation::Validators};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::ExecutedTransaction;
 use nimiq_vrf::VrfSeed;

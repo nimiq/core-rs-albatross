@@ -10,7 +10,7 @@ use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
     types::{
         is_of_log_type_and_related_to_addresses, Account, Block, BlockLog, BlockchainState,
-        ExecutedTransaction, Inherent, LogType, RPCData, RPCResult, SlashedSlots, Slot, Staker,
+        ExecutedTransaction, Inherent, LogType, PenalizedSlots, RPCData, RPCResult, Slot, Staker,
         Validator,
     },
 };
@@ -332,7 +332,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     /// Returns all the inherents (including reward inherents) for the given batch number. Note
-    /// that this only considers blocks in the main chain.
+    /// that this only considers blocks in the main chain.  
     async fn get_inherents_by_batch_number(
         &mut self,
         batch_number: u32,
@@ -342,7 +342,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                 Error::InvalidArgument("Batch number out of bounds".to_string()),
             )?;
 
-            // Check the batch's macro block to see if the batch includes slashes.
+            // Check the batch's macro block to see if the batch includes punishments.  PITODO
             let macro_block = blockchain
                 .get_block_at(macro_block_number, true, None) // The lost_reward_set is in the MacroBody
                 .map_err(|_| Error::BlockNotFound(macro_block_number))?;
@@ -352,7 +352,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             let macro_body = macro_block.unwrap_macro().body.unwrap();
 
             if !macro_body.lost_reward_set.is_empty() {
-                // Search all micro blocks of the batch to find the slash inherents.
+                // Search all micro blocks of the batch to find the punishment inherents.
                 let first_micro_block = Policy::first_block_of_batch(batch_number).ok_or(
                     Error::InvalidArgument("Batch number out of bounds".to_string()),
                 )?;
@@ -538,11 +538,11 @@ impl BlockchainInterface for BlockchainDispatcher {
         }
     }
 
-    /// Returns information about the currently slashed slots. This includes slots that lost rewards
+    /// Returns information about the currently penalized slots. This includes slots that lost rewards
     /// and that were disabled.
-    async fn get_current_slashed_slots(
+    async fn get_current_penalized_slots(
         &mut self,
-    ) -> RPCResult<SlashedSlots, BlockchainState, Self::Error> {
+    ) -> RPCResult<PenalizedSlots, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
             let block_number = blockchain.block_number();
@@ -551,7 +551,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                 .ok_or(Error::NoConsensus)?;
 
             Ok(RPCData::with_blockchain(
-                SlashedSlots {
+                PenalizedSlots {
                     block_number,
                     lost_rewards: staking_contract.current_batch_lost_rewards(),
                     disabled: staking_contract.current_epoch_disabled_slots(),
@@ -563,11 +563,11 @@ impl BlockchainInterface for BlockchainDispatcher {
         }
     }
 
-    /// Returns information about the slashed slots of the previous batch. This includes slots that
+    /// Returns information about the penalized slots of the previous batch. This includes slots that
     /// lost rewards and that were disabled.
-    async fn get_previous_slashed_slots(
+    async fn get_previous_penalized_slots(
         &mut self,
-    ) -> RPCResult<SlashedSlots, BlockchainState, Self::Error> {
+    ) -> RPCResult<PenalizedSlots, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
             let block_number = blockchain.block_number();
@@ -576,7 +576,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                 .ok_or(Error::NoConsensus)?;
 
             Ok(RPCData::with_blockchain(
-                SlashedSlots {
+                PenalizedSlots {
                     block_number,
                     lost_rewards: staking_contract.previous_batch_lost_rewards(),
                     disabled: staking_contract.previous_epoch_disabled_slots(),

@@ -2,7 +2,9 @@ use nimiq_account::StakingContract;
 use nimiq_block::{ForkProof, MacroBlock, MacroHeader, SkipBlockInfo};
 use nimiq_database as db;
 use nimiq_keys::Address;
-use nimiq_primitives::{account::AccountType, coin::Coin, policy::Policy, slots::SlashedSlot};
+use nimiq_primitives::{
+    account::AccountType, coin::Coin, policy::Policy, slots_allocation::PenalizedSlot,
+};
 use nimiq_transaction::{inherent::Inherent, reward::RewardTransaction};
 use nimiq_vrf::{AliasMethod, VrfUseCase};
 
@@ -25,9 +27,9 @@ impl Blockchain {
 
         inherents
     }
-    /// Given fork proofs and (or) a skip block, it returns the respective slash inherents. It expects
+    /// Given fork proofs and (or) a skip block, it returns the respective punishment inherents. It expects
     /// verified fork proofs and (or) skip block.
-    pub fn create_slash_inherents(
+    pub fn create_punishment_inherents(
         &self,
         fork_proofs: &[ForkProof],
         skip_block_info: Option<SkipBlockInfo>,
@@ -64,18 +66,18 @@ impl Blockchain {
             )
             .expect("Couldn't calculate slot owner!");
 
-        // Create the SlashedSlot struct.
-        let slot = SlashedSlot {
+        // Create the PenalizedSlot struct.
+        let slot = PenalizedSlot {
             slot: proposer_slot.number,
             validator_address: proposer_slot.validator.address,
             event_block: fork_proof.header1.block_number,
         };
 
         // Create the corresponding slash inherent.
-        Inherent::Slash { slot }
+        Inherent::Penalize { slot }
     }
 
-    /// It creates a slash inherent from a skip block. It expects a *verified* skip block!
+    /// It creates a penalize inherent from a skip block. It expects a *verified* skip block!
     pub fn inherent_from_skip_block_info(
         &self,
         skip_block_info: &SkipBlockInfo,
@@ -93,18 +95,18 @@ impl Blockchain {
 
         debug!(
             address = %proposer_slot.validator.address,
-            "Slash inherent from skip block"
+            "Penalize inherent from skip block"
         );
 
-        // Create the SlashedSlot struct.
-        let slot = SlashedSlot {
+        // Create the PenalizedSlot struct.
+        let slot = PenalizedSlot {
             slot: proposer_slot.number,
             validator_address: proposer_slot.validator.address,
             event_block: skip_block_info.block_number,
         };
 
-        // Create the corresponding slash inherent.
-        Inherent::Slash { slot }
+        // Create the corresponding penalize inherent.
+        Inherent::Penalize { slot }
     }
 
     /// Creates the inherents to finalize a batch. The inherents are for reward distribution and
@@ -177,7 +179,7 @@ impl Blockchain {
             // Use the current epoch's disabled slots for the rest of the batches
             staking_contract.current_epoch_disabled_slots()
         };
-        let slashed_set = lost_rewards_set | disabled_set;
+        let penalized_set = lost_rewards_set | disabled_set;
 
         // Total reward for the previous batch
         let block_reward = block_reward_for_batch(
@@ -198,8 +200,8 @@ impl Blockchain {
         // The first slot number of the current validator
         let mut first_slot_number = 0;
 
-        // Peekable iterator to collect slashed slots for validator
-        let mut slashed_set_iter = slashed_set.iter().peekable();
+        // Peekable iterator to collect penalized slots for validator
+        let mut penalized_set_iter = penalized_set.iter().peekable();
 
         // All accepted inherents.
         let mut transactions = Vec::new();
@@ -208,7 +210,7 @@ impl Blockchain {
         let mut num_eligible_slots_for_accepted_tx = Vec::new();
 
         // Remember that the total amount of reward must be burned. The reward for a slot is burned
-        // either because the slot was slashed or because the corresponding validator was unable to
+        // either because the slot was penalized or because the corresponding validator was unable to
         // accept the inherent.
         let mut burned_reward = Coin::ZERO;
 
@@ -221,29 +223,29 @@ impl Blockchain {
 
             // Compute the number of slashes for this validator slot band.
             let mut num_eligible_slots = validator_slot.num_slots();
-            let mut num_slashed_slots = 0;
+            let mut num_penalized_slots = 0;
 
-            while let Some(next_slashed_slot) = slashed_set_iter.peek() {
-                let next_slashed_slot = *next_slashed_slot as u16;
-                assert!(next_slashed_slot >= first_slot_number);
-                if next_slashed_slot < last_slot_number {
+            while let Some(next_penalized_slot) = penalized_set_iter.peek() {
+                let next_penalized_slot = *next_penalized_slot as u16;
+                assert!(next_penalized_slot >= first_slot_number);
+                if next_penalized_slot < last_slot_number {
                     assert!(num_eligible_slots > 0);
-                    slashed_set_iter.next();
+                    penalized_set_iter.next();
                     num_eligible_slots -= 1;
-                    num_slashed_slots += 1;
+                    num_penalized_slots += 1;
                 } else {
                     break;
                 }
             }
 
             // Compute reward from slot reward and number of eligible slots. Also update the burned
-            // reward from the number of slashed slots.
+            // reward from the number of penalized slots.
             let reward = slot_reward
                 .checked_mul(num_eligible_slots as u64)
                 .expect("Overflow in reward");
 
             burned_reward += slot_reward
-                .checked_mul(num_slashed_slots as u64)
+                .checked_mul(num_penalized_slots as u64)
                 .expect("Overflow in reward");
 
             // Create inherent for the reward.

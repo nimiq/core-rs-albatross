@@ -5,7 +5,7 @@ use nimiq_blockchain_interface::{
 };
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::slots::{Validator, Validators};
+use nimiq_primitives::slots_allocation::{Validator, Validators};
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::blockchain::LightBlockchain;

@@ -13,7 +13,7 @@ use nimiq_genesis::NetworkId;
 use nimiq_keys::{Address, PublicKey};
 use nimiq_primitives::{
     policy::Policy,
-    slots::{Validator, Validators},
+    slots_allocation::{Validator, Validators},
 };
 use nimiq_serde::Deserialize;
 use nimiq_test_log::test;

@@ -10,7 +10,7 @@ use nimiq_database::{
 use nimiq_genesis::NetworkInfo;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{
-    coin::Coin, networks::NetworkId, policy::Policy, slots::Validators, trie::TrieItem,
+    coin::Coin, networks::NetworkId, policy::Policy, slots_allocation::Validators, trie::TrieItem,
 };
 use nimiq_utils::time::OffsetTime;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};

@@ -4,7 +4,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{
     networks::NetworkId,
     policy::Policy,
-    slots::{Validator, Validators},
+    slots_allocation::{Validator, Validators},
 };
 
 use crate::{

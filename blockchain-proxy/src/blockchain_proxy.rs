@@ -11,7 +11,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_light_blockchain::LightBlockchain;
 use nimiq_primitives::{
     networks::NetworkId,
-    slots::{Validator, Validators},
+    slots_allocation::{Validator, Validators},
 };
 use parking_lot::{RwLock, RwLockReadGuard};
 

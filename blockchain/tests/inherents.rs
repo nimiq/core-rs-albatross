@@ -6,7 +6,9 @@ use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_database::{traits::WriteTransaction, volatile::VolatileDatabase};
 use nimiq_hash::{Blake2bHash, Blake2sHash};
 use nimiq_keys::Address;
-use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy, slots::SlashedSlot};
+use nimiq_primitives::{
+    coin::Coin, networks::NetworkId, policy::Policy, slots_allocation::PenalizedSlot,
+};
 use nimiq_test_log::test;
 use nimiq_transaction::inherent::Inherent;
 use nimiq_utils::time::OffsetTime;
@@ -82,13 +84,13 @@ fn it_can_create_batch_finalization_inherents() {
     }
     assert!(got_reward && got_finalize_batch);
 
-    // Slash one slot. Expect 1x FinalizeBatch, 1x Reward to validator, 1x Reward burn
-    let slot = SlashedSlot {
+    // Penalize one slot. Expect 1x FinalizeBatch, 1x Reward to validator, 1x Reward burn
+    let slot = PenalizedSlot {
         slot: 0,
         validator_address: validator_address.clone(),
         event_block: 0,
     };
-    let slash_inherent = Inherent::Slash { slot };
+    let slash_inherent = Inherent::Penalize { slot };
 
     let mut txn = blockchain.write_transaction();
     // adds slot 0 to previous_lost_rewards -> slot won't get reward on next finalize_previous_batch

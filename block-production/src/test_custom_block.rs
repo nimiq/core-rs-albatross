@@ -102,7 +102,7 @@ pub fn next_micro_block(
     let mut transactions = config.transactions.clone();
     transactions.sort_unstable();
 
-    let inherents = blockchain.create_slash_inherents(&config.fork_proofs, None, None);
+    let inherents = blockchain.create_punishment_inherents(&config.fork_proofs, None, None);
 
     let block_state = BlockState::new(block_number, timestamp);
 
@@ -191,7 +191,7 @@ pub fn next_skip_block(
     };
 
     // Create the inherents from the skip block info.
-    let inherents = blockchain.create_slash_inherents(&[], Some(skip_block_info), None);
+    let inherents = blockchain.create_punishment_inherents(&[], Some(skip_block_info), None);
 
     let block_state = BlockState::new(block_number, timestamp);
 

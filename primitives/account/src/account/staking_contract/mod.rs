@@ -5,7 +5,7 @@ use nimiq_keys::Address;
 use nimiq_primitives::{
     coin::Coin,
     policy::Policy,
-    slots::{Validators, ValidatorsBuilder},
+    slots_allocation::{Validators, ValidatorsBuilder},
 };
 use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
 pub use receipts::*;

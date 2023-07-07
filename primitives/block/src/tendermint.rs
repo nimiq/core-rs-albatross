@@ -3,7 +3,7 @@ use std::io;
 use log::error;
 use nimiq_bls::AggregatePublicKey;
 use nimiq_hash::{Blake2sHash, SerializeContent};
-use nimiq_primitives::{policy::Policy, slots::Validators};
+use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
 use nimiq_serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 

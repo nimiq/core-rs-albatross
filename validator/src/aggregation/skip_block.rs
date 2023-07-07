@@ -27,7 +27,7 @@ use nimiq_handel::{
 };
 use nimiq_hash::Blake2sHash;
 use nimiq_network_interface::request::{MessageMarker, RequestCommon};
-use nimiq_primitives::{policy, slots::Validators};
+use nimiq_primitives::{policy, slots_allocation::Validators};
 use nimiq_validator_network::ValidatorNetwork;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};

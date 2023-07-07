@@ -18,7 +18,7 @@ use nimiq_primitives::{
     coin::Coin,
     networks::NetworkId,
     policy::Policy,
-    slots::SlashedSlot,
+    slots_allocation::PenalizedSlot,
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
@@ -1022,9 +1022,9 @@ fn can_revert_inherents() {
         false,
     );
 
-    info!("Testing inherent Slash");
-    let inherent = Inherent::Slash {
-        slot: SlashedSlot {
+    info!("Testing inherent Penalize");
+    let inherent = Inherent::Penalize {
+        slot: PenalizedSlot {
             slot: rng.gen_range(0..Policy::SLOTS),
             validator_address: Address::from(&validator_key_pair),
             event_block: block_state.number - 1,

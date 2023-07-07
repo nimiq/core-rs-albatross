@@ -16,7 +16,7 @@ use nimiq_collections::BitSet;
 use nimiq_handel::{aggregation::Aggregation, identity::IdentityRegistry};
 use nimiq_hash::{Blake2sHash, Blake2sHasher, Hash, Hasher, SerializeContent};
 use nimiq_keys::Signature as SchnorrSignature;
-use nimiq_primitives::{policy::Policy, slots::Validators};
+use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
 use nimiq_serde::Serialize;
 use nimiq_tendermint::{
     Proposal, ProposalError, ProposalMessage, Protocol, SignedProposalMessage, Step,

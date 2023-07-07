@@ -97,7 +97,7 @@ impl StakingRecipientBuilder {
     /// This method allows to reactivate a validator. This reverts the inactivation of a validator
     /// and will result in the validator being considered for the validator selection again.
     /// This also resets any disabled slots of the given validator if it is selected in current
-    /// epoch and has previously been slashed.
+    /// epoch and has previously been penalized.
     /// It needs to be signed by the key pair corresponding to the signing key.
     pub fn reactivate_validator(&mut self, validator_address: Address) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::ReactivateValidator {

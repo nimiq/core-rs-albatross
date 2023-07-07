@@ -14,7 +14,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
 use nimiq_block::MacroBlock;
 use nimiq_hash::{Blake2sHash, Hash};
-use nimiq_primitives::{policy::Policy, slots::PK_TREE_DEPTH};
+use nimiq_primitives::{policy::Policy, slots_allocation::PK_TREE_DEPTH};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_zkp_circuits::{
     bits::BitVec,

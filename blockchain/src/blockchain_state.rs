@@ -2,7 +2,7 @@ use nimiq_account::Accounts;
 use nimiq_block::MacroBlock;
 use nimiq_blockchain_interface::ChainInfo;
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::slots::Validators;
+use nimiq_primitives::slots_allocation::Validators;
 
 /// A struct that keeps the current state of the blockchain. It summarizes the information known to
 /// a validator at the head of the blockchain.

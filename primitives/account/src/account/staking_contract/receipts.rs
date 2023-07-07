@@ -11,13 +11,13 @@ use crate::{convert_receipt, AccountReceipt};
 /// A collection of receipts for inherents/transactions. This is necessary to be able to revert
 /// those inherents/transactions.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct SlashReceipt {
+pub struct PenalizeReceipt {
     pub newly_deactivated: bool,
     pub newly_disabled: bool,
     pub newly_lost_rewards: bool,
     pub old_jail_release: Option<u32>,
 }
-convert_receipt!(SlashReceipt);
+convert_receipt!(PenalizeReceipt);
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct UpdateValidatorReceipt {
@@ -35,8 +35,8 @@ pub struct JailValidatorReceipt {
 }
 convert_receipt!(JailValidatorReceipt);
 
-impl From<SlashReceipt> for JailValidatorReceipt {
-    fn from(value: SlashReceipt) -> Self {
+impl From<PenalizeReceipt> for JailValidatorReceipt {
+    fn from(value: PenalizeReceipt) -> Self {
         Self {
             newly_deactivated: value.newly_deactivated,
             old_jail_release: value.old_jail_release,

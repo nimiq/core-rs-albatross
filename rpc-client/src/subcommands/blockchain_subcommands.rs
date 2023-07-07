@@ -109,12 +109,12 @@ pub enum BlockchainCommand {
         offset: Option<u32>,
     },
 
-    /// Returns information about the currently slashed slots or the previous batch. This includes slots that lost rewards
+    /// Returns information about the currently penalized slots or the previous batch. This includes slots that lost rewards
     /// and that were disabled.
-    SlashedSlots {
-        /// To retrieve the previously slashed slots instead.
+    PenalizedSlots {
+        /// To retrieve the previously penalized slots instead.
         #[clap(short, long)]
-        previous_slashed: bool,
+        previous_penalized: bool,
     },
 
     /// Tries to fetch a validator information given its address.
@@ -285,16 +285,16 @@ impl HandleSubcommand for BlockchainCommand {
                     )
                 }
             }
-            BlockchainCommand::SlashedSlots { previous_slashed } => {
-                if previous_slashed {
+            BlockchainCommand::PenalizedSlots { previous_penalized } => {
+                if previous_penalized {
                     println!(
                         "{:#?}",
-                        client.blockchain.get_current_slashed_slots().await?
+                        client.blockchain.get_current_penalized_slots().await?
                     )
                 } else {
                     println!(
                         "{:#?}",
-                        client.blockchain.get_previous_slashed_slots().await?
+                        client.blockchain.get_previous_penalized_slots().await?
                     )
                 }
             }

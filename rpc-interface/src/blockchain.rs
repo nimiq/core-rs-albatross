@@ -4,8 +4,8 @@ use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 
 use crate::types::{
-    Account, Block, BlockLog, BlockchainState, ExecutedTransaction, Inherent, LogType, RPCData,
-    RPCResult, SlashedSlots, Slot, Staker, Validator,
+    Account, Block, BlockLog, BlockchainState, ExecutedTransaction, Inherent, LogType,
+    PenalizedSlots, RPCData, RPCResult, Slot, Staker, Validator,
 };
 
 #[nimiq_jsonrpc_derive::proxy(name = "BlockchainProxy", rename_all = "camelCase")]
@@ -94,13 +94,13 @@ pub trait BlockchainInterface {
         &mut self,
     ) -> RPCResult<Vec<Validator>, BlockchainState, Self::Error>;
 
-    async fn get_current_slashed_slots(
+    async fn get_current_penalized_slots(
         &mut self,
-    ) -> RPCResult<SlashedSlots, BlockchainState, Self::Error>;
+    ) -> RPCResult<PenalizedSlots, BlockchainState, Self::Error>;
 
-    async fn get_previous_slashed_slots(
+    async fn get_previous_penalized_slots(
         &mut self,
-    ) -> RPCResult<SlashedSlots, BlockchainState, Self::Error>;
+    ) -> RPCResult<PenalizedSlots, BlockchainState, Self::Error>;
 
     async fn get_validator_by_address(
         &mut self,

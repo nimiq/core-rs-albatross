@@ -15,7 +15,7 @@ use nimiq_bls::CompressedPublicKey;
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::{Address, PublicKey};
-use nimiq_primitives::{coin::Coin, policy::Policy, slots::Validators};
+use nimiq_primitives::{coin::Coin, policy::Policy, slots_allocation::Validators};
 use nimiq_serde::Serialize as NimiqSerialize;
 use nimiq_transaction::{
     account::htlc_contract::AnyHash, inherent::Inherent as BaseInherent, reward::RewardTransaction,
@@ -375,7 +375,7 @@ impl Slots {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SlashedSlots {
+pub struct PenalizedSlots {
     pub block_number: u32,
     pub lost_rewards: BitSet,
     pub disabled: BitSet,
@@ -520,10 +520,16 @@ pub enum Inherent {
         value: Coin,
         hash: Blake2bHash,
     },
-    Slash {
+    Penalize {
         block_number: u32,
         block_time: u64,
         slot: u16,
+        validator_address: Address,
+        event_block: u32,
+    },
+    Slash {
+        block_number: u32,
+        block_time: u64,
         validator_address: Address,
         event_block: u32,
     },
@@ -548,13 +554,20 @@ impl Inherent {
                 value,
                 hash,
             },
-            BaseInherent::Slash { slot } => Inherent::Slash {
+            BaseInherent::Penalize { slot } => Inherent::Penalize {
                 block_number,
                 block_time,
                 slot: slot.slot,
                 validator_address: slot.validator_address,
                 event_block: slot.event_block,
             },
+            BaseInherent::Slash { validator } => Inherent::Slash {
+                block_number,
+                block_time,
+                validator_address: validator.validator_address,
+                event_block: validator.event_block,
+            },
+
             BaseInherent::FinalizeBatch => Inherent::FinalizeBatch {
                 block_number,
                 block_time,
@@ -859,7 +872,7 @@ pub enum LogType {
     Unstake,
     SetInactiveStake,
     PayoutReward,
-    Slash,
+    Penalize,
     RevertContract,
     FailedTransaction,
 }
@@ -908,7 +921,7 @@ impl LogType {
             Log::Unstake { .. } => Self::Unstake,
             Log::SetInactiveStake { .. } => Self::SetInactiveStake,
             Log::PayoutReward { .. } => Self::PayoutReward,
-            Log::Slash { .. } => Self::Slash,
+            Log::Penalize { .. } => Self::Penalize,
             Log::RevertContract { .. } => Self::RevertContract,
             Log::FailedTransaction { .. } => Self::FailedTransaction,
             Log::ValidatorFeeDeduction { .. } => Self::ValidatorFeeDeduction,

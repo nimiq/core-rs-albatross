@@ -63,19 +63,32 @@ impl Validator {
     }
 }
 
-/// Identifies a slashed slot by the slot id.
+/// Identifies a penalized slot by the slot id.
 /// Contains the corresponding validator id for reference.
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SlashedSlot {
+pub struct PenalizedSlot {
     pub slot: u16,
     pub validator_address: Address,
-    /// The `event_block` identifies the block at which the slashable action occurred.
+    /// The `event_block` identifies the block at which the penalizable action occurred.
     pub event_block: u32,
 }
 
-impl SlashedSlot {
+impl PenalizedSlot {
     pub const SIZE: usize = 2 + Address::SIZE + 4;
+}
+
+/// Identifies a slash slot by the validator's address.
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SlashedValidator {
+    pub validator_address: Address,
+    /// The `event_block` identifies the block at which the slash action occurred.
+    pub event_block: u32,
+}
+
+impl SlashedValidator {
+    pub const SIZE: usize = Address::SIZE + 4;
 }
 
 /// A collection of Validators. This struct is normally used to hold the validators for a specific

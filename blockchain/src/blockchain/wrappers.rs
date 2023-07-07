@@ -9,7 +9,7 @@ use nimiq_database::TransactionProxy as DBTransaction;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::{
-    account::AccountError, key_nibbles::KeyNibbles, policy::Policy, slots::Validator,
+    account::AccountError, key_nibbles::KeyNibbles, policy::Policy, slots_allocation::Validator,
 };
 use nimiq_transaction::Transaction;
 

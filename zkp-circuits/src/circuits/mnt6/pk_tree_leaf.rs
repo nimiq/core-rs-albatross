@@ -5,7 +5,7 @@ use ark_r1cs_std::{
     uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use nimiq_primitives::{policy::Policy, slots::PK_TREE_BREADTH};
+use nimiq_primitives::{policy::Policy, slots_allocation::PK_TREE_BREADTH};
 use nimiq_zkp_primitives::pedersen_parameters;
 use rand::{distributions::Standard, prelude::Distribution};
 

@@ -14,7 +14,7 @@ use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
 use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_network_interface::network::Topic;
-use nimiq_primitives::slots::Validators;
+use nimiq_primitives::slots_allocation::Validators;
 use nimiq_tendermint::{Return as TendermintReturn, SignedProposalMessage, Tendermint};
 use nimiq_validator_network::ValidatorNetwork;
 use parking_lot::RwLock;

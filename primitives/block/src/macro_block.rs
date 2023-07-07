@@ -7,7 +7,7 @@ use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput, Hasher, SerializeCo
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{
     policy::Policy,
-    slots::{Validators, ValidatorsBuilder},
+    slots_allocation::{Validators, ValidatorsBuilder},
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::reward::RewardTransaction;
@@ -241,7 +241,7 @@ pub struct MacroBody {
     /// public key, their reward address and their assigned validator slots.
     /// Is only Some when the macro block is an election block.
     pub validators: Option<Validators>,
-    /// A bitset representing which validator slots had their reward slashed at the time when this
+    /// A bitset representing which validator slots had their reward penalized at the time when this
     /// block was produced. It is used later on for reward distribution.
     pub lost_reward_set: BitSet,
     /// A bitset representing which validator slots were prohibited from producing micro blocks or

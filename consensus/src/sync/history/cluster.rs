@@ -15,7 +15,7 @@ use nimiq_blockchain::{Blockchain, HistoryTreeChunk, CHUNK_SIZE};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestError};
-use nimiq_primitives::{policy::Policy, slots::Validators};
+use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
 use nimiq_transaction::extended_transaction::ExtendedTransaction;
 use nimiq_utils::math::CeilingDiv;
 use parking_lot::RwLock;

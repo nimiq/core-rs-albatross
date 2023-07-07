@@ -9,7 +9,7 @@ pub mod networks;
 #[cfg(feature = "policy")]
 pub mod policy;
 #[cfg(feature = "slots")]
-pub mod slots;
+pub mod slots_allocation;
 #[cfg(feature = "transaction")]
 pub mod transaction;
 #[cfg(feature = "tree-proof")]

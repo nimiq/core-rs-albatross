@@ -7,7 +7,7 @@ use nimiq_bls::{AggregateSignature, G2Projective, PublicKey as BlsPublicKey};
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::{Address, KeyPair, PublicKey as SchnorrPublicKey, Signature};
-use nimiq_primitives::{networks::NetworkId, policy::Policy, slots::ValidatorsBuilder};
+use nimiq_primitives::{networks::NetworkId, policy::Policy, slots_allocation::ValidatorsBuilder};
 use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::generate_transactions;
 use nimiq_transaction::ExecutedTransaction;

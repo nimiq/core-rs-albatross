@@ -114,7 +114,7 @@ impl BlockProducer {
         };
 
         // Create the inherents from the fork proofs or skip block info.
-        let inherents = blockchain.create_slash_inherents(&fork_proofs, skip_block_info, None);
+        let inherents = blockchain.create_punishment_inherents(&fork_proofs, skip_block_info, None);
 
         // Update the state and calculate the state root.
         let block_state = BlockState::new(block_number, timestamp);
