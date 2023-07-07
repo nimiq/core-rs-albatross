@@ -178,7 +178,7 @@ fn it_correctly_serializes_and_deserializes_path() {
     let size = proof.serialize_to_writer(&mut serialization).unwrap();
     assert_eq!(size, proof.serialized_size());
     let proof2: MerklePath<Blake2bHash> =
-        Deserialize::deserialize_from_vec(&mut &serialization[..]).unwrap();
+        Deserialize::deserialize_from_vec(&serialization[..]).unwrap();
     assert_eq!(proof, proof2);
 }
 

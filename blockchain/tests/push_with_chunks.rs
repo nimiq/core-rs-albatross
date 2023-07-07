@@ -33,11 +33,12 @@ macro_rules! check_invalid_chunk {
 }
 
 fn key_pair_with_funds() -> KeyPair {
-    let priv_key: PrivateKey = Deserialize::deserialize_from_vec(
-        &mut &hex::decode("6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587")
-            .unwrap()[..],
-    )
-    .unwrap();
+    let priv_key: PrivateKey =
+        Deserialize::deserialize_from_vec(
+            &hex::decode("6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587")
+                .unwrap()[..],
+        )
+        .unwrap();
     priv_key.into()
 }
 
@@ -56,7 +57,7 @@ where
     let mut invalid_chunk = temp_producer1.get_chunk(next_chunk_start.clone(), 2);
     f(&mut invalid_chunk);
 
-    let valid_chunk2 = temp_producer1.get_chunk(next_chunk_start.clone(), 2);
+    let valid_chunk2 = temp_producer1.get_chunk(next_chunk_start, 2);
 
     let (_, result) = temp_producer2
         .push_with_chunks(
@@ -102,7 +103,7 @@ fn can_push_blocks_into_incomplete_trie() {
 
     let tx = TransactionBuilder::new_basic(
         &key_pair,
-        address.clone(),
+        address,
         100.try_into().unwrap(),
         Coin::ZERO,
         1,
@@ -357,7 +358,7 @@ fn can_partially_apply_blocks() {
 
     let tx1 = TransactionBuilder::new_basic(
         &key_pair,
-        address_known.clone(),
+        address_known,
         100.try_into().unwrap(),
         Coin::ZERO,
         1,
@@ -366,7 +367,7 @@ fn can_partially_apply_blocks() {
     .unwrap();
     let tx2 = TransactionBuilder::new_basic(
         &key_pair,
-        address_unknown.clone(),
+        address_unknown,
         100.try_into().unwrap(),
         Coin::ZERO,
         1,
@@ -504,7 +505,7 @@ fn can_detect_invalid_chunks() {
 
     let tx = TransactionBuilder::new_basic(
         &key_pair,
-        address.clone(),
+        address,
         100.try_into().unwrap(),
         Coin::ZERO,
         1,

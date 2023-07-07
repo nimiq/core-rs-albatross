@@ -1,6 +1,3 @@
-pub mod block_request_component;
-pub mod live_sync;
-
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     pin::Pin,
@@ -8,7 +5,6 @@ use std::{
     task::{Context, Poll},
 };
 
-use crate::sync::peer_list::PeerList;
 use futures::{stream::BoxStream, Stream, StreamExt};
 use nimiq_block::{Block, BlockHeaderTopic, BlockTopic};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction, ForkEvent};
@@ -23,6 +19,10 @@ use super::{
     block_queue::block_request_component::BlockRequestComponentEvent,
     queue::{LiveSyncQueue, QueueConfig},
 };
+use crate::sync::peer_list::PeerList;
+
+pub mod block_request_component;
+pub mod live_sync;
 
 pub type BlockStream<N> = BoxStream<
     'static,

@@ -1,7 +1,7 @@
-use std::ops::RangeTo;
 use std::{
     collections::HashSet,
     future::Future,
+    ops::RangeTo,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -12,12 +12,6 @@ use futures::{
     stream::{FuturesOrdered, FuturesUnordered},
     Stream, StreamExt, TryStreamExt,
 };
-use parking_lot::RwLock;
-
-use crate::sync::live::block_queue::live_sync::PushOpResult;
-use crate::sync::live::queue::LiveSyncQueue;
-use crate::sync::peer_list::PeerList;
-use crate::sync::syncer::LiveSyncEvent;
 use nimiq_block::Block;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
@@ -26,10 +20,15 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_diff::TrieDiff};
 use nimiq_serde::{Deserialize, Serialize};
-
-use super::block_queue::{BlockAndId, BlockQueue, QueuedBlock};
+use parking_lot::RwLock;
 
 use self::diff_request_component::DiffRequestComponent;
+use super::block_queue::{BlockAndId, BlockQueue, QueuedBlock};
+use crate::sync::{
+    live::{block_queue::live_sync::PushOpResult, queue::LiveSyncQueue},
+    peer_list::PeerList,
+    syncer::LiveSyncEvent,
+};
 
 pub mod diff_request_component;
 

@@ -112,7 +112,7 @@ async fn peers_reply_with_valid_proof() {
 
     // Set a valid proof into the 2 components.
     let new_proof = simulate_merger_wrapper(
-        &Path::new(ZKP_TEST_KEYS_PATH),
+        Path::new(ZKP_TEST_KEYS_PATH),
         &blockchain2,
         &ZKP_VERIFYING_KEY,
         &mut get_base_seed(),
@@ -196,7 +196,7 @@ async fn peers_reply_with_valid_proof_and_election_block() {
 
     // Seta valid proof into the 2 components.
     let new_proof = simulate_merger_wrapper(
-        &Path::new(ZKP_TEST_KEYS_PATH),
+        Path::new(ZKP_TEST_KEYS_PATH),
         &blockchain2,
         &ZKP_VERIFYING_KEY,
         &mut get_base_seed(),

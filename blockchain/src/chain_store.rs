@@ -634,7 +634,7 @@ impl ChainStore {
             None => {
                 // Check if we know the block.
                 let _ = self.get_block(hash, false, Some(txn))?;
-                return Err(BlockchainError::AccountsDiffNotFound);
+                Err(BlockchainError::AccountsDiffNotFound)
             }
         }
     }

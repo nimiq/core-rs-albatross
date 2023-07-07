@@ -123,10 +123,8 @@ mod tests {
 
         // Allocate the Pedersen generators in the circuit.
         let generators_var =
-            PedersenParametersVar::<G1Projective, G1Var>::new_witness(cs.clone(), || {
-                Ok(&parameters)
-            })
-            .unwrap();
+            PedersenParametersVar::<G1Projective, G1Var>::new_witness(cs, || Ok(&parameters))
+                .unwrap();
 
         // Evaluate Pedersen hash using the gadget version.
         let gadget_hash = PedersenHashGadget::<_, _, GenericWindow<5, MNT6Fq>>::evaluate(

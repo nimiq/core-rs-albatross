@@ -706,7 +706,7 @@ impl Blockchain {
         // Commit block to AccountsTree.
         let total_tx_size;
         {
-            let is_complete = state.accounts.is_complete(Some(&txn));
+            let is_complete = state.accounts.is_complete(Some(txn));
             let mut txn: TrieWriteTransactionProxy = txn.into();
             if is_complete {
                 txn.start_recording();

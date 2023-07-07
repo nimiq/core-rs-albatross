@@ -19,14 +19,13 @@ use nimiq_vrf::VrfSeed;
 use parking_lot::RwLock;
 
 fn remove_micro_body(block: Block) -> Block {
-    let block = match block {
+    match block {
         Block::Macro(macro_block) => Block::Macro(macro_block),
         Block::Micro(mut micro_block) => {
             micro_block.body = None;
             Block::Micro(micro_block)
         }
-    };
-    block
+    }
 }
 
 /// This is just a wrapper around the TemporaryBlockProducer to incorporate the light blockchain
@@ -194,7 +193,7 @@ fn push_fork(config: &BlockConfig, expected_res: &Result<PushResult, PushError>)
 
     let block_2a = {
         let blockchain = &temp_producer2.blockchain.read();
-        next_micro_block(&&&temp_producer2.producer.signing_key, blockchain, config)
+        next_micro_block(&temp_producer2.producer.signing_key, blockchain, config)
     };
 
     assert_eq!(temp_producer2.push(block_1a), Ok(PushResult::Extended));
@@ -222,7 +221,7 @@ fn push_rebranch_fork(config: &BlockConfig, expected_res: &Result<PushResult, Pu
 
     let better = {
         let blockchain = &temp_producer1.blockchain.read();
-        next_micro_block(&&&temp_producer1.producer.signing_key, blockchain, config)
+        next_micro_block(&temp_producer1.producer.signing_key, blockchain, config)
     };
 
     // Check that producer 2 rebranches.
@@ -278,7 +277,7 @@ fn simply_push_macro_block(config: &BlockConfig, expected_res: &Result<PushResul
         )
     };
 
-    assert_eq!(&temp_producer.push(block.clone()), expected_res);
+    assert_eq!(&temp_producer.push(block), expected_res);
 }
 
 #[test]

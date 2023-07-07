@@ -75,7 +75,7 @@ impl<'txn, 'env> WriteTransactionProxy<'txn, 'env> {
         old_value: OldValue,
         new_value: Option<&[u8]>,
     ) {
-        self.diff.as_mut().map(|diff| {
+        if let Some(diff) = self.diff.as_mut() {
             let value_change = match (old_value, new_value) {
                 (OldValue::Unchanged, _) => return,
                 (OldValue::None, None) => return,
@@ -89,13 +89,13 @@ impl<'txn, 'env> WriteTransactionProxy<'txn, 'env> {
                 }
             };
             diff.add_change(key.clone(), value_change);
-        });
+        }
     }
     pub(crate) fn clear_database(&mut self, db: &TableProxy) {
         self.raw.clear_database(db)
     }
     pub(crate) fn put_node(&mut self, db: &TableProxy, node: &TrieNode, old_value: OldValue) {
-        self.record_value_change(&node.key, old_value, node.value.as_ref().map(Vec::as_slice));
+        self.record_value_change(&node.key, old_value, node.value.as_deref());
         self.raw.put_reserve(db, &node.key, node);
     }
     pub(crate) fn remove_node(&mut self, db: &TableProxy, key: &KeyNibbles, old_value: OldValue) {
@@ -110,6 +110,6 @@ impl<'txn, 'env> WriteTransactionProxy<'txn, 'env> {
 impl<'txn, 'env> ops::Deref for WriteTransactionProxy<'txn, 'env> {
     type Target = RawTransactionProxy<'env>;
     fn deref(&self) -> &RawTransactionProxy<'env> {
-        &self.raw
+        self.raw
     }
 }

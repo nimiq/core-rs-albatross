@@ -935,7 +935,7 @@ impl MerkleRadixTrie {
                 // Remove the value from the node.
                 // PITODO check if hybrid or leaf node
                 let prev_kind = cur_node.kind();
-                let old_value = mem::replace(&mut cur_node.value, None);
+                let old_value = cur_node.value.take();
                 let count_updates;
                 if cur_node.is_root() || cur_node.has_children() {
                     // Node was a hybrid node and is now a branch node.
@@ -1604,35 +1604,35 @@ mod tests {
 
         let proof = trie.get_proof(&txn, vec![&key_1, &key_2, &key_3]).unwrap();
         assert_eq!(proof.nodes.len(), 6);
-        assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
+        assert!(proof.verify(&trie.root_hash_assert(&txn)));
 
         let proof = trie.get_proof(&txn, vec![&key_3, &key_1, &key_2]).unwrap();
         assert_eq!(proof.nodes.len(), 6);
-        assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
+        assert!(proof.verify(&trie.root_hash_assert(&txn)));
 
         let proof = trie.get_proof(&txn, vec![&key_1, &key_3]).unwrap();
         assert_eq!(proof.nodes.len(), 5);
-        assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
+        assert!(proof.verify(&trie.root_hash_assert(&txn)));
 
         let proof = trie.get_proof(&txn, vec![&key_1, &key_2]).unwrap();
         assert_eq!(proof.nodes.len(), 5);
-        assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
+        assert!(proof.verify(&trie.root_hash_assert(&txn)));
 
         let proof = trie.get_proof(&txn, vec![&key_1]).unwrap();
         assert_eq!(proof.nodes.len(), 4);
-        assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
+        assert!(proof.verify(&trie.root_hash_assert(&txn)));
 
         let proof = trie.get_proof(&txn, vec![&key_3]).unwrap();
         assert_eq!(proof.nodes.len(), 3);
-        assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
+        assert!(proof.verify(&trie.root_hash_assert(&txn)));
 
         let proof = trie.get_proof(&txn, vec![&key_4, &key_2]).unwrap();
         assert_eq!(proof.nodes.len(), 4);
-        assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
+        assert!(proof.verify(&trie.root_hash_assert(&txn)));
 
         let proof = trie.get_proof(&txn, vec![&key_4]).unwrap();
         assert_eq!(proof.nodes.len(), 2);
-        assert_eq!(proof.verify(&trie.root_hash_assert(&txn)), true);
+        assert!(proof.verify(&trie.root_hash_assert(&txn)));
     }
 
     #[test]

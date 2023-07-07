@@ -12,7 +12,7 @@ fn verify_created_signature() {
     let data = b"test";
     let signature = key_pair.sign(data);
     let valid = key_pair.public.verify(&signature, data);
-    assert_eq!(true, valid);
+    assert!(valid);
 }
 
 #[test]
@@ -20,7 +20,7 @@ fn falsify_wrong_signature() {
     let key_pair = KeyPair::generate(&mut test_rng(false));
     let signature = key_pair.sign(b"test");
     let valid = key_pair.public.verify(&signature, b"test2");
-    assert_eq!(false, valid);
+    assert!(!valid);
 }
 
 #[test]
@@ -120,10 +120,8 @@ fn it_computes_friendly_addresses() {
         "NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR"
     );
 
-    let addr2 = Address::from_user_friendly_address(
-        &"NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR".to_string(),
-    )
-    .unwrap();
+    let addr2 = Address::from_user_friendly_address("NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR")
+        .unwrap();
     assert_eq!(addr.as_bytes(), addr2.as_bytes());
     assert_eq!(
         addr.to_user_friendly_address(),
@@ -133,55 +131,38 @@ fn it_computes_friendly_addresses() {
 
 #[test]
 fn it_parses_friendly_addresses() {
-    let addr = Address::from_user_friendly_address(
-        &"NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR".to_string(),
-    );
+    let addr = Address::from_user_friendly_address("NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR");
     assert!(addr.is_ok());
 
     // Not having spaces should be ok
-    let addr =
-        Address::from_user_friendly_address(&"NQ05563U530YXDRTL7GQM6HEYRNU20FE4PNR".to_string());
+    let addr = Address::from_user_friendly_address("NQ05563U530YXDRTL7GQM6HEYRNU20FE4PNR");
     assert!(addr.is_ok());
 
     // Not having some spaces should be ok
-    let addr = Address::from_user_friendly_address(
-        &"NQ05 563U 530Y XDRTL7GQ M6HE YRNU 20FE 4PNR".to_string(),
-    );
+    let addr = Address::from_user_friendly_address("NQ05 563U 530Y XDRTL7GQ M6HE YRNU 20FE 4PNR");
     assert!(addr.is_ok());
 
     // Having NQ in lowercase at the beggining should not be ok
-    let addr = Address::from_user_friendly_address(
-        &"nq05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR".to_string(),
-    );
+    let addr = Address::from_user_friendly_address("nq05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR");
     assert_eq!(addr, Err(AddressParseError::WrongCountryCode));
 
     // Wrong Country Code
-    let addr = Address::from_user_friendly_address(
-        &"SQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR".to_string(),
-    );
+    let addr = Address::from_user_friendly_address("SQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR");
     assert_eq!(addr, Err(AddressParseError::WrongCountryCode));
 
     // Wrong Length
-    let addr = Address::from_user_friendly_address(
-        &"SQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNRS".to_string(),
-    );
+    let addr = Address::from_user_friendly_address("SQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNRS");
     assert_eq!(addr, Err(AddressParseError::WrongLength));
 
     // Wrong alphabet (lowercase -> L7gq)
-    let addr = Address::from_user_friendly_address(
-        &"NQ05 563U 530Y XDRT L7gq M6HE YRNU 20FE 4PNR".to_string(),
-    );
+    let addr = Address::from_user_friendly_address("NQ05 563U 530Y XDRT L7gq M6HE YRNU 20FE 4PNR");
     assert_eq!(addr, Err(AddressParseError::UnknownFormat));
 
     // Wrong checksum
-    let addr = Address::from_user_friendly_address(
-        &"NQ05 563U 530Y XDRT L7IQ M6HE YRNU 20FE 4PNR".to_string(),
-    );
+    let addr = Address::from_user_friendly_address("NQ05 563U 530Y XDRT L7IQ M6HE YRNU 20FE 4PNR");
     assert_eq!(addr, Err(AddressParseError::InvalidChecksum));
 
     // Wrong alphabet (VIDM)
-    let addr = Address::from_user_friendly_address(
-        &"NQ16 GB8S Q5QR MAVN MR3C VIDM 62G6 NL0D ANYX".to_string(),
-    );
+    let addr = Address::from_user_friendly_address("NQ16 GB8S Q5QR MAVN MR3C VIDM 62G6 NL0D ANYX");
     assert_eq!(addr, Err(AddressParseError::UnknownFormat));
 }

@@ -1697,7 +1697,7 @@ mod tests {
 
     fn reward_inherent_value(inherent: &Inherent) -> Coin {
         match inherent {
-            Inherent::Reward { value, .. } => value.clone(),
+            Inherent::Reward { value, .. } => *value,
             _ => unreachable!(),
         }
     }

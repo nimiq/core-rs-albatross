@@ -105,7 +105,7 @@ fn get_incomplete_live_sync(
     );
 
     let live_sync = StateLiveSync::with_queue(
-        incomplete_blockchain_proxy.clone(),
+        incomplete_blockchain_proxy,
         Arc::clone(&network),
         state_queue,
         bls_cache(),

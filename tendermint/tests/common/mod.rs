@@ -136,7 +136,7 @@ impl Protocol for Validator {
     fn create_proposal(&self, round: u32) -> (ProposalMessage<Self::Proposal>, Self::Inherent) {
         (
             ProposalMessage {
-                round: round,
+                round,
                 valid_round: None,
                 proposal: TestProposal(round),
             },

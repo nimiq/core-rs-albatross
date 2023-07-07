@@ -45,7 +45,7 @@ async fn syncer(
         SyncMode::History => {
             SyncerProxy::new_history(
                 blockchain.clone(),
-                Arc::clone(&network),
+                Arc::clone(network),
                 Arc::new(Mutex::new(PublicKeyCache::new(
                     TESTING_BLS_CACHE_MAX_CAPACITY,
                 ))),
@@ -56,7 +56,7 @@ async fn syncer(
         SyncMode::Full => {
             SyncerProxy::new_full(
                 blockchain.clone(),
-                Arc::clone(&network),
+                Arc::clone(network),
                 Arc::new(Mutex::new(PublicKeyCache::new(
                     TESTING_BLS_CACHE_MAX_CAPACITY,
                 ))),
@@ -69,7 +69,7 @@ async fn syncer(
         SyncMode::Light => {
             SyncerProxy::new_light(
                 blockchain.clone(),
-                Arc::clone(&network),
+                Arc::clone(network),
                 Arc::new(Mutex::new(PublicKeyCache::new(
                     TESTING_BLS_CACHE_MAX_CAPACITY,
                 ))),

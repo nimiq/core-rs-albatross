@@ -413,37 +413,37 @@ mod tests {
     #[test]
     fn it_correctly_computes_block_positions() {
         initialize_policy();
-        assert_eq!(Policy::is_macro_block_at(0), true);
-        assert_eq!(!Policy::is_micro_block_at(0), true);
-        assert_eq!(Policy::is_election_block_at(0), true);
+        assert!(Policy::is_macro_block_at(0));
+        assert!(!Policy::is_micro_block_at(0));
+        assert!(Policy::is_election_block_at(0));
 
-        assert_eq!(Policy::is_macro_block_at(1), false);
-        assert_eq!(!Policy::is_micro_block_at(1), false);
-        assert_eq!(Policy::is_election_block_at(1), false);
+        assert!(!Policy::is_macro_block_at(1));
+        assert!(Policy::is_micro_block_at(1));
+        assert!(!Policy::is_election_block_at(1));
 
-        assert_eq!(Policy::is_macro_block_at(2), false);
-        assert_eq!(!Policy::is_micro_block_at(2), false);
-        assert_eq!(Policy::is_election_block_at(2), false);
+        assert!(!Policy::is_macro_block_at(2));
+        assert!(Policy::is_micro_block_at(2));
+        assert!(!Policy::is_election_block_at(2));
 
-        assert_eq!(Policy::is_macro_block_at(32), true);
-        assert_eq!(Policy::is_micro_block_at(32), false);
-        assert_eq!(Policy::is_election_block_at(32), false);
+        assert!(Policy::is_macro_block_at(32));
+        assert!(!Policy::is_micro_block_at(32));
+        assert!(!Policy::is_election_block_at(32));
 
-        assert_eq!(Policy::is_macro_block_at(127), false);
-        assert_eq!(!Policy::is_micro_block_at(127), false);
-        assert_eq!(Policy::is_election_block_at(127), false);
+        assert!(!Policy::is_macro_block_at(127));
+        assert!(Policy::is_micro_block_at(127));
+        assert!(!Policy::is_election_block_at(127));
 
-        assert_eq!(Policy::is_macro_block_at(128), true);
-        assert_eq!(!Policy::is_micro_block_at(128), true);
-        assert_eq!(Policy::is_election_block_at(128), true);
+        assert!(Policy::is_macro_block_at(128));
+        assert!(!Policy::is_micro_block_at(128));
+        assert!(Policy::is_election_block_at(128));
 
-        assert_eq!(Policy::is_macro_block_at(129), false);
-        assert_eq!(!Policy::is_micro_block_at(129), false);
-        assert_eq!(Policy::is_election_block_at(129), false);
+        assert!(!Policy::is_macro_block_at(129));
+        assert!(Policy::is_micro_block_at(129));
+        assert!(!Policy::is_election_block_at(129));
 
-        assert_eq!(Policy::is_macro_block_at(160), true);
-        assert_eq!(Policy::is_micro_block_at(160), false);
-        assert_eq!(Policy::is_election_block_at(160), false);
+        assert!(Policy::is_macro_block_at(160));
+        assert!(!Policy::is_micro_block_at(160));
+        assert!(!Policy::is_election_block_at(160));
     }
 
     #[test]
@@ -503,10 +503,10 @@ mod tests {
     #[test]
     fn it_correctly_computes_first_batch_of_epoch() {
         initialize_policy();
-        assert_eq!(Policy::first_batch_of_epoch(1), true);
-        assert_eq!(Policy::first_batch_of_epoch(32), true);
-        assert_eq!(Policy::first_batch_of_epoch(33), false);
-        assert_eq!(Policy::first_batch_of_epoch(128), false);
-        assert_eq!(Policy::first_batch_of_epoch(129), true);
+        assert!(Policy::first_batch_of_epoch(1));
+        assert!(Policy::first_batch_of_epoch(32));
+        assert!(!Policy::first_batch_of_epoch(33));
+        assert!(!Policy::first_batch_of_epoch(128));
+        assert!(Policy::first_batch_of_epoch(129));
     }
 }

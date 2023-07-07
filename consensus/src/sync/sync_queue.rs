@@ -16,9 +16,9 @@ use nimiq_macros::store_waker;
 use nimiq_network_interface::network::Network;
 use parking_lot::RwLock;
 use pin_project::pin_project;
-use crate::sync::peer_list::PeerListIndex;
 
 use super::peer_list::PeerList;
+use crate::sync::peer_list::PeerListIndex;
 
 #[pin_project]
 #[derive(Debug)]
@@ -28,7 +28,7 @@ struct OrderWrapper<TId, TOutput> {
     data: TOutput, // A future or a future's output
     index: usize,
     peer: PeerListIndex, // The peer the data is requested from
-    num_tries: usize, // The number of tries this id has been requested
+    num_tries: usize,    // The number of tries this id has been requested
 }
 
 impl<TId: Clone, TOutput: Future> Future for OrderWrapper<TId, TOutput> {
@@ -139,7 +139,11 @@ where
             let id = self.ids_to_request.pop_front().unwrap();
 
             // Get next peer in line. If there are no more peers, simulate a failed request.
-            let wrapper = match self.peers.read().increment_and_get(&mut self.current_peer_index) {
+            let wrapper = match self
+                .peers
+                .read()
+                .increment_and_get(&mut self.current_peer_index)
+            {
                 Some(peer_id) => {
                     log::trace!(
                         %peer_id,
@@ -149,15 +153,13 @@ where
                         self.next_incoming_index,
                     );
 
-                    let wrapper = OrderWrapper {
+                    OrderWrapper {
                         data: (self.request_fn)(id.clone(), Arc::clone(&self.network), peer_id),
                         id,
                         index: self.next_incoming_index,
                         peer: self.current_peer_index.clone(),
                         num_tries: 1,
-                    };
-
-                    wrapper
+                    }
                 }
                 None => OrderWrapper {
                     data: future::ready(None).boxed(),

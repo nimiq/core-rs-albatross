@@ -125,7 +125,7 @@ fn test_verify_body_root() {
     // Fix the body root and check that it passes
     micro_header.body_root = micro_body.hash();
     let block = Block::Micro(MicroBlock {
-        header: micro_header.clone(),
+        header: micro_header,
         justification: Some(micro_justification),
         body: Some(micro_body),
     });
@@ -163,7 +163,7 @@ fn test_verify_skip_block() {
 
     let mut micro_body = MicroBody {
         fork_proofs: [].to_vec(),
-        transactions: transactions,
+        transactions,
     };
 
     // Build a block with body
@@ -181,7 +181,7 @@ fn test_verify_skip_block() {
     micro_body.transactions = vec![];
     micro_header.body_root = micro_body.hash();
     let block = Block::Micro(MicroBlock {
-        header: micro_header.clone(),
+        header: micro_header,
         justification: Some(micro_justification),
         body: Some(micro_body),
     });
@@ -258,15 +258,15 @@ fn test_verify_micro_block_body_txns() {
 
     let micro_body = MicroBody {
         fork_proofs: [].to_vec(),
-        transactions: txns.clone(),
+        transactions: txns,
     };
 
     // Build a block with body with the expired transactions
     micro_header.body_root = micro_body.hash();
     let block = Block::Micro(MicroBlock {
-        header: micro_header.clone(),
+        header: micro_header,
         justification: Some(micro_justification),
-        body: Some(micro_body.clone()),
+        body: Some(micro_body),
     });
 
     // The body check should fail
@@ -323,7 +323,7 @@ fn test_verify_micro_block_body_fork_proofs() {
     let block = Block::Micro(MicroBlock {
         header: micro_header.clone(),
         justification: Some(micro_justification.clone()),
-        body: Some(micro_body.clone()),
+        body: Some(micro_body),
     });
 
     // The body check should fail
@@ -340,7 +340,7 @@ fn test_verify_micro_block_body_fork_proofs() {
     let block = Block::Micro(MicroBlock {
         header: micro_header.clone(),
         justification: Some(micro_justification.clone()),
-        body: Some(micro_body.clone()),
+        body: Some(micro_body),
     });
 
     assert_eq!(block.verify(), Ok(()));
@@ -356,7 +356,7 @@ fn test_verify_micro_block_body_fork_proofs() {
     let block = Block::Micro(MicroBlock {
         header: micro_header.clone(),
         justification: Some(micro_justification.clone()),
-        body: Some(micro_body.clone()),
+        body: Some(micro_body),
     });
 
     assert_eq!(block.verify(), Err(BlockError::DuplicateForkProof));
@@ -374,9 +374,9 @@ fn test_verify_micro_block_body_fork_proofs() {
 
     micro_header.body_root = micro_body.hash();
     let block = Block::Micro(MicroBlock {
-        header: micro_header.clone(),
-        justification: Some(micro_justification.clone()),
-        body: Some(micro_body.clone()),
+        header: micro_header,
+        justification: Some(micro_justification),
+        body: Some(micro_body),
     });
 
     // The first fork proof should no longer be valid
@@ -432,9 +432,9 @@ fn test_verify_election_macro_body() {
 
     macro_header.body_root = macro_body.hash();
     let block = Block::Macro(MacroBlock {
-        header: macro_header.clone(),
+        header: macro_header,
         justification: None,
-        body: Some(macro_body.clone()),
+        body: Some(macro_body),
     });
 
     // Skipping the verification of the PK tree root should make the verify function to pass

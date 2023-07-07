@@ -71,7 +71,7 @@ async fn one_validator_can_create_micro_blocks() {
 
     log::debug!("Establishing consensus...");
     consensus1.force_established();
-    assert_eq!(consensus1.is_established(), true);
+    assert!(consensus1.is_established());
 
     let blockchain = Arc::clone(&validator.blockchain);
 
@@ -158,11 +158,8 @@ fn create_skip_block_update(
     slots: &Vec<u16>,
 ) -> LevelUpdate<SignedSkipBlockMessage> {
     // get a single signature for this skip block data
-    let signed_skip_block_info = SignedSkipBlockInfo::from_message(
-        skip_block_info.clone(),
-        &key_pair.secret_key,
-        validator_id,
-    );
+    let signed_skip_block_info =
+        SignedSkipBlockInfo::from_message(skip_block_info, &key_pair.secret_key, validator_id);
 
     // multiply with number of slots to get a signature representing all the slots of this public_key
     let signature = AggregateSignature::from_signatures(&[signed_skip_block_info

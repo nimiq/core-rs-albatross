@@ -382,12 +382,12 @@ fn make_self_transaction(data: IncomingStakingTransactionData, key_pair: &KeyPai
 
 fn bls_key_pair() -> BlsKeyPair {
     BlsKeyPair::from_secret(
-        &Deserialize::deserialize_from_vec(&mut &hex::decode(BLS_PRIVKEY).unwrap()[..]).unwrap(),
+        &Deserialize::deserialize_from_vec(&hex::decode(BLS_PRIVKEY).unwrap()[..]).unwrap(),
     )
 }
 
 fn ed25519_key_pair() -> KeyPair {
     let priv_key: PrivateKey =
-        Deserialize::deserialize_from_vec(&mut &hex::decode(PRIVATE_KEY).unwrap()[..]).unwrap();
+        Deserialize::deserialize_from_vec(&hex::decode(PRIVATE_KEY).unwrap()[..]).unwrap();
     priv_key.into()
 }

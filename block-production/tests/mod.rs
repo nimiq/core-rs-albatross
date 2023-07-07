@@ -1166,7 +1166,7 @@ fn it_can_revert_basic_and_create_contracts_txns() {
 
     let tx = TransactionBuilder::new_basic(
         &key_pair,
-        address.clone(),
+        address,
         100.try_into().unwrap(),
         Coin::ZERO,
         1,
@@ -1196,7 +1196,7 @@ fn it_can_revert_basic_and_create_contracts_txns() {
 
     let tx = TransactionBuilder::new_basic(
         &key_pair,
-        address.clone(),
+        address,
         100.try_into().unwrap(),
         Coin::ZERO,
         1,
@@ -1234,6 +1234,6 @@ fn it_can_revert_basic_and_create_contracts_txns() {
 
 fn ed25519_key_pair(secret_key: &str) -> SchnorrKeyPair {
     let priv_key: SchnorrPrivateKey =
-        Deserialize::deserialize_from_vec(&mut &hex::decode(secret_key).unwrap()[..]).unwrap();
+        Deserialize::deserialize_from_vec(&hex::decode(secret_key).unwrap()[..]).unwrap();
     priv_key.into()
 }

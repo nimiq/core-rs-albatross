@@ -79,7 +79,7 @@ async fn loads_valid_zkp_state_from_db() {
     );
 
     let new_proof = simulate_merger_wrapper(
-        &Path::new(ZKP_TEST_KEYS_PATH),
+        Path::new(ZKP_TEST_KEYS_PATH),
         &blockchain,
         &ZKP_VERIFYING_KEY,
         &mut get_base_seed(),

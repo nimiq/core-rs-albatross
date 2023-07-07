@@ -16,7 +16,7 @@ async fn it_exports_state_before_broadcast() {
     let (validator, mut observe_receiver) = create_validator(vec![true], vec![]);
 
     let mut tendermint = Tendermint::new(
-        validator.clone(),
+        validator,
         None,
         stream::iter(vec![]).boxed(),
         stream::iter(vec![]).boxed(),
@@ -37,7 +37,7 @@ async fn it_exports_state_before_broadcast() {
     // Polling again must broadcast the proposal.
     let _state = expect_state(&mut tendermint);
     let observed_proposal = expect_observe_proposal(&mut observe_receiver);
-    assert_eq!(observed_proposal.signature, true);
+    assert!(observed_proposal.signature);
     assert_eq!(observed_proposal.message.round, 0);
     assert_eq!(observed_proposal.message.valid_round, None);
     assert_eq!(proposal, &observed_proposal.message.proposal);
@@ -136,7 +136,7 @@ async fn it_returns_pending_state() {
     let (mut proposal_sender, proposal_receiver) = mpsc::channel(10);
 
     let mut tendermint = Tendermint::new(
-        proposer.clone(),
+        proposer,
         None,
         ReceiverStream::new(proposal_receiver).boxed(),
         stream::iter(vec![]).boxed(),
@@ -1315,7 +1315,7 @@ async fn it_accepts_vr_proposal() {
 
     let mut tendermint = Tendermint::new(
         proposer.clone(),
-        Some(recoverable_state.clone()),
+        Some(recoverable_state),
         ReceiverStream::new(receiver).boxed(),
         stream::iter(vec![]).boxed(),
     );

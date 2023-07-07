@@ -1,11 +1,10 @@
-use byteorder::WriteBytesExt;
 use std::{
     cmp::{self, Ordering},
     fmt, io, ops, str, usize,
 };
 
+use byteorder::WriteBytesExt;
 use log::error;
-
 use nimiq_hash::{HashOutput, SerializeContent};
 use nimiq_keys::Address;
 
@@ -356,7 +355,6 @@ impl ops::Add<&KeyNibbles> for &KeyNibbles {
 
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
-
     use std::{borrow::Cow, fmt, io};
 
     use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};

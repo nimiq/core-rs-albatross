@@ -37,7 +37,7 @@ fn test_is_block_proven() {
         1,
         MacroBlock {
             header: MacroHeader {
-                block_number: Policy::blocks_per_epoch() * 1,
+                block_number: Policy::blocks_per_epoch(),
                 interlink: Some(vec![]),
                 ..Default::default()
             },

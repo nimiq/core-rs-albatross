@@ -82,7 +82,7 @@ fn main() {
         if i == 0 {
             genesis_header_hash = prev_block.hash_blake2s().0;
         } else {
-            genesis_data = Some((proof, genesis_header_hash.clone()))
+            genesis_data = Some((proof, genesis_header_hash))
         }
 
         println!("Proving epoch {}", i + 1);

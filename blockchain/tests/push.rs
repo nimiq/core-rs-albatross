@@ -117,7 +117,7 @@ fn push_fork(config: &BlockConfig, expected_res: &Result<PushResult, PushError>)
 
     let block_2a = {
         let blockchain = &temp_producer2.blockchain.read();
-        next_micro_block(&&&temp_producer2.producer.signing_key, blockchain, config)
+        next_micro_block(&temp_producer2.producer.signing_key, blockchain, config)
     };
 
     assert_eq!(temp_producer2.push(block_1a), Ok(PushResult::Extended));
@@ -145,7 +145,7 @@ fn push_rebranch_fork(config: &BlockConfig, expected_res: &Result<PushResult, Pu
 
     let better = {
         let blockchain = &temp_producer1.blockchain.read();
-        next_micro_block(&&&temp_producer1.producer.signing_key, blockchain, config)
+        next_micro_block(&temp_producer1.producer.signing_key, blockchain, config)
     };
 
     // Check that producer 2 rebranches.
@@ -201,7 +201,7 @@ fn simply_push_macro_block(config: &BlockConfig, expected_res: &Result<PushResul
         )
     };
 
-    assert_eq!(&temp_producer.push(block.clone()), expected_res);
+    assert_eq!(&temp_producer.push(block), expected_res);
 }
 
 fn simply_push_election_block(config: &BlockConfig, expected_res: &Result<PushResult, PushError>) {
@@ -222,7 +222,7 @@ fn simply_push_election_block(config: &BlockConfig, expected_res: &Result<PushRe
         )
     };
 
-    assert_eq!(&temp_producer.push(block.clone()), expected_res);
+    assert_eq!(&temp_producer.push(block), expected_res);
 }
 
 #[test]
@@ -343,11 +343,11 @@ fn it_validates_state_root() {
     };
 
     // This does not fail since now the state root is properly calculated from strach
-    push_micro_after_micro(&config.clone(), &Ok(PushResult::Extended));
+    push_micro_after_micro(&config, &Ok(PushResult::Extended));
 
     push_rebranch(config.clone(), &Err(PushError::InvalidFork));
 
-    push_rebranch_across_epochs(config.clone());
+    push_rebranch_across_epochs(config);
 }
 
 #[test]
@@ -357,13 +357,13 @@ fn it_validates_history_root() {
         ..Default::default()
     };
     push_micro_after_micro(
-        &config.clone(),
+        &config,
         &Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot)),
     );
 
     push_rebranch(config.clone(), &Err(PushError::InvalidFork));
 
-    push_rebranch_across_epochs(config.clone());
+    push_rebranch_across_epochs(config);
 }
 
 #[test]

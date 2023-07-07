@@ -315,7 +315,7 @@ fn it_correctly_calculates_commitments() {
     // Decompress the 32 byte cryptographically secure random data to 64 byte.
     let mut h: ::sha2::Sha512 = ::sha2::Sha512::default();
 
-    h.update(&randomness);
+    h.update(randomness);
     let scalar = Scalar::from_hash::<::sha2::Sha512>(h);
 
     // Compute the point [scalar]B.
@@ -453,12 +453,9 @@ fn it_sign_and_verify_multisigs() {
         let partial_signature: PartialSignature = signatures.iter().sum();
         let final_signature: Signature =
             partial_signature.to_signature(&aggregated_commitment.unwrap());
-        assert_eq!(
-            aggregated_public_key
-                .unwrap()
-                .verify(&final_signature, test.message.as_slice()),
-            true
-        );
+        assert!(aggregated_public_key
+            .unwrap()
+            .verify(&final_signature, test.message.as_slice()));
     }
 }
 

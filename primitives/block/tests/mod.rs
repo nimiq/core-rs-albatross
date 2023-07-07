@@ -97,7 +97,7 @@ fn it_can_convert_macro_block_into_slots() {
             interlink: None,
             seed: VrfSeed::default(),
             extra_data: vec![],
-            state_root: hash.clone(),
+            state_root: hash,
             body_root: Blake2sHash::default(),
             diff_root: Blake2bHash::default(),
             history_root: Blake2bHash::default(),

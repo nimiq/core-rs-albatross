@@ -1,6 +1,6 @@
-use byteorder::WriteBytesExt;
 use std::io::Write;
 
+use byteorder::WriteBytesExt;
 use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher, SerializeContent};
 
 /// Stores a complete, balanced binary tree of hashes, starting from the root at index `0`.
@@ -89,7 +89,7 @@ mod test {
     #[test]
     fn one() {
         // 1
-        assert_eq!(TreeProof::new(&["1"]).root_hash(), hash_leaf(&"1"));
+        assert_eq!(TreeProof::new(["1"]).root_hash(), hash_leaf(&"1"));
     }
     #[test]
     fn two() {
@@ -97,7 +97,7 @@ mod test {
         //  / \
         // 1   2
         assert_eq!(
-            TreeProof::new(&["1", "2"]).root_hash(),
+            TreeProof::new(["1", "2"]).root_hash(),
             hash_branch(&hash_leaf(&"1"), &hash_leaf(&"2")),
         );
     }
@@ -109,7 +109,7 @@ mod test {
         //  / \
         // 1   2
         assert_eq!(
-            TreeProof::new(&["1", "2", "3"]).root_hash(),
+            TreeProof::new(["1", "2", "3"]).root_hash(),
             hash_branch(
                 &hash_branch(&hash_leaf(&"1"), &hash_leaf(&"2")),
                 &hash_leaf(&"3"),
@@ -124,7 +124,7 @@ mod test {
         //  / \   / \
         // 1   2 3   4
         assert_eq!(
-            TreeProof::new(&["1", "2", "3", "4"]).root_hash(),
+            TreeProof::new(["1", "2", "3", "4"]).root_hash(),
             hash_branch(
                 &hash_branch(&hash_leaf(&"1"), &hash_leaf(&"2")),
                 &hash_branch(&hash_leaf(&"3"), &hash_leaf(&"4")),
@@ -141,7 +141,7 @@ mod test {
         //  / \
         // 1   2
         assert_eq!(
-            TreeProof::new(&["1", "2", "3", "4", "5"]).root_hash(),
+            TreeProof::new(["1", "2", "3", "4", "5"]).root_hash(),
             hash_branch(
                 &hash_branch(
                     &hash_branch(&hash_leaf(&"1"), &hash_leaf(&"2")),

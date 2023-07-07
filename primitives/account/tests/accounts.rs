@@ -83,7 +83,7 @@ fn it_can_commit_and_revert_a_block_body() {
         NetworkId::Main,
     );
 
-    let transactions = vec![tx.clone()];
+    let transactions = vec![tx];
 
     let transaction_receipts = vec![TransactionOperationReceipt::Ok(
         TransactionReceipt::default(),
@@ -433,8 +433,8 @@ fn accounts_performance() {
         let mempool_transaction = TestTransaction {
             fee: (i + 1) as u64,
             value: balance,
-            recipient: recipient_accounts[i as usize].clone(),
-            sender: sender_accounts[i as usize].clone(),
+            recipient: recipient_accounts[i].clone(),
+            sender: sender_accounts[i].clone(),
         };
         mempool_transactions.push(mempool_transaction);
     }
@@ -546,7 +546,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
         let mut mempool_transactions = vec![];
         for _i in 0..num_txns {
             let mempool_transaction = TestTransaction {
-                fee: 0 as u64,
+                fee: 0_u64,
                 value: 1,
                 recipient: recipient_accounts[txn_index as usize].clone(),
                 sender: sender_accounts[0].clone(),
@@ -671,7 +671,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
         let mut mempool_transactions = vec![];
         for _i in 0..num_txns {
             let mempool_transaction = TestTransaction {
-                fee: 0 as u64,
+                fee: 0_u64,
                 value: 1,
                 recipient: recipient_accounts[txn_index as usize].clone(),
                 sender: sender_accounts[txn_index as usize].clone(),
@@ -797,12 +797,7 @@ fn it_commits_valid_and_failing_txns() {
 
     let block_state = BlockState::new(1, 200);
     let receipts = accounts
-        .commit_and_test(
-            &vec![tx.clone()],
-            &[],
-            &block_state,
-            &mut BlockLogger::empty(),
-        )
+        .commit_and_test(&[tx], &[], &block_state, &mut BlockLogger::empty())
         .unwrap();
 
     assert_eq!(
@@ -846,7 +841,7 @@ fn it_commits_valid_and_failing_txns() {
 
     let mut block_logger = BlockLogger::empty();
     let receipts = accounts
-        .commit_and_test(&vec![tx.clone()], &[], &block_state, &mut block_logger)
+        .commit_and_test(&[tx.clone()], &[], &block_state, &mut block_logger)
         .unwrap();
     let block_logs = block_logger.build(0);
 

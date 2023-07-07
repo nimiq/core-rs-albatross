@@ -466,7 +466,7 @@ async fn mempool_get_txn_max_size() {
     // Generate transactions
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
-            fee: (i + 1) as u64,
+            fee: (i + 1),
             value: balance / num_txns,
             recipient: recipient_accounts[i as usize].clone(),
             sender: sender_accounts[0].clone(),
@@ -537,7 +537,7 @@ async fn mempool_get_txn_ordered() {
     // Generate transactions
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
-            fee: (i + 1) as u64,
+            fee: (i + 1),
             value: balance / num_txns,
             recipient: recipient_accounts[i as usize].clone(),
             sender: sender_accounts[0].clone(),
@@ -609,7 +609,7 @@ async fn push_tx_with_insufficient_balance() {
     // Generate transactions
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
-            fee: (i + 1) as u64,
+            fee: (i + 1),
             value: txns_value[i as usize],
             recipient: recipient_accounts[i as usize].clone(),
             sender: sender_accounts[0].clone(),
@@ -671,7 +671,7 @@ async fn multiple_transactions_multiple_senders() {
     // Generate transactions
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
-            fee: (i + 1) as u64,
+            fee: (i + 1),
             value: balance / num_txns,
             recipient: recipient_accounts[i as usize].clone(),
             sender: sender_accounts[i as usize].clone(),
@@ -745,7 +745,7 @@ async fn mempool_tps() {
     // Generate transactions
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
-            fee: (i + 1) as u64,
+            fee: (i + 1),
             value: balance,
             recipient: recipient_accounts[i as usize].clone(),
             sender: sender_accounts[i as usize].clone(),
@@ -823,7 +823,7 @@ async fn multiple_start_stop() {
     // Generate transactions
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
-            fee: (i + 1) as u64,
+            fee: (i + 1),
             value: balance,
             recipient: recipient_accounts[i as usize].clone(),
             sender: sender_accounts[i as usize].clone(),
@@ -883,7 +883,7 @@ async fn mempool_update() {
     // Generate transactions
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
-            fee: (i + 1) as u64,
+            fee: (i + 1),
             value: balance,
             recipient: recipient_accounts[i as usize].clone(),
             sender: sender_accounts[i as usize].clone(),
@@ -910,7 +910,7 @@ async fn mempool_update() {
     // Generate transactions
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
-            fee: (i + 100) as u64,
+            fee: (i + 100),
             value: balance,
             recipient: recipient_accounts[i as usize].clone(),
             sender: sender_accounts[i as usize].clone(),
@@ -947,7 +947,7 @@ async fn mempool_update() {
     // Generate transactions
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
-            fee: (i + 200) as u64,
+            fee: (i + 200),
             value: balance,
             recipient: recipient_accounts[i as usize].clone(),
             sender: sender_accounts[i as usize].clone(),
@@ -1069,7 +1069,7 @@ async fn mempool_update_aged_transaction() {
     // Generate transactions
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
-            fee: 0 as u64,
+            fee: 0_u64,
             value: 60,
             recipient: recipient_accounts[i as usize].clone(),
             sender: sender_accounts[i as usize].clone(),
@@ -1141,7 +1141,7 @@ async fn mempool_update_aged_transaction() {
     );
 
     // Call mempool update, this should prune all the old transactions
-    mempool.mempool_update(&[].to_vec(), &[].to_vec());
+    mempool.mempool_update([].as_ref(), [].as_ref());
 
     assert_eq!(
         mempool.num_transactions(),
@@ -1183,7 +1183,7 @@ async fn mempool_update_not_enough_balance() {
     // Generate transactions
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
-            fee: 0 as u64,
+            fee: 0_u64,
             value: 60,
             recipient: recipient_accounts[i as usize].clone(),
             sender: sender_accounts[i as usize].clone(),
@@ -1206,7 +1206,7 @@ async fn mempool_update_not_enough_balance() {
     // Generate transactions
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
-            fee: 0 as u64,
+            fee: 0_u64,
             value: 60,
             recipient: recipient_accounts[i as usize].clone(),
             sender: sender_accounts[i as usize].clone(),
@@ -1278,7 +1278,7 @@ async fn mempool_update_not_enough_balance() {
     }
 
     // Call mempool update
-    mempool.mempool_update(&adopted_micro_blocks[..], &[].to_vec());
+    mempool.mempool_update(&adopted_micro_blocks[..], [].as_ref());
 
     // Get txns from mempool
     let (updated_txns, _) = mempool.get_transactions_for_block(10_000);
@@ -1294,14 +1294,8 @@ async fn mempool_update_not_enough_balance() {
     {
         let bc = blockchain.upgradable_read();
 
-        let block = producer.next_micro_block(
-            &bc,
-            bc.time.now(),
-            vec![],
-            updated_txns.clone(),
-            vec![0x41],
-            None,
-        );
+        let block =
+            producer.next_micro_block(&bc, bc.time.now(), vec![], updated_txns, vec![0x41], None);
 
         // We should succeed producing a block with the remaining mempool transactions
         assert_eq!(
@@ -1334,7 +1328,7 @@ async fn mempool_update_pruned_account() {
     // Generate transactions
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
-            fee: 0 as u64,
+            fee: 0_u64,
             value: 60,
             recipient: recipient_accounts[i as usize].clone(),
             sender: sender_accounts[i as usize].clone(),
@@ -1358,7 +1352,7 @@ async fn mempool_update_pruned_account() {
     // from the accounts tree
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
-            fee: 0 as u64,
+            fee: 0_u64,
             value: 100,
             recipient: recipient_accounts[i as usize].clone(),
             sender: sender_accounts[i as usize].clone(),
@@ -1430,7 +1424,7 @@ async fn mempool_update_pruned_account() {
     }
 
     // Call mempool update
-    mempool.mempool_update(&adopted_micro_blocks[..], &[].to_vec());
+    mempool.mempool_update(&adopted_micro_blocks[..], [].as_ref());
 
     // Get txns from mempool
     let (updated_txns, _) = mempool.get_transactions_for_block(10_000);
@@ -1444,14 +1438,8 @@ async fn mempool_update_pruned_account() {
     {
         let bc = blockchain.upgradable_read();
 
-        let block = producer.next_micro_block(
-            &bc,
-            bc.time.now(),
-            vec![],
-            updated_txns.clone(),
-            vec![0x41],
-            None,
-        );
+        let block =
+            producer.next_micro_block(&bc, bc.time.now(), vec![], updated_txns, vec![0x41], None);
 
         // We should succeed producing a block with the remaining mempool transactions
         assert_eq!(
@@ -1566,7 +1554,7 @@ async fn mempool_regular_and_control_tx() {
     // Generate transactions
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
-            fee: (i + 1) as u64,
+            fee: (i + 1),
             value: 1,
             recipient: recipient_accounts[i as usize].clone(),
             sender: sender_accounts[0].clone(),
@@ -1696,7 +1684,7 @@ async fn applies_total_tx_size_limits() {
 
     for i in 0..num_txns {
         let mempool_transaction = TestTransaction {
-            fee: if i < 2 { 0 as u64 } else { (i + 1) as u64 }, // Produce two tx with the same lowest fees
+            fee: if i < 2 { 0_u64 } else { i + 1 }, // Produce two tx with the same lowest fees
             value: balance,
             recipient: recipient_accounts[i as usize].clone(),
             sender: sender_accounts[i as usize].clone(),

@@ -254,8 +254,8 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
     for peer in 1..n_peers {
         // Dial the previous peer
         log::debug!(index = peer, "Dialing peer");
-        networks[peer as usize]
-            .dial_address(addresses[(peer - 1) as usize].clone())
+        networks[peer]
+            .dial_address(addresses[peer - 1].clone())
             .await
             .unwrap();
     }
@@ -278,20 +278,16 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
 
     // Verify that each network has all the other peers connected
     for peer in 0..n_peers {
-        assert_eq!(networks[peer as usize].get_peers().len(), n_peers - 1);
+        assert_eq!(networks[peer].get_peers().len(), n_peers - 1);
         assert_eq!(
-            networks[peer as usize]
-                .network_info()
-                .await
-                .unwrap()
-                .num_peers(),
+            networks[peer].network_info().await.unwrap().num_peers(),
             n_peers - 1
         );
     }
 
     // Now disconnect and reconnect a random peer from all peers
     for peer in 0..n_peers {
-        let network1 = &networks[peer as usize];
+        let network1 = &networks[peer];
         let peer_id1 = network1.local_peer_id();
         let mut events1 = network1.subscribe_events();
 
@@ -299,7 +295,7 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
         while peer == close_peer {
             close_peer = rng.gen_range(0..n_peers);
         }
-        let network2 = &networks[close_peer as usize];
+        let network2 = &networks[close_peer];
         let peer_id2 = network2.local_peer_id();
         let mut events2 = network2.subscribe_events();
 
@@ -336,7 +332,7 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
         events2 = network2.subscribe_events();
         log::debug!(peer_id = close_peer, "Reconnecting to peer");
         network1
-            .dial_address(addresses[close_peer as usize].clone())
+            .dial_address(addresses[close_peer].clone())
             .await
             .unwrap();
 

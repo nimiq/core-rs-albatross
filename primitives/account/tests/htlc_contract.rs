@@ -47,8 +47,7 @@ fn create_serialized_contract() {
 #[test]
 fn it_can_deserialize_a_htlc() {
     let bytes: Vec<u8> = hex::decode(HTLC).unwrap();
-    let htlc: HashedTimeLockedContract =
-        Deserialize::deserialize_from_vec(&mut &bytes[..]).unwrap();
+    let htlc: HashedTimeLockedContract = Deserialize::deserialize_from_vec(&bytes[..]).unwrap();
     assert_eq!(htlc.balance, Coin::ZERO);
     assert_eq!(htlc.hash_count, 1);
     assert_eq!(
@@ -72,8 +71,7 @@ fn it_can_deserialize_a_htlc() {
 #[test]
 fn it_can_serialize_a_htlc() {
     let bytes: Vec<u8> = hex::decode(HTLC).unwrap();
-    let htlc: HashedTimeLockedContract =
-        Deserialize::deserialize_from_vec(&mut &bytes[..]).unwrap();
+    let htlc: HashedTimeLockedContract = Deserialize::deserialize_from_vec(&bytes[..]).unwrap();
     let mut bytes2: Vec<u8> = Vec::with_capacity(htlc.serialized_size());
     let size = htlc.serialize_to_writer(&mut bytes2).unwrap();
     assert_eq!(size, htlc.serialized_size());
@@ -210,7 +208,7 @@ fn it_can_apply_and_revert_regular_transfer() {
             },
             Log::HTLCRegularTransfer {
                 contract_address: tx.sender,
-                pre_image: pre_image,
+                pre_image,
                 hash_depth: 2
             }
         ]
@@ -375,7 +373,7 @@ fn it_refuses_invalid_transactions() {
     // regular transfer: underflow
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
         hash_depth: 1,
-        hash_root: start_contract.hash_root.clone(),
+        hash_root: start_contract.hash_root,
         pre_image: PreImage::from(Blake2bHasher::default().digest(pre_image.as_bytes())),
         signature_proof: recipient_signature_proof.clone(),
     };

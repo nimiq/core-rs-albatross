@@ -173,7 +173,7 @@ fn it_can_verify_regular_transfer() {
             DeserializeError::serde_custom()
         ))
     );
-    tx.proof[2] = 3 as u8; // 3 -> Sha256
+    tx.proof[2] = 3_u8; // 3 -> Sha256
 
     // regular: invalid signature
     // Proof is not a valid point, so Deserialize will result in an error.
@@ -240,7 +240,7 @@ fn it_can_verify_early_resolve() {
 
     // early resolve: invalid over-long
     let proof = OutgoingHTLCTransactionProof::EarlyResolve {
-        signature_proof_recipient: recipient_signature_proof.clone(),
+        signature_proof_recipient: recipient_signature_proof,
         signature_proof_sender: sender_signature_proof,
     };
     tx.proof = proof.serialize_to_vec();
@@ -273,7 +273,7 @@ fn it_can_verify_timeout_resolve() {
 
     // timeout resolve: invalid over-long
     let proof = OutgoingHTLCTransactionProof::TimeoutResolve {
-        signature_proof_sender: sender_signature_proof.clone(),
+        signature_proof_sender: sender_signature_proof,
     };
     tx.proof = proof.serialize_to_vec();
     tx.proof.push(0);

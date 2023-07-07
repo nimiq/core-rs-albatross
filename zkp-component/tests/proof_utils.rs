@@ -120,7 +120,7 @@ async fn can_detect_valid_proof_none_genesis_blocks() {
 
     // Gets the election block and sets the precomputed zk proof from it.
     let zkp_proof = simulate_merger_wrapper(
-        &Path::new(ZKP_TEST_KEYS_PATH),
+        Path::new(ZKP_TEST_KEYS_PATH),
         &blockchain,
         &ZKP_VERIFYING_KEY,
         &mut get_base_seed(),
@@ -139,7 +139,7 @@ async fn can_detect_valid_proof_none_genesis_blocks() {
 
     // Gets the election block and sets the precomputed zk proof from it.
     let zkp_proof = simulate_merger_wrapper(
-        &Path::new(ZKP_TEST_KEYS_PATH),
+        Path::new(ZKP_TEST_KEYS_PATH),
         &blockchain,
         &ZKP_VERIFYING_KEY,
         &mut get_base_seed(),

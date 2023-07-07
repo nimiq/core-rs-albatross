@@ -340,7 +340,7 @@ async fn sync_ingredients() {
     .expect("Should yield macro chain");
     let checkpoint = macro_chain.checkpoint.expect("Should contain checkpoint");
     assert!(
-        macro_chain.epochs.is_none() || macro_chain.epochs.unwrap().len() == 0,
+        macro_chain.epochs.is_none() || macro_chain.epochs.unwrap().is_empty(),
         "MacroChain must contain either epochs, or a checkpoint or neither"
     );
     let blockchain = consensus1.blockchain.read();
@@ -396,7 +396,7 @@ async fn sync_ingredients() {
     .await
     .expect("Should yield macro chain");
     assert!(
-        macro_chain.epochs.is_none() || macro_chain.epochs.unwrap().len() == 0,
+        macro_chain.epochs.is_none() || macro_chain.epochs.unwrap().is_empty(),
         "Must not contain epochs"
     );
     assert!(

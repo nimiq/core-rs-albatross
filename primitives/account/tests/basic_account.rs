@@ -97,7 +97,7 @@ fn basic_transfer_works() {
     );
 
     // Doesn't work when the transaction total value exceeds the account balance.
-    let tx = make_signed_transaction(899, sender_address.clone(), recipient_address.clone());
+    let tx = make_signed_transaction(899, sender_address, recipient_address);
 
     assert_eq!(
         accounts.test_commit_outgoing_transaction(
