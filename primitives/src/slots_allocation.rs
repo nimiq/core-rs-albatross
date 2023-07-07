@@ -14,7 +14,7 @@
 //!                      |             SlotBand                      |    SlotBand       |
 //!                      +-------------------------------------------+-------------------+
 //! ```
-use std::{cmp::max, collections::BTreeMap, ops, slice::Iter};
+use std::{cmp::max, collections::BTreeMap, ops::Range, slice::Iter};
 
 use ark_ec::CurveGroup;
 use ark_serialize::CanonicalSerialize;
@@ -38,7 +38,7 @@ pub struct Validator {
     pub signing_key: SchnorrPublicKey,
     // The slot range for this validator. For example, if the slot range is (10,25) then
     // this validator owns the slots from 10 (inclusive) to 25 (exclusive). So it owns 25-10=15 slots.
-    pub slots: ops::Range<u16>,
+    pub slots: Range<u16>,
 }
 
 impl Validator {
@@ -47,7 +47,7 @@ impl Validator {
         address: Address,
         voting_key: TBlsKey,
         signing_key: TSchnorrKey,
-        slots: ops::Range<u16>,
+        slots: Range<u16>,
     ) -> Self {
         Self {
             address,
@@ -82,6 +82,8 @@ impl PenalizedSlot {
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SlashedValidator {
+    /// All slots to be slashed.
+    pub slots: Range<u16>,
     pub validator_address: Address,
     /// The `event_block` identifies the block at which the slash action occurred.
     pub event_block: u32,

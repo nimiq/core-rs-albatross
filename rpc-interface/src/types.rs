@@ -561,7 +561,10 @@ impl Inherent {
                 validator_address: slot.validator_address,
                 event_block: slot.event_block,
             },
-            BaseInherent::Slash { validator } => Inherent::Slash {
+            BaseInherent::Slash {
+                slashed_validator,
+                new_epoch_slot_range
+            } => Inherent::Slash {
                 block_number,
                 block_time,
                 validator_address: validator.validator_address,
@@ -873,6 +876,7 @@ pub enum LogType {
     SetInactiveStake,
     PayoutReward,
     Penalize,
+    Slash,
     RevertContract,
     FailedTransaction,
 }
@@ -922,6 +926,9 @@ impl LogType {
             Log::SetInactiveStake { .. } => Self::SetInactiveStake,
             Log::PayoutReward { .. } => Self::PayoutReward,
             Log::Penalize { .. } => Self::Penalize,
+            Log::Slash {
+            ..,
+            } => Self::Slash,
             Log::RevertContract { .. } => Self::RevertContract,
             Log::FailedTransaction { .. } => Self::FailedTransaction,
             Log::ValidatorFeeDeduction { .. } => Self::ValidatorFeeDeduction,

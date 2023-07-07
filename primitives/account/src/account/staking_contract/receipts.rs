@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
+use nimiq_collections::BitSet;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{account::AccountError, coin::Coin};
@@ -8,16 +9,26 @@ use nimiq_serde::{Deserialize, Serialize};
 
 use crate::{convert_receipt, AccountReceipt};
 
-/// A collection of receipts for inherents/transactions. This is necessary to be able to revert
-/// those inherents/transactions.
+/// Penalize receipt for the inherent. This is necessary to be able to revert
+/// these inherents.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct PenalizeReceipt {
     pub newly_deactivated: bool,
-    pub newly_disabled: bool,
-    pub newly_lost_rewards: bool,
-    pub old_jail_release: Option<u32>,
+    pub newly_punished_previous_batch: bool,
+    pub newly_punished_current_batch: bool,
 }
 convert_receipt!(PenalizeReceipt);
+
+/// Slash receipt for the inherent. This is necessary to be able to revert
+/// these inherents.
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct SlashReceipt {
+    pub newly_deactivated: bool,
+    pub old_previous_batch_punished_slots: BitSet,
+    pub old_current_batch_punished_slots: Option<BTreeSet<u16>>,
+    pub old_jail_release: Option<u32>,
+}
+convert_receipt!(SlashReceipt);
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct UpdateValidatorReceipt {
@@ -35,8 +46,8 @@ pub struct JailValidatorReceipt {
 }
 convert_receipt!(JailValidatorReceipt);
 
-impl From<PenalizeReceipt> for JailValidatorReceipt {
-    fn from(value: PenalizeReceipt) -> Self {
+impl From<&SlashReceipt> for JailValidatorReceipt {
+    fn from(value: &SlashReceipt) -> Self {
         Self {
             newly_deactivated: value.newly_deactivated,
             old_jail_release: value.old_jail_release,
@@ -47,7 +58,6 @@ impl From<PenalizeReceipt> for JailValidatorReceipt {
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ReactivateValidatorReceipt {
     pub was_inactive_since: u32,
-    pub current_epoch_disabled_slots: Option<BTreeSet<u16>>,
 }
 convert_receipt!(ReactivateValidatorReceipt);
 

@@ -169,17 +169,9 @@ impl Blockchain {
 
         // Calculate the slots that will receive rewards.
         // Rewards are for the previous batch (to give validators time to report misbehavior)
-        // lost_rewards_set (clears on batch end) makes rewards being lost for at least one batch
-        // disabled_set (clears on epoch end) makes rewards being lost further if validator doesn't unpark
-        let lost_rewards_set = staking_contract.previous_batch_lost_rewards();
-        let disabled_set = if Policy::first_batch_of_epoch(macro_header.block_number) {
-            // Use the previous epoch's disabled slots for the first batch of the epoch
-            staking_contract.previous_epoch_disabled_slots()
-        } else {
-            // Use the current epoch's disabled slots for the rest of the batches
-            staking_contract.current_epoch_disabled_slots()
-        };
-        let penalized_set = lost_rewards_set | disabled_set;
+        let penalized_set = staking_contract
+            .punished_slots
+            .previous_batch_punished_slots();
 
         // Total reward for the previous batch
         let block_reward = block_reward_for_batch(

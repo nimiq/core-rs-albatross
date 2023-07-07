@@ -1,5 +1,3 @@
-use std::{collections::BTreeSet, mem};
-
 use nimiq_primitives::{
     account::{AccountError, AccountType},
     coin::Coin,
@@ -23,8 +21,8 @@ use crate::{
     data_store::{DataStoreRead, DataStoreWrite},
     interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction},
     reserved_balance::ReservedBalance,
-    Account, AccountPruningInteraction, AccountReceipt, BlockState, InherentLogger, Log,
-    TransactionLog,
+    Account, AccountPruningInteraction, AccountReceipt, BlockState, InherentLogger,
+    JailValidatorReceipt, Log, SlashReceipt, TransactionLog,
 };
 
 impl AccountTransactionInteraction for StakingContract {
@@ -640,9 +638,45 @@ impl AccountInherentInteraction for StakingContract {
         inherent_logger: &mut InherentLogger,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         match inherent {
-            Inherent::Slash { validator } => {
-                // PITODO
-                Ok(None)
+            Inherent::Slash {
+                slashed_validator,
+                new_epoch_slot_range,
+            } => {
+                // Jail validator
+                let mut store = StakingContractStoreWrite::new(&mut data_store);
+                let mut tx_logger = TransactionLog::empty();
+                let receipt = self.jail_validator(
+                    &mut store,
+                    &slashed_validator.validator_address,
+                    block_state.number,
+                    Policy::block_after_jail(block_state.number),
+                    &mut tx_logger,
+                )?;
+                inherent_logger.push_tx_logger(tx_logger);
+
+                let newly_deactivated = receipt.newly_deactivated;
+                let newly_jailed = receipt.old_jail_release.is_none();
+
+                // Slash the validator
+                let (old_previous_batch_punished_slots, old_current_batch_punished_slots) = self
+                    .punished_slots
+                    .register_slash(slashed_validator, block_state.number, new_epoch_slot_range);
+
+                inherent_logger.push_log(Log::Slash {
+                    validator_address: slashed_validator.validator_address.clone(),
+                    event_block: slashed_validator.event_block,
+                    newly_jailed,
+                });
+
+                Ok(Some(
+                    SlashReceipt {
+                        newly_deactivated,
+                        old_previous_batch_punished_slots,
+                        old_current_batch_punished_slots,
+                        old_jail_release: receipt.old_jail_release,
+                    }
+                    .into(),
+                ))
             }
             Inherent::Penalize { slot } => {
                 // Check that the penalized validator does exist.
@@ -651,99 +685,50 @@ impl AccountInherentInteraction for StakingContract {
 
                 // Deactivate validator
                 let newly_deactivated = validator.is_active();
-
-                // Fork proof from previous epoch should affect:
-                // - previous_lost_rewards
-                // - previous_disabled_slots (not needed, because it's redundant with the lost rewards)
-                // Fork proof from current epoch, but previous batch should affect:
-                // - previous_lost_rewards
-                // - current_epoch_disabled_slots
-                // All others:
-                // - current_batch_lost_rewards
-                // - current_epoch_disabled_slots
-                let newly_disabled;
-                let newly_lost_rewards;
-
-                if Policy::epoch_at(slot.event_block) < Policy::epoch_at(block_state.number) {
-                    newly_lost_rewards = !self
-                        .previous_batch_lost_rewards
-                        .contains(slot.slot as usize);
-
-                    self.previous_batch_lost_rewards.insert(slot.slot as usize);
-
-                    newly_disabled = false;
-                } else if Policy::batch_at(slot.event_block) < Policy::batch_at(block_state.number)
-                {
-                    newly_lost_rewards = !self
-                        .previous_batch_lost_rewards
-                        .contains(slot.slot as usize);
-
-                    self.previous_batch_lost_rewards.insert(slot.slot as usize);
-
-                    newly_disabled = self
-                        .current_epoch_disabled_slots
-                        .entry(slot.validator_address.clone())
-                        .or_insert_with(BTreeSet::new)
-                        .insert(slot.slot);
-                } else {
-                    newly_lost_rewards =
-                        !self.current_batch_lost_rewards.contains(slot.slot as usize);
-
-                    self.current_batch_lost_rewards.insert(slot.slot as usize);
-
-                    newly_disabled = self
-                        .current_epoch_disabled_slots
-                        .entry(slot.validator_address.clone())
-                        .or_insert_with(BTreeSet::new)
-                        .insert(slot.slot);
+                if newly_deactivated {
+                    let mut tx_logger = TransactionLog::empty();
+                    self.deactivate_validator(
+                        &mut store,
+                        &slot.validator_address,
+                        &slot.validator_address,
+                        block_state.number,
+                        &mut tx_logger,
+                    )?;
+                    inherent_logger.push_tx_logger(tx_logger);
                 }
 
-                if newly_lost_rewards {
-                    inherent_logger.push_log(Log::Penalize {
-                        validator_address: slot.validator_address.clone(),
-                        event_block: slot.event_block,
-                        slot: slot.slot,
-                        newly_disabled,
-                        newly_deactivated,
-                    });
-                }
+                // Penalize the validator
+                let (newly_punished_previous_batch, newly_punished_current_batch) = self
+                    .punished_slots
+                    .register_penalty(slot, block_state.number);
 
-                let mut tx_logger = TransactionLog::empty();
-                let receipt = self.jail_validator(
-                    &mut store,
-                    &slot.validator_address,
-                    block_state.number,
-                    Policy::block_after_jail(block_state.number),
-                    &mut tx_logger,
-                )?;
-                let old_jail_release = receipt.old_jail_release;
-                inherent_logger.push_tx_logger(tx_logger);
+                inherent_logger.push_log(Log::Penalize {
+                    validator_address: slot.validator_address.clone(),
+                    event_block: slot.event_block,
+                    slot: slot.slot,
+                    newly_punished_previous_batch,
+                    newly_punished_current_batch,
+                    newly_deactivated,
+                });
 
                 Ok(Some(
                     PenalizeReceipt {
                         newly_deactivated,
-                        newly_disabled,
-                        newly_lost_rewards,
-                        old_jail_release,
+                        newly_punished_previous_batch,
+                        newly_punished_current_batch,
                     }
                     .into(),
                 ))
             }
             Inherent::FinalizeBatch => {
                 // Clear the lost rewards set.
-                self.previous_batch_lost_rewards = mem::take(&mut self.current_batch_lost_rewards);
+                self.punished_slots.finalize_batch(&self.active_validators);
 
                 // Since finalized batches cannot be reverted, we don't need any receipts.
                 Ok(None)
             }
             Inherent::FinalizeEpoch => {
-                // Clear the lost rewards set.
-                self.previous_batch_lost_rewards = mem::take(&mut self.current_batch_lost_rewards);
-
-                // And the disabled slots.
-                // Optimization: We actually only need the old slots for the first batch of the epoch.
-                self.previous_epoch_disabled_slots =
-                    mem::take(&mut self.current_epoch_disabled_slots);
+                self.punished_slots.finalize_epoch();
 
                 // Since finalized epochs cannot be reverted, we don't need any receipts.
                 Ok(None)
@@ -755,73 +740,71 @@ impl AccountInherentInteraction for StakingContract {
     fn revert_inherent(
         &mut self,
         inherent: &Inherent,
-        block_state: &BlockState,
+        _block_state: &BlockState,
         receipt: Option<AccountReceipt>,
         mut data_store: DataStoreWrite,
         inherent_logger: &mut InherentLogger,
     ) -> Result<(), AccountError> {
         match inherent {
-            Inherent::Slash { validator } => {
-                // PITODO
+            Inherent::Slash {
+                slashed_validator, ..
+            } => {
+                let receipt: SlashReceipt =
+                    receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
+                let newly_jailed = receipt.old_jail_release.is_none();
+                let jail_receipt = JailValidatorReceipt::from(&receipt);
+
+                self.punished_slots.revert_register_slash(
+                    slashed_validator,
+                    receipt.old_previous_batch_punished_slots,
+                    receipt.old_current_batch_punished_slots,
+                );
+
+                inherent_logger.push_log(Log::Slash {
+                    validator_address: slashed_validator.validator_address.clone(),
+                    event_block: slashed_validator.event_block,
+                    newly_jailed,
+                });
+
+                let mut tx_logger = TransactionLog::empty();
+                self.revert_jail_validator(
+                    &mut StakingContractStoreWrite::new(&mut data_store),
+                    &slashed_validator.validator_address,
+                    jail_receipt,
+                    &mut tx_logger,
+                )?;
+                inherent_logger.push_tx_logger(tx_logger);
+
                 Ok(())
             }
             Inherent::Penalize { slot } => {
                 let receipt: PenalizeReceipt =
                     receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
-                let mut tx_logger = TransactionLog::empty();
-                self.revert_jail_validator(
-                    &mut StakingContractStoreWrite::new(&mut data_store),
-                    &slot.validator_address,
-                    receipt.into(),
-                    &mut tx_logger,
-                )?;
+                self.punished_slots.revert_register_penalty(
+                    slot,
+                    receipt.newly_punished_previous_batch,
+                    receipt.newly_punished_current_batch,
+                );
 
-                inherent_logger.push_tx_logger(tx_logger);
+                inherent_logger.push_log(Log::Penalize {
+                    validator_address: slot.validator_address.clone(),
+                    event_block: slot.event_block,
+                    slot: slot.slot,
+                    newly_punished_previous_batch: receipt.newly_punished_previous_batch,
+                    newly_punished_current_batch: receipt.newly_punished_current_batch,
+                    newly_deactivated: receipt.newly_deactivated,
+                });
 
-                // Fork proof from previous epoch should affect:
-                // - previous_lost_rewards
-                // - previous_disabled_slots (not needed, because it's redundant with the lost rewards)
-                // Fork proof from current epoch, but previous batch should affect:
-                // - previous_lost_rewards
-                // - current_epoch_disabled_slots
-                // All others:
-                // - current_batch_lost_rewards
-                // - current_epoch_disabled_slots
-                if receipt.newly_disabled {
-                    if Policy::epoch_at(slot.event_block) < Policy::epoch_at(block_state.number) {
-                        // Nothing to do.
-                    } else {
-                        let is_empty = {
-                            let entry = self
-                                .current_epoch_disabled_slots
-                                .get_mut(&slot.validator_address)
-                                .unwrap();
-                            entry.remove(&slot.slot);
-                            entry.is_empty()
-                        };
-                        if is_empty {
-                            self.current_epoch_disabled_slots
-                                .remove(&slot.validator_address);
-                        }
-                    }
-                }
-                if receipt.newly_lost_rewards {
-                    if Policy::epoch_at(slot.event_block) < Policy::epoch_at(block_state.number)
-                        || Policy::batch_at(slot.event_block) < Policy::batch_at(block_state.number)
-                    {
-                        self.previous_batch_lost_rewards.remove(slot.slot as usize);
-                    } else {
-                        self.current_batch_lost_rewards.remove(slot.slot as usize);
-                    }
+                if receipt.newly_deactivated {
+                    let mut tx_logger = TransactionLog::empty();
+                    self.revert_deactivate_validator(
+                        &mut StakingContractStoreWrite::new(&mut data_store),
+                        &slot.validator_address,
+                        &mut tx_logger,
+                    )?;
 
-                    inherent_logger.push_log(Log::Penalize {
-                        validator_address: slot.validator_address.clone(),
-                        event_block: slot.event_block,
-                        slot: slot.slot,
-                        newly_disabled: receipt.newly_disabled,
-                        newly_deactivated: receipt.newly_deactivated,
-                    });
+                    inherent_logger.push_tx_logger(tx_logger);
                 }
 
                 Ok(())

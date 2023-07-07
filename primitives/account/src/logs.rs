@@ -150,8 +150,16 @@ pub enum Log {
         validator_address: Address,
         event_block: u32,
         slot: u16,
-        newly_disabled: bool,
+        newly_punished_previous_batch: bool,
+        newly_punished_current_batch: bool,
         newly_deactivated: bool,
+    },
+
+    #[serde(rename_all = "camelCase")]
+    Slash {
+        validator_address: Address,
+        event_block: u32,
+        newly_jailed: bool,
     },
 
     #[serde(rename_all = "camelCase")]
@@ -291,6 +299,9 @@ impl Log {
             }
             Log::PayoutReward { to, .. } => to == address,
             Log::Penalize {
+                validator_address, ..
+            }
+            | Log::Slash {
                 validator_address, ..
             } => validator_address == address,
             Log::RevertContract { contract_address } => contract_address == address,

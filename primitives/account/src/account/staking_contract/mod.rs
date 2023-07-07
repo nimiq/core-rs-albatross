@@ -1,6 +1,5 @@
-use std::collections::{btree_set::BTreeSet, BTreeMap};
+use std::collections::BTreeMap;
 
-use nimiq_collections::BitSet;
 use nimiq_keys::Address;
 use nimiq_primitives::{
     coin::Coin,
@@ -17,10 +16,14 @@ pub use store::StakingContractStoreWrite;
 pub use validator::{Tombstone, Validator};
 
 use crate::{
-    account::staking_contract::store::{StakingContractStoreRead, StakingContractStoreReadOps},
+    account::staking_contract::{
+        punished_slots::PunishedSlots,
+        store::{StakingContractStoreRead, StakingContractStoreReadOps},
+    },
     data_store_ops::{DataStoreIterOps, DataStoreReadOps},
 };
 
+mod punished_slots;
 mod receipts;
 mod staker;
 mod store;
@@ -58,18 +61,8 @@ pub struct StakingContract {
     // The list of active validators addresses (i.e. are eligible to receive slots) and their
     // corresponding balances.
     pub active_validators: BTreeMap<Address, Coin>,
-    // The validator slots that lost rewards (i.e. are not eligible to receive rewards) during
-    // the current epoch.
-    pub current_batch_lost_rewards: BitSet,
-    // The validator slots that lost rewards (i.e. are not eligible to receive rewards) during
-    // the previous batch.
-    pub previous_batch_lost_rewards: BitSet,
-    // The validator slots, searchable by the validator address, that are disabled (i.e. are no
-    // longer eligible to produce blocks) currently.
-    pub current_epoch_disabled_slots: BTreeMap<Address, BTreeSet<u16>>,
-    // The validator slots, searchable by the validator address, that were disabled (i.e. are no
-    // longer eligible to produce blocks) during the previous epoch.
-    pub previous_epoch_disabled_slots: BTreeMap<Address, BTreeSet<u16>>,
+    // The punished slots for the current and previous batches.
+    pub punished_slots: PunishedSlots,
 }
 
 impl StakingContract {
@@ -167,37 +160,5 @@ impl StakingContract {
         }
 
         slots_builder.build()
-    }
-
-    /// Returns a BitSet of slots that lost its rewards in the previous batch.
-    pub fn previous_batch_lost_rewards(&self) -> BitSet {
-        self.previous_batch_lost_rewards.clone()
-    }
-
-    /// Returns a BitSet of slots that lost its rewards in the current batch.
-    pub fn current_batch_lost_rewards(&self) -> BitSet {
-        self.current_batch_lost_rewards.clone()
-    }
-
-    /// Returns a BitSet of slots that were marked as disabled in the previous epoch.
-    pub fn previous_epoch_disabled_slots(&self) -> BitSet {
-        let mut bitset = BitSet::new();
-        for slots in self.previous_epoch_disabled_slots.values() {
-            for &slot in slots {
-                bitset.insert(slot as usize);
-            }
-        }
-        bitset
-    }
-
-    /// Returns a BitSet of slots that were marked as disabled in the current epoch.
-    pub fn current_epoch_disabled_slots(&self) -> BitSet {
-        let mut bitset = BitSet::new();
-        for slots in self.current_epoch_disabled_slots.values() {
-            for &slot in slots {
-                bitset.insert(slot as usize);
-            }
-        }
-        bitset
     }
 }

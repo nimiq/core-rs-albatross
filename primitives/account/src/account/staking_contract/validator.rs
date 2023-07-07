@@ -476,10 +476,6 @@ impl StakingContract {
             .take()
             .expect("validator is inactive");
 
-        // Clear the validator's current and previous disabled slots.
-        let current_epoch_disabled_slots =
-            self.current_epoch_disabled_slots.remove(validator_address);
-
         // Add validator to active_validators.
         self.active_validators
             .insert(validator_address.clone(), validator.total_stake);
@@ -491,10 +487,7 @@ impl StakingContract {
             validator_address: validator_address.clone(),
         });
 
-        Ok(ReactivateValidatorReceipt {
-            was_inactive_since,
-            current_epoch_disabled_slots,
-        })
+        Ok(ReactivateValidatorReceipt { was_inactive_since })
     }
 
     /// Reverts reactivating a validator.
@@ -510,12 +503,6 @@ impl StakingContract {
 
         // Restore validator inactive state.
         validator.inactive_since = Some(receipt.was_inactive_since);
-
-        // Re-add current and previous disabled slots.
-        if let Some(slots) = receipt.current_epoch_disabled_slots {
-            self.current_epoch_disabled_slots
-                .insert(validator_address.clone(), slots);
-        }
 
         // Remove validator from active_validators again.
         self.active_validators
