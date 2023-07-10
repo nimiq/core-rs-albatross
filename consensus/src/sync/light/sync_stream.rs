@@ -519,7 +519,7 @@ mod tests {
             match sync.next().await {
                 // The peer does not reply to the zkp request, so we disconnect from it and do not emit it
                 None => {
-                    assert_eq!(chain1.read().block_number(), 0);
+                    assert_eq!(chain1.read().block_number(), Policy::genesis_block_number());
                     // Verify the peer was removed
                     assert_eq!(sync.peer_requests.len(), 0);
                 }
@@ -614,7 +614,10 @@ mod tests {
                     0,
                 );
             }
-            assert_eq!(chain2.read().block_number(), Policy::blocks_per_epoch());
+            assert_eq!(
+                chain2.read().block_number(),
+                Policy::blocks_per_epoch() + Policy::genesis_block_number()
+            );
 
             let zkp_component = nimiq_zkp_component::ZKPComponent::new(
                 chain1.clone(),
@@ -689,7 +692,9 @@ mod tests {
             }
             assert_eq!(
                 chain2.read().block_number(),
-                Policy::blocks_per_epoch() + Policy::blocks_per_batch()
+                Policy::blocks_per_epoch()
+                    + Policy::blocks_per_batch()
+                    + Policy::genesis_block_number()
             );
 
             let zkp_component = nimiq_zkp_component::ZKPComponent::new(
@@ -760,7 +765,7 @@ mod tests {
             }
             assert_eq!(
                 chain2.read().block_number(),
-                num_batches as u32 * Policy::blocks_per_batch()
+                num_batches as u32 * Policy::blocks_per_batch() + Policy::genesis_block_number()
             );
 
             let zkp_component = nimiq_zkp_component::ZKPComponent::new(
@@ -838,11 +843,15 @@ mod tests {
             assert_eq!(
                 chain2.read().block_number(),
                 Policy::blocks_per_epoch() * (num_extra_epochs + 2)
+                    + Policy::genesis_block_number()
             );
             if let BlockchainProxy::Full(ref chain1) = chain1 {
                 let block_to_delete = chain2
                     .read()
-                    .get_block_at(Policy::blocks_per_epoch(), true)
+                    .get_block_at(
+                        Policy::blocks_per_epoch() + Policy::genesis_block_number(),
+                        true,
+                    )
                     .unwrap();
 
                 assert_eq!(
@@ -854,7 +863,10 @@ mod tests {
                         chain1.upgradable_read(),
                         chain2
                             .read()
-                            .get_block_at(Policy::blocks_per_epoch() * 2, true)
+                            .get_block_at(
+                                Policy::blocks_per_epoch() * 2 + Policy::genesis_block_number(),
+                                true
+                            )
                             .unwrap(),
                     ),
                     Ok(PushResult::Extended),

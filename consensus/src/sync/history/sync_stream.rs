@@ -357,7 +357,7 @@ mod tests {
 
         match sync.next().await {
             Some(MacroSyncReturn::Good(_)) => {
-                assert_eq!(chain.read().block_number(), 0);
+                assert_eq!(chain.read().block_number(), Policy::genesis_block_number());
             }
             res => panic!("Unexpected HistorySyncReturn: {res:?}"),
         }
@@ -380,7 +380,10 @@ mod tests {
             1,
             0,
         );
-        assert_eq!(chain2.read().block_number(), Policy::blocks_per_epoch());
+        assert_eq!(
+            chain2.read().block_number(),
+            Policy::blocks_per_epoch() + Policy::genesis_block_number()
+        );
 
         let mut sync = HistoryMacroSync::<MockNetwork>::new(
             Arc::clone(&chain1),
@@ -419,7 +422,7 @@ mod tests {
         );
         assert_eq!(
             chain2.read().block_number(),
-            num_epochs as u32 * Policy::blocks_per_epoch()
+            num_epochs as u32 * Policy::blocks_per_epoch() + Policy::genesis_block_number()
         );
 
         let mut sync = HistoryMacroSync::<MockNetwork>::new(
@@ -450,7 +453,10 @@ mod tests {
 
         let producer = BlockProducer::new(signing_key(), voting_key());
         produce_macro_blocks_with_txns(&producer, &chain2, 1, 1, 0);
-        assert_eq!(chain2.read().block_number(), Policy::blocks_per_batch());
+        assert_eq!(
+            chain2.read().block_number(),
+            Policy::blocks_per_batch() + Policy::genesis_block_number()
+        );
 
         let mut sync = HistoryMacroSync::<MockNetwork>::new(
             Arc::clone(&chain1),
@@ -483,7 +489,7 @@ mod tests {
         produce_macro_blocks_with_txns(&producer, &chain2, num_batches, 1, 0);
         assert_eq!(
             chain2.read().block_number(),
-            num_batches as u32 * Policy::blocks_per_batch()
+            num_batches as u32 * Policy::blocks_per_batch() + Policy::genesis_block_number()
         );
 
         let mut sync = HistoryMacroSync::<MockNetwork>::new(
@@ -517,12 +523,15 @@ mod tests {
         produce_macro_blocks_with_txns(&producer, &chain2, num_batches, 50, 0);
         assert_eq!(
             chain2.read().block_number(),
-            num_batches as u32 * Policy::blocks_per_batch()
+            num_batches as u32 * Policy::blocks_per_batch() + Policy::genesis_block_number()
         );
 
         let num_blocks = Policy::blocks_per_batch() + Policy::blocks_per_batch() / 2;
         copy_chain_with_limit(&chain2, &chain1, num_blocks as usize);
-        assert_eq!(chain1.read().block_number(), num_blocks);
+        assert_eq!(
+            chain1.read().block_number(),
+            num_blocks + Policy::genesis_block_number()
+        );
 
         let mut sync = HistoryMacroSync::<MockNetwork>::new(
             Arc::clone(&chain1),
@@ -556,15 +565,24 @@ mod tests {
 
         let producer = BlockProducer::new(signing_key(), voting_key());
         produce_macro_blocks_with_txns(&producer, &chain2, 1, 1, 0);
-        assert_eq!(chain2.read().block_number(), Policy::blocks_per_batch());
+        assert_eq!(
+            chain2.read().block_number(),
+            Policy::blocks_per_batch() + Policy::genesis_block_number()
+        );
 
         copy_chain(&chain2, &chain3);
         produce_macro_blocks_with_txns(&producer, &chain3, 1, 1, 0);
-        assert_eq!(chain3.read().block_number(), 2 * Policy::blocks_per_batch());
+        assert_eq!(
+            chain3.read().block_number(),
+            2 * Policy::blocks_per_batch() + Policy::genesis_block_number()
+        );
 
         copy_chain(&chain3, &chain4);
         produce_macro_blocks_with_txns(&producer, &chain4, 1, 1, 0);
-        assert_eq!(chain4.read().block_number(), 3 * Policy::blocks_per_batch());
+        assert_eq!(
+            chain4.read().block_number(),
+            3 * Policy::blocks_per_batch() + Policy::genesis_block_number()
+        );
 
         let mut sync = HistoryMacroSync::<MockNetwork>::new(
             Arc::clone(&chain1),

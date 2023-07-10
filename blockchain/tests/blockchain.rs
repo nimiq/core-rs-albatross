@@ -180,7 +180,7 @@ fn prune_epoch_micro_blocks() {
         .chain_store
         .get_chain_info(&micro_block3.hash(), false, None,)
         .is_ok());
-    assert_eq!(bc_read.block_number(), 1);
+    assert_eq!(bc_read.block_number(), 1 + Policy::genesis_block_number());
 
     let mut txs = bc_read.write_transaction();
     // Prune the 3 created MicroBlocks.

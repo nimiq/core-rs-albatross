@@ -275,9 +275,10 @@ fn test_verify_micro_block_body_txns() {
 
 #[test]
 fn test_verify_micro_block_body_fork_proofs() {
+    let genesis_block_number = Policy::genesis_block_number();
     let mut micro_header = MicroHeader {
         version: Policy::VERSION,
-        block_number: 1,
+        block_number: 1 + genesis_block_number,
         timestamp: 0,
         parent_hash: Blake2bHash::default(),
         seed: VrfSeed::default(),
@@ -363,7 +364,7 @@ fn test_verify_micro_block_body_fork_proofs() {
 
     // Now modify the block height of the first header of the first fork proof
     let mut fork_proof = fork_proofs.pop().unwrap();
-    fork_proof.header1.block_number = Policy::blocks_per_epoch();
+    fork_proof.header1.block_number = Policy::blocks_per_epoch() + genesis_block_number;
     fork_proofs.push(fork_proof);
     fork_proofs.sort();
 

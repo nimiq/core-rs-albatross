@@ -123,7 +123,8 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             Arc::new(RwLock::new(peers)),
             epoch_ids,
             first_epoch_number,
-            first_epoch_number * Policy::blocks_per_epoch() as usize,
+            (first_epoch_number * Policy::blocks_per_epoch() as usize)
+                + Policy::genesis_block_number() as usize,
         )
     }
 

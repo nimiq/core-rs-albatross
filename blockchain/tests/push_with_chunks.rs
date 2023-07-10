@@ -7,6 +7,7 @@ use nimiq_primitives::{
     account::AccountError,
     coin::Coin,
     key_nibbles::KeyNibbles,
+    policy::Policy,
     trie::{
         error::MerkleRadixTrieError,
         trie_chunk::{TrieChunkWithStart, TrieItem},
@@ -106,7 +107,7 @@ fn can_push_blocks_into_incomplete_trie() {
         address,
         100.try_into().unwrap(),
         Coin::ZERO,
-        1,
+        1 + Policy::genesis_block_number(),
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -361,7 +362,7 @@ fn can_partially_apply_blocks() {
         address_known,
         100.try_into().unwrap(),
         Coin::ZERO,
-        1,
+        1 + Policy::genesis_block_number(),
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -370,7 +371,7 @@ fn can_partially_apply_blocks() {
         address_unknown,
         100.try_into().unwrap(),
         Coin::ZERO,
-        1,
+        1 + Policy::genesis_block_number(),
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -508,7 +509,7 @@ fn can_detect_invalid_chunks() {
         address,
         100.try_into().unwrap(),
         Coin::ZERO,
-        1,
+        1 + Policy::genesis_block_number(),
         NetworkId::UnitAlbatross,
     )
     .unwrap();

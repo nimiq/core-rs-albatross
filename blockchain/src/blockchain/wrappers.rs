@@ -253,7 +253,6 @@ impl Blockchain {
         if self.state.can_verify_history {
             // If we are at the genesis block or in the first epoch and we can verify the history,
             // we can also enforce the validity window.
-            // TODO: Genesis: update because of non zero genesis
             if Policy::epoch_at(self.block_number() + 1) <= 1 {
                 return true;
             }

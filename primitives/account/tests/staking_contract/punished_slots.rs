@@ -31,11 +31,11 @@ struct SlashConfig {
 impl Default for SlashConfig {
     fn default() -> Self {
         Self {
-            event_block1: 1,
+            event_block1: 1 + Policy::genesis_block_number(),
             slots_range1: 0..5,
-            event_block2: 2,
+            event_block2: 2 + Policy::genesis_block_number(),
             slots_range2: 0..5,
-            reporting_block: 3,
+            reporting_block: 3 + Policy::genesis_block_number(),
             slots_range_next_epoch: 1..6,
             expected_current1: 0..0,
             expected_previous1: 0..0,
@@ -184,7 +184,7 @@ fn can_penalize_slash_and_revert_twice() {
         // 2. both events in previous batch
         SlashConfig {
             slots_range1: 2..3,
-            reporting_block: Policy::blocks_per_batch() + 1,
+            reporting_block: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
             expected_current1: 2..3,
             expected_previous1: 2..3,
             expected_current2: 0..5,
@@ -194,8 +194,8 @@ fn can_penalize_slash_and_revert_twice() {
         // 3. 1st event in current, 2nd in previous
         SlashConfig {
             slots_range1: 2..3,
-            event_block1: Policy::blocks_per_batch() + 1,
-            reporting_block: Policy::blocks_per_batch() + 2,
+            event_block1: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_batch() + 2 + Policy::genesis_block_number(),
             expected_current1: 2..3,
             expected_current2: 0..5,
             expected_previous2: 0..5,
@@ -204,8 +204,8 @@ fn can_penalize_slash_and_revert_twice() {
         // 4. 1st event in previous, 2nd in current
         SlashConfig {
             slots_range1: 2..3,
-            event_block2: Policy::blocks_per_batch() + 1,
-            reporting_block: Policy::blocks_per_batch() + 2,
+            event_block2: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_batch() + 2 + Policy::genesis_block_number(),
             expected_current1: 2..3,
             expected_previous1: 2..3,
             expected_current2: 0..5,
@@ -216,9 +216,9 @@ fn can_penalize_slash_and_revert_twice() {
         // 1. both events in previous batch
         SlashConfig {
             slots_range1: 2..3,
-            event_block1: Policy::blocks_per_epoch() - 2,
-            event_block2: Policy::blocks_per_epoch() - 1,
-            reporting_block: Policy::blocks_per_epoch() + 1,
+            event_block1: Policy::blocks_per_epoch() - 2 + Policy::genesis_block_number(),
+            event_block2: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
             expected_previous1: 2..3,
             expected_current2: 1..6,
             expected_previous2: 0..5,
@@ -227,9 +227,9 @@ fn can_penalize_slash_and_revert_twice() {
         // 2. 1st event in current, 2nd in previous
         SlashConfig {
             slots_range1: 2..3,
-            event_block1: Policy::blocks_per_epoch() + 1,
-            event_block2: Policy::blocks_per_epoch() - 1,
-            reporting_block: Policy::blocks_per_epoch() + 2,
+            event_block1: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
+            event_block2: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_epoch() + 2 + Policy::genesis_block_number(),
             expected_current1: 2..3,
             expected_current2: 1..6,
             expected_previous2: 0..5,
@@ -239,9 +239,9 @@ fn can_penalize_slash_and_revert_twice() {
         SlashConfig {
             slots_range1: 2..3,
             slots_range2: 1..6,
-            event_block1: Policy::blocks_per_epoch() - 1,
-            event_block2: Policy::blocks_per_epoch() + 1,
-            reporting_block: Policy::blocks_per_epoch() + 2,
+            event_block1: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
+            event_block2: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_epoch() + 2 + Policy::genesis_block_number(),
             expected_previous1: 2..3,
             expected_current2: 1..6,
             expected_previous2: 2..3,
@@ -394,7 +394,7 @@ fn can_slash_penalize_and_revert_twice() {
         // 2. both events in previous batch
         SlashConfig {
             slots_range2: 2..3,
-            reporting_block: Policy::blocks_per_batch() + 1,
+            reporting_block: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
             expected_current1: 0..5,
             expected_previous1: 0..5,
             expected_current2: 0..5,
@@ -404,8 +404,8 @@ fn can_slash_penalize_and_revert_twice() {
         // 3. 1st event in current, 2nd in previous
         SlashConfig {
             slots_range2: 2..3,
-            event_block1: Policy::blocks_per_batch() + 1,
-            reporting_block: Policy::blocks_per_batch() + 2,
+            event_block1: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_batch() + 2 + Policy::genesis_block_number(),
             expected_current1: 0..5,
             expected_current2: 0..5,
             expected_previous2: 2..3,
@@ -414,8 +414,8 @@ fn can_slash_penalize_and_revert_twice() {
         // 4. 1st event in previous, 2nd in current
         SlashConfig {
             slots_range2: 2..3,
-            event_block2: Policy::blocks_per_batch() + 1,
-            reporting_block: Policy::blocks_per_batch() + 2,
+            event_block2: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_batch() + 2 + Policy::genesis_block_number(),
             expected_current1: 0..5,
             expected_previous1: 0..5,
             expected_current2: 0..5,
@@ -426,9 +426,9 @@ fn can_slash_penalize_and_revert_twice() {
         // 1. both events in previous batch
         SlashConfig {
             slots_range2: 2..3,
-            event_block1: Policy::blocks_per_epoch() - 2,
-            event_block2: Policy::blocks_per_epoch() - 1,
-            reporting_block: Policy::blocks_per_epoch() + 1,
+            event_block1: Policy::blocks_per_epoch() - 2 + Policy::genesis_block_number(),
+            event_block2: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
             expected_current1: 1..6,
             expected_previous1: 0..5,
             expected_current2: 1..6,
@@ -439,9 +439,9 @@ fn can_slash_penalize_and_revert_twice() {
         SlashConfig {
             slots_range1: 1..6,
             slots_range2: 2..3,
-            event_block1: Policy::blocks_per_epoch() + 1,
-            event_block2: Policy::blocks_per_epoch() - 1,
-            reporting_block: Policy::blocks_per_epoch() + 2,
+            event_block1: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
+            event_block2: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_epoch() + 2 + Policy::genesis_block_number(),
             expected_current1: 1..6,
             expected_current2: 1..6,
             expected_previous2: 2..3,
@@ -450,9 +450,9 @@ fn can_slash_penalize_and_revert_twice() {
         // 3. 1st event in previous, 2nd in current
         SlashConfig {
             slots_range2: 2..3,
-            event_block1: Policy::blocks_per_epoch() - 1,
-            event_block2: Policy::blocks_per_epoch() + 1,
-            reporting_block: Policy::blocks_per_epoch() + 2,
+            event_block1: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
+            event_block2: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_epoch() + 2 + Policy::genesis_block_number(),
             expected_current1: 1..6,
             expected_previous1: 0..5,
             expected_current2: 1..6,
@@ -607,7 +607,7 @@ fn can_slash_and_revert_twice() {
         },
         // 2. both events in previous batch
         SlashConfig {
-            reporting_block: Policy::blocks_per_batch() + 1,
+            reporting_block: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
             expected_current1: 0..5,
             expected_previous1: 0..5,
             expected_current2: 0..5,
@@ -616,8 +616,8 @@ fn can_slash_and_revert_twice() {
         },
         // 3. 1st event in current, 2nd in previous
         SlashConfig {
-            event_block1: Policy::blocks_per_batch() + 1,
-            reporting_block: Policy::blocks_per_batch() + 2,
+            event_block1: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_batch() + 2 + Policy::genesis_block_number(),
             expected_current1: 0..5,
             expected_current2: 0..5,
             expected_previous2: 0..5,
@@ -625,8 +625,8 @@ fn can_slash_and_revert_twice() {
         },
         // 4. 1st event in previous, 2nd in current
         SlashConfig {
-            event_block2: Policy::blocks_per_batch() + 1,
-            reporting_block: Policy::blocks_per_batch() + 2,
+            event_block2: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_batch() + 2 + Policy::genesis_block_number(),
             expected_current1: 0..5,
             expected_previous1: 0..5,
             expected_current2: 0..5,
@@ -636,9 +636,9 @@ fn can_slash_and_revert_twice() {
         // Test cases at epoch boundary:
         // 1. both events in previous batch
         SlashConfig {
-            event_block1: Policy::blocks_per_epoch() - 2,
-            event_block2: Policy::blocks_per_epoch() - 1,
-            reporting_block: Policy::blocks_per_epoch() + 1,
+            event_block1: Policy::blocks_per_epoch() - 2 + Policy::genesis_block_number(),
+            event_block2: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
             expected_current1: 1..6,
             expected_previous1: 0..5,
             expected_current2: 1..6,
@@ -647,10 +647,10 @@ fn can_slash_and_revert_twice() {
         },
         // 2. 1st event in current, 2nd in previous
         SlashConfig {
-            event_block1: Policy::blocks_per_epoch() + 1,
+            event_block1: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
             slots_range1: 1..6,
-            event_block2: Policy::blocks_per_epoch() - 1,
-            reporting_block: Policy::blocks_per_epoch() + 2,
+            event_block2: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_epoch() + 2 + Policy::genesis_block_number(),
             expected_current1: 1..6,
             expected_current2: 1..6,
             expected_previous2: 0..5,
@@ -658,10 +658,10 @@ fn can_slash_and_revert_twice() {
         },
         // 3. 1st event in previous, 2nd in current
         SlashConfig {
-            event_block1: Policy::blocks_per_epoch() - 1,
-            event_block2: Policy::blocks_per_epoch() + 1,
+            event_block1: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
+            event_block2: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
             slots_range2: 1..6,
-            reporting_block: Policy::blocks_per_epoch() + 2,
+            reporting_block: Policy::blocks_per_epoch() + 2 + Policy::genesis_block_number(),
             expected_current1: 1..6,
             expected_previous1: 0..5,
             expected_current2: 1..6,
@@ -671,9 +671,9 @@ fn can_slash_and_revert_twice() {
         // 4. 1st event in same epoch as reporting block and one batch earlier than `previous_batch`,
         // `current_batch` in the same epoch one batch after
         SlashConfig {
-            event_block1: 1,
-            event_block2: 1,
-            reporting_block: Policy::blocks_per_batch() * 2 + 1,
+            event_block1: 1 + Policy::genesis_block_number(),
+            event_block2: 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_batch() * 2 + 1 + Policy::genesis_block_number(),
             expected_current1: 0..5,
             expected_previous1: 0..5,
             expected_current2: 0..5,
@@ -683,9 +683,9 @@ fn can_slash_and_revert_twice() {
         // 5. 1st event in previous epoch (same epoch as `previous_batch`) and earlier than `previous_batch`,
         // `current_batch` in a new epoch
         SlashConfig {
-            event_block1: 1,
-            event_block2: 1,
-            reporting_block: Policy::blocks_per_epoch() + 1,
+            event_block1: 1 + Policy::genesis_block_number(),
+            event_block2: 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
             expected_current1: 1..6,
             expected_previous1: 0..5,
             expected_current2: 1..6,
@@ -695,9 +695,12 @@ fn can_slash_and_revert_twice() {
         // 6. 1st event in the epoch before `previous_batch`,
         // `previous_batch` and `current_batch` are both in a new epoch
         SlashConfig {
-            event_block1: Policy::blocks_per_batch() + 1,
-            event_block2: Policy::blocks_per_batch() + 1,
-            reporting_block: Policy::blocks_per_epoch() + Policy::blocks_per_batch() + 1,
+            event_block1: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
+            event_block2: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
+            reporting_block: Policy::blocks_per_epoch()
+                + Policy::blocks_per_batch()
+                + 1
+                + Policy::genesis_block_number(),
             expected_current1: 1..6,
             expected_previous1: 1..6,
             expected_current2: 1..6,
@@ -943,7 +946,10 @@ fn can_finalize_batch() {
     current_active_validators.insert(validator_address2.clone(), Coin::from_u64_unchecked(1));
 
     // Finalize the batch and check sets.
-    punished_slots.finalize_batch(Policy::blocks_per_batch(), &current_active_validators);
+    punished_slots.finalize_batch(
+        Policy::blocks_per_batch() + Policy::genesis_block_number(),
+        &current_active_validators,
+    );
 
     assert_eq!(
         punished_slots.previous_batch_punished_slots,

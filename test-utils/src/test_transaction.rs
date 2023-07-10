@@ -1,6 +1,6 @@
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, SecureGenerate};
-use nimiq_primitives::{coin::Coin, networks::NetworkId};
+use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::Serialize;
 use nimiq_transaction::{SignatureProof, Transaction};
 use rand::{CryptoRng, Rng};
@@ -59,7 +59,7 @@ pub fn generate_transactions(
             mempool_transaction.recipient.address.clone(),
             Coin::from_u64_unchecked(mempool_transaction.value),
             Coin::from_u64_unchecked(mempool_transaction.fee),
-            1,
+            1 + Policy::genesis_block_number(),
             NetworkId::UnitAlbatross,
         );
 

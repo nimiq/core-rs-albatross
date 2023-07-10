@@ -90,6 +90,7 @@ impl Blockchain {
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_block = network_info.genesis_block();
         let genesis_accounts = network_info.genesis_accounts();
+
         Self::with_genesis(
             env,
             config,

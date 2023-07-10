@@ -40,7 +40,7 @@ async fn can_detect_valid_and_invalid_genesis_proof() {
     let blockchain = BlockchainProxy::from(blockchain());
 
     let proof = ZKProof {
-        block_number: 0,
+        block_number: Policy::genesis_block_number(),
         proof: None,
     };
     assert!(
@@ -49,7 +49,7 @@ async fn can_detect_valid_and_invalid_genesis_proof() {
     );
 
     let proof = ZKProof {
-        block_number: 0,
+        block_number: Policy::genesis_block_number(),
         proof: Some(Proof::default()),
     };
     assert!(

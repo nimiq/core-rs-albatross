@@ -15,6 +15,7 @@ use nimiq_network_interface::{
 };
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::MockHub;
+use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     test_network::TestNetwork,
@@ -126,7 +127,7 @@ async fn four_validators_can_do_skip_block() {
     .await;
 
     // Disconnect the next block producer.
-    let validator = pop_validator_for_slot(&mut validators, 1, 1);
+    let validator = pop_validator_for_slot(&mut validators, 1 + Policy::genesis_block_number(), 1);
     validator
         .consensus
         .network

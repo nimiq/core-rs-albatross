@@ -4,6 +4,7 @@ use nimiq_block::MacroBlock;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_genesis::NetworkInfo;
+use nimiq_primitives::policy::Policy;
 use nimiq_zkp::{verify::verify, ZKP_VERIFYING_KEY};
 use nimiq_zkp_primitives::NanoZKPError;
 
@@ -17,7 +18,7 @@ pub fn validate_proof(
     election_block: Option<MacroBlock>,
 ) -> bool {
     // If it's a genesis block proof, then should have none as proof value to be valid.
-    if proof.block_number == 0 && proof.proof.is_none() {
+    if proof.block_number == Policy::genesis_block_number() && proof.proof.is_none() {
         return true;
     }
 

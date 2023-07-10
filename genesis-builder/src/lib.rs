@@ -111,7 +111,7 @@ impl GenesisBuilder {
             basic_accounts: vec![],
             vesting_accounts: vec![],
             htlc_accounts: vec![],
-            block_number: 0,
+            block_number: Policy::genesis_block_number(),
         }
     }
 

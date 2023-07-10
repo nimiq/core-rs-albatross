@@ -4459,6 +4459,7 @@ dependencies = [
 name = "nimiq-test-log"
 version = "0.1.0"
 dependencies = [
+ "nimiq-genesis",
  "nimiq-log",
  "nimiq-primitives",
  "nimiq-test-log-proc-macro",

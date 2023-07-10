@@ -1229,6 +1229,7 @@ mod tests {
 
     #[test]
     fn get_block_transactions_works() {
+        let genesis_block_number = Policy::genesis_block_number();
         // Initialize History Store.
         let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
@@ -1243,63 +1244,63 @@ mod tests {
 
         // Verify method works. Note that the block transactions are returned in the same
         // order they were inserted.
-        let query_0 = history_store.get_block_transactions(0, Some(&txn));
+        let query_0 = history_store.get_block_transactions(genesis_block_number, Some(&txn));
 
         assert!(!query_0[0].is_inherent());
-        assert_eq!(query_0[0].block_number, 0);
+        assert_eq!(query_0[0].block_number, genesis_block_number);
         assert_eq!(
             query_0[0].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(0)
         );
 
         assert!(!query_0[1].is_inherent());
-        assert_eq!(query_0[1].block_number, 0);
+        assert_eq!(query_0[1].block_number, genesis_block_number);
         assert_eq!(
             query_0[1].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(1)
         );
 
         assert!(query_0[2].is_inherent());
-        assert_eq!(query_0[2].block_number, 0);
+        assert_eq!(query_0[2].block_number, genesis_block_number);
         assert_eq!(
             reward_inherent_value(query_0[2].unwrap_inherent()),
             Coin::from_u64_unchecked(2)
         );
 
-        let query_1 = history_store.get_block_transactions(1, Some(&txn));
+        let query_1 = history_store.get_block_transactions(1 + genesis_block_number, Some(&txn));
 
         assert!(!query_1[0].is_inherent());
-        assert_eq!(query_1[0].block_number, 1);
+        assert_eq!(query_1[0].block_number, 1 + genesis_block_number);
         assert_eq!(
             query_1[0].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(3)
         );
 
         assert!(query_1[1].is_inherent());
-        assert_eq!(query_1[1].block_number, 1);
+        assert_eq!(query_1[1].block_number, 1 + genesis_block_number);
         assert_eq!(
             reward_inherent_value(query_1[1].unwrap_inherent()),
             Coin::from_u64_unchecked(4)
         );
 
-        let query_2 = history_store.get_block_transactions(2, Some(&txn));
+        let query_2 = history_store.get_block_transactions(2 + genesis_block_number, Some(&txn));
 
         assert!(!query_2[0].is_inherent());
-        assert_eq!(query_2[0].block_number, 2);
+        assert_eq!(query_2[0].block_number, 2 + genesis_block_number);
         assert_eq!(
             query_2[0].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(5)
         );
 
         assert!(!query_2[1].is_inherent());
-        assert_eq!(query_2[1].block_number, 2);
+        assert_eq!(query_2[1].block_number, 2 + genesis_block_number);
         assert_eq!(
             query_2[1].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(6)
         );
 
         assert!(query_2[2].is_inherent());
-        assert_eq!(query_2[2].block_number, 2);
+        assert_eq!(query_2[2].block_number, 2 + genesis_block_number);
         assert_eq!(
             reward_inherent_value(query_2[2].unwrap_inherent()),
             Coin::from_u64_unchecked(7)
@@ -1311,38 +1312,39 @@ mod tests {
 
         // Verify method works. Note that the block transactions are returned in the same
         // order they were inserted.
-        let query_0 = history_store.get_block_transactions(0, Some(&txn));
+        let query_0 = history_store.get_block_transactions(genesis_block_number, Some(&txn));
 
         assert!(!query_0[0].is_inherent());
-        assert_eq!(query_0[0].block_number, 0);
+        assert_eq!(query_0[0].block_number, genesis_block_number);
         assert_eq!(
             query_0[0].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(0)
         );
 
-        let query_1 = history_store.get_block_transactions(1, Some(&txn));
+        let query_1 = history_store.get_block_transactions(1 + genesis_block_number, Some(&txn));
 
         assert!(!query_1[0].is_inherent());
-        assert_eq!(query_1[0].block_number, 1);
+        assert_eq!(query_1[0].block_number, 1 + genesis_block_number);
         assert_eq!(
             query_1[0].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(3)
         );
 
         assert!(query_1[1].is_inherent());
-        assert_eq!(query_1[1].block_number, 1);
+        assert_eq!(query_1[1].block_number, 1 + genesis_block_number);
         assert_eq!(
             reward_inherent_value(query_1[1].unwrap_inherent()),
             Coin::from_u64_unchecked(4)
         );
 
-        let query_2 = history_store.get_block_transactions(2, Some(&txn));
+        let query_2 = history_store.get_block_transactions(2 + genesis_block_number, Some(&txn));
 
         assert!(query_2.is_empty());
     }
 
     #[test]
     fn get_epoch_transactions_works() {
+        let genesis_block_number = Policy::genesis_block_number();
         // Initialize History Store.
         let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
@@ -1359,21 +1361,21 @@ mod tests {
         let query = history_store.get_epoch_transactions(0, Some(&txn));
 
         assert!(!query[0].is_inherent());
-        assert_eq!(query[0].block_number, 0);
+        assert_eq!(query[0].block_number, genesis_block_number);
         assert_eq!(
             query[0].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(0)
         );
 
         assert!(!query[1].is_inherent());
-        assert_eq!(query[1].block_number, 0);
+        assert_eq!(query[1].block_number, genesis_block_number);
         assert_eq!(
             query[1].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(1)
         );
 
         assert!(query[2].is_inherent());
-        assert_eq!(query[2].block_number, 0);
+        assert_eq!(query[2].block_number, genesis_block_number);
         assert_eq!(
             reward_inherent_value(query[2].unwrap_inherent()),
             Coin::from_u64_unchecked(2)
@@ -1382,35 +1384,35 @@ mod tests {
         let query = history_store.get_epoch_transactions(1, Some(&txn));
 
         assert!(!query[0].is_inherent());
-        assert_eq!(query[0].block_number, 1);
+        assert_eq!(query[0].block_number, 1 + genesis_block_number);
         assert_eq!(
             query[0].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(3)
         );
 
         assert!(query[1].is_inherent());
-        assert_eq!(query[1].block_number, 1);
+        assert_eq!(query[1].block_number, 1 + genesis_block_number);
         assert_eq!(
             reward_inherent_value(query[1].unwrap_inherent()),
             Coin::from_u64_unchecked(4)
         );
 
         assert!(!query[2].is_inherent());
-        assert_eq!(query[2].block_number, 2);
+        assert_eq!(query[2].block_number, 2 + genesis_block_number);
         assert_eq!(
             query[2].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(5)
         );
 
         assert!(!query[3].is_inherent());
-        assert_eq!(query[3].block_number, 2);
+        assert_eq!(query[3].block_number, 2 + genesis_block_number);
         assert_eq!(
             query[3].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(6)
         );
 
         assert!(query[4].is_inherent());
-        assert_eq!(query[4].block_number, 2);
+        assert_eq!(query[4].block_number, 2 + genesis_block_number);
         assert_eq!(
             reward_inherent_value(query[4].unwrap_inherent()),
             Coin::from_u64_unchecked(7)
@@ -1423,21 +1425,21 @@ mod tests {
         let query = history_store.get_epoch_transactions(0, Some(&txn));
 
         assert!(!query[0].is_inherent());
-        assert_eq!(query[0].block_number, 0);
+        assert_eq!(query[0].block_number, genesis_block_number);
         assert_eq!(
             query[0].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(0)
         );
 
         assert!(!query[1].is_inherent());
-        assert_eq!(query[1].block_number, 0);
+        assert_eq!(query[1].block_number, genesis_block_number);
         assert_eq!(
             query[1].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(1)
         );
 
         assert!(query[2].is_inherent());
-        assert_eq!(query[2].block_number, 0);
+        assert_eq!(query[2].block_number, genesis_block_number);
         assert_eq!(
             reward_inherent_value(query[2].unwrap_inherent()),
             Coin::from_u64_unchecked(2)
@@ -1446,14 +1448,14 @@ mod tests {
         let query = history_store.get_epoch_transactions(1, Some(&txn));
 
         assert!(!query[0].is_inherent());
-        assert_eq!(query[0].block_number, 1);
+        assert_eq!(query[0].block_number, 1 + genesis_block_number);
         assert_eq!(
             query[0].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(3)
         );
 
         assert!(query[1].is_inherent());
-        assert_eq!(query[1].block_number, 1);
+        assert_eq!(query[1].block_number, 1 + genesis_block_number);
         assert_eq!(
             reward_inherent_value(query[1].unwrap_inherent()),
             Coin::from_u64_unchecked(4)
@@ -1631,12 +1633,13 @@ mod tests {
 
     #[test]
     fn get_indexes_for_block_works() {
+        let genesis_block_number = Policy::genesis_block_number();
         // Initialize History Store.
         let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
         let mut txn = env.write_transaction();
 
-        for i in 0..=(16 * Policy::blocks_per_batch()) {
+        for i in genesis_block_number..=(16 * Policy::blocks_per_batch() + genesis_block_number) {
             if Policy::is_macro_block_at(i) {
                 let ext_txs = vec![
                     create_inherent(i, 1),
@@ -1649,11 +1652,14 @@ mod tests {
             }
         }
 
-        assert_eq!(history_store.get_indexes_for_block(0, Some(&txn)), (0, 4));
+        assert_eq!(
+            history_store.get_indexes_for_block(genesis_block_number, Some(&txn)),
+            (0, 4)
+        );
 
         for i in 1..=16 {
             assert_eq!(
-                history_store.get_indexes_for_block(32 * i, Some(&txn)),
+                history_store.get_indexes_for_block(32 * i + genesis_block_number, Some(&txn)),
                 ((i - 1) % 4 * 4, ((i - 1) % 4 + 1) * 4)
             );
         }
@@ -1662,13 +1668,13 @@ mod tests {
         for i in (1..=16).rev() {
             history_store.remove_partial_history(
                 &mut txn,
-                Policy::epoch_at(i * Policy::blocks_per_batch()),
+                Policy::epoch_at(i * Policy::blocks_per_batch() + genesis_block_number),
                 4,
             );
 
             for j in 1..i {
                 assert_eq!(
-                    history_store.get_indexes_for_block(32 * j, Some(&txn)),
+                    history_store.get_indexes_for_block(32 * j + genesis_block_number, Some(&txn)),
                     ((j - 1) % 4 * 4, ((j - 1) % 4 + 1) * 4)
                 );
             }
@@ -1708,14 +1714,15 @@ mod tests {
     }
 
     fn gen_ext_txs() -> Vec<ExtendedTransaction> {
-        let ext_0 = create_transaction(0, 0);
-        let ext_1 = create_transaction(0, 1);
-        let ext_2 = create_inherent(0, 2);
-        let ext_3 = create_transaction(1, 3);
-        let ext_4 = create_inherent(1, 4);
-        let ext_5 = create_transaction(2, 5);
-        let ext_6 = create_transaction(2, 6);
-        let ext_7 = create_inherent(2, 7);
+        let genesis_block_number = Policy::genesis_block_number();
+        let ext_0 = create_transaction(genesis_block_number + 0, 0);
+        let ext_1 = create_transaction(genesis_block_number + 0, 1);
+        let ext_2 = create_inherent(genesis_block_number + 0, 2);
+        let ext_3 = create_transaction(genesis_block_number + 1, 3);
+        let ext_4 = create_inherent(genesis_block_number + 1, 4);
+        let ext_5 = create_transaction(genesis_block_number + 2, 5);
+        let ext_6 = create_transaction(genesis_block_number + 2, 6);
+        let ext_7 = create_inherent(genesis_block_number + 2, 7);
 
         vec![ext_0, ext_1, ext_2, ext_3, ext_4, ext_5, ext_6, ext_7]
     }

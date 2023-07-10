@@ -21,7 +21,7 @@ use nimiq_consensus::{
 use nimiq_database::volatile::VolatileDatabase;
 use nimiq_network_interface::{network::Network, request::RequestCommon};
 use nimiq_network_mock::{MockHub, MockId, MockPeerId};
-use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{
@@ -120,13 +120,19 @@ async fn send_single_micro_block_to_block_queue() {
     let mock_id = MockId::new(mock_node.network.get_local_peer_id());
     block_tx.send((block, mock_id)).await.unwrap();
 
-    assert_eq!(blockchain2.read().block_number(), 0);
+    assert_eq!(
+        blockchain2.read().block_number(),
+        Policy::genesis_block_number()
+    );
 
     // Run the block_queue one iteration, i.e. until it processed one block
     syncer.next().await;
 
     // The produced block is without gap and should go right into the blockchain
-    assert_eq!(blockchain2.read().block_number(), 1);
+    assert_eq!(
+        blockchain2.read().block_number(),
+        1 + Policy::genesis_block_number()
+    );
     assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
 }
 
@@ -176,13 +182,19 @@ async fn send_two_micro_blocks_out_of_order() {
         .await
         .unwrap();
 
-    assert_eq!(blockchain1.read().block_number(), 0);
+    assert_eq!(
+        blockchain1.read().block_number(),
+        Policy::genesis_block_number()
+    );
 
     // Run the block_queue one iteration, i.e. until it processed one block
     let _ = poll!(syncer.next());
 
     // This block should be buffered now
-    assert_eq!(blockchain1.read().block_number(), 0);
+    assert_eq!(
+        blockchain1.read().block_number(),
+        Policy::genesis_block_number()
+    );
     let blocks = syncer
         .live_sync
         .queue()
@@ -190,7 +202,7 @@ async fn send_two_micro_blocks_out_of_order() {
         .collect::<Vec<_>>();
     assert_eq!(blocks.len(), 1);
     let (block_number, blocks) = blocks.get(0).unwrap();
-    assert_eq!(*block_number, 2);
+    assert_eq!(*block_number, 2 + Policy::genesis_block_number());
     assert_eq!(blocks[0], &block2);
 
     // Also we should've received a request to fill this gap
@@ -205,14 +217,23 @@ async fn send_two_micro_blocks_out_of_order() {
     syncer.next().await;
 
     // Now both blocks should've been pushed to the blockchain
-    assert_eq!(blockchain1.read().block_number(), 2);
+    assert_eq!(
+        blockchain1.read().block_number(),
+        2 + Policy::genesis_block_number()
+    );
     assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
     assert_eq!(
-        blockchain1.read().get_block_at(1, true, None).unwrap(),
+        blockchain1
+            .read()
+            .get_block_at(1 + Policy::genesis_block_number(), true, None)
+            .unwrap(),
         block1
     );
     assert_eq!(
-        blockchain1.read().get_block_at(2, true, None).unwrap(),
+        blockchain1
+            .read()
+            .get_block_at(2 + Policy::genesis_block_number(), true, None)
+            .unwrap(),
         block2
     );
 }
@@ -276,7 +297,10 @@ async fn send_micro_blocks_out_of_order() {
     }
 
     // All blocks should be buffered
-    assert_eq!(blockchain1.read().block_number(), 0);
+    assert_eq!(
+        blockchain1.read().block_number(),
+        Policy::genesis_block_number()
+    );
 
     // Obtain the buffered blocks
     assert_eq!(
@@ -296,7 +320,7 @@ async fn send_micro_blocks_out_of_order() {
         assert_eq!(
             blockchain1
                 .read()
-                .get_block_at(i as u32, true, None)
+                .get_block_at(i as u32 + Policy::genesis_block_number(), true, None)
                 .unwrap(),
             ordered_blocks[(i - 1) as usize]
         );
@@ -356,13 +380,19 @@ async fn send_invalid_block() {
         .await
         .unwrap();
 
-    assert_eq!(blockchain1.read().block_number(), 0);
+    assert_eq!(
+        blockchain1.read().block_number(),
+        Policy::genesis_block_number()
+    );
 
     // Run the block_queue one iteration, i.e. until it processed one block
     let _ = poll!(syncer.next());
 
     // This block should be buffered now
-    assert_eq!(blockchain1.read().block_number(), 0);
+    assert_eq!(
+        blockchain1.read().block_number(),
+        Policy::genesis_block_number()
+    );
     let blocks = syncer
         .live_sync
         .queue()
@@ -370,7 +400,7 @@ async fn send_invalid_block() {
         .collect::<Vec<_>>();
     assert_eq!(blocks.len(), 1);
     let (block_number, blocks) = blocks.get(0).unwrap();
-    assert_eq!(*block_number, 2);
+    assert_eq!(*block_number, 2 + Policy::genesis_block_number());
     assert_eq!(blocks[0], &block2);
 
     let req = mock_node.next().await.unwrap();
@@ -385,20 +415,30 @@ async fn send_invalid_block() {
     syncer.next().await;
 
     // Only Block 1 should be pushed to the blockchain
-    assert_eq!(blockchain1.read().block_number(), 1);
+    assert_eq!(
+        blockchain1.read().block_number(),
+        1 + Policy::genesis_block_number()
+    );
     assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
     assert_eq!(
-        blockchain1.read().get_block_at(1, true, None).unwrap(),
+        blockchain1
+            .read()
+            .get_block_at(1 + Policy::genesis_block_number(), true, None)
+            .unwrap(),
         block1
     );
     assert_ne!(
-        blockchain1.read().get_block_at(1, true, None).unwrap(),
+        blockchain1
+            .read()
+            .get_block_at(1 + Policy::genesis_block_number(), true, None)
+            .unwrap(),
         block2
     );
 }
 
 #[test(tokio::test)]
 async fn send_block_with_gap_and_respond_to_missing_request() {
+    let genesis_block_number = Policy::genesis_block_number();
     let blockchain1 = blockchain();
     let blockchain_proxy_1 = BlockchainProxy::from(&blockchain1);
 
@@ -437,13 +477,13 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     // Send block2 first
     block_tx.send((block2.clone(), mock_id)).await.unwrap();
 
-    assert_eq!(blockchain1.read().block_number(), 0);
+    assert_eq!(blockchain1.read().block_number(), genesis_block_number);
 
     // Run the block_queue one iteration, i.e. until it processed one block
     let _ = poll!(syncer.next());
 
     // This block should be buffered now
-    assert_eq!(blockchain1.read().block_number(), 0);
+    assert_eq!(blockchain1.read().block_number(), genesis_block_number);
     let blocks = syncer
         .live_sync
         .queue()
@@ -451,7 +491,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
         .collect::<Vec<_>>();
     assert_eq!(blocks.len(), 1);
     let (block_number, blocks) = blocks.get(0).unwrap();
-    assert_eq!(*block_number, 2);
+    assert_eq!(*block_number, 2 + genesis_block_number);
     assert_eq!(blocks[0], &block2);
 
     // Also we should've received a request to fill this gap
@@ -464,20 +504,27 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     syncer.next().await;
 
     // Now both blocks should've been pushed to the blockchain
-    assert_eq!(blockchain1.read().block_number(), 2);
+    assert_eq!(blockchain1.read().block_number(), 2 + genesis_block_number);
     assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
     assert_eq!(
-        blockchain1.read().get_block_at(1, true, None).unwrap(),
+        blockchain1
+            .read()
+            .get_block_at(1 + genesis_block_number, true, None)
+            .unwrap(),
         block1
     );
     assert_eq!(
-        blockchain1.read().get_block_at(2, true, None).unwrap(),
+        blockchain1
+            .read()
+            .get_block_at(2 + genesis_block_number, true, None)
+            .unwrap(),
         block2
     );
 }
 
 #[test(tokio::test)]
 async fn request_missing_blocks_across_macro_block() {
+    let genesis_block_number = Policy::genesis_block_number();
     let blockchain1 = blockchain();
     let blockchain_proxy_1 = BlockchainProxy::from(&blockchain1);
 
@@ -517,13 +564,13 @@ async fn request_missing_blocks_across_macro_block() {
     // Send block2 first
     block_tx.send((block2.clone(), mock_id)).await.unwrap();
 
-    assert_eq!(blockchain1.read().block_number(), 0);
+    assert_eq!(blockchain1.read().block_number(), genesis_block_number);
 
     // Run the block_queue one iteration, i.e. until it processed one block
     let _ = poll!(syncer.next());
 
     // This block should be buffered now
-    assert_eq!(blockchain1.read().block_number(), 0);
+    assert_eq!(blockchain1.read().block_number(), genesis_block_number);
     let blocks = syncer
         .live_sync
         .queue()
@@ -560,7 +607,7 @@ async fn request_missing_blocks_across_macro_block() {
     let _ = poll!(syncer.next());
 
     // The blocks from the first missing blocks request should be applied now
-    assert_eq!(blockchain1.read().block_number(), 2);
+    assert_eq!(blockchain1.read().block_number(), 2 + genesis_block_number);
     let blocks = syncer
         .live_sync
         .queue()

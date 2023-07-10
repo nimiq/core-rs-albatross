@@ -19,6 +19,7 @@ use parking_lot::RwLock;
 // does NOT test if macro blocks can be pushed with micro blocks already in the blockchain.
 #[test]
 fn history_sync_works() {
+    let genesis_block_number = Policy::genesis_block_number();
     // The minimum number of macro blocks necessary so that we have two election blocks and a few
     // checkpoint blocks to push.
     let num_macro_blocks = (2 * Policy::batches_per_epoch() + 1) as usize;
@@ -46,14 +47,22 @@ fn history_sync_works() {
     // Get the election blocks and corresponding history tree transactions.
     let election_block_1 = blockchain
         .chain_store
-        .get_block_at(Policy::blocks_per_epoch(), true, None)
+        .get_block_at(
+            Policy::blocks_per_epoch() + genesis_block_number,
+            true,
+            None,
+        )
         .unwrap();
 
     let election_txs_1 = blockchain.history_store.get_epoch_transactions(1, None);
 
     let election_block_2 = blockchain
         .chain_store
-        .get_block_at(2 * Policy::blocks_per_epoch(), true, None)
+        .get_block_at(
+            2 * Policy::blocks_per_epoch() + genesis_block_number,
+            true,
+            None,
+        )
         .unwrap();
 
     let election_txs_2 = blockchain.history_store.get_epoch_transactions(2, None);
@@ -62,7 +71,7 @@ fn history_sync_works() {
     let checkpoint_block_2_1 = blockchain
         .chain_store
         .get_block_at(
-            Policy::blocks_per_epoch() + Policy::blocks_per_batch(),
+            Policy::blocks_per_epoch() + Policy::blocks_per_batch() + genesis_block_number,
             true,
             None,
         )
@@ -71,7 +80,9 @@ fn history_sync_works() {
     let mut checkpoint_txs_2_1 = vec![];
 
     for ext_tx in &election_txs_2 {
-        if ext_tx.block_number > Policy::blocks_per_epoch() + Policy::blocks_per_batch() {
+        if ext_tx.block_number
+            > Policy::blocks_per_epoch() + Policy::blocks_per_batch() + genesis_block_number
+        {
             break;
         }
 
@@ -81,7 +92,7 @@ fn history_sync_works() {
     let checkpoint_block_2_3 = blockchain
         .chain_store
         .get_block_at(
-            Policy::blocks_per_epoch() + 3 * Policy::blocks_per_batch(),
+            Policy::blocks_per_epoch() + 3 * Policy::blocks_per_batch() + genesis_block_number,
             true,
             None,
         )
@@ -90,7 +101,9 @@ fn history_sync_works() {
     let mut checkpoint_txs_2_3 = vec![];
 
     for ext_tx in &election_txs_2 {
-        if ext_tx.block_number > Policy::blocks_per_epoch() + 3 * Policy::blocks_per_batch() {
+        if ext_tx.block_number
+            > Policy::blocks_per_epoch() + 3 * Policy::blocks_per_batch() + genesis_block_number
+        {
             break;
         }
 
@@ -100,7 +113,7 @@ fn history_sync_works() {
     let checkpoint_block_3_1 = blockchain
         .chain_store
         .get_block_at(
-            2 * Policy::blocks_per_epoch() + Policy::blocks_per_batch(),
+            2 * Policy::blocks_per_epoch() + Policy::blocks_per_batch() + genesis_block_number,
             true,
             None,
         )
@@ -173,6 +186,7 @@ fn history_sync_works() {
 // This basically tests if we can go from the history sync to the normal follow mode and back.
 #[test]
 fn history_sync_works_with_micro_blocks() {
+    let genesis_block_number = Policy::genesis_block_number();
     // The minimum number of macro blocks necessary so that we have two election blocks and a few
     // checkpoint blocks to push.
     let num_macro_blocks = (2 * Policy::batches_per_epoch() + 2) as usize;
@@ -201,14 +215,22 @@ fn history_sync_works_with_micro_blocks() {
     // Get the election blocks and corresponding history tree transactions.
     let election_block_1 = blockchain
         .chain_store
-        .get_block_at(Policy::blocks_per_epoch(), true, None)
+        .get_block_at(
+            Policy::blocks_per_epoch() + genesis_block_number,
+            true,
+            None,
+        )
         .unwrap();
 
     let election_txs_1 = blockchain.history_store.get_epoch_transactions(1, None);
 
     let election_block_2 = blockchain
         .chain_store
-        .get_block_at(2 * Policy::blocks_per_epoch(), true, None)
+        .get_block_at(
+            2 * Policy::blocks_per_epoch() + genesis_block_number,
+            true,
+            None,
+        )
         .unwrap();
 
     let election_txs_2 = blockchain.history_store.get_epoch_transactions(2, None);
@@ -217,7 +239,7 @@ fn history_sync_works_with_micro_blocks() {
     let checkpoint_block_2_1 = blockchain
         .chain_store
         .get_block_at(
-            Policy::blocks_per_epoch() + Policy::blocks_per_batch(),
+            Policy::blocks_per_epoch() + Policy::blocks_per_batch() + genesis_block_number,
             true,
             None,
         )
@@ -226,7 +248,9 @@ fn history_sync_works_with_micro_blocks() {
     let mut checkpoint_txs_2_1 = vec![];
 
     for ext_tx in &election_txs_2 {
-        if ext_tx.block_number > Policy::blocks_per_epoch() + Policy::blocks_per_batch() {
+        if ext_tx.block_number
+            > Policy::blocks_per_epoch() + Policy::blocks_per_batch() + genesis_block_number
+        {
             break;
         }
 
@@ -236,7 +260,7 @@ fn history_sync_works_with_micro_blocks() {
     let checkpoint_block_3_2 = blockchain
         .chain_store
         .get_block_at(
-            2 * Policy::blocks_per_epoch() + 2 * Policy::blocks_per_batch(),
+            2 * Policy::blocks_per_epoch() + 2 * Policy::blocks_per_batch() + genesis_block_number,
             true,
             None,
         )
@@ -252,7 +276,10 @@ fn history_sync_works_with_micro_blocks() {
             blockchain
                 .chain_store
                 .get_block_at(
-                    Policy::blocks_per_epoch() + Policy::blocks_per_batch() + i,
+                    Policy::blocks_per_epoch()
+                        + Policy::blocks_per_batch()
+                        + i
+                        + genesis_block_number,
                     true,
                     None,
                 )
@@ -266,7 +293,11 @@ fn history_sync_works_with_micro_blocks() {
         micro_blocks_3_1.push(
             blockchain
                 .chain_store
-                .get_block_at(2 * Policy::blocks_per_epoch() + i, true, None)
+                .get_block_at(
+                    2 * Policy::blocks_per_epoch() + i + genesis_block_number,
+                    true,
+                    None,
+                )
                 .unwrap(),
         )
     }
@@ -345,6 +376,7 @@ fn history_sync_works_with_micro_blocks() {
 // but the history given via `push_history_sync` diverges from the adopted one.
 #[test]
 fn history_sync_works_with_diverging_history() {
+    let genesis_block_number = Policy::genesis_block_number();
     // Produce macro blocks to complete one epoch in blockchain1.
     let env = VolatileDatabase::new(20).unwrap();
     let time = Arc::new(OffsetTime::new());
@@ -363,7 +395,7 @@ fn history_sync_works_with_diverging_history() {
     produce_macro_blocks_with_txns(&producer, &blockchain1, num_macro_blocks, 2, 0);
     assert_eq!(
         blockchain1.read().block_number(),
-        Policy::blocks_per_epoch()
+        Policy::blocks_per_epoch() + genesis_block_number
     );
 
     // Produce some micro blocks (with a different history) in blockchain2.
@@ -381,14 +413,18 @@ fn history_sync_works_with_diverging_history() {
     fill_micro_blocks_with_txns(&producer, &blockchain2, 3, 1);
     assert_eq!(
         blockchain2.read().block_number(),
-        Policy::blocks_per_batch() - 1
+        Policy::blocks_per_batch() - 1 + genesis_block_number
     );
 
     // Get the election block and corresponding history tree transactions from blockchain1.
     let blockchain = blockchain1.read();
     let election_block_1 = blockchain
         .chain_store
-        .get_block_at(Policy::blocks_per_epoch(), true, None)
+        .get_block_at(
+            Policy::blocks_per_epoch() + genesis_block_number,
+            true,
+            None,
+        )
         .unwrap();
     let election_txs_1 = blockchain.history_store.get_epoch_transactions(1, None);
 

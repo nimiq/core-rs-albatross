@@ -71,7 +71,7 @@ async fn peers_do_not_reply_with_outdated_proof() {
     let mut zkp_requests = ZKPRequests::new(Arc::clone(&network));
 
     // Trigger zkp requests
-    zkp_requests.request_zkps(network.get_peers(), 0, false);
+    zkp_requests.request_zkps(network.get_peers(), Policy::genesis_block_number(), false);
 
     for _ in 0..2 {
         assert!(

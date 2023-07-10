@@ -320,13 +320,23 @@ async fn push_same_tx_twice() {
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
+    // The genesis block number must match the specs we are setting in Policy
+    let genesis_block = genesis_info.block;
+    let genesis_block = match genesis_block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            nimiq_block::Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
             BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
-            genesis_info.block,
+            genesis_block,
             genesis_info.accounts,
         )
         .unwrap(),
@@ -428,13 +438,23 @@ async fn push_tx_with_wrong_signature() {
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
+    // The genesis block number must match the specs we are setting in Policy
+    let genesis_block = genesis_info.block;
+    let genesis_block = match genesis_block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            nimiq_block::Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
             BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
-            genesis_info.block,
+            genesis_block,
             genesis_info.accounts,
         )
         .unwrap(),
@@ -489,13 +509,23 @@ async fn mempool_get_txn_max_size() {
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
+    // The genesis block number must match the specs we are setting in Policy
+    let genesis_block = genesis_info.block;
+    let genesis_block = match genesis_block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            nimiq_block::Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
             BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
-            genesis_info.block,
+            genesis_block,
             genesis_info.accounts,
         )
         .unwrap(),
@@ -560,13 +590,23 @@ async fn mempool_get_txn_ordered() {
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
+    // The genesis block number must match the specs we are setting in Policy
+    let genesis_block = genesis_info.block;
+    let genesis_block = match genesis_block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            nimiq_block::Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
             BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
-            genesis_info.block,
+            genesis_block,
             genesis_info.accounts,
         )
         .unwrap(),
@@ -632,13 +672,23 @@ async fn push_tx_with_insufficient_balance() {
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
+    // The genesis block number must match the specs we are setting in Policy
+    let genesis_block = genesis_info.block;
+    let genesis_block = match genesis_block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            nimiq_block::Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
             BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
-            genesis_info.block,
+            genesis_block,
             genesis_info.accounts,
         )
         .unwrap(),
@@ -694,13 +744,23 @@ async fn multiple_transactions_multiple_senders() {
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
+    // The genesis block number must match the specs we are setting in Policy
+    let genesis_block = genesis_info.block;
+    let genesis_block = match genesis_block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            nimiq_block::Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
             BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
-            genesis_info.block,
+            genesis_block,
             genesis_info.accounts,
         )
         .unwrap(),
@@ -766,13 +826,23 @@ async fn mempool_tps() {
     // Generate the genesis and blockchain
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
+    // The genesis block number must match the specs we are setting in Policy
+    let genesis_block = genesis_info.block;
+    let genesis_block = match genesis_block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            nimiq_block::Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
             BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
-            genesis_info.block,
+            genesis_block,
             genesis_info.accounts,
         )
         .unwrap(),
@@ -844,13 +914,23 @@ async fn multiple_start_stop() {
     // Generate the genesis and blockchain
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
+    // The genesis block number must match the specs we are setting in Policy
+    let genesis_block = genesis_info.block;
+    let genesis_block = match genesis_block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            nimiq_block::Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
             BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
-            genesis_info.block,
+            genesis_block,
             genesis_info.accounts,
         )
         .unwrap(),
@@ -980,13 +1060,23 @@ async fn mempool_update() {
     // Generate the genesis and blockchain
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
+    // The genesis block number must match the specs we are setting in Policy
+    let genesis_block = genesis_info.block;
+    let genesis_block = match genesis_block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            nimiq_block::Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
             BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
-            genesis_info.block,
+            genesis_block,
             genesis_info.accounts,
         )
         .unwrap(),
@@ -1040,7 +1130,6 @@ async fn mempool_update() {
 }
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
-#[ignore]
 // The purpose of this test is to verify that aged transactions, that is,
 // transactions that are stored in the mempool for which the validity
 // window is already expired, are properly pruned from the mempool.
@@ -1098,13 +1187,23 @@ async fn mempool_update_aged_transaction() {
     // Generate the genesis and blockchain
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
+    // The genesis block number must match the specs we are setting in Policy
+    let genesis_block = genesis_info.block;
+    let genesis_block = match genesis_block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            nimiq_block::Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
             BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
-            genesis_info.block,
+            genesis_block,
             genesis_info.accounts,
         )
         .unwrap(),
@@ -1235,13 +1334,23 @@ async fn mempool_update_not_enough_balance() {
     // Generate the genesis and blockchain
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
+    // The genesis block number must match the specs we are setting in Policy
+    let genesis_block = genesis_info.block;
+    let genesis_block = match genesis_block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            nimiq_block::Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
             BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
-            genesis_info.block,
+            genesis_block,
             genesis_info.accounts,
         )
         .unwrap(),
@@ -1381,13 +1490,23 @@ async fn mempool_update_pruned_account() {
     // Generate the genesis and blockchain
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
+    // The genesis block number must match the specs we are setting in Policy
+    let genesis_block = genesis_info.block;
+    let genesis_block = match genesis_block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            nimiq_block::Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
             BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
-            genesis_info.block,
+            genesis_block,
             genesis_info.accounts,
         )
         .unwrap(),
@@ -1464,7 +1583,7 @@ async fn mempool_basic_prioritization_control_tx() {
         validator_address,
         &validator_signing_key,
         1.try_into().unwrap(),
-        1,
+        1 + Policy::genesis_block_number(),
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -1476,7 +1595,7 @@ async fn mempool_basic_prioritization_control_tx() {
         Some(address.clone()),
         100_000_000.try_into().unwrap(),
         100.try_into().unwrap(),
-        1,
+        1 + Policy::genesis_block_number(),
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -1577,13 +1696,23 @@ async fn mempool_regular_and_control_tx() {
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
+    // The genesis block number must match the specs we are setting in Policy
+    let genesis_block = genesis_info.block;
+    let genesis_block = match genesis_block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            nimiq_block::Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
             BlockchainConfig::default(),
             time,
             NetworkId::UnitAlbatross,
-            genesis_info.block,
+            genesis_block,
             genesis_info.accounts,
         )
         .unwrap(),
@@ -1602,7 +1731,7 @@ async fn mempool_regular_and_control_tx() {
         None,
         100.try_into().unwrap(),
         1.try_into().unwrap(),
-        1,
+        1 + Policy::genesis_block_number(),
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -1665,7 +1794,7 @@ async fn mempool_regular_and_control_tx() {
     );
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn applies_total_tx_size_limits() {
     let env = VolatileDatabase::new(20).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
@@ -1704,13 +1833,23 @@ async fn applies_total_tx_size_limits() {
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
+    // The genesis block number must match the specs we are setting in Policy
+    let genesis_block = genesis_info.block;
+    let genesis_block = match genesis_block {
+        Block::Macro(mut block) => {
+            block.header.block_number = Policy::genesis_block_number();
+            nimiq_block::Block::Macro(block)
+        }
+        Block::Micro(_) => panic!(),
+    };
+
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
             BlockchainConfig::default(),
             Arc::new(OffsetTime::new()),
             NetworkId::UnitAlbatross,
-            genesis_info.block,
+            genesis_block,
             genesis_info.accounts,
         )
         .unwrap(),
@@ -1739,8 +1878,7 @@ async fn applies_total_tx_size_limits() {
     }
     assert_eq!(mempool_txns.len(), (num_txns - 1) as usize);
 }
-
-#[tokio::test]
+#[test(tokio::test)]
 async fn it_can_reject_invalid_vesting_contract_transaction() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileDatabase::new(20).unwrap();
@@ -1775,7 +1913,7 @@ async fn it_can_reject_invalid_vesting_contract_transaction() {
         100,
         Coin::from_u64_unchecked(1000),
         Coin::from_u64_unchecked(100),
-        1,
+        1 + Policy::genesis_block_number(),
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -1788,7 +1926,10 @@ async fn it_can_reject_invalid_vesting_contract_transaction() {
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
     );
-    assert_eq!(blockchain.read().block_number(), 1);
+    assert_eq!(
+        blockchain.read().block_number(),
+        1 + Policy::genesis_block_number()
+    );
 
     // Now we need to verify the contract was created and it has the right balance
     let bc = blockchain.read();
@@ -1810,7 +1951,7 @@ async fn it_can_reject_invalid_vesting_contract_transaction() {
         address,
         Coin::from_u64_unchecked(100),
         Coin::from_u64_unchecked(100),
-        1,
+        1 + Policy::genesis_block_number(),
         NetworkId::UnitAlbatross,
     )
     .unwrap();

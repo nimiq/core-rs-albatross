@@ -248,7 +248,7 @@ fn it_can_produce_macro_block_after_punishment() {
         address,
         &producer.producer.signing_key,
         100.try_into().unwrap(),
-        1,
+        1 + Policy::genesis_block_number(),
         NetworkId::UnitAlbatross,
     )
     .unwrap();
@@ -986,8 +986,9 @@ fn it_can_consume_all_validator_deposit() {
         Ok(PushResult::Extended)
     );
 
-    let last_block_of_reporting_window =
-        Policy::last_block_of_reporting_window(Policy::election_block_after(1));
+    let last_block_of_reporting_window = Policy::last_block_of_reporting_window(
+        Policy::election_block_after(1 + Policy::genesis_block_number()),
+    );
     produce_macro_blocks(
         &producer,
         &blockchain,
@@ -1027,7 +1028,7 @@ fn it_can_consume_all_validator_deposit() {
 
     assert_eq!(
         blockchain.read().block_number(),
-        last_block_of_reporting_window + 1
+        last_block_of_reporting_window + 1 + Policy::genesis_block_number()
     );
 
     // Now we need to verify that the validator deposit was reduced because of the failing txn
@@ -1084,7 +1085,7 @@ fn it_can_consume_all_validator_deposit() {
 
     assert_eq!(
         blockchain.read().block_number(),
-        last_block_of_reporting_window + 2
+        last_block_of_reporting_window + 2 + Policy::genesis_block_number()
     );
 
     // Now we need to verify that the validator no longer exists
@@ -1194,8 +1195,9 @@ fn it_can_revert_failed_delete_validator() {
         Ok(PushResult::Extended)
     );
 
-    let last_block_of_reporting_window =
-        Policy::last_block_of_reporting_window(Policy::election_block_after(1));
+    let last_block_of_reporting_window = Policy::last_block_of_reporting_window(
+        Policy::election_block_after(1 + Policy::genesis_block_number()),
+    );
     produce_macro_blocks(
         &producer,
         &blockchain,
@@ -1234,7 +1236,7 @@ fn it_can_revert_failed_delete_validator() {
 
     assert_eq!(
         blockchain.read().block_number(),
-        last_block_of_reporting_window + 1
+        last_block_of_reporting_window + 1 + Policy::genesis_block_number()
     );
 
     // Now we need to verify that the validator deposit was reduced because of the failing txn
@@ -1257,7 +1259,10 @@ fn it_can_revert_failed_delete_validator() {
         );
 
         // Now the validator should be inactive because of the failing txn.
-        assert_eq!(validator.inactive_since, Some(1));
+        assert_eq!(
+            validator.inactive_since,
+            Some(1 + Policy::genesis_block_number())
+        );
     }
 
     // Revert the delete transaction

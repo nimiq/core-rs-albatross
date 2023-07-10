@@ -25,6 +25,8 @@ pub struct Policy {
     /// Number of blocks a transaction is valid with Albatross consensus.
     /// This should be a multiple of `blocks_per_batch`.
     pub transaction_validity_window: u32,
+    /// Genesis block number
+    pub genesis_block_number: u32,
 }
 
 impl Policy {
@@ -122,6 +124,11 @@ impl Policy {
     }
 
     #[inline]
+    fn get_genesis_block_number(&self) -> u32 {
+        self.genesis_block_number
+    }
+
+    #[inline]
     pub fn transaction_validity_window() -> u32 {
         GLOBAL_POLICY
             .get_or_init(Self::default)
@@ -143,6 +150,13 @@ impl Policy {
         GLOBAL_POLICY
             .get_or_init(Self::default)
             .get_blocks_per_epoch()
+    }
+
+    #[inline]
+    pub fn genesis_block_number() -> u32 {
+        GLOBAL_POLICY
+            .get_or_init(Self::default)
+            .get_genesis_block_number()
     }
 
     #[inline]
@@ -169,57 +183,90 @@ impl Policy {
     /// Returns the epoch number at a given block number (height).
     #[inline]
     pub fn epoch_at(block_number: u32) -> u32 {
-        let blocks_per_epoch = Self::blocks_per_epoch();
-        (block_number + blocks_per_epoch - 1) / blocks_per_epoch
+        // If the block number is less than the genesis, we are at epoch 0
+        if block_number <= Self::genesis_block_number() {
+            0
+        } else {
+            let block_number = block_number - Self::genesis_block_number();
+            let blocks_per_epoch = Self::blocks_per_epoch();
+            (block_number + blocks_per_epoch - 1) / blocks_per_epoch
+        }
     }
 
     /// Returns the epoch index at a given block number. The epoch index is the number of a block relative
     /// to the epoch it is in. For example, the first block of any epoch always has an epoch index of 0.
     #[inline]
     pub fn epoch_index_at(block_number: u32) -> u32 {
-        let blocks_per_epoch = Self::blocks_per_epoch();
-        (block_number + blocks_per_epoch - 1) % blocks_per_epoch
+        // Any block before the genesis is considered to be part of epoch 0
+        if block_number < Self::genesis_block_number() {
+            panic!("There are no epochs prior to the genesis block");
+        } else {
+            let blocks_per_epoch = Self::blocks_per_epoch();
+            (block_number + blocks_per_epoch - 1) % blocks_per_epoch
+        }
     }
 
     /// Returns the batch number at a given `block_number` (height)
     #[inline]
     pub fn batch_at(block_number: u32) -> u32 {
-        let blocks_per_batch = Self::blocks_per_batch();
-        (block_number + blocks_per_batch - 1) / blocks_per_batch
+        // If the block number is less than the genesis, we are at batch 0
+        if block_number <= Self::genesis_block_number() {
+            0
+        } else {
+            let block_number = block_number - Self::genesis_block_number();
+            let blocks_per_batch = Self::blocks_per_batch();
+            (block_number + blocks_per_batch - 1) / blocks_per_batch
+        }
     }
 
     /// Returns the batch index at a given block number. The batch index is the number of a block relative
     /// to the batch it is in. For example, the first block of any batch always has an batch index of 0.
     #[inline]
     pub fn batch_index_at(block_number: u32) -> u32 {
-        let blocks_per_batch = Self::blocks_per_batch();
-        (block_number + blocks_per_batch - 1) % blocks_per_batch
+        // No batches before the genesis block number
+        if block_number < Self::genesis_block_number() {
+            panic!("There are no batches prior to the genesis block");
+        } else {
+            let blocks_per_batch = Self::blocks_per_batch();
+            (block_number + blocks_per_batch - 1) % blocks_per_batch
+        }
     }
 
     /// Returns the number (height) of the next election macro block after a given block number (height).
     #[inline]
     pub fn election_block_after(block_number: u32) -> u32 {
-        let blocks_per_epoch = Self::blocks_per_epoch();
-        (block_number / blocks_per_epoch + 1) * blocks_per_epoch
+        // The next election block of any block before the genesis, is the genesis itself
+        if block_number < Self::genesis_block_number() {
+            Self::genesis_block_number()
+        } else {
+            let blocks_per_epoch = Self::blocks_per_epoch();
+            (block_number / blocks_per_epoch + 1) * blocks_per_epoch
+        }
     }
 
     /// Returns the block number (height) of the preceding election macro block before a given block number (height).
     /// If the given block number is an election macro block, it returns the election macro block before it.
     #[inline]
     pub fn election_block_before(block_number: u32) -> u32 {
-        if block_number == 0 {
-            panic!("Called macro_block_before with block_number 0");
+        if block_number < Self::genesis_block_number() {
+            panic!("No election blocks before the genesis block");
+        } else {
+            let blocks_per_epoch = Self::blocks_per_epoch();
+            (block_number - 1) / blocks_per_epoch * blocks_per_epoch
         }
-        let blocks_per_epoch = Self::blocks_per_epoch();
-        (block_number - 1) / blocks_per_epoch * blocks_per_epoch
     }
 
     /// Returns the block number (height) of the last election macro block at a given block number (height).
     /// If the given block number is an election macro block, then it returns that block number.
     #[inline]
     pub fn last_election_block(block_number: u32) -> u32 {
-        let blocks_per_epoch = Self::blocks_per_epoch();
-        block_number / blocks_per_epoch * blocks_per_epoch
+        // The last election block of any block before the genesis, is the genesis itself
+        if block_number < Self::genesis_block_number() {
+            panic!("No election blocks before the genesis block");
+        } else {
+            let blocks_per_epoch = Self::blocks_per_epoch();
+            block_number / blocks_per_epoch * blocks_per_epoch
+        }
     }
 
     /// Returns a boolean expressing if the block at a given block number (height) is an election macro block.
@@ -231,39 +278,60 @@ impl Policy {
     /// Returns the block number (height) of the next macro block after a given block number (height).
     #[inline]
     pub fn macro_block_after(block_number: u32) -> u32 {
-        let blocks_per_batch = Self::blocks_per_batch();
-        (block_number / blocks_per_batch + 1) * blocks_per_batch
+        // The next macro block of any block before the genesis, is the genesis itself
+        if block_number < Self::genesis_block_number() {
+            Self::genesis_block_number()
+        } else {
+            let blocks_per_batch = Self::blocks_per_batch();
+            (block_number / blocks_per_batch + 1) * blocks_per_batch
+        }
     }
 
     /// Returns the block number (height) of the preceding macro block before a given block number (height).
     /// If the given block number is a macro block, it returns the macro block before it.
     #[inline]
     pub fn macro_block_before(block_number: u32) -> u32 {
-        if block_number == 0 {
-            panic!("Called macro_block_before with block_number 0");
+        if block_number <= Self::genesis_block_number() {
+            panic!("No macro blocks before genesis block");
+        } else {
+            let blocks_per_batch = Self::blocks_per_batch();
+            (block_number - 1) / blocks_per_batch * blocks_per_batch
         }
-        let blocks_per_batch = Self::blocks_per_batch();
-        (block_number - 1) / blocks_per_batch * blocks_per_batch
     }
 
     /// Returns the block number (height) of the last macro block at a given block number (height).
     /// If the given block number is a macro block, then it returns that block number.
     #[inline]
     pub fn last_macro_block(block_number: u32) -> u32 {
-        let blocks_per_batch = Self::blocks_per_batch();
-        block_number / blocks_per_batch * blocks_per_batch
+        // There is no macro block before the genesis
+        if block_number < Self::genesis_block_number() {
+            panic!("No macro blocks before genesis block");
+        } else {
+            let blocks_per_batch = Self::blocks_per_batch();
+            block_number / blocks_per_batch * blocks_per_batch
+        }
     }
 
     /// Returns a boolean expressing if the block at a given block number (height) is a macro block.
     #[inline]
     pub fn is_macro_block_at(block_number: u32) -> bool {
-        Self::batch_index_at(block_number) == Self::blocks_per_batch() - 1
+        // No macro blocks before genesis
+        if block_number < Self::genesis_block_number() {
+            false
+        } else {
+            Self::batch_index_at(block_number) == Self::blocks_per_batch() - 1
+        }
     }
 
     /// Returns a boolean expressing if the block at a given block number (height) is a micro block.
     #[inline]
     pub fn is_micro_block_at(block_number: u32) -> bool {
-        Self::batch_index_at(block_number) != Self::blocks_per_batch() - 1
+        // No micro blocks before genesis
+        if block_number < Self::genesis_block_number() {
+            false
+        } else {
+            Self::batch_index_at(block_number) != Self::blocks_per_batch() - 1
+        }
     }
 
     /// Returns the block number of the first block of the given epoch (which is always a micro block).
@@ -275,7 +343,8 @@ impl Policy {
 
         (epoch - 1)
             .checked_mul(Self::blocks_per_epoch())?
-            .checked_add(1)
+            .checked_add(1)?
+            .checked_add(Self::genesis_block_number())
     }
 
     /// Returns the block number of the first block of the given batch (which is always a micro block).
@@ -287,20 +356,25 @@ impl Policy {
 
         (batch - 1)
             .checked_mul(Self::blocks_per_batch())?
-            .checked_add(1)
+            .checked_add(1)?
+            .checked_add(Self::genesis_block_number())
     }
 
     /// Returns the block number of the election macro block of the given epoch (which is always the last block).
     /// If the index is out of bounds, None is returned
     pub fn election_block_of(epoch: u32) -> Option<u32> {
-        epoch.checked_mul(Self::blocks_per_epoch())
+        epoch
+            .checked_mul(Self::blocks_per_epoch())?
+            .checked_add(Self::genesis_block_number())
     }
 
     /// Returns the block number of the macro block (checkpoint or election) of the given batch (which
     /// is always the last block).
     /// If the index is out of bounds, None is returned
     pub fn macro_block_of(batch: u32) -> Option<u32> {
-        batch.checked_mul(Self::blocks_per_batch())
+        batch
+            .checked_mul(Self::blocks_per_batch())?
+            .checked_add(Self::genesis_block_number())
     }
 
     /// Returns a boolean expressing if the batch at a given block number (height) is the first batch
@@ -374,6 +448,7 @@ impl Default for Policy {
             tendermint_timeout_delta: 1000,
             state_chunks_max_size: 200, // #Nodes/accounts 200, TODO: Simulate with different sizes
             transaction_validity_window: 7200,
+            genesis_block_number: 0,
         }
     }
 }
@@ -385,6 +460,7 @@ pub const TEST_POLICY: Policy = Policy {
     tendermint_timeout_delta: 1000,
     state_chunks_max_size: 2,
     transaction_validity_window: 64,
+    genesis_block_number: 0,
 };
 
 #[cfg(test)]
@@ -394,142 +470,497 @@ mod tests {
     use super::*;
 
     fn initialize_policy() {
-        let _ = Policy::get_or_init(TEST_POLICY);
+        let mut policy_config = TEST_POLICY;
+        policy_config.genesis_block_number = 128;
+
+        let _ = Policy::get_or_init(policy_config);
     }
 
     #[test]
     fn it_correctly_computes_epoch() {
         initialize_policy();
-        assert_eq!(Policy::epoch_at(0), 0);
-        assert_eq!(Policy::epoch_at(1), 1);
-        assert_eq!(Policy::epoch_at(128), 1);
-        assert_eq!(Policy::epoch_at(129), 2);
+        assert_eq!(Policy::epoch_at(Policy::genesis_block_number()), 0);
+        assert_eq!(Policy::epoch_at(1 + Policy::genesis_block_number()), 1);
+        assert_eq!(
+            Policy::epoch_at(Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number()),
+            1
+        );
+        assert_eq!(
+            Policy::epoch_at(
+                Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number() + 1
+            ),
+            2
+        );
     }
 
     #[test]
     fn it_correctly_computes_epoch_index() {
         initialize_policy();
-        assert_eq!(Policy::epoch_index_at(1), 0);
-        assert_eq!(Policy::epoch_index_at(2), 1);
-        assert_eq!(Policy::epoch_index_at(128), 127);
-        assert_eq!(Policy::epoch_index_at(129), 0);
+        assert_eq!(
+            Policy::epoch_index_at(1 + Policy::genesis_block_number()),
+            0
+        );
+        assert_eq!(
+            Policy::epoch_index_at(2 + Policy::genesis_block_number()),
+            1
+        );
+        assert_eq!(
+            Policy::epoch_index_at(
+                Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number()
+            ),
+            127
+        );
+        assert_eq!(
+            Policy::epoch_index_at(
+                Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number() + 1
+            ),
+            0
+        );
     }
 
     #[test]
     fn it_correctly_computes_batch() {
         initialize_policy();
-        assert_eq!(Policy::batch_at(0), 0);
-        assert_eq!(Policy::batch_at(1), 1);
-        assert_eq!(Policy::batch_at(32), 1);
-        assert_eq!(Policy::batch_at(33), 2);
+        assert_eq!(Policy::batch_at(Policy::genesis_block_number()), 0);
+        assert_eq!(Policy::batch_at(1 + Policy::genesis_block_number()), 1);
+        assert_eq!(
+            Policy::batch_at(Policy::blocks_per_batch() as u32 + Policy::genesis_block_number()),
+            1
+        );
+        assert_eq!(
+            Policy::batch_at(
+                Policy::blocks_per_batch() as u32 + Policy::genesis_block_number() + 1
+            ),
+            2
+        );
     }
 
     #[test]
     fn it_correctly_computes_batch_index() {
         initialize_policy();
-        assert_eq!(Policy::batch_index_at(1), 0);
-        assert_eq!(Policy::batch_index_at(2), 1);
-        assert_eq!(Policy::batch_index_at(128), 31);
-        assert_eq!(Policy::batch_index_at(129), 0);
+        assert_eq!(
+            Policy::batch_index_at(1 + Policy::genesis_block_number()),
+            0
+        );
+        assert_eq!(
+            Policy::batch_index_at(2 + Policy::genesis_block_number()),
+            1
+        );
+        assert_eq!(
+            Policy::batch_index_at(
+                Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number()
+            ),
+            31
+        );
+        assert_eq!(
+            Policy::batch_index_at(
+                Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number() + 1
+            ),
+            0
+        );
     }
 
     #[test]
     fn it_correctly_computes_block_positions() {
         initialize_policy();
-        assert!(Policy::is_macro_block_at(0));
-        assert!(!Policy::is_micro_block_at(0));
-        assert!(Policy::is_election_block_at(0));
+        assert_eq!(
+            Policy::is_macro_block_at(Policy::genesis_block_number()),
+            true
+        );
+        assert_eq!(
+            !Policy::is_micro_block_at(Policy::genesis_block_number()),
+            true
+        );
+        assert_eq!(
+            Policy::is_election_block_at(Policy::genesis_block_number()),
+            true
+        );
 
-        assert!(!Policy::is_macro_block_at(1));
-        assert!(Policy::is_micro_block_at(1));
-        assert!(!Policy::is_election_block_at(1));
+        assert_eq!(
+            Policy::is_macro_block_at(1 + Policy::genesis_block_number()),
+            false
+        );
+        assert_eq!(
+            !Policy::is_micro_block_at(1 + Policy::genesis_block_number()),
+            false
+        );
+        assert_eq!(
+            Policy::is_election_block_at(1 + Policy::genesis_block_number()),
+            false
+        );
 
-        assert!(!Policy::is_macro_block_at(2));
-        assert!(Policy::is_micro_block_at(2));
-        assert!(!Policy::is_election_block_at(2));
+        assert_eq!(
+            Policy::is_macro_block_at(2 + Policy::genesis_block_number()),
+            false
+        );
+        assert_eq!(
+            !Policy::is_micro_block_at(2 + Policy::genesis_block_number()),
+            false
+        );
+        assert_eq!(
+            Policy::is_election_block_at(2 + Policy::genesis_block_number()),
+            false
+        );
 
-        assert!(Policy::is_macro_block_at(32));
-        assert!(!Policy::is_micro_block_at(32));
-        assert!(!Policy::is_election_block_at(32));
+        assert_eq!(
+            Policy::is_macro_block_at(
+                Policy::blocks_per_batch() as u32 + Policy::genesis_block_number()
+            ),
+            true
+        );
+        assert_eq!(
+            Policy::is_micro_block_at(
+                Policy::blocks_per_batch() as u32 + Policy::genesis_block_number()
+            ),
+            false
+        );
+        assert_eq!(
+            Policy::is_election_block_at(
+                Policy::blocks_per_batch() as u32 + Policy::genesis_block_number()
+            ),
+            false
+        );
 
-        assert!(!Policy::is_macro_block_at(127));
-        assert!(Policy::is_micro_block_at(127));
-        assert!(!Policy::is_election_block_at(127));
+        assert_eq!(
+            Policy::is_macro_block_at(127 + Policy::genesis_block_number()),
+            false
+        );
+        assert_eq!(
+            !Policy::is_micro_block_at(127 + Policy::genesis_block_number()),
+            false
+        );
+        assert_eq!(
+            Policy::is_election_block_at(127 + Policy::genesis_block_number()),
+            false
+        );
 
-        assert!(Policy::is_macro_block_at(128));
-        assert!(!Policy::is_micro_block_at(128));
-        assert!(Policy::is_election_block_at(128));
+        assert_eq!(
+            Policy::is_macro_block_at(
+                Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number()
+            ),
+            true
+        );
+        assert_eq!(
+            !Policy::is_micro_block_at(
+                Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number()
+            ),
+            true
+        );
+        assert_eq!(
+            Policy::is_election_block_at(
+                Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number()
+            ),
+            true
+        );
 
-        assert!(!Policy::is_macro_block_at(129));
-        assert!(Policy::is_micro_block_at(129));
-        assert!(!Policy::is_election_block_at(129));
+        assert_eq!(
+            Policy::is_macro_block_at(
+                Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number() + 1
+            ),
+            false
+        );
+        assert_eq!(
+            !Policy::is_micro_block_at(
+                Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number() + 1
+            ),
+            false
+        );
+        assert_eq!(
+            Policy::is_election_block_at(
+                Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number() + 1
+            ),
+            false
+        );
 
-        assert!(Policy::is_macro_block_at(160));
-        assert!(!Policy::is_micro_block_at(160));
-        assert!(!Policy::is_election_block_at(160));
+        assert_eq!(
+            Policy::is_macro_block_at(
+                Policy::blocks_per_epoch()
+                    + Policy::blocks_per_batch() as u32
+                    + Policy::genesis_block_number()
+            ),
+            true
+        );
+        assert_eq!(
+            Policy::is_micro_block_at(
+                Policy::blocks_per_epoch()
+                    + Policy::blocks_per_batch() as u32
+                    + Policy::genesis_block_number()
+            ),
+            false
+        );
+        assert_eq!(
+            Policy::is_election_block_at(
+                Policy::blocks_per_epoch()
+                    + Policy::blocks_per_batch() as u32
+                    + Policy::genesis_block_number()
+            ),
+            false
+        );
     }
 
     #[test]
     fn it_correctly_computes_macro_numbers() {
         initialize_policy();
-        assert_eq!(Policy::macro_block_after(0), 32);
-        assert_eq!(Policy::macro_block_after(1), 32);
-        assert_eq!(Policy::macro_block_after(127), 128);
-        assert_eq!(Policy::macro_block_after(128), 160);
-        assert_eq!(Policy::macro_block_after(129), 160);
+        assert_eq!(
+            Policy::macro_block_after(Policy::genesis_block_number()),
+            Policy::genesis_block_number() + Policy::blocks_per_batch() as u32
+        );
+        assert_eq!(
+            Policy::macro_block_after(1 + Policy::genesis_block_number()),
+            Policy::genesis_block_number() + Policy::blocks_per_batch() as u32
+        );
+        assert_eq!(
+            Policy::macro_block_after(127 + Policy::genesis_block_number()),
+            Policy::genesis_block_number() + Policy::blocks_per_epoch() as u32
+        );
+        assert_eq!(
+            Policy::macro_block_after(
+                Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number()
+            ),
+            Policy::genesis_block_number() + 160
+        );
+        assert_eq!(
+            Policy::macro_block_after(129 + Policy::genesis_block_number()),
+            Policy::genesis_block_number() + 160
+        );
 
-        assert_eq!(Policy::macro_block_before(1), 0);
-        assert_eq!(Policy::macro_block_before(2), 0);
-        assert_eq!(Policy::macro_block_before(127), 96);
-        assert_eq!(Policy::macro_block_before(128), 96);
-        assert_eq!(Policy::macro_block_before(129), 128);
-        assert_eq!(Policy::macro_block_before(130), 128);
+        assert_eq!(
+            Policy::macro_block_before(1 + Policy::genesis_block_number()),
+            Policy::genesis_block_number()
+        );
+        assert_eq!(
+            Policy::macro_block_before(2 + Policy::genesis_block_number()),
+            Policy::genesis_block_number()
+        );
+        assert_eq!(
+            Policy::macro_block_before(127 + Policy::genesis_block_number()),
+            Policy::genesis_block_number() + 96
+        );
+        assert_eq!(
+            Policy::macro_block_before(128 + Policy::genesis_block_number()),
+            Policy::genesis_block_number() + 96
+        );
+        assert_eq!(
+            Policy::macro_block_before(129 + Policy::genesis_block_number()),
+            Policy::genesis_block_number() + Policy::blocks_per_epoch() as u32
+        );
+        assert_eq!(
+            Policy::macro_block_before(130 + Policy::genesis_block_number()),
+            Policy::genesis_block_number() + Policy::blocks_per_epoch() as u32
+        );
     }
 
     #[test]
     fn it_correctly_computes_election_numbers() {
         initialize_policy();
-        assert_eq!(Policy::election_block_after(0), 128);
-        assert_eq!(Policy::election_block_after(1), 128);
-        assert_eq!(Policy::election_block_after(127), 128);
-        assert_eq!(Policy::election_block_after(128), 256);
-        assert_eq!(Policy::election_block_after(129), 256);
+        assert_eq!(
+            Policy::election_block_after(Policy::genesis_block_number()),
+            Policy::genesis_block_number() + Policy::blocks_per_epoch() as u32
+        );
+        assert_eq!(
+            Policy::election_block_after(1 + Policy::genesis_block_number()),
+            Policy::genesis_block_number() + Policy::blocks_per_epoch() as u32
+        );
+        assert_eq!(
+            Policy::election_block_after(127 + Policy::genesis_block_number()),
+            Policy::genesis_block_number() + Policy::blocks_per_epoch() as u32
+        );
+        assert_eq!(
+            Policy::election_block_after(128 + Policy::genesis_block_number()),
+            Policy::genesis_block_number() + 256
+        );
+        assert_eq!(
+            Policy::election_block_after(129 + Policy::genesis_block_number()),
+            Policy::genesis_block_number() + 256
+        );
 
-        assert_eq!(Policy::election_block_before(1), 0);
-        assert_eq!(Policy::election_block_before(2), 0);
-        assert_eq!(Policy::election_block_before(127), 0);
-        assert_eq!(Policy::election_block_before(128), 0);
-        assert_eq!(Policy::election_block_before(129), 128);
-        assert_eq!(Policy::election_block_before(130), 128);
+        assert_eq!(
+            Policy::election_block_before(1 + Policy::genesis_block_number()),
+            Policy::genesis_block_number()
+        );
+        assert_eq!(
+            Policy::election_block_before(2 + Policy::genesis_block_number()),
+            Policy::genesis_block_number()
+        );
+        assert_eq!(
+            Policy::election_block_before(127 + Policy::genesis_block_number()),
+            Policy::genesis_block_number()
+        );
+        assert_eq!(
+            Policy::election_block_before(
+                Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number()
+            ),
+            Policy::genesis_block_number()
+        );
+        assert_eq!(
+            Policy::election_block_before(
+                Policy::blocks_per_epoch() as u32 + 1 + Policy::genesis_block_number()
+            ),
+            Policy::genesis_block_number() + Policy::blocks_per_epoch() as u32
+        );
+        assert_eq!(
+            Policy::election_block_before(
+                Policy::blocks_per_epoch() as u32 + 2 + Policy::genesis_block_number()
+            ),
+            Policy::genesis_block_number() + Policy::blocks_per_epoch() as u32
+        );
 
-        assert_eq!(Policy::last_election_block(0), 0);
-        assert_eq!(Policy::last_election_block(1), 0);
-        assert_eq!(Policy::last_election_block(127), 0);
-        assert_eq!(Policy::last_election_block(128), 128);
-        assert_eq!(Policy::last_election_block(129), 128);
+        assert_eq!(
+            Policy::last_election_block(Policy::genesis_block_number()),
+            Policy::genesis_block_number()
+        );
+        assert_eq!(
+            Policy::last_election_block(1 + Policy::genesis_block_number()),
+            Policy::genesis_block_number()
+        );
+        assert_eq!(
+            Policy::last_election_block(127 + Policy::genesis_block_number()),
+            Policy::genesis_block_number()
+        );
+        assert_eq!(
+            Policy::last_election_block(
+                Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number()
+            ),
+            Policy::genesis_block_number() + Policy::blocks_per_epoch() as u32
+        );
+        assert_eq!(
+            Policy::last_election_block(
+                Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number() + 1
+            ),
+            Policy::genesis_block_number() + Policy::blocks_per_epoch() as u32
+        );
     }
 
     #[test]
     fn it_correctly_commutes_first_ofs() {
         initialize_policy();
-        assert_eq!(Policy::first_block_of(1), Some(1));
-        assert_eq!(Policy::first_block_of(2), Some(129));
+        assert_eq!(
+            Policy::first_block_of(1),
+            Some(Policy::genesis_block_number() + 1)
+        );
+        assert_eq!(Policy::first_block_of(2), Some(257));
 
-        assert_eq!(Policy::first_block_of_batch(1), Some(1));
-        assert_eq!(Policy::first_block_of_batch(2), Some(33));
-        assert_eq!(Policy::first_block_of_batch(3), Some(65));
-        assert_eq!(Policy::first_block_of_batch(4), Some(97));
-        assert_eq!(Policy::first_block_of_batch(5), Some(129));
+        assert_eq!(
+            Policy::first_block_of_batch(1),
+            Some(1 + Policy::genesis_block_number())
+        );
+        assert_eq!(
+            Policy::first_block_of_batch(2),
+            Some(33 + Policy::genesis_block_number())
+        );
+        assert_eq!(
+            Policy::first_block_of_batch(3),
+            Some(65 + Policy::genesis_block_number())
+        );
+        assert_eq!(
+            Policy::first_block_of_batch(4),
+            Some(97 + Policy::genesis_block_number())
+        );
+        assert_eq!(
+            Policy::first_block_of_batch(5),
+            Some(129 + Policy::genesis_block_number())
+        );
         assert_eq!(Policy::first_block_of_batch(4294967295), None);
     }
 
     #[test]
     fn it_correctly_computes_first_batch_of_epoch() {
         initialize_policy();
-        assert!(Policy::first_batch_of_epoch(1));
-        assert!(Policy::first_batch_of_epoch(32));
-        assert!(!Policy::first_batch_of_epoch(33));
-        assert!(!Policy::first_batch_of_epoch(128));
-        assert!(Policy::first_batch_of_epoch(129));
+        assert_eq!(
+            Policy::first_batch_of_epoch(1 + Policy::genesis_block_number()),
+            true
+        );
+        assert_eq!(
+            Policy::first_batch_of_epoch(
+                Policy::blocks_per_batch() as u32 + Policy::genesis_block_number()
+            ),
+            true
+        );
+        assert_eq!(
+            Policy::first_batch_of_epoch(
+                Policy::blocks_per_batch() as u32 + 1 + Policy::genesis_block_number()
+            ),
+            false
+        );
+        assert_eq!(
+            Policy::first_batch_of_epoch(
+                Policy::blocks_per_epoch() as u32 + Policy::genesis_block_number()
+            ),
+            false
+        );
+        assert_eq!(
+            Policy::first_batch_of_epoch(
+                Policy::blocks_per_epoch() as u32 + 1 + Policy::genesis_block_number()
+            ),
+            true
+        );
+    }
+
+    #[test]
+    fn non_zero_genesis_extra_tests() {
+        initialize_policy();
+
+        // Anything prior to genesis belongs to epoch 0
+        assert_eq!(Policy::epoch_at(Policy::genesis_block_number()), 0);
+        assert_eq!(Policy::epoch_at(40), 0);
+        // Epoch 1 starts at genesis + 1
+        assert_eq!(Policy::epoch_at(1 + Policy::genesis_block_number()), 1);
+
+        assert_eq!(
+            Policy::epoch_index_at(2 * Policy::genesis_block_number() + 1),
+            0
+        );
+
+        //First batch starts after genesis
+        assert_eq!(Policy::batch_at(Policy::genesis_block_number() + 1), 1);
+        //Anything prior to genesis belongs to batch 0
+        assert_eq!(Policy::batch_at(Policy::genesis_block_number() - 15), 0);
+
+        assert_eq!(
+            Policy::batch_index_at(Policy::genesis_block_number() + 1),
+            0
+        );
+        assert_eq!(
+            Policy::batch_index_at(Policy::genesis_block_number() + 2),
+            1
+        );
+
+        // No macro blocks before genesis
+        assert_eq!(Policy::is_macro_block_at(1), false);
+        assert_eq!(
+            Policy::is_macro_block_at(Policy::genesis_block_number()),
+            true
+        );
+
+        // No micro blocks before genesis
+        assert_eq!(
+            Policy::is_micro_block_at(Policy::genesis_block_number() - 20),
+            false
+        );
+        assert_eq!(Policy::is_micro_block_at(15), false);
+
+        // Genesis is a macro/election block
+        assert_eq!(
+            Policy::is_macro_block_at(Policy::genesis_block_number()),
+            true
+        );
+        assert_eq!(
+            Policy::is_election_block_at(Policy::genesis_block_number()),
+            true
+        );
+
+        // The next macro for any pre-genesis block is the genesis itself
+        assert_eq!(Policy::macro_block_after(0), Policy::genesis_block_number());
+        assert_eq!(Policy::macro_block_after(5), Policy::genesis_block_number());
+
+        // The next election for any pre-genesis block is the genesis itself
+        assert_eq!(
+            Policy::election_block_after(0),
+            Policy::genesis_block_number()
+        );
+        assert_eq!(
+            Policy::election_block_after(10),
+            Policy::genesis_block_number()
+        );
     }
 }

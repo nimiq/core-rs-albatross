@@ -1077,10 +1077,11 @@ fn reward_inherents_not_allowed() {
 
 #[test]
 fn slash_inherents_work() {
+    let genesis_block_number = Policy::genesis_block_number();
     let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let block_state = BlockState::new(2, 2);
+    let block_state = BlockState::new(2 + genesis_block_number, 2);
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
@@ -1092,7 +1093,7 @@ fn slash_inherents_work() {
     let slot = PenalizedSlot {
         slot: 0,
         validator_address: validator_address.clone(),
-        event_block: 1,
+        event_block: 1 + genesis_block_number,
     };
 
     let inherent = Inherent::Penalize { slot: slot.clone() };
@@ -1153,7 +1154,7 @@ fn slash_inherents_work() {
     );
 
     // Works in current epoch, previous batch case.
-    let block_state = BlockState::new(Policy::blocks_per_batch() + 1, 500);
+    let block_state = BlockState::new(Policy::blocks_per_batch() + 1 + genesis_block_number, 500);
 
     let mut logs = vec![];
     let mut inherent_logger = InherentLogger::new(&mut logs);
@@ -1181,7 +1182,7 @@ fn slash_inherents_work() {
             },
             Log::Penalize {
                 validator_address: slot.validator_address.clone(),
-                event_block: 1,
+                event_block: 1 + genesis_block_number,
                 slot: slot.slot,
                 newly_deactivated: true,
             },
@@ -1210,11 +1211,11 @@ fn slash_inherents_work() {
     );
 
     // Works in previous epoch, previous batch case.
-    let block_state = BlockState::new(Policy::blocks_per_epoch() + 1, 1000);
+    let block_state = BlockState::new(Policy::blocks_per_epoch() + 1 + genesis_block_number, 1000);
     let slot = PenalizedSlot {
         slot: 0,
         validator_address: validator_address.clone(),
-        event_block: Policy::blocks_per_epoch() - 1,
+        event_block: Policy::blocks_per_epoch() - 1 + genesis_block_number,
     };
 
     let inherent = Inherent::Penalize { slot: slot.clone() };
@@ -1278,7 +1279,10 @@ fn finalize_batch_inherents_works() {
     let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let block_state = BlockState::new(Policy::blocks_per_batch(), 500);
+    let block_state = BlockState::new(
+        Policy::blocks_per_batch() + Policy::genesis_block_number(),
+        500,
+    );
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 

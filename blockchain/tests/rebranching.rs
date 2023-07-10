@@ -52,6 +52,7 @@ fn it_can_rebranch_skip_block() {
 
 #[test]
 fn micro_block_works_after_macro_block() {
+    let genesis_block_number = Policy::genesis_block_number();
     let temp_producer = TemporaryBlockProducer::new();
 
     // apply an entire batch including macro block on view_number/round_number zero
@@ -61,7 +62,7 @@ fn micro_block_works_after_macro_block() {
     // make sure we are at the beginning of the batch and all block were applied
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        Policy::blocks_per_batch()
+        Policy::blocks_per_batch() + genesis_block_number
     );
 
     // Test if a micro block can be rebranched immediately after
@@ -75,14 +76,14 @@ fn micro_block_works_after_macro_block() {
     // make sure this was an extend
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        Policy::blocks_per_batch() + 1
+        Policy::blocks_per_batch() + 1 + genesis_block_number
     );
     // and rebranch it to block the chain with only one skip block
     temp_producer.push(rebranch).unwrap();
     // make sure this was a rebranch
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        Policy::blocks_per_batch() + 1
+        Policy::blocks_per_batch() + 1 + genesis_block_number
     );
 
     // apply the rest of the batch including macro block on view_number/round_number one
@@ -92,7 +93,7 @@ fn micro_block_works_after_macro_block() {
     // make sure we are at the beginning of the batch
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        Policy::blocks_per_batch() * 2
+        Policy::blocks_per_batch() * 2 + genesis_block_number
     );
 
     // Test if a micro block can be rebranched immediately after
@@ -109,7 +110,7 @@ fn micro_block_works_after_macro_block() {
 
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        Policy::blocks_per_batch() * 2 + 1
+        Policy::blocks_per_batch() * 2 + 1 + genesis_block_number
     );
 }
 

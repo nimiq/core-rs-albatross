@@ -8,6 +8,7 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+nimiq-genesis = { path = "../genesis" }
 nimiq-log = { path = "../log" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-test-log-proc-macro = { path = "proc-macro" }

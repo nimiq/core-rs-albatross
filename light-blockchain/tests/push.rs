@@ -483,6 +483,7 @@ fn it_can_ignore_orphan_blocks() {
 #[test]
 fn micro_block_works_after_macro_block() {
     let temp_producer = TemporaryLightBlockProducer::new();
+    let genesis_block_number = Policy::genesis_block_number();
 
     // Apply an entire batch including macro block on skip_block/round_number zero
     for _ in 0..Policy::blocks_per_batch() {
@@ -491,7 +492,7 @@ fn micro_block_works_after_macro_block() {
     // Make sure we are at the beginning of the batch and all block were applied
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        Policy::blocks_per_batch()
+        Policy::blocks_per_batch() + genesis_block_number
     );
 
     // Test if a micro block can be rebranched immediately after
@@ -505,14 +506,14 @@ fn micro_block_works_after_macro_block() {
     // Make sure this was an extend
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        Policy::blocks_per_batch() + 1
+        Policy::blocks_per_batch() + 1 + genesis_block_number
     );
     // And rebranch it to block the chain with only one skip block
     temp_producer.push(rebranch).unwrap();
     // Make sure this was a rebranch
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        Policy::blocks_per_batch() + 1
+        Policy::blocks_per_batch() + 1 + genesis_block_number
     );
 
     // Apply the rest of the batch including macro block on round_number one
@@ -522,7 +523,7 @@ fn micro_block_works_after_macro_block() {
     // Make sure we are at the beginning of the batch
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        Policy::blocks_per_batch() * 2
+        Policy::blocks_per_batch() * 2 + genesis_block_number
     );
 
     // Test if a micro block can be rebranched immediately after
@@ -538,7 +539,7 @@ fn micro_block_works_after_macro_block() {
 
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        Policy::blocks_per_batch() * 2 + 1
+        Policy::blocks_per_batch() * 2 + 1 + genesis_block_number
     );
 }
 
