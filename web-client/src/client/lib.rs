@@ -48,10 +48,10 @@ use crate::{
             PlainValidatorType,
         },
         block::{PlainBlock, PlainBlockType},
-        client_configuration::{
-            ClientConfiguration, PlainClientConfiguration, PlainClientConfigurationType,
-        },
         peer_info::PlainPeerInfo,
+    },
+    client_configuration::{
+        ClientConfiguration, PlainClientConfiguration, PlainClientConfigurationType,
     },
     transaction::{
         PlainTransactionData, PlainTransactionDetails, PlainTransactionDetailsArrayType,
