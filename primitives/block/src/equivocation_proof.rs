@@ -9,6 +9,34 @@ use nimiq_vrf::VrfSeed;
 
 use crate::MicroHeader;
 
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, SerializeContent)]
+pub enum EquivocationProof {
+    Fork(ForkProof),
+}
+
+impl EquivocationProof {
+    /// The size of a single equivocation proof. This is the maximum possible size.
+    pub const SIZE: usize = ForkProof::SIZE + 1;
+
+    pub fn is_valid_at(&self, block_number: u32) -> bool {
+        use self::EquivocationProof::*;
+        match self {
+            Fork(proof) => proof.is_valid_at(block_number),
+        }
+    }
+
+    /// Returns the key by which equivocation proofs are supposed to be sorted.
+    pub fn sort_key(&self) -> Blake2bHash {
+        self.hash()
+    }
+}
+
+impl From<ForkProof> for EquivocationProof {
+    fn from(proof: ForkProof) -> EquivocationProof {
+        EquivocationProof::Fork(proof)
+    }
+}
+
 /// Struct representing a fork proof. A fork proof proves that a given validator created or
 /// continued a fork. For this it is enough to provide two different headers, with the same block
 /// number, signed by the same validator.
@@ -100,11 +128,6 @@ impl ForkProof {
 
         block_number <= Policy::last_block_of_reporting_window(fork_block)
             && Policy::batch_at(block_number) >= Policy::batch_at(fork_block)
-    }
-
-    /// Returns the key by which fork proofs are supposed to be sorted.
-    pub fn sort_key(&self) -> Blake2bHash {
-        self.hash()
     }
 
     /// Returns the block number of a fork proof. This assumes that the fork proof is valid.

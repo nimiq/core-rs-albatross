@@ -433,7 +433,7 @@ impl LightBlockchain {
                 );
 
                 // We shouldn't log errors if there are no listeners.
-                _ = self.fork_notifier.send(ForkEvent::Detected(proof));
+                _ = self.fork_notifier.send(ForkEvent::Detected(proof.into()));
             }
         }
     }

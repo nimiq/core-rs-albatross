@@ -1,6 +1,6 @@
 use nimiq_account::BlockState;
 use nimiq_block::{
-    ForkProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader,
+    EquivocationProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader,
     MicroJustification, SkipBlockInfo, SkipBlockProof,
 };
 use nimiq_blockchain::Blockchain;
@@ -39,9 +39,9 @@ impl BlockProducer {
         blockchain: &Blockchain,
         // The timestamp for the block.
         timestamp: u64,
-        // Proofs of any forks created by malicious validators. A fork proof may be submitted during
-        // the batch when it happened or in the next one, but not after that.
-        fork_proofs: Vec<ForkProof>,
+        // Proofs of any misbehavior by malicious validators. A equivocation proof may be submitted
+        // during the batch when it happened or in the next one, but not after that.
+        equivocation_proofs: Vec<EquivocationProof>,
         // The transactions to be included in the block body.
         transactions: Vec<Transaction>,
         // Extra data for this block.
@@ -52,7 +52,7 @@ impl BlockProducer {
         self.next_micro_block_with_rng(
             blockchain,
             timestamp,
-            fork_proofs,
+            equivocation_proofs,
             transactions,
             extra_data,
             skip_block_proof,
@@ -67,9 +67,9 @@ impl BlockProducer {
         blockchain: &Blockchain,
         // The timestamp for the block.
         timestamp: u64,
-        // Proofs of any forks created by malicious validators. A fork proof may be submitted during
-        // the batch when it happened or in the next one, but not after that.
-        fork_proofs: Vec<ForkProof>,
+        // Proofs of any misbehavior by malicious validators. A equivocation proof may be submitted
+        // during the batch when it happened or in the next one, but not after that.
+        equivocation_proofs: Vec<EquivocationProof>,
         // The transactions to be included in the block body.
         transactions: Vec<Transaction>,
         // Extra data for this block.
@@ -113,10 +113,10 @@ impl BlockProducer {
             prev_seed.sign_next_with_rng(&self.signing_key, rng)
         };
 
-        // Create the inherents from the fork proofs or skip block info.
+        // Create the inherents from the equivocation proofs or skip block info.
         let inherents = blockchain.create_punishment_inherents(
             block_number,
-            &fork_proofs,
+            &equivocation_proofs,
             skip_block_info,
             None,
         );
@@ -153,7 +153,7 @@ impl BlockProducer {
 
         // Create the micro block body.
         let body = MicroBody {
-            fork_proofs,
+            equivocation_proofs,
             transactions: executed_txns,
         };
 

@@ -6,7 +6,7 @@ use std::{
 };
 
 use futures::{stream::BoxStream, Stream, StreamExt};
-use nimiq_block::{Block, BlockHeaderTopic, BlockTopic};
+use nimiq_block::{Block, BlockHeaderTopic, BlockTopic, EquivocationProof};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction, ForkEvent};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -454,7 +454,7 @@ impl<N: Network> BlockQueue<N> {
         let mut block_infos = vec![];
 
         match event {
-            ForkEvent::Detected(proof) => {
+            ForkEvent::Detected(EquivocationProof::Fork(proof)) => {
                 block_infos.push((proof.header1.block_number, proof.header1.hash()));
                 block_infos.push((proof.header2.block_number, proof.header2.hash()));
             }

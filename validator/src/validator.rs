@@ -44,7 +44,7 @@ use crate::{
         proposal::{Header, RequestProposal},
         state::MacroState,
     },
-    jail::ForkProofPool,
+    jail::EquivocationProofPool,
     micro::{ProduceMicroBlock, ProduceMicroBlockEvent},
     r#macro::{MappedReturn, ProduceMacroBlock, ProposalTopic},
 };
@@ -62,7 +62,7 @@ struct ActiveEpochState {
 }
 
 struct BlockchainState {
-    fork_proofs: ForkProofPool,
+    equivocation_proofs: EquivocationProofPool,
     can_enforce_validity_window: bool,
 }
 
@@ -145,7 +145,7 @@ where
     const MACRO_STATE_KEY: &'static str = "validatorState";
     const PRODUCER_TIMEOUT: Duration = Duration::from_millis(Policy::BLOCK_PRODUCER_TIMEOUT);
     const BLOCK_SEPARATION_TIME: Duration = Duration::from_millis(Policy::BLOCK_SEPARATION_TIME);
-    const FORK_PROOFS_MAX_SIZE: usize = 1_000; // bytes
+    const EQUIVOCATION_PROOFS_MAX_SIZE: usize = 1_000; // bytes
 
     pub fn new(
         env: DatabaseProxy,
@@ -168,7 +168,7 @@ where
         drop(blockchain_rg);
 
         let blockchain_state = BlockchainState {
-            fork_proofs: ForkProofPool::new(),
+            equivocation_proofs: EquivocationProofPool::new(),
             can_enforce_validity_window,
         };
 
@@ -388,10 +388,10 @@ where
                 ));
             }
             BlockType::Micro => {
-                let fork_proofs = self
+                let equivocation_proofs = self
                     .blockchain_state
-                    .fork_proofs
-                    .get_fork_proofs_for_block(Self::FORK_PROOFS_MAX_SIZE);
+                    .equivocation_proofs
+                    .get_equivocation_proofs_for_block(Self::EQUIVOCATION_PROOFS_MAX_SIZE);
                 let prev_seed = head.seed().clone();
 
                 drop(blockchain);
@@ -402,7 +402,7 @@ where
                     Arc::clone(&self.network),
                     block_producer,
                     self.validator_slot_band(),
-                    fork_proofs,
+                    equivocation_proofs,
                     prev_seed,
                     next_block_number,
                     Self::PRODUCER_TIMEOUT,
@@ -497,7 +497,9 @@ where
             .expect("Head block not found");
 
         // Update mempool and blockchain state
-        self.blockchain_state.fork_proofs.apply_block(&block);
+        self.blockchain_state
+            .equivocation_proofs
+            .apply_block(&block);
         // Mempool updates are only done once we can be active.
         if self.can_be_active() {
             self.mempool
@@ -512,10 +514,12 @@ where
     ) {
         // Update mempool and blockchain state
         for (_hash, block) in old_chain.iter() {
-            self.blockchain_state.fork_proofs.revert_block(block);
+            self.blockchain_state
+                .equivocation_proofs
+                .revert_block(block);
         }
         for (_hash, block) in new_chain.iter() {
-            self.blockchain_state.fork_proofs.apply_block(block);
+            self.blockchain_state.equivocation_proofs.apply_block(block);
         }
         // Mempool updates are only done once we can be active.
         if self.can_be_active() {
@@ -525,7 +529,9 @@ where
 
     fn on_fork_event(&mut self, event: ForkEvent) {
         match event {
-            ForkEvent::Detected(fork_proof) => self.blockchain_state.fork_proofs.insert(fork_proof),
+            ForkEvent::Detected(fork_proof) => {
+                self.blockchain_state.equivocation_proofs.insert(fork_proof)
+            }
         };
     }
 

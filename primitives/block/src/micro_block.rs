@@ -9,7 +9,9 @@ use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{ExecutedTransaction, Transaction};
 use nimiq_vrf::VrfSeed;
 
-use crate::{fork_proof::ForkProof, skip_block::SkipBlockProof, BlockError, SkipBlockInfo};
+use crate::{
+    equivocation_proof::EquivocationProof, skip_block::SkipBlockProof, BlockError, SkipBlockInfo,
+};
 
 /// The struct representing a Micro block.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -48,9 +50,9 @@ impl MicroBlock {
     }
 
     /// Returns the available size, in bytes, in a micro block body for transactions.
-    pub fn get_available_bytes(num_fork_proofs: usize) -> usize {
+    pub fn get_available_bytes(num_equivocation_proofs: usize) -> usize {
         Policy::MAX_SIZE_MICRO_BODY
-            - (/*fork_proofs vector length*/2 + num_fork_proofs * ForkProof::SIZE
+            - (/*equivocation_proofs vector length*/2 + num_equivocation_proofs * EquivocationProof::SIZE
             + /*transactions vector length*/ 2)
     }
 
@@ -206,8 +208,8 @@ impl fmt::Display for MicroHeader {
 /// The struct representing the body of a Micro block.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
 pub struct MicroBody {
-    /// A vector containing the fork proofs for this block. It might be empty.
-    pub fork_proofs: Vec<ForkProof>,
+    /// A vector containing the equivocation proofs for this block. It might be empty.
+    pub equivocation_proofs: Vec<EquivocationProof>,
     /// A vector containing the transactions for this block. It might be empty.
     pub transactions: Vec<ExecutedTransaction>,
 }
@@ -235,10 +237,10 @@ impl MicroBody {
         }
 
         // Check that the body is empty for skip blocks.
-        if is_skip && (!self.fork_proofs.is_empty() || !self.transactions.is_empty()) {
+        if is_skip && (!self.equivocation_proofs.is_empty() || !self.transactions.is_empty()) {
             debug!(
                 num_transactions = self.transactions.len(),
-                num_fork_proofs = self.fork_proofs.len(),
+                num_equivocation_proofs = self.equivocation_proofs.len(),
                 reason = "Skip block has a non empty body",
                 "Invalid block"
             );
@@ -246,8 +248,8 @@ impl MicroBody {
         }
 
         // Ensure that fork proofs are ordered, unique and within their reporting window.
-        let mut previous_proof: Option<&ForkProof> = None;
-        for proof in &self.fork_proofs {
+        let mut previous_proof: Option<&EquivocationProof> = None;
+        for proof in &self.equivocation_proofs {
             // Check reporting window.
             if !proof.is_valid_at(block_number) {
                 return Err(BlockError::InvalidForkProof);

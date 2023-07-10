@@ -105,7 +105,7 @@ fn it_can_produce_micro_blocks() {
     let block = producer.next_micro_block(
         &bc,
         bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![fork_proof],
+        vec![fork_proof.into()],
         vec![],
         vec![0x41],
         None,

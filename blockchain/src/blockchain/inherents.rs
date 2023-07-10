@@ -1,5 +1,5 @@
 use nimiq_account::StakingContract;
-use nimiq_block::{ForkProof, MacroBlock, MacroHeader, SkipBlockInfo};
+use nimiq_block::{EquivocationProof, ForkProof, MacroBlock, MacroHeader, SkipBlockInfo};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_database as db;
 use nimiq_keys::Address;
@@ -31,20 +31,27 @@ impl Blockchain {
 
         inherents
     }
-    /// Given fork proofs and (or) a skip block, it returns the respective punishment inherents. It expects
-    /// verified fork proofs and (or) skip block.
+    /// Given equivocation proofs and (or) a skip block, it returns the respective punishment inherents. It expects
+    /// verified equivocation proofs and (or) skip block.
     pub fn create_punishment_inherents(
         &self,
         block_number: u32,
-        fork_proofs: &[ForkProof],
+        equivocation_proofs: &[EquivocationProof],
         skip_block_info: Option<SkipBlockInfo>,
         txn_option: Option<&db::TransactionProxy>,
     ) -> Vec<Inherent> {
         let mut inherents = vec![];
 
-        for fork_proof in fork_proofs {
-            trace!("Creating inherent from fork proof: {:?}", fork_proof);
-            inherents.push(self.inherent_from_fork_proof(block_number, fork_proof, txn_option));
+        for equivocation_proof in equivocation_proofs {
+            trace!(
+                "Creating inherent from equivocation proof: {:?}",
+                equivocation_proof,
+            );
+            inherents.push(self.inherent_from_equivocation_proof(
+                block_number,
+                equivocation_proof,
+                txn_option,
+            ));
         }
 
         if let Some(skip_block_info) = skip_block_info {
@@ -53,6 +60,19 @@ impl Blockchain {
         }
 
         inherents
+    }
+
+    /// It creates a jail inherent from an equivocation proof. It expects a *verified* equivocation proof!
+    pub fn inherent_from_equivocation_proof(
+        &self,
+        block_number: u32,
+        equivocation_proof: &EquivocationProof,
+        txn_option: Option<&db::TransactionProxy>,
+    ) -> Inherent {
+        use self::EquivocationProof::*;
+        match equivocation_proof {
+            Fork(fork) => self.inherent_from_fork_proof(block_number, fork, txn_option),
+        }
     }
 
     /// It creates a jail inherent from a fork proof. It expects a *verified* fork proof!

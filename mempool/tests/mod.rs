@@ -266,7 +266,7 @@ fn create_dummy_micro_block(transactions: Option<Vec<Transaction>>) -> Block {
     }
 
     let micro_body = MicroBody {
-        fork_proofs: vec![],
+        equivocation_proofs: vec![],
         transactions: executed_txns,
     };
 

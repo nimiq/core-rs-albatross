@@ -1,7 +1,8 @@
 use ark_ec::Group;
 use nimiq_block::{
-    Block, BlockError, BlockHeader, ForkProof, MacroBlock, MacroBody, MacroHeader, MicroBlock,
-    MicroBody, MicroHeader, MicroJustification, MultiSignature, SkipBlockProof,
+    Block, BlockError, BlockHeader, EquivocationProof, ForkProof, MacroBlock, MacroBody,
+    MacroHeader, MicroBlock, MicroBody, MicroHeader, MicroJustification, MultiSignature,
+    SkipBlockProof,
 };
 use nimiq_bls::{AggregateSignature, G2Projective, PublicKey as BlsPublicKey};
 use nimiq_collections::BitSet;
@@ -108,7 +109,7 @@ fn test_verify_body_root() {
     let micro_justification = MicroJustification::Micro(Signature::default());
 
     let micro_body = MicroBody {
-        fork_proofs: [].to_vec(),
+        equivocation_proofs: [].to_vec(),
         transactions: [].to_vec(),
     };
 
@@ -162,7 +163,7 @@ fn test_verify_skip_block() {
             .collect();
 
     let mut micro_body = MicroBody {
-        fork_proofs: [].to_vec(),
+        equivocation_proofs: vec![],
         transactions,
     };
 
@@ -217,7 +218,7 @@ fn test_verify_micro_block_body_txns() {
     txns_dup.push(txns.first().unwrap().clone());
 
     let mut micro_body = MicroBody {
-        fork_proofs: [].to_vec(),
+        equivocation_proofs: [].to_vec(),
         transactions: txns_dup.clone(),
     };
 
@@ -257,7 +258,7 @@ fn test_verify_micro_block_body_txns() {
     .collect();
 
     let micro_body = MicroBody {
-        fork_proofs: [].to_vec(),
+        equivocation_proofs: vec![],
         transactions: txns,
     };
 
@@ -312,10 +313,10 @@ fn test_verify_micro_block_body_fork_proofs() {
     let micro_justification = MicroJustification::Micro(Signature::default());
 
     let mut fork_proofs = vec![fork_proof_1, fork_proof_2, fork_proof_3];
-    fork_proofs.sort_by_key(ForkProof::sort_key);
+    fork_proofs.sort_by_key(|p| EquivocationProof::from(p.clone()).sort_key());
     fork_proofs.reverse();
     let micro_body = MicroBody {
-        fork_proofs: fork_proofs.clone(),
+        equivocation_proofs: fork_proofs.iter().cloned().map(Into::into).collect(),
         transactions: [].to_vec(),
     };
 
@@ -331,9 +332,9 @@ fn test_verify_micro_block_body_fork_proofs() {
     assert_eq!(block.verify(), Err(BlockError::ForkProofsNotOrdered));
 
     // Sort fork proofs and re-build block
-    fork_proofs.sort_by_key(ForkProof::sort_key);
+    fork_proofs.sort_by_key(|p| EquivocationProof::from(p.clone()).sort_key());
     let micro_body = MicroBody {
-        fork_proofs: fork_proofs.clone(),
+        equivocation_proofs: fork_proofs.iter().cloned().map(Into::into).collect(),
         transactions: [].to_vec(),
     };
 
@@ -349,7 +350,7 @@ fn test_verify_micro_block_body_fork_proofs() {
     // Lets have a duplicate fork proof
     fork_proofs.push(fork_proofs.last().unwrap().clone());
     let micro_body = MicroBody {
-        fork_proofs: fork_proofs.clone(),
+        equivocation_proofs: fork_proofs.iter().cloned().map(Into::into).collect(),
         transactions: [].to_vec(),
     };
 
@@ -367,10 +368,10 @@ fn test_verify_micro_block_body_fork_proofs() {
     fork_proof.header1.block_number = Policy::blocks_per_epoch() + genesis_block_number;
     fork_proof.header2.block_number = Policy::blocks_per_epoch() + genesis_block_number + 1;
     fork_proofs.push(fork_proof);
-    fork_proofs.sort_by_key(ForkProof::sort_key);
+    fork_proofs.sort_by_key(|p| EquivocationProof::from(p.clone()).sort_key());
 
     let micro_body = MicroBody {
-        fork_proofs: fork_proofs.clone(),
+        equivocation_proofs: fork_proofs.iter().cloned().map(Into::into).collect(),
         transactions: [].to_vec(),
     };
 

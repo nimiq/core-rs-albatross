@@ -287,7 +287,7 @@ fn it_correctly_creates_inherents_from_skip_block() {
     // Create the inherents from any forks or skip block info.
     let inherents = blockchain_rg.create_punishment_inherents(
         skip_block.block_number(),
-        &skip_block.body.as_ref().unwrap().fork_proofs,
+        &skip_block.body.as_ref().unwrap().equivocation_proofs,
         skip_block_info,
         None,
     );
@@ -341,8 +341,8 @@ fn it_correctly_creates_inherents_from_fork_proof() {
         .body
         .as_mut()
         .unwrap()
-        .fork_proofs
-        .push(fork_proof);
+        .equivocation_proofs
+        .push(fork_proof.into());
 
     let blockchain_rg = temp_producer1.blockchain.read();
     let (validator, _slot) = blockchain_rg
@@ -358,7 +358,7 @@ fn it_correctly_creates_inherents_from_fork_proof() {
     // Create the inherents from any forks or skip block info.
     let inherents = blockchain_rg.create_punishment_inherents(
         reporting_micro_block.block_number(),
-        &reporting_micro_block.body.unwrap().fork_proofs,
+        &reporting_micro_block.body.unwrap().equivocation_proofs,
         skip_block_info,
         None,
     );
@@ -426,8 +426,8 @@ fn it_correctly_creates_inherents_in_next_epoch_from_fork_proof() {
         .body
         .as_mut()
         .unwrap()
-        .fork_proofs
-        .push(fork_proof);
+        .equivocation_proofs
+        .push(fork_proof.into());
 
     let blockchain_rg = temp_producer1.blockchain.read();
     let (validator, _slot) = blockchain_rg
@@ -449,7 +449,7 @@ fn it_correctly_creates_inherents_in_next_epoch_from_fork_proof() {
     // Create the inherents from any forks or skip block info.
     let inherents = blockchain_rg.create_punishment_inherents(
         reporting_micro_block.block_number(),
-        &reporting_micro_block.body.unwrap().fork_proofs,
+        &reporting_micro_block.body.unwrap().equivocation_proofs,
         skip_block_info,
         None,
     );
