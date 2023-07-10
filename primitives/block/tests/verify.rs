@@ -403,8 +403,7 @@ fn test_verify_election_macro_body() {
 
     let mut macro_body = MacroBody {
         validators: None,
-        lost_reward_set: BitSet::default(),
-        disabled_set: BitSet::default(),
+        next_batch_initial_punished_set: BitSet::default(),
         transactions: vec![],
     };
     macro_header.body_root = macro_body.hash();

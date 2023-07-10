@@ -117,7 +117,7 @@ impl Blockchain {
     /// It receives a block as input but that block is only required to have a header (the body and
     /// justification are optional, we don't need them).
     /// Macro block specific checks are done in `verify_macro_block_state`
-    pub fn verify_block_state(
+    pub fn verify_block_state_post_commit(
         &self,
         state: &BlockchainState,
         block: &Block,
@@ -136,6 +136,34 @@ impl Blockchain {
                     "Rejecting block"
                 );
                 return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
+            }
+        }
+
+        // Verify the initial punished set for the next batch.
+        // It should be equal to the current punished slots after the blockchain state has been updated.
+        if let Block::Macro(macro_block) = block {
+            // If we don't have the staking contract, there is nothing we can check.
+            if let Some(staking_contract) = self.get_staking_contract_if_complete(Some(txn)) {
+                let body = macro_block
+                    .body
+                    .as_ref()
+                    .expect("Block body must be present");
+
+                if body.next_batch_initial_punished_set
+                    != staking_contract
+                        .punished_slots
+                        .current_batch_punished_slots()
+                {
+                    warn!(
+                        %macro_block,
+                        given_punished_set = ?body.next_batch_initial_punished_set,
+                        expected_punished_set = ?staking_contract.punished_slots
+                        .current_batch_punished_slots(),
+                        reason = "Invalid next batch punished set",
+                        "Rejecting block"
+                    );
+                    return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+                }
             }
         }
 
@@ -172,7 +200,7 @@ impl Blockchain {
     /// Verifies a block against the blockchain state BEFORE changes to the accounts tree and thus to the staking contract.
     /// Some fields in the staking contract are cleared using the FinalizeBatch and FinalizeEpoch Inherents in preparation for the next batch.
     /// Thus, we need to compare the respective fields in the block before clearing the staking contract.
-    pub fn verify_macro_block_state(
+    pub fn verify_block_state_pre_commit(
         &self,
         state: &BlockchainState,
         block: &Block,
@@ -206,30 +234,6 @@ impl Blockchain {
                 given_validators = ?body.validators,
                 expected_validators = ?validators,
                 reason = "Invalid validators",
-                "Rejecting block"
-            );
-            return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
-        }
-
-        // Verify lost_rewards.
-        if body.lost_reward_set != staking_contract.current_batch_lost_rewards() {
-            warn!(
-                %macro_block,
-                given_lost_rewards = ?body.lost_reward_set,
-                expected_lost_rewards = ?staking_contract.current_batch_lost_rewards(),
-                reason = "Invalid lost rewards",
-                "Rejecting block"
-            );
-            return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
-        }
-
-        // Verify disabled_slots.
-        if body.disabled_set != staking_contract.current_epoch_disabled_slots() {
-            warn!(
-                %macro_block,
-                given_disabled_slots = ?body.disabled_set,
-                expected_disabled_slots = ?staking_contract.current_epoch_disabled_slots(),
-                reason = "Invalid disabled slots",
                 "Rejecting block"
             );
             return Err(PushError::InvalidBlock(BlockError::InvalidValidators));

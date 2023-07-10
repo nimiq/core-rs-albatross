@@ -429,7 +429,7 @@ where
             let mut txn = blockchain.write_transaction();
 
             // Verify macro block state before committing accounts.
-            if let Err(error) = blockchain.verify_macro_block_state(state, &block, &txn) {
+            if let Err(error) = blockchain.verify_block_state_pre_commit(state, &block, &txn) {
                 debug!(%error, %block, "Tendermint - await_proposal: Invalid macro block state");
                 return Err(ProposalError::InvalidProposal);
             }
@@ -450,7 +450,7 @@ where
             // Check the validity of the block against our state. If it is invalid, we return a proposal
             // timeout. This also returns the block body that matches the block header
             // (assuming that the block is valid).
-            if let Err(error) = blockchain.verify_block_state(state, &block, &txn) {
+            if let Err(error) = blockchain.verify_block_state_post_commit(state, &block, &txn) {
                 log::debug!(%error, %block, "Tendermint - await_proposal: Invalid block state");
                 return Err(ProposalError::InvalidProposal);
             }

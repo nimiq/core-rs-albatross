@@ -136,9 +136,7 @@ pub enum BlockAdditionalFields {
         #[serde(skip_serializing_if = "Option::is_none")]
         slots: Option<Vec<Slots>>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        lost_reward_set: Option<BitSet>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        disabled_set: Option<BitSet>,
+        next_batch_initial_punished_set: Option<BitSet>,
 
         #[serde(skip_serializing_if = "Option::is_none")]
         justification: Option<TendermintProof>,
@@ -168,9 +166,9 @@ impl Block {
 
         let slots = macro_block.get_validators().map(Slots::from_slots);
 
-        let (lost_reward_set, disabled_set) = match macro_block.body.clone() {
-            None => (None, None),
-            Some(body) => (Some(body.lost_reward_set), Some(body.disabled_set)),
+        let next_batch_initial_punished_set = match macro_block.body.clone() {
+            None => None,
+            Some(body) => Some(body.next_batch_initial_punished_set),
         };
 
         // Get the reward inherents and convert them to reward transactions.
@@ -207,8 +205,8 @@ impl Block {
                 parent_election_hash: macro_block.header.parent_election_hash,
                 interlink: macro_block.header.interlink,
                 slots,
-                lost_reward_set,
-                disabled_set,
+
+                next_batch_initial_punished_set,
                 justification: macro_block.justification.map(TendermintProof::from),
             },
         })
@@ -377,7 +375,6 @@ impl Slots {
 #[serde(rename_all = "camelCase")]
 pub struct PenalizedSlots {
     pub block_number: u32,
-    pub lost_rewards: BitSet,
     pub disabled: BitSet,
 }
 
@@ -562,13 +559,12 @@ impl Inherent {
                 event_block: slot.event_block,
             },
             BaseInherent::Slash {
-                slashed_validator,
-                new_epoch_slot_range
+                slashed_validator, ..
             } => Inherent::Slash {
                 block_number,
                 block_time,
-                validator_address: validator.validator_address,
-                event_block: validator.event_block,
+                validator_address: slashed_validator.validator_address,
+                event_block: slashed_validator.event_block,
             },
 
             BaseInherent::FinalizeBatch => Inherent::FinalizeBatch {
@@ -926,9 +922,7 @@ impl LogType {
             Log::SetInactiveStake { .. } => Self::SetInactiveStake,
             Log::PayoutReward { .. } => Self::PayoutReward,
             Log::Penalize { .. } => Self::Penalize,
-            Log::Slash {
-            ..,
-            } => Self::Slash,
+            Log::Slash { .. } => Self::Slash,
             Log::RevertContract { .. } => Self::RevertContract,
             Log::FailedTransaction { .. } => Self::FailedTransaction,
             Log::ValidatorFeeDeduction { .. } => Self::ValidatorFeeDeduction,

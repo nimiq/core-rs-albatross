@@ -71,7 +71,11 @@ impl Blockchain {
         //  An offline validator will thus continue to delay the chain as his slot(s) will still
         //  be selected until the end of the batch.
         let macro_block = self.get_block_at(Policy::macro_block_before(block_number), true, txn)?;
-        let disabled_slots = macro_block.unwrap_macro().body.unwrap().disabled_set;
+        let disabled_slots = macro_block
+            .unwrap_macro()
+            .body
+            .unwrap()
+            .next_batch_initial_punished_set;
 
         // Compute the slot number of the next proposer.
         let slot_number = Self::compute_slot_number(offset, vrf_entropy, disabled_slots);

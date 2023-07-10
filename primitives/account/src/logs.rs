@@ -150,8 +150,6 @@ pub enum Log {
         validator_address: Address,
         event_block: u32,
         slot: u16,
-        newly_punished_previous_batch: bool,
-        newly_punished_current_batch: bool,
         newly_deactivated: bool,
     },
 

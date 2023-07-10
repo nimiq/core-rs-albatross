@@ -1,3 +1,4 @@
+use nimiq_keys::Address;
 use nimiq_primitives::{
     account::{AccountError, AccountType},
     coin::Coin,
@@ -658,9 +659,12 @@ impl AccountInherentInteraction for StakingContract {
                 let newly_jailed = receipt.old_jail_release.is_none();
 
                 // Slash the validator
-                let (old_previous_batch_punished_slots, old_current_batch_punished_slots) = self
-                    .punished_slots
-                    .register_slash(slashed_validator, block_state.number, new_epoch_slot_range);
+                let (old_previous_batch_punished_slots, old_current_batch_punished_slots) =
+                    self.punished_slots.register_slash(
+                        slashed_validator,
+                        block_state.number,
+                        new_epoch_slot_range.clone(),
+                    );
 
                 inherent_logger.push_log(Log::Slash {
                     validator_address: slashed_validator.validator_address.clone(),
@@ -690,7 +694,7 @@ impl AccountInherentInteraction for StakingContract {
                     self.deactivate_validator(
                         &mut store,
                         &slot.validator_address,
-                        &slot.validator_address,
+                        &Address::from(&validator.signing_key),
                         block_state.number,
                         &mut tx_logger,
                     )?;
@@ -706,8 +710,6 @@ impl AccountInherentInteraction for StakingContract {
                     validator_address: slot.validator_address.clone(),
                     event_block: slot.event_block,
                     slot: slot.slot,
-                    newly_punished_previous_batch,
-                    newly_punished_current_batch,
                     newly_deactivated,
                 });
 
@@ -791,8 +793,6 @@ impl AccountInherentInteraction for StakingContract {
                     validator_address: slot.validator_address.clone(),
                     event_block: slot.event_block,
                     slot: slot.slot,
-                    newly_punished_previous_batch: receipt.newly_punished_previous_batch,
-                    newly_punished_current_batch: receipt.newly_punished_current_batch,
                     newly_deactivated: receipt.newly_deactivated,
                 });
 

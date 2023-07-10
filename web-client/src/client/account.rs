@@ -37,10 +37,8 @@ pub struct PlainHtlcContract {
 pub struct PlainStakingContract {
     balance: u64,
     active_validators: Vec<(String, u64)>,
-    current_batch_lost_rewards: String,
-    previous_lost_rewards: String,
     current_epoch_disabled_slots: Vec<(String, Vec<u16>)>,
-    previous_disabled_slots: Vec<(String, Vec<u16>)>,
+    previous_disabled_slots: Vec<u16>,
 }
 
 #[derive(serde::Serialize, Tsify)]
@@ -108,10 +106,9 @@ impl PlainAccount {
                         )
                     })
                     .collect(),
-                current_batch_lost_rewards: acc.current_batch_lost_rewards.to_string(),
-                previous_lost_rewards: acc.previous_batch_lost_rewards.to_string(),
                 current_epoch_disabled_slots: acc
-                    .current_epoch_disabled_slots
+                    .punished_slots
+                    .current_batch_punished_slots
                     .iter()
                     .map(|(address, slots)| {
                         (
@@ -121,14 +118,10 @@ impl PlainAccount {
                     })
                     .collect(),
                 previous_disabled_slots: acc
-                    .previous_epoch_disabled_slots
+                    .punished_slots
+                    .previous_batch_punished_slots
                     .iter()
-                    .map(|(address, slots)| {
-                        (
-                            address.to_user_friendly_address(),
-                            slots.iter().cloned().collect(),
-                        )
-                    })
+                    .map(|slot| slot as u16)
                     .collect(),
             }),
         }

@@ -241,13 +241,11 @@ pub struct MacroBody {
     /// public key, their reward address and their assigned validator slots.
     /// Is only Some when the macro block is an election block.
     pub validators: Option<Validators>,
-    /// A bitset representing which validator slots had their reward penalized at the time when this
-    /// block was produced. It is used later on for reward distribution.
-    pub lost_reward_set: BitSet,
-    /// A bitset representing which validator slots were prohibited from producing micro blocks or
-    /// proposing macro blocks at the time when this block was produced. It is used later on for
-    /// reward distribution.
-    pub disabled_set: BitSet,
+    /// A bitset representing which validator slots will be prohibited from producing micro blocks or
+    /// proposing macro blocks in the batch following this macro block.
+    /// This set is needed for nodes that do not have the state as it is normally computed
+    /// inside the staking contract.
+    pub next_batch_initial_punished_set: BitSet,
     /// The reward related transactions of this block.
     pub transactions: Vec<RewardTransaction>,
 }
@@ -271,8 +269,8 @@ impl SerializeContent for MacroBody {
         } else {
             0u8.serialize_to_writer(writer)?;
         }
-        self.lost_reward_set.serialize_to_writer(writer)?;
-        self.disabled_set.serialize_to_writer(writer)?;
+        self.next_batch_initial_punished_set
+            .serialize_to_writer(writer)?;
 
         let transactions_hash = self.transactions.serialize_to_vec().hash::<H>();
         transactions_hash.serialize_to_writer(writer)?;

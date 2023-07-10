@@ -10,6 +10,7 @@ use nimiq_transaction::{
     SignatureProof, Transaction,
 };
 
+mod punished_slots;
 mod staker;
 mod validator;
 

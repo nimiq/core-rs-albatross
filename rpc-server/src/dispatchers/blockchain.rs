@@ -342,29 +342,20 @@ impl BlockchainInterface for BlockchainDispatcher {
                 Error::InvalidArgument("Batch number out of bounds".to_string()),
             )?;
 
-            // Check the batch's macro block to see if the batch includes punishments.  PITODO
-            let macro_block = blockchain
-                .get_block_at(macro_block_number, true, None) // The lost_reward_set is in the MacroBody
-                .map_err(|_| Error::BlockNotFound(macro_block_number))?;
-
             let mut inherent_tx_vec = vec![];
 
-            let macro_body = macro_block.unwrap_macro().body.unwrap();
+            // Search all micro blocks of the batch to find the punishment inherents.
+            let first_micro_block = Policy::first_block_of_batch(batch_number).ok_or(
+                Error::InvalidArgument("Batch number out of bounds".to_string()),
+            )?;
+            let last_micro_block = macro_block_number - 1;
 
-            if !macro_body.lost_reward_set.is_empty() {
-                // Search all micro blocks of the batch to find the punishment inherents.
-                let first_micro_block = Policy::first_block_of_batch(batch_number).ok_or(
-                    Error::InvalidArgument("Batch number out of bounds".to_string()),
-                )?;
-                let last_micro_block = macro_block_number - 1;
+            for i in first_micro_block..=last_micro_block {
+                let micro_ext_tx_vec = blockchain.history_store.get_block_transactions(i, None);
 
-                for i in first_micro_block..=last_micro_block {
-                    let micro_ext_tx_vec = blockchain.history_store.get_block_transactions(i, None);
-
-                    for ext_tx in micro_ext_tx_vec {
-                        if ext_tx.is_inherent() {
-                            inherent_tx_vec.push(ext_tx);
-                        }
+                for ext_tx in micro_ext_tx_vec {
+                    if ext_tx.is_inherent() {
+                        inherent_tx_vec.push(ext_tx);
                     }
                 }
             }
@@ -553,8 +544,9 @@ impl BlockchainInterface for BlockchainDispatcher {
             Ok(RPCData::with_blockchain(
                 PenalizedSlots {
                     block_number,
-                    lost_rewards: staking_contract.current_batch_lost_rewards(),
-                    disabled: staking_contract.current_epoch_disabled_slots(),
+                    disabled: staking_contract
+                        .punished_slots
+                        .current_batch_punished_slots(),
                 },
                 &blockchain_proxy,
             ))
@@ -578,8 +570,9 @@ impl BlockchainInterface for BlockchainDispatcher {
             Ok(RPCData::with_blockchain(
                 PenalizedSlots {
                     block_number,
-                    lost_rewards: staking_contract.previous_batch_lost_rewards(),
-                    disabled: staking_contract.previous_epoch_disabled_slots(),
+                    disabled: staking_contract
+                        .punished_slots
+                        .current_batch_punished_slots(),
                 },
                 &blockchain_proxy,
             ))

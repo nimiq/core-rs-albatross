@@ -379,9 +379,11 @@ impl StakingContract {
             validator_address: validator_address.clone(),
             jail_release,
         });
-        tx_logger.push_log(Log::DeactivateValidator {
-            validator_address: validator_address.clone(),
-        });
+        if newly_deactivated {
+            tx_logger.push_log(Log::DeactivateValidator {
+                validator_address: validator_address.clone(),
+            });
+        }
 
         Ok(JailValidatorReceipt {
             newly_deactivated,

@@ -307,8 +307,15 @@ fn next_macro_block_proposal(
     // Get the staking contract PRIOR to any state changes.
     let staking_contract = blockchain.get_staking_contract();
 
-    let disabled_set = staking_contract.current_epoch_disabled_slots();
-    let lost_reward_set = staking_contract.current_batch_lost_rewards();
+    let active_validators = if Policy::is_election_block_at(header.block_number) {
+        Some(&staking_contract.active_validators)
+    } else {
+        None
+    };
+    let next_batch_initial_punished_set = staking_contract
+        .punished_slots
+        .next_batch_initial_punished_set(header.block_number, active_validators);
+
     let reward_transactions =
         blockchain.create_reward_transactions(state, &header, &staking_contract);
 
@@ -320,8 +327,7 @@ fn next_macro_block_proposal(
 
     let body = MacroBody {
         validators,
-        lost_reward_set,
-        disabled_set,
+        next_batch_initial_punished_set,
         transactions: reward_transactions,
     };
 

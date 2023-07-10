@@ -324,11 +324,15 @@ impl BlockProducer {
         // Get the staking contract PRIOR to any state changes.
         let staking_contract = blockchain.get_staking_contract();
 
-        // Calculate the disabled set for the current validator set.
-        let disabled_set = staking_contract.current_epoch_disabled_slots();
-
-        // Calculate the lost reward set for the current validator set.
-        let lost_reward_set = staking_contract.current_batch_lost_rewards();
+        // Calculate the punished set for the next batch.
+        let active_validators = if Policy::is_election_block_at(macro_header.block_number) {
+            Some(&staking_contract.active_validators)
+        } else {
+            None
+        };
+        let next_batch_initial_punished_set = staking_contract
+            .punished_slots
+            .next_batch_initial_punished_set(macro_header.block_number, active_validators);
 
         // Calculate the reward transactions.
         let reward_transactions = blockchain.create_reward_transactions(
@@ -346,8 +350,7 @@ impl BlockProducer {
         // Create the body for the macro block.
         MacroBody {
             validators,
-            lost_reward_set,
-            disabled_set,
+            next_batch_initial_punished_set,
             transactions: reward_transactions,
         }
     }

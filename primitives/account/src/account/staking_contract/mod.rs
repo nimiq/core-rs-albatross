@@ -23,7 +23,7 @@ use crate::{
     data_store_ops::{DataStoreIterOps, DataStoreReadOps},
 };
 
-mod punished_slots;
+pub mod punished_slots;
 mod receipts;
 mod staker;
 mod store;

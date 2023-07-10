@@ -7,7 +7,10 @@ use nimiq_database::{traits::WriteTransaction, volatile::VolatileDatabase};
 use nimiq_hash::{Blake2bHash, Blake2sHash};
 use nimiq_keys::Address;
 use nimiq_primitives::{
-    coin::Coin, networks::NetworkId, policy::Policy, slots_allocation::PenalizedSlot,
+    coin::Coin,
+    networks::NetworkId,
+    policy::Policy,
+    slots_allocation::{PenalizedSlot, SlashedValidator},
 };
 use nimiq_test_log::test;
 use nimiq_transaction::inherent::Inherent;
@@ -30,7 +33,7 @@ fn it_can_create_batch_finalization_inherents() {
 
     let macro_header = MacroHeader {
         version: 1,
-        block_number: 42,
+        block_number: Policy::macro_block_of(2).unwrap(),
         round: 0,
         timestamp: blockchain.state().election_head.header.timestamp + 1,
         parent_hash: Blake2bHash::default(),
@@ -51,8 +54,9 @@ fn it_can_create_batch_finalization_inherents() {
 
     let body = MacroBody {
         validators: None,
-        lost_reward_set: staking_contract.current_batch_lost_rewards(),
-        disabled_set: staking_contract.current_epoch_disabled_slots(),
+        next_batch_initial_punished_set: staking_contract
+            .punished_slots
+            .current_batch_punished_slots(),
         transactions: reward_transactions,
     };
 
@@ -84,13 +88,13 @@ fn it_can_create_batch_finalization_inherents() {
     }
     assert!(got_reward && got_finalize_batch);
 
-    // Penalize one slot. Expect 1x FinalizeBatch, 1x Reward to validator, 1x Reward burn
+    // Penalize one slot. Expect 1x FinalizeBatch, 1x Reward to validator, 1x Reward burn   PITODO
     let slot = PenalizedSlot {
         slot: 0,
         validator_address: validator_address.clone(),
-        event_block: 0,
+        event_block: 1,
     };
-    let slash_inherent = Inherent::Penalize { slot };
+    let penalize_inherent = Inherent::Penalize { slot };
 
     let mut txn = blockchain.write_transaction();
     // adds slot 0 to previous_lost_rewards -> slot won't get reward on next finalize_previous_batch
@@ -100,7 +104,7 @@ fn it_can_create_batch_finalization_inherents() {
         .commit(
             &mut (&mut txn).into(),
             &[],
-            &[slash_inherent],
+            &[penalize_inherent],
             &BlockState::new(Policy::blocks_per_batch() + 1, 1),
             &mut BlockLogger::empty()
         )
@@ -112,8 +116,9 @@ fn it_can_create_batch_finalization_inherents() {
         blockchain.create_reward_transactions(blockchain.state(), &macro_header, &staking_contract);
     let body = MacroBody {
         validators: None,
-        lost_reward_set: staking_contract.current_batch_lost_rewards(),
-        disabled_set: staking_contract.current_epoch_disabled_slots(),
+        next_batch_initial_punished_set: staking_contract
+            .punished_slots
+            .current_batch_punished_slots(),
         transactions: reward_transactions,
     };
     let macro_block = MacroBlock {
@@ -126,7 +131,7 @@ fn it_can_create_batch_finalization_inherents() {
     assert_eq!(inherents.len(), 3);
     let one_slot_reward = 875 / Policy::SLOTS as u64;
     let mut got_reward = false;
-    let mut got_slash = false;
+    let mut got_penalize = false;
     let mut got_finalize_batch = false;
 
     for inherent in &inherents {
@@ -134,7 +139,7 @@ fn it_can_create_batch_finalization_inherents() {
             Inherent::Reward { target, value } => {
                 if *target == Address::burn_address() {
                     assert_eq!(*value, Coin::from_u64_unchecked(one_slot_reward));
-                    got_slash = true;
+                    got_penalize = true;
                 } else {
                     assert_eq!(
                         *value,
@@ -149,7 +154,7 @@ fn it_can_create_batch_finalization_inherents() {
             _ => panic!(),
         }
     }
-    assert!(got_reward && got_slash && got_finalize_batch);
+    assert!(got_reward && got_penalize && got_finalize_batch);
 }
 
 #[test]
@@ -221,8 +226,9 @@ fn it_can_penalize_delayed_batch() {
 
     let body = MacroBody {
         validators: None,
-        lost_reward_set: staking_contract.current_batch_lost_rewards(),
-        disabled_set: staking_contract.current_epoch_disabled_slots(),
+        next_batch_initial_punished_set: staking_contract
+            .punished_slots
+            .current_batch_punished_slots(),
         transactions: reward_transactions,
     };
 

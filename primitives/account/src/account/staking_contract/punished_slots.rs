@@ -17,13 +17,23 @@ use nimiq_serde::{Deserialize, Serialize};
 pub struct PunishedSlots {
     // The validator slots that lost rewards (i.e. are not eligible to receive rewards) during
     // the current epoch.
-    current_batch_punished_slots: BTreeMap<Address, BTreeSet<u16>>,
+    pub current_batch_punished_slots: BTreeMap<Address, BTreeSet<u16>>,
     // The validator slots that lost rewards (i.e. are not eligible to receive rewards) during
     // the previous batch.
-    previous_batch_punished_slots: BitSet,
+    pub previous_batch_punished_slots: BitSet,
 }
 
 impl PunishedSlots {
+    pub fn new(
+        current_batch_punished_slots: BTreeMap<Address, BTreeSet<u16>>,
+        previous_batch_punished_slots: BitSet,
+    ) -> Self {
+        Self {
+            current_batch_punished_slots,
+            previous_batch_punished_slots,
+        }
+    }
+
     /// Registers a new slash for a given validator.
     /// The slash always affects the batch in which the event happened.
     /// If the event was only reported in the subsequent batch, it will affect both sets.
@@ -32,7 +42,7 @@ impl PunishedSlots {
         &mut self,
         slashed_validator: &SlashedValidator,
         reporting_block: u32,
-        new_epoch_slot_range: &Option<Range<u16>>,
+        mut new_epoch_slot_range: Option<Range<u16>>,
     ) -> (BitSet, Option<BTreeSet<u16>>) {
         let old_previous_batch_punished_slots = self.previous_batch_punished_slots.clone();
         let old_current_batch_punished_slots = self
@@ -58,15 +68,19 @@ impl PunishedSlots {
             }
 
             // If we are in the current epoch, the slot range will be the same as slot_range.
+            if Policy::epoch_at(slashed_validator.event_block) == Policy::epoch_at(reporting_block)
+            {
+                new_epoch_slot_range = Some(slashed_validator.slots.clone());
+            }
             // Otherwise, we must use the slots of the new epoch to slash.
             // If the validator is wasn't elected for the new epoch, then we don't slash.
-            if let Some(ref slots) = new_epoch_slot_range {
+            if let Some(slots) = new_epoch_slot_range {
                 let entry = self
                     .current_batch_punished_slots
                     .entry(slashed_validator.validator_address.clone())
                     .or_insert_with(BTreeSet::new);
 
-                for slot in slots.clone() {
+                for slot in slots {
                     entry.insert(slot);
                 }
             }
@@ -112,13 +126,14 @@ impl PunishedSlots {
         penalized_slot: &PenalizedSlot,
         reporting_block: u32,
     ) -> (bool, bool) {
-        let newly_punished_previous_batch = !self
-            .previous_batch_punished_slots
-            .contains(penalized_slot.slot as usize);
+        let mut newly_punished_previous_batch = false;
         let mut newly_punished_current_batch = false;
 
         // Reported during subsequent batch, so changes the previous set.
         if Policy::batch_at(penalized_slot.event_block) + 1 == Policy::batch_at(reporting_block) {
+            newly_punished_previous_batch = !self
+                .previous_batch_punished_slots
+                .contains(penalized_slot.slot as usize);
             self.previous_batch_punished_slots
                 .insert(penalized_slot.slot as usize);
         }
@@ -188,6 +203,30 @@ impl PunishedSlots {
         self.current_batch_punished_slots = Default::default();
     }
 
+    /// Returns the bitset representing which validator slots will be prohibited from producing micro blocks or
+    /// proposing macro blocks in the next batch.
+    /// It is exercising the `finalize_batch`/`finalize_epoch` transition.
+    /// This method should only be needed to populate the corresponding field in *macro blocks*.
+    pub fn next_batch_initial_punished_set(
+        &self,
+        block_number: u32,
+        current_active_validators: Option<&BTreeMap<Address, Coin>>,
+    ) -> BitSet {
+        assert!(Policy::is_macro_block_at(block_number));
+        assert_eq!(
+            Policy::is_election_block_at(block_number),
+            current_active_validators.is_none()
+        );
+
+        let mut punished_slots = self.clone();
+        if let Some(current_active_validators) = current_active_validators {
+            punished_slots.finalize_batch(current_active_validators);
+        } else {
+            punished_slots.finalize_epoch();
+        }
+        punished_slots.current_batch_punished_slots()
+    }
+
     /// Returns a BitSet of slots that were punished in the current epoch.
     pub fn current_batch_punished_slots(&self) -> BitSet {
         let mut bitset = BitSet::new();
@@ -197,6 +236,11 @@ impl PunishedSlots {
             }
         }
         bitset
+    }
+
+    /// Returns a BitSet of slots that were punished in the current epoch.
+    pub fn current_batch_punished_slots_map(&self) -> &BTreeMap<Address, BTreeSet<u16>> {
+        &self.current_batch_punished_slots
     }
 
     /// Returns a BitSet of slots that were punished in the previous epoch.

@@ -3,7 +3,7 @@ use std::{
     convert::TryInto,
 };
 
-use nimiq_account::*;
+use nimiq_account::{punished_slots::PunishedSlots, *};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_collections::BitSet;
 use nimiq_database::{
@@ -18,7 +18,7 @@ use nimiq_primitives::{
     coin::Coin,
     networks::NetworkId,
     policy::Policy,
-    slots_allocation::PenalizedSlot,
+    slots_allocation::{PenalizedSlot, SlashedValidator},
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
@@ -68,9 +68,6 @@ fn revert_penalize_inherent(
     validator_address: &Address,
     slot: u16,
 ) {
-    let newly_disabled = staking_contract
-        .current_epoch_disabled_slots
-        .contains_key(validator_address);
     let newly_deactivated = !staking_contract
         .active_validators
         .contains_key(validator_address);
@@ -94,37 +91,27 @@ fn revert_penalize_inherent(
     assert_eq!(
         logs,
         vec![
-            Log::DeactivateValidator {
-                validator_address: validator_address.clone(),
-            },
-            Log::JailValidator {
-                validator_address: validator_address.clone(),
-                jail_release: Policy::block_after_jail(block_state.number),
-            },
             Log::Penalize {
                 validator_address: validator_address.clone(),
                 event_block,
                 slot,
-                newly_disabled,
                 newly_deactivated,
+            },
+            Log::DeactivateValidator {
+                validator_address: validator_address.clone(),
             },
         ]
     );
 
-    assert!(!staking_contract
-        .current_batch_lost_rewards
-        .contains(slot as usize));
-    assert!(!staking_contract
-        .previous_batch_lost_rewards
-        .contains(slot as usize));
     assert!(staking_contract
-        .current_epoch_disabled_slots
+        .punished_slots
+        .current_batch_punished_slots_map()
         .get(validator_address)
         .is_none());
-    assert!(staking_contract
-        .previous_epoch_disabled_slots
-        .get(validator_address)
-        .is_none());
+    assert!(!staking_contract
+        .punished_slots
+        .previous_batch_punished_slots()
+        .contains(slot as usize));
 }
 
 struct JailedSetup {
@@ -213,37 +200,25 @@ fn generate_contract_2() {
         Coin::from_u64_unchecked(300_000_000),
     );
 
-    let mut current_batch_lost_rewards = BitSet::new();
-    current_batch_lost_rewards.insert(0);
-    current_batch_lost_rewards.insert(10);
+    let mut current_punished_slots = BTreeMap::new();
+    let mut set = BTreeSet::new();
+    set.insert(0);
+    set.insert(10);
 
-    let mut previous_batch_lost_rewards = BitSet::new();
-    previous_batch_lost_rewards.insert(100);
-    previous_batch_lost_rewards.insert(101);
-    previous_batch_lost_rewards.insert(102);
-    previous_batch_lost_rewards.insert(104);
+    current_punished_slots.insert(Address::from([1u8; 20]), set);
 
-    let mut b_set = BTreeSet::new();
-    b_set.insert(0);
-    b_set.insert(10);
-    let mut current_epoch_disabled_slots = BTreeMap::new();
-    current_epoch_disabled_slots.insert(Address::from([1u8; 20]), b_set);
+    let mut previous_punished_slots = BitSet::default();
+    previous_punished_slots.insert(100);
+    previous_punished_slots.insert(101);
+    previous_punished_slots.insert(102);
+    previous_punished_slots.insert(104);
 
-    let mut b_set = BTreeSet::new();
-    b_set.insert(100);
-    b_set.insert(101);
-    b_set.insert(102);
-    b_set.insert(104);
-    let mut previous_epoch_disabled_slots = BTreeMap::new();
-    previous_epoch_disabled_slots.insert(Address::from([2u8; 20]), b_set);
+    let punished_slots = PunishedSlots::new(current_punished_slots, previous_punished_slots);
 
     let contract = StakingContract {
         balance: Coin::from_u64_unchecked(300_000_000),
         active_validators,
-        current_batch_lost_rewards,
-        previous_batch_lost_rewards,
-        current_epoch_disabled_slots,
-        previous_epoch_disabled_slots,
+        punished_slots,
     };
 
     assert_eq!(&hex::encode(contract.serialize_to_vec()), "");
@@ -258,25 +233,29 @@ fn it_can_de_serialize_a_staking_contract() {
     assert_eq!(contract_1, contract_1a);
 
     let balance = Coin::from_u64_unchecked(300_000_000);
-    let mut current_batch_lost_rewards = BitSet::new();
-    current_batch_lost_rewards.insert(1);
-    current_batch_lost_rewards.insert(2);
+
     let mut active_validators: BTreeMap<Address, Coin> = BTreeMap::new();
     active_validators.insert(Address::START_ADDRESS, Coin::MAX);
-    let mut previous_batch_lost_rewards = current_batch_lost_rewards.clone();
-    previous_batch_lost_rewards.insert(3);
-    previous_batch_lost_rewards.insert(4);
-    let mut current_epoch_disabled_slots = BTreeMap::new();
-    current_epoch_disabled_slots.insert(Address::START_ADDRESS, BTreeSet::new());
-    let previous_epoch_disabled_slots = current_epoch_disabled_slots.clone();
+
+    let mut current_punished_slots = BTreeMap::new();
+    let mut set = BTreeSet::new();
+    set.insert(1);
+    set.insert(2);
+
+    current_punished_slots.insert(Address::START_ADDRESS, set);
+
+    let mut previous_punished_slots = BitSet::default();
+    previous_punished_slots.insert(1);
+    previous_punished_slots.insert(2);
+    previous_punished_slots.insert(3);
+    previous_punished_slots.insert(4);
+
+    let punished_slots = PunishedSlots::new(current_punished_slots, previous_punished_slots);
 
     let contract_2 = StakingContract {
         balance,
         active_validators,
-        current_batch_lost_rewards,
-        previous_batch_lost_rewards,
-        current_epoch_disabled_slots,
-        previous_epoch_disabled_slots,
+        punished_slots,
     };
     let contract_2a: StakingContract =
         Deserialize::deserialize_from_vec(&contract_2.serialize_to_vec()).unwrap();
@@ -809,7 +788,6 @@ fn reactivate_validator_works() {
 
     let expected_receipt = ReactivateValidatorReceipt {
         was_inactive_since: 2,
-        current_epoch_disabled_slots: None,
     };
 
     assert_eq!(receipt, Some(expected_receipt.into()));
@@ -849,7 +827,7 @@ fn reactivate_validator_works() {
         slot: PenalizedSlot {
             slot: 1,
             validator_address: validator_address.clone(),
-            event_block: Policy::blocks_per_epoch() - 1,
+            event_block: 1,
         },
     };
     let mut logs = vec![];
@@ -867,9 +845,8 @@ fn reactivate_validator_works() {
         Some(
             PenalizeReceipt {
                 newly_deactivated: true,
-                newly_disabled: true,
-                newly_lost_rewards: true,
-                old_jail_release: None,
+                newly_punished_previous_batch: false,
+                newly_punished_current_batch: true,
             }
             .into()
         )
@@ -877,20 +854,15 @@ fn reactivate_validator_works() {
     assert_eq!(
         logs,
         vec![
-            Log::Penalize {
-                validator_address: validator_address.clone(),
-                event_block: Policy::blocks_per_epoch() - 1,
-                slot: 1,
-                newly_disabled: true,
-                newly_deactivated: true
-            },
-            Log::JailValidator {
-                validator_address: validator_address.clone(),
-                jail_release: Policy::block_after_jail(block_state.number)
-            },
             Log::DeactivateValidator {
                 validator_address: validator_address.clone(),
-            }
+            },
+            Log::Penalize {
+                validator_address: validator_address.clone(),
+                event_block: 1,
+                slot: 1,
+                newly_deactivated: true
+            },
         ]
     );
 
@@ -913,7 +885,6 @@ fn reactivate_validator_works() {
     bitset.insert(1);
     let expected_receipt = ReactivateValidatorReceipt {
         was_inactive_since: 2,
-        current_epoch_disabled_slots: Some(bitset),
     };
 
     assert_eq!(receipt, Some(expected_receipt.into()));
@@ -1105,13 +1076,6 @@ fn retire_validator_works() {
 
     let expected_receipt = RetireValidatorReceipt { was_active: true };
     assert_eq!(receipt, Some(expected_receipt.into()));
-
-    assert!(!staking_contract
-        .current_epoch_disabled_slots
-        .contains_key(&validator_address));
-    assert!(!staking_contract
-        .previous_epoch_disabled_slots
-        .contains_key(&validator_address));
 
     // Try with an already retired validator.
     assert_eq!(
@@ -1439,7 +1403,7 @@ fn slash_inherents_work() {
     let slot = PenalizedSlot {
         slot: 0,
         validator_address: validator_address.clone(),
-        event_block: 2,
+        event_block: 1,
     };
 
     let inherent = Inherent::Penalize { slot: slot.clone() };
@@ -1458,47 +1422,36 @@ fn slash_inherents_work() {
 
     let expected_receipt = PenalizeReceipt {
         newly_deactivated: true,
-        newly_disabled: true,
-        newly_lost_rewards: true,
-        old_jail_release: None,
+        newly_punished_previous_batch: false,
+        newly_punished_current_batch: true,
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
     assert_eq!(
         logs,
         vec![
+            Log::DeactivateValidator {
+                validator_address: validator_address.clone(),
+            },
             Log::Penalize {
                 validator_address: slot.validator_address.clone(),
                 event_block: slot.event_block,
                 slot: slot.slot,
-                newly_disabled: true,
                 newly_deactivated: true,
             },
-            Log::JailValidator {
-                validator_address: validator_address.clone(),
-                jail_release: Policy::block_after_jail(block_state.number)
-            },
-            Log::DeactivateValidator {
-                validator_address: validator_address.clone(),
-            }
         ]
     );
 
     assert!(staking_contract
-        .current_batch_lost_rewards
-        .contains(slot.slot as usize));
-    assert!(!staking_contract
-        .previous_batch_lost_rewards
-        .contains(slot.slot as usize));
-    assert!(staking_contract
-        .current_epoch_disabled_slots
+        .punished_slots
+        .current_batch_punished_slots_map()
         .get(&validator_address)
         .unwrap()
         .contains(&slot.slot));
-    assert!(staking_contract
-        .previous_epoch_disabled_slots
-        .get(&validator_address)
-        .is_none());
+    assert!(!staking_contract
+        .punished_slots
+        .previous_batch_punished_slots()
+        .contains(slot.slot as usize));
 
     revert_penalize_inherent(
         &mut staking_contract,
@@ -1526,47 +1479,36 @@ fn slash_inherents_work() {
 
     let expected_receipt = PenalizeReceipt {
         newly_deactivated: true,
-        newly_disabled: true,
-        newly_lost_rewards: true,
-        old_jail_release: None,
+        newly_punished_previous_batch: true,
+        newly_punished_current_batch: true,
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
     assert_eq!(
         logs,
         vec![
-            Log::Penalize {
-                validator_address: slot.validator_address.clone(),
-                event_block: 2,
-                slot: slot.slot,
-                newly_disabled: true,
-                newly_deactivated: true,
-            },
-            Log::JailValidator {
-                validator_address: slot.validator_address.clone(),
-                jail_release: Policy::block_after_jail(block_state.number)
-            },
             Log::DeactivateValidator {
                 validator_address: slot.validator_address.clone(),
+            },
+            Log::Penalize {
+                validator_address: slot.validator_address.clone(),
+                event_block: 1,
+                slot: slot.slot,
+                newly_deactivated: true,
             },
         ]
     );
 
-    assert!(!staking_contract
-        .current_batch_lost_rewards
-        .contains(slot.slot as usize));
     assert!(staking_contract
-        .previous_batch_lost_rewards
-        .contains(slot.slot as usize));
-    assert!(staking_contract
-        .current_epoch_disabled_slots
+        .punished_slots
+        .current_batch_punished_slots_map()
         .get(&validator_address)
         .unwrap()
         .contains(&slot.slot));
     assert!(staking_contract
-        .previous_epoch_disabled_slots
-        .get(&validator_address)
-        .is_none());
+        .punished_slots
+        .previous_batch_punished_slots()
+        .contains(slot.slot as usize));
 
     revert_penalize_inherent(
         &mut staking_contract,
@@ -1580,6 +1522,13 @@ fn slash_inherents_work() {
 
     // Works in previous epoch, previous batch case.
     let block_state = BlockState::new(Policy::blocks_per_epoch() + 1, 1000);
+    let slot = PenalizedSlot {
+        slot: 0,
+        validator_address: validator_address.clone(),
+        event_block: Policy::blocks_per_epoch() - 1,
+    };
+
+    let inherent = Inherent::Penalize { slot: slot.clone() };
 
     let mut logs = vec![];
     let mut inherent_logger = InherentLogger::new(&mut logs);
@@ -1594,46 +1543,35 @@ fn slash_inherents_work() {
 
     let expected_receipt = PenalizeReceipt {
         newly_deactivated: true,
-        newly_disabled: false,
-        newly_lost_rewards: true,
-        old_jail_release: None,
+        newly_punished_previous_batch: true,
+        newly_punished_current_batch: false,
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
     assert_eq!(
         logs,
         vec![
-            Log::Penalize {
+            Log::DeactivateValidator {
                 validator_address: slot.validator_address.clone(),
+            },
+            Log::Penalize {
+                validator_address: slot.validator_address,
                 event_block: slot.event_block,
                 slot: slot.slot,
-                newly_disabled: false,
                 newly_deactivated: true
-            },
-            Log::JailValidator {
-                validator_address: slot.validator_address.clone(),
-                jail_release: Policy::block_after_jail(block_state.number)
-            },
-            Log::DeactivateValidator {
-                validator_address: slot.validator_address,
             },
         ]
     );
 
-    assert!(!staking_contract
-        .current_batch_lost_rewards
-        .contains(slot.slot as usize));
     assert!(staking_contract
-        .previous_batch_lost_rewards
-        .contains(slot.slot as usize));
-    assert!(staking_contract
-        .current_epoch_disabled_slots
+        .punished_slots
+        .current_batch_punished_slots_map()
         .get(&validator_address)
         .is_none());
     assert!(staking_contract
-        .previous_epoch_disabled_slots
-        .get(&validator_address)
-        .is_none());
+        .punished_slots
+        .previous_batch_punished_slots()
+        .contains(slot.slot as usize));
 
     revert_penalize_inherent(
         &mut staking_contract,
@@ -1658,8 +1596,17 @@ fn finalize_batch_inherents_works() {
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
     // Prepare the staking contract.
-    staking_contract.current_batch_lost_rewards.insert(0);
-    staking_contract.previous_batch_lost_rewards.insert(1);
+    let mut set = BTreeSet::default();
+    set.insert(0);
+
+    staking_contract
+        .punished_slots
+        .current_batch_punished_slots
+        .insert(validator_address(), set);
+    staking_contract
+        .punished_slots
+        .previous_batch_punished_slots
+        .insert(1);
 
     // Works in the valid case.
     let inherent = Inherent::FinalizeBatch;
@@ -1678,10 +1625,14 @@ fn finalize_batch_inherents_works() {
     assert_eq!(receipt, None);
     assert!(logs.is_empty());
 
-    assert!(staking_contract.current_batch_lost_rewards.is_empty());
-    assert!(staking_contract.previous_batch_lost_rewards.contains(0));
-    assert!(staking_contract.current_epoch_disabled_slots.is_empty());
-    assert!(staking_contract.previous_epoch_disabled_slots.is_empty());
+    assert!(staking_contract
+        .punished_slots
+        .current_batch_punished_slots
+        .is_empty());
+    assert!(staking_contract
+        .punished_slots
+        .previous_batch_punished_slots
+        .contains(0));
 
     // Cannot revert the inherent.
     assert_eq!(
@@ -1709,11 +1660,15 @@ fn finalize_epoch_inherents_works() {
 
     let validator_address = validator_address();
 
-    // Pre polutate the previous epoch and batch related sets.
+    // Pre populate the previous epoch and batch related sets.
     // To test proper behaviour upon epoch finalization.
-    staking_contract.previous_batch_lost_rewards.insert(10);
     staking_contract
-        .previous_epoch_disabled_slots
+        .punished_slots
+        .previous_batch_punished_slots
+        .insert(10);
+    staking_contract
+        .punished_slots
+        .current_batch_punished_slots
         .insert(Address::END_ADDRESS, BTreeSet::new());
 
     // Penalize the validator slot
@@ -1739,9 +1694,8 @@ fn finalize_epoch_inherents_works() {
         Some(
             PenalizeReceipt {
                 newly_deactivated: true,
-                newly_disabled: true,
-                newly_lost_rewards: true,
-                old_jail_release: None,
+                newly_punished_previous_batch: false,
+                newly_punished_current_batch: true,
             }
             .into()
         )
@@ -1749,20 +1703,15 @@ fn finalize_epoch_inherents_works() {
     assert_eq!(
         logs,
         vec![
+            Log::DeactivateValidator {
+                validator_address: validator_address.clone(),
+            },
             Log::Penalize {
                 validator_address: validator_address.clone(),
                 event_block: Policy::blocks_per_epoch() - 1,
                 slot: 1,
-                newly_disabled: true,
                 newly_deactivated: true
             },
-            Log::JailValidator {
-                validator_address: validator_address.clone(),
-                jail_release: Policy::block_after_jail(block_state.number)
-            },
-            Log::DeactivateValidator {
-                validator_address: validator_address.clone(),
-            }
         ]
     );
 
@@ -1787,19 +1736,25 @@ fn finalize_epoch_inherents_works() {
     assert_eq!(receipt, None);
     assert_eq!(logs, vec![]);
 
-    assert!(staking_contract.current_batch_lost_rewards.is_empty());
-    assert!(staking_contract.current_epoch_disabled_slots.is_empty());
+    assert!(staking_contract
+        .punished_slots
+        .current_batch_punished_slots()
+        .is_empty());
 
     let mut bitset = BitSet::new();
     bitset.insert(1);
-    assert_eq!(staking_contract.previous_batch_lost_rewards, bitset);
-    let mut set_c = BTreeSet::new();
+    assert_eq!(
+        staking_contract
+            .punished_slots
+            .previous_batch_punished_slots(),
+        &bitset
+    );
+    let mut set_c = BitSet::new();
     set_c.insert(1);
     assert_eq!(
         staking_contract
-            .previous_epoch_disabled_slots
-            .get(&validator_address)
-            .unwrap(),
+            .punished_slots
+            .previous_batch_punished_slots(),
         &set_c
     );
 
@@ -1916,13 +1871,118 @@ fn deactivate_jail_interaction() {
     assert_eq!(result, Err(AccountError::InvalidForRecipient));
 }
 
+// Jailing an active validator and reverting it
+#[test]
+fn jail_and_revert() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let block_number: u32 = 2;
+    let block_state = BlockState::new(block_number, 1000);
+
+    // 1. Create staking contract with validator
+    let env = VolatileDatabase::new(10).unwrap();
+    let accounts = Accounts::new(env.clone());
+    let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = env.write_transaction();
+
+    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
+
+    let validator_address = validator_address();
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Prepare slash.
+    let inherent = Inherent::Slash {
+        slashed_validator: SlashedValidator {
+            slots: 1..2,
+            validator_address: validator_address.clone(),
+            event_block: 1,
+        },
+        new_epoch_slot_range: None,
+    };
+    let mut logs = vec![];
+    let mut inherent_logger = InherentLogger::new(&mut logs);
+
+    // Slash and thus jail validator.
+    let receipt = staking_contract
+        .commit_inherent(
+            &inherent,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut inherent_logger,
+        )
+        .expect("Failed to commit inherent");
+    let old_previous_batch_punished_slots = BitSet::default();
+    let old_current_batch_punished_slots = None;
+    let old_jail_release = None;
+    assert_eq!(
+        receipt,
+        Some(
+            SlashReceipt {
+                newly_deactivated: true,
+                old_previous_batch_punished_slots,
+                old_current_batch_punished_slots,
+                old_jail_release
+            }
+            .into()
+        )
+    );
+    assert_eq!(
+        logs,
+        vec![
+            Log::JailValidator {
+                validator_address: validator_address.clone(),
+                jail_release: Policy::block_after_jail(block_state.number)
+            },
+            Log::DeactivateValidator {
+                validator_address: validator_address.clone(),
+            },
+            Log::Slash {
+                validator_address: validator_address.clone(),
+                event_block: 1,
+                newly_jailed: true
+            },
+        ]
+    );
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .unwrap();
+    assert!(validator.jail_release.is_some());
+
+    assert!(!staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+
+    // Revert slash and thus jail validator should be reverted.
+    staking_contract
+        .revert_inherent(
+            &inherent,
+            &block_state,
+            receipt,
+            data_store.write(&mut db_txn),
+            &mut InherentLogger::empty(),
+        )
+        .expect("Failed to revert inherent");
+
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .unwrap();
+    assert!(validator.jail_release.is_none());
+
+    assert!(staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+}
+
 // Jailing an inactive validator and reverting it (to check that it’s still inactive)
 #[test]
 fn jail_inactive_and_revert() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let block_number: u32 = 1;
+    let block_number: u32 = 2;
     let block_state = BlockState::new(block_number, 1000);
 
     // 1. Create staking contract with validator
@@ -1954,18 +2014,19 @@ fn jail_inactive_and_revert() {
     // -----------------------------------
     // Test execution:
     // -----------------------------------
-    // Prepare penalize.
-    let inherent = Inherent::Penalize {
-        slot: PenalizedSlot {
-            slot: 1,
+    // Prepare slash.
+    let inherent = Inherent::Slash {
+        slashed_validator: SlashedValidator {
+            slots: 1..2,
             validator_address: validator_address.clone(),
-            event_block: Policy::blocks_per_epoch() - 1,
+            event_block: 1,
         },
+        new_epoch_slot_range: None,
     };
     let mut logs = vec![];
     let mut inherent_logger = InherentLogger::new(&mut logs);
 
-    // Penalize and thus jail validator.
+    // Slash and thus jail validator.
     let receipt = staking_contract
         .commit_inherent(
             &inherent,
@@ -1974,14 +2035,17 @@ fn jail_inactive_and_revert() {
             &mut inherent_logger,
         )
         .expect("Failed to commit inherent");
+    let old_previous_batch_punished_slots = BitSet::default();
+    let old_current_batch_punished_slots = None;
+    let old_jail_release = None;
     assert_eq!(
         receipt,
         Some(
-            PenalizeReceipt {
+            SlashReceipt {
                 newly_deactivated: false,
-                newly_disabled: true,
-                newly_lost_rewards: true,
-                old_jail_release: None,
+                old_previous_batch_punished_slots,
+                old_current_batch_punished_slots,
+                old_jail_release
             }
             .into()
         )
@@ -1989,20 +2053,15 @@ fn jail_inactive_and_revert() {
     assert_eq!(
         logs,
         vec![
-            Log::Penalize {
-                validator_address: validator_address.clone(),
-                event_block: Policy::blocks_per_epoch() - 1,
-                slot: 1,
-                newly_disabled: true,
-                newly_deactivated: false
-            },
             Log::JailValidator {
                 validator_address: validator_address.clone(),
                 jail_release: Policy::block_after_jail(block_state.number)
             },
-            Log::DeactivateValidator {
+            Log::Slash {
                 validator_address: validator_address.clone(),
-            }
+                event_block: 1,
+                newly_jailed: true
+            },
         ]
     );
     let validator = staking_contract
@@ -2014,7 +2073,7 @@ fn jail_inactive_and_revert() {
         .active_validators
         .contains_key(&validator_address));
 
-    // Revert penalize and thus jail validator should be reverted.
+    // Revert slash and thus jail validator should be reverted.
     // The deactivate state should remain.
     staking_contract
         .revert_inherent(
@@ -2049,14 +2108,15 @@ fn can_jail_twice() {
     let mut db_txn = jailed_setup.env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    // Prepare penalize.
-    let second_penalize_block_state = BlockState::new(2, 200);
-    let inherent = Inherent::Penalize {
-        slot: PenalizedSlot {
-            slot: 1,
+    // Prepare slash.
+    let second_slash_block_state = BlockState::new(2, 200);
+    let inherent = Inherent::Slash {
+        slashed_validator: SlashedValidator {
             validator_address: jailed_setup.validator_address.clone(),
-            event_block: second_penalize_block_state.number,
+            event_block: second_slash_block_state.number,
+            slots: 0..5,
         },
+        new_epoch_slot_range: None,
     };
 
     // -----------------------------------
@@ -2065,24 +2125,27 @@ fn can_jail_twice() {
     let mut logs = vec![];
     let mut inherent_logger = InherentLogger::new(&mut logs);
 
-    // Penalize and thus jail validator.
+    // Slash and thus jail validator.
     let receipt = jailed_setup
         .staking_contract
         .commit_inherent(
             &inherent,
-            &second_penalize_block_state,
+            &second_slash_block_state,
             data_store.write(&mut db_txn),
             &mut inherent_logger,
         )
         .expect("Failed to commit inherent");
+    let old_previous_batch_punished_slots = BitSet::default();
+    let old_current_batch_punished_slots = None;
+    let old_jail_release = Some(jailed_setup.jail_release_block_state.number);
     assert_eq!(
         receipt,
         Some(
-            PenalizeReceipt {
+            SlashReceipt {
                 newly_deactivated: false,
-                newly_disabled: true,
-                newly_lost_rewards: true,
-                old_jail_release: Some(jailed_setup.jail_release_block_state.number),
+                old_previous_batch_punished_slots,
+                old_current_batch_punished_slots,
+                old_jail_release,
             }
             .into()
         )
@@ -2090,20 +2153,15 @@ fn can_jail_twice() {
     assert_eq!(
         logs,
         vec![
-            Log::Penalize {
-                validator_address: jailed_setup.validator_address.clone(),
-                event_block: second_penalize_block_state.number,
-                slot: 1,
-                newly_disabled: true,
-                newly_deactivated: false
-            },
             Log::JailValidator {
                 validator_address: jailed_setup.validator_address.clone(),
-                jail_release: Policy::block_after_jail(second_penalize_block_state.number),
+                jail_release: Policy::block_after_jail(second_slash_block_state.number),
             },
-            Log::DeactivateValidator {
+            Log::Slash {
                 validator_address: jailed_setup.validator_address.clone(),
-            }
+                event_block: second_slash_block_state.number,
+                newly_jailed: false
+            },
         ]
     );
 
@@ -2114,7 +2172,7 @@ fn can_jail_twice() {
         .unwrap();
     assert_eq!(
         validator.jail_release,
-        Some(Policy::block_after_jail(second_penalize_block_state.number))
+        Some(Policy::block_after_jail(second_slash_block_state.number))
     );
 
     // Make sure that the validator is still deactivated.
@@ -2123,12 +2181,12 @@ fn can_jail_twice() {
         .active_validators
         .contains_key(&jailed_setup.validator_address));
 
-    // Revert the second penalize.
+    // Revert the second slash.
     jailed_setup
         .staking_contract
         .revert_inherent(
             &inherent,
-            &second_penalize_block_state,
+            &second_slash_block_state,
             receipt,
             data_store.write(&mut db_txn),
             &mut InherentLogger::empty(),
@@ -2218,6 +2276,568 @@ fn can_retire_jailed_validator() {
         validator.jail_release,
         Some(jailed_setup.jail_release_block_state.number)
     );
+    assert!(!jailed_setup
+        .staking_contract
+        .active_validators
+        .contains_key(&jailed_setup.validator_address));
+}
+
+// Penalizing an active validator and reverting it
+#[test]
+fn penalize_and_revert_twice() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let block_number: u32 = 5;
+    let block_state = BlockState::new(block_number, 1000);
+
+    // 1. Create staking contract with validator
+    let env = VolatileDatabase::new(10).unwrap();
+    let accounts = Accounts::new(env.clone());
+    let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = env.write_transaction();
+
+    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
+
+    let validator_address = validator_address();
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Prepare penalty.
+    let inherent = Inherent::Penalize {
+        slot: PenalizedSlot {
+            slot: 1,
+            validator_address: validator_address.clone(),
+            event_block: 1,
+        },
+    };
+
+    let inherent2 = Inherent::Penalize {
+        slot: PenalizedSlot {
+            slot: 1,
+            validator_address: validator_address.clone(),
+            event_block: 2,
+        },
+    };
+
+    let mut logs = vec![];
+    let mut inherent_logger = InherentLogger::new(&mut logs);
+
+    // First penalty.
+    let receipt = staking_contract
+        .commit_inherent(
+            &inherent,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut inherent_logger,
+        )
+        .expect("Failed to commit inherent");
+    assert_eq!(
+        receipt,
+        Some(
+            PenalizeReceipt {
+                newly_deactivated: true,
+                newly_punished_previous_batch: false,
+                newly_punished_current_batch: true,
+            }
+            .into()
+        )
+    );
+    assert_eq!(
+        logs,
+        vec![
+            Log::DeactivateValidator {
+                validator_address: validator_address.clone(),
+            },
+            Log::Penalize {
+                validator_address: validator_address.clone(),
+                event_block: 1,
+                slot: 1,
+                newly_deactivated: true
+            },
+        ]
+    );
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .unwrap();
+    assert!(validator.jail_release.is_none());
+
+    assert!(!staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+
+    // Second penalty.
+    let mut logs = vec![];
+    let mut inherent_logger = InherentLogger::new(&mut logs);
+
+    let receipt2 = staking_contract
+        .commit_inherent(
+            &inherent2,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut inherent_logger,
+        )
+        .expect("Failed to commit inherent");
+    assert_eq!(
+        receipt2,
+        Some(
+            PenalizeReceipt {
+                newly_deactivated: false,
+                newly_punished_previous_batch: false,
+                newly_punished_current_batch: false,
+            }
+            .into()
+        )
+    );
+    assert_eq!(
+        logs,
+        vec![Log::Penalize {
+            validator_address: validator_address.clone(),
+            event_block: 2,
+            slot: 1,
+            newly_deactivated: false
+        },]
+    );
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .unwrap();
+    assert!(validator.jail_release.is_none());
+
+    assert!(!staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+
+    // Revert second penalize.
+    // The deactivate state should remain.
+    staking_contract
+        .revert_inherent(
+            &inherent2,
+            &block_state,
+            receipt2,
+            data_store.write(&mut db_txn),
+            &mut InherentLogger::empty(),
+        )
+        .expect("Failed to revert inherent");
+
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .unwrap();
+    assert!(validator.jail_release.is_none());
+
+    assert!(!staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+
+    // Revert first penalize.
+    staking_contract
+        .revert_inherent(
+            &inherent,
+            &block_state,
+            receipt,
+            data_store.write(&mut db_txn),
+            &mut InherentLogger::empty(),
+        )
+        .expect("Failed to revert inherent");
+
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .unwrap();
+    assert!(validator.jail_release.is_none());
+
+    assert!(staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+}
+
+// Penalizing an inactive validator and reverting it (to check that it’s still inactive)
+#[test]
+fn penalize_inactive_and_revert() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let block_number: u32 = 2;
+    let block_state = BlockState::new(block_number, 1000);
+
+    // 1. Create staking contract with validator
+    let env = VolatileDatabase::new(10).unwrap();
+    let accounts = Accounts::new(env.clone());
+    let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = env.write_transaction();
+
+    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
+
+    let validator_address = validator_address();
+
+    // 2. Deactivate validator
+    let mut data_store_write = data_store.write(&mut db_txn);
+    let mut staking_contract_store = StakingContractStoreWrite::new(&mut data_store_write);
+    let result = staking_contract.deactivate_validator(
+        &mut staking_contract_store,
+        &validator_address,
+        &Address::from(&ed25519_public_key(VALIDATOR_SIGNING_KEY)),
+        block_number,
+        &mut TransactionLog::empty(),
+    );
+    assert!(result.is_ok());
+    assert!(!staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Prepare penalty.
+    let inherent = Inherent::Penalize {
+        slot: PenalizedSlot {
+            slot: 1,
+            validator_address: validator_address.clone(),
+            event_block: 1,
+        },
+    };
+    let mut logs = vec![];
+    let mut inherent_logger = InherentLogger::new(&mut logs);
+
+    // Penalize.
+    let receipt = staking_contract
+        .commit_inherent(
+            &inherent,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut inherent_logger,
+        )
+        .expect("Failed to commit inherent");
+    assert_eq!(
+        receipt,
+        Some(
+            PenalizeReceipt {
+                newly_deactivated: false,
+                newly_punished_previous_batch: false,
+                newly_punished_current_batch: true
+            }
+            .into()
+        )
+    );
+    assert_eq!(
+        logs,
+        vec![Log::Penalize {
+            validator_address: validator_address.clone(),
+            event_block: 1,
+            slot: 1,
+            newly_deactivated: false
+        }]
+    );
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .unwrap();
+    assert!(validator.jail_release.is_none());
+
+    assert!(!staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+
+    // Revert penalize.
+    // The deactivate state should remain.
+    staking_contract
+        .revert_inherent(
+            &inherent,
+            &block_state,
+            receipt,
+            data_store.write(&mut db_txn),
+            &mut InherentLogger::empty(),
+        )
+        .expect("Failed to revert inherent");
+
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .unwrap();
+    assert!(validator.jail_release.is_none());
+
+    assert!(!staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+}
+
+// Slashing a penalized validator and reverting it
+#[test]
+fn penalize_and_slash_and_revert_twice() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let block_number: u32 = 5;
+    let block_state = BlockState::new(block_number, 1000);
+
+    // 1. Create staking contract with validator
+    let env = VolatileDatabase::new(10).unwrap();
+    let accounts = Accounts::new(env.clone());
+    let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = env.write_transaction();
+
+    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
+
+    let validator_address = validator_address();
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Prepare penalty.
+    let inherent = Inherent::Penalize {
+        slot: PenalizedSlot {
+            slot: 1,
+            validator_address: validator_address.clone(),
+            event_block: 1,
+        },
+    };
+
+    let inherent2 = Inherent::Slash {
+        slashed_validator: SlashedValidator {
+            slots: 1..3,
+            validator_address: validator_address.clone(),
+            event_block: 2,
+        },
+        new_epoch_slot_range: None,
+    };
+
+    let mut logs = vec![];
+    let mut inherent_logger = InherentLogger::new(&mut logs);
+
+    // First: penalty.
+    let receipt = staking_contract
+        .commit_inherent(
+            &inherent,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut inherent_logger,
+        )
+        .expect("Failed to commit inherent");
+    assert_eq!(
+        receipt,
+        Some(
+            PenalizeReceipt {
+                newly_deactivated: true,
+                newly_punished_previous_batch: false,
+                newly_punished_current_batch: true,
+            }
+            .into()
+        )
+    );
+    assert_eq!(
+        logs,
+        vec![
+            Log::DeactivateValidator {
+                validator_address: validator_address.clone(),
+            },
+            Log::Penalize {
+                validator_address: validator_address.clone(),
+                event_block: 1,
+                slot: 1,
+                newly_deactivated: true
+            },
+        ]
+    );
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .unwrap();
+    assert!(validator.jail_release.is_none());
+
+    assert!(!staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+
+    // Second: slash.
+    let mut logs = vec![];
+    let mut inherent_logger = InherentLogger::new(&mut logs);
+
+    let receipt2 = staking_contract
+        .commit_inherent(
+            &inherent2,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut inherent_logger,
+        )
+        .expect("Failed to commit inherent");
+    let old_previous_batch_punished_slots = BitSet::default();
+    let mut old_current_batch_punished_slots = BTreeSet::new();
+    old_current_batch_punished_slots.insert(1);
+    let old_current_batch_punished_slots = Some(old_current_batch_punished_slots);
+    let old_jail_release = None;
+    assert_eq!(
+        receipt2,
+        Some(
+            SlashReceipt {
+                newly_deactivated: false,
+                old_previous_batch_punished_slots,
+                old_current_batch_punished_slots,
+                old_jail_release,
+            }
+            .into()
+        )
+    );
+    assert_eq!(
+        logs,
+        vec![
+            Log::JailValidator {
+                validator_address: validator_address.clone(),
+                jail_release: Policy::block_after_jail(block_state.number),
+            },
+            Log::Slash {
+                validator_address: validator_address.clone(),
+                event_block: 2,
+                newly_jailed: true
+            },
+        ]
+    );
+
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .unwrap();
+    assert_eq!(
+        validator.jail_release,
+        Some(Policy::block_after_jail(block_state.number))
+    );
+
+    assert!(!staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+
+    // Revert slash.
+    // The deactivate state should remain.
+    staking_contract
+        .revert_inherent(
+            &inherent2,
+            &block_state,
+            receipt2,
+            data_store.write(&mut db_txn),
+            &mut InherentLogger::empty(),
+        )
+        .expect("Failed to revert inherent");
+
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .unwrap();
+    assert!(validator.jail_release.is_none());
+
+    assert!(!staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+
+    // Revert first penalize.
+    staking_contract
+        .revert_inherent(
+            &inherent,
+            &block_state,
+            receipt,
+            data_store.write(&mut db_txn),
+            &mut InherentLogger::empty(),
+        )
+        .expect("Failed to revert inherent");
+
+    let validator = staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .unwrap();
+    assert!(validator.jail_release.is_none());
+
+    assert!(staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+}
+
+// Penalizing a jailed validator
+#[test]
+fn jail_and_penalize_and_revert_twice() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let mut jailed_setup = setup_jailed_validator();
+    let data_store = jailed_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = jailed_setup.env.write_transaction();
+
+    // Prepare slash.
+    let penalty_block_state = BlockState::new(2, 200);
+    let inherent = Inherent::Penalize {
+        slot: PenalizedSlot {
+            slot: 1,
+            validator_address: jailed_setup.validator_address.clone(),
+            event_block: penalty_block_state.number,
+        },
+    };
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    let mut logs = vec![];
+    let mut inherent_logger = InherentLogger::new(&mut logs);
+
+    // Penalize slot.
+    let receipt = jailed_setup
+        .staking_contract
+        .commit_inherent(
+            &inherent,
+            &penalty_block_state,
+            data_store.write(&mut db_txn),
+            &mut inherent_logger,
+        )
+        .expect("Failed to commit inherent");
+    assert_eq!(
+        receipt,
+        Some(
+            PenalizeReceipt {
+                newly_deactivated: false,
+                newly_punished_previous_batch: false,
+                newly_punished_current_batch: true,
+            }
+            .into()
+        )
+    );
+    assert_eq!(
+        logs,
+        vec![Log::Penalize {
+            validator_address: jailed_setup.validator_address.clone(),
+            event_block: penalty_block_state.number,
+            slot: 1,
+            newly_deactivated: false
+        }]
+    );
+
+    // Make sure that the jail release is not changed by the penalty.
+    let validator = jailed_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &jailed_setup.validator_address)
+        .unwrap();
+    assert_eq!(
+        validator.jail_release,
+        Some(jailed_setup.jail_release_block_state.number)
+    );
+
+    // Make sure that the validator is still deactivated.
+    assert!(!jailed_setup
+        .staking_contract
+        .active_validators
+        .contains_key(&jailed_setup.validator_address));
+
+    // Revert the penalty.
+    jailed_setup
+        .staking_contract
+        .revert_inherent(
+            &inherent,
+            &penalty_block_state,
+            receipt,
+            data_store.write(&mut db_txn),
+            &mut InherentLogger::empty(),
+        )
+        .expect("Failed to revert inherent");
+
+    let validator = jailed_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &jailed_setup.validator_address)
+        .unwrap();
+    assert_eq!(
+        validator.jail_release,
+        Some(jailed_setup.jail_release_block_state.number)
+    );
+
     assert!(!jailed_setup
         .staking_contract
         .active_validators
