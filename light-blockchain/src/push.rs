@@ -26,7 +26,7 @@ impl LightBlockchain {
         if block.block_number() <= last_macro_block {
             log::debug!(
                 block_no = block.block_number(),
-                reason = "we have already finalized an earlier macro block",
+                reason = "we have already finalized a later macro block",
                 last_macro_block_no = last_macro_block,
                 "Ignoring block",
             );
