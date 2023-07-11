@@ -23,7 +23,7 @@ use nimiq_primitives::{
     account::AccountError, coin::Coin, key_nibbles::KeyNibbles, policy::Policy, trie::TrieItem,
     TreeProof,
 };
-use nimiq_serde::{DeserializeError, Serialize};
+use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_trie::WriteTransactionProxy;
 use nimiq_vrf::VrfSeed;
 use thiserror::Error;
@@ -305,12 +305,12 @@ impl GenesisBuilder {
             .vrf_seed
             .clone()
             .ok_or(GenesisBuilderError::NoVrfSeed)?;
-        debug!("Genesis seed: {}", seed);
+        debug!(%seed);
 
         // Generate slot allocation from staking contract.
         let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
         let slots = staking_contract.select_validators(&data_store.read(&txn), &seed);
-        debug!("Slots: {:#?}", slots);
+        debug!(?slots);
 
         // Body
         let body = MacroBody {
@@ -319,21 +319,21 @@ impl GenesisBuilder {
         };
 
         let body_root = body.hash::<Blake2sHash>();
-        debug!("Body root: {}", &body_root);
+        debug!(%body_root);
 
         // State root
         let state_root = accounts.get_root_hash_assert(Some(&txn));
-        debug!("State root: {}", &state_root);
+        debug!(state_root = %state_root);
 
         // Supply
         let supply = accounts
-            .tree
-            .iter_nodes::<Account>(
-                &txn,
-                &KeyNibbles::from(&Address::START_ADDRESS),
-                &KeyNibbles::from(&Address::END_ADDRESS),
-            )
+            .get_chunk(KeyNibbles::default(), usize::MAX - 1, Some(&txn))
+            .items
+            .into_iter()
+            .filter(|trie| trie.key.to_address().is_some())
+            .map(|trie| Account::deserialize_from_vec(&trie.value).unwrap())
             .fold(Coin::ZERO, |sum, account| sum + account.balance());
+        debug!(initial_supply = %supply);
 
         raw_txn.abort();
 
@@ -428,13 +428,13 @@ impl GenesisBuilder {
             accounts,
         } = self.generate(env)?;
 
-        debug!("Genesis block: {}", &hash);
-        debug!("{:#?}", &block);
+        debug!(%hash, "Genesis block");
+        debug!(?block);
         debug!("Accounts:");
-        debug!("{:#?}", &accounts);
+        debug!(?accounts);
 
         let block_path = directory.as_ref().join("block.dat");
-        info!("Writing block to {}", block_path.display());
+        info!(path = %block_path.display(), "Writing block to");
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
@@ -442,7 +442,7 @@ impl GenesisBuilder {
         block.serialize_to_writer(&mut file)?;
 
         let accounts_path = directory.as_ref().join("accounts.dat");
-        info!("Writing accounts to {}", accounts_path.display());
+        info!(path = %accounts_path.display(), "Writing accounts to");
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
