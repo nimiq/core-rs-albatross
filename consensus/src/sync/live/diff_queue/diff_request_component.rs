@@ -40,6 +40,7 @@ impl<N: Network> DiffRequestComponent<N> {
 
             let network = Arc::clone(&network);
             let range = range.clone();
+            let block_desc = format!("{}", block);
             let block_hash = block.hash();
             let block_diff_root = block.diff_root().clone();
 
@@ -53,7 +54,7 @@ impl<N: Network> DiffRequestComponent<N> {
                             return Err(());
                         }
                     };
-                    match network
+                    let result = network
                         .request(
                             RequestPartialDiff {
                                 block_hash: block_hash.clone(),
@@ -61,27 +62,38 @@ impl<N: Network> DiffRequestComponent<N> {
                             },
                             peer_id,
                         )
-                        .await
-                    {
+                        .await;
+                    num_tries += 1;
+                    let max_tries = peers.read().len();
+                    let exhausted = num_tries >= max_tries;
+                    match result {
                         Ok(ResponsePartialDiff::PartialDiff(diff)) => {
                             if TreeProof::new(diff.0.iter()).root_hash() == block_diff_root {
                                 return Ok(diff);
                             }
-                            error!(%peer_id, "couldn't fetch diff: invalid diff");
+                            error!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: invalid diff");
                         }
                         // TODO: remove peer, retry elsewhere
                         Ok(ResponsePartialDiff::IncompleteState) => {
-                            error!(%peer_id, "couldn't fetch diff: incomplete state")
+                            if exhausted {
+                                error!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: incomplete state")
+                            } else {
+                                debug!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: incomplete state")
+                            }
                         }
                         Ok(ResponsePartialDiff::UnknownBlockHash) => {
-                            error!(%peer_id, "couldn't fetch diff: unknown block hash")
+                            if exhausted {
+                                error!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: unknown block hash")
+                            } else {
+                                debug!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: unknown block hash")
+                            }
                         }
-                        Err(error) => error!(%peer_id, ?error, "couldn't fetch diff: {}", error),
+                        Err(error) => {
+                            error!(%peer_id, block = %block_desc, %num_tries, %max_tries, ?error, "couldn't fetch diff: {}", error)
+                        }
                     }
 
-                    num_tries += 1;
-                    let max_tries = peers.read().len();
-                    if num_tries >= max_tries {
+                    if exhausted {
                         error!(%num_tries, %max_tries, "couldn't fetch diff: maximum tries reached");
                         return Err(());
                     }
