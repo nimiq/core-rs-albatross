@@ -3,9 +3,11 @@ use nimiq_keys::Address;
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::{account::AccountError, coin::Coin};
 use nimiq_serde::{Deserialize, Serialize};
+use nimiq_transaction::account::htlc_contract::AnyHash;
 #[cfg(feature = "interaction-traits")]
-use nimiq_transaction::account::htlc_contract::CreationTransactionData;
-use nimiq_transaction::account::htlc_contract::{AnyHash, OutgoingHTLCTransactionProof};
+use nimiq_transaction::account::htlc_contract::{
+    CreationTransactionData, OutgoingHTLCTransactionProof,
+};
 #[cfg(feature = "interaction-traits")]
 use nimiq_transaction::{inherent::Inherent, Transaction};
 

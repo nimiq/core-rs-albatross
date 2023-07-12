@@ -12,15 +12,13 @@ pub mod policy;
 pub mod slots;
 #[cfg(feature = "transaction")]
 pub mod transaction;
+#[cfg(feature = "tree-proof")]
+mod tree_proof;
 #[cfg(feature = "trie")]
 pub mod trie;
 
+pub mod merkle_tree;
 pub mod task_executor;
 
-pub mod merkle_tree;
-
-#[cfg(feature = "tree_proof")]
-mod tree_proof;
-
-#[cfg(feature = "tree_proof")]
+#[cfg(feature = "tree-proof")]
 pub use self::tree_proof::TreeProof;
