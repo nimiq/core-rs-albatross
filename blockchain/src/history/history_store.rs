@@ -109,12 +109,12 @@ impl HistoryStore {
         let mut cursor = txn.cursor(&self.last_leaf_table);
 
         // Seek to the last leaf index of the block, if it exists.
-        match cursor.seek_key::<u32, u32>(&block_number.to_be()) {
+        match cursor.seek_range_key::<u32, u32>(&block_number.to_be()) {
             // If it exists, we simply get the last leaf index for the block. We increment by 1
             // because the leaf index is 0-based and we want the number of leaves.
-            Some(i) => i + 1,
+            Some((n, i)) if n == block_number => i + 1,
             // Otherwise, seek to the previous block, if it exists.
-            None => match cursor.prev::<u32, u32>() {
+            _ => match cursor.prev::<u32, u32>() {
                 // If it exists, we also need to check if the previous block is in the same epoch.
                 Some((n, i)) => {
                     if Policy::epoch_at(n.to_be()) == Policy::epoch_at(block_number) {
