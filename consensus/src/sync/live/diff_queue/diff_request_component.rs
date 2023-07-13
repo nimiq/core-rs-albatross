@@ -5,6 +5,7 @@ use nimiq_block::Block;
 use nimiq_network_interface::network::Network;
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_diff::TrieDiff, TreeProof};
 use parking_lot::RwLock;
+use tokio::sync::Semaphore;
 
 use super::{RequestPartialDiff, ResponsePartialDiff};
 use crate::sync::peer_list::{PeerList, PeerListIndex};
@@ -13,14 +14,18 @@ pub struct DiffRequestComponent<N: Network> {
     network: Arc<N>,
     peers: Arc<RwLock<PeerList<N>>>,
     current_peer_index: PeerListIndex,
+    concurrent_requests: Arc<Semaphore>,
 }
 
 impl<N: Network> DiffRequestComponent<N> {
+    const NUM_PENDING_DIFFS: usize = 5;
+
     pub fn new(network: Arc<N>, peers: Arc<RwLock<PeerList<N>>>) -> Self {
         DiffRequestComponent {
             network,
             peers,
             current_peer_index: PeerListIndex::default(),
+            concurrent_requests: Arc::new(Semaphore::new(Self::NUM_PENDING_DIFFS)),
         }
     }
 
@@ -33,18 +38,21 @@ impl<N: Network> DiffRequestComponent<N> {
 
         let peers = Arc::clone(&self.peers);
         let network = Arc::clone(&self.network);
+        let concurrent_requests = Arc::clone(&self.concurrent_requests);
         move |block| {
             let peers = Arc::clone(&peers);
             let mut current_peer_index = starting_peer_index.clone();
             starting_peer_index.increment();
 
             let network = Arc::clone(&network);
+            let concurrent_requests = Arc::clone(&concurrent_requests);
             let range = range.clone();
             let block_desc = format!("{}", block);
             let block_hash = block.hash();
             let block_diff_root = block.diff_root().clone();
 
             Box::pin(async move {
+                let _request_permit = concurrent_requests.acquire().await.unwrap();
                 let mut num_tries = 0;
                 loop {
                     let peer_id = match peers.read().increment_and_get(&mut current_peer_index) {
