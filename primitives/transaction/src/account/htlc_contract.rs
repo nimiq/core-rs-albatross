@@ -324,10 +324,10 @@ impl OutgoingHTLCTransactionProof {
 }
 
 mod serde_derive {
-    use std::{borrow::Cow, fmt};
+    use std::{borrow::Cow, fmt, str::FromStr};
 
     use serde::{
-        de::{Deserialize, Deserializer, Error, SeqAccess, Visitor},
+        de::{Deserialize, Deserializer, Error, MapAccess, SeqAccess, Visitor},
         ser::{Serialize, SerializeStruct, Serializer},
     };
 
@@ -336,10 +336,15 @@ mod serde_derive {
     const ANYHASH_FIELDS: &[&str] = &["algorithm", "hash"];
     const PREIMAGE_FIELDS: &[&str] = &["type", "pre_image"];
 
-    struct PreImageVisitor;
-    struct AnyHashVisitor {
-        human_readable: bool,
+    #[derive(nimiq_serde::Deserialize)]
+    #[serde(field_identifier, rename_all = "lowercase")]
+    enum AnyHashField {
+        Algorithm,
+        Hash,
     }
+
+    struct PreImageVisitor;
+    struct AnyHashVisitor;
 
     impl Serialize for AnyHash {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -385,66 +390,83 @@ mod serde_derive {
             formatter.write_str("enum AnyHash")
         }
 
+        /// If the deserializer is not human friendly most likely will use `visit_seq` for deserializing
         fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
         where
             A: SeqAccess<'de>,
         {
-            if self.human_readable {
-                let algorithm: &str = seq
-                    .next_element()?
-                    .ok_or_else(|| A::Error::invalid_length(0, &self))?;
-                match algorithm {
-                    "blake2b" => {
-                        let hash: AnyHash32 = seq
-                            .next_element()?
-                            .ok_or_else(|| A::Error::invalid_length(1, &self))?;
-                        Ok(AnyHash::Blake2b(hash))
-                    }
-                    "sha256" => {
-                        let hash: AnyHash32 = seq
-                            .next_element()?
-                            .ok_or_else(|| A::Error::invalid_length(1, &self))?;
-                        Ok(AnyHash::Sha256(hash))
-                    }
-                    "sha512" => {
-                        let hash: AnyHash64 = seq
-                            .next_element()?
-                            .ok_or_else(|| A::Error::invalid_length(1, &self))?;
-                        Ok(AnyHash::Sha512(hash))
-                    }
-                    _ => Err(A::Error::invalid_value(
-                        serde::de::Unexpected::Str(algorithm),
-                        &"an AnyHash variant",
-                    )),
+            let algorithm: u8 = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(0, &self))?;
+            match algorithm {
+                1u8 => {
+                    let hash: AnyHash32 = seq
+                        .next_element()?
+                        .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+                    Ok(AnyHash::Blake2b(hash))
                 }
-            } else {
-                let algorithm: u8 = seq
-                    .next_element()?
-                    .ok_or_else(|| A::Error::invalid_length(0, &self))?;
-                match algorithm {
-                    1u8 => {
-                        let hash: AnyHash32 = seq
-                            .next_element()?
-                            .ok_or_else(|| A::Error::invalid_length(1, &self))?;
-                        Ok(AnyHash::Blake2b(hash))
-                    }
-                    3u8 => {
-                        let hash: AnyHash32 = seq
-                            .next_element()?
-                            .ok_or_else(|| A::Error::invalid_length(1, &self))?;
-                        Ok(AnyHash::Sha256(hash))
-                    }
-                    4u8 => {
-                        let hash: AnyHash64 = seq
-                            .next_element()?
-                            .ok_or_else(|| A::Error::invalid_length(1, &self))?;
-                        Ok(AnyHash::Sha512(hash))
-                    }
-                    _ => Err(A::Error::invalid_value(
-                        serde::de::Unexpected::Unsigned(algorithm as u64),
-                        &"an AnyHash variant",
-                    )),
+                3u8 => {
+                    let hash: AnyHash32 = seq
+                        .next_element()?
+                        .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+                    Ok(AnyHash::Sha256(hash))
                 }
+                4u8 => {
+                    let hash: AnyHash64 = seq
+                        .next_element()?
+                        .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+                    Ok(AnyHash::Sha512(hash))
+                }
+                _ => Err(A::Error::invalid_value(
+                    serde::de::Unexpected::Unsigned(algorithm as u64),
+                    &"an AnyHash variant",
+                )),
+            }
+        }
+
+        /// If the deserializer is human friendly most likely will use `visit_map` for deserializing
+        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+        where
+            A: MapAccess<'de>,
+        {
+            let mut algorithm = None;
+            let mut hash = None;
+            while let Some(key) = map.next_key()? {
+                match key {
+                    AnyHashField::Algorithm => {
+                        if algorithm.is_some() {
+                            return Err(A::Error::duplicate_field("algorithm"));
+                        }
+                        algorithm = Some(map.next_value()?);
+                    }
+                    AnyHashField::Hash => {
+                        if hash.is_some() {
+                            return Err(A::Error::duplicate_field("hash"));
+                        }
+                        hash = Some(map.next_value()?);
+                    }
+                }
+            }
+            let hash: String = hash.ok_or_else(|| A::Error::missing_field("hash"))?;
+            let algorithm: String =
+                algorithm.ok_or_else(|| A::Error::missing_field("algorithm"))?;
+            match algorithm.as_str() {
+                "blake2b" => {
+                    let hash = AnyHash32::from_str(hash.as_str()).map_err(A::Error::custom)?;
+                    Ok(AnyHash::Blake2b(hash))
+                }
+                "sha256" => {
+                    let hash = AnyHash32::from_str(hash.as_str()).map_err(A::Error::custom)?;
+                    Ok(AnyHash::Sha256(hash))
+                }
+                "sha512" => {
+                    let hash = AnyHash64::from_str(hash.as_str()).map_err(A::Error::custom)?;
+                    Ok(AnyHash::Sha512(hash))
+                }
+                _ => Err(A::Error::invalid_value(
+                    serde::de::Unexpected::Str(algorithm.as_str()),
+                    &"an AnyHash variant",
+                )),
             }
         }
     }
@@ -454,12 +476,9 @@ mod serde_derive {
         where
             D: Deserializer<'de>,
         {
-            let human_readable = deserializer.is_human_readable();
-            deserializer.deserialize_struct(
-                "AnyHash",
-                ANYHASH_FIELDS,
-                AnyHashVisitor { human_readable },
-            )
+            // Here we are not making any distinction between a human readable deserializer and a non human readable ones
+            // because regularly the first one uses `visit_map` while the latter uses `visit_seq` instead.
+            deserializer.deserialize_struct("AnyHash", ANYHASH_FIELDS, AnyHashVisitor)
         }
     }
 
