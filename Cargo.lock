@@ -4580,6 +4580,7 @@ dependencies = [
  "nimiq-utils",
  "num-traits",
  "serde",
+ "serde_json",
  "strum_macros",
  "thiserror",
  "tracing",

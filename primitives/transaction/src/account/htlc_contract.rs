@@ -558,3 +558,185 @@ mod serde_derive {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use nimiq_serde::{Deserialize, Serialize};
+    use nimiq_test_log::test;
+
+    use super::{AnyHash, AnyHash32, AnyHash64, PreImage};
+
+    fn sample_anyhashes() -> [AnyHash; 3] {
+        let hash_32 = AnyHash32([0xC; AnyHash32::SIZE]);
+        let hash_64 = AnyHash64([0xC; AnyHash64::SIZE]);
+        [
+            AnyHash::Sha256(hash_32.clone()),
+            AnyHash::Blake2b(hash_32),
+            AnyHash::Sha512(hash_64),
+        ]
+    }
+
+    fn sample_preimages() -> [PreImage; 2] {
+        let hash_32 = AnyHash32([0xC; AnyHash32::SIZE]);
+        let hash_64 = AnyHash64([0xC; AnyHash64::SIZE]);
+        [PreImage::PreImage32(hash_32), PreImage::PreImage64(hash_64)]
+    }
+
+    #[test]
+    fn it_can_correctly_serialize_anyhash() {
+        let hashes = sample_anyhashes();
+        let bin = hashes[0].serialize_to_vec();
+        assert_eq!(
+            hex::decode("030C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C")
+                .unwrap(),
+            bin
+        );
+        let bin = hashes[1].serialize_to_vec();
+        assert_eq!(
+            hex::decode("010C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C")
+                .unwrap(),
+            bin
+        );
+        let bin = hashes[2].serialize_to_vec();
+        assert_eq!(hex::decode("040C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C").unwrap(), bin);
+    }
+
+    #[test]
+    fn it_can_correctly_deserialize_anyhash() {
+        let hashes = sample_anyhashes();
+        let bin = hex::decode("030C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C")
+            .unwrap();
+        let set = AnyHash::deserialize_from_vec(&bin).unwrap();
+        assert_eq!(hashes[0], set);
+        let bin = hex::decode("010C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C")
+            .unwrap();
+        let set = AnyHash::deserialize_from_vec(&bin).unwrap();
+        assert_eq!(hashes[1], set);
+        let bin = hex::decode("040C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C").unwrap();
+        let set = AnyHash::deserialize_from_vec(&bin).unwrap();
+        assert_eq!(hashes[2], set);
+    }
+
+    #[test]
+    fn it_can_correctly_serialize_anyhash_human_readably() {
+        let hashes = sample_anyhashes();
+        assert_eq!(
+            serde_json::to_string(&hashes[0]).unwrap(),
+            r#"{"algorithm":"sha256","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#,
+        );
+        assert_eq!(
+            serde_json::to_string(&hashes[1]).unwrap(),
+            r#"{"algorithm":"blake2b","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#,
+        );
+        assert_eq!(
+            serde_json::to_string(&hashes[2]).unwrap(),
+            r#"{"algorithm":"sha512","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#,
+        );
+    }
+
+    #[test]
+    fn it_can_correctly_deserialize_anyhash_human_readably() {
+        let hashes = sample_anyhashes();
+        assert_eq!(
+            serde_json::from_str::<AnyHash>(r#"{"algorithm":"sha256","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#,)
+                .unwrap(),
+            hashes[0],
+        );
+        assert_eq!(
+            serde_json::from_str::<AnyHash>(r#"{"algorithm":"blake2b","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#)
+                .unwrap(),
+            hashes[1],
+        );
+        assert_eq!(
+            serde_json::from_str::<AnyHash>(r#"{"algorithm":"sha512","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#)
+                .unwrap(),
+            hashes[2],
+        );
+    }
+
+    #[test]
+    fn it_can_error_on_human_readable_anyhash_deserialization() {
+        assert!(serde_json::from_str::<AnyHash>(
+            "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"
+        )
+        .is_err()); // invalid type
+        assert!(serde_json::from_str::<AnyHash>(r#"sha256"#).is_err()); // invalid type
+        assert!(serde_json::from_str::<AnyHash>(r#"{"algorithm":"baKe2b","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#).is_err()); // invalid algorithm
+        assert!(serde_json::from_str::<AnyHash>(r#"{"algorithm":"blake2b","algorithm":"blake2b","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#).is_err()); // duplicate algorithm
+        assert!(serde_json::from_str::<AnyHash>(r#"{"algorithm":"sha256","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#).is_err());
+        // too small hash for 32 byte hash
+        assert!(serde_json::from_str::<AnyHash>(r#"{"algorithm":"sha256","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#).is_err());
+        // too large hash for 32 byte hash
+        assert!(serde_json::from_str::<AnyHash>(r#"{"algorithm":"sha512","hash":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"}"#).is_err());
+        // too large hash for 64 byte hash
+    }
+
+    #[test]
+    fn it_can_correctly_serialize_preimage() {
+        let hashes = sample_preimages();
+        let bin = hashes[0].serialize_to_vec();
+        assert_eq!(
+            hex::decode("200C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C")
+                .unwrap(),
+            bin
+        );
+        let bin = hashes[1].serialize_to_vec();
+        assert_eq!(hex::decode("400C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C").unwrap(), bin);
+    }
+
+    #[test]
+    fn it_can_correctly_deserialize_preimage() {
+        let hashes = sample_preimages();
+        let bin = hex::decode("200C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C")
+            .unwrap();
+        let set = PreImage::deserialize_from_vec(&bin).unwrap();
+        assert_eq!(hashes[0], set);
+        let bin = hex::decode("400C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C").unwrap();
+        let set = PreImage::deserialize_from_vec(&bin).unwrap();
+        assert_eq!(hashes[1], set);
+    }
+
+    #[test]
+    fn it_can_correctly_serialize_preimage_human_readably() {
+        let hashes = sample_preimages();
+        assert_eq!(
+            serde_json::to_string(&hashes[0]).unwrap(),
+            r#""0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c""#,
+        );
+        assert_eq!(
+            serde_json::to_string(&hashes[1]).unwrap(),
+            r#""0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c""#,
+        );
+    }
+
+    #[test]
+    fn it_can_correctly_deserialize_preimage_human_readably() {
+        let hashes = sample_preimages();
+        assert_eq!(
+            serde_json::from_str::<PreImage>(
+                r#""0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c""#,
+            )
+            .unwrap(),
+            hashes[0],
+        );
+        assert_eq!(
+            serde_json::from_str::<PreImage>(r#""0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c""#)
+                .unwrap(),
+            hashes[1],
+        );
+    }
+
+    #[test]
+    fn it_can_error_on_human_readable_preimage_deserialization() {
+        assert!(serde_json::from_str::<PreImage>("[]").is_err()); // invalid type
+        assert!(serde_json::from_str::<PreImage>(r#""123""#).is_err()); // too short
+        assert!(serde_json::from_str::<PreImage>(
+            r#""0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c""#
+        )
+        .is_err()); // too large for 32 byte and too small for 64 byte
+        assert!(serde_json::from_str::<PreImage>(
+            r#""0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c""#
+        )
+        .is_err()); // too large for 64 byte
+    }
+}
