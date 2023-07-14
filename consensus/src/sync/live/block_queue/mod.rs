@@ -222,7 +222,8 @@ impl<N: Network> BlockQueue<N> {
             return;
         }
 
-        let parent_hash = block.parent_hash().clone();
+        let mut parent_hash = block.parent_hash().clone();
+        let mut parent_block_number = block_number - 1;
 
         // Insert block into buffer. If we already know the block, we're done.
         let block_known = self.insert_block_into_buffer(block, pubsub_id);
@@ -231,19 +232,17 @@ impl<N: Network> BlockQueue<N> {
             return;
         }
 
-        // If the parent of this block is already in the buffer, we're done.
-        let parent_buffered = self.is_block_buffered(block_number - 1, &parent_hash);
-        log::trace!(
-            "Parent of block #{} buffered={}",
-            block_number,
-            parent_buffered
-        );
-        if parent_buffered {
-            return;
+        // If the parent of this block is already in the buffer, follow the chain to see whether there are still blocks missing.
+        while let Some(parent_block_hash) =
+            self.get_parent_from_buffer(parent_block_number, &parent_hash)
+        {
+            parent_hash = parent_block_hash;
+            parent_block_number = block_number.saturating_sub(1);
         }
 
-        // If the parent of this block is already being pushed, we're done.
-        let parent_pending = self.blocks_pending_push.contains(&parent_hash);
+        // If the parent of this block is already being pushed or we already requested missing blocks for it, we're done.
+        let parent_pending = self.blocks_pending_push.contains(&parent_hash)
+            || self.request_component.is_pending(&parent_hash);
         log::trace!(
             "Parent of block #{} pending={}",
             block_number,
@@ -254,7 +253,7 @@ impl<N: Network> BlockQueue<N> {
         }
 
         // We don't know the predecessor of this block, request it.
-        self.request_missing_blocks(block_number - 1, parent_hash, None);
+        self.request_missing_blocks(parent_block_number, parent_hash, None);
     }
 
     fn insert_block_into_buffer(&mut self, block: Block, pubsub_id: Option<N::PubsubId>) -> bool {
@@ -265,13 +264,20 @@ impl<N: Network> BlockQueue<N> {
             .is_some()
     }
 
-    fn is_block_buffered(&self, block_number: u32, hash: &Blake2bHash) -> bool {
+    fn get_parent_from_buffer(&self, block_number: u32, hash: &Blake2bHash) -> Option<Blake2bHash> {
         self.buffer
             .get(&block_number)
-            .map_or(false, |blocks| blocks.contains_key(hash))
+            .map(|blocks| {
+                blocks
+                    .get(hash)
+                    .map(|(block, _)| block.parent_hash().clone())
+            })
+            .flatten()
     }
 
     /// Requests missing blocks.
+    /// If a block locator is given, it is inserted at the beginning of the full block locator list.
+    /// The list contains all blocks from the head until the last macro block.
     fn request_missing_blocks(
         &mut self,
         block_number: u32,
@@ -346,7 +352,7 @@ impl<N: Network> BlockQueue<N> {
             && !self.blocks_pending_push.contains(first_block.parent_hash())
             && !self
                 .buffer
-                .get(&first_block.block_number())
+                .get(&first_block.block_number().saturating_sub(1))
                 .map(|blocks| blocks.contains_key(first_block.parent_hash()))
                 .unwrap_or(false)
         {

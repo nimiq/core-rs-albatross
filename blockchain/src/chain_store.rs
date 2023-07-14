@@ -380,6 +380,7 @@ impl ChainStore {
         Ok(blocks)
     }
 
+    /// Does not include the block with `start_block_hash`.
     fn get_blocks_forward(
         &self,
         start_block_hash: &Blake2bHash,

@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -42,6 +43,8 @@ pub struct BlockRequestComponent<N: Network> {
     peers: Arc<RwLock<PeerList<N>>>,
     network_event_rx: SubscribeEvents<N::PeerId>,
     include_micro_bodies: bool,
+    /// Pending requests.
+    pending_requests: BTreeSet<Blake2bHash>,
 }
 
 impl<N: Network> BlockRequestComponent<N> {
@@ -80,6 +83,7 @@ impl<N: Network> BlockRequestComponent<N> {
             peers,
             network_event_rx,
             include_micro_bodies,
+            pending_requests: BTreeSet::new(),
         }
     }
 
@@ -113,12 +117,17 @@ impl<N: Network> BlockRequestComponent<N> {
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
     ) {
+        self.pending_requests.insert(target_block_hash.clone());
         self.sync_queue.add_ids(vec![(
             target_block_number,
             target_block_hash,
             locators,
             self.include_micro_bodies,
         )]);
+    }
+
+    pub fn is_pending(&self, target_block_hash: &Blake2bHash) -> bool {
+        self.pending_requests.contains(target_block_hash)
     }
 
     pub fn num_peers(&self) -> usize {
@@ -157,13 +166,15 @@ impl<N: Network> Stream for BlockRequestComponent<N> {
         while let Poll::Ready(Some(result)) = self.sync_queue.poll_next_unpin(cx) {
             match result {
                 Ok((target_block_number, target_hash, blocks)) => {
+                    self.pending_requests.remove(&target_hash);
                     return Poll::Ready(Some(BlockRequestComponentEvent::ReceivedBlocks(
                         target_block_number,
                         target_hash,
                         blocks,
-                    )))
+                    )));
                 }
                 Err((target_block_number, target_hash, _, _)) => {
+                    self.pending_requests.remove(&target_hash);
                     debug!(
                         target_block_number,
                         ?target_hash,
