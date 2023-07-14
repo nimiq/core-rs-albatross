@@ -90,6 +90,7 @@ if [[ ! -z "${VALIDATOR_ADDRESS+x}" ]]; then
     optional fee_key FEE_KEY string
     optional signing_key_file SIGNING_KEY_FILE string
     optional signing_key SIGNING_KEY string
+    optional automatic_reactivate AUTOMATIC_REACTIVATE boolean
 fi
 
 if [[ "$RPC_ENABLED" == "true" ]]; then
