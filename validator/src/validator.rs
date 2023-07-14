@@ -447,10 +447,12 @@ where
     /// Check and update if we can enforce the tx validity window.
     /// This is important if we use the state sync and do not have the relevant parts of the history yet.
     fn update_can_enforce_validity_window(&mut self) {
-        if !self.blockchain_state.can_enforce_validity_window
-            && self.blockchain.read().can_enforce_validity_window()
-        {
-            self.blockchain_state.can_enforce_validity_window = true;
+        let old_can_enforce_validity_window = self.blockchain_state.can_enforce_validity_window;
+        self.blockchain_state.can_enforce_validity_window =
+            self.blockchain.read().can_enforce_validity_window();
+
+        // Re-initialize validator when flag returns to true.
+        if !old_can_enforce_validity_window && self.blockchain_state.can_enforce_validity_window {
             self.init();
             self.init_mempool();
         }
