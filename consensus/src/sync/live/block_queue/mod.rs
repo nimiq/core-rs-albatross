@@ -237,7 +237,7 @@ impl<N: Network> BlockQueue<N> {
             self.get_parent_from_buffer(parent_block_number, &parent_hash)
         {
             parent_hash = parent_block_hash;
-            parent_block_number = block_number.saturating_sub(1);
+            parent_block_number = parent_block_number.saturating_sub(1);
         }
 
         // If the parent of this block is already being pushed or we already requested missing blocks for it, we're done.
@@ -265,14 +265,11 @@ impl<N: Network> BlockQueue<N> {
     }
 
     fn get_parent_from_buffer(&self, block_number: u32, hash: &Blake2bHash) -> Option<Blake2bHash> {
-        self.buffer
-            .get(&block_number)
-            .map(|blocks| {
-                blocks
-                    .get(hash)
-                    .map(|(block, _)| block.parent_hash().clone())
-            })
-            .flatten()
+        self.buffer.get(&block_number).and_then(|blocks| {
+            blocks
+                .get(hash)
+                .map(|(block, _)| block.parent_hash().clone())
+        })
     }
 
     /// Requests missing blocks.
