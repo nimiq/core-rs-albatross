@@ -29,6 +29,15 @@ fn it_correctly_computes_a_simple_root_hash() {
 }
 
 #[test]
+fn it_serializes_empty_path_to_one_byte() {
+    let path: MerklePath<Blake2bHash> = MerklePath::empty();
+    let serialized = path.serialize_to_vec();
+    assert_eq!(serialized, vec![0]);
+    let path2 = MerklePath::<Blake2bHash>::deserialize_from_vec(&serialized).unwrap();
+    assert_eq!(path, path2);
+}
+
+#[test]
 fn it_correctly_computes_a_complex_root_hash() {
     /*
      *          level2

@@ -70,7 +70,7 @@ fn it_can_deserialize_basic_transaction() {
     assert_eq!(t.validity_start_height, 104000);
     assert_eq!(t.network_id, NetworkId::Dev);
     assert_eq!(t.flags, TransactionFlags::empty());
-    assert_eq!(t.proof, hex::decode("0222666efadc937148a6d61589ce6d4aeecca97fda4c32348d294eab582f14a00000003fecb82d3aef4be76853d5c5b263754b7d495d9838f6ae5df60cf3addd3512a82988db0056059c7a52ae15285983ef0db8229ae446c004559147686d28f0a30a").unwrap())
+    assert_eq!(t.proof, hex::decode("0222666efadc937148a6d61589ce6d4aeecca97fda4c32348d294eab582f14a0003fecb82d3aef4be76853d5c5b263754b7d495d9838f6ae5df60cf3addd3512a82988db0056059c7a52ae15285983ef0db8229ae446c004559147686d28f0a30a").unwrap())
 }
 
 #[test]

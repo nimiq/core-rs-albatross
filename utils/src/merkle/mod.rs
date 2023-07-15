@@ -168,19 +168,25 @@ impl<H: HashOutput> Serialize for MerklePath<H> {
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("MerklePath", 3)?;
-        state.serialize_field("nodes_len", &(self.nodes.len() as u8))?;
-        let compressed = self.compress();
-        state.serialize_field("compressed", &compressed)?;
-        state.serialize_field(
-            "node_hashes",
-            &self
-                .nodes
-                .iter()
-                .map(|node| node.hash.clone())
-                .collect::<Vec<H>>(),
-        )?;
-        state.end()
+        if self.is_empty() {
+            let mut state = serializer.serialize_struct("MerklePath", 1)?;
+            state.serialize_field("nodes_len", &(self.nodes.len() as u8))?;
+            state.end()
+        } else {
+            let mut state = serializer.serialize_struct("MerklePath", 3)?;
+            state.serialize_field("nodes_len", &(self.nodes.len() as u8))?;
+            let compressed = self.compress();
+            state.serialize_field("compressed", &compressed)?;
+            state.serialize_field(
+                "node_hashes",
+                &self
+                    .nodes
+                    .iter()
+                    .map(|node| node.hash.clone())
+                    .collect::<Vec<H>>(),
+            )?;
+            state.end()
+        }
     }
 }
 
@@ -202,6 +208,9 @@ impl<'de, H: HashOutput> Visitor<'de> for MerklePathVisitor<H> {
         let count: u8 = seq
             .next_element()?
             .ok_or_else(|| A::Error::invalid_length(0, &self))?;
+        if count == 0 {
+            return Ok(MerklePath::empty());
+        }
         let count = count as usize;
         let left_bits_size = count.ceiling_div(8);
         let left_bits: Vec<u8> = seq
