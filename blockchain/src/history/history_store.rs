@@ -112,12 +112,12 @@ impl HistoryStore {
         match cursor.seek_range_key::<u32, u32>(&block_number.to_be()) {
             // If it exists, we simply get the last leaf index for the block. We increment by 1
             // because the leaf index is 0-based and we want the number of leaves.
-            Some((n, i)) if n == block_number => i + 1,
+            Some((n, i)) if u32::from_be(n) == block_number => i + 1,
             // Otherwise, seek to the previous block, if it exists.
             _ => match cursor.prev::<u32, u32>() {
                 // If it exists, we also need to check if the previous block is in the same epoch.
                 Some((n, i)) => {
-                    if Policy::epoch_at(n.to_be()) == Policy::epoch_at(block_number) {
+                    if Policy::epoch_at(u32::from_be(n)) == Policy::epoch_at(block_number) {
                         i + 1
                     } else {
                         0
@@ -1029,7 +1029,7 @@ impl HistoryStore {
                 None => 0,
                 Some((n, i)) => {
                     // If the previous block is from a different epoch, then we also have to start at zero.
-                    if Policy::epoch_at(n.to_be()) != Policy::epoch_at(block_number) {
+                    if Policy::epoch_at(u32::from_be(n)) != Policy::epoch_at(block_number) {
                         0
                     } else {
                         i + 1
