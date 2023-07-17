@@ -417,7 +417,7 @@ where
             let state = blockchain.state();
 
             // Compute block body if it is not cached.
-            let mut macro_block = block.unwrap_macro_ref_mut();
+            let macro_block = block.unwrap_macro_ref_mut();
             let body = match precalculated_inherent {
                 Some(body) => body.0,
                 None => BlockProducer::next_macro_body(&blockchain, &macro_block.header),

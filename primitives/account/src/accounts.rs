@@ -271,7 +271,7 @@ impl Accounts {
             &mut BlockLogger::empty(),
         )?;
         let diff = txn.stop_recording().into_forward_diff();
-        let diff_hash = TreeProof::new(diff.0.into_iter()).root_hash();
+        let diff_hash = TreeProof::new(diff.0).root_hash();
 
         assert_eq!(transactions.len(), receipts.transactions.len());
 
@@ -588,7 +588,7 @@ impl Accounts {
     ) -> Result<(), AccountError> {
         // Revert inherents in reverse order.
         assert_eq!(inherents.len(), receipts.inherents.len());
-        let iter = inherents.iter().zip(receipts.inherents.into_iter()).rev();
+        let iter = inherents.iter().zip(receipts.inherents).rev();
         for (inherent, receipt) in iter {
             self.revert_inherent(
                 txn,
@@ -601,10 +601,7 @@ impl Accounts {
 
         // Revert transactions in reverse order.
         assert_eq!(transactions.len(), receipts.transactions.len());
-        let iter = transactions
-            .iter()
-            .zip(receipts.transactions.into_iter())
-            .rev();
+        let iter = transactions.iter().zip(receipts.transactions).rev();
         for (transaction, receipt) in iter {
             self.revert_transaction(
                 txn,
