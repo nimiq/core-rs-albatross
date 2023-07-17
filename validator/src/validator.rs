@@ -797,7 +797,17 @@ where
         // Process blockchain updates.
         let mut received_event: Option<Blake2bHash> = None;
         while let Poll::Ready(Some(event)) = self.blockchain_event_rx.poll_next_unpin(cx) {
-            self.update_can_enforce_validity_window();
+            // The `can_enforce_validity_window` flag can only change on macro blocks:
+            // It can change to false during macro sync when pushing macro blocks.
+            // It can change to true when we reach an offset of the transaction validity window
+            // into a new epoch we have the history for. The validity window is a multiple
+            // of the batch size – thus it is again a macro block.
+            if matches!(
+                event,
+                BlockchainEvent::Finalized(..) | BlockchainEvent::EpochFinalized(..)
+            ) {
+                self.update_can_enforce_validity_window();
+            }
             let can_be_active = self.can_be_active();
             trace!(?event, can_be_active, "blockchain event");
             let latest_hash = event.get_newest_hash();

@@ -23,6 +23,7 @@ pub struct Policy {
     /// Maximum size of accounts trie chunks.
     pub state_chunks_max_size: u32,
     /// Number of blocks a transaction is valid with Albatross consensus.
+    /// This should be a multiple of `blocks_per_batch`.
     pub transaction_validity_window: u32,
 }
 
