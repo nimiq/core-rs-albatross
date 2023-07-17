@@ -69,7 +69,8 @@ impl HistoryStore {
             Self::TX_HASH_DB_NAME.to_string(),
             TableFlags::DUPLICATE_KEYS | TableFlags::DUP_FIXED_SIZE_VALUES,
         );
-        let last_leaf_table = db.open_table(Self::LAST_LEAF_DB_NAME.to_string());
+        let last_leaf_table =
+            db.open_table_with_flags(Self::LAST_LEAF_DB_NAME.to_string(), TableFlags::UINT_KEYS);
         let address_table = db.open_table_with_flags(
             Self::ADDRESS_DB_NAME.to_string(),
             TableFlags::DUPLICATE_KEYS | TableFlags::DUP_FIXED_SIZE_VALUES,
@@ -109,15 +110,15 @@ impl HistoryStore {
         let mut cursor = txn.cursor(&self.last_leaf_table);
 
         // Seek to the last leaf index of the block, if it exists.
-        match cursor.seek_range_key::<u32, u32>(&block_number.to_be()) {
+        match cursor.seek_range_key::<u32, u32>(&block_number) {
             // If it exists, we simply get the last leaf index for the block. We increment by 1
             // because the leaf index is 0-based and we want the number of leaves.
-            Some((n, i)) if u32::from_be(n) == block_number => i + 1,
+            Some((n, i)) if n == block_number => i + 1,
             // Otherwise, seek to the previous block, if it exists.
             _ => match cursor.prev::<u32, u32>() {
                 // If it exists, we also need to check if the previous block is in the same epoch.
                 Some((n, i)) => {
-                    if Policy::epoch_at(u32::from_be(n)) == Policy::epoch_at(block_number) {
+                    if Policy::epoch_at(n) == Policy::epoch_at(block_number) {
                         i + 1
                     } else {
                         0
@@ -241,11 +242,11 @@ impl HistoryStore {
             let (start, end) = self.get_indexes_for_block(block_number, Some(txn));
 
             if end - start == 1 {
-                txn.remove(&self.last_leaf_table, &block_number.to_be());
+                txn.remove(&self.last_leaf_table, &block_number);
             } else {
                 txn.put(
                     &self.last_leaf_table,
-                    &block_number.to_be(),
+                    &block_number,
                     &(leaf_index as u32 - 1),
                 );
             }
@@ -914,11 +915,7 @@ impl HistoryStore {
 
         // We need to convert the block number to big-endian since that's how the LMDB database
         // orders the keys.
-        txn.put(
-            &self.last_leaf_table,
-            &ext_tx.block_number.to_be(),
-            &leaf_index,
-        );
+        txn.put(&self.last_leaf_table, &ext_tx.block_number, &leaf_index);
 
         match &ext_tx.data {
             ExtTxData::Basic(tx) => {
@@ -1010,7 +1007,7 @@ impl HistoryStore {
         // Seek to the last leaf index of the block, if it exists.
         let mut cursor = txn.cursor(&self.last_leaf_table);
 
-        let end = match cursor.seek_key::<u32, u32>(&block_number.to_be()) {
+        let end = match cursor.seek_key::<u32, u32>(&block_number) {
             // If the block number doesn't exist in the database that's because it doesn't contain
             // any transactions or inherents. So we terminate here.
             None => return (0, 0),
@@ -1029,7 +1026,7 @@ impl HistoryStore {
                 None => 0,
                 Some((n, i)) => {
                     // If the previous block is from a different epoch, then we also have to start at zero.
-                    if Policy::epoch_at(u32::from_be(n)) != Policy::epoch_at(block_number) {
+                    if Policy::epoch_at(n) != Policy::epoch_at(block_number) {
                         0
                     } else {
                         i + 1
