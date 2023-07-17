@@ -54,6 +54,7 @@ enum ValidatorStakingState {
     Active,
     Inactive,
     NoStake,
+    Unknown,
 }
 
 struct ActiveEpochState {
@@ -682,7 +683,10 @@ where
 
     fn get_staking_state(&self, blockchain: &Blockchain) -> ValidatorStakingState {
         let validator_address = self.validator_address();
-        let staking_contract = blockchain.get_staking_contract();
+        let staking_contract = match blockchain.get_staking_contract_if_complete(None) {
+            Some(contract) => contract,
+            None => return ValidatorStakingState::Unknown,
+        };
 
         // Then fetch the validator to see if it is active.
         let data_store = blockchain.get_staking_contract_store();
@@ -861,7 +865,7 @@ where
                         self.validator_state = Some(inactivity_state);
                     }
                 }
-                ValidatorStakingState::NoStake => {}
+                ValidatorStakingState::NoStake | ValidatorStakingState::Unknown => {}
             }
         }
 
