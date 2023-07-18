@@ -13,8 +13,13 @@ use crate::{convert_receipt, AccountReceipt};
 /// these inherents.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct PenalizeReceipt {
+    /// true if corresponding validator was deactivated by this penalty
     pub newly_deactivated: bool,
+    /// true if corresponding slot was punished for the first time
+    /// for an offense in the previous batch
     pub newly_punished_previous_batch: bool,
+    /// true if corresponding slot was punished for the first time
+    /// in the current batch
     pub newly_punished_current_batch: bool,
 }
 convert_receipt!(PenalizeReceipt);
@@ -23,25 +28,39 @@ convert_receipt!(PenalizeReceipt);
 /// these inherents.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct SlashReceipt {
+    /// true if corresponding validator was deactivated by this slash
     pub newly_deactivated: bool,
+    /// the previous batch punished slots before this slash is applied
     pub old_previous_batch_punished_slots: BitSet,
+    /// the current batch punished slots of the affected validator before this slash is applied
     pub old_current_batch_punished_slots: Option<BTreeSet<u16>>,
+    // the jail release before this slash is applied
     pub old_jail_release: Option<u32>,
 }
 convert_receipt!(SlashReceipt);
 
+/// Receipt for update validator transactions. This is necessary to be able to revert
+/// these transactions.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct UpdateValidatorReceipt {
+    // the signing key before this transaction is applied
     pub old_signing_key: SchnorrPublicKey,
+    // the voting key before this transaction is applied
     pub old_voting_key: BlsPublicKey,
+    // the reward address before this transaction is applied
     pub old_reward_address: Address,
+    // the signal data before this transaction is applied
     pub old_signal_data: Option<Blake2bHash>,
 }
 convert_receipt!(UpdateValidatorReceipt);
 
+/// Receipt for jailing a validator. This is necessary to be able to revert
+/// a jail.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct JailValidatorReceipt {
+    /// true if corresponding validator was deactivated by this jail
     pub newly_deactivated: bool,
+    // the jail release before this jail is applied
     pub old_jail_release: Option<u32>,
 }
 convert_receipt!(JailValidatorReceipt);
@@ -55,45 +74,70 @@ impl From<&SlashReceipt> for JailValidatorReceipt {
     }
 }
 
+/// Receipt for reactivate validator transactions. This is necessary to be able to revert
+/// these transactions.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ReactivateValidatorReceipt {
+    // the value of `inactive_since` before this transaction is applied
     pub was_inactive_since: u32,
 }
 convert_receipt!(ReactivateValidatorReceipt);
 
+/// Receipt for retire validator transactions. This is necessary to be able to revert
+/// these transactions.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct RetireValidatorReceipt {
+    // true if the validator was retired from an active state
     pub was_active: bool,
 }
 convert_receipt!(RetireValidatorReceipt);
 
+/// Receipt for delete validator transactions. This is necessary to be able to revert
+/// these transactions.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct DeleteValidatorReceipt {
+    // the signing key before this transaction is applied
     pub signing_key: SchnorrPublicKey,
+    // the voting key before this transaction is applied
     pub voting_key: BlsPublicKey,
+    // the reward address before this transaction is applied
     pub reward_address: Address,
+    // the signal data before this transaction is applied
     pub signal_data: Option<Blake2bHash>,
+    // the value of `inactive_since` before this transaction is applied
     pub inactive_since: u32,
+    // the jail release before this transaction is applied
     pub jail_release: Option<u32>,
 }
 convert_receipt!(DeleteValidatorReceipt);
 
+/// Receipt for most staker-related transactions. This is necessary to be able to revert
+/// these transactions.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct StakerReceipt {
+    // the delegation before this transaction is applied
     pub delegation: Option<Address>,
 }
 convert_receipt!(StakerReceipt);
 
+/// Receipt for set inactive stake transactions. This is necessary to be able to revert
+/// these transactions.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct SetInactiveStakeReceipt {
+    // the inactive release before this transaction is applied
     pub old_inactive_release: Option<u32>,
+    // the active balance before this transaction is applied
     pub old_active_balance: Coin,
 }
 convert_receipt!(SetInactiveStakeReceipt);
 
+/// Receipt for remove stake transactions. This is necessary to be able to revert
+/// these transactions.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct RemoveStakeReceipt {
+    // the delegation before this transaction is applied
     pub delegation: Option<Address>,
+    // the inactive release before this transaction is applied
     pub inactive_release: Option<u32>,
 }
 convert_receipt!(RemoveStakeReceipt);

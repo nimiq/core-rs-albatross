@@ -906,8 +906,8 @@ fn can_finalize_batch() {
     current_active_validators.insert(validator_address1.clone(), Coin::from_u64_unchecked(1));
     current_active_validators.insert(validator_address2.clone(), Coin::from_u64_unchecked(1));
 
-    // Finalize the epoch and check sets.
-    punished_slots.finalize_batch(&current_active_validators);
+    // Finalize the batch and check sets.
+    punished_slots.finalize_batch(Policy::blocks_per_batch(), &current_active_validators);
 
     assert_eq!(
         punished_slots.previous_batch_punished_slots,
@@ -951,7 +951,7 @@ fn can_finalize_epoch() {
     let current_punished_slots = punished_slots.current_batch_punished_slots();
 
     // Finalize the epoch and check sets.
-    punished_slots.finalize_epoch();
+    punished_slots.finalize_batch(Policy::blocks_per_epoch(), &BTreeMap::default());
 
     assert!(punished_slots.current_batch_punished_slots().is_empty());
     assert_eq!(

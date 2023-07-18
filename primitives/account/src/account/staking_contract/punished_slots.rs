@@ -182,48 +182,42 @@ impl PunishedSlots {
     }
 
     /// At the end of a batch, we update the previous bitset and remove reactivated validators from the current bitset.
-    pub fn finalize_batch(&mut self, current_active_validators: &BTreeMap<Address, Coin>) {
+    /// However, at the end of an epoch the current bitset is reset.
+    /// This function should be called at every macro block.
+    pub fn finalize_batch(
+        &mut self,
+        block_number: u32,
+        current_active_validators: &BTreeMap<Address, Coin>,
+    ) {
         // Updates the previous bitset with the current one.
         self.previous_batch_punished_slots = self.current_batch_punished_slots();
 
-        // Remove all validators that are active again.
-        self.current_batch_punished_slots
-            .retain(|validator_address, _| {
-                current_active_validators.get(validator_address).is_none()
-            });
-    }
+        if Policy::is_election_block_at(block_number) {
+            // At an epoch boundary, the next starting set is empty.
+            self.current_batch_punished_slots = Default::default();
+        } else {
+            // Remove all validators that are active again.
+            assert!(Policy::is_macro_block_at(block_number));
 
-    // At the end of an epoch the current bitset is reset and the previous bitset
-    // should retain the information of the last batch.
-    pub fn finalize_epoch(&mut self) {
-        // Updates the previous bitset with the current one.
-        self.previous_batch_punished_slots = self.current_batch_punished_slots();
-
-        // At an epoch boundary, the next starting set is empty.
-        self.current_batch_punished_slots = Default::default();
+            self.current_batch_punished_slots
+                .retain(|validator_address, _| {
+                    current_active_validators.get(validator_address).is_none()
+                });
+        }
     }
 
     /// Returns the bitset representing which validator slots will be prohibited from producing micro blocks or
     /// proposing macro blocks in the next batch.
-    /// It is exercising the `finalize_batch`/`finalize_epoch` transition.
+    /// It is exercising the `finalize_batch` transition.
     /// This method should only be needed to populate the corresponding field in *macro blocks*.
     pub fn next_batch_initial_punished_set(
         &self,
         block_number: u32,
-        current_active_validators: Option<&BTreeMap<Address, Coin>>,
+        current_active_validators: &BTreeMap<Address, Coin>,
     ) -> BitSet {
-        assert!(Policy::is_macro_block_at(block_number));
-        assert_eq!(
-            Policy::is_election_block_at(block_number),
-            current_active_validators.is_none()
-        );
-
         let mut punished_slots = self.clone();
-        if let Some(current_active_validators) = current_active_validators {
-            punished_slots.finalize_batch(current_active_validators);
-        } else {
-            punished_slots.finalize_epoch();
-        }
+        punished_slots.finalize_batch(block_number, current_active_validators);
+
         punished_slots.current_batch_punished_slots()
     }
 

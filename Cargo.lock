@@ -3599,6 +3599,7 @@ dependencies = [
  "nimiq-mmr",
  "nimiq-primitives",
  "nimiq-serde",
+ "nimiq-tendermint",
  "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-transaction",

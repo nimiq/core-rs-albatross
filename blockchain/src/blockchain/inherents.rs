@@ -1,9 +1,13 @@
 use nimiq_account::StakingContract;
 use nimiq_block::{ForkProof, MacroBlock, MacroHeader, SkipBlockInfo};
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_database as db;
 use nimiq_keys::Address;
 use nimiq_primitives::{
-    account::AccountType, coin::Coin, policy::Policy, slots_allocation::PenalizedSlot,
+    account::AccountType,
+    coin::Coin,
+    policy::Policy,
+    slots_allocation::{PenalizedSlot, SlashedValidator},
 };
 use nimiq_transaction::{inherent::Inherent, reward::RewardTransaction};
 use nimiq_vrf::{AliasMethod, VrfUseCase};
@@ -31,6 +35,7 @@ impl Blockchain {
     /// verified fork proofs and (or) skip block.
     pub fn create_punishment_inherents(
         &self,
+        block_number: u32,
         fork_proofs: &[ForkProof],
         skip_block_info: Option<SkipBlockInfo>,
         txn_option: Option<&db::TransactionProxy>,
@@ -39,7 +44,7 @@ impl Blockchain {
 
         for fork_proof in fork_proofs {
             trace!("Creating inherent from fork proof: {:?}", fork_proof);
-            inherents.push(self.inherent_from_fork_proof(fork_proof, txn_option));
+            inherents.push(self.inherent_from_fork_proof(block_number, fork_proof, txn_option));
         }
 
         if let Some(skip_block_info) = skip_block_info {
@@ -53,6 +58,7 @@ impl Blockchain {
     /// It creates a slash inherent from a fork proof. It expects a *verified* fork proof!
     pub fn inherent_from_fork_proof(
         &self,
+        reporting_block: u32, // PITODO: we can get it from the blockchain, should be head block number + 1
         fork_proof: &ForkProof,
         txn_option: Option<&db::TransactionProxy>,
     ) -> Inherent {
@@ -66,15 +72,31 @@ impl Blockchain {
             )
             .expect("Couldn't calculate slot owner!");
 
-        // Create the PenalizedSlot struct.
-        let slot = PenalizedSlot {
-            slot: proposer_slot.number,
+        // If the reporting block is in a new epoch, we check if the proposer is still a validator in this epoch
+        // and retrieve its new slots.
+        let new_epoch_slot_range = if Policy::epoch_at(reporting_block)
+            == Policy::epoch_at(fork_proof.header1.block_number) + 1
+        {
+            self.current_validators()
+                .expect("We need to have validators")
+                .get_validator_by_address(&proposer_slot.validator.address)
+                .map(|validator| validator.slot_range.0..validator.slot_range.1)
+        } else {
+            None
+        };
+
+        // Create the SlashedValidator struct.
+        let slashed_validator = SlashedValidator {
+            slots: proposer_slot.validator.slot_range.0..proposer_slot.validator.slot_range.1,
             validator_address: proposer_slot.validator.address,
             event_block: fork_proof.header1.block_number,
         };
 
         // Create the corresponding slash inherent.
-        Inherent::Penalize { slot }
+        Inherent::Slash {
+            slashed_validator,
+            new_epoch_slot_range,
+        }
     }
 
     /// It creates a penalize inherent from a skip block. It expects a *verified* skip block!

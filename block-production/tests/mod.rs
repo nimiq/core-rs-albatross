@@ -16,6 +16,7 @@ use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_serde::Deserialize;
 use nimiq_test_log::test;
 use nimiq_test_utils::{
+    block_production::TemporaryBlockProducer,
     blockchain::{
         fill_micro_blocks, fill_micro_blocks_with_txns, produce_macro_blocks, sign_macro_block,
         signing_key, voting_key,
@@ -176,6 +177,105 @@ fn it_can_produce_macro_blocks() {
     };
 
     let block = sign_macro_block(&voting_key(), macro_block.header, macro_block.body);
+    assert_eq!(
+        Blockchain::push(bc, Block::Macro(block)),
+        Ok(PushResult::Extended)
+    );
+}
+
+#[test]
+fn it_can_produce_macro_block_after_punishment() {
+    let producer = TemporaryBlockProducer::new();
+
+    // Penalize one slot.
+    producer.next_block(vec![], true);
+
+    fill_micro_blocks(&producer.producer, &producer.blockchain);
+
+    // Create checkpoint block.
+    let bc = producer.blockchain.upgradable_read();
+    let macro_block = {
+        producer.producer.next_macro_block_proposal(
+            &bc,
+            bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            0u32,
+            vec![],
+        )
+    };
+
+    // Check sets are correctly produced.
+    assert!(!bc
+        .get_staking_contract()
+        .punished_slots
+        .current_batch_punished_slots()
+        .is_empty());
+    assert!(!macro_block
+        .body
+        .as_ref()
+        .unwrap()
+        .next_batch_initial_punished_set
+        .is_empty());
+
+    let block = sign_macro_block(
+        &producer.producer.voting_key,
+        macro_block.header,
+        macro_block.body,
+    );
+    assert_eq!(
+        Blockchain::push(bc, Block::Macro(block)),
+        Ok(PushResult::Extended)
+    );
+
+    // Reactivate validator.
+    let address =
+        Address::from_user_friendly_address("NQ20 TSB0 DFSM UH9C 15GQ GAGJ TTE4 D3MA 859E")
+            .unwrap();
+    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+    let reactivate_tx = TransactionBuilder::new_reactivate_validator(
+        &key_pair,
+        address,
+        &producer.producer.signing_key,
+        100.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+    producer.next_block_with_txs(vec![], false, vec![reactivate_tx]);
+
+    // Produce next checkpoint block.
+    fill_micro_blocks(&producer.producer, &producer.blockchain);
+
+    let bc = producer.blockchain.upgradable_read();
+    let macro_block = {
+        producer.producer.next_macro_block_proposal(
+            &bc,
+            bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            0u32,
+            vec![],
+        )
+    };
+
+    // Check sets are correctly produced.
+    // The current punished slots still contain the slot.
+    // However, the initial set for the next batch should
+    // already take into account the reactivation.
+    assert!(!bc
+        .get_staking_contract()
+        .punished_slots
+        .current_batch_punished_slots()
+        .is_empty());
+    assert!(macro_block
+        .body
+        .as_ref()
+        .unwrap()
+        .next_batch_initial_punished_set
+        .is_empty());
+
+    let block = sign_macro_block(
+        &producer.producer.voting_key,
+        macro_block.header,
+        macro_block.body,
+    );
     assert_eq!(
         Blockchain::push(bc, Block::Macro(block)),
         Ok(PushResult::Extended)

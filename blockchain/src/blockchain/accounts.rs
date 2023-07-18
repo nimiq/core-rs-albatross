@@ -88,8 +88,12 @@ impl Blockchain {
                 let skip_block_info = SkipBlockInfo::from_micro_block(micro_block);
 
                 // Create the inherents from any forks or skip block info.
-                let inherents =
-                    self.create_punishment_inherents(&body.fork_proofs, skip_block_info, Some(txn));
+                let inherents = self.create_punishment_inherents(
+                    block_state.number,
+                    &body.fork_proofs,
+                    skip_block_info,
+                    Some(txn),
+                );
 
                 // Commit block to AccountsTree and create the receipts.
                 let revert_info: RevertInfo = if accounts.is_complete(Some(txn)) {
@@ -192,8 +196,12 @@ impl Blockchain {
 
         // Create the inherents from any forks or skip block info.
         let skip_block_info = SkipBlockInfo::from_micro_block(block);
-        let inherents =
-            self.create_punishment_inherents(&body.fork_proofs, skip_block_info, Some(txn));
+        let inherents = self.create_punishment_inherents(
+            block.block_number(),
+            &body.fork_proofs,
+            skip_block_info,
+            Some(txn),
+        );
 
         // Get the revert info for this block.
         let revert_info = self

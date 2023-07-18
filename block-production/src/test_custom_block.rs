@@ -102,7 +102,8 @@ pub fn next_micro_block(
     let mut transactions = config.transactions.clone();
     transactions.sort_unstable();
 
-    let inherents = blockchain.create_punishment_inherents(&config.fork_proofs, None, None);
+    let inherents =
+        blockchain.create_punishment_inherents(block_number, &config.fork_proofs, None, None);
 
     let block_state = BlockState::new(block_number, timestamp);
 
@@ -191,7 +192,8 @@ pub fn next_skip_block(
     };
 
     // Create the inherents from the skip block info.
-    let inherents = blockchain.create_punishment_inherents(&[], Some(skip_block_info), None);
+    let inherents =
+        blockchain.create_punishment_inherents(block_number, &[], Some(skip_block_info), None);
 
     let block_state = BlockState::new(block_number, timestamp);
 
@@ -255,7 +257,7 @@ pub fn next_skip_block(
     }
 }
 
-fn next_macro_block_proposal(
+pub fn next_macro_block_proposal(
     signing_key: &SchnorrKeyPair,
     blockchain: &Blockchain,
     config: &BlockConfig,
@@ -307,14 +309,9 @@ fn next_macro_block_proposal(
     // Get the staking contract PRIOR to any state changes.
     let staking_contract = blockchain.get_staking_contract();
 
-    let active_validators = if Policy::is_election_block_at(header.block_number) {
-        Some(&staking_contract.active_validators)
-    } else {
-        None
-    };
     let next_batch_initial_punished_set = staking_contract
         .punished_slots
-        .next_batch_initial_punished_set(header.block_number, active_validators);
+        .next_batch_initial_punished_set(header.block_number, &staking_contract.active_validators);
 
     let reward_transactions =
         blockchain.create_reward_transactions(state, &header, &staking_contract);

@@ -311,9 +311,10 @@ impl Policy {
     }
 
     /// Returns the block height for the last block of the reporting window of a given block number.
+    /// Note: Any change here should be reflected in the misbehavior proofs as well (e.g. fork proofs).
     #[inline]
     pub fn last_block_of_reporting_window(block_number: u32) -> u32 {
-        Self::election_block_after(block_number) + Self::blocks_per_batch()
+        Self::macro_block_after(block_number) + Self::blocks_per_batch()
     }
 
     /// Returns the first block after the reporting window of a given block number has ended.

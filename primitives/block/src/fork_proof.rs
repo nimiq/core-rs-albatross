@@ -65,6 +65,7 @@ impl ForkProof {
 
     /// Check if a fork proof is valid at a given block height. Fork proofs are only during the
     /// batch when the fork was created and during batch immediately after.
+    /// Note: Any change here should be reflected in the policy reporting window related functions.
     pub fn is_valid_at(&self, block_number: u32) -> bool {
         let given_batch = Policy::batch_at(block_number);
 

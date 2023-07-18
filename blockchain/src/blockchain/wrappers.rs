@@ -65,12 +65,20 @@ impl Blockchain {
             .get_chain_info(hash, include_body, txn_option)
     }
 
+    /// Returns the information for the slot owner at the given block height and offset. The
+    /// offset is the block number for micro blocks + skip blocks and to the round number for macro blocks.
     pub fn get_slot_owner_at(
         &self,
         block_number: u32,
         offset: u32,
         txn_option: Option<&DBTransaction>,
     ) -> Result<(Validator, u16), BlockchainError> {
+        if Policy::is_micro_block_at(block_number) && block_number != offset {
+            error!(
+                block_number,
+                offset, "Micro blocks need to have their block number as offset"
+            );
+        }
         let vrf_entropy = self
             .get_block_at(block_number - 1, false, txn_option)?
             .seed()

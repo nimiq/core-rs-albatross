@@ -114,7 +114,12 @@ impl BlockProducer {
         };
 
         // Create the inherents from the fork proofs or skip block info.
-        let inherents = blockchain.create_punishment_inherents(&fork_proofs, skip_block_info, None);
+        let inherents = blockchain.create_punishment_inherents(
+            block_number,
+            &fork_proofs,
+            skip_block_info,
+            None,
+        );
 
         // Update the state and calculate the state root.
         let block_state = BlockState::new(block_number, timestamp);
@@ -325,14 +330,12 @@ impl BlockProducer {
         let staking_contract = blockchain.get_staking_contract();
 
         // Calculate the punished set for the next batch.
-        let active_validators = if Policy::is_election_block_at(macro_header.block_number) {
-            Some(&staking_contract.active_validators)
-        } else {
-            None
-        };
         let next_batch_initial_punished_set = staking_contract
             .punished_slots
-            .next_batch_initial_punished_set(macro_header.block_number, active_validators);
+            .next_batch_initial_punished_set(
+                macro_header.block_number,
+                &staking_contract.active_validators,
+            );
 
         // Calculate the reward transactions.
         let reward_transactions = blockchain.create_reward_transactions(

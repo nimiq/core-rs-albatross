@@ -159,8 +159,8 @@ impl Validators {
     }
 
     /// Returns the validator given its address, if it exists.
-    pub fn get_validator_by_address(&self, address: Address) -> Option<&Validator> {
-        let band = *self.validator_map.get(&address)?;
+    pub fn get_validator_by_address(&self, address: &Address) -> Option<&Validator> {
+        let band = *self.validator_map.get(address)?;
         Some(&self.validators[band as usize])
     }
 

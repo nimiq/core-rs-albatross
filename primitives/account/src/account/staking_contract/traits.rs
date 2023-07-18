@@ -724,14 +724,13 @@ impl AccountInherentInteraction for StakingContract {
             }
             Inherent::FinalizeBatch => {
                 // Clear the lost rewards set.
-                self.punished_slots.finalize_batch(&self.active_validators);
+                self.punished_slots
+                    .finalize_batch(block_state.number, &self.active_validators);
 
                 // Since finalized batches cannot be reverted, we don't need any receipts.
                 Ok(None)
             }
             Inherent::FinalizeEpoch => {
-                self.punished_slots.finalize_epoch();
-
                 // Since finalized epochs cannot be reverted, we don't need any receipts.
                 Ok(None)
             }

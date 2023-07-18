@@ -731,317 +731,6 @@ fn deactivate_validator_works() {
 }
 
 #[test]
-fn reactivate_validator_works() {
-    let env = VolatileDatabase::new(20).unwrap();
-    let accounts = Accounts::new(env.clone());
-    let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let mut block_state = BlockState::new(2, 2);
-    let mut db_txn = env.write_transaction();
-    let mut db_txn = (&mut db_txn).into();
-
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
-    let validator_address = validator_address();
-    let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
-    let signing_key = ed25519_public_key(VALIDATOR_SIGNING_KEY);
-    let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
-    let voting_key = bls_public_key(VALIDATOR_VOTING_KEY);
-
-    // To begin with, deactivate the validator.
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::DeactivateValidator {
-            validator_address: validator_address.clone(),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &signing_keypair,
-    );
-
-    staking_contract
-        .commit_incoming_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut TransactionLog::empty(),
-        )
-        .expect("Failed to commit transaction");
-
-    // Works in the valid case.
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::ReactivateValidator {
-            validator_address: validator_address.clone(),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &signing_keypair,
-    );
-
-    let mut tx_logger = TransactionLog::empty();
-    let receipt = staking_contract
-        .commit_incoming_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut tx_logger,
-        )
-        .expect("Failed to commit transaction");
-
-    let expected_receipt = ReactivateValidatorReceipt {
-        was_inactive_since: 2,
-    };
-
-    assert_eq!(receipt, Some(expected_receipt.into()));
-    assert_eq!(
-        tx_logger.logs,
-        vec![Log::ReactivateValidator {
-            validator_address: validator_address.clone()
-        }]
-    );
-
-    let validator = staking_contract
-        .get_validator(&data_store.read(&db_txn), &validator_address)
-        .expect("Validator should exist");
-
-    assert_eq!(validator.address, validator_address);
-    assert_eq!(validator.signing_key, signing_key);
-    assert_eq!(validator.voting_key, voting_key);
-    assert_eq!(validator.reward_address, validator_address);
-    assert_eq!(validator.signal_data, None);
-    assert_eq!(
-        validator.total_stake,
-        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
-    );
-    assert_eq!(validator.num_stakers, 1);
-    assert_eq!(validator.inactive_since, None);
-
-    assert_eq!(
-        staking_contract.active_validators.get(&validator_address),
-        Some(&Coin::from_u64_unchecked(
-            Policy::VALIDATOR_DEPOSIT + 150_000_000
-        ))
-    );
-
-    // Reactivate a penalized validator.
-    // Penalize the validator slot.
-    let inherent = Inherent::Penalize {
-        slot: PenalizedSlot {
-            slot: 1,
-            validator_address: validator_address.clone(),
-            event_block: 1,
-        },
-    };
-    let mut logs = vec![];
-    let mut inherent_logger = InherentLogger::new(&mut logs);
-    let receipt = staking_contract
-        .commit_inherent(
-            &inherent,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut inherent_logger,
-        )
-        .expect("Failed to commit inherent");
-    assert_eq!(
-        receipt,
-        Some(
-            PenalizeReceipt {
-                newly_deactivated: true,
-                newly_punished_previous_batch: false,
-                newly_punished_current_batch: true,
-            }
-            .into()
-        )
-    );
-    assert_eq!(
-        logs,
-        vec![
-            Log::DeactivateValidator {
-                validator_address: validator_address.clone(),
-            },
-            Log::Penalize {
-                validator_address: validator_address.clone(),
-                event_block: 1,
-                slot: 1,
-                newly_deactivated: true
-            },
-        ]
-    );
-
-    assert!(!staking_contract
-        .active_validators
-        .contains_key(&validator_address));
-
-    block_state.number += Policy::block_after_jail(block_state.number);
-    let mut tx_logger = TransactionLog::empty();
-    let receipt = staking_contract
-        .commit_incoming_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut tx_logger,
-        )
-        .expect("Failed to commit transaction");
-
-    let mut bitset = BTreeSet::new();
-    bitset.insert(1);
-    let expected_receipt = ReactivateValidatorReceipt {
-        was_inactive_since: 2,
-    };
-
-    assert_eq!(receipt, Some(expected_receipt.into()));
-    assert_eq!(
-        tx_logger.logs,
-        vec![Log::ReactivateValidator {
-            validator_address: validator_address.clone()
-        }]
-    );
-
-    let validator = staking_contract
-        .get_validator(&data_store.read(&db_txn), &validator_address)
-        .expect("Validator should exist");
-
-    assert_eq!(validator.address, validator_address);
-    assert_eq!(validator.signing_key, signing_key);
-    assert_eq!(validator.voting_key, voting_key);
-    assert_eq!(validator.reward_address, validator_address);
-    assert_eq!(validator.signal_data, None);
-    assert_eq!(
-        validator.total_stake,
-        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
-    );
-    assert_eq!(validator.num_stakers, 1);
-    assert_eq!(validator.inactive_since, None);
-
-    assert_eq!(
-        staking_contract.active_validators.get(&validator_address),
-        Some(&Coin::from_u64_unchecked(
-            Policy::VALIDATOR_DEPOSIT + 150_000_000
-        ))
-    );
-
-    // Try with an already active validator.
-    assert_eq!(
-        staking_contract.commit_incoming_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut TransactionLog::empty()
-        ),
-        Err(AccountError::InvalidForRecipient)
-    );
-
-    // Revert the transaction.
-    let mut tx_logger = TransactionLog::empty();
-    staking_contract
-        .revert_incoming_transaction(
-            &tx,
-            &block_state,
-            receipt,
-            data_store.write(&mut db_txn),
-            &mut tx_logger,
-        )
-        .expect("Failed to revert transaction");
-
-    assert_eq!(
-        tx_logger.logs,
-        vec![Log::ReactivateValidator {
-            validator_address: validator_address.clone()
-        }]
-    );
-
-    let validator = staking_contract
-        .get_validator(&data_store.read(&db_txn), &validator_address)
-        .expect("Validator should exist");
-
-    assert_eq!(validator.address, validator_address);
-    assert_eq!(validator.signing_key, signing_key);
-    assert_eq!(validator.voting_key, voting_key);
-    assert_eq!(validator.reward_address, validator_address);
-    assert_eq!(validator.signal_data, None);
-    assert_eq!(
-        validator.total_stake,
-        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
-    );
-    assert_eq!(validator.num_stakers, 1);
-    assert_eq!(validator.inactive_since, Some(2));
-
-    assert!(!staking_contract
-        .active_validators
-        .contains_key(&validator_address));
-
-    // Try with a non-existent validator.
-    let fake_address = non_existent_address();
-
-    let invalid_tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::ReactivateValidator {
-            validator_address: fake_address.clone(),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &signing_keypair,
-    );
-
-    assert_eq!(
-        staking_contract.commit_incoming_transaction(
-            &invalid_tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut TransactionLog::empty()
-        ),
-        Err(AccountError::NonExistentAddress {
-            address: fake_address
-        })
-    );
-
-    // Try with a wrong signature.
-    let invalid_tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::ReactivateValidator {
-            validator_address: validator_address.clone(),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &cold_keypair,
-    );
-
-    assert_eq!(
-        staking_contract.commit_incoming_transaction(
-            &invalid_tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut TransactionLog::empty()
-        ),
-        Err(AccountError::InvalidSignature)
-    );
-
-    // Try with a retired validator.
-    let retire_tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::RetireValidator {
-            proof: SignatureProof::default(),
-        },
-        0,
-        &cold_keypair,
-    );
-
-    staking_contract
-        .commit_incoming_transaction(
-            &retire_tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut TransactionLog::empty(),
-        )
-        .expect("Failed to commit transaction");
-
-    assert_eq!(
-        staking_contract.commit_incoming_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut TransactionLog::empty()
-        ),
-        Err(AccountError::InvalidForRecipient)
-    );
-}
-
-#[test]
 fn retire_validator_works() {
     let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
@@ -1181,7 +870,7 @@ fn delete_validator_works() {
         .expect("Failed to commit transaction");
 
     // Doesn't work with a deactivated but not retired validator.
-    let after_cooldown = Policy::election_block_after(2) + Policy::blocks_per_batch() + 1;
+    let after_cooldown = Policy::block_after_reporting_window(2);
     let block_state = BlockState::new(after_cooldown, 1000);
 
     assert_eq!(
@@ -1720,13 +1409,13 @@ fn finalize_epoch_inherents_works() {
         .contains_key(&validator_address));
 
     // Finalize epoch to check that the relevant sets are set properly.
-    let inherent = Inherent::FinalizeEpoch;
+    let finalize_batch_inherent = Inherent::FinalizeBatch;
 
     let mut logs = vec![];
     let mut inherent_logger = InherentLogger::new(&mut logs);
     let receipt = staking_contract
         .commit_inherent(
-            &inherent,
+            &finalize_batch_inherent,
             &block_state,
             data_store.write(&mut db_txn),
             &mut inherent_logger,
@@ -1764,10 +1453,26 @@ fn finalize_epoch_inherents_works() {
 
     assert_eq!(validator.inactive_since, Some(Policy::blocks_per_epoch()));
 
+    // Now we finalize the epoch
+    let finalize_epoch_inherent = Inherent::FinalizeEpoch;
+    let mut logs = vec![];
+    let mut inherent_logger = InherentLogger::new(&mut logs);
+    let receipt = staking_contract
+        .commit_inherent(
+            &finalize_epoch_inherent,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut inherent_logger,
+        )
+        .expect("Failed to commit inherent");
+
+    assert_eq!(receipt, None);
+    assert_eq!(logs, vec![]);
+
     // Cannot revert the inherent.
     assert_eq!(
         staking_contract.revert_inherent(
-            &inherent,
+            &finalize_epoch_inherent,
             &block_state,
             None,
             data_store.write(&mut db_txn),
@@ -1885,6 +1590,7 @@ fn jail_and_revert() {
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -2296,6 +2002,7 @@ fn penalize_and_revert_twice() {
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -2464,6 +2171,7 @@ fn penalize_inactive_and_revert() {
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -2572,6 +2280,7 @@ fn penalize_and_slash_and_revert_twice() {
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
 
@@ -2753,6 +2462,7 @@ fn jail_and_penalize_and_revert_twice() {
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = jailed_setup.env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
     // Prepare slash.
     let penalty_block_state = BlockState::new(2, 200);
