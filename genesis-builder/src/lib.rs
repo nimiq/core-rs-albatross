@@ -30,7 +30,7 @@ use thiserror::Error;
 use time::OffsetDateTime;
 use toml::de::Error as TomlError;
 
-mod config;
+pub mod config;
 
 /// Errors that can be reported building the genesis
 #[derive(Debug, Error)]

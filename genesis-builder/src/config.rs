@@ -2,14 +2,14 @@ use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::coin::Coin;
-use nimiq_serde::Deserialize;
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::account::htlc_contract::AnyHash;
 use nimiq_vrf::VrfSeed;
 use time::OffsetDateTime;
 
 /// Struct that defines the genesis configuration that is going to be parsed
 /// from the genesis TOML files.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GenesisConfig {
     /// Seed message.
     #[serde(default)]
@@ -49,7 +49,7 @@ pub struct GenesisConfig {
     pub htlc_accounts: Vec<GenesisHTLC>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GenesisValidator {
     pub validator_address: Address,
     pub signing_key: SchnorrPublicKey,
@@ -57,21 +57,21 @@ pub struct GenesisValidator {
     pub reward_address: Address,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GenesisStaker {
     pub staker_address: Address,
     pub balance: Coin,
     pub delegation: Address,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GenesisAccount {
     pub address: Address,
     pub balance: Coin,
 }
 
 /// Struct that represents a vesting contract in the toml file that is used to generate the genesis
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GenesisVestingContract {
     /// Vesting contract account address
     pub address: Address,
@@ -90,7 +90,7 @@ pub struct GenesisVestingContract {
 }
 
 /// Struct that represents an HTLC in the toml file that is used to generate the genesis
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GenesisHTLC {
     /// HTLC account address
     pub address: Address,
