@@ -88,6 +88,14 @@ impl Validator {
     pub fn is_active(&self) -> bool {
         self.inactive_since.is_none()
     }
+
+    /// Checks if a validator is currently jailed.
+    pub fn is_jailed(&self, block_number: u32) -> bool {
+        if let Some(jail_release) = self.jail_release {
+            return block_number < jail_release;
+        }
+        false
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -453,15 +461,14 @@ impl StakingContract {
             return Err(AccountError::InvalidForRecipient);
         }
 
-        // Check that the validator is not retired.
-        if let Some(jail_release) = validator.jail_release {
-            if block_number < jail_release {
-                debug!(
-                    "Validator {} is jailed until {}",
-                    validator_address, jail_release
-                );
-                return Err(AccountError::InvalidForRecipient);
-            }
+        // Check that the validator is not jailed.
+        if validator.is_jailed(block_number) {
+            debug!(
+                "Validator {} is jailed until {}",
+                validator_address,
+                validator.jail_release.unwrap()
+            );
+            return Err(AccountError::InvalidForRecipient);
         }
 
         // Check that the signer is correct.
@@ -619,15 +626,30 @@ impl StakingContract {
             return Err(AccountError::InvalidForSender);
         }
 
+        // Check that the validator is not currently jailed.
+        if validator.is_jailed(block_number) {
+            debug!(
+                "Validator {} is jailed until {}",
+                validator.address,
+                validator.jail_release.unwrap()
+            );
+            return Err(AccountError::InvalidForSender);
+        }
+
         // Check that the validator has been inactive for long enough.
-        // We must wait until the first batch of the next epoch has passed such that we don't delete
-        // the validator before potential rewards have been distributed.
+        // We must wait until all potential offenses of this validator could have been reported.
+        // This includes the time it takes for the deactivation to take effect (end of the epoch)
+        // and the reporting window from there.
         let inactive_since = validator
             .inactive_since
             .expect("Validator is retired so it must be inactive");
-        let wait_until = Policy::last_block_of_reporting_window(inactive_since);
+        let wait_until =
+            Policy::last_block_of_reporting_window(Policy::election_block_after(inactive_since));
         if block_number <= wait_until {
-            debug!("Tried to delete validator {} too soon", validator.address);
+            debug!(
+                current_block = block_number,
+                wait_until, "Tried to delete validator {} too soon", validator.address
+            );
             return Err(AccountError::InvalidForSender);
         }
 

@@ -311,10 +311,10 @@ impl Policy {
     }
 
     /// Returns the block height for the last block of the reporting window of a given block number.
-    /// Note: Any change here should be reflected in the misbehavior proofs as well (e.g. fork proofs).
+    /// Note: This window is meant for reporting malicious behaviour (aka slashable behaviour).
     #[inline]
     pub fn last_block_of_reporting_window(block_number: u32) -> u32 {
-        Self::macro_block_after(block_number) + Self::blocks_per_batch()
+        block_number + Self::blocks_per_epoch()
     }
 
     /// Returns the first block after the reporting window of a given block number has ended.

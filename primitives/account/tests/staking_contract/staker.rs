@@ -75,12 +75,16 @@ fn setup_staker_with_inactive_balance(
 ) -> StakerSetup {
     let deactivation_block_state = BlockState::new(2, 2);
     let inactive_release_block_state = BlockState::new(
-        Policy::block_after_reporting_window(deactivation_block_state.number),
+        Policy::block_after_reporting_window(Policy::election_block_after(
+            deactivation_block_state.number,
+        )),
         2,
     );
     let before_release_block_state = BlockState::new(inactive_release_block_state.number - 1, 2);
     let jail_release = if validator_is_jailed {
-        Some(Policy::block_after_jail(deactivation_block_state.number))
+        Some(Policy::block_after_jail(Policy::election_block_after(
+            deactivation_block_state.number,
+        )))
     } else {
         None
     };
@@ -517,7 +521,10 @@ fn update_staker_works() {
         .expect("Failed to commit transaction");
 
     // Works when changing to another validator.
-    let block_state = BlockState::new(Policy::block_after_reporting_window(2), 2);
+    let block_state = BlockState::new(
+        Policy::block_after_reporting_window(Policy::election_block_after(2)),
+        2,
+    );
     let mut tx_logger = TransactionLog::empty();
     let receipt = staking_contract
         .commit_incoming_transaction(
@@ -760,7 +767,10 @@ fn unstake_works() {
         .expect("Failed to commit transaction");
 
     // Doesn't work if the value is greater than the balance.
-    let block_state = BlockState::new(Policy::block_after_reporting_window(2), 2);
+    let block_state = BlockState::new(
+        Policy::block_after_reporting_window(Policy::election_block_after(2)),
+        2,
+    );
     let tx = make_unstake_transaction(200_000_000);
 
     assert_eq!(
@@ -851,7 +861,10 @@ fn unstake_works() {
     // Works when removing the entire balance.
     let tx = make_unstake_transaction(50_000_000);
 
-    let block_state = BlockState::new(Policy::block_after_reporting_window(3), 3);
+    let block_state = BlockState::new(
+        Policy::block_after_reporting_window(Policy::election_block_after(2)),
+        3,
+    );
 
     let mut tx_logger = TransactionLog::empty();
     let receipt = staking_contract
@@ -868,6 +881,8 @@ fn unstake_works() {
         inactive_release: Some(block_state.number),
     };
 
+    eprintln!("receipt: {:?}", receipt);
+    eprintln!("receipt: {:?}", expected_receipt);
     assert_eq!(receipt, Some(expected_receipt.into()));
 
     assert_eq!(
@@ -1009,7 +1024,7 @@ fn unstake_from_tombstone_works() {
         .delete_validator(
             &mut store,
             &validator_address,
-            Policy::block_after_reporting_window(0) + 1,
+            Policy::block_after_reporting_window(Policy::election_block_after(0)),
             Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
             &mut TransactionLog::empty(),
         )
@@ -1018,7 +1033,10 @@ fn unstake_from_tombstone_works() {
     // Deactivate the stake.
     let deactivate_stake_tx = make_deactivate_stake_transaction(150_000_000);
 
-    let block_state = BlockState::new(Policy::block_after_reporting_window(0) + 2, 1);
+    let block_state = BlockState::new(
+        Policy::block_after_reporting_window(Policy::election_block_after(0)) + 2,
+        1,
+    );
 
     let deactivate_stake_receipt = staking_contract
         .commit_incoming_transaction(
@@ -1044,7 +1062,7 @@ fn unstake_from_tombstone_works() {
     let unstake_tx = make_unstake_transaction(150_000_000);
 
     let unstake_block_state = BlockState::new(
-        Policy::block_after_reporting_window(block_state.number),
+        Policy::block_after_reporting_window(Policy::election_block_after(block_state.number)),
         block_state.time + 1,
     );
 
@@ -1059,7 +1077,9 @@ fn unstake_from_tombstone_works() {
 
     let expected_receipt = RemoveStakeReceipt {
         delegation: Some(validator_address.clone()),
-        inactive_release: Some(Policy::block_after_reporting_window(block_state.number)),
+        inactive_release: Some(Policy::block_after_reporting_window(
+            Policy::election_block_after(block_state.number),
+        )),
     };
     assert_eq!(unstake_receipt, Some(expected_receipt.into()));
 
@@ -1513,7 +1533,7 @@ fn can_update_inactive_balance() {
             validator_address: Some(staker_setup.validator_address.clone()),
             value: Coin::from_u64_unchecked(100_000_000),
             inactive_release: Some(Policy::block_after_reporting_window(
-                staker_setup.before_release_block_state.number
+                Policy::election_block_after(staker_setup.before_release_block_state.number)
             ))
         }]
     );
@@ -1531,7 +1551,7 @@ fn can_update_inactive_balance() {
     assert_eq!(
         staker.inactive_release,
         Some(Policy::block_after_reporting_window(
-            staker_setup.before_release_block_state.number
+            Policy::election_block_after(staker_setup.before_release_block_state.number)
         ))
     );
 

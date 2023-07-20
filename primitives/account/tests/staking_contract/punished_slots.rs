@@ -478,12 +478,12 @@ fn slash_and_revert_twice(config: SlashConfig) {
         "Can only report event after it happened"
     );
     assert!(
-        Policy::batch_at(config.reporting_block) <= Policy::batch_at(config.event_block1) + 1,
-        "Can only report event up until end of next batch"
+        config.reporting_block <= Policy::last_block_of_reporting_window(config.event_block1),
+        "Can only report event up until reporting window"
     );
     assert!(
-        Policy::batch_at(config.reporting_block) <= Policy::batch_at(config.event_block2) + 1,
-        "Can only report event up until end of next batch"
+        config.reporting_block <= Policy::last_block_of_reporting_window(config.event_block2),
+        "Can only report event up until reporting window"
     );
 
     // Start with an empty set.
@@ -666,6 +666,42 @@ fn can_slash_and_revert_twice() {
             expected_previous1: 0..5,
             expected_current2: 1..6,
             expected_previous2: 0..5,
+            ..Default::default()
+        },
+        // 4. 1st event in same epoch as reporting block and one batch earlier than `previous_batch`,
+        // `current_batch` in the same epoch one batch after
+        SlashConfig {
+            event_block1: 1,
+            event_block2: 1,
+            reporting_block: Policy::blocks_per_batch() * 2 + 1,
+            expected_current1: 0..5,
+            expected_previous1: 0..5,
+            expected_current2: 0..5,
+            expected_previous2: 0..5,
+            ..Default::default()
+        },
+        // 5. 1st event in previous epoch (same epoch as `previous_batch`) and earlier than `previous_batch`,
+        // `current_batch` in a new epoch
+        SlashConfig {
+            event_block1: 1,
+            event_block2: 1,
+            reporting_block: Policy::blocks_per_epoch() + 1,
+            expected_current1: 1..6,
+            expected_previous1: 0..5,
+            expected_current2: 1..6,
+            expected_previous2: 0..5,
+            ..Default::default()
+        },
+        // 6. 1st event in the epoch before `previous_batch`,
+        // `previous_batch` and `current_batch` are both in a new epoch
+        SlashConfig {
+            event_block1: Policy::blocks_per_batch() + 1,
+            event_block2: Policy::blocks_per_batch() + 1,
+            reporting_block: Policy::blocks_per_epoch() + Policy::blocks_per_batch() + 1,
+            expected_current1: 1..6,
+            expected_previous1: 1..6,
+            expected_current2: 1..6,
+            expected_previous2: 1..6,
             ..Default::default()
         },
     ];

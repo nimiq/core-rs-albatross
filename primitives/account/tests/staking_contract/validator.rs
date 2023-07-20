@@ -870,7 +870,7 @@ fn delete_validator_works() {
         .expect("Failed to commit transaction");
 
     // Doesn't work with a deactivated but not retired validator.
-    let after_cooldown = Policy::block_after_reporting_window(2);
+    let after_cooldown = Policy::block_after_reporting_window(Policy::election_block_after(2));
     let block_state = BlockState::new(after_cooldown, 1000);
 
     assert_eq!(
@@ -1574,6 +1574,59 @@ fn deactivate_jail_interaction() {
         &mut TransactionLog::empty(),
     );
     assert_eq!(result, Err(AccountError::InvalidForRecipient));
+}
+
+/// This test makes sure that:
+/// - Validators cannot be deleted while being jailed
+/// - Validators can be deleted after jail release
+#[test]
+fn delete_jail_interaction() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let mut jailed_setup = setup_jailed_validator();
+    let data_store = jailed_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = jailed_setup.env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+
+    // Retire validator
+    let mut data_store_write = data_store.write(&mut db_txn);
+    let mut staking_contract_store = StakingContractStoreWrite::new(&mut data_store_write);
+    jailed_setup
+        .staking_contract
+        .retire_validator(
+            &mut staking_contract_store,
+            &jailed_setup.validator_address,
+            0,
+            &mut TransactionLog::empty(),
+        )
+        .unwrap();
+
+    // Create delete transaction
+    let delete_tx = make_delete_validator_transaction();
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Should fail before jail release.
+    let result = jailed_setup.staking_contract.commit_outgoing_transaction(
+        &delete_tx,
+        &jailed_setup.still_jailed_block_state,
+        data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
+    );
+    assert_eq!(result, Err(AccountError::InvalidForSender));
+
+    // // Should work after jail release.
+    let result = jailed_setup.staking_contract.commit_outgoing_transaction(
+        &delete_tx,
+        &jailed_setup.jail_release_block_state,
+        data_store.write(&mut db_txn),
+        &mut TransactionLog::empty(),
+    );
+    assert!(result.is_ok());
 }
 
 // Jailing an active validator and reverting it

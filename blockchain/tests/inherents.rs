@@ -364,7 +364,7 @@ fn it_correctly_creates_inherents_from_fork_proof() {
         inherents,
         vec![Inherent::Slash {
             slashed_validator: SlashedValidator {
-                slots: validator.slot_range.0..validator.slot_range.1,
+                slots: validator.slots,
                 validator_address: validator.address,
                 event_block: micro_block_fork1.block_number(),
             },
@@ -455,13 +455,11 @@ fn it_correctly_creates_inherents_in_next_epoch_from_fork_proof() {
         inherents,
         vec![Inherent::Slash {
             slashed_validator: SlashedValidator {
-                slots: validator.slot_range.0..validator.slot_range.1,
+                slots: validator.slots,
                 validator_address: validator.address,
                 event_block: micro_block_fork1.block_number(),
             },
-            new_epoch_slot_range: Some(
-                current_epoch_validator.slot_range.0..current_epoch_validator.slot_range.1
-            )
+            new_epoch_slot_range: Some(current_epoch_validator.slots)
         }]
     );
 }

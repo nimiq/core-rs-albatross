@@ -75,19 +75,19 @@ impl Blockchain {
         // If the reporting block is in a new epoch, we check if the proposer is still a validator in this epoch
         // and retrieve its new slots.
         let new_epoch_slot_range = if Policy::epoch_at(reporting_block)
-            == Policy::epoch_at(fork_proof.header1.block_number) + 1
+            > Policy::epoch_at(fork_proof.header1.block_number)
         {
             self.current_validators()
                 .expect("We need to have validators")
                 .get_validator_by_address(&proposer_slot.validator.address)
-                .map(|validator| validator.slot_range.0..validator.slot_range.1)
+                .map(|validator| validator.slots.clone())
         } else {
             None
         };
 
         // Create the SlashedValidator struct.
         let slashed_validator = SlashedValidator {
-            slots: proposer_slot.validator.slot_range.0..proposer_slot.validator.slot_range.1,
+            slots: proposer_slot.validator.slots,
             validator_address: proposer_slot.validator.address,
             event_block: fork_proof.header1.block_number,
         };

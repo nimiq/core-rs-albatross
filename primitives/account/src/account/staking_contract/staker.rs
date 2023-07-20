@@ -398,7 +398,9 @@ impl StakingContract {
             None
         } else {
             // We release after the end of the reporting window.
-            Some(Policy::block_after_reporting_window(block_number))
+            Some(Policy::block_after_reporting_window(
+                Policy::election_block_after(block_number),
+            ))
         };
 
         tx_logger.push_log(Log::SetInactiveStake {

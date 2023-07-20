@@ -25,7 +25,7 @@ use nimiq_test_utils::{
 };
 use nimiq_transaction::ExecutedTransaction;
 use nimiq_transaction_builder::TransactionBuilder;
-use nimiq_utils::time::OffsetTime;
+use nimiq_utils::{math::CeilingDiv, time::OffsetTime};
 use parking_lot::RwLock;
 use tempfile::tempdir;
 
@@ -944,10 +944,12 @@ fn it_can_consume_all_validator_deposit() {
         Ok(PushResult::Extended)
     );
 
+    let last_block_of_reporting_window =
+        Policy::last_block_of_reporting_window(Policy::election_block_after(1));
     produce_macro_blocks(
         &producer,
         &blockchain,
-        (Policy::batches_per_epoch() + 1) as usize,
+        last_block_of_reporting_window.ceiling_div(Policy::blocks_per_batch()) as usize,
     );
 
     // This is an invalid tx since the recipient type doesn't match.
@@ -983,7 +985,7 @@ fn it_can_consume_all_validator_deposit() {
 
     assert_eq!(
         blockchain.read().block_number(),
-        (Policy::batches_per_epoch() + 1) as u32 * Policy::blocks_per_batch() + 1
+        last_block_of_reporting_window + 1
     );
 
     // Now we need to verify that the validator deposit was reduced because of the failing txn
@@ -1040,7 +1042,7 @@ fn it_can_consume_all_validator_deposit() {
 
     assert_eq!(
         blockchain.read().block_number(),
-        (Policy::batches_per_epoch() + 1) as u32 * Policy::blocks_per_batch() + 2
+        last_block_of_reporting_window + 2
     );
 
     // Now we need to verify that the validator no longer exists
@@ -1150,10 +1152,12 @@ fn it_can_revert_failed_delete_validator() {
         Ok(PushResult::Extended)
     );
 
+    let last_block_of_reporting_window =
+        Policy::last_block_of_reporting_window(Policy::election_block_after(1));
     produce_macro_blocks(
         &producer,
         &blockchain,
-        (Policy::batches_per_epoch() + 1) as usize,
+        last_block_of_reporting_window.ceiling_div(Policy::blocks_per_batch()) as usize,
     );
 
     // This is an invalid tx since the recipient type doesn't match.
@@ -1188,7 +1192,7 @@ fn it_can_revert_failed_delete_validator() {
 
     assert_eq!(
         blockchain.read().block_number(),
-        (Policy::batches_per_epoch() + 1) as u32 * Policy::blocks_per_batch() + 1
+        last_block_of_reporting_window + 1
     );
 
     // Now we need to verify that the validator deposit was reduced because of the failing txn

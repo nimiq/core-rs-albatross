@@ -887,7 +887,7 @@ fn can_revert_transactions() {
     );
 
     let block_state = BlockState::new(
-        Policy::blocks_per_epoch() + Policy::blocks_per_batch() + 1,
+        Policy::block_after_reporting_window(Policy::election_block_after(0)),
         10,
     );
 

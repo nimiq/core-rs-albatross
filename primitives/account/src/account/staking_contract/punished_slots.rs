@@ -35,14 +35,14 @@ impl PunishedSlots {
     }
 
     /// Registers a new slash for a given validator.
-    /// The slash always affects the batch in which the event happened.
-    /// If the event was only reported in the subsequent batch, it will affect both sets.
-    /// In the case the validator is not elected, the current set remains unchanged.
+    /// If the event occurred in the current batch, it will only affect the current set.
+    /// If the event was only reported in a subsequent batch, it will affect both sets,
+    /// except if the validator was not elected in the corresponding batches.
     pub fn register_slash(
         &mut self,
         slashed_validator: &SlashedValidator,
         reporting_block: u32,
-        mut new_epoch_slot_range: Option<Range<u16>>,
+        new_epoch_slot_range: Option<Range<u16>>,
     ) -> (BitSet, Option<BTreeSet<u16>>) {
         let old_previous_batch_punished_slots = self.previous_batch_punished_slots.clone();
         let old_current_batch_punished_slots = self
@@ -50,38 +50,53 @@ impl PunishedSlots {
             .get(&slashed_validator.validator_address)
             .cloned();
 
-        if Policy::batch_at(slashed_validator.event_block) == Policy::batch_at(reporting_block) {
+        // If the event happened in the same epoch, the slot range will be determined by the event.
+        // If the event happened in a previous epoch, we get the current slot range as an argument.
+        let current_batch_slot_range = if Policy::epoch_at(slashed_validator.event_block)
+            == Policy::epoch_at(reporting_block)
+        {
+            Some(slashed_validator.slots.clone())
+        } else {
+            new_epoch_slot_range.clone()
+        };
+
+        // We always add the validator to the current set.
+        // If the validator is wasn't elected for the epoch, then we don't slash.
+        if let Some(slots) = current_batch_slot_range {
             let entry = self
                 .current_batch_punished_slots
                 .entry(slashed_validator.validator_address.clone())
                 .or_insert_with(BTreeSet::new);
 
-            for slot in slashed_validator.slots.clone() {
+            for slot in slots {
                 entry.insert(slot);
             }
-        } else if Policy::batch_at(slashed_validator.event_block) + 1
-            == Policy::batch_at(reporting_block)
-        {
-            // Reported during subsequent batch, so changes the previous set.
-            for slot in slashed_validator.slots.clone() {
-                self.previous_batch_punished_slots.insert(slot as usize);
-            }
+        }
 
-            // If we are in the current epoch, the slot range will be the same as slot_range.
-            if Policy::epoch_at(slashed_validator.event_block) == Policy::epoch_at(reporting_block)
+        // If the event happened in an earlier batch, we also punish
+        // the slots in the previous batch set.
+        if Policy::batch_at(slashed_validator.event_block) < Policy::batch_at(reporting_block) {
+            // The following code assumes that the reporting window cannot span more than 2 epochs.
+            assert!(
+                Policy::epoch_at(reporting_block) - Policy::epoch_at(slashed_validator.event_block)
+                    <= 1,
+                "Cannot handle events that happened more than one epoch ago"
+            );
+
+            // If the event happened in the same epoch as the previous batch, the slot range will be determined by the event.
+            // If the event happened in a different epoch than the previous batch, we get the current slot range as an argument.
+            let previous_batch_slot_range = if Policy::epoch_at(slashed_validator.event_block)
+                == Policy::epoch_at(reporting_block - Policy::blocks_per_batch())
             {
-                new_epoch_slot_range = Some(slashed_validator.slots.clone());
-            }
-            // Otherwise, we must use the slots of the new epoch to slash.
-            // If the validator is wasn't elected for the new epoch, then we don't slash.
-            if let Some(slots) = new_epoch_slot_range {
-                let entry = self
-                    .current_batch_punished_slots
-                    .entry(slashed_validator.validator_address.clone())
-                    .or_insert_with(BTreeSet::new);
+                Some(slashed_validator.slots.clone())
+            } else {
+                new_epoch_slot_range
+            };
 
+            // If the validator is wasn't elected for the corresponding epoch, then we don't slash.
+            if let Some(slots) = previous_batch_slot_range {
                 for slot in slots {
-                    entry.insert(slot);
+                    self.previous_batch_punished_slots.insert(slot as usize);
                 }
             }
         }
