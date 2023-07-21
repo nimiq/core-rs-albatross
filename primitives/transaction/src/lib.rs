@@ -422,7 +422,10 @@ impl Transaction {
     }
 
     pub fn serialize_content(&self) -> Vec<u8> {
-        let mut res: Vec<u8> = self.data.serialize_to_vec();
+        // Serialize data as in PoW (2 bytes for the length and then the data)
+        // for backwards compatibility
+        let mut res: Vec<u8> = (self.data.len() as u16).to_be_bytes().serialize_to_vec();
+        res.append(&mut self.data.clone());
         res.append(&mut self.sender.serialize_to_vec());
         res.append(&mut self.sender_type.serialize_to_vec());
         res.append(&mut self.recipient.serialize_to_vec());
@@ -451,17 +454,7 @@ impl Transaction {
 
 impl SerializeContent for Transaction {
     fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
-        Serialize::serialize_to_writer(&self.data, writer)?;
-        Serialize::serialize_to_writer(&self.sender, writer)?;
-        Serialize::serialize_to_writer(&self.sender_type, writer)?;
-        Serialize::serialize_to_writer(&self.recipient, writer)?;
-        Serialize::serialize_to_writer(&self.recipient_type, writer)?;
-        Serialize::serialize_to_writer(&self.value, writer)?;
-        Serialize::serialize_to_writer(&self.fee, writer)?;
-        Serialize::serialize_to_writer(&self.validity_start_height, writer)?;
-        Serialize::serialize_to_writer(&self.network_id, writer)?;
-        Serialize::serialize_to_writer(&self.flags, writer)?;
-        Ok(())
+        writer.write_all(&self.serialize_content())
     }
 }
 
