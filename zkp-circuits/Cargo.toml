@@ -47,9 +47,12 @@ nimiq-keys = { path = "../keys" }
 [dev-dependencies]
 ark-test-curves = { version = "0.4", features = ["bls12_381_curve"] }
 
+nimiq-collections = { path = "../collections" }
+nimiq-primitives = { path = "../primitives", features = ["policy", "slots"] }
 nimiq-tendermint = { path = "../tendermint" }
 nimiq-test-log = { path = "../test-log" }
 nimiq-test-utils = { path = "../test-utils" }
+nimiq-transaction = { path = "../primitives/transaction" }
 
 
 [features]

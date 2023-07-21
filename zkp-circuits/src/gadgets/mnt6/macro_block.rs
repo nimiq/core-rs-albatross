@@ -365,13 +365,85 @@ mod tests {
     use ark_mnt6_753::{constraints::G2Var, Fq as MNT6Fq, G1Projective, G2Projective};
     use ark_r1cs_std::{prelude::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
-    use ark_std::{test_rng, UniformRand};
-    use nimiq_bls::Signature;
+    use ark_std::UniformRand;
+    use nimiq_block::{MacroBody, MacroHeader, TendermintProof};
+    use nimiq_bls::{KeyPair as BlsKeyPair, Signature};
+    use nimiq_collections::bitset::BitSet;
+    use nimiq_hash::{Blake2bHash, Hash};
+    use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, SecureGenerate};
+    use nimiq_primitives::coin::Coin;
+    use nimiq_primitives::{policy::Policy, slots_allocation::ValidatorsBuilder};
     use nimiq_tendermint::ProposalMessage;
     use nimiq_test_log::test;
-    use nimiq_test_utils::block_production::TemporaryBlockProducer;
+    use nimiq_test_utils::{block_production::TemporaryBlockProducer, test_rng::test_rng};
+    use nimiq_transaction::reward::RewardTransaction;
+    use rand::Rng;
 
     use super::*;
+
+    fn random_macro_block() -> MacroBlock {
+        let mut rng = test_rng(true);
+
+        // Initialize validators.
+        let mut validators = ValidatorsBuilder::new();
+        let validator_address =
+            Address::from_user_friendly_address("NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR")
+                .unwrap();
+        let bls_key_pair = BlsKeyPair::generate(&mut rng);
+        let schnorr_key_pair = SchnorrKeyPair::generate(&mut rng);
+        for _ in 0..Policy::SLOTS {
+            validators.push(
+                validator_address.clone(),
+                bls_key_pair.public_key,
+                schnorr_key_pair.public,
+            );
+        }
+
+        let validators = Some(validators.build());
+
+        // Initialize other body fields.
+        let mut next_batch_initial_punished_set = BitSet::new();
+        next_batch_initial_punished_set.insert(5);
+        next_batch_initial_punished_set.insert(67);
+
+        let transactions = vec![RewardTransaction::new(
+            validator_address,
+            Coin::from_u64_unchecked(12),
+        )];
+
+        let body = MacroBody {
+            validators,
+            next_batch_initial_punished_set: Default::default(),
+            transactions,
+        };
+
+        // Initialize the header.
+        let body_root = body.hash();
+        let header = MacroHeader {
+            version: 1,
+            block_number: 5,
+            round: 3,
+            timestamp: 16274824,
+            parent_hash: Blake2bHash(rng.gen()),
+            parent_election_hash: Blake2bHash(rng.gen()),
+            interlink: Some(vec![Blake2bHash(rng.gen()), Blake2bHash(rng.gen())]),
+            seed: Default::default(),
+            extra_data: vec![0x42],
+            state_root: Blake2bHash(rng.gen()),
+            body_root,
+            diff_root: Blake2bHash(rng.gen()),
+            history_root: Blake2bHash(rng.gen()),
+        };
+
+        MacroBlock {
+            header,
+            body: Some(body),
+            justification: Some(TendermintProof {
+                round: 2,
+                sig: Default::default(),
+            }),
+        }
+    }
 
     #[test]
     fn block_hash_works() {
@@ -388,7 +460,22 @@ mod tests {
         // Calculate hash using the gadget version.
         let gadget_hash = block_var.hash(cs).unwrap();
 
-        assert_eq!(primitive_hash.0, &gadget_hash.value().unwrap()[..])
+        assert_eq!(primitive_hash.0, &gadget_hash.value().unwrap()[..]);
+
+        // Test with a second block.
+        let cs = ConstraintSystem::<MNT6Fq>::new_ref();
+        let block = random_macro_block();
+
+        // Calculate hash using the primitive version.
+        let primitive_hash = block.hash_blake2s();
+
+        // Allocate parameters in the circuit.
+        let mut block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
+
+        // Calculate hash using the gadget version.
+        let gadget_hash = block_var.hash(cs).unwrap();
+
+        assert_eq!(primitive_hash.0, &gadget_hash.value().unwrap()[..]);
     }
 
     #[test]
@@ -397,7 +484,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut test_rng();
+        let rng = &mut test_rng(true);
 
         // Create more block parameters.
         let block_number = u32::rand(rng);
@@ -436,7 +523,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut test_rng();
+        let rng = &mut test_rng(true);
 
         // Create more block parameters.
         let block_number = u32::rand(rng);
@@ -478,7 +565,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut test_rng();
+        let rng = &mut test_rng(true);
 
         // Create more block parameters.
         let block_number = u32::rand(rng);
@@ -520,7 +607,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut test_rng();
+        let rng = &mut test_rng(true);
 
         // Create more block parameters.
         let block_number = u32::rand(rng);
@@ -562,7 +649,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut test_rng();
+        let rng = &mut test_rng(true);
 
         // Create more block parameters.
         let block_number = u32::rand(rng);
@@ -610,7 +697,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut test_rng();
+        let rng = &mut test_rng(true);
 
         // Create more block parameters.
         let block_number = u32::rand(rng);
