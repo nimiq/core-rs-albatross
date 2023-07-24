@@ -529,9 +529,10 @@ where
 
     fn on_fork_event(&mut self, event: ForkEvent) {
         match event {
-            ForkEvent::Detected(fork_proof) => {
-                self.blockchain_state.equivocation_proofs.insert(fork_proof)
-            }
+            ForkEvent::Detected(fork_proof) => self
+                .blockchain_state
+                .equivocation_proofs
+                .insert(fork_proof.into()),
         };
     }
 

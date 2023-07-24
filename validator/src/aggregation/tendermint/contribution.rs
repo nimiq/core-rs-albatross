@@ -36,7 +36,7 @@ impl TendermintContribution {
             .sign(&vote)
             .multiply(validator_slots.len() as u16)]);
 
-        // get the slots of the validator ad insert them into the bitset
+        // get the slots of the validator and insert them into the bitset
         let mut signers = BitSet::new();
         for slot in validator_slots {
             signers.insert(slot as usize);

@@ -1,4 +1,4 @@
-use nimiq_block::{Block, BlockError, EquivocationProof};
+use nimiq_block::{Block, BlockError, ForkProof};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{account::AccountError, networks::NetworkId};
 use thiserror::Error;
@@ -6,7 +6,7 @@ use thiserror::Error;
 /// An enum used when a fork is detected.
 #[derive(Clone, Debug)]
 pub enum ForkEvent {
-    Detected(EquivocationProof),
+    Detected(ForkProof),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

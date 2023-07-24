@@ -379,15 +379,23 @@ pub struct PenalizedSlots {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum EquivocationProof {
     Fork(ForkProof),
+    DoubleProposal(DoubleProposalProof),
+    DoubleVote(DoubleVoteProof),
 }
 
 impl From<nimiq_block::EquivocationProof> for EquivocationProof {
     fn from(proof: nimiq_block::EquivocationProof) -> Self {
         match proof {
             nimiq_block::EquivocationProof::Fork(proof) => EquivocationProof::Fork(proof.into()),
+            nimiq_block::EquivocationProof::DoubleProposal(proof) => {
+                EquivocationProof::DoubleProposal(proof.into())
+            }
+            nimiq_block::EquivocationProof::DoubleVote(proof) => {
+                EquivocationProof::DoubleVote(proof.into())
+            }
         }
     }
 }
@@ -404,6 +412,39 @@ impl From<nimiq_block::ForkProof> for ForkProof {
         Self {
             block_number: fork_proof.header1.block_number,
             hashes: [fork_proof.header1.hash(), fork_proof.header2.hash()],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DoubleProposalProof {
+    pub block_number: u32,
+    pub hashes: [Blake2bHash; 2],
+}
+
+impl From<nimiq_block::DoubleProposalProof> for DoubleProposalProof {
+    fn from(double_proposal_proof: nimiq_block::DoubleProposalProof) -> Self {
+        Self {
+            block_number: double_proposal_proof.header1.block_number,
+            hashes: [
+                double_proposal_proof.header1.hash(),
+                double_proposal_proof.header2.hash(),
+            ],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DoubleVoteProof {
+    pub block_number: u32,
+}
+
+impl From<nimiq_block::DoubleVoteProof> for DoubleVoteProof {
+    fn from(double_vote_proof: nimiq_block::DoubleVoteProof) -> Self {
+        Self {
+            block_number: double_vote_proof.block_number(),
         }
     }
 }
