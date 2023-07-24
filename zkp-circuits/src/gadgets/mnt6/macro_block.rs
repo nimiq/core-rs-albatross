@@ -458,9 +458,12 @@ mod tests {
         let mut block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         // Calculate hash using the gadget version.
-        let gadget_hash = block_var.hash(cs).unwrap();
+        let gadget_hash = block_var.hash(cs.clone()).unwrap();
 
         assert_eq!(primitive_hash.0, &gadget_hash.value().unwrap()[..]);
+
+        let num_instance_vars = cs.num_instance_variables();
+        let num_witness_vars = cs.num_witness_variables();
 
         // Test with a second block.
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
@@ -473,9 +476,20 @@ mod tests {
         let mut block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
 
         // Calculate hash using the gadget version.
-        let gadget_hash = block_var.hash(cs).unwrap();
+        let gadget_hash = block_var.hash(cs.clone()).unwrap();
 
         assert_eq!(primitive_hash.0, &gadget_hash.value().unwrap()[..]);
+
+        assert_eq!(
+            num_instance_vars,
+            cs.num_instance_variables(),
+            "Number of allocated public variables should not change"
+        );
+        assert_eq!(
+            num_witness_vars,
+            cs.num_witness_variables(),
+            "Number of allocated private variables should not change"
+        );
     }
 
     #[test]

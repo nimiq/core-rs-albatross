@@ -225,7 +225,12 @@ impl SerializeContent for MacroHeader {
         interlink_hash.serialize_to_writer(writer)?;
 
         self.seed.serialize_to_writer(writer)?;
-        self.extra_data.serialize_to_writer(writer)?;
+
+        let extra_data_hash = H::Builder::default()
+            .chain(&self.extra_data.serialize_to_vec())
+            .finish();
+        extra_data_hash.serialize_to_writer(writer)?;
+
         self.state_root.serialize_to_writer(writer)?;
         self.body_root.serialize_to_writer(writer)?;
         self.history_root.serialize_to_writer(writer)?;
@@ -269,8 +274,12 @@ impl SerializeContent for MacroBody {
         } else {
             0u8.serialize_to_writer(writer)?;
         }
-        self.next_batch_initial_punished_set
-            .serialize_to_writer(writer)?;
+
+        let punished_set_hash = self
+            .next_batch_initial_punished_set
+            .serialize_to_vec()
+            .hash::<H>();
+        punished_set_hash.serialize_to_writer(writer)?;
 
         let transactions_hash = self.transactions.serialize_to_vec().hash::<H>();
         transactions_hash.serialize_to_writer(writer)?;
