@@ -362,7 +362,7 @@ impl Slots {
 
         for validator in validators.iter() {
             slots.push(Slots {
-                first_slot_number: validator.slot_range.0,
+                first_slot_number: validator.slots.start,
                 num_slots: validator.num_slots(),
                 validator: validator.address.clone(),
                 public_key: validator.voting_key.compressed().clone(),

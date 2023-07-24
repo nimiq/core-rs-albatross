@@ -14,7 +14,7 @@
 //!                      |             SlotBand                      |    SlotBand       |
 //!                      +-------------------------------------------+-------------------+
 //! ```
-use std::{cmp::max, collections::BTreeMap, slice::Iter};
+use std::{cmp::max, collections::BTreeMap, ops, slice::Iter};
 
 use ark_ec::CurveGroup;
 use ark_serialize::CanonicalSerialize;
@@ -30,15 +30,15 @@ pub const PK_TREE_DEPTH: usize = 5;
 pub const PK_TREE_BREADTH: usize = 2_usize.pow(PK_TREE_DEPTH as u32);
 
 /// A validator that owns some slots.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct Validator {
     pub address: Address,
     pub voting_key: LazyBlsPublicKey,
     pub signing_key: SchnorrPublicKey,
-    // The start and end slots for this validator. For example, if the slot range is (10,25) then
+    // The slot range for this validator. For example, if the slot range is (10,25) then
     // this validator owns the slots from 10 (inclusive) to 25 (exclusive). So it owns 25-10=15 slots.
-    pub slot_range: (u16, u16),
+    pub slots: ops::Range<u16>,
 }
 
 impl Validator {
@@ -47,19 +47,19 @@ impl Validator {
         address: Address,
         voting_key: TBlsKey,
         signing_key: TSchnorrKey,
-        slot_range: (u16, u16),
+        slots: ops::Range<u16>,
     ) -> Self {
         Self {
             address,
             voting_key: voting_key.into(),
             signing_key: signing_key.into(),
-            slot_range,
+            slots,
         }
     }
 
     /// Returns the number of slots owned by this validator.
     pub fn num_slots(&self) -> u16 {
-        self.slot_range.1 - self.slot_range.0
+        self.slots.len() as u16
     }
 }
 
@@ -122,10 +122,10 @@ impl Validators {
                 pivot - last_pivot
             };
             last_pivot = pivot;
-            let (start, end) = self.validators[pivot].slot_range;
-            if slot < start {
+            let slots = self.validators[pivot].slots.clone();
+            if slot < slots.start {
                 pivot -= max(pivot_diff / 2, 1);
-            } else if slot >= end {
+            } else if slot >= slots.end {
                 pivot += max(pivot_diff / 2, 1);
             } else {
                 return pivot as u16;
@@ -254,7 +254,7 @@ impl ValidatorsBuilder {
                 validator_address,
                 voting_key,
                 signing_key,
-                (start_slot, start_slot + num_slots),
+                start_slot..(start_slot + num_slots),
             ));
             start_slot += num_slots;
         }

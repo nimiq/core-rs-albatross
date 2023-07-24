@@ -253,9 +253,9 @@ impl SkipBlockAggregation {
         // TODO expose this somewehere else so we don't need to clone here.
         let weights = Arc::new(ValidatorRegistry::new(active_validators.clone()));
 
-        let slot_range = active_validators.validators[validator_id as usize].slot_range;
-
-        let slots: Vec<u16> = (slot_range.0..slot_range.1).collect();
+        let slots = active_validators.validators[validator_id as usize]
+            .slots
+            .clone();
 
         loop {
             let message_hash = skip_block_info.hash_with_prefix();
@@ -275,8 +275,8 @@ impl SkipBlockAggregation {
                 .multiply(slots.len() as u16)]);
 
             let mut signers = BitSet::new();
-            for slot in &slots {
-                signers.insert(*slot as usize);
+            for slot in slots.clone() {
+                signers.insert(slot as usize);
             }
 
             let own_contribution = SignedSkipBlockMessage {

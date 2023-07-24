@@ -57,7 +57,7 @@ fn test_skip_block_single_signature() {
         Address::default(),
         LazyPublicKey::from(key_pair.public_key),
         PublicKey::from([0u8; 32]),
-        (0, Policy::SLOTS),
+        0..Policy::SLOTS,
     )]);
 
     assert!(skip_block_proof.verify(&skip_block_info, &validators));

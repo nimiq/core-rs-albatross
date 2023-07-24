@@ -251,11 +251,11 @@ async fn validator_can_catch_up() {
     // Listen for blockchain events from the block producer (after two skip blocks).
     let mut events = blockchain.read().notifier_as_stream();
 
-    let (start, end) = blockchain.read().current_validators().unwrap().validators
+    let slots = blockchain.read().current_validators().unwrap().validators
         [validator.validator_slot_band() as usize]
-        .slot_range;
-
-    let slots = (start..end).collect();
+        .slots
+        .clone()
+        .collect();
 
     let skip_block_info = SkipBlockInfo {
         block_number: 1,

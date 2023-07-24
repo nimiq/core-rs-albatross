@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops};
 
 use nimiq_block::{MultiSignature, TendermintVote};
 use nimiq_bls::{AggregateSignature, SecretKey};
@@ -28,7 +28,7 @@ impl TendermintContribution {
     pub(crate) fn from_vote(
         vote: TendermintVote,
         secret_key: &SecretKey,
-        validator_slots: Vec<u16>,
+        validator_slots: ops::Range<u16>,
     ) -> Self {
         assert!(!validator_slots.is_empty());
         // sign the hash

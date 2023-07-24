@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, ops};
 
 use nimiq_bls::PublicKey;
 use nimiq_collections::BitSet;
@@ -20,10 +20,8 @@ impl ValidatorRegistry {
         self.validators.num_validators()
     }
 
-    pub fn get_slots(&self, idx: u16) -> Vec<u16> {
-        let validator = &self.validators.validators[idx as usize];
-
-        (validator.slot_range.0..validator.slot_range.1).collect()
+    pub fn get_slots(&self, idx: u16) -> ops::Range<u16> {
+        self.validators.validators[idx as usize].slots.clone()
     }
 }
 
@@ -64,8 +62,8 @@ impl IdentityRegistry for ValidatorRegistry {
         // This holds for Single and Multiple signatories.
         let mut validators_slots = BitSet::new();
         for validator_id in ids.iter() {
-            for slot in self.get_slots(*validator_id).iter() {
-                validators_slots.insert(*slot as usize);
+            for slot in self.get_slots(*validator_id) {
+                validators_slots.insert(slot as usize);
             }
         }
 
