@@ -1,14 +1,16 @@
 use std::{ops, sync::Arc};
 
 use futures::future::BoxFuture;
-use nimiq_block::Block;
-use nimiq_network_interface::network::Network;
+use nimiq_network_interface::network::{Network, PubsubId};
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_diff::TrieDiff, TreeProof};
 use parking_lot::RwLock;
 use tokio::sync::Semaphore;
 
 use super::{RequestPartialDiff, ResponsePartialDiff};
-use crate::sync::peer_list::{PeerList, PeerListIndex};
+use crate::sync::{
+    live::block_queue::BlockAndId,
+    peer_list::{PeerList, PeerListIndex},
+};
 
 pub struct DiffRequestComponent<N: Network> {
     network: Arc<N>,
@@ -32,17 +34,26 @@ impl<N: Network> DiffRequestComponent<N> {
     pub fn request_diff(
         &mut self,
         range: ops::RangeTo<KeyNibbles>,
-    ) -> impl FnMut(&Block) -> BoxFuture<'static, Result<TrieDiff, ()>> {
+    ) -> impl FnMut(&BlockAndId<N>) -> BoxFuture<'static, Result<TrieDiff, ()>> {
         let mut starting_peer_index = self.current_peer_index.clone();
         self.current_peer_index.increment();
 
         let peers = Arc::clone(&self.peers);
         let network = Arc::clone(&self.network);
         let concurrent_requests = Arc::clone(&self.concurrent_requests);
-        move |block| {
+
+        move |(block, pubsub_id)| {
             let peers = Arc::clone(&peers);
-            let mut current_peer_index = starting_peer_index.clone();
-            starting_peer_index.increment();
+
+            // If we know the peer that sent us this block, we ask them first.
+            let mut current_peer_index = pubsub_id
+                .as_ref()
+                .map(|id| id.propagation_source())
+                .and_then(|peer_id| peers.read().index_of(&peer_id))
+                .unwrap_or_else(|| {
+                    starting_peer_index.increment();
+                    starting_peer_index.clone()
+                });
 
             let network = Arc::clone(&network);
             let concurrent_requests = Arc::clone(&concurrent_requests);
@@ -55,13 +66,15 @@ impl<N: Network> DiffRequestComponent<N> {
                 let _request_permit = concurrent_requests.acquire().await.unwrap();
                 let mut num_tries = 0;
                 loop {
-                    let peer_id = match peers.read().increment_and_get(&mut current_peer_index) {
+                    let peer_id = match peers.read().get(&current_peer_index) {
                         Some(peer_id) => peer_id,
                         None => {
                             error!("couldn't fetch diff: no peers");
                             return Err(());
                         }
                     };
+                    current_peer_index.increment();
+
                     let result = network
                         .request(
                             RequestPartialDiff {
@@ -71,9 +84,11 @@ impl<N: Network> DiffRequestComponent<N> {
                             peer_id,
                         )
                         .await;
+
                     num_tries += 1;
                     let max_tries = peers.read().len();
                     let exhausted = num_tries >= max_tries;
+
                     match result {
                         Ok(ResponsePartialDiff::PartialDiff(diff)) => {
                             if TreeProof::new(diff.0.iter()).root_hash() == block_diff_root {

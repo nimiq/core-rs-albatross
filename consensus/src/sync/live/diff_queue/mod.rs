@@ -71,22 +71,23 @@ pub enum QueuedDiff<N: Network> {
 async fn augment_block<N, F, R>(block: QueuedBlock<N>, mut get_diff: F) -> Result<QueuedDiff<N>, ()>
 where
     N: Network,
-    F: FnMut(&Block) -> R,
+    F: FnMut(&BlockAndId<N>) -> R,
     R: Future<Output = Result<TrieDiff, ()>>,
 {
-    async fn get_multiple_diffs<F, R>(
-        blocks: &[&Block],
+    async fn get_multiple_diffs<N, F, R>(
+        blocks: &[BlockAndId<N>],
         mut get_diff: F,
-    ) -> Result<Vec<(usize, TrieDiff)>, ()>
+    ) -> Result<Vec<TrieDiff>, ()>
     where
-        F: FnMut(&Block) -> R,
+        N: Network,
+        F: FnMut(&BlockAndId<N>) -> R,
         R: Future<Output = Result<TrieDiff, ()>>,
     {
         // This is just a fancy way to collect all the diffs simultaneously.
         let diffs: FuturesUnordered<_> = blocks
             .iter()
             .enumerate()
-            .map(|(i, &block)| {
+            .map(|(i, block)| {
                 // Get each diff.
                 let diff = get_diff(block);
                 async move {
@@ -95,37 +96,38 @@ where
                 }
             })
             .collect();
+
         // Collect all diffs, returning an error if any failed.
         let mut diffs = diffs.try_collect::<Vec<_>>().await?;
+
         // Sort the diffs by index again.
         diffs.sort_unstable_by_key(|&(i, _)| i);
         assert_eq!(blocks.len(), diffs.len());
-        Ok(diffs)
+
+        // Strip index before returning.
+        Ok(diffs.into_iter().map(|(_, diff)| diff).collect())
     }
+
     Ok(match block {
-        QueuedBlock::Head((block, id)) => {
+        QueuedBlock::Head(block) => {
             let diff = get_diff(&block).await?;
-            QueuedDiff::Head((block, id), diff)
+            QueuedDiff::Head(block, diff)
         }
         QueuedBlock::Buffered(blocks) => {
-            let diffs =
-                get_multiple_diffs(&blocks.iter().map(|(b, _)| b).collect::<Vec<_>>(), get_diff)
-                    .await?;
-            assert_eq!(blocks.len(), diffs.len());
-            QueuedDiff::Buffered(
-                blocks
-                    .into_iter()
-                    .zip(diffs.into_iter().map(|(_, d)| d))
-                    .collect(),
-            )
+            let diffs = get_multiple_diffs::<N, F, R>(&blocks[..], get_diff).await?;
+            QueuedDiff::Buffered(blocks.into_iter().zip(diffs).collect())
         }
         QueuedBlock::Missing(blocks) => {
-            let diffs = get_multiple_diffs(&blocks.iter().collect::<Vec<_>>(), get_diff).await?;
-            assert_eq!(blocks.len(), diffs.len());
+            let blocks = blocks
+                .into_iter()
+                .map(|block| (block, Option::<N::PubsubId>::None))
+                .collect::<Vec<_>>();
+            let diffs = get_multiple_diffs::<N, F, R>(&blocks[..], get_diff).await?;
             QueuedDiff::Missing(
                 blocks
                     .into_iter()
-                    .zip(diffs.into_iter().map(|(_, d)| d))
+                    .map(|(block, _)| block)
+                    .zip(diffs)
                     .collect(),
             )
         }

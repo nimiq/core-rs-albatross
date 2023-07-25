@@ -22,10 +22,8 @@ pub struct PeerListIndex {
 
 impl Default for PeerListIndex {
     fn default() -> PeerListIndex {
-        PeerListIndex {
-            // This works because `usize::MAX.wrapping_add(1)` is `0`.
-            index: usize::MAX,
-        }
+        // This works because `usize::MAX.wrapping_add(1)` is `0`.
+        PeerListIndex { index: usize::MAX }
     }
 }
 
@@ -46,6 +44,10 @@ impl fmt::Display for PeerListIndex {
 }
 
 impl PeerListIndex {
+    pub fn new(index: usize) -> Self {
+        PeerListIndex { index }
+    }
+
     pub fn increment(&mut self) {
         self.index = self.index.wrapping_add(1);
     }
@@ -104,6 +106,21 @@ impl<N: Network> PeerList<N> {
             return true;
         }
         false
+    }
+
+    pub fn index_of(&self, peer_id: &N::PeerId) -> Option<PeerListIndex> {
+        self.peers
+            .iter()
+            .position(|id| id == peer_id)
+            .map(PeerListIndex::new)
+    }
+
+    pub fn get(&self, peer_index: &PeerListIndex) -> Option<N::PeerId> {
+        if self.peers.is_empty() {
+            return None;
+        }
+        let index = peer_index.index % self.peers.len();
+        Some(self.peers[index])
     }
 
     pub fn increment_and_get(&self, peer_index: &mut PeerListIndex) -> Option<N::PeerId> {
