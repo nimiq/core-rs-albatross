@@ -161,6 +161,12 @@ impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
                     .get(peak_pos.index)
                     .ok_or(Error::InconsistentStore)?,
                 peak_pos.num_leaves(),
+                peak_pos
+                    .left_child()
+                    .and_then(|pos| self.store.get(pos.index)),
+                peak_pos
+                    .right_child()
+                    .and_then(|pos| self.store.get(pos.index)),
             ))
         });
 
@@ -455,6 +461,8 @@ impl<H: Merge + Clone + PartialEq, S: Store<H>> MerkleMountainRange<H, S> {
 
 #[cfg(test)]
 mod tests {
+    use std::vec;
+
     use nimiq_test_log::test;
 
     use super::*;
@@ -479,6 +487,40 @@ mod tests {
             assert_eq!(mmr.find(v), Some(i));
             // Check hash.
             assert_eq!(mmr.get_root(), Ok(hash_mmr(&nodes[..i + 1])))
+        }
+    }
+
+    #[test]
+    fn it_correctly_proves_num_leaves() {
+        let nodes = vec![2, 3, 5, 7, 11, 13, 17, 19, 23, 29];
+        let mut hashes = vec![];
+
+        let store = MemoryStore::new();
+        let mut mmr = MerkleMountainRange::<TestHash, _>::new(store);
+
+        // Check empty size proof.
+        let size_proof = mmr
+            .prove_num_leaves(|hash| hashes.iter().position(|h| h == &hash).map(|pos| nodes[pos]))
+            .unwrap();
+
+        assert!(size_proof.verify(&mmr.get_root().unwrap()));
+        assert_eq!(size_proof.size(), 0);
+
+        // Check size proof for multiple sizes.
+        for (i, v) in nodes.clone().into_iter().enumerate() {
+            // Add value.
+            let index = mmr.push(&v).unwrap();
+            let hash = mmr.get_leaf(index).unwrap();
+            hashes.push(hash);
+
+            let size_proof = mmr
+                .prove_num_leaves(|hash| {
+                    hashes.iter().position(|h| h == &hash).map(|pos| nodes[pos])
+                })
+                .unwrap();
+
+            assert!(size_proof.verify(&mmr.get_root().unwrap()));
+            assert_eq!(size_proof.size() as usize, i + 1);
         }
     }
 }

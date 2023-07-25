@@ -13,16 +13,16 @@ use crate::{
 #[derive(Clone, Debug)]
 pub enum SizeProof<H: Merge, T: Hash<H>> {
     EmptyTree,
-    SinglePeak(u64, T),
-    MultiplePeaks(u64, H, H),
+    SingleElement(u64, T),
+    MultipleElements(u64, H, H),
 }
 
 impl<H: Merge + Eq, T: Hash<H>> SizeProof<H, T> {
     pub fn verify(&self, hash: &H) -> bool {
         let self_hash = match self {
             SizeProof::EmptyTree => H::empty(0),
-            SizeProof::SinglePeak(size, item) => item.hash(*size),
-            SizeProof::MultiplePeaks(size, left, right) => left.merge(right, *size),
+            SizeProof::SingleElement(size, item) => item.hash(*size),
+            SizeProof::MultipleElements(size, left, right) => left.merge(right, *size),
         };
         hash == &self_hash
     }
@@ -30,7 +30,7 @@ impl<H: Merge + Eq, T: Hash<H>> SizeProof<H, T> {
     pub fn size(&self) -> u64 {
         match self {
             SizeProof::EmptyTree => 0,
-            SizeProof::SinglePeak(size, _) | SizeProof::MultiplePeaks(size, _, _) => *size,
+            SizeProof::SingleElement(size, _) | SizeProof::MultipleElements(size, _, _) => *size,
         }
     }
 }

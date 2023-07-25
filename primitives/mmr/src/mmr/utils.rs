@@ -38,7 +38,7 @@ pub(crate) fn bagging<H: Merge, I: Iterator<Item = Result<(H, usize), Error>>>(
 pub fn prove_num_leaves<
     H: Merge + Clone,
     T: Hash<H>,
-    I: Iterator<Item = Result<(H, usize), Error>>,
+    I: Iterator<Item = Result<(H, usize, Option<H>, Option<H>), Error>>,
     F: Fn(H) -> Option<T>,
 >(
     peaks_rev: I,
@@ -47,10 +47,10 @@ pub fn prove_num_leaves<
     // Bagging
     let mut bagging_info = None;
     for item in peaks_rev {
-        let (peak_hash, peak_leaves) = item?;
+        let (peak_hash, peak_leaves, left_child_hash, right_child_hash) = item?;
 
         bagging_info = match bagging_info {
-            None => Some((peak_leaves, None, None, peak_hash)),
+            None => Some((peak_leaves, left_child_hash, right_child_hash, peak_hash)),
             Some((root_leaves, _, _, root_hash)) => {
                 let sum_leaves: usize = root_leaves + peak_leaves;
 
@@ -64,10 +64,12 @@ pub fn prove_num_leaves<
         };
     }
     match bagging_info {
-        Some((size, Some(left_hash), Some(right_hash), _)) => {
-            Ok(SizeProof::MultiplePeaks(size as u64, left_hash, right_hash))
-        }
-        Some((size, None, None, hash)) => Ok(SizeProof::SinglePeak(
+        Some((size, Some(left_hash), Some(right_hash), _)) => Ok(SizeProof::MultipleElements(
+            size as u64,
+            left_hash,
+            right_hash,
+        )),
+        Some((size, None, None, hash)) if size == 1 => Ok(SizeProof::SingleElement(
             size as u64,
             f(hash).ok_or(Error::InconsistentStore)?,
         )),

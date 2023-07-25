@@ -1106,6 +1106,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn prove_num_leaves_works() {
+        // Initialize History Store.
+        let env = VolatileDatabase::new(20).unwrap();
+        let history_store = HistoryStore::new(env.clone());
+
+        // Create extended transactions.
+        let ext_0 = create_transaction(1, 0);
+        let ext_1 = create_transaction(3, 1);
+        let ext_2 = create_transaction(7, 2);
+        let ext_3 = create_transaction(8, 3);
+
+        let ext_txs = vec![ext_0, ext_1, ext_2, ext_3];
+
+        // Add extended transactions to History Store.
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, 1, &ext_txs);
+
+        // Prove number of leaves.
+        let size_proof = history_store
+            .prove_num_leaves(1, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+
+        // Verify method works.
+        assert!(size_proof.verify(&history_store.get_history_tree_root(1, Some(&txn)).unwrap()));
+        assert_eq!(size_proof.size(), 4);
+    }
+
+    #[test]
     fn length_at_works() {
         // Initialize History Store.
         let env = VolatileDatabase::new(20).unwrap();
