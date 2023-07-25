@@ -3,6 +3,7 @@ use std::net::IpAddr;
 #[cfg(feature = "metrics-server")]
 use std::net::SocketAddr;
 use std::{
+    fmt::Debug,
     path::{Path, PathBuf},
     string::ToString,
 };
@@ -142,7 +143,7 @@ impl From<TlsSettings> for TlsConfig {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct FileStorageConfig {
     /// The parent directory where the database will be stored. The database directory name
     /// is determined by the network ID and consensus type using the `database_name` static
@@ -219,6 +220,28 @@ impl FileStorageConfig {
 impl Default for FileStorageConfig {
     fn default() -> Self {
         Self::home()
+    }
+}
+
+impl Debug for FileStorageConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug_struct = f.debug_struct("FileStorageConfig");
+        debug_struct
+            .field("database_parent", &self.database_parent)
+            .field("peer_key_path", &self.peer_key_path)
+            .field("peer_key", &self.peer_key.as_ref().map(|_| "***"));
+
+        #[cfg(feature = "validator")]
+        {
+            debug_struct
+                .field("voting_key_path", &self.voting_key_path)
+                .field("voting_key", &self.voting_key.as_ref().map(|_| "***"))
+                .field("signing_key_path", &self.signing_key_path)
+                .field("signing_key", &self.signing_key.as_ref().map(|_| "***"))
+                .field("fee_key_path", &self.fee_key_path)
+                .field("fee_key", &self.fee_key.as_ref().map(|_| "***"));
+        }
+        debug_struct.finish()
     }
 }
 

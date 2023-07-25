@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::read_to_string, path::Path, str::FromStr};
+use std::{collections::HashMap, fmt::Debug, fs::read_to_string, path::Path, str::FromStr};
 
 use log::level_filters::LevelFilter;
 #[cfg(feature = "nimiq-mempool")]
@@ -430,7 +430,7 @@ impl From<MempoolFilterSettings> for MempoolRules {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Default)]
+#[derive(Clone, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct ValidatorSettings {
     pub validator_address: String,
@@ -442,6 +442,21 @@ pub struct ValidatorSettings {
     pub fee_key: Option<String>,
     #[serde(default)]
     pub automatic_reactivate: bool,
+}
+
+impl Debug for ValidatorSettings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ValidatorSettings")
+            .field("validator_address", &self.validator_address)
+            .field("signing_key_file", &self.signing_key_file)
+            .field("signing_key", &self.signing_key.as_ref().map(|_| "***"))
+            .field("voting_key_file", &self.voting_key_file)
+            .field("voting_key", &self.voting_key.as_ref().map(|_| "***"))
+            .field("fee_key_file", &self.fee_key_file)
+            .field("fee_key", &self.fee_key.as_ref().map(|_| "***"))
+            .field("automatic_reactivate", &self.automatic_reactivate)
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]
