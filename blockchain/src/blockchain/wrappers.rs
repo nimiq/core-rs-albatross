@@ -145,7 +145,7 @@ impl Blockchain {
         if let Ok(account) = self.state.accounts.get(address, None) {
             Some(account)
         } else {
-            warn!("Could not get account for address");
+            warn!(%address, "Could not get account for address");
             None
         }
     }
