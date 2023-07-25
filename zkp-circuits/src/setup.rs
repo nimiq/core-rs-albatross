@@ -105,9 +105,9 @@ pub fn all_files_created(path: &Path, prover_active: bool) -> bool {
                 && verifying_keys.join("macro_block_wrapper.bin").exists()
                 && verifying_keys.join("merger.bin").exists()
                 && proving_keys.join("merger_wrapper.bin").exists()
+                && proving_keys.join("macro_block.bin").exists()
                 && proving_keys.join("macro_block_wrapper.bin").exists()
-                && proving_keys.join("merger.bin").exists()
-                && proving_keys.join("merger_wrapper.bin").exists()))
+                && proving_keys.join("merger.bin").exists()))
 }
 
 fn setup_pk_tree_leaf<R: Rng + CryptoRng>(
