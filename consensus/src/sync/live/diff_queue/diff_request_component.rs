@@ -1,10 +1,10 @@
-use std::{ops, sync::Arc};
+use std::{ops, sync::Arc, time::Duration};
 
 use futures::future::BoxFuture;
 use nimiq_network_interface::network::{Network, PubsubId};
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_diff::TrieDiff, TreeProof};
 use parking_lot::RwLock;
-use tokio::sync::Semaphore;
+use tokio::{sync::Semaphore, time};
 
 use super::{RequestPartialDiff, ResponsePartialDiff};
 use crate::sync::{
@@ -61,16 +61,21 @@ impl<N: Network> DiffRequestComponent<N> {
             let block_desc = format!("{}", block);
             let block_hash = block.hash();
             let block_diff_root = block.diff_root().clone();
+            let max_backoff = Duration::from_secs(30);
 
             Box::pin(async move {
                 let _request_permit = concurrent_requests.acquire().await.unwrap();
                 let mut num_tries = 0;
+                let mut backoff_delay = Duration::from_secs(1);
+
                 loop {
-                    let peer_id = match peers.read().get(&current_peer_index) {
+                    let peer_id = peers.read().get(&current_peer_index);
+                    let peer_id = match peer_id {
                         Some(peer_id) => peer_id,
                         None => {
                             error!("couldn't fetch diff: no peers");
-                            return Err(());
+                            time::sleep(Duration::from_secs(5)).await;
+                            continue;
                         }
                     };
                     current_peer_index.increment();
@@ -87,38 +92,32 @@ impl<N: Network> DiffRequestComponent<N> {
 
                     num_tries += 1;
                     let max_tries = peers.read().len();
-                    let exhausted = num_tries >= max_tries;
 
                     match result {
                         Ok(ResponsePartialDiff::PartialDiff(diff)) => {
                             if TreeProof::new(diff.0.iter()).root_hash() == block_diff_root {
                                 return Ok(diff);
                             }
-                            error!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: invalid diff");
+                            warn!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: invalid diff");
                         }
                         // TODO: remove peer, retry elsewhere
                         Ok(ResponsePartialDiff::IncompleteState) => {
-                            if exhausted {
-                                error!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: incomplete state")
-                            } else {
-                                debug!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: incomplete state")
-                            }
+                            debug!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: incomplete state")
                         }
                         Ok(ResponsePartialDiff::UnknownBlockHash) => {
-                            if exhausted {
-                                error!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: unknown block hash")
-                            } else {
-                                debug!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: unknown block hash")
-                            }
+                            debug!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: unknown block hash")
                         }
                         Err(error) => {
-                            error!(%peer_id, block = %block_desc, %num_tries, %max_tries, ?error, "couldn't fetch diff: {}", error)
+                            debug!(%peer_id, block = %block_desc, %num_tries, %max_tries, ?error, "couldn't fetch diff: {}", error)
                         }
                     }
 
-                    if exhausted {
-                        error!(%num_tries, %max_tries, "couldn't fetch diff: maximum tries reached");
-                        return Err(());
+                    if num_tries >= max_tries {
+                        error!(%num_tries, %max_tries, ?backoff_delay, "couldn't fetch diff: maximum tries reached");
+
+                        time::sleep(backoff_delay).await;
+                        backoff_delay = Duration::min(backoff_delay.mul_f32(2_f32), max_backoff);
+                        num_tries = 0;
                     }
                 }
             })
