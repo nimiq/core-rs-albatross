@@ -22,7 +22,7 @@ byteorder = "1.2"
 hex = "0.4"
 rust-argon2 = "1.0"
 serde = "1.0"
-sha2 = "0.9"
+sha2 = "0.10"
 
 nimiq-database-value = { workspace = true }
 nimiq-macros = { workspace = true }

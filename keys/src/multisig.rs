@@ -108,12 +108,12 @@ impl CommitmentPair {
 
         h.update(randomness);
         let scalar = Scalar::from_hash::<sha2::Sha512>(h);
-        if scalar == Scalar::zero() || scalar == Scalar::one() {
+        if scalar == Scalar::ZERO || scalar == Scalar::ONE {
             return Err(InvalidScalarError);
         }
 
         // Compute the point [scalar]B.
-        let commitment: EdwardsPoint = &scalar * &constants::ED25519_BASEPOINT_TABLE;
+        let commitment: EdwardsPoint = &scalar * constants::ED25519_BASEPOINT_TABLE;
 
         let rs = RandomSecret(scalar);
         let ct = Commitment(commitment);
@@ -141,7 +141,7 @@ impl SecureGenerate for CommitmentPair {
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct PartialSignature(Scalar);
-implement_simple_add_sum_traits!(PartialSignature, Scalar::zero());
+implement_simple_add_sum_traits!(PartialSignature, Scalar::ZERO);
 
 impl PartialSignature {
     pub const SIZE: usize = 32;
@@ -290,6 +290,9 @@ impl ToScalar for ::ed25519_zebra::SigningKey {
         scalar_bytes[0] &= 248;
         scalar_bytes[31] &= 127;
         scalar_bytes[31] |= 64;
+        // The above bit operations ensure that the integer represented by
+        // `scalar_bytes` is less than 2***255-19 as required by this function.
+        #[allow(deprecated)]
         Scalar::from_bits(scalar_bytes)
     }
 }

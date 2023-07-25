@@ -34,6 +34,9 @@ impl PrivateKey {
         scalar_bytes[0] &= 248;
         scalar_bytes[31] &= 127;
         scalar_bytes[31] |= 64;
+        // The above bit operations ensure that the integer represented by
+        // `scalar_bytes` is less than 2***255-19 as required by this function.
+        #[allow(deprecated)]
         Scalar::from_bits(scalar_bytes)
     }
 
