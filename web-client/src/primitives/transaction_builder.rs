@@ -213,6 +213,37 @@ impl TransactionBuilder {
         Ok(Transaction::from_native(tx))
     }
 
+    /// Sets the inactive stake balance of the staker. This is a
+    /// signaling transaction and as such does not transfer any value.
+    ///
+    /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
+    ///
+    /// Throws when the number given for fee does not fit within a u64 or the networkId is unknown.
+    #[wasm_bindgen(js_name = newSetInactiveStake)]
+    pub fn new_set_inactive_stake(
+        sender: &Address,
+        new_inactive_balance: u64,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.set_inactive_stake(Coin::try_from(new_inactive_balance)?);
+
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(sender.native_ref().clone())
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(Coin::ZERO)
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from_native(tx))
+    }
+
     // pub fn new_create_validator()
 
     // pub fn new_update_validator()

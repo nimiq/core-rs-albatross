@@ -1,4 +1,3 @@
-use nimiq_primitives::coin::Coin;
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 
@@ -142,7 +141,7 @@ pub struct PlainStaker {
     /// Stake can only be re-delegated if the whole balance of the staker is inactive and released
     /// (or if there was no prior delegation). For inactive balance to be released, the maximum of
     /// the `inactive_release` and the validator's `jail_release` must have passed.
-    inactive_balance: Coin,
+    inactive_balance: u64,
     /// The earliest block number at which the inactive balance is released for withdrawal or re-delegation.
     /// If the stake is currently delegated to a jailed validator, the maximum of its jail release
     /// and the inactive release is taken. Re-delegation requires the whole balance of the staker to be inactive.
@@ -157,7 +156,7 @@ impl PlainStaker {
                 .as_ref()
                 .map(|address| address.to_user_friendly_address()),
             balance: staker.balance.into(),
-            inactive_balance: staker.inactive_balance,
+            inactive_balance: staker.inactive_balance.into(),
             inactive_release: staker.inactive_release,
         }
     }
