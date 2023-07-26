@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use nimiq_block::{Block, BlockError, SkipBlockProof};
 use nimiq_block_production::{
@@ -14,8 +14,12 @@ use nimiq_hash::Blake2bHash;
 use nimiq_light_blockchain::LightBlockchain;
 use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
-use nimiq_test_utils::block_production::TemporaryBlockProducer;
+use nimiq_test_utils::{
+    block_production::TemporaryBlockProducer,
+    zkp_test_data::{get_base_seed, simulate_merger_wrapper, ZKP_TEST_KEYS_PATH},
+};
 use nimiq_vrf::VrfSeed;
+use nimiq_zkp::ZKP_VERIFYING_KEY;
 use parking_lot::RwLock;
 
 fn remove_micro_body(block: Block) -> Block {
@@ -655,4 +659,52 @@ fn it_can_rebranch_to_inferior_macro_block() {
         blockchain1.state.previous_slots,
         blockchain2.state.previous_slots
     );
+}
+
+#[test]
+fn can_push_zkps() {
+    let temp_producer1 = TemporaryBlockProducer::new();
+    let temp_producer2 = TemporaryLightBlockProducer::new();
+
+    // Produce a full epoch of blocks.
+    for _ in 0..Policy::blocks_per_epoch() - 1 {
+        temp_producer1.next_block(vec![], false);
+    }
+    let election_block = temp_producer1.next_block(vec![], false);
+    let block_number = election_block.block_number();
+
+    // Try pushing an invalid ZKP.
+    let invalid_zkp_proof = Default::default();
+    let blockchain2 = temp_producer2.light_blockchain.upgradable_read();
+    let result = LightBlockchain::push_zkp(
+        blockchain2,
+        election_block.clone(),
+        invalid_zkp_proof,
+        false,
+    );
+
+    assert_eq!(result, Err(PushError::InvalidZKP));
+    {
+        let blockchain2_rg = temp_producer2.light_blockchain.read();
+        assert_eq!(blockchain2_rg.block_number(), 0);
+    }
+
+    // Create a valid ZKP.
+    let zkp_proof = simulate_merger_wrapper(
+        Path::new(ZKP_TEST_KEYS_PATH),
+        &temp_producer1.blockchain,
+        &ZKP_VERIFYING_KEY,
+        &mut get_base_seed(),
+    );
+
+    // Push the valid ZKP.
+    let blockchain2 = temp_producer2.light_blockchain.upgradable_read();
+    let result =
+        LightBlockchain::push_zkp(blockchain2, election_block, zkp_proof.proof.unwrap(), false);
+
+    assert_eq!(result, Ok(PushResult::Extended));
+    {
+        let blockchain2_rg = temp_producer2.light_blockchain.read();
+        assert_eq!(blockchain2_rg.block_number(), block_number);
+    }
 }
