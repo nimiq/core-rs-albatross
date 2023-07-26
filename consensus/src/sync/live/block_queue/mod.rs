@@ -9,7 +9,7 @@ use futures::{stream::BoxStream, Stream, StreamExt};
 use nimiq_block::{Block, BlockHeaderTopic, BlockTopic};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction, ForkEvent};
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId};
 use nimiq_primitives::policy::Policy;
 use parking_lot::RwLock;
@@ -455,8 +455,8 @@ impl<N: Network> BlockQueue<N> {
 
         match event {
             ForkEvent::Detected(proof) => {
-                block_infos.push((proof.header1.block_number, proof.header1.hash()));
-                block_infos.push((proof.header2.block_number, proof.header2.hash()));
+                block_infos.push((proof.block_number(), proof.header1_hash()));
+                block_infos.push((proof.block_number(), proof.header2_hash()));
             }
         }
         block_infos

@@ -58,17 +58,15 @@ impl From<ForkProof> for EquivocationProof {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializeContent)]
 pub struct ForkProof {
     /// Header number 1.
-    pub header1: MicroHeader,
+    header1: MicroHeader,
     /// Header number 2.
-    pub header2: MicroHeader,
+    header2: MicroHeader,
     /// Justification for header number 1.
-    pub justification1: SchnorrSignature,
+    justification1: SchnorrSignature,
     /// Justification for header number 2.
-    pub justification2: SchnorrSignature,
+    justification2: SchnorrSignature,
     /// Vrf seed of the previous block. Used to determine the slot.
-    pub prev_vrf_seed: VrfSeed,
-    /// Make sure everyone has to go through the constructor.
-    dont_construct_me: (),
+    prev_vrf_seed: VrfSeed,
 }
 
 impl ForkProof {
@@ -96,12 +94,20 @@ impl ForkProof {
             justification1,
             justification2,
             prev_vrf_seed,
-            dont_construct_me: (),
         }
     }
 
+    pub fn header1_hash(&self) -> Blake2bHash {
+        self.header1.hash()
+    }
+    pub fn header2_hash(&self) -> Blake2bHash {
+        self.header2.hash()
+    }
     pub fn block_number(&self) -> u32 {
         self.header1.block_number
+    }
+    pub fn prev_vrf_seed(&self) -> &VrfSeed {
+        &self.prev_vrf_seed
     }
 
     /// Verify the validity of a fork proof.
@@ -159,13 +165,12 @@ pub enum EquivocationProofError {
 /// validator created two macro block proposals at the same height, in the same round.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializeContent)]
 pub struct DoubleProposalProof {
-    pub header1: MacroHeader,
-    pub header2: MacroHeader,
-    pub justification1: SchnorrSignature,
-    pub justification2: SchnorrSignature,
-    pub prev_vrf_seed1: VrfSeed,
-    pub prev_vrf_seed2: VrfSeed,
-    dont_construct_me: (),
+    header1: MacroHeader,
+    header2: MacroHeader,
+    justification1: SchnorrSignature,
+    justification2: SchnorrSignature,
+    prev_vrf_seed1: VrfSeed,
+    prev_vrf_seed2: VrfSeed,
 }
 
 impl DoubleProposalProof {
@@ -191,12 +196,26 @@ impl DoubleProposalProof {
             justification2,
             prev_vrf_seed1,
             prev_vrf_seed2,
-            dont_construct_me: (),
         }
     }
 
     pub fn block_number(&self) -> u32 {
         self.header1.block_number
+    }
+    pub fn round(&self) -> u32 {
+        self.header1.round
+    }
+    pub fn header1_hash(&self) -> Blake2bHash {
+        self.header1.hash()
+    }
+    pub fn header2_hash(&self) -> Blake2bHash {
+        self.header2.hash()
+    }
+    pub fn prev_vrf_seed1(&self) -> &VrfSeed {
+        &self.prev_vrf_seed1
+    }
+    pub fn prev_vrf_seed2(&self) -> &VrfSeed {
+        &self.prev_vrf_seed2
     }
 
     /// Verify the validity of a double proposal proof.
@@ -248,15 +267,14 @@ impl std::hash::Hash for DoubleProposalProof {
 /// validator voted twice at same height, in the same round.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializeContent)]
 pub struct DoubleVoteProof {
-    pub tendermint_id: TendermintIdentifier,
-    pub slot_number: u16,
-    pub proposal_hash1: Option<Blake2sHash>,
-    pub proposal_hash2: Option<Blake2sHash>,
-    pub signature1: AggregateSignature,
-    pub signature2: AggregateSignature,
-    pub signers1: BitSet,
-    pub signers2: BitSet,
-    dont_construct_me: (),
+    tendermint_id: TendermintIdentifier,
+    slot_number: u16,
+    proposal_hash1: Option<Blake2sHash>,
+    proposal_hash2: Option<Blake2sHash>,
+    signature1: AggregateSignature,
+    signature2: AggregateSignature,
+    signers1: BitSet,
+    signers2: BitSet,
 }
 
 impl DoubleVoteProof {
@@ -284,12 +302,14 @@ impl DoubleVoteProof {
             signature2,
             signers1,
             signers2,
-            dont_construct_me: (),
         }
     }
 
     pub fn block_number(&self) -> u32 {
         self.tendermint_id.block_number
+    }
+    pub fn slot_number(&self) -> u16 {
+        self.slot_number
     }
 
     /// Verify the validity of a double vote proof.

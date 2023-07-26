@@ -94,31 +94,30 @@ impl Blockchain {
         // Get the slot owner and slot number for this block number.
         let proposer_slot = self
             .get_proposer_at(
-                fork_proof.header1.block_number,
-                fork_proof.header1.block_number,
-                fork_proof.prev_vrf_seed.entropy(),
+                fork_proof.block_number(),
+                fork_proof.block_number(),
+                fork_proof.prev_vrf_seed().entropy(),
                 txn_option,
             )
             .expect("Couldn't calculate slot owner!");
 
         // If the reporting block is in a new epoch, we check if the proposer is still a validator in this epoch
         // and retrieve its new slots.
-        let new_epoch_slot_range = if Policy::epoch_at(reporting_block)
-            > Policy::epoch_at(fork_proof.header1.block_number)
-        {
-            self.current_validators()
-                .expect("We need to have validators")
-                .get_validator_by_address(&proposer_slot.validator.address)
-                .map(|validator| validator.slots.clone())
-        } else {
-            None
-        };
+        let new_epoch_slot_range =
+            if Policy::epoch_at(reporting_block) > Policy::epoch_at(fork_proof.block_number()) {
+                self.current_validators()
+                    .expect("We need to have validators")
+                    .get_validator_by_address(&proposer_slot.validator.address)
+                    .map(|validator| validator.slots.clone())
+            } else {
+                None
+            };
 
         // Create the JailedValidator struct.
         let jailed_validator = JailedValidator {
             slots: proposer_slot.validator.slots,
             validator_address: proposer_slot.validator.address,
-            offense_event_block: fork_proof.header1.block_number,
+            offense_event_block: fork_proof.block_number(),
         };
 
         // Create the corresponding jail inherent.
@@ -138,9 +137,9 @@ impl Blockchain {
         // Get the slot owner and slot number for this block number.
         let proposer_slot = self
             .get_proposer_at(
-                double_proposal_proof.header1.block_number,
-                double_proposal_proof.header1.round,
-                double_proposal_proof.prev_vrf_seed1.entropy(),
+                double_proposal_proof.block_number(),
+                double_proposal_proof.round(),
+                double_proposal_proof.prev_vrf_seed1().entropy(),
                 txn_option,
             )
             .expect("Couldn't calculate slot owner!");
@@ -148,7 +147,7 @@ impl Blockchain {
         // If the reporting block is in a new epoch, we check if the proposer is still a validator in this epoch
         // and retrieve its new slots.
         let new_epoch_slot_range = if Policy::epoch_at(reporting_block)
-            > Policy::epoch_at(double_proposal_proof.header1.block_number)
+            > Policy::epoch_at(double_proposal_proof.block_number())
         {
             self.current_validators()
                 .expect("We need to have validators")
@@ -162,7 +161,7 @@ impl Blockchain {
         let jailed_validator = JailedValidator {
             slots: proposer_slot.validator.slots,
             validator_address: proposer_slot.validator.address,
-            offense_event_block: double_proposal_proof.header1.block_number,
+            offense_event_block: double_proposal_proof.block_number(),
         };
 
         // Create the corresponding jail inherent.
@@ -187,7 +186,7 @@ impl Blockchain {
             )
             .expect("Couldn't calculate validators");
         // `double_vote_proof.slot_number` is checked in `DoubleVoteProof::verify`.
-        let validator = validators.get_validator_by_slot_number(double_vote_proof.slot_number);
+        let validator = validators.get_validator_by_slot_number(double_vote_proof.slot_number());
 
         // If the reporting block is in a new epoch, we check if the proposer is still a validator in this epoch
         // and retrieve its new slots.

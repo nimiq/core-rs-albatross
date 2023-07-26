@@ -410,8 +410,8 @@ pub struct ForkProof {
 impl From<nimiq_block::ForkProof> for ForkProof {
     fn from(fork_proof: nimiq_block::ForkProof) -> Self {
         Self {
-            block_number: fork_proof.header1.block_number,
-            hashes: [fork_proof.header1.hash(), fork_proof.header2.hash()],
+            block_number: fork_proof.block_number(),
+            hashes: [fork_proof.header1_hash(), fork_proof.header2_hash()],
         }
     }
 }
@@ -426,10 +426,10 @@ pub struct DoubleProposalProof {
 impl From<nimiq_block::DoubleProposalProof> for DoubleProposalProof {
     fn from(double_proposal_proof: nimiq_block::DoubleProposalProof) -> Self {
         Self {
-            block_number: double_proposal_proof.header1.block_number,
+            block_number: double_proposal_proof.block_number(),
             hashes: [
-                double_proposal_proof.header1.hash(),
-                double_proposal_proof.header2.hash(),
+                double_proposal_proof.header1_hash(),
+                double_proposal_proof.header2_hash(),
             ],
         }
     }

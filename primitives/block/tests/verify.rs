@@ -304,11 +304,21 @@ fn test_verify_micro_block_body_fork_proofs() {
         VrfSeed::default(),
     );
 
-    let mut fork_proof_2 = fork_proof_1.clone();
-    fork_proof_2.header1 = micro_header_2;
+    let fork_proof_2 = ForkProof::new(
+        micro_header_1.clone(),
+        Signature::default(),
+        micro_header_2.clone(),
+        Signature::default(),
+        VrfSeed::default(),
+    );
 
-    let mut fork_proof_3 = fork_proof_2.clone();
-    fork_proof_3.header2 = micro_header_1;
+    let fork_proof_3 = ForkProof::new(
+        micro_header.clone(),
+        Signature::default(),
+        micro_header_2.clone(),
+        Signature::default(),
+        VrfSeed::default(),
+    );
 
     let micro_justification = MicroJustification::Micro(Signature::default());
 
@@ -364,10 +374,19 @@ fn test_verify_micro_block_body_fork_proofs() {
     assert_eq!(block.verify(), Err(BlockError::DuplicateForkProof));
 
     // Now modify the block height of the first header of the first fork proof
-    let mut fork_proof = fork_proofs.pop().unwrap();
-    fork_proof.header1.block_number = Policy::blocks_per_epoch() + genesis_block_number;
-    fork_proof.header2.block_number = Policy::blocks_per_epoch() + genesis_block_number + 1;
-    fork_proofs.push(fork_proof);
+    let mut micro_header_large_block_number_1 = micro_header.clone();
+    micro_header_large_block_number_1.block_number =
+        Policy::blocks_per_epoch() + genesis_block_number;
+    let mut micro_header_large_block_number_2 = micro_header_large_block_number_1.clone();
+    micro_header_large_block_number_2.block_number += 1;
+    fork_proofs.pop().unwrap();
+    fork_proofs.push(ForkProof::new(
+        micro_header_large_block_number_1,
+        Signature::default(),
+        micro_header_large_block_number_2,
+        Signature::default(),
+        VrfSeed::default(),
+    ));
     fork_proofs.sort_by_key(|p| EquivocationProof::from(p.clone()).sort_key());
 
     let micro_body = MicroBody {
