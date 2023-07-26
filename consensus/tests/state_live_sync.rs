@@ -407,13 +407,10 @@ async fn can_sync_state() {
     // Will apply the announced block.
     assert!(
         matches!(
-            join!(mock_node.next(), live_sync.next()),
-            (
-                Some(RequestPartialDiff::TYPE_ID),
-                Some(LiveSyncEvent::PushEvent(
-                    LiveSyncPushEvent::AcceptedAnnouncedBlock(..)
-                )),
-            )
+            live_sync.next().await,
+            Some(LiveSyncEvent::PushEvent(
+                LiveSyncPushEvent::AcceptedAnnouncedBlock(..)
+            ))
         ),
         "Should apply announced block"
     );

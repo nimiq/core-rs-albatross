@@ -60,9 +60,9 @@ impl RequestCommon for RequestPartialDiff {
 }
 
 pub enum QueuedDiff<N: Network> {
-    Head(BlockAndId<N>, TrieDiff),
-    Buffered(Vec<(BlockAndId<N>, TrieDiff)>),
-    Missing(Vec<(Block, TrieDiff)>),
+    Head(BlockAndId<N>, Option<TrieDiff>),
+    Buffered(Vec<(BlockAndId<N>, Option<TrieDiff>)>),
+    Missing(Vec<(Block, Option<TrieDiff>)>),
     TooFarAhead(N::PeerId),
     TooFarBehind(N::PeerId),
     PeerIncompleteState(N::PeerId),
@@ -111,11 +111,16 @@ where
     Ok(match block {
         QueuedBlock::Head(block) => {
             let diff = get_diff(&block).await?;
-            QueuedDiff::Head(block, diff)
+            QueuedDiff::Head(block, Some(diff))
         }
         QueuedBlock::Buffered(blocks) => {
             let diffs = get_multiple_diffs::<N, F, R>(&blocks[..], get_diff).await?;
-            QueuedDiff::Buffered(blocks.into_iter().zip(diffs).collect())
+            QueuedDiff::Buffered(
+                blocks
+                    .into_iter()
+                    .zip(diffs.into_iter().map(|diff| Some(diff)))
+                    .collect(),
+            )
         }
         QueuedBlock::Missing(blocks) => {
             let blocks = blocks
@@ -127,7 +132,7 @@ where
                 blocks
                     .into_iter()
                     .map(|(block, _)| block)
-                    .zip(diffs)
+                    .zip(diffs.into_iter().map(|diff| Some(diff)))
                     .collect(),
             )
         }
@@ -146,6 +151,9 @@ pub struct DiffQueue<N: Network> {
 
     /// The pending TreeDiff requests to peers.
     diffs: FuturesOrdered<BoxFuture<'static, Result<QueuedDiff<N>, ()>>>,
+
+    /// Flag indicating if diffs should be requested.
+    diff_needed: bool,
 }
 
 impl<N: Network> DiffQueue<N> {
@@ -156,6 +164,7 @@ impl<N: Network> DiffQueue<N> {
             block_queue,
             diff_request_component,
             diffs: FuturesOrdered::new(),
+            diff_needed: true,
         }
     }
 
@@ -198,6 +207,10 @@ impl<N: Network> DiffQueue<N> {
     pub(crate) fn num_buffered_blocks(&self) -> usize {
         self.block_queue.num_buffered_blocks()
     }
+
+    pub(crate) fn set_diff_needed(&mut self, diff_needed: bool) {
+        self.diff_needed = diff_needed;
+    }
 }
 
 impl<N: Network> Stream for DiffQueue<N> {
@@ -210,6 +223,20 @@ impl<N: Network> Stream for DiffQueue<N> {
         loop {
             match self.block_queue.poll_next_unpin(cx) {
                 Poll::Ready(Some(block)) => {
+                    if !self.diff_needed {
+                        return Poll::Ready(Some(match block {
+                            QueuedBlock::Head(block) => QueuedDiff::Head(block, None),
+                            QueuedBlock::Buffered(blocks) => QueuedDiff::Buffered(
+                                blocks.into_iter().map(|block| (block, None)).collect(),
+                            ),
+                            QueuedBlock::Missing(blocks) => QueuedDiff::Missing(
+                                blocks.into_iter().map(|block| (block, None)).collect(),
+                            ),
+                            QueuedBlock::TooFarAhead(_, peer) => QueuedDiff::TooFarAhead(peer),
+                            QueuedBlock::TooFarBehind(_, peer) => QueuedDiff::TooFarBehind(peer),
+                        }));
+                    }
+
                     let get_diff = self.diff_request_component.request_diff(..KeyNibbles::ROOT);
                     self.diffs
                         .push_back(Box::pin(augment_block(block, get_diff)));

@@ -208,17 +208,17 @@ pub async fn push_block_and_chunks<N: Network>(
     bls_cache: Arc<Mutex<PublicKeyCache>>,
     pubsub_id: Option<N::PubsubId>,
     block: Block,
-    diff: TrieDiff,
+    diff: Option<TrieDiff>,
     chunks: Vec<ChunkAndId<N>>,
 ) -> (
     Result<PushResult, PushError>,
     Result<ChunksPushResult, ChunksPushError>,
     Blake2bHash,
 ) {
-    let push_results = spawn_blocking(move || {
-        blockchain_push(blockchain, bls_cache, Some(block), Some(diff), chunks)
-    })
-    .await;
+    let push_results =
+        spawn_blocking(move || blockchain_push(blockchain, bls_cache, Some(block), diff, chunks))
+            .await;
+
     validate_message(network, pubsub_id, &push_results.block_push_result, true);
 
     // TODO Ban peer depending on type of chunk error?
@@ -342,17 +342,13 @@ pub async fn push_multiple_blocks_impl<N: Network>(
 pub async fn push_multiple_blocks_with_chunks<N: Network>(
     blockchain: BlockchainProxy,
     bls_cache: Arc<Mutex<PublicKeyCache>>,
-    blocks: Vec<(Block, TrieDiff, Vec<ChunkAndId<N>>)>,
+    blocks: Vec<(Block, Option<TrieDiff>, Vec<ChunkAndId<N>>)>,
 ) -> (
     Result<PushResult, PushError>,
     Result<ChunksPushResult, ChunksPushError>,
     Vec<Blake2bHash>,
     HashSet<Blake2bHash>,
 ) {
-    let blocks = blocks
-        .into_iter()
-        .map(|(block, diff, chunks)| (block, Some(diff), chunks))
-        .collect();
     push_multiple_blocks_impl(blockchain, bls_cache, blocks).await
 }
 

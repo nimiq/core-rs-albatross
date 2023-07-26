@@ -90,9 +90,9 @@ impl RequestCommon for RequestChunk {
 }
 
 pub enum QueuedStateChunks<N: Network> {
-    Head(BlockAndId<N>, TrieDiff, Vec<ChunkAndId<N>>),
-    Buffered(Vec<(BlockAndId<N>, TrieDiff, Vec<ChunkAndId<N>>)>),
-    Missing(Vec<(Block, TrieDiff, Vec<ChunkAndId<N>>)>),
+    Head(BlockAndId<N>, Option<TrieDiff>, Vec<ChunkAndId<N>>),
+    Buffered(Vec<(BlockAndId<N>, Option<TrieDiff>, Vec<ChunkAndId<N>>)>),
+    Missing(Vec<(Block, Option<TrieDiff>, Vec<ChunkAndId<N>>)>),
     HeadStateChunk(Vec<ChunkAndId<N>>),
     TooFarFutureBlock(N::PeerId),
     TooDistantPastBlock(N::PeerId),
@@ -141,6 +141,7 @@ pub struct StateQueue<N: Network> {
     /// Reference to the network.
     network: Arc<N>,
 
+    /// The queue from which we receive blocks and tree diffs.
     diff_queue: DiffQueue<N>,
 
     /// The chunk request component.
@@ -172,7 +173,7 @@ impl<N: Network> StateQueue<N> {
     pub fn with_diff_queue(
         network: Arc<N>,
         blockchain: Arc<RwLock<Blockchain>>,
-        diff_queue: DiffQueue<N>,
+        mut diff_queue: DiffQueue<N>,
         config: QueueConfig,
     ) -> Self {
         let chunk_request_component =
@@ -182,11 +183,13 @@ impl<N: Network> StateQueue<N> {
 
         // When initializing the state sync, we assume it to be complete if we have the full state.
         // In this case, we only start the state sync, once the accounts tree is reinitialized or we reverted a chunk.
-        let start_key = if blockchain.read().state.accounts.is_complete(None) {
+        let accounts_complete = blockchain.read().state.accounts.is_complete(None);
+        let start_key = if accounts_complete {
             ChunkRequestState::Complete
         } else {
             ChunkRequestState::Reset
         };
+        diff_queue.set_diff_needed(!accounts_complete);
 
         Self {
             config,
@@ -488,16 +491,19 @@ impl<N: Network> Stream for StateQueue<N> {
                         self.start_key = ChunkRequestState::Complete;
                         self.buffer.clear();
                         self.buffer_size = 0;
+                        self.diff_queue.set_diff_needed(false);
                     } else if self.start_key.is_complete() && !blockchain_state_complete {
                         // Start state sync if the blockchain state was reinitialized after pushing a macro block.
                         info!("Trie incomplete, starting state sync.");
                         self.start_key = ChunkRequestState::Reset;
+                        self.diff_queue.set_diff_needed(true);
                     }
                 }
                 BlockchainEvent::Rebranched(_, _) => {
                     if !self.blockchain.read().state.accounts.is_complete(None) {
                         info!("Reset due to rebranch.");
                         self.start_key = ChunkRequestState::Reset;
+                        self.diff_queue.set_diff_needed(true);
                     }
                 }
                 _ => {}
