@@ -1,6 +1,14 @@
 codecov:
   require_ci_to_pass: yes
 
+ignore: 
+  - metrics-server
+  - rpc-*
+  - spammer
+  - tools
+  - zkp-component/zkp-test-gen
+  - zkp-circuits/zkp-setup
+
 coverage:
   precision: 2
   round: down
