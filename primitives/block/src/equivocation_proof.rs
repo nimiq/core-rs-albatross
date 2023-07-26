@@ -4,7 +4,7 @@ use nimiq_bls::{AggregatePublicKey, AggregateSignature};
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
 use nimiq_hash_derive::SerializeContent;
-use nimiq_keys::{PublicKey as SchnorrPublicKey, Signature as SchnorrSignature};
+use nimiq_keys::{Address, PublicKey as SchnorrPublicKey, Signature as SchnorrSignature};
 use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_vrf::VrfSeed;
@@ -155,8 +155,9 @@ impl std::hash::Hash for ForkProof {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EquivocationProofError {
     SlotMismatch,
+    NoOverlap,
     InvalidJustification,
-    InvalidSlotNumber,
+    InvalidValidatorAddress,
     SameHeader,
     WrongOrder,
 }
@@ -268,7 +269,7 @@ impl std::hash::Hash for DoubleProposalProof {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializeContent)]
 pub struct DoubleVoteProof {
     tendermint_id: TendermintIdentifier,
-    slot_number: u16,
+    validator_address: Address,
     proposal_hash1: Option<Blake2sHash>,
     proposal_hash2: Option<Blake2sHash>,
     signature1: AggregateSignature,
@@ -280,7 +281,7 @@ pub struct DoubleVoteProof {
 impl DoubleVoteProof {
     pub fn new(
         tendermint_id: TendermintIdentifier,
-        slot_number: u16,
+        validator_address: Address,
         mut proposal_hash1: Option<Blake2sHash>,
         mut proposal_hash2: Option<Blake2sHash>,
         mut signature1: AggregateSignature,
@@ -295,7 +296,7 @@ impl DoubleVoteProof {
         }
         DoubleVoteProof {
             tendermint_id,
-            slot_number,
+            validator_address,
             proposal_hash1,
             proposal_hash2,
             signature1,
@@ -308,8 +309,8 @@ impl DoubleVoteProof {
     pub fn block_number(&self) -> u32 {
         self.tendermint_id.block_number
     }
-    pub fn slot_number(&self) -> u16 {
-        self.slot_number
+    pub fn validator_address(&self) -> &Address {
+        &self.validator_address
     }
 
     /// Verify the validity of a double vote proof.
@@ -324,54 +325,50 @@ impl DoubleVoteProof {
             Ordering::Greater => return Err(EquivocationProofError::WrongOrder),
         }
 
-        if self.slot_number >= Policy::SLOTS {
-            return Err(EquivocationProofError::InvalidSlotNumber);
-        }
-
-        // Check that the signatures actually contain the reported validator.
-        if !self.signers1.contains(self.slot_number as usize) {
-            // The validator did not participate in the signature.
-            return Err(EquivocationProofError::SlotMismatch);
-        }
-        if !self.signers2.contains(self.slot_number as usize) {
-            // The validator did not participate in the signature.
-            return Err(EquivocationProofError::SlotMismatch);
-        }
-
-        // Calculate the messages that were actually signed by the validators.
-        let message1 = TendermintVote {
-            proposal_hash: self.proposal_hash1.clone(),
-            id: self.tendermint_id.clone(),
-        };
-        let message2 = TendermintVote {
-            proposal_hash: self.proposal_hash2.clone(),
-            id: self.tendermint_id.clone(),
+        let validator = match validators.get_validator_by_address(&self.validator_address) {
+            None => return Err(EquivocationProofError::InvalidValidatorAddress),
+            Some(v) => v,
         };
 
-        // Verify the signatures.
+        // Check that at least one of the validator's slots is actually contained in both signer sets.
+        if !validator
+            .slots
+            .clone()
+            .any(|s| self.signers1.contains(s as usize) && self.signers2.contains(s as usize))
         {
-            let mut agg_pk1 = AggregatePublicKey::new();
-            for (i, pk) in validators.voting_keys().iter().enumerate() {
-                if self.signers1.contains(i) {
-                    agg_pk1.aggregate(pk);
-                }
-            }
-            if !agg_pk1.verify(&message1, &self.signature1) {
-                return Err(EquivocationProofError::InvalidJustification);
-            }
-        }
-        {
-            let mut agg_pk2 = AggregatePublicKey::new();
-            for (i, pk) in validators.voting_keys().iter().enumerate() {
-                if self.signers2.contains(i) {
-                    agg_pk2.aggregate(pk);
-                }
-            }
-            if !agg_pk2.verify(&message2, &self.signature2) {
-                return Err(EquivocationProofError::InvalidJustification);
-            }
+            return Err(EquivocationProofError::NoOverlap);
         }
 
+        let verify =
+            |proposal_hash, signers: &BitSet, signature| -> Result<(), EquivocationProofError> {
+                // Calculate the message that was actually signed by the validators.
+                let message = TendermintVote {
+                    proposal_hash,
+                    id: self.tendermint_id.clone(),
+                };
+                // Verify the signatures.
+                let mut agg_pk = AggregatePublicKey::new();
+                for (i, pk) in validators.voting_keys().iter().enumerate() {
+                    if signers.contains(i) {
+                        agg_pk.aggregate(pk);
+                    }
+                }
+                if !agg_pk.verify(&message, signature) {
+                    return Err(EquivocationProofError::InvalidJustification);
+                }
+                Ok(())
+            };
+
+        verify(
+            self.proposal_hash1.clone(),
+            &self.signers1,
+            &self.signature1,
+        )?;
+        verify(
+            self.proposal_hash2.clone(),
+            &self.signers2,
+            &self.signature2,
+        )?;
         Ok(())
     }
 }

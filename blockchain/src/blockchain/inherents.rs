@@ -186,7 +186,9 @@ impl Blockchain {
             )
             .expect("Couldn't calculate validators");
         // `double_vote_proof.slot_number` is checked in `DoubleVoteProof::verify`.
-        let validator = validators.get_validator_by_slot_number(double_vote_proof.slot_number());
+        let validator = validators
+            .get_validator_by_address(double_vote_proof.validator_address())
+            .expect("Validator must have been present");
 
         // If the reporting block is in a new epoch, we check if the proposer is still a validator in this epoch
         // and retrieve its new slots.
