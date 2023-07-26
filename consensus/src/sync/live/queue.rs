@@ -25,10 +25,20 @@ use nimiq_primitives::{
     },
 };
 use parking_lot::Mutex;
-#[cfg(not(target_family = "wasm"))]
-use tokio::task::spawn_blocking;
 
 use crate::sync::syncer::LiveSyncEvent;
+
+async fn spawn_blocking<R: Send + 'static, F: FnOnce() -> R + Send + 'static>(f: F) -> R {
+    #[cfg(not(target_family = "wasm"))]
+    {
+        tokio::task::spawn_blocking(f).await.unwrap()
+    }
+
+    #[cfg(target_family = "wasm")]
+    {
+        f()
+    }
+}
 
 pub struct ChunkAndId<N: Network> {
     pub chunk: TrieChunk,
@@ -208,8 +218,7 @@ pub async fn push_block_and_chunks<N: Network>(
     let push_results = spawn_blocking(move || {
         blockchain_push(blockchain, bls_cache, Some(block), Some(diff), chunks)
     })
-    .await
-    .expect("blockchain.push() should not panic");
+    .await;
     validate_message(network, pubsub_id, &push_results.block_push_result, true);
 
     // TODO Ban peer depending on type of chunk error?
@@ -230,14 +239,10 @@ pub async fn push_block_only<N: Network>(
     block: Block,
     include_body: bool,
 ) -> (Result<PushResult, PushError>, Blake2bHash) {
-    #[cfg(not(target_family = "wasm"))]
     let push_results = spawn_blocking(move || {
         blockchain_push::<N>(blockchain, bls_cache, Some(block), None, vec![])
     })
-    .await
-    .expect("blockchain.push() should not panic");
-    #[cfg(target_family = "wasm")]
-    let push_results = blockchain_push::<N>(blockchain, bls_cache, Some(block), None, vec![]);
+    .await;
 
     validate_message(
         network,
@@ -284,15 +289,10 @@ pub async fn push_multiple_blocks_impl<N: Network>(
         if push_chunk_result.is_err() {
             chunks.clear();
         }
-        #[cfg(not(target_family = "wasm"))]
         let push_results = spawn_blocking(move || {
             blockchain_push::<N>(blockchain2, bls_cache2, Some(block), diff, chunks)
         })
-        .await
-        .expect("blockchain.push() should not panic");
-
-        #[cfg(target_family = "wasm")]
-        let push_results = blockchain_push::<N>(blockchain2, bls_cache2, Some(block), diff, chunks);
+        .await;
 
         push_result = push_results.block_push_result.unwrap();
         let block_hash = push_results.block_hash;
@@ -387,9 +387,7 @@ pub async fn push_chunks_only<N: Network>(
     chunks: Vec<ChunkAndId<N>>,
 ) -> (Result<ChunksPushResult, ChunksPushError>, Blake2bHash) {
     let push_results =
-        spawn_blocking(move || blockchain_push(blockchain, bls_cache, None, None, chunks))
-            .await
-            .expect("blockchain.push() should not panic");
+        spawn_blocking(move || blockchain_push(blockchain, bls_cache, None, None, chunks)).await;
 
     // TODO Ban peer depending on type of chunk error?
 
