@@ -11,7 +11,7 @@ use nimiq_block::Block;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_network_interface::network::{Network, SubscribeEvents};
-use nimiq_primitives::task_executor::TaskExecutor;
+use nimiq_primitives::{policy::Policy, task_executor::TaskExecutor};
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 use parking_lot::Mutex;
 use pin_project::pin_project;
@@ -102,8 +102,9 @@ impl<N: Network> SyncerProxy<N> {
         full_sync_threshold: u32,
     ) -> Self {
         let mut queue_config = QueueConfig::default();
-        queue_config.window_ahead_max = max(full_sync_threshold, queue_config.window_ahead_max);
-        queue_config.buffer_max = max(full_sync_threshold as usize, queue_config.buffer_max);
+        let min_queue_size = full_sync_threshold + Policy::blocks_per_batch() * 2;
+        queue_config.window_ahead_max = max(min_queue_size, queue_config.window_ahead_max);
+        queue_config.buffer_max = max(min_queue_size as usize, queue_config.buffer_max);
 
         let block_queue = BlockQueue::new(
             Arc::clone(&network),
