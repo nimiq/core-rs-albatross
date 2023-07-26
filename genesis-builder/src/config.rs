@@ -25,7 +25,7 @@ pub struct GenesisConfig {
     pub parent_hash: Option<Blake2bHash>,
 
     /// Timestamp for the genesis block.
-    #[serde(deserialize_with = "time::serde::rfc3339::option::deserialize")]
+    #[serde(with = "time::serde::rfc3339::option")]
     pub timestamp: Option<OffsetDateTime>,
 
     /// The set of validators for the genesis state.
