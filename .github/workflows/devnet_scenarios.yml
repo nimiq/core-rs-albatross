@@ -62,7 +62,7 @@ jobs:
     - name: Install Protoc
       run: sudo apt-get install protobuf-compiler
     - name: Build the code
-      run: cargo build
+      run: cargo build --profile ci
     - name: Retrieve initial timestamp
       id: initial_ts
       run: |
