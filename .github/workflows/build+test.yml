@@ -146,7 +146,7 @@ jobs:
     - name: Install Protoc
       run: sudo apt-get install protobuf-compiler
     - name: Build the code
-      run: cargo build --profile ci
+      run: cargo build
     - name: Executes the 4 validators reconnecting scenario
       run: |
           python3 scripts/devnet/devnet.py -t .github/devnet_topologies/four_validators.toml -r 1

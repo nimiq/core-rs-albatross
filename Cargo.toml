@@ -138,10 +138,6 @@ opt-level = 2
 [profile.test.package.ark-crypto-primitives]
 opt-level = 2
 
-[profile.ci]
-inherits = "test"
-incremental = false
-
 [patch.crates-io]
 ark-ec = { git = "https://github.com/paberr/algebra", branch = "pb/0.4" }
 ark-ff = { git = "https://github.com/paberr/algebra", branch = "pb/0.4" }

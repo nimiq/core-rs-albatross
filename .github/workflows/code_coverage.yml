@@ -40,7 +40,7 @@ jobs:
     - name: Remove possible stale artifacts
       run: cargo llvm-cov clean --workspace
     - name: Run test with coverage instrumentation
-      run: cargo llvm-cov nextest --all-features --profile ci
+      run: cargo llvm-cov nextest --all-features
       # Fixme: --doctest is not supported in stable. See:
       # https://github.com/taiki-e/cargo-llvm-cov/tree/7448e48b438797efb446a98ebd8ff22d3fae5ebe#known-limitations
       # run: cargo llvm-cov --all-features --doctests
