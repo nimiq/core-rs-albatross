@@ -30,10 +30,15 @@ impl LightBlockchain {
             .body()
             .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
 
-        let block_hash = block.hash();
+        let block_hash_blake2b = block.hash();
+        let block_hash_blake2s = block.unwrap_macro_ref().hash_blake2s();
 
         // Check if we already know this block.
-        if this.chain_store.get_chain_info(&block_hash, false).is_ok() {
+        if this
+            .chain_store
+            .get_chain_info(&block_hash_blake2b, false)
+            .is_ok()
+        {
             return Ok(PushResult::Known);
         }
 
@@ -44,15 +49,11 @@ impl LightBlockchain {
         // Perform block intrinsic checks.
         block.verify()?;
 
-        // Prepare the inputs to verify the proof.
-        let genesis_header_hash = <[u8; 32]>::from(this.genesis_block.hash());
-        let final_header_hash = <[u8; 32]>::from(block_hash.clone());
-
         // Verify the zk proof.
         if !trusted_proof {
             let verify_result = verify(
-                genesis_header_hash,
-                final_header_hash,
+                this.genesis_block.unwrap_macro_ref().hash_blake2s(),
+                block_hash_blake2s,
                 proof,
                 &ZKP_VERIFYING_KEY,
             );
@@ -93,7 +94,7 @@ impl LightBlockchain {
         // We shouldn't log errors if there are no listeners.
         _ = this
             .notifier
-            .send(BlockchainEvent::EpochFinalized(block_hash));
+            .send(BlockchainEvent::EpochFinalized(block_hash_blake2b));
 
         Ok(PushResult::Extended)
     }

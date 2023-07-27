@@ -371,8 +371,7 @@ mod tests {
     use nimiq_collections::bitset::BitSet;
     use nimiq_hash::{Blake2bHash, Hash};
     use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, SecureGenerate};
-    use nimiq_primitives::coin::Coin;
-    use nimiq_primitives::{policy::Policy, slots_allocation::ValidatorsBuilder};
+    use nimiq_primitives::{coin::Coin, policy::Policy, slots_allocation::ValidatorsBuilder};
     use nimiq_tendermint::ProposalMessage;
     use nimiq_test_log::test;
     use nimiq_test_utils::{block_production::TemporaryBlockProducer, test_rng::test_rng};

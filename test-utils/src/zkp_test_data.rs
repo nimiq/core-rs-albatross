@@ -73,8 +73,12 @@ pub fn simulate_merger_wrapper(
     let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
     let genesis_block = network_info.genesis_block().unwrap_macro();
 
-    let mut genesis_header_hash = genesis_block.hash().as_bytes().to_field_elements().unwrap();
-    let mut final_header_hash = block.hash().as_bytes().to_field_elements().unwrap();
+    let mut genesis_header_hash = genesis_block
+        .hash_blake2s()
+        .as_bytes()
+        .to_field_elements()
+        .unwrap();
+    let mut final_header_hash = block.hash_blake2s().as_bytes().to_field_elements().unwrap();
 
     // Prepare the inputs.
     let mut inputs = vec![];

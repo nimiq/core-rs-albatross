@@ -34,12 +34,14 @@ impl Blockchain {
             .body()
             .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
 
+        let block_hash_blake2b = block.hash();
+
         let read_txn = this.read_transaction();
 
         // Check if we already know this block.
         if this
             .chain_store
-            .get_chain_info(&block.hash(), false, Some(&read_txn))
+            .get_chain_info(&block_hash_blake2b, false, Some(&read_txn))
             .is_ok()
         {
             return Ok(PushResult::Known);
@@ -57,16 +59,15 @@ impl Blockchain {
             .chain_store
             .get_block_at(Policy::genesis_block_number(), true, Some(&read_txn))
             .unwrap();
-        let genesis_hash = genesis_block.hash();
-
-        let genesis_header_hash = <[u8; 32]>::from(genesis_hash.clone());
-        let final_header_hash = <[u8; 32]>::from(block.hash());
+        let genesis_macro_block = genesis_block.unwrap_macro_ref();
+        let genesis_hash_blake2s = genesis_macro_block.hash_blake2s();
+        let genesis_hash_blake2b = genesis_macro_block.hash();
 
         // Verify the zk proof.
         if !trusted_proof {
             let verify_result = verify(
-                genesis_header_hash,
-                final_header_hash,
+                genesis_hash_blake2s,
+                block.unwrap_macro_ref().hash_blake2s(),
                 proof,
                 &ZKP_VERIFYING_KEY,
             );
@@ -79,7 +80,6 @@ impl Blockchain {
         // At this point we know that the block is correct. We just have to push it.
 
         // Create the chain info for the new block.
-        let block_hash = block.hash();
         let chain_info = ChainInfo::new(block, true);
 
         read_txn.close();
@@ -99,11 +99,11 @@ impl Blockchain {
         // Restore genesis block.
         let genesis_info = ChainInfo::new(genesis_block, true);
         this.chain_store
-            .put_chain_info(&mut txn, &genesis_hash, &genesis_info, true);
+            .put_chain_info(&mut txn, &genesis_hash_blake2b, &genesis_info, true);
 
         this.chain_store
-            .put_chain_info(&mut txn, &block_hash, &chain_info, true);
-        this.chain_store.set_head(&mut txn, &block_hash);
+            .put_chain_info(&mut txn, &block_hash_blake2b, &chain_info, true);
+        this.chain_store.set_head(&mut txn, &block_hash_blake2b);
 
         txn.commit();
 
@@ -112,11 +112,13 @@ impl Blockchain {
 
         if let Block::Macro(ref macro_block) = chain_info.head {
             this.state.macro_info = chain_info.clone();
-            this.state.macro_head_hash = block_hash.clone();
+            this.state.macro_head_hash = block_hash_blake2b.clone();
 
             this.state.election_head = macro_block.clone();
-            let old_election_head_hash =
-                mem::replace(&mut this.state.election_head_hash, block_hash.clone());
+            let old_election_head_hash = mem::replace(
+                &mut this.state.election_head_hash,
+                block_hash_blake2b.clone(),
+            );
 
             // If we coincidentally know the previous election block, we remember its slots.
             if old_election_head_hash == macro_block.header.parent_election_hash {
@@ -133,7 +135,7 @@ impl Blockchain {
         }
 
         this.state.main_chain = chain_info;
-        this.state.head_hash = block_hash.clone();
+        this.state.head_hash = block_hash_blake2b.clone();
 
         // Downgrade the lock again as the notify listeners might want to acquire read access themselves.
         let this = RwLockWriteGuard::downgrade_to_upgradable(this);
@@ -151,7 +153,7 @@ impl Blockchain {
         // We shouldn't log errors if there are no listeners.
         _ = this
             .notifier
-            .send(BlockchainEvent::EpochFinalized(block_hash));
+            .send(BlockchainEvent::EpochFinalized(block_hash_blake2b));
 
         // We don't have any block logs, so we do not notify the block log stream.
 

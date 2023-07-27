@@ -60,15 +60,13 @@ fn main() {
         .get_block_at(0, true, None)
         .unwrap()
         .unwrap_macro()
-        .hash_blake2s()
-        .0;
+        .hash_blake2s();
     // Get final random parameters.
     let final_header_hash = blockchain_rg
         .get_block_at(number_epochs * Policy::blocks_per_epoch(), true, None)
         .unwrap()
         .unwrap_macro()
-        .hash_blake2s()
-        .0;
+        .hash_blake2s();
 
     // Load the proof from file.
     let mut file = File::open(format!("proofs/proof_epoch_{number_epochs}.bin")).unwrap();

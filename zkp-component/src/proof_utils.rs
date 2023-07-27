@@ -70,8 +70,8 @@ pub(crate) fn validate_proof_get_new_state(
     genesis_block: MacroBlock,
 ) -> Result<ZKPState, Error> {
     if verify(
-        genesis_block.hash().into(),
-        new_block.hash().into(),
+        genesis_block.hash_blake2s(),
+        new_block.hash_blake2s(),
         proof.clone(),
         &ZKP_VERIFYING_KEY,
     )? {

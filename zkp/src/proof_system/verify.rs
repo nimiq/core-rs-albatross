@@ -3,6 +3,7 @@ use ark_ec::mnt6::MNT6;
 use ark_ff::ToConstraintField;
 use ark_groth16::{Groth16, Proof, VerifyingKey};
 use ark_mnt6_753::{Config, MNT6_753};
+use nimiq_hash::Blake2sHash;
 use nimiq_zkp_primitives::{vk_commitment, NanoZKPError};
 
 /// This function verifies a proof for the Merger Wrapper circuit, which implicitly is a proof for
@@ -10,9 +11,9 @@ use nimiq_zkp_primitives::{vk_commitment, NanoZKPError};
 /// computers.
 pub fn verify(
     // The header hash of the initial block.
-    genesis_header_hash: [u8; 32],
+    genesis_header_hash: Blake2sHash,
     // The header hash of the final block.
-    final_header_hash: [u8; 32],
+    final_header_hash: Blake2sHash,
     // The SNARK proof for this circuit.
     proof: Proof<MNT6_753>,
     verifying_key: &VerifyingKey<MNT6<Config>>,
@@ -20,8 +21,8 @@ pub fn verify(
     // Prepare the inputs.
     let mut inputs = vec![];
 
-    inputs.append(&mut genesis_header_hash.to_field_elements().unwrap());
-    inputs.append(&mut final_header_hash.to_field_elements().unwrap());
+    inputs.append(&mut genesis_header_hash.0.to_field_elements().unwrap());
+    inputs.append(&mut final_header_hash.0.to_field_elements().unwrap());
 
     inputs.append(
         &mut vk_commitment(verifying_key.clone())
