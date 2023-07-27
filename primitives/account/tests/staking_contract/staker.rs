@@ -81,9 +81,7 @@ fn setup_staker_with_inactive_balance(
     );
     let before_release_block_state = BlockState::new(inactive_release_block_state.number - 1, 2);
     let jail_release = if validator_is_jailed {
-        Some(Policy::block_after_jail(Policy::election_block_after(
-            deactivation_block_state.number,
-        )))
+        Some(Policy::block_after_jail(deactivation_block_state.number))
     } else {
         None
     };
