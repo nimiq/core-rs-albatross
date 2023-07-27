@@ -55,7 +55,7 @@ impl Blockchain {
         // Prepare the inputs to verify the proof.
         let genesis_block = this
             .chain_store
-            .get_block_at(0, true, Some(&read_txn))
+            .get_block_at(Policy::genesis_block_number(), true, Some(&read_txn))
             .unwrap();
         let genesis_hash = genesis_block.hash();
 

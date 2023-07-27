@@ -439,7 +439,10 @@ fn can_push_zkps() {
     assert_eq!(result, Err(PushError::InvalidZKP));
     {
         let blockchain2_rg = temp_producer2.blockchain.read();
-        assert_eq!(blockchain2_rg.block_number(), 0);
+        assert_eq!(
+            blockchain2_rg.block_number(),
+            Policy::genesis_block_number()
+        );
 
         assert!(blockchain2_rg.can_enforce_validity_window());
         assert_eq!(blockchain2_rg.get_missing_accounts_range(None), None);

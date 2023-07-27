@@ -687,7 +687,10 @@ fn can_push_zkps() {
     assert_eq!(result, Err(PushError::InvalidZKP));
     {
         let blockchain2_rg = temp_producer2.light_blockchain.read();
-        assert_eq!(blockchain2_rg.block_number(), 0);
+        assert_eq!(
+            blockchain2_rg.block_number(),
+            Policy::genesis_block_number()
+        );
     }
 
     // Create a valid ZKP.
