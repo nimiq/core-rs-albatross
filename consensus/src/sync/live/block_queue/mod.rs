@@ -623,7 +623,7 @@ impl<N: Network> Stream for BlockQueue<N> {
                 Poll::Ready(Some((block, peer_id, pubsub_id))) => {
                     // Ignore all block announcements until there is at least one synced peer.
                     if self.num_peers() > 0 {
-                        log::debug!(%block, "Received block via gossipsub");
+                        log::debug!(%block, %peer_id, "Received block via gossipsub");
                         if let Some(block) = self.check_announced_block(block, peer_id, pubsub_id) {
                             return Poll::Ready(Some(block));
                         }

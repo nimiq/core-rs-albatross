@@ -60,6 +60,7 @@ pub trait AbstractBlockchain {
     }
 
     /// Returns the block type of the next block.
+    // FIXME Get rid of this
     fn get_next_block_type(last_block_number: u32) -> BlockType {
         if Policy::is_macro_block_at(last_block_number + 1) {
             BlockType::Macro
@@ -122,8 +123,10 @@ pub trait AbstractBlockchain {
     ) -> Result<Vec<Block>, BlockchainError>;
 
     /// Stream of Blockchain Events.
+    // FIXME Naming
     fn notifier_as_stream(&self) -> BoxStream<'static, BlockchainEvent>;
 
     /// Stream of Fork Events.
+    // FIXME Get rid of this
     fn fork_notifier_as_stream(&self) -> BoxStream<'static, ForkEvent>;
 }

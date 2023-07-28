@@ -581,14 +581,15 @@ impl Network {
             } => {
                 debug!(
                     %peer_id,
-                    ?endpoint,
+                    address = %endpoint.get_remote_address(),
+                    direction = if endpoint.is_dialer() { "outbound" } else { "inbound" },
                     connections = num_established,
                     "Connection established",
                 );
 
                 if let Some(dial_errors) = concurrent_dial_errors {
                     for (addr, error) in dial_errors {
-                        debug!(
+                        trace!(
                             %peer_id,
                             address = %addr,
                             %error,
@@ -814,7 +815,7 @@ impl Network {
                                     .insert(peer_id, peer_info.clone())
                                     .is_none()
                                 {
-                                    info!(%peer_id, "Peer joined");
+                                    info!(%peer_id, peer_address = %peer_info.get_address(), "Peer joined");
                                     if let Err(error) =
                                         events_tx.send(NetworkEvent::PeerJoined(peer_id, peer_info))
                                     {

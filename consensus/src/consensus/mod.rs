@@ -252,8 +252,9 @@ impl<N: Network> Consensus<N> {
         // Also stop any other checks.
         self.head_requests = None;
         self.head_requests_time = None;
+
         // We don't care if anyone is listening.
-        let _ = self.events.send(ConsensusEvent::Established);
+        self.events.send(ConsensusEvent::Established).ok();
     }
 
     /// Calculates and sets established state, returns a ConsensusEvent if the state changed.
@@ -392,9 +393,7 @@ impl<N: Network> Future for Consensus<N> {
 
         // Check consensus established state on changes.
         if let Some(event) = self.check_established(None) {
-            if let Err(error) = self.events.send(event) {
-                error!(%error, "Could not send established event")
-            }
+            self.events.send(event).ok();
         }
 
         // 2. Poll any head requests if active.
@@ -410,9 +409,7 @@ impl<N: Network> Future for Consensus<N> {
 
                 // Update established state using the result.
                 if let Some(event) = self.check_established(Some(result)) {
-                    if let Err(error) = self.events.send(event) {
-                        error!(%error, "Could not send established event after handling head requests");
-                    }
+                    self.events.send(event).ok();
                 }
             }
         }

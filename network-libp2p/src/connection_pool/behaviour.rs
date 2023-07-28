@@ -1,4 +1,3 @@
-use std::io::Error;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     sync::Arc,
@@ -325,7 +324,6 @@ impl ConnectionPoolBehaviour {
         {
             // Dial peers from the contact book.
             for peer_id in self.choose_peers_to_dial() {
-                debug!(%peer_id, "Dialing peer");
                 self.peer_ids.mark_dialing(peer_id);
                 let handler = self.new_handler();
                 self.actions.push_back(NetworkBehaviourAction::Dial {
@@ -542,15 +540,6 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         failed_addresses: Option<&Vec<Multiaddr>>,
         other_established: usize,
     ) {
-        let address = endpoint.get_remote_address();
-
-        debug!(
-            %peer_id,
-            %address,
-            ?endpoint,
-            "Connection established",
-        );
-
         // Mark failed addresses as such.
         if let Some(addresses) = failed_addresses {
             for address in addresses {
@@ -586,6 +575,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
             return;
         }
 
+        let address = endpoint.get_remote_address();
         let mut close_reason = None;
         if self.addresses.is_banned(address.clone()) {
             debug!(%address, "Address is banned");
@@ -760,12 +750,13 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                     .iter()
                     .map(|(address, error)| {
                         let mut address = address.clone();
+
                         // XXX Cut off public key
                         address.pop();
 
                         let err = match error {
-                            TransportError::MultiaddrNotSupported(address) => {
-                                format!("MultiaddrNotSupported({})", address)
+                            TransportError::MultiaddrNotSupported(_) => {
+                                "Multiaddr not supported".to_string()
                             }
                             TransportError::Other(e) => e.to_string(),
                         };

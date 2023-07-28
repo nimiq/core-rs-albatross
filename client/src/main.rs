@@ -46,7 +46,6 @@ async fn main_inner() -> Result<(), Error> {
     // Early return in case of a proving process.
     if command_line.prove {
         info!("Starting proof generation. Waiting for input.");
-
         return Ok(prover_main().await?);
     }
 
@@ -66,7 +65,6 @@ async fn main_inner() -> Result<(), Error> {
     let metrics_enabled = metrics_config.is_some();
 
     // Create client from config.
-    log::info!("Initializing client");
     let mut client: Client = Client::from_config(
         config,
         Box::new(|fut| {
@@ -74,7 +72,6 @@ async fn main_inner() -> Result<(), Error> {
         }),
     )
     .await?;
-    log::info!("Client initialized");
 
     // Initialize RPC server
     if let Some(rpc_config) = rpc_config {
@@ -90,7 +87,6 @@ async fn main_inner() -> Result<(), Error> {
     // Start consensus.
     let consensus = client.take_consensus().unwrap();
 
-    log::info!("Spawning consensus");
     if metrics_enabled {
         let con_metrics_monitor = tokio_metrics::TaskMonitor::new();
         let instr_con = con_metrics_monitor.instrument(consensus);
@@ -111,7 +107,8 @@ async fn main_inner() -> Result<(), Error> {
     // Start validator
     let val_metric_monitor = tokio_metrics::TaskMonitor::new();
     if let Some(validator) = client.take_validator() {
-        log::info!("Spawning validator");
+        info!("Initializing validator {}", validator.validator_address());
+
         if metrics_enabled {
             let mp_metrics_monitor = validator.get_mempool_monitor();
             let inst_validator = val_metric_monitor.instrument(validator);
@@ -125,7 +122,6 @@ async fn main_inner() -> Result<(), Error> {
                 monitor: val_metric_monitor,
             });
         } else {
-            log::info!("Spawning validator");
             tokio::spawn(validator);
         }
     }
@@ -154,7 +150,6 @@ async fn main_inner() -> Result<(), Error> {
 
     // Run periodically
     let mut interval = tokio::time::interval(Duration::from_secs(statistics_interval));
-
     loop {
         interval.tick().await;
 

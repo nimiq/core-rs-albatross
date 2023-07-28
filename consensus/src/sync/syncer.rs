@@ -139,12 +139,12 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
     }
 
     fn move_peer_into_macro_sync(&mut self, peer_id: N::PeerId) {
-        debug!("Adding peer {:?} into history sync", peer_id);
+        debug!(%peer_id, "Adding peer to macro sync");
         self.macro_sync.add_peer(peer_id);
     }
 
     pub fn move_peer_into_live_sync(&mut self, peer_id: N::PeerId) {
-        debug!("Adding peer {:?} into live sync", peer_id);
+        debug!(%peer_id, "Adding peer to live sync");
         self.live_sync.add_peer(peer_id);
     }
 

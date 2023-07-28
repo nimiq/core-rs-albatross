@@ -66,6 +66,16 @@ impl AbstractBlockchain for Blockchain {
         self.get_block(hash, include_body, None)
     }
 
+    fn get_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+    ) -> Result<Vec<Block>, BlockchainError> {
+        self.get_blocks(start_block_hash, count, include_body, direction, None)
+    }
+
     fn get_chain_info(
         &self,
         hash: &Blake2bHash,
@@ -80,16 +90,6 @@ impl AbstractBlockchain for Blockchain {
         offset: u32,
     ) -> Result<(Validator, u16), BlockchainError> {
         self.get_slot_owner_at(block_number, offset, None)
-    }
-
-    fn get_blocks(
-        &self,
-        start_block_hash: &Blake2bHash,
-        count: u32,
-        include_body: bool,
-        direction: Direction,
-    ) -> Result<Vec<Block>, BlockchainError> {
-        self.get_blocks(start_block_hash, count, include_body, direction, None)
     }
 
     fn get_macro_blocks(

@@ -77,7 +77,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                     // We deem this too close to do a macro sync, thus we are not pushing the zkp. This would
                                     // clear the state and history store. Instead, we request the epoch ids from this peer.
                                     log::debug!(
-                                        peer_id = ?peer_id,
+                                        peer_id = %peer_id,
                                         "Peer is sufficiently close not to apply the zkp."
                                     );
 
@@ -175,6 +175,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                     if epoch_ids.checkpoint_epoch_number() == 0 {
                         return 0;
                     }
+                    // FIXME: Ban peer if it sends an invalid epoch_number instead of panicking.
                     Policy::first_block_of(epoch_ids.checkpoint_epoch_number() as u32)
                         .expect("The supplied epoch number is out of bounds")
                 })
@@ -227,7 +228,9 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         && blockchain.accounts_complete()
                     {
                         log::debug!(
-                            peer_id = ?epoch_ids.sender,
+                            our_head,
+                            peer_head = peer_head_upper_bound,
+                            peer_id = %epoch_ids.sender,
                             "Peer is sufficiently close for a live sync instead of macro sync."
                         );
                         return Poll::Ready(Some(MacroSyncReturn::Good(epoch_ids.sender)));

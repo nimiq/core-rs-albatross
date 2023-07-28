@@ -187,7 +187,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
 impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for LightMacroSync<TNetwork> {
     fn add_peer(&self, peer_id: TNetwork::PeerId) {
-        info!("Requesting zkp from peer: {:?}", peer_id);
+        info!(%peer_id, "Requesting zkp from peer");
 
         self.zkp_requests
             .push(Self::request_zkps(self.zkp_component_proxy.clone(), peer_id).boxed());

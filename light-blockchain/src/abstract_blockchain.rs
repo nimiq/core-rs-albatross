@@ -63,6 +63,17 @@ impl AbstractBlockchain for LightBlockchain {
             .map(|chain_info| chain_info.head.clone())
     }
 
+    fn get_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+    ) -> Result<Vec<Block>, BlockchainError> {
+        self.chain_store
+            .get_blocks(start_block_hash, count, direction, include_body)
+    }
+
     fn get_chain_info(
         &self,
         hash: &Blake2bHash,
@@ -79,17 +90,6 @@ impl AbstractBlockchain for LightBlockchain {
         let vrf_entropy = self.get_block_at(block_number - 1, false)?.seed().entropy();
 
         self.get_proposer_at(block_number, offset, vrf_entropy)
-    }
-
-    fn get_blocks(
-        &self,
-        start_block_hash: &Blake2bHash,
-        count: u32,
-        include_body: bool,
-        direction: Direction,
-    ) -> Result<Vec<Block>, BlockchainError> {
-        self.chain_store
-            .get_blocks(start_block_hash, count, direction, include_body)
     }
 
     /// Fetches a given number of macro blocks, starting at a specific block (by its hash).
