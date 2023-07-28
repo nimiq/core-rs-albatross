@@ -4795,6 +4795,7 @@ dependencies = [
  "ark-std",
  "nimiq-block",
  "nimiq-bls",
+ "nimiq-genesis",
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-log",

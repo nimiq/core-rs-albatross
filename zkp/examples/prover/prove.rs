@@ -8,8 +8,9 @@ use std::{
 use ark_groth16::Proof;
 use ark_serialize::CanonicalSerialize;
 use log::metadata::LevelFilter;
+use nimiq_genesis::{NetworkId, NetworkInfo};
 use nimiq_log::TargetsExt;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::policy::{Policy, TEST_POLICY};
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer, blockchain_with_rng::produce_macro_blocks_with_rng,
     test_rng::test_rng,
@@ -28,6 +29,15 @@ fn initialize() {
                 .with_env(),
         )
         .init();
+    let network_info = NetworkInfo::from_network_id(NetworkId::UnitAlbatross);
+    let genesis_block = network_info.genesis_block();
+
+    // Run tests with different policy values:
+    let mut policy_config = TEST_POLICY;
+    // The genesis block number must be set accordingly
+    policy_config.genesis_block_number = genesis_block.block_number();
+
+    let _ = Policy::get_or_init(policy_config);
 }
 
 /// Generates a proof for a chain of election blocks. The random parameters generation uses always

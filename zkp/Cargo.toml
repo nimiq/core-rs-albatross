@@ -30,6 +30,7 @@ thiserror = "1.0"
 
 nimiq-block = { path = "../primitives/block" }
 nimiq-bls = { path = "../bls" }
+nimiq-genesis = { path = "../genesis", default-features = false }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives", features = ["policy", "networks"] }

@@ -118,6 +118,11 @@ impl Blockchain {
             return Err(BlockchainError::InvalidGenesisBlock);
         }
 
+        if Policy::genesis_block_number() != genesis_block.block_number() {
+            log::error!("The genesis block number and the one configured in Policy must be equal");
+            return Err(BlockchainError::InvalidGenesisBlock);
+        }
+
         let chain_store = ChainStore::new(env.clone());
         let history_store = HistoryStore::new(env.clone());
 

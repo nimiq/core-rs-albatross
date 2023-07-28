@@ -142,6 +142,21 @@ impl ClientInner {
         }
         let network_info = NetworkInfo::from_network_id(config.network_id);
 
+        let policy_config = nimiq_primitives::policy::Policy {
+            genesis_block_number: network_info.genesis_block().block_number(),
+            ..Default::default()
+        };
+
+        let _ = Policy::get_or_init(policy_config);
+
+        // Verify Policy is configured with the genesis block number we expect
+        if network_info.genesis_block().block_number() != Policy::genesis_block_number() {
+            log::error!("The genesis block number must be configured before using any other Policy function");
+            return Err(Error::config_error(
+                "There is a genesis block number configuration mismatch",
+            ));
+        }
+
         // Load the correct verifying key.
         ZKP_VERIFYING_KEY.init_with_network_id(config.network_id);
 
