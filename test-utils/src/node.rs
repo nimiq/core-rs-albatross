@@ -73,6 +73,12 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
         let network = N::build_network(peer_id, block_hash, hub).await;
         let zkp_storage: Option<Box<dyn ProofStore>> =
             Some(Box::new(DBProofStore::new(env.clone())));
+
+        let prover_path = if is_prover_active {
+            Some(zkp_test_exe())
+        } else {
+            None
+        };
         let zkp_proxy = ZKPComponent::with_prover(
             BlockchainProxy::from(&blockchain),
             Arc::clone(&network),
@@ -80,7 +86,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
                 tokio::spawn(fut);
             }),
             is_prover_active,
-            Some(zkp_test_exe()),
+            prover_path,
             PathBuf::from(ZKP_TEST_KEYS_PATH),
             zkp_storage,
         )

@@ -3,7 +3,9 @@ codecov:
 
 ignore: 
   - metrics-server
-  - rpc-*
+  - rpc-client
+  - rpc-server
+  - rpc-interface
   - spammer
   - tools
   - zkp-component/zkp-test-gen
