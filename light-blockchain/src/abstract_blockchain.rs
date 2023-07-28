@@ -32,6 +32,10 @@ impl AbstractBlockchain for LightBlockchain {
         self.election_head.clone()
     }
 
+    fn accounts_complete(&self) -> bool {
+        false
+    }
+
     fn current_validators(&self) -> Option<Validators> {
         self.current_validators.clone()
     }

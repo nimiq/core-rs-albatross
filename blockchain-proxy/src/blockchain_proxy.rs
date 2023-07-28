@@ -115,6 +115,10 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         gen_blockchain_match!(self, BlockchainReadProxy, election_head)
     }
 
+    fn accounts_complete(&self) -> bool {
+        gen_blockchain_match!(self, BlockchainReadProxy, accounts_complete)
+    }
+
     fn current_validators(&self) -> Option<Validators> {
         gen_blockchain_match!(self, BlockchainReadProxy, current_validators)
     }

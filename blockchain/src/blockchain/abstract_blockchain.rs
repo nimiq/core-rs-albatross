@@ -39,6 +39,10 @@ impl AbstractBlockchain for Blockchain {
         self.state.main_chain.head.epoch_number()
     }
 
+    fn accounts_complete(&self) -> bool {
+        self.state.accounts.is_complete(None)
+    }
+
     fn current_validators(&self) -> Option<Validators> {
         self.state.current_slots.clone()
     }

@@ -338,7 +338,7 @@ where
 
         // Abort if the blockchain is not in the correct state anymore.
         let blockchain = self.blockchain.read();
-        if !blockchain.state().accounts.is_complete(None) {
+        if !blockchain.accounts_complete() {
             return Err(ProposalError::Other);
         }
 

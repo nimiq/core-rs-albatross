@@ -178,12 +178,15 @@ impl<N: Network> StateQueue<N> {
     ) -> Self {
         let chunk_request_component =
             ChunkRequestComponent::new(Arc::clone(&network), diff_queue.peer_list());
-        let current_macro_height = Policy::last_macro_block(blockchain.read().block_number());
-        let blockchain_rx = blockchain.read().notifier_as_stream();
+
+        let bc = blockchain.read();
+        let current_macro_height = Policy::last_macro_block(bc.block_number());
+        let blockchain_rx = bc.notifier_as_stream();
+        let accounts_complete = bc.accounts_complete();
+        drop(bc);
 
         // When initializing the state sync, we assume it to be complete if we have the full state.
         // In this case, we only start the state sync, once the accounts tree is reinitialized or we reverted a chunk.
-        let accounts_complete = blockchain.read().state.accounts.is_complete(None);
         let start_key = if accounts_complete {
             ChunkRequestState::Complete
         } else {
@@ -483,8 +486,7 @@ impl<N: Network> Stream for StateQueue<N> {
         while let Poll::Ready(Some(event)) = self.blockchain_rx.poll_next_unpin(cx) {
             match event {
                 BlockchainEvent::Finalized(_) | BlockchainEvent::EpochFinalized(_) => {
-                    let blockchain_state_complete =
-                        self.blockchain.read().state.accounts.is_complete(None);
+                    let blockchain_state_complete = self.blockchain.read().accounts_complete();
                     if !self.start_key.is_complete() && blockchain_state_complete {
                         // Mark state sync as complete after passing a macro block.
                         info!("Finished state sync, trie complete.");
@@ -500,7 +502,7 @@ impl<N: Network> Stream for StateQueue<N> {
                     }
                 }
                 BlockchainEvent::Rebranched(_, _) => {
-                    if !self.blockchain.read().state.accounts.is_complete(None) {
+                    if !self.blockchain.read().accounts_complete() {
                         info!("Reset due to rebranch.");
                         self.start_key = ChunkRequestState::Reset;
                         self.diff_queue.set_diff_needed(true);

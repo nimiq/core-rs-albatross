@@ -288,7 +288,7 @@ pub async fn sync_two_peers(
 
     match blockchain2_proxy {
         BlockchainProxy::Full(blockchain) => {
-            assert!(blockchain.read().state.accounts.is_complete(None));
+            assert!(blockchain.read().accounts_complete());
         }
         BlockchainProxy::Light(_) => {}
     }

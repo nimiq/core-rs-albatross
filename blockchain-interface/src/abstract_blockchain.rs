@@ -68,6 +68,9 @@ pub trait AbstractBlockchain {
         }
     }
 
+    /// Returns a flag indicating if the accounts tree is complete.
+    fn accounts_complete(&self) -> bool;
+
     /// Returns the current set of validators.
     fn current_validators(&self) -> Option<Validators>;
 

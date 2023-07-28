@@ -362,7 +362,7 @@ async fn can_sync_state() {
     }
 
     let blockchain_rg = incomplete_blockchain.read();
-    assert!(blockchain_rg.state.accounts.is_complete(None));
+    assert!(blockchain_rg.accounts_complete());
     assert!(!live_sync.queue().chunk_request_state().is_complete());
     drop(blockchain_rg);
 
@@ -418,7 +418,7 @@ async fn can_sync_state() {
     assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
     let blockchain_rg = incomplete_blockchain.read();
-    assert!(blockchain_rg.state.accounts.is_complete(None));
+    assert!(blockchain_rg.accounts_complete());
     assert!(live_sync.queue().chunk_request_state().is_complete());
     drop(blockchain_rg);
 }
@@ -588,7 +588,7 @@ async fn revert_chunks_for_state_live_sync() {
     // Checks that the state is complete but that the sync is still incomplete
     // and waiting for the macro block.
     let blockchain_rg = incomplete_blockchain.read();
-    assert!(blockchain_rg.state.accounts.is_complete(None));
+    assert!(blockchain_rg.accounts_complete());
     assert!(!live_sync.queue().chunk_request_state().is_complete());
     assert_eq!(
         blockchain_rg.state.accounts.get_root_hash_assert(None),

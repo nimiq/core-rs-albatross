@@ -221,8 +221,10 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             } else {
                 #[cfg(feature = "full")]
                 if let BlockchainProxy::Full(_) = self.blockchain {
-                    if peer_head_upper_bound.saturating_sub(self.blockchain.read().block_number())
-                        <= self.full_sync_threshold
+                    let blockchain = self.blockchain.read();
+                    let our_head = blockchain.block_number();
+                    if peer_head_upper_bound.saturating_sub(our_head) <= self.full_sync_threshold
+                        && blockchain.accounts_complete()
                     {
                         log::debug!(
                             peer_id = ?epoch_ids.sender,
