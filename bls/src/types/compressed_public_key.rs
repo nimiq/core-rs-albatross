@@ -64,7 +64,7 @@ impl Ord for CompressedPublicKey {
 
 impl PartialOrd<CompressedPublicKey> for CompressedPublicKey {
     fn partial_cmp(&self, other: &CompressedPublicKey) -> Option<Ordering> {
-        self.as_ref().partial_cmp(other.as_ref())
+        Some(self.cmp(other))
     }
 }
 

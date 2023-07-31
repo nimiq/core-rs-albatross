@@ -111,7 +111,7 @@ impl<H: Merge + PartialEq + Clone, S: Store<H>> PartialMerkleMountainRange<H, S>
                 if let Some(hash) = Self::get_node(
                     peak.index,
                     &new_node_range,
-                    &mut store,
+                    &store,
                     &mut proof_iter,
                     range_proof.assume_previous,
                 ) {
@@ -184,7 +184,7 @@ impl<H: Merge + PartialEq + Clone, S: Store<H>> PartialMerkleMountainRange<H, S>
     fn get_node<'a, I>(
         index: usize,
         new_nodes_range: &Range<usize>,
-        store: &mut MemoryTransaction<H, S>,
+        store: &MemoryTransaction<H, S>,
         proof_iter: &mut I,
         assume_previous: bool,
     ) -> Option<H>

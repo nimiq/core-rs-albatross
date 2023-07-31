@@ -118,7 +118,7 @@ where
             QueuedDiff::Buffered(
                 blocks
                     .into_iter()
-                    .zip(diffs.into_iter().map(|diff| Some(diff)))
+                    .zip(diffs.into_iter().map(Some))
                     .collect(),
             )
         }
@@ -132,7 +132,7 @@ where
                 blocks
                     .into_iter()
                     .map(|(block, _)| block)
-                    .zip(diffs.into_iter().map(|diff| Some(diff)))
+                    .zip(diffs.into_iter().map(Some))
                     .collect(),
             )
         }

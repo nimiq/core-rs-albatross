@@ -43,7 +43,7 @@ impl Eq for LazyPublicKey {}
 
 impl PartialOrd<LazyPublicKey> for LazyPublicKey {
     fn partial_cmp(&self, other: &LazyPublicKey) -> Option<Ordering> {
-        self.compressed.partial_cmp(&other.compressed)
+        Some(self.cmp(other))
     }
 }
 

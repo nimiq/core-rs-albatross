@@ -59,7 +59,7 @@ impl Eq for Sha512Hash {}
 
 impl PartialOrd for Sha512Hash {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.0[..].partial_cmp(&other.0[..])
+        Some(self.cmp(other))
     }
 }
 

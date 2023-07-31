@@ -65,7 +65,7 @@ impl Ord for CompressedSignature {
 
 impl PartialOrd<CompressedSignature> for CompressedSignature {
     fn partial_cmp(&self, other: &CompressedSignature) -> Option<Ordering> {
-        self.as_ref().partial_cmp(other.as_ref())
+        Some(self.cmp(other))
     }
 }
 
