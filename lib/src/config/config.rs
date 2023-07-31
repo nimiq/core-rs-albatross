@@ -524,7 +524,7 @@ impl Credentials {
 }
 
 #[cfg(feature = "rpc-server")]
-#[derive(Debug, Clone, Builder)]
+#[derive(Clone, Builder)]
 #[builder(setter(into))]
 pub struct RpcServerConfig {
     /// Bind the RPC server to the specified IP address.
@@ -560,8 +560,21 @@ pub struct RpcServerConfig {
     pub credentials: Option<Credentials>,
 }
 
+impl Debug for RpcServerConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RpcServerConfig")
+            .field("bind_to", &self.bind_to)
+            .field("port", &self.port)
+            .field("corsdomain", &self.corsdomain)
+            .field("allow_ips", &self.allow_ips)
+            .field("allowed_methods", &self.allowed_methods)
+            .field("credentials", &self.credentials.as_ref().map(|_| "***"))
+            .finish()
+    }
+}
+
 #[cfg(feature = "metrics-server")]
-#[derive(Debug, Clone, Builder)]
+#[derive(Clone, Builder)]
 #[builder(setter(into))]
 pub struct MetricsServerConfig {
     /// Bind the server to the specified ip and port.
@@ -573,6 +586,15 @@ pub struct MetricsServerConfig {
     /// If specified, require HTTP basic auth with these credentials
     #[builder(setter(strip_option))]
     pub credentials: Option<Credentials>,
+}
+
+impl Debug for MetricsServerConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MetricsServerConfig")
+            .field("addr", &self.addr)
+            .field("credentials", &self.credentials.as_ref().map(|_| "***"))
+            .finish()
+    }
 }
 
 /// Client configuration
