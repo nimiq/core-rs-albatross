@@ -70,26 +70,26 @@ impl Validator {
 pub struct PenalizedSlot {
     pub slot: u16,
     pub validator_address: Address,
-    /// The `event_block` identifies the block at which the penalizable action occurred.
-    pub event_block: u32,
+    /// The `offense_event_block` identifies the block at which the penalizable action occurred.
+    pub offense_event_block: u32,
 }
 
 impl PenalizedSlot {
     pub const SIZE: usize = 2 + Address::SIZE + 4;
 }
 
-/// Identifies a slash slot by the validator's address.
+/// Identifies a jail slot by the validator's address.
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SlashedValidator {
-    /// All slots to be slashed.
+pub struct JailedValidator {
+    /// All slots to be jailed.
     pub slots: Range<u16>,
     pub validator_address: Address,
-    /// The `event_block` identifies the block at which the slash action occurred.
-    pub event_block: u32,
+    /// The `offense_event_block` identifies the block at which the malicious behaviour occurred.
+    pub offense_event_block: u32,
 }
 
-impl SlashedValidator {
+impl JailedValidator {
     pub const SIZE: usize = Address::SIZE + 4;
 }
 

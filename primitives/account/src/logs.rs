@@ -148,13 +148,13 @@ pub enum Log {
     #[serde(rename_all = "camelCase")]
     Penalize {
         validator_address: Address,
-        event_block: u32,
+        offense_event_block: u32,
         slot: u16,
         newly_deactivated: bool,
     },
 
     #[serde(rename_all = "camelCase")]
-    Slash {
+    Jail {
         validator_address: Address,
         event_block: u32,
         newly_jailed: bool,
@@ -299,7 +299,7 @@ impl Log {
             Log::Penalize {
                 validator_address, ..
             }
-            | Log::Slash {
+            | Log::Jail {
                 validator_address, ..
             } => validator_address == address,
             Log::RevertContract { contract_address } => contract_address == address,

@@ -11,7 +11,7 @@ use nimiq_primitives::{
     coin::Coin,
     networks::NetworkId,
     policy::Policy,
-    slots_allocation::{PenalizedSlot, SlashedValidator},
+    slots_allocation::{JailedValidator, PenalizedSlot},
 };
 use nimiq_test_log::test;
 use nimiq_test_utils::block_production::TemporaryBlockProducer;
@@ -97,7 +97,7 @@ fn it_can_create_batch_finalization_inherents() {
         slot: PenalizedSlot {
             slot: 0,
             validator_address: validator_address.clone(),
-            event_block: 1 + Policy::genesis_block_number(),
+            offense_event_block: 1 + Policy::genesis_block_number(),
         },
     };
 
@@ -300,7 +300,7 @@ fn it_correctly_creates_inherents_from_skip_block() {
             slot: PenalizedSlot {
                 slot,
                 validator_address: validator.address,
-                event_block: skip_block.block_number()
+                offense_event_block: skip_block.block_number()
             }
         }]
     );
@@ -367,11 +367,11 @@ fn it_correctly_creates_inherents_from_fork_proof() {
     // Check inherents are correct.
     assert_eq!(
         inherents,
-        vec![Inherent::Slash {
-            slashed_validator: SlashedValidator {
+        vec![Inherent::Jail {
+            jailed_validator: JailedValidator {
                 slots: validator.slots,
                 validator_address: validator.address,
-                event_block: micro_block_fork1.block_number(),
+                offense_event_block: micro_block_fork1.block_number(),
             },
             new_epoch_slot_range: None
         }]
@@ -458,11 +458,11 @@ fn it_correctly_creates_inherents_in_next_epoch_from_fork_proof() {
     // Check inherents are correct.
     assert_eq!(
         inherents,
-        vec![Inherent::Slash {
-            slashed_validator: SlashedValidator {
+        vec![Inherent::Jail {
+            jailed_validator: JailedValidator {
                 slots: validator.slots,
                 validator_address: validator.address,
-                event_block: micro_block_fork1.block_number(),
+                offense_event_block: micro_block_fork1.block_number(),
             },
             new_epoch_slot_range: Some(current_epoch_validator.slots)
         }]

@@ -44,9 +44,9 @@ use crate::{
         proposal::{Header, RequestProposal},
         state::MacroState,
     },
+    jail::ForkProofPool,
     micro::{ProduceMicroBlock, ProduceMicroBlockEvent},
     r#macro::{MappedReturn, ProduceMacroBlock, ProposalTopic},
-    slash::ForkProofPool,
 };
 
 #[derive(PartialEq)]

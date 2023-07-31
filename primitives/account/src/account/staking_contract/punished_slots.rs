@@ -8,7 +8,7 @@ use nimiq_keys::Address;
 use nimiq_primitives::{
     coin::Coin,
     policy::Policy,
-    slots_allocation::{PenalizedSlot, SlashedValidator},
+    slots_allocation::{JailedValidator, PenalizedSlot},
 };
 use nimiq_serde::{Deserialize, Serialize};
 
@@ -34,38 +34,38 @@ impl PunishedSlots {
         }
     }
 
-    /// Registers a new slash for a given validator.
+    /// Registers a new jail for a given validator.
     /// If the event occurred in the current batch, it will only affect the current set.
     /// If the event was only reported in a subsequent batch, it will affect both sets,
     /// except if the validator was not elected in the corresponding batches.
-    pub fn register_slash(
+    pub fn register_jail(
         &mut self,
-        slashed_validator: &SlashedValidator,
+        jailed_validator: &JailedValidator,
         reporting_block: u32,
         new_epoch_slot_range: Option<Range<u16>>,
     ) -> (BitSet, Option<BTreeSet<u16>>) {
         let old_previous_batch_punished_slots = self.previous_batch_punished_slots.clone();
         let old_current_batch_punished_slots = self
             .current_batch_punished_slots
-            .get(&slashed_validator.validator_address)
+            .get(&jailed_validator.validator_address)
             .cloned();
 
         // If the event happened in the same epoch, the slot range will be determined by the event.
         // If the event happened in a previous epoch, we get the current slot range as an argument.
-        let current_batch_slot_range = if Policy::epoch_at(slashed_validator.event_block)
+        let current_batch_slot_range = if Policy::epoch_at(jailed_validator.offense_event_block)
             == Policy::epoch_at(reporting_block)
         {
-            Some(slashed_validator.slots.clone())
+            Some(jailed_validator.slots.clone())
         } else {
             new_epoch_slot_range.clone()
         };
 
         // We always add the validator to the current set.
-        // If the validator is wasn't elected for the epoch, then we don't slash.
+        // If the validator is wasn't elected for the epoch, then we don't punish.
         if let Some(slots) = current_batch_slot_range {
             let entry = self
                 .current_batch_punished_slots
-                .entry(slashed_validator.validator_address.clone())
+                .entry(jailed_validator.validator_address.clone())
                 .or_insert_with(BTreeSet::new);
 
             for slot in slots {
@@ -75,25 +75,29 @@ impl PunishedSlots {
 
         // If the event happened in an earlier batch, we also punish
         // the slots in the previous batch set.
-        if Policy::batch_at(slashed_validator.event_block) < Policy::batch_at(reporting_block) {
+        if Policy::batch_at(jailed_validator.offense_event_block)
+            < Policy::batch_at(reporting_block)
+        {
             // The following code assumes that the reporting window cannot span more than 2 epochs.
             assert!(
-                Policy::epoch_at(reporting_block) - Policy::epoch_at(slashed_validator.event_block)
+                Policy::epoch_at(reporting_block)
+                    - Policy::epoch_at(jailed_validator.offense_event_block)
                     <= 1,
                 "Cannot handle events that happened more than one epoch ago"
             );
 
             // If the event happened in the same epoch as the previous batch, the slot range will be determined by the event.
             // If the event happened in a different epoch than the previous batch, we get the current slot range as an argument.
-            let previous_batch_slot_range = if Policy::epoch_at(slashed_validator.event_block)
-                == Policy::epoch_at(reporting_block - Policy::blocks_per_batch())
-            {
-                Some(slashed_validator.slots.clone())
-            } else {
-                new_epoch_slot_range
-            };
+            let previous_batch_slot_range =
+                if Policy::epoch_at(jailed_validator.offense_event_block)
+                    == Policy::epoch_at(reporting_block - Policy::blocks_per_batch())
+                {
+                    Some(jailed_validator.slots.clone())
+                } else {
+                    new_epoch_slot_range
+                };
 
-            // If the validator is wasn't elected for the corresponding epoch, then we don't slash.
+            // If the validator is wasn't elected for the corresponding epoch, then we don't punish.
             if let Some(slots) = previous_batch_slot_range {
                 for slot in slots {
                     self.previous_batch_punished_slots.insert(slot as usize);
@@ -108,9 +112,9 @@ impl PunishedSlots {
     }
 
     /// Reverts a new penalty for a given slot.
-    pub fn revert_register_slash(
+    pub fn revert_register_jail(
         &mut self,
-        slashed_validator: &SlashedValidator,
+        jailed_validator: &JailedValidator,
         old_previous_batch_punished_slots: BitSet,
         old_current_batch_punished_slots: Option<BTreeSet<u16>>,
     ) {
@@ -118,16 +122,16 @@ impl PunishedSlots {
         if let Some(set) = old_current_batch_punished_slots {
             assert!(
                 self.current_batch_punished_slots
-                    .insert(slashed_validator.validator_address.clone(), set)
+                    .insert(jailed_validator.validator_address.clone(), set)
                     .is_some(),
-                "Missing slashed validator"
+                "Missing jailed validator"
             );
         } else {
             assert!(
                 self.current_batch_punished_slots
-                    .remove(&slashed_validator.validator_address)
+                    .remove(&jailed_validator.validator_address)
                     .is_some(),
-                "Missing slashed validator"
+                "Missing jailed validator"
             );
         }
     }
@@ -145,7 +149,9 @@ impl PunishedSlots {
         let mut newly_punished_current_batch = false;
 
         // Reported during subsequent batch, so changes the previous set.
-        if Policy::batch_at(penalized_slot.event_block) + 1 == Policy::batch_at(reporting_block) {
+        if Policy::batch_at(penalized_slot.offense_event_block) + 1
+            == Policy::batch_at(reporting_block)
+        {
             newly_punished_previous_batch = !self
                 .previous_batch_punished_slots
                 .contains(penalized_slot.slot as usize);
@@ -155,7 +161,8 @@ impl PunishedSlots {
         // Only apply the penalty to the current set if the epoch is the same.
         // On a new epoch the validator may not be elected. Even if it is,
         // there is no straightforward mapping between the slots of the previous and new epoch.
-        if Policy::epoch_at(penalized_slot.event_block) == Policy::epoch_at(reporting_block) {
+        if Policy::epoch_at(penalized_slot.offense_event_block) == Policy::epoch_at(reporting_block)
+        {
             newly_punished_current_batch = self
                 .current_batch_punished_slots
                 .entry(penalized_slot.validator_address.clone())

@@ -10,12 +10,12 @@ use nimiq_keys::Address;
 use nimiq_primitives::{
     coin::Coin,
     policy::Policy,
-    slots_allocation::{PenalizedSlot, SlashedValidator},
+    slots_allocation::{JailedValidator, PenalizedSlot},
 };
 use nimiq_test_log::test;
 
 #[derive(Debug)]
-struct SlashConfig {
+struct JailConfig {
     event_block1: u32,
     slots_range1: Range<u16>,
     event_block2: u32,
@@ -28,7 +28,7 @@ struct SlashConfig {
     expected_previous2: Range<u16>,
 }
 
-impl Default for SlashConfig {
+impl Default for JailConfig {
     fn default() -> Self {
         Self {
             event_block1: 1 + Policy::genesis_block_number(),
@@ -45,7 +45,7 @@ impl Default for SlashConfig {
     }
 }
 
-fn penalize_slash_and_revert_twice(config: SlashConfig) {
+fn penalize_jail_and_revert_twice(config: JailConfig) {
     // Only allow valid block combinations.
     assert!(
         config.event_block1 < config.reporting_block,
@@ -71,17 +71,17 @@ fn penalize_slash_and_revert_twice(config: SlashConfig) {
     let penalize_slot1 = PenalizedSlot {
         slot: config.slots_range1.start,
         validator_address: Address([1u8; 20]),
-        event_block: config.event_block1,
+        offense_event_block: config.event_block1,
     };
 
-    // Always slash the same validator for different events.
-    let slashed_validator2 = SlashedValidator {
+    // Always jail the same validator for different events.
+    let jailed_validator2 = JailedValidator {
         slots: config.slots_range2,
         validator_address: Address([1u8; 20]),
-        event_block: config.event_block2,
+        offense_event_block: config.event_block2,
     };
 
-    // After a slash, we expect all slots of the validator to be in the set.
+    // After a jail, we expect all slots of the validator to be in the set.
     let mut expected_current_batch1 = BitSet::default();
     for slot in config.expected_current1 {
         expected_current_batch1.insert(slot as usize);
@@ -123,15 +123,15 @@ fn penalize_slash_and_revert_twice(config: SlashConfig) {
     );
 
     // --------
-    // Slash.
+    // Jail.
     // --------
-    let (old_prev2, old_current2) = punished_slots.register_slash(
-        &slashed_validator2,
+    let (old_prev2, old_current2) = punished_slots.register_jail(
+        &jailed_validator2,
         config.reporting_block,
         Some(config.slots_range_next_epoch),
     );
 
-    // Test that slash is properly registered in batch of event + current batch.
+    // Test that jail is properly registered in batch of event + current batch.
     assert_eq!(
         punished_slots.previous_batch_punished_slots,
         expected_previous_batch2
@@ -142,9 +142,9 @@ fn penalize_slash_and_revert_twice(config: SlashConfig) {
     );
 
     // ---------------
-    // Revert slash.
+    // Revert jail.
     // ---------------
-    punished_slots.revert_register_slash(&slashed_validator2, old_prev2, old_current2);
+    punished_slots.revert_register_jail(&jailed_validator2, old_prev2, old_current2);
 
     assert_eq!(
         punished_slots.current_batch_punished_slots(),
@@ -171,18 +171,18 @@ fn penalize_slash_and_revert_twice(config: SlashConfig) {
 }
 
 #[test]
-fn can_penalize_slash_and_revert_twice() {
+fn can_penalize_jail_and_revert_twice() {
     let combinations = vec![
         // Test cases within the same epoch:
         // 1. both events in same batch
-        SlashConfig {
+        JailConfig {
             slots_range1: 2..3,
             expected_current1: 2..3,
             expected_current2: 0..5,
             ..Default::default()
         },
         // 2. both events in previous batch
-        SlashConfig {
+        JailConfig {
             slots_range1: 2..3,
             reporting_block: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
             expected_current1: 2..3,
@@ -192,7 +192,7 @@ fn can_penalize_slash_and_revert_twice() {
             ..Default::default()
         },
         // 3. 1st event in current, 2nd in previous
-        SlashConfig {
+        JailConfig {
             slots_range1: 2..3,
             event_block1: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
             reporting_block: Policy::blocks_per_batch() + 2 + Policy::genesis_block_number(),
@@ -202,7 +202,7 @@ fn can_penalize_slash_and_revert_twice() {
             ..Default::default()
         },
         // 4. 1st event in previous, 2nd in current
-        SlashConfig {
+        JailConfig {
             slots_range1: 2..3,
             event_block2: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
             reporting_block: Policy::blocks_per_batch() + 2 + Policy::genesis_block_number(),
@@ -214,7 +214,7 @@ fn can_penalize_slash_and_revert_twice() {
         },
         // Test cases at epoch boundary:
         // 1. both events in previous batch
-        SlashConfig {
+        JailConfig {
             slots_range1: 2..3,
             event_block1: Policy::blocks_per_epoch() - 2 + Policy::genesis_block_number(),
             event_block2: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
@@ -225,7 +225,7 @@ fn can_penalize_slash_and_revert_twice() {
             ..Default::default()
         },
         // 2. 1st event in current, 2nd in previous
-        SlashConfig {
+        JailConfig {
             slots_range1: 2..3,
             event_block1: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
             event_block2: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
@@ -236,7 +236,7 @@ fn can_penalize_slash_and_revert_twice() {
             ..Default::default()
         },
         // 3. 1st event in previous, 2nd in current
-        SlashConfig {
+        JailConfig {
             slots_range1: 2..3,
             slots_range2: 1..6,
             event_block1: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
@@ -250,12 +250,12 @@ fn can_penalize_slash_and_revert_twice() {
     ];
 
     for config in combinations {
-        log::info!(?config, "slash and revert twice");
-        penalize_slash_and_revert_twice(config);
+        log::info!(?config, "jail and revert twice");
+        penalize_jail_and_revert_twice(config);
     }
 }
 
-fn slash_penalize_and_revert_twice(config: SlashConfig) {
+fn jail_penalize_and_revert_twice(config: JailConfig) {
     // Only allow valid block combinations.
     assert!(
         config.event_block1 < config.reporting_block,
@@ -277,21 +277,21 @@ fn slash_penalize_and_revert_twice(config: SlashConfig) {
     // Start with an empty set.
     let mut punished_slots = PunishedSlots::default();
 
-    // Always slash the same validator for different events.
-    let slashed_validator1 = SlashedValidator {
+    // Always jail the same validator for different events.
+    let jailed_validator1 = JailedValidator {
         slots: config.slots_range1,
         validator_address: Address([1u8; 20]),
-        event_block: config.event_block1,
+        offense_event_block: config.event_block1,
     };
 
     // Always penalize the same slot for different events.
     let penalized_slot2 = PenalizedSlot {
         slot: config.slots_range2.start,
         validator_address: Address([1u8; 20]),
-        event_block: config.event_block2,
+        offense_event_block: config.event_block2,
     };
 
-    // After a slash, we expect all slots of the validator to be in the set.
+    // After a jail, we expect all slots of the validator to be in the set.
     let mut expected_current_batch1 = BitSet::default();
     for slot in config.expected_current1 {
         expected_current_batch1.insert(slot as usize);
@@ -314,10 +314,10 @@ fn slash_penalize_and_revert_twice(config: SlashConfig) {
     let previous_batch_initial = punished_slots.previous_batch_punished_slots.clone();
 
     // ------
-    // Slash.
+    // Jail.
     // ------
-    let (old_prev1, old_current1) = punished_slots.register_slash(
-        &slashed_validator1,
+    let (old_prev1, old_current1) = punished_slots.register_jail(
+        &jailed_validator1,
         config.reporting_block,
         Some(config.slots_range_next_epoch),
     );
@@ -325,7 +325,7 @@ fn slash_penalize_and_revert_twice(config: SlashConfig) {
     let current_batch_intermediate = punished_slots.current_batch_punished_slots();
     let previous_batch_intermediate = punished_slots.previous_batch_punished_slots.clone();
 
-    // Test that slash is properly registered in batch of event + current batch.
+    // Test that jail is properly registered in batch of event + current batch.
     assert_eq!(
         punished_slots.previous_batch_punished_slots,
         expected_previous_batch1
@@ -366,9 +366,9 @@ fn slash_penalize_and_revert_twice(config: SlashConfig) {
     );
 
     // -------------
-    // Revert slash.
+    // Revert jail.
     // -------------
-    punished_slots.revert_register_slash(&slashed_validator1, old_prev1, old_current1);
+    punished_slots.revert_register_jail(&jailed_validator1, old_prev1, old_current1);
 
     assert_eq!(
         punished_slots.current_batch_punished_slots(),
@@ -381,18 +381,18 @@ fn slash_penalize_and_revert_twice(config: SlashConfig) {
 }
 
 #[test]
-fn can_slash_penalize_and_revert_twice() {
+fn can_jail_penalize_and_revert_twice() {
     let combinations = vec![
         // Test cases within the same epoch:
         // 1. both events in same batch
-        SlashConfig {
+        JailConfig {
             slots_range2: 2..3,
             expected_current1: 0..5,
             expected_current2: 0..5,
             ..Default::default()
         },
         // 2. both events in previous batch
-        SlashConfig {
+        JailConfig {
             slots_range2: 2..3,
             reporting_block: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
             expected_current1: 0..5,
@@ -402,7 +402,7 @@ fn can_slash_penalize_and_revert_twice() {
             ..Default::default()
         },
         // 3. 1st event in current, 2nd in previous
-        SlashConfig {
+        JailConfig {
             slots_range2: 2..3,
             event_block1: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
             reporting_block: Policy::blocks_per_batch() + 2 + Policy::genesis_block_number(),
@@ -412,7 +412,7 @@ fn can_slash_penalize_and_revert_twice() {
             ..Default::default()
         },
         // 4. 1st event in previous, 2nd in current
-        SlashConfig {
+        JailConfig {
             slots_range2: 2..3,
             event_block2: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
             reporting_block: Policy::blocks_per_batch() + 2 + Policy::genesis_block_number(),
@@ -424,7 +424,7 @@ fn can_slash_penalize_and_revert_twice() {
         },
         // Test cases at epoch boundary:
         // 1. both events in previous batch
-        SlashConfig {
+        JailConfig {
             slots_range2: 2..3,
             event_block1: Policy::blocks_per_epoch() - 2 + Policy::genesis_block_number(),
             event_block2: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
@@ -436,7 +436,7 @@ fn can_slash_penalize_and_revert_twice() {
             ..Default::default()
         },
         // 2. 1st event in current, 2nd in previous
-        SlashConfig {
+        JailConfig {
             slots_range1: 1..6,
             slots_range2: 2..3,
             event_block1: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
@@ -448,7 +448,7 @@ fn can_slash_penalize_and_revert_twice() {
             ..Default::default()
         },
         // 3. 1st event in previous, 2nd in current
-        SlashConfig {
+        JailConfig {
             slots_range2: 2..3,
             event_block1: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
             event_block2: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
@@ -462,12 +462,12 @@ fn can_slash_penalize_and_revert_twice() {
     ];
 
     for config in combinations {
-        log::info!(?config, "slash and revert twice");
-        slash_penalize_and_revert_twice(config);
+        log::info!(?config, "jail and revert twice");
+        jail_penalize_and_revert_twice(config);
     }
 }
 
-fn slash_and_revert_twice(config: SlashConfig) {
+fn jail_and_revert_twice(config: JailConfig) {
     // Only allow valid block combinations.
     assert!(
         config.event_block1 < config.reporting_block,
@@ -489,21 +489,21 @@ fn slash_and_revert_twice(config: SlashConfig) {
     // Start with an empty set.
     let mut punished_slots = PunishedSlots::default();
 
-    // Always slash the same validator for different events.
-    let slashed_validator1 = SlashedValidator {
+    // Always jail the same validator for different events.
+    let jailed_validator1 = JailedValidator {
         slots: config.slots_range1,
         validator_address: Address([1u8; 20]),
-        event_block: config.event_block1,
+        offense_event_block: config.event_block1,
     };
 
-    let slashed_validator2 = SlashedValidator {
+    let jailed_validator2 = JailedValidator {
         slots: config.slots_range2,
         validator_address: Address([1u8; 20]),
-        event_block: config.event_block2,
+        offense_event_block: config.event_block2,
     };
     let validator_slots_next_epoch = Some(config.slots_range_next_epoch.clone());
 
-    // After a slash, we expect all slots of the validator to be in the set.
+    // After a jail, we expect all slots of the validator to be in the set.
     let mut expected_current_batch1 = BitSet::default();
     for slot in config.expected_current1 {
         expected_current_batch1.insert(slot as usize);
@@ -526,10 +526,10 @@ fn slash_and_revert_twice(config: SlashConfig) {
     let previous_batch_initial = punished_slots.previous_batch_punished_slots.clone();
 
     // ------------
-    // First slash.
+    // First jail.
     // ------------
-    let (old_prev1, old_current1) = punished_slots.register_slash(
-        &slashed_validator1,
+    let (old_prev1, old_current1) = punished_slots.register_jail(
+        &jailed_validator1,
         config.reporting_block,
         validator_slots_next_epoch.clone(),
     );
@@ -537,7 +537,7 @@ fn slash_and_revert_twice(config: SlashConfig) {
     let current_batch_intermediate = punished_slots.current_batch_punished_slots();
     let previous_batch_intermediate = punished_slots.previous_batch_punished_slots.clone();
 
-    // Test that slash is properly registered in batch of event + current batch.
+    // Test that jail is properly registered in batch of event + current batch.
     assert_eq!(
         punished_slots.previous_batch_punished_slots,
         expected_previous_batch1
@@ -548,15 +548,15 @@ fn slash_and_revert_twice(config: SlashConfig) {
     );
 
     // -------------
-    // Second slash.
+    // Second jail.
     // -------------
-    let (old_prev2, old_current2) = punished_slots.register_slash(
-        &slashed_validator2,
+    let (old_prev2, old_current2) = punished_slots.register_jail(
+        &jailed_validator2,
         config.reporting_block,
         validator_slots_next_epoch,
     );
 
-    // Test that slash is properly registered in batch of event + current batch.
+    // Test that jail is properly registered in batch of event + current batch.
     assert_eq!(
         punished_slots.previous_batch_punished_slots,
         expected_previous_batch2
@@ -567,9 +567,9 @@ fn slash_and_revert_twice(config: SlashConfig) {
     );
 
     // --------------------
-    // Revert second slash.
+    // Revert second jail.
     // --------------------
-    punished_slots.revert_register_slash(&slashed_validator2, old_prev2, old_current2);
+    punished_slots.revert_register_jail(&jailed_validator2, old_prev2, old_current2);
 
     assert_eq!(
         punished_slots.current_batch_punished_slots(),
@@ -581,9 +581,9 @@ fn slash_and_revert_twice(config: SlashConfig) {
     );
 
     // -------------------
-    // Revert first slash.
+    // Revert first jail.
     // -------------------
-    punished_slots.revert_register_slash(&slashed_validator1, old_prev1, old_current1);
+    punished_slots.revert_register_jail(&jailed_validator1, old_prev1, old_current1);
 
     assert_eq!(
         punished_slots.current_batch_punished_slots(),
@@ -596,17 +596,17 @@ fn slash_and_revert_twice(config: SlashConfig) {
 }
 
 #[test]
-fn can_slash_and_revert_twice() {
+fn can_jail_and_revert_twice() {
     let combinations = vec![
         // Test cases within the same epoch:
         // 1. both events in same batch
-        SlashConfig {
+        JailConfig {
             expected_current1: 0..5,
             expected_current2: 0..5,
             ..Default::default()
         },
         // 2. both events in previous batch
-        SlashConfig {
+        JailConfig {
             reporting_block: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
             expected_current1: 0..5,
             expected_previous1: 0..5,
@@ -615,7 +615,7 @@ fn can_slash_and_revert_twice() {
             ..Default::default()
         },
         // 3. 1st event in current, 2nd in previous
-        SlashConfig {
+        JailConfig {
             event_block1: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
             reporting_block: Policy::blocks_per_batch() + 2 + Policy::genesis_block_number(),
             expected_current1: 0..5,
@@ -624,7 +624,7 @@ fn can_slash_and_revert_twice() {
             ..Default::default()
         },
         // 4. 1st event in previous, 2nd in current
-        SlashConfig {
+        JailConfig {
             event_block2: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
             reporting_block: Policy::blocks_per_batch() + 2 + Policy::genesis_block_number(),
             expected_current1: 0..5,
@@ -635,7 +635,7 @@ fn can_slash_and_revert_twice() {
         },
         // Test cases at epoch boundary:
         // 1. both events in previous batch
-        SlashConfig {
+        JailConfig {
             event_block1: Policy::blocks_per_epoch() - 2 + Policy::genesis_block_number(),
             event_block2: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
             reporting_block: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
@@ -646,7 +646,7 @@ fn can_slash_and_revert_twice() {
             ..Default::default()
         },
         // 2. 1st event in current, 2nd in previous
-        SlashConfig {
+        JailConfig {
             event_block1: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
             slots_range1: 1..6,
             event_block2: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
@@ -657,7 +657,7 @@ fn can_slash_and_revert_twice() {
             ..Default::default()
         },
         // 3. 1st event in previous, 2nd in current
-        SlashConfig {
+        JailConfig {
             event_block1: Policy::blocks_per_epoch() - 1 + Policy::genesis_block_number(),
             event_block2: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
             slots_range2: 1..6,
@@ -670,7 +670,7 @@ fn can_slash_and_revert_twice() {
         },
         // 4. 1st event in same epoch as reporting block and one batch earlier than `previous_batch`,
         // `current_batch` in the same epoch one batch after
-        SlashConfig {
+        JailConfig {
             event_block1: 1 + Policy::genesis_block_number(),
             event_block2: 1 + Policy::genesis_block_number(),
             reporting_block: Policy::blocks_per_batch() * 2 + 1 + Policy::genesis_block_number(),
@@ -682,7 +682,7 @@ fn can_slash_and_revert_twice() {
         },
         // 5. 1st event in previous epoch (same epoch as `previous_batch`) and earlier than `previous_batch`,
         // `current_batch` in a new epoch
-        SlashConfig {
+        JailConfig {
             event_block1: 1 + Policy::genesis_block_number(),
             event_block2: 1 + Policy::genesis_block_number(),
             reporting_block: Policy::blocks_per_epoch() + 1 + Policy::genesis_block_number(),
@@ -694,7 +694,7 @@ fn can_slash_and_revert_twice() {
         },
         // 6. 1st event in the epoch before `previous_batch`,
         // `previous_batch` and `current_batch` are both in a new epoch
-        SlashConfig {
+        JailConfig {
             event_block1: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
             event_block2: Policy::blocks_per_batch() + 1 + Policy::genesis_block_number(),
             reporting_block: Policy::blocks_per_epoch()
@@ -710,8 +710,8 @@ fn can_slash_and_revert_twice() {
     ];
 
     for config in combinations {
-        log::info!(?config, "slash and revert twice");
-        slash_and_revert_twice(config);
+        log::info!(?config, "jail and revert twice");
+        jail_and_revert_twice(config);
     }
 }
 
@@ -741,13 +741,13 @@ fn penalize_and_revert_twice(event_block1: u32, event_block2: u32, reporting_blo
     let penalized_slot1 = PenalizedSlot {
         slot: 1,
         validator_address: Address([1u8; 20]),
-        event_block: event_block1,
+        offense_event_block: event_block1,
     };
 
     let penalized_slot2 = PenalizedSlot {
         slot: 1,
         validator_address: Address([1u8; 20]),
-        event_block: event_block2,
+        offense_event_block: event_block2,
     };
 
     // After a penalty, we expect the corresponding slot of the validator to be in the set.
@@ -797,7 +797,7 @@ fn penalize_and_revert_twice(event_block1: u32, event_block2: u32, reporting_blo
     let (old_prev2, old_current2) =
         punished_slots.register_penalty(&penalized_slot2, reporting_block);
 
-    // Test that slash is properly registered in batch of event + current batch.
+    // Test that jail is properly registered in batch of event + current batch.
     if Policy::batch_at(event_block2) < Policy::batch_at(reporting_block) {
         assert_eq!(
             punished_slots.previous_batch_punished_slots,
@@ -896,7 +896,7 @@ fn can_penalize_and_revert_twice() {
             event_block1,
             event_block2,
             reporting_block,
-            "slash and revert twice"
+            "jail and revert twice"
         );
         penalize_and_revert_twice(event_block1, event_block2, reporting_block);
     }

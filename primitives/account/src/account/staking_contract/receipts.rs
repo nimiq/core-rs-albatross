@@ -24,20 +24,20 @@ pub struct PenalizeReceipt {
 }
 convert_receipt!(PenalizeReceipt);
 
-/// Slash receipt for the inherent. This is necessary to be able to revert
+/// Jail receipt for the inherent. This is necessary to be able to revert
 /// these inherents.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct SlashReceipt {
-    /// true if corresponding validator was deactivated by this slash
+pub struct JailReceipt {
+    /// true if corresponding validator was deactivated by this jail
     pub newly_deactivated: bool,
-    /// the previous batch punished slots before this slash is applied
+    /// the previous batch punished slots before this jail is applied
     pub old_previous_batch_punished_slots: BitSet,
-    /// the current batch punished slots of the affected validator before this slash is applied
+    /// the current batch punished slots of the affected validator before this jail is applied
     pub old_current_batch_punished_slots: Option<BTreeSet<u16>>,
-    // the jail release before this slash is applied
+    // the jail release before this jail is applied
     pub old_jail_release: Option<u32>,
 }
-convert_receipt!(SlashReceipt);
+convert_receipt!(JailReceipt);
 
 /// Receipt for update validator transactions. This is necessary to be able to revert
 /// these transactions.
@@ -65,8 +65,8 @@ pub struct JailValidatorReceipt {
 }
 convert_receipt!(JailValidatorReceipt);
 
-impl From<&SlashReceipt> for JailValidatorReceipt {
-    fn from(value: &SlashReceipt) -> Self {
+impl From<&JailReceipt> for JailValidatorReceipt {
+    fn from(value: &JailReceipt) -> Self {
         Self {
             newly_deactivated: value.newly_deactivated,
             old_jail_release: value.old_jail_release,

@@ -23,8 +23,8 @@ use crate::{
     data_store::{DataStoreRead, DataStoreWrite},
     interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction},
     reserved_balance::ReservedBalance,
-    Account, AccountPruningInteraction, AccountReceipt, BlockState, InherentLogger,
-    JailValidatorReceipt, Log, SlashReceipt, TransactionLog,
+    Account, AccountPruningInteraction, AccountReceipt, BlockState, InherentLogger, JailReceipt,
+    JailValidatorReceipt, Log, TransactionLog,
 };
 
 impl AccountTransactionInteraction for StakingContract {
@@ -647,8 +647,8 @@ impl AccountInherentInteraction for StakingContract {
         inherent_logger: &mut InherentLogger,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         match inherent {
-            Inherent::Slash {
-                slashed_validator,
+            Inherent::Jail {
+                jailed_validator,
                 new_epoch_slot_range,
             } => {
                 // Jail validator
@@ -656,7 +656,7 @@ impl AccountInherentInteraction for StakingContract {
                 let mut tx_logger = TransactionLog::empty();
                 let receipt = self.jail_validator(
                     &mut store,
-                    &slashed_validator.validator_address,
+                    &jailed_validator.validator_address,
                     block_state.number,
                     Policy::block_after_jail(block_state.number),
                     &mut tx_logger,
@@ -666,22 +666,22 @@ impl AccountInherentInteraction for StakingContract {
                 let newly_deactivated = receipt.newly_deactivated;
                 let newly_jailed = receipt.old_jail_release.is_none();
 
-                // Slash the validator
+                // Register the validator slots as punished
                 let (old_previous_batch_punished_slots, old_current_batch_punished_slots) =
-                    self.punished_slots.register_slash(
-                        slashed_validator,
+                    self.punished_slots.register_jail(
+                        jailed_validator,
                         block_state.number,
                         new_epoch_slot_range.clone(),
                     );
 
-                inherent_logger.push_log(Log::Slash {
-                    validator_address: slashed_validator.validator_address.clone(),
-                    event_block: slashed_validator.event_block,
+                inherent_logger.push_log(Log::Jail {
+                    validator_address: jailed_validator.validator_address.clone(),
+                    event_block: jailed_validator.offense_event_block,
                     newly_jailed,
                 });
 
                 Ok(Some(
-                    SlashReceipt {
+                    JailReceipt {
                         newly_deactivated,
                         old_previous_batch_punished_slots,
                         old_current_batch_punished_slots,
@@ -716,7 +716,7 @@ impl AccountInherentInteraction for StakingContract {
 
                 inherent_logger.push_log(Log::Penalize {
                     validator_address: slot.validator_address.clone(),
-                    event_block: slot.event_block,
+                    offense_event_block: slot.offense_event_block,
                     slot: slot.slot,
                     newly_deactivated,
                 });
@@ -755,30 +755,30 @@ impl AccountInherentInteraction for StakingContract {
         inherent_logger: &mut InherentLogger,
     ) -> Result<(), AccountError> {
         match inherent {
-            Inherent::Slash {
-                slashed_validator, ..
+            Inherent::Jail {
+                jailed_validator, ..
             } => {
-                let receipt: SlashReceipt =
+                let receipt: JailReceipt =
                     receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
                 let newly_jailed = receipt.old_jail_release.is_none();
                 let jail_receipt = JailValidatorReceipt::from(&receipt);
 
-                self.punished_slots.revert_register_slash(
-                    slashed_validator,
+                self.punished_slots.revert_register_jail(
+                    jailed_validator,
                     receipt.old_previous_batch_punished_slots,
                     receipt.old_current_batch_punished_slots,
                 );
 
-                inherent_logger.push_log(Log::Slash {
-                    validator_address: slashed_validator.validator_address.clone(),
-                    event_block: slashed_validator.event_block,
+                inherent_logger.push_log(Log::Jail {
+                    validator_address: jailed_validator.validator_address.clone(),
+                    event_block: jailed_validator.offense_event_block,
                     newly_jailed,
                 });
 
                 let mut tx_logger = TransactionLog::empty();
                 self.revert_jail_validator(
                     &mut StakingContractStoreWrite::new(&mut data_store),
-                    &slashed_validator.validator_address,
+                    &jailed_validator.validator_address,
                     jail_receipt,
                     &mut tx_logger,
                 )?;
@@ -798,7 +798,7 @@ impl AccountInherentInteraction for StakingContract {
 
                 inherent_logger.push_log(Log::Penalize {
                     validator_address: slot.validator_address.clone(),
-                    event_block: slot.event_block,
+                    offense_event_block: slot.offense_event_block,
                     slot: slot.slot,
                     newly_deactivated: receipt.newly_deactivated,
                 });

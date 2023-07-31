@@ -7,7 +7,7 @@ use nimiq_primitives::{
     account::AccountType,
     coin::Coin,
     policy::Policy,
-    slots_allocation::{PenalizedSlot, SlashedValidator},
+    slots_allocation::{JailedValidator, PenalizedSlot},
 };
 use nimiq_transaction::{inherent::Inherent, reward::RewardTransaction};
 use nimiq_vrf::{AliasMethod, VrfUseCase};
@@ -55,7 +55,7 @@ impl Blockchain {
         inherents
     }
 
-    /// It creates a slash inherent from a fork proof. It expects a *verified* fork proof!
+    /// It creates a jail inherent from a fork proof. It expects a *verified* fork proof!
     pub fn inherent_from_fork_proof(
         &self,
         reporting_block: u32, // PITODO: we can get it from the blockchain, should be head block number + 1
@@ -85,16 +85,16 @@ impl Blockchain {
             None
         };
 
-        // Create the SlashedValidator struct.
-        let slashed_validator = SlashedValidator {
+        // Create the JailedValidator struct.
+        let jailed_validator = JailedValidator {
             slots: proposer_slot.validator.slots,
             validator_address: proposer_slot.validator.address,
-            event_block: fork_proof.header1.block_number,
+            offense_event_block: fork_proof.header1.block_number,
         };
 
-        // Create the corresponding slash inherent.
-        Inherent::Slash {
-            slashed_validator,
+        // Create the corresponding jail inherent.
+        Inherent::Jail {
+            jailed_validator,
             new_epoch_slot_range,
         }
     }
@@ -124,7 +124,7 @@ impl Blockchain {
         let slot = PenalizedSlot {
             slot: proposer_slot.number,
             validator_address: proposer_slot.validator.address,
-            event_block: skip_block_info.block_number,
+            offense_event_block: skip_block_info.block_number,
         };
 
         // Create the corresponding penalize inherent.
@@ -235,7 +235,7 @@ impl Blockchain {
             // `last_slot_number`.
             let last_slot_number = first_slot_number + validator_slot.num_slots();
 
-            // Compute the number of slashes for this validator slot band.
+            // Compute the number of punishments for this validator slot band.
             let mut num_eligible_slots = validator_slot.num_slots();
             let mut num_penalized_slots = 0;
 

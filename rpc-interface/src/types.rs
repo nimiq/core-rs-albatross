@@ -522,13 +522,13 @@ pub enum Inherent {
         block_time: u64,
         slot: u16,
         validator_address: Address,
-        event_block: u32,
+        offense_event_block: u32,
     },
-    Slash {
+    Jail {
         block_number: u32,
         block_time: u64,
         validator_address: Address,
-        event_block: u32,
+        offense_event_block: u32,
     },
     FinalizeBatch {
         block_number: u32,
@@ -556,15 +556,15 @@ impl Inherent {
                 block_time,
                 slot: slot.slot,
                 validator_address: slot.validator_address,
-                event_block: slot.event_block,
+                offense_event_block: slot.offense_event_block,
             },
-            BaseInherent::Slash {
-                slashed_validator, ..
-            } => Inherent::Slash {
+            BaseInherent::Jail {
+                jailed_validator, ..
+            } => Inherent::Jail {
                 block_number,
                 block_time,
-                validator_address: slashed_validator.validator_address,
-                event_block: slashed_validator.event_block,
+                validator_address: jailed_validator.validator_address,
+                offense_event_block: jailed_validator.offense_event_block,
             },
 
             BaseInherent::FinalizeBatch => Inherent::FinalizeBatch {
@@ -872,7 +872,7 @@ pub enum LogType {
     SetInactiveStake,
     PayoutReward,
     Penalize,
-    Slash,
+    Jail,
     RevertContract,
     FailedTransaction,
 }
@@ -922,7 +922,7 @@ impl LogType {
             Log::SetInactiveStake { .. } => Self::SetInactiveStake,
             Log::PayoutReward { .. } => Self::PayoutReward,
             Log::Penalize { .. } => Self::Penalize,
-            Log::Slash { .. } => Self::Slash,
+            Log::Jail { .. } => Self::Jail,
             Log::RevertContract { .. } => Self::RevertContract,
             Log::FailedTransaction { .. } => Self::FailedTransaction,
             Log::ValidatorFeeDeduction { .. } => Self::ValidatorFeeDeduction,

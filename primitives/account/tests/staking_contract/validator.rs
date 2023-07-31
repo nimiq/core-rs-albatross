@@ -18,7 +18,7 @@ use nimiq_primitives::{
     coin::Coin,
     networks::NetworkId,
     policy::Policy,
-    slots_allocation::{PenalizedSlot, SlashedValidator},
+    slots_allocation::{JailedValidator, PenalizedSlot},
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
@@ -80,9 +80,9 @@ fn revert_penalize_inherent(
         )
         .expect("Failed to revert inherent");
 
-    let mut event_block = block_state.number;
+    let mut offense_event_block = block_state.number;
     if let Inherent::Penalize { ref slot } = inherent {
-        event_block = slot.event_block;
+        offense_event_block = slot.offense_event_block;
     }
 
     assert_eq!(
@@ -90,7 +90,7 @@ fn revert_penalize_inherent(
         vec![
             Log::Penalize {
                 validator_address: validator_address.clone(),
-                event_block,
+                offense_event_block,
                 slot,
                 newly_deactivated,
             },
@@ -1073,7 +1073,7 @@ fn reward_inherents_not_allowed() {
 }
 
 #[test]
-fn slash_inherents_work() {
+fn jail_inherents_work() {
     let genesis_block_number = Policy::genesis_block_number();
     let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
@@ -1090,7 +1090,7 @@ fn slash_inherents_work() {
     let slot = PenalizedSlot {
         slot: 0,
         validator_address: validator_address.clone(),
-        event_block: 1 + genesis_block_number,
+        offense_event_block: 1 + genesis_block_number,
     };
 
     let inherent = Inherent::Penalize { slot: slot.clone() };
@@ -1122,7 +1122,7 @@ fn slash_inherents_work() {
             },
             Log::Penalize {
                 validator_address: slot.validator_address.clone(),
-                event_block: slot.event_block,
+                offense_event_block: slot.offense_event_block,
                 slot: slot.slot,
                 newly_deactivated: true,
             },
@@ -1179,7 +1179,7 @@ fn slash_inherents_work() {
             },
             Log::Penalize {
                 validator_address: slot.validator_address.clone(),
-                event_block: 1 + genesis_block_number,
+                offense_event_block: 1 + genesis_block_number,
                 slot: slot.slot,
                 newly_deactivated: true,
             },
@@ -1212,7 +1212,7 @@ fn slash_inherents_work() {
     let slot = PenalizedSlot {
         slot: 0,
         validator_address: validator_address.clone(),
-        event_block: Policy::blocks_per_epoch() - 1 + genesis_block_number,
+        offense_event_block: Policy::blocks_per_epoch() - 1 + genesis_block_number,
     };
 
     let inherent = Inherent::Penalize { slot: slot.clone() };
@@ -1243,7 +1243,7 @@ fn slash_inherents_work() {
             },
             Log::Penalize {
                 validator_address: slot.validator_address,
-                event_block: slot.event_block,
+                offense_event_block: slot.offense_event_block,
                 slot: slot.slot,
                 newly_deactivated: true
             },
@@ -1366,7 +1366,7 @@ fn finalize_epoch_inherents_works() {
         slot: PenalizedSlot {
             slot: 1,
             validator_address: validator_address.clone(),
-            event_block: Policy::blocks_per_epoch() - 1,
+            offense_event_block: Policy::blocks_per_epoch() - 1,
         },
     };
     let mut logs = vec![];
@@ -1398,7 +1398,7 @@ fn finalize_epoch_inherents_works() {
             },
             Log::Penalize {
                 validator_address: validator_address.clone(),
-                event_block: Policy::blocks_per_epoch() - 1,
+                offense_event_block: Policy::blocks_per_epoch() - 1,
                 slot: 1,
                 newly_deactivated: true
             },
@@ -1653,19 +1653,19 @@ fn jail_and_revert() {
     // -----------------------------------
     // Test execution:
     // -----------------------------------
-    // Prepare slash.
-    let inherent = Inherent::Slash {
-        slashed_validator: SlashedValidator {
+    // Prepare jail inherent.
+    let inherent = Inherent::Jail {
+        jailed_validator: JailedValidator {
             slots: 1..2,
             validator_address: validator_address.clone(),
-            event_block: 1,
+            offense_event_block: 1,
         },
         new_epoch_slot_range: None,
     };
     let mut logs = vec![];
     let mut inherent_logger = InherentLogger::new(&mut logs);
 
-    // Slash and thus jail validator.
+    // Commit jail inherent and thus jail validator.
     let receipt = staking_contract
         .commit_inherent(
             &inherent,
@@ -1680,7 +1680,7 @@ fn jail_and_revert() {
     assert_eq!(
         receipt,
         Some(
-            SlashReceipt {
+            JailReceipt {
                 newly_deactivated: true,
                 old_previous_batch_punished_slots,
                 old_current_batch_punished_slots,
@@ -1699,7 +1699,7 @@ fn jail_and_revert() {
             Log::DeactivateValidator {
                 validator_address: validator_address.clone(),
             },
-            Log::Slash {
+            Log::Jail {
                 validator_address: validator_address.clone(),
                 event_block: 1,
                 newly_jailed: true
@@ -1715,7 +1715,7 @@ fn jail_and_revert() {
         .active_validators
         .contains_key(&validator_address));
 
-    // Revert slash and thus jail validator should be reverted.
+    // Revert jail inherent and thus jail validator should be reverted.
     staking_contract
         .revert_inherent(
             &inherent,
@@ -1774,19 +1774,19 @@ fn jail_inactive_and_revert() {
     // -----------------------------------
     // Test execution:
     // -----------------------------------
-    // Prepare slash.
-    let inherent = Inherent::Slash {
-        slashed_validator: SlashedValidator {
+    // Prepare jail inherent.
+    let inherent = Inherent::Jail {
+        jailed_validator: JailedValidator {
             slots: 1..2,
             validator_address: validator_address.clone(),
-            event_block: 1,
+            offense_event_block: 1,
         },
         new_epoch_slot_range: None,
     };
     let mut logs = vec![];
     let mut inherent_logger = InherentLogger::new(&mut logs);
 
-    // Slash and thus jail validator.
+    // Commit jail inherent and thus jail validator.
     let receipt = staking_contract
         .commit_inherent(
             &inherent,
@@ -1801,7 +1801,7 @@ fn jail_inactive_and_revert() {
     assert_eq!(
         receipt,
         Some(
-            SlashReceipt {
+            JailReceipt {
                 newly_deactivated: false,
                 old_previous_batch_punished_slots,
                 old_current_batch_punished_slots,
@@ -1817,7 +1817,7 @@ fn jail_inactive_and_revert() {
                 validator_address: validator_address.clone(),
                 jail_release: Policy::block_after_jail(block_state.number)
             },
-            Log::Slash {
+            Log::Jail {
                 validator_address: validator_address.clone(),
                 event_block: 1,
                 newly_jailed: true
@@ -1833,7 +1833,7 @@ fn jail_inactive_and_revert() {
         .active_validators
         .contains_key(&validator_address));
 
-    // Revert slash and thus jail validator should be reverted.
+    // Revert jail inherent and thus jail validator should be reverted.
     // The deactivate state should remain.
     staking_contract
         .revert_inherent(
@@ -1868,12 +1868,12 @@ fn can_jail_twice() {
     let mut db_txn = jailed_setup.env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    // Prepare slash.
-    let second_slash_block_state = BlockState::new(2, 200);
-    let inherent = Inherent::Slash {
-        slashed_validator: SlashedValidator {
+    // Prepare jail inherent.
+    let second_jail_block_state = BlockState::new(2, 200);
+    let inherent = Inherent::Jail {
+        jailed_validator: JailedValidator {
             validator_address: jailed_setup.validator_address.clone(),
-            event_block: second_slash_block_state.number,
+            offense_event_block: second_jail_block_state.number,
             slots: 0..5,
         },
         new_epoch_slot_range: None,
@@ -1885,12 +1885,12 @@ fn can_jail_twice() {
     let mut logs = vec![];
     let mut inherent_logger = InherentLogger::new(&mut logs);
 
-    // Slash and thus jail validator.
+    // Commit jail inherent and thus jail validator.
     let receipt = jailed_setup
         .staking_contract
         .commit_inherent(
             &inherent,
-            &second_slash_block_state,
+            &second_jail_block_state,
             data_store.write(&mut db_txn),
             &mut inherent_logger,
         )
@@ -1901,7 +1901,7 @@ fn can_jail_twice() {
     assert_eq!(
         receipt,
         Some(
-            SlashReceipt {
+            JailReceipt {
                 newly_deactivated: false,
                 old_previous_batch_punished_slots,
                 old_current_batch_punished_slots,
@@ -1915,11 +1915,11 @@ fn can_jail_twice() {
         vec![
             Log::JailValidator {
                 validator_address: jailed_setup.validator_address.clone(),
-                jail_release: Policy::block_after_jail(second_slash_block_state.number),
+                jail_release: Policy::block_after_jail(second_jail_block_state.number),
             },
-            Log::Slash {
+            Log::Jail {
                 validator_address: jailed_setup.validator_address.clone(),
-                event_block: second_slash_block_state.number,
+                event_block: second_jail_block_state.number,
                 newly_jailed: false
             },
         ]
@@ -1932,7 +1932,7 @@ fn can_jail_twice() {
         .unwrap();
     assert_eq!(
         validator.jail_release,
-        Some(Policy::block_after_jail(second_slash_block_state.number))
+        Some(Policy::block_after_jail(second_jail_block_state.number))
     );
 
     // Make sure that the validator is still deactivated.
@@ -1941,12 +1941,12 @@ fn can_jail_twice() {
         .active_validators
         .contains_key(&jailed_setup.validator_address));
 
-    // Revert the second slash.
+    // Revert the second jail.
     jailed_setup
         .staking_contract
         .revert_inherent(
             &inherent,
-            &second_slash_block_state,
+            &second_jail_block_state,
             receipt,
             data_store.write(&mut db_txn),
             &mut InherentLogger::empty(),
@@ -2070,7 +2070,7 @@ fn penalize_and_revert_twice() {
         slot: PenalizedSlot {
             slot: 1,
             validator_address: validator_address.clone(),
-            event_block: 1,
+            offense_event_block: 1,
         },
     };
 
@@ -2078,7 +2078,7 @@ fn penalize_and_revert_twice() {
         slot: PenalizedSlot {
             slot: 1,
             validator_address: validator_address.clone(),
-            event_block: 2,
+            offense_event_block: 2,
         },
     };
 
@@ -2113,7 +2113,7 @@ fn penalize_and_revert_twice() {
             },
             Log::Penalize {
                 validator_address: validator_address.clone(),
-                event_block: 1,
+                offense_event_block: 1,
                 slot: 1,
                 newly_deactivated: true
             },
@@ -2155,7 +2155,7 @@ fn penalize_and_revert_twice() {
         logs,
         vec![Log::Penalize {
             validator_address: validator_address.clone(),
-            event_block: 2,
+            offense_event_block: 2,
             slot: 1,
             newly_deactivated: false
         },]
@@ -2254,7 +2254,7 @@ fn penalize_inactive_and_revert() {
         slot: PenalizedSlot {
             slot: 1,
             validator_address: validator_address.clone(),
-            event_block: 1,
+            offense_event_block: 1,
         },
     };
     let mut logs = vec![];
@@ -2284,7 +2284,7 @@ fn penalize_inactive_and_revert() {
         logs,
         vec![Log::Penalize {
             validator_address: validator_address.clone(),
-            event_block: 1,
+            offense_event_block: 1,
             slot: 1,
             newly_deactivated: false
         }]
@@ -2320,9 +2320,9 @@ fn penalize_inactive_and_revert() {
         .contains_key(&validator_address));
 }
 
-// Slashing a penalized validator and reverting it
+// Jailing a penalized validator and reverting it
 #[test]
-fn penalize_and_slash_and_revert_twice() {
+fn penalize_and_jail_and_revert_twice() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
@@ -2348,15 +2348,15 @@ fn penalize_and_slash_and_revert_twice() {
         slot: PenalizedSlot {
             slot: 1,
             validator_address: validator_address.clone(),
-            event_block: 1,
+            offense_event_block: 1,
         },
     };
 
-    let inherent2 = Inherent::Slash {
-        slashed_validator: SlashedValidator {
+    let inherent2 = Inherent::Jail {
+        jailed_validator: JailedValidator {
             slots: 1..3,
             validator_address: validator_address.clone(),
-            event_block: 2,
+            offense_event_block: 2,
         },
         new_epoch_slot_range: None,
     };
@@ -2392,7 +2392,7 @@ fn penalize_and_slash_and_revert_twice() {
             },
             Log::Penalize {
                 validator_address: validator_address.clone(),
-                event_block: 1,
+                offense_event_block: 1,
                 slot: 1,
                 newly_deactivated: true
             },
@@ -2407,7 +2407,7 @@ fn penalize_and_slash_and_revert_twice() {
         .active_validators
         .contains_key(&validator_address));
 
-    // Second: slash.
+    // Second: jail.
     let mut logs = vec![];
     let mut inherent_logger = InherentLogger::new(&mut logs);
 
@@ -2427,7 +2427,7 @@ fn penalize_and_slash_and_revert_twice() {
     assert_eq!(
         receipt2,
         Some(
-            SlashReceipt {
+            JailReceipt {
                 newly_deactivated: false,
                 old_previous_batch_punished_slots,
                 old_current_batch_punished_slots,
@@ -2443,7 +2443,7 @@ fn penalize_and_slash_and_revert_twice() {
                 validator_address: validator_address.clone(),
                 jail_release: Policy::block_after_jail(block_state.number),
             },
-            Log::Slash {
+            Log::Jail {
                 validator_address: validator_address.clone(),
                 event_block: 2,
                 newly_jailed: true
@@ -2463,7 +2463,7 @@ fn penalize_and_slash_and_revert_twice() {
         .active_validators
         .contains_key(&validator_address));
 
-    // Revert slash.
+    // Revert jail.
     // The deactivate state should remain.
     staking_contract
         .revert_inherent(
@@ -2518,13 +2518,13 @@ fn jail_and_penalize_and_revert_twice() {
     let mut db_txn = jailed_setup.env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    // Prepare slash.
+    // Prepare jail inherent.
     let penalty_block_state = BlockState::new(2, 200);
     let inherent = Inherent::Penalize {
         slot: PenalizedSlot {
             slot: 1,
             validator_address: jailed_setup.validator_address.clone(),
-            event_block: penalty_block_state.number,
+            offense_event_block: penalty_block_state.number,
         },
     };
 
@@ -2559,7 +2559,7 @@ fn jail_and_penalize_and_revert_twice() {
         logs,
         vec![Log::Penalize {
             validator_address: jailed_setup.validator_address.clone(),
-            event_block: penalty_block_state.number,
+            offense_event_block: penalty_block_state.number,
             slot: 1,
             newly_deactivated: false
         }]

@@ -96,7 +96,7 @@ impl Policy {
     pub const VALIDATOR_DEPOSIT: u64 = 1_000_000_000;
 
     /// The number of epochs a validator is put in jail for. The jailing only happens for severe offenses.
-    pub const SLASH_JAIL_EPOCHS: u32 = 8;
+    pub const JAIL_EPOCHS: u32 = 8;
 
     /// Total supply in units.
     pub const TOTAL_SUPPLY: u64 = 2_100_000_000_000_000;
@@ -385,7 +385,7 @@ impl Policy {
     }
 
     /// Returns the block height for the last block of the reporting window of a given block number.
-    /// Note: This window is meant for reporting malicious behaviour (aka slashable behaviour).
+    /// Note: This window is meant for reporting malicious behaviour (aka `jailable` behaviour).
     #[inline]
     pub fn last_block_of_reporting_window(block_number: u32) -> u32 {
         block_number + Self::blocks_per_epoch()
@@ -400,7 +400,7 @@ impl Policy {
     /// Returns the first block after the jail period of a given block number has ended.
     #[inline]
     pub fn block_after_jail(block_number: u32) -> u32 {
-        block_number + Self::blocks_per_epoch() * Self::SLASH_JAIL_EPOCHS + 1
+        block_number + Self::blocks_per_epoch() * Self::JAIL_EPOCHS + 1
     }
 
     /// Returns the supply at a given time (as Unix time) in Lunas (1 NIM = 100,000 Lunas). It is

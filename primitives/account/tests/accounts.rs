@@ -18,7 +18,7 @@ use nimiq_primitives::{
     coin::Coin,
     networks::NetworkId,
     policy::Policy,
-    slots_allocation::{PenalizedSlot, SlashedValidator},
+    slots_allocation::{JailedValidator, PenalizedSlot},
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
@@ -1027,7 +1027,7 @@ fn can_revert_inherents() {
         slot: PenalizedSlot {
             slot: rng.gen_range(0..Policy::SLOTS),
             validator_address: Address::from(&validator_key_pair),
-            event_block: block_state.number - 1,
+            offense_event_block: block_state.number - 1,
         },
     };
 
@@ -1035,15 +1035,15 @@ fn can_revert_inherents() {
     let receipts = accounts.test(&[], &[inherent], &block_state);
     assert!(matches!(receipts.inherents[..], [OperationReceipt::Ok(_)]));
 
-    info!("Testing inherent Slash");
+    info!("Testing inherent Jail");
     let slot_start = rng.gen_range(0..Policy::SLOTS);
     let slot_end = rng.gen_range(slot_start..Policy::SLOTS);
-    let inherent = Inherent::Slash {
-        slashed_validator: SlashedValidator {
+    let inherent = Inherent::Jail {
+        jailed_validator: JailedValidator {
             slots: slot_start..slot_end,
             validator_address: Address::from(&validator_key_pair),
-            /// The `event_block` identifies the block at which the slash action occurred.
-            event_block: block_state.number - 1,
+            /// The `offense_event_block` identifies the block at which the malicious behaviour occurred.
+            offense_event_block: block_state.number - 1,
         },
         new_epoch_slot_range: None,
     };
