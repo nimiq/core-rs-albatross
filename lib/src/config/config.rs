@@ -560,6 +560,7 @@ pub struct RpcServerConfig {
     pub credentials: Option<Credentials>,
 }
 
+#[cfg(feature = "rpc-server")]
 impl Debug for RpcServerConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RpcServerConfig")
@@ -588,6 +589,7 @@ pub struct MetricsServerConfig {
     pub credentials: Option<Credentials>,
 }
 
+#[cfg(feature = "metrics-server")]
 impl Debug for MetricsServerConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MetricsServerConfig")
