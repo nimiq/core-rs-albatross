@@ -4,6 +4,7 @@ use futures::{future, StreamExt};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_database::volatile::VolatileDatabase;
 use nimiq_network_libp2p::Network;
+use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::validator::build_validators;
 
@@ -24,5 +25,5 @@ async fn four_validators_can_create_an_epoch() {
 
     events.take(130).for_each(|_| future::ready(())).await;
 
-    assert!(blockchain.read().block_number() >= 130);
+    assert!(blockchain.read().block_number() >= 130 + Policy::genesis_block_number());
 }

@@ -7,6 +7,7 @@ use nimiq_database::volatile::VolatileDatabase;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_network_mock::{MockHub, MockNetwork};
+use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{produce_macro_blocks, signing_key, voting_key},
@@ -59,7 +60,9 @@ async fn test_request_component() {
     let mut connected = false;
     let mut interval = tokio::time::interval(Duration::from_secs(1));
     loop {
-        if node1.blockchain.read().block_number() > 200 && !connected {
+        if node1.blockchain.read().block_number() > 200 + Policy::genesis_block_number()
+            && !connected
+        {
             log::info!("Connecting node2 to node 1");
             node2.network.dial_mock(&node1.network);
             connected = true;

@@ -92,6 +92,7 @@ impl TestNetwork for Network {
             // Tell the network to connect to seed nodes
             let seed = multiaddr![Memory(seed_peer_id)];
             log::debug!("Dialing seed: {:?}", seed);
+
             network
                 .dial_address(seed)
                 .await

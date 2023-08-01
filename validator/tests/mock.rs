@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{sync::Arc, task::Poll, time::Duration};
 
 use futures::{future, StreamExt};
 use nimiq_block::{MultiSignature, SignedSkipBlockInfo, SkipBlockInfo};
@@ -14,7 +14,7 @@ use nimiq_network_interface::{
     request::{MessageMarker, RequestCommon},
 };
 use nimiq_network_libp2p::Network;
-use nimiq_network_mock::MockHub;
+use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::{
@@ -82,7 +82,7 @@ async fn one_validator_can_create_micro_blocks() {
     let events1 = blockchain.read().notifier_as_stream();
     events1.take(10).for_each(|_| future::ready(())).await;
 
-    assert!(consensus1.blockchain.read().block_number() >= 10);
+    assert!(consensus1.blockchain.read().block_number() >= 10 + Policy::genesis_block_number());
 }
 
 #[test(tokio::test)]
@@ -90,7 +90,7 @@ async fn four_validators_can_create_micro_blocks() {
     let hub = MockHub::default();
     let env = VolatileDatabase::new(20).expect("Could not open a volatile database");
 
-    let validators = build_validators::<Network>(
+    let validators = build_validators::<MockNetwork>(
         env,
         &(1u64..=4u64).collect::<Vec<_>>(),
         &mut Some(hub),
@@ -102,15 +102,28 @@ async fn four_validators_can_create_micro_blocks() {
 
     tokio::spawn(future::join_all(validators));
 
+    // Take events until 30 blocks have been produced.
+    let blockchain2 = Arc::clone(&blockchain);
+    let stop_fut = future::poll_fn(move |_cx| {
+        if blockchain2.read().block_number() < 30 + Policy::genesis_block_number() {
+            Poll::Pending
+        } else {
+            Poll::Ready(())
+        }
+    });
+
     let events = blockchain.read().notifier_as_stream();
     time::timeout(
         Duration::from_secs(60),
-        events.take(30).for_each(|_| future::ready(())),
+        events.take_until(stop_fut).for_each(|e| {
+            log::info!(?e, "EVENT");
+            future::ready(())
+        }),
     )
     .await
     .unwrap();
 
-    assert!(blockchain.read().block_number() >= 30);
+    assert!(blockchain.read().block_number() >= 30 + Policy::genesis_block_number());
 }
 
 #[test(tokio::test)]
@@ -149,7 +162,7 @@ async fn four_validators_can_do_skip_block() {
     // Wait for the new block producer to create a block.
     events.next().await;
 
-    assert!(blockchain.read().block_number() >= 1);
+    assert!(blockchain.read().block_number() >= 1 + Policy::genesis_block_number());
 }
 
 fn create_skip_block_update(
