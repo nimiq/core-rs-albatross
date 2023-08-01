@@ -39,16 +39,16 @@ pub enum GenesisBuilderError {
     #[error("No VRF seed to generate genesis block")]
     NoVrfSeed,
     /// Serialization failed.
-    #[error("Serialization failed")]
+    #[error("Serialization failed: {0}")]
     SerializingError(#[from] DeserializeError),
     /// I/O error
-    #[error("I/O error")]
+    #[error("I/O error: {0}")]
     IoError(#[from] IoError),
     /// Failure at parsing TOML file
-    #[error("Failed to parse TOML file")]
+    #[error("Failed to parse TOML file: {0}")]
     TomlError(#[from] TomlError),
     /// Failure at staking
-    #[error("Failed to stake")]
+    #[error("Failed to stake: {0}")]
     StakingError(#[from] AccountError),
 }
 
@@ -78,6 +78,8 @@ pub struct GenesisBuilder {
     pub parent_hash: Option<Blake2bHash>,
     /// The parent election hash of the genesis block.
     pub parent_election_hash: Option<Blake2bHash>,
+    /// Merkle root over all of the transactions previous the genesis block.
+    pub history_root: Option<Blake2bHash>,
     /// The set of validators for the genesis state.
     pub validators: Vec<config::GenesisValidator>,
     /// The set of stakers for the genesis state.
@@ -106,6 +108,7 @@ impl GenesisBuilder {
             vrf_seed: None,
             parent_election_hash: None,
             parent_hash: None,
+            history_root: None,
             validators: vec![],
             stakers: vec![],
             basic_accounts: vec![],
@@ -148,6 +151,11 @@ impl GenesisBuilder {
 
     pub fn with_parent_hash(&mut self, hash: Blake2bHash) -> &mut Self {
         self.parent_hash = Some(hash);
+        self
+    }
+
+    pub fn with_history_root(&mut self, history_root: Blake2bHash) -> &mut Self {
+        self.history_root = Some(history_root);
         self
     }
 
@@ -197,6 +205,7 @@ impl GenesisBuilder {
             vrf_seed,
             parent_election_hash,
             parent_hash,
+            history_root,
             block_number,
             mut validators,
             mut stakers,
@@ -209,6 +218,7 @@ impl GenesisBuilder {
         timestamp.map(|t| self.with_timestamp(t));
         parent_election_hash.map(|hash| self.with_parent_election_hash(hash));
         parent_hash.map(|hash| self.with_parent_hash(hash));
+        history_root.map(|history_root| self.with_history_root(history_root));
         self.validators.append(&mut validators);
         self.stakers.append(&mut stakers);
         self.basic_accounts.append(&mut basic_accounts);
@@ -223,6 +233,7 @@ impl GenesisBuilder {
         let timestamp = self.timestamp.unwrap_or_else(OffsetDateTime::now_utc);
         let parent_election_hash = self.parent_election_hash.clone().unwrap_or_default();
         let parent_hash = self.parent_hash.clone().unwrap_or_default();
+        let history_root = self.history_root.clone().unwrap_or_default();
 
         // Initialize the accounts.
         let accounts = Accounts::new(env.clone());
@@ -351,7 +362,7 @@ impl GenesisBuilder {
             state_root,
             body_root,
             diff_root: TreeProof::empty().root_hash(),
-            history_root: Blake2bHash::default(),
+            history_root,
         };
 
         // Genesis hash

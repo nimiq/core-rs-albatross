@@ -15,6 +15,10 @@ pub struct GenesisConfig {
     #[serde(default)]
     pub seed_message: Option<String>,
 
+    /// Timestamp for the genesis block.
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub timestamp: Option<OffsetDateTime>,
+
     /// VRF seed for the genesis block.
     pub vrf_seed: Option<VrfSeed>,
 
@@ -24,13 +28,12 @@ pub struct GenesisConfig {
     /// Hash of the parent block for the genesis block.
     pub parent_hash: Option<Blake2bHash>,
 
+    /// Merkle root over all of the transactions previous the genesis block.
+    pub history_root: Option<Blake2bHash>,
+
     /// The genesis block number.
     #[serde(default)]
     pub block_number: u32,
-
-    /// Timestamp for the genesis block.
-    #[serde(with = "time::serde::rfc3339::option")]
-    pub timestamp: Option<OffsetDateTime>,
 
     /// The set of validators for the genesis state.
     #[serde(default)]
