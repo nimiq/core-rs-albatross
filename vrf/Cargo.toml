@@ -1,13 +1,14 @@
 [package]
-authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
-description = "Verifiable Random Function based on VXEdDSA"
-documentation = "https://github.com/nimiq/core-rs-albatross"
-homepage = "https://github.com/nimiq/core-rs-albatross"
-license = "MIT/Apache-2.0"
 name = "nimiq-vrf"
-repository = "https://github.com/nimiq/core-rs-albatross"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "Verifiable Random Function based on VXEdDSA"
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+keywords.workspace = true
 
 [dependencies]
 byteorder = "1.3"

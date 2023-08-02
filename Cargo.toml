@@ -143,3 +143,13 @@ ark-ec = { git = "https://github.com/paberr/algebra", branch = "pb/0.4" }
 ark-ff = { git = "https://github.com/paberr/algebra", branch = "pb/0.4" }
 ark-r1cs-std = { git = "https://github.com/paberr/r1cs-std", branch = "pb/fix-pedersen" }
 wasm-timer = { git = "https://github.com/sisou/wasm-timer.git" }
+
+[workspace.package]
+version = "0.1.0"
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+edition = "2021"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs-albatross"
+license = "Apache-2.0"
+categories = ["cryptography::cryptocurrencies"]
+keywords = ["nimiq", "cryptocurrency", "blockchain"]

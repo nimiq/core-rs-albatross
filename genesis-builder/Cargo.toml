@@ -1,7 +1,14 @@
 [package]
 name = "nimiq-genesis-builder"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "Tools for building a Nimiq genesis"
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+keywords.workspace = true
 
 [dependencies]
 hex = "0.4"

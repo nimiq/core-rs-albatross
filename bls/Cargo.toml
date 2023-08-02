@@ -1,12 +1,14 @@
 [package]
 name = "nimiq-bls"
-version = "0.1.0"
+version.workspace = true
 authors = ["Jack Grigg <str4d@i2pmail.org>", "The Nimiq Core Development Team <info@nimiq.com>"]
 description = "BLS signatures"
-license = "Apache-2.0"
-homepage = "https://nimiq.com"
-repository = "https://github.com/nimiq/core-rs-albatross"
-edition = "2021"
+license.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+keywords.workspace = true
 
 [dependencies]
 blake2 = "0.10"

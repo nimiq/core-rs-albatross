@@ -1,14 +1,14 @@
 [package]
 name = "nimiq-key-derivation"
-version = "0.1.0"
+version.workspace = true
 authors = ["Pascal B <git@paberr.net>", "The Nimiq Core Development Team <info@nimiq.com>"]
-edition = "2021"
+license.workspace = true
+edition.workspace = true
 description = "Helper library for key derivation in Nimiq"
-homepage = "https://nimiq.com"
-repository = "https://github.com/nimiq/core-rs-albatross"
-license = "Apache-2.0"
-categories = ["cryptography::cryptocurrencies"]
-keywords = ["nimiq", "cryptocurrency", "blockchain"]
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+keywords.workspace = true
 
 [badges]
 travis-ci = { repository = "nimiq/core-rs", branch = "master" }

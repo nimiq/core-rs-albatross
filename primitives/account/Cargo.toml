@@ -1,14 +1,14 @@
 [package]
-authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
-categories = ["cryptography::cryptocurrencies"]
-description = "Account primitives to be used in Nimiq's Albatross implementation"
-edition = "2021"
-homepage = "https://nimiq.com"
-keywords = ["nimiq", "cryptocurrency", "blockchain"]
-license = "Apache-2.0"
 name = "nimiq-account"
-repository = "https://github.com/nimiq/core-rs-albatross"
-version = "0.1.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "Account primitives to be used in Nimiq's Albatross implementation"
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+keywords.workspace = true
 
 [dependencies]
 hex = "0.4"
