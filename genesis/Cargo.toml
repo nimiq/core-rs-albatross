@@ -23,27 +23,27 @@ hex = "0.4"
 serde = "1.0"
 url = "2.3"
 
-nimiq-block = { path = "../primitives/block" }
-nimiq-bls = { path = "../bls" }
-nimiq-database = { path = "../database", optional = true }
-nimiq-genesis-builder = { path = "../genesis-builder", optional = true }
-nimiq-hash = { path = "../hash" }
-nimiq-hash_derive = { path = "../hash/hash_derive" }
-nimiq-keys = { path = "../keys" }
-nimiq-macros = { path = "../macros" }
-nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
-nimiq-serde = { path = "../serde" }
-nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-utils = { path = "../utils", features = ["time"] }
+nimiq-block = { workspace = true }
+nimiq-bls = { workspace = true }
+nimiq-database = { workspace = true, optional = true }
+nimiq-genesis-builder = { workspace = true, optional = true }
+nimiq-hash = { workspace = true }
+nimiq-hash_derive = { workspace = true }
+nimiq-keys = { workspace = true }
+nimiq-macros = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["coin", "networks"] }
+nimiq-serde = { workspace = true }
+nimiq-transaction = { workspace = true }
+nimiq-utils = { workspace = true, features = ["time"] }
 
 [build-dependencies]
 log = { package = "tracing", version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-nimiq-database = { path = "../database" }
-nimiq-genesis-builder = { path = "../genesis-builder" }
-nimiq-hash = { path = "../hash" }
-nimiq-keys = { path = "../keys" }
+nimiq-database = { workspace = true }
+nimiq-genesis-builder = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true }
 
 [features]
 default = ["genesis-override"]

@@ -29,10 +29,10 @@ tokio = { version = "1.29", features = [
 ] }
 tokio-metrics = "0.1"
 
-nimiq-blockchain = { path = "../blockchain", features = ["metrics"] }
-nimiq-blockchain-interface = { path = "../blockchain-interface" }
-nimiq-blockchain-proxy = { path = "../blockchain-proxy" }
-nimiq-consensus = { path = "../consensus" }
-nimiq-mempool = { path = "../mempool", features = ["metrics"] }
-nimiq-network-interface = { path = "../network-interface" }
-nimiq-network-libp2p = { path = "../network-libp2p", features = ["metrics"] }
+nimiq-blockchain = { workspace = true, features = ["metrics"] }
+nimiq-blockchain-interface = { workspace = true }
+nimiq-blockchain-proxy = { workspace = true }
+nimiq-consensus = { workspace = true }
+nimiq-mempool = { workspace = true, features = ["metrics"] }
+nimiq-network-interface = { workspace = true }
+nimiq-network-libp2p = { workspace = true, features = ["metrics"] }

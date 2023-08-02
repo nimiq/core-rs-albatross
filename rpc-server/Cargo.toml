@@ -28,37 +28,37 @@ thiserror = "1.0"
 tokio = "1.29"
 tokio-stream = "0.1"
 
-nimiq-account = { path = "../primitives/account" }
-nimiq-block = { path = "../primitives/block" }
-nimiq-blockchain-interface = { path = "../blockchain-interface" }
-nimiq-blockchain-proxy = { path = "../blockchain-proxy" }
-nimiq-blockchain = { path = "../blockchain" }
-nimiq-bls = { path = "../bls", features = ["serde-derive"] }
-nimiq-collections = { path = "../collections" }
-nimiq-consensus = { path = "../consensus" }
-nimiq-database = { path = "../database" }
-nimiq-hash = { path = "../hash" }
-nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
-nimiq-jsonrpc-derive = { git = "https://github.com/nimiq/jsonrpc.git" }
-nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git" }
-nimiq-keys = { path = "../keys", features = ["serde-derive"] }
-nimiq-mempool = { path = "../mempool" }
-nimiq-network-interface = { path = "../network-interface" }
-nimiq-network-libp2p = { path = "../network-libp2p" }
-nimiq-primitives = { path = "../primitives", features = [
+nimiq-account = { workspace = true }
+nimiq-block = { workspace = true }
+nimiq-blockchain-interface = { workspace = true }
+nimiq-blockchain-proxy = { workspace = true }
+nimiq-blockchain = { workspace = true }
+nimiq-bls = { workspace = true, features = ["serde-derive"] }
+nimiq-collections = { workspace = true }
+nimiq-consensus = { workspace = true }
+nimiq-database = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-jsonrpc-core = { workspace = true }
+nimiq-jsonrpc-derive = { workspace = true }
+nimiq-jsonrpc-server = { workspace = true }
+nimiq-keys = { workspace = true, features = ["serde-derive"] }
+nimiq-mempool = { workspace = true }
+nimiq-network-interface = { workspace = true }
+nimiq-network-libp2p = { workspace = true }
+nimiq-primitives = { workspace = true, features = [
     "coin",
     "account",
     "serde-derive",
 ] }
-nimiq-rpc-interface = { path = "../rpc-interface" }
-nimiq-serde = { path = "../serde" }
-nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-transaction-builder = { path = "../transaction-builder", features = [
+nimiq-rpc-interface = { workspace = true }
+nimiq-serde = { workspace = true }
+nimiq-transaction = { workspace = true }
+nimiq-transaction-builder = { workspace = true, features = [
     "serde-derive",
 ] }
-nimiq-utils = { path = "../utils", features = ["otp"] }
-nimiq-validator = { path = "../validator" }
-nimiq-validator-network = { path = "../validator-network" }
-nimiq-vrf = { path = "../vrf", features = ["serde-derive"] }
-nimiq-wallet = { path = "../wallet" }
-nimiq-zkp-component = { path = "../zkp-component" }
+nimiq-utils = { workspace = true, features = ["otp"] }
+nimiq-validator = { workspace = true }
+nimiq-validator-network = { workspace = true }
+nimiq-vrf = { workspace = true, features = ["serde-derive"] }
+nimiq-wallet = { workspace = true }
+nimiq-zkp-component = { workspace = true }

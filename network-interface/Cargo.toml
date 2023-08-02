@@ -28,7 +28,7 @@ thiserror = "1.0"
 tokio = { version = "1.29", features = ["rt"] }
 tokio-stream = { version = "0.1", features = ["default", "sync"] }
 
-nimiq-serde = { path = "../serde" }
+nimiq-serde = { workspace = true }
 
 [dev-dependencies]
-nimiq-test-log = { path = "../test-log" }
+nimiq-test-log = { workspace = true }

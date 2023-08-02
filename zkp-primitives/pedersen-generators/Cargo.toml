@@ -21,8 +21,8 @@ ark-ff = "0.4"
 ark-mnt6-753 = "0.4"
 hex = "0.4"
 
-nimiq-hash = { path = "../../hash" }
-nimiq-primitives = { path = "../../primitives", features = ["policy"] }
+nimiq-hash = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["policy"] }
 
 [dev-dependencies]
 bencher = "0.1"

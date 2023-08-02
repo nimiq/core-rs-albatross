@@ -33,46 +33,46 @@ serde = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"], optional = true }
 signal-hook = { version = "0.3", optional = true }
 strum_macros = "0.24"
-toml = "0.7"
-url = { version = "2.3", features = ["serde"] }
 thiserror = "1.0"
 time = { version = "0.3", optional = true }
 tokio = { version = "1.29", features = ["rt"], optional = true }
+toml = "0.7"
 tracing-loki = { version = "0.2.1", optional = true }
 tracing-subscriber = { version = "0.3", optional = true }
 tracing-web = { version = "0.1", optional = true}
+url = { version = "2.3", features = ["serde"] }
 
-nimiq-block = { path = "../primitives/block" }
-nimiq-blockchain = { path = "../blockchain", optional = true }
-nimiq-blockchain-interface = { path = "../blockchain-interface" }
-nimiq-blockchain-proxy = { path = "../blockchain-proxy", default-features = false }
-nimiq-bls = { path = "../bls" }
-nimiq-consensus = { path = "../consensus", default-features = false }
-nimiq-database = { path = "../database", optional = true }
-nimiq-genesis = { path = "../genesis", default-features = false }
-nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git", optional = true }
-nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git", optional = true }
-nimiq-keys = { path = "../keys" }
-nimiq-light-blockchain = { path = "../light-blockchain" }
-nimiq-log = { path = "../log", optional = true }
-nimiq-mempool = { path = "../mempool", optional = true }
-nimiq-metrics-server = { path = "../metrics-server", optional = true }
-nimiq-network-libp2p = { path = "../network-libp2p" }
-nimiq-network-interface = { path = "../network-interface" }
-nimiq-primitives = { path = "../primitives", features = ["networks"] }
-nimiq-rpc-server = { path = "../rpc-server", optional = true }
-nimiq-serde = { path = "../serde" }
-nimiq-utils = { path = "../utils", features = ["time", "key-store"] }
-nimiq-validator = { path = "../validator", optional = true, features = ["trusted_push"] }
-nimiq-validator-network = { path = "../validator-network", optional = true }
-nimiq-wallet = { path = "../wallet", optional = true }
-nimiq-zkp = { path = "../zkp" }
-nimiq-zkp-circuits = { path = "../zkp-circuits" }
-nimiq-zkp-component = { path = "../zkp-component" }
-nimiq-zkp-primitives = { path = "../zkp-primitives" }
+nimiq-block = { workspace = true }
+nimiq-blockchain = { workspace = true, optional = true }
+nimiq-blockchain-interface = { workspace = true }
+nimiq-blockchain-proxy = { workspace = true, default-features = false }
+nimiq-bls = { workspace = true }
+nimiq-consensus = { workspace = true, default-features = false }
+nimiq-database = { workspace = true, optional = true }
+nimiq-genesis = { workspace = true, default-features = false }
+nimiq-jsonrpc-core = { workspace = true, optional = true }
+nimiq-jsonrpc-server = { workspace = true, optional = true }
+nimiq-keys = { workspace = true }
+nimiq-light-blockchain = { workspace = true }
+nimiq-log = { workspace = true, optional = true }
+nimiq-mempool = { workspace = true, optional = true }
+nimiq-metrics-server = { workspace = true, optional = true }
+nimiq-network-libp2p = { workspace = true }
+nimiq-network-interface = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["networks"] }
+nimiq-rpc-server = { workspace = true, optional = true }
+nimiq-serde = { workspace = true }
+nimiq-utils = { workspace = true, features = ["time", "key-store"] }
+nimiq-validator = { workspace = true, optional = true, features = ["trusted_push"] }
+nimiq-validator-network = { workspace = true, optional = true }
+nimiq-wallet = { workspace = true, optional = true }
+nimiq-zkp = { workspace = true }
+nimiq-zkp-circuits = { workspace = true }
+nimiq-zkp-component = { workspace = true }
+nimiq-zkp-primitives = { workspace = true }
 
 [dev-dependencies]
-nimiq-test-log = { path = "../test-log" }
+nimiq-test-log = { workspace = true }
 
 [features]
 database-storage = ["nimiq-database", "nimiq-zkp-component/database-storage"]

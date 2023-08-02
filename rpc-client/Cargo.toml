@@ -34,12 +34,12 @@ tokio = { version = "1.29", features = [
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2.3"
 
-nimiq-account = { path = "../primitives/account" }
-nimiq-bls = { path = "../bls" }
-nimiq-hash = { path = "../hash" }
-nimiq-jsonrpc-client = { git = "https://github.com/nimiq/jsonrpc.git" }
-nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
-nimiq-keys = { path = "../keys" }
-nimiq-primitives = { path = "../primitives" }
-nimiq-rpc-interface = { path = "../rpc-interface" }
-nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-account = { workspace = true }
+nimiq-bls = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-jsonrpc-client = { workspace = true, features = ["http-client", "websocket-client"] }
+nimiq-jsonrpc-core = { workspace = true }
+nimiq-keys = { workspace = true }
+nimiq-primitives = { workspace = true }
+nimiq-rpc-interface = { workspace = true }
+nimiq-transaction = { workspace = true }

@@ -23,24 +23,24 @@ thiserror = "1.0"
 tsify = { version = "0.4", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 
-nimiq-bls = { path = "../../bls", features = ["serde-derive"] }
-nimiq-database-value = { path = "../../database/database-value"}
-nimiq-hash = { path = "../../hash" }
-nimiq-hash_derive = { path = "../../hash/hash_derive" }
-nimiq-keys = { path = "../../keys", features = ["serde-derive"] }
-nimiq-macros = { path = "../../macros" }
-nimiq-mmr = { path = "../mmr", features = ["serde-derive"] }
-nimiq-network-interface = { path = "../../network-interface" }
-nimiq-primitives = { path = "..", features = ["account", "coin", "networks", "policy", "serde-derive", "slots"] }
-nimiq-serde = { path = "../../serde" }
-nimiq-utils = { path = "../../utils", features = ["merkle"] }
+nimiq-bls = { workspace = true, features = ["serde-derive"] }
+nimiq-database-value = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-hash_derive = { workspace = true }
+nimiq-keys = { workspace = true, features = ["serde-derive"] }
+nimiq-macros = { workspace = true }
+nimiq-mmr = { workspace = true, features = ["serde-derive"] }
+nimiq-network-interface = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["account", "coin", "networks", "policy", "serde-derive", "slots"] }
+nimiq-serde = { workspace = true }
+nimiq-utils = { workspace = true, features = ["merkle"] }
 
 [dev-dependencies]
 hex = "0.4"
 serde_json = "1.0"
 
-nimiq-test-log = { path = "../../test-log" }
-nimiq-test-utils = { path = "../../test-utils" }
+nimiq-test-log = { workspace = true }
+nimiq-test-utils = { workspace = true }
 
 
 [features]

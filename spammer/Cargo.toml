@@ -27,14 +27,14 @@ tokio = { version = "1.29", features = ["rt-multi-thread", "time", "tracing"] }
 tokio-metrics = { version = "0.1" }
 toml = "0.7"
 
-nimiq-block = { path = "../primitives/block" }
-nimiq-blockchain = { path = "../blockchain" }
-nimiq-blockchain-interface = { path = "../blockchain-interface" }
-nimiq-keys = { path = "../keys" }
-nimiq-mempool = { path = "../mempool" }
-nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
-nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-transaction-builder = { path = "../transaction-builder" }
+nimiq-block = { workspace = true }
+nimiq-blockchain = { workspace = true }
+nimiq-blockchain-interface = { workspace = true }
+nimiq-keys = { workspace = true }
+nimiq-mempool = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["coin", "networks"] }
+nimiq-transaction = { workspace = true }
+nimiq-transaction-builder = { workspace = true }
 
 [dependencies.nimiq]
 package = "nimiq-lib"

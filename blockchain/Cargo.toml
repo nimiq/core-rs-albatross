@@ -28,36 +28,36 @@ thiserror = "1.0"
 tokio = { version = "1.29", features = ["sync"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 
-nimiq-account = { path = "../primitives/account" }
-nimiq-block = { path = "../primitives/block" }
-nimiq-blockchain-interface = { path = "../blockchain-interface" }
-nimiq-bls = { path = "../bls", features = ["serde-derive"] }
-nimiq-collections = { path = "../collections" }
-nimiq-database = { path = "../database" }
-nimiq-database-value = { path = "../database/database-value" }
-nimiq-genesis = { path = "../genesis" }
-nimiq-hash = { path = "../hash" }
-nimiq-keys = { path = "../keys" }
-nimiq-mmr = { path = "../primitives/mmr" }
-nimiq-primitives = { path = "../primitives" }
-nimiq-serde = { path = "../serde" }
-nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-trie = { path = "../primitives/trie" }
-nimiq-utils = { path = "../utils", features = ["math", "time"] }
-nimiq-vrf = { path = "../vrf" }
-nimiq-zkp = { path = "../zkp" }
+nimiq-account = { workspace = true }
+nimiq-block = { workspace = true }
+nimiq-blockchain-interface = { workspace = true }
+nimiq-bls = { workspace = true, features = ["serde-derive"] }
+nimiq-collections = { workspace = true }
+nimiq-database = { workspace = true }
+nimiq-database-value = { workspace = true }
+nimiq-genesis = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true }
+nimiq-mmr = { workspace = true }
+nimiq-primitives = { workspace = true }
+nimiq-serde = { workspace = true }
+nimiq-transaction = { workspace = true }
+nimiq-trie = { workspace = true }
+nimiq-utils = { workspace = true, features = ["math", "time"] }
+nimiq-vrf = { workspace = true }
+nimiq-zkp = { workspace = true }
 
 [dev-dependencies]
 rand_chacha = "0.3.1"
 
-nimiq-block-production = { path = "../block-production", features = ["test-utils"] }
-nimiq-test-log = { path = "../test-log" }
-nimiq-tendermint = { path = "../tendermint" }
-nimiq-transaction-builder = { path = "../transaction-builder" }
+nimiq-block-production = { workspace = true, features = ["test-utils"] }
+nimiq-tendermint = { workspace = true }
+nimiq-test-log = { workspace = true }
+nimiq-transaction-builder = { workspace = true }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/14167
-nimiq-test-utils = { path = "../test-utils" }
-nimiq-zkp-primitives = { path = "../zkp-primitives" }
+nimiq-test-utils = { workspace = true }
+nimiq-zkp-primitives = { workspace = true }
 
 [features]
 metrics = ["prometheus-client"]

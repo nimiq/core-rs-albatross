@@ -19,27 +19,27 @@ serde = "1.0"
 strum_macros = "0.24"
 thiserror = "1.0"
 
-nimiq-bls = { path = "../../bls" }
-nimiq-collections = { path = "../../collections" }
-nimiq-database = { path = "../../database", optional = true }
-nimiq-database-value = { path = "../../database/database-value" }
-nimiq-hash = { path = "../../hash" }
-nimiq-keys = { path = "../../keys", features = ["serde-derive"] }
-nimiq-macros = { path = "../../macros" }
-nimiq-primitives = { path = "..", features = ["coin", "policy", "serde-derive", "slots", "tree-proof", "trie"] }
-nimiq-serde = { path = "../../serde" }
-nimiq-transaction = { path = "../transaction" }
-nimiq-trie = { path = "../trie", optional = true }
-nimiq-utils = { path = "../../utils", features = ["key-rng"] }
-nimiq-vrf = { path = "../../vrf" }
+nimiq-bls = { workspace = true }
+nimiq-collections = { workspace = true }
+nimiq-database = { workspace = true, optional = true }
+nimiq-database-value = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true, features = ["serde-derive"] }
+nimiq-macros = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["coin", "policy", "serde-derive", "slots", "tree-proof", "trie"] }
+nimiq-serde = { workspace = true }
+nimiq-transaction = { workspace = true }
+nimiq-trie = { workspace = true, optional = true }
+nimiq-utils = { workspace = true, features = ["key-rng"] }
+nimiq-vrf = { workspace = true }
 
 [dev-dependencies]
 hex = "0.4"
 tempfile = "3.3"
 
-nimiq-genesis-builder = { path = "../../genesis-builder" }
-nimiq-test-log = { path = "../../test-log" }
-nimiq-test-utils = { path = "../../test-utils" }
+nimiq-genesis-builder = { workspace = true }
+nimiq-test-log = { workspace = true }
+nimiq-test-utils = { workspace = true }
 
 [features]
 accounts = ["interaction-traits", "nimiq-database", "nimiq-trie"]

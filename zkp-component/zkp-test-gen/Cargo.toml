@@ -15,24 +15,24 @@ hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 serde = "1.0"
-tracing-subscriber = { version = "0.3" }
 tokio = { version = "1.29", features = ["macros", "rt", "sync"] }
+tracing-subscriber = { version = "0.3" }
 
-nimiq-block = { path = "../../primitives/block" }
-nimiq-block-production = { path = "../../block-production" }
-nimiq-blockchain = { path = "../../blockchain" }
-nimiq-blockchain-interface = { path = "../../blockchain-interface" }
-nimiq-blockchain-proxy = { path = "../../blockchain-proxy" }
-nimiq-database = { path = "../../database" }
-nimiq-genesis = { path = "../../genesis" }
-nimiq-log = { path = "../../log" }
-nimiq-primitives = { path = "../../primitives", features = ["policy"] }
-nimiq-serde = { path = "../../serde" }
-nimiq-test-utils = { path = "../../test-utils" }
-nimiq-utils = { path = "../../utils", features = [
+nimiq-block = { workspace = true }
+nimiq-block-production = { workspace = true }
+nimiq-blockchain = { workspace = true }
+nimiq-blockchain-interface = { workspace = true }
+nimiq-blockchain-proxy = { workspace = true }
+nimiq-database = { workspace = true }
+nimiq-genesis = { workspace = true }
+nimiq-log = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["policy"] }
+nimiq-serde = { workspace = true }
+nimiq-test-utils = { workspace = true }
+nimiq-utils = { workspace = true, features = [
     "time",
 ] }
-nimiq-zkp = { path = "../../zkp", features = ["zkp-prover"] }
-nimiq-zkp-circuits = { path = "../../zkp-circuits", features = ["zkp-prover"] }
-nimiq-zkp-component = { path = "..", features = ["zkp-prover"] }
-nimiq-zkp-primitives = { path = "../../zkp-primitives", features = ["zkp-prover"] }
+nimiq-zkp = { workspace = true, features = ["zkp-prover"] }
+nimiq-zkp-circuits = { workspace = true, features = ["zkp-prover"] }
+nimiq-zkp-component = { workspace = true, features = ["zkp-prover"] }
+nimiq-zkp-primitives = { workspace = true, features = ["zkp-prover"] }

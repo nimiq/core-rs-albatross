@@ -19,14 +19,14 @@ time = { version = "0.3", features = ["formatting", "parsing", "serde"] }
 toml = "0.7"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-nimiq-account = { path = "../primitives/account" }
-nimiq-block = { path = "../primitives/block" }
-nimiq-bls = { path = "../bls", features = ["serde-derive"] }
-nimiq-database = { path = "../database" }
-nimiq-hash = { path = "../hash" }
-nimiq-serde = { path = "../serde" }
-nimiq-keys = { path = "../keys", features = ["serde-derive"] }
-nimiq-primitives = { path = "../primitives", features = ["serde-derive", "tree-proof"] }
-nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-trie = { path = "../primitives/trie" }
-nimiq-vrf = { path = "../vrf", features = ["serde-derive"] }
+nimiq-account = { workspace = true, features = ["accounts", "interaction-traits"] }
+nimiq-block = { workspace = true }
+nimiq-bls = { workspace = true, features = ["serde-derive"] }
+nimiq-database = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true, features = ["serde-derive"] }
+nimiq-primitives = { workspace = true, features = ["serde-derive", "tree-proof"] }
+nimiq-serde = { workspace = true }
+nimiq-transaction = { workspace = true }
+nimiq-trie = { workspace = true }
+nimiq-vrf = { workspace = true, features = ["serde-derive"] }

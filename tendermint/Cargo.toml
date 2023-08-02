@@ -22,14 +22,14 @@ tokio = { version = "1.29", features = [
 ] }
 tokio-stream = "0.1"
 
-nimiq-block = { path = "../primitives/block" }
-nimiq-collections = { path = "../collections" }
-nimiq-hash = { path = "../hash" }
-nimiq-macros = { path = "../macros" }
-nimiq-primitives = { path = "../primitives", features = ["policy"] }
+nimiq-block = { workspace = true }
+nimiq-collections = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-macros = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["policy"] }
 
 [dev-dependencies]
-nimiq-test-log = { path = "../test-log" }
+nimiq-test-log = { workspace = true }
 tokio = { version = "1.29", features = [
     "macros",
     "rt-multi-thread",

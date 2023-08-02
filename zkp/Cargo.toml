@@ -28,24 +28,24 @@ rand = { version = "0.8", features = ["small_rng"] }
 serde = "1.0"
 thiserror = "1.0"
 
-nimiq-block = { path = "../primitives/block" }
-nimiq-bls = { path = "../bls" }
-nimiq-genesis = { path = "../genesis", default-features = false }
-nimiq-hash = { path = "../hash" }
-nimiq-keys = { path = "../keys" }
-nimiq-primitives = { path = "../primitives", features = ["policy", "networks"] }
-nimiq-serde = { path = "../serde" }
-nimiq-zkp-circuits = { path = "../zkp-circuits" }
-nimiq-zkp-primitives = { path = "../zkp-primitives" }
+nimiq-block = { workspace = true }
+nimiq-bls = { workspace = true }
+nimiq-genesis = { workspace = true, default-features = false }
+nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["policy", "networks"] }
+nimiq-serde = { workspace = true }
+nimiq-zkp-circuits = { workspace = true }
+nimiq-zkp-primitives = { workspace = true }
 
 [dev-dependencies]
 rand_chacha = "0.3.1"
 tracing-subscriber = { version = "0.3" }
 
-nimiq-log = { path = "../log" }
-nimiq-test-log = { path = "../test-log" }
-nimiq-test-utils = { path = "../test-utils" }
-nimiq-zkp-circuits = { path = "../zkp-circuits", features = ["zkp-prover"] }
+nimiq-log = { workspace = true }
+nimiq-test-log = { workspace = true }
+nimiq-test-utils = { workspace = true }
+nimiq-zkp-circuits = { workspace = true, features = ["zkp-prover"] }
 
 [features]
 parallel = ["nimiq-zkp-circuits/parallel", "nimiq-zkp-primitives/parallel", "ark-crypto-primitives/parallel", "ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "ark-groth16/parallel"]

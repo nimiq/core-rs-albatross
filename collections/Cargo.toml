@@ -25,5 +25,5 @@ hex = "0.4"
 rand = "0.8"
 serde_json = "1.0"
 
-nimiq-serde = { path = "../serde" }
-nimiq-test-log = { path = "../test-log" }
+nimiq-serde = { workspace = true }
+nimiq-test-log = { workspace = true }

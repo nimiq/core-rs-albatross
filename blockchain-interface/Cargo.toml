@@ -24,9 +24,9 @@ serde = "1.0"
 thiserror = "1.0"
 tokio-stream = { version = "0.1", features = ["sync"] }
 
-nimiq-block = { path = "../primitives/block" }
-nimiq-database-value = { path = "../database/database-value" }
-nimiq-hash = { path = "../hash" }
-nimiq-primitives = { path = "../primitives", features = ["coin", "key-nibbles", "policy"] }
-nimiq-serde = { path = "../serde" }
-nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-block = { workspace = true }
+nimiq-database-value = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["coin", "key-nibbles", "policy"] }
+nimiq-serde = { workspace = true }
+nimiq-transaction = { workspace = true }

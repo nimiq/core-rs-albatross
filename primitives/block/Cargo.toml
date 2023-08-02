@@ -24,24 +24,24 @@ serde = "1.0"
 serde_repr = "0.1"
 thiserror = "1.0"
 
-nimiq-bls = { path = "../../bls", features = ["cache", "serde-derive"]}
-nimiq-collections = { path = "../../collections" }
-nimiq-database-value = { path = "../../database/database-value" }
-nimiq-handel = { path = "../../handel" }
-nimiq-hash = { path = "../../hash" }
-nimiq-hash_derive = { path = "../../hash/hash_derive" }
-nimiq-keys = { path = "../../keys" }
-nimiq-macros = { path = "../../macros" }
-nimiq-network-interface = { path = "../../network-interface" }
-nimiq-primitives = { path = "..", features = ["coin", "networks", "policy", "slots"] }
-nimiq-serde = { path = "../../serde" }
-nimiq-transaction = { path = "../transaction" }
-nimiq-utils = { path = "../../utils", features = ["merkle"] }
-nimiq-vrf = { path = "../../vrf", features = ["serde-derive"] }
-nimiq-zkp-primitives = { path = "../../zkp-primitives" }
+nimiq-bls = { workspace = true, features = ["cache", "serde-derive"]}
+nimiq-collections = { workspace = true }
+nimiq-database-value = { workspace = true }
+nimiq-handel = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-hash_derive = { workspace = true }
+nimiq-keys = { workspace = true }
+nimiq-macros = { workspace = true }
+nimiq-network-interface = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["coin", "networks", "policy", "slots"] }
+nimiq-serde = { workspace = true }
+nimiq-transaction = { workspace = true }
+nimiq-utils = { workspace = true, features = ["merkle"] }
+nimiq-vrf = { workspace = true, features = ["serde-derive"] }
+nimiq-zkp-primitives = { workspace = true }
 
 [dev-dependencies]
-nimiq-test-log = { path = "../../test-log" }
-nimiq-test-utils = { path = "../../test-utils" }
+nimiq-test-log = { workspace = true }
+nimiq-test-utils = { workspace = true }
 num-traits = "0.2"
 

@@ -19,14 +19,14 @@ hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 serde = "1.0"
 
-nimiq-bls = { path = "../../bls", features = ["serde-derive"] }
-nimiq-hash = { path = "../../hash" }
-nimiq-keys = { path = "../../keys" }
-nimiq-macros = { path = "../../macros" }
-nimiq-primitives = { path = "..", features = ["policy", "networks", "account", "coin"] }
-nimiq-serde = { path = "../../serde" }
-nimiq-transaction = { path = "../transaction" }
-nimiq-utils = { path = "../../utils", features = ["merkle"] }
+nimiq-bls = { workspace = true, features = ["serde-derive"] }
+nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true }
+nimiq-macros = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["policy", "networks", "account", "coin"] }
+nimiq-serde = { workspace = true }
+nimiq-transaction = { workspace = true }
+nimiq-utils = { workspace = true, features = ["merkle"] }
 
 [dev-dependencies]
 hex = "0.4"

@@ -28,32 +28,32 @@ tokio = { version = "1.29", features = ["rt", "time", "tracing"] }
 tokio-metrics = "0.1"
 tokio-stream = { version = "0.1", features = ["sync"] }
 
-nimiq-account = { path = "../primitives/account" }
-nimiq-block = { path = "../primitives/block" }
-nimiq-block-production = { path = "../block-production" }
-nimiq-blockchain = { path = "../blockchain" }
-nimiq-blockchain-interface = { path = "../blockchain-interface" }
-nimiq-bls = { path = "../bls" }
-nimiq-collections = { path = "../collections" }
-nimiq-consensus = { path = "../consensus" }
-nimiq-database = { path = "../database" }
-nimiq-database-value = { path = "../database/database-value" }
-nimiq-genesis = { path = "../genesis" }
-nimiq-handel = { path = "../handel" }
-nimiq-hash = { path = "../hash" }
-nimiq-keys = { path = "../keys" }
-nimiq-macros = { path = "../macros" }
-nimiq-mempool = { path = "../mempool" }
-nimiq-network-interface = { path = "../network-interface" }
-nimiq-primitives = { path = "../primitives" }
-nimiq-serde = { path = "../serde" }
-nimiq-tendermint = { path = "../tendermint" }
-nimiq-transaction-builder = { path = "../transaction-builder" }
-nimiq-utils = { path = "../utils", features = [
+nimiq-account = { workspace = true }
+nimiq-block = { workspace = true }
+nimiq-block-production = { workspace = true }
+nimiq-blockchain = { workspace = true }
+nimiq-blockchain-interface = { workspace = true }
+nimiq-bls = { workspace = true }
+nimiq-collections = { workspace = true }
+nimiq-consensus = { workspace = true }
+nimiq-database = { workspace = true }
+nimiq-database-value = { workspace = true }
+nimiq-genesis = { workspace = true }
+nimiq-handel = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true }
+nimiq-macros = { workspace = true }
+nimiq-mempool = { workspace = true }
+nimiq-network-interface = { workspace = true }
+nimiq-primitives = { workspace = true }
+nimiq-serde = { workspace = true }
+nimiq-tendermint = { workspace = true }
+nimiq-transaction-builder = { workspace = true }
+nimiq-utils = { workspace = true, features = [
     "time",
 ] }
-nimiq-validator-network = { path = "../validator-network" }
-nimiq-vrf = { path = "../vrf" }
+nimiq-validator-network = { workspace = true }
+nimiq-vrf = { workspace = true }
 
 [dev-dependencies]
 hex = "0.4"
@@ -61,13 +61,13 @@ tokio = { version = "1.29", features = ["rt", "test-util", "time", "tracing"] }
 tracing-core = "0.1"
 tracing-subscriber = "0.3"
 
-nimiq-genesis-builder = { path = "../genesis-builder" }
-nimiq-network-libp2p = { path = "../network-libp2p" }
-nimiq-network-mock = { path = "../network-mock" }
-nimiq-test-log = { path = "../test-log" }
+nimiq-genesis-builder = { workspace = true }
+nimiq-network-libp2p = { workspace = true }
+nimiq-network-mock = { workspace = true }
+nimiq-test-log = { workspace = true }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/14167
-nimiq-test-utils = { path = "../test-utils" }
+nimiq-test-utils = { workspace = true }
 
 [features]
 metrics = ["nimiq-mempool/metrics"]

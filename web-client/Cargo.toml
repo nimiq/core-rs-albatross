@@ -33,19 +33,19 @@ wasm-bindgen-derive = { version = "0.2", optional = true }
 wasm-timer = "0.2"
 web-sys = { version = "0.3.64", features = ["MessageEvent"]}
 
-nimiq-account = { path = "../primitives/account", default-features = false }
-nimiq-block = { path = "../primitives/block" }
-nimiq-blockchain-interface = { path = "../blockchain-interface" }
-nimiq-blockchain-proxy = { path = "../blockchain-proxy", default-features = false }
-nimiq-bls = { path = "../bls" }
-nimiq-consensus = { path = "../consensus", default-features = false }
-nimiq-hash = { path = "../hash" }
-nimiq-keys = { path = "../keys" }
-nimiq-network-interface = { path = "../network-interface" }
-nimiq-primitives = {path = "../primitives", features = ["coin", "networks", "ts-types"]}
-nimiq-serde = { path = "../serde" }
-nimiq-transaction = { path = "../primitives/transaction", features = ["ts-types"] }
-nimiq-transaction-builder = { path = "../transaction-builder" }
+nimiq-account = { workspace = true, default-features = false }
+nimiq-block = { workspace = true }
+nimiq-blockchain-interface = { workspace = true }
+nimiq-blockchain-proxy = { workspace = true, default-features = false }
+nimiq-bls = { workspace = true }
+nimiq-consensus = { workspace = true, default-features = false }
+nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true }
+nimiq-network-interface = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["coin", "networks", "ts-types"] }
+nimiq-serde = { workspace = true }
+nimiq-transaction = { workspace = true, features = ["ts-types"] }
+nimiq-transaction-builder = { workspace = true }
 
 [dependencies.nimiq]
 package = "nimiq-lib"
@@ -63,14 +63,14 @@ parking_lot = "0.12"
 serde = "1.0"
 wasm-bindgen-test = "0.3"
 
-nimiq-bls = { path = "../bls"}
-nimiq-blockchain-proxy = { path = "../blockchain-proxy", default-features = false }
-nimiq-consensus = { path = "../consensus", default-features = false }
-nimiq-genesis = { path = "../genesis", default-features = false }
-nimiq-light-blockchain = { path = "../light-blockchain" }
-nimiq-network-interface = { path = "../network-interface" }
-nimiq-network-mock = { path = "../network-mock" }
-nimiq-zkp-component = { path = "../zkp-component", default-features = false }
+nimiq-bls = { workspace = true }
+nimiq-blockchain-proxy = { workspace = true, default-features = false }
+nimiq-consensus = { workspace = true, default-features = false }
+nimiq-genesis = { workspace = true, default-features = false }
+nimiq-light-blockchain = { workspace = true }
+nimiq-network-interface = { workspace = true }
+nimiq-network-mock = { workspace = true }
+nimiq-zkp-component = { workspace = true, default-features = false }
 
 [features]
 client = []

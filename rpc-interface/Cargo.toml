@@ -28,23 +28,23 @@ serde = "1.0"
 serde_with = "3.0"
 thiserror = "1.0"
 
-nimiq-account = { path = "../primitives/account" }
-nimiq-block = { path = "../primitives/block" }
-nimiq-blockchain = { path = "../blockchain" }
-nimiq-blockchain-interface = { path = "../blockchain-interface" }
-nimiq-blockchain-proxy = { path = "../blockchain-proxy" }
-nimiq-bls = { path = "../bls", features = ["serde-derive"] }
-nimiq-collections = { path = "../collections" }
-nimiq-hash = { path = "../hash" }
-nimiq-jsonrpc-client = { git = "https://github.com/nimiq/jsonrpc.git" }
-nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
-nimiq-jsonrpc-derive = { git = "https://github.com/nimiq/jsonrpc.git" }
-nimiq-keys = { path = "../keys", features = ["serde-derive"] }
-nimiq-primitives = { path = "../primitives", features = ["coin", "account", "serde-derive"] }
-nimiq-serde = { path = "../serde" }
-nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-vrf = { path = "../vrf", features = ["serde-derive"] }
-nimiq-zkp-component = { path = "../zkp-component" }
+nimiq-account = { workspace = true }
+nimiq-block = { workspace = true }
+nimiq-blockchain = { workspace = true }
+nimiq-blockchain-interface = { workspace = true }
+nimiq-blockchain-proxy = { workspace = true }
+nimiq-bls = { workspace = true, features = ["serde-derive"] }
+nimiq-collections = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-jsonrpc-client = { workspace = true }
+nimiq-jsonrpc-core = { workspace = true }
+nimiq-jsonrpc-derive = { workspace = true }
+nimiq-keys = { workspace = true, features = ["serde-derive"] }
+nimiq-primitives = { workspace = true, features = ["coin", "account", "serde-derive"] }
+nimiq-serde = { workspace = true }
+nimiq-transaction = { workspace = true }
+nimiq-vrf = { workspace = true, features = ["serde-derive"] }
+nimiq-zkp-component = { workspace = true }
 
 [dev-dependencies]
 serde_json = "1.0"

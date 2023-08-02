@@ -28,16 +28,16 @@ serde-big-array = { version = "0.5", optional = true }
 sha2 = "0.9"
 thiserror = "1.0"
 
-nimiq-database-value = { path = "../database/database-value" }
-nimiq-hash = { path = "../hash" }
-nimiq-hash_derive = { path = "../hash/hash_derive" }
-nimiq-macros = { path = "../macros" }
-nimiq-serde = { path = "../serde", optional = true }
-nimiq-utils = { path = "../utils", features = ["key-rng"] }
+nimiq-database-value = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-hash_derive = { workspace = true }
+nimiq-macros = { workspace = true }
+nimiq-serde = { workspace = true, optional = true }
+nimiq-utils = { workspace = true, features = ["key-rng"] }
 
 [dev-dependencies]
-nimiq-test-log = { path = "../test-log" }
-nimiq-test-utils = { path = "../test-utils" }
+nimiq-test-log = { workspace = true }
+nimiq-test-utils = { workspace = true }
 
 [features]
 serde-derive = ["nimiq-serde", "serde", "serde-big-array"]

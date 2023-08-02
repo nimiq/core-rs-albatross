@@ -28,16 +28,16 @@ rand_core = { version = "0.6", optional = true }
 serde = { version = "1.0", optional = true }
 thiserror = { version = "1.0", optional = true }
 
-nimiq-collections = { path = "../collections", optional = true }
-nimiq-database-value = { path = "../database/database-value" }
-nimiq-hash = { path = "../hash", optional = true }
-nimiq-serde = { path = "../serde", optional = true }
+nimiq-collections = { workspace = true, optional = true }
+nimiq-database-value = { workspace = true }
+nimiq-hash = { workspace = true, optional = true }
+nimiq-serde = { workspace = true, optional = true }
 
 [dev-dependencies]
-nimiq-keys = { path = "../keys" }
-nimiq-serde = { path = "../serde" }
-nimiq-test-log = { path = "../test-log" }
-nimiq-test-utils = { path = "../test-utils" }
+nimiq-keys = { workspace = true }
+nimiq-serde = { workspace = true }
+nimiq-test-log = { workspace = true }
+nimiq-test-utils = { workspace = true }
 
 [features]
 crc = []

@@ -30,8 +30,8 @@ tokio = { version = "1.29", features = [
 ] }
 tokio-stream = "0.1"
 
-nimiq-network-interface = { path = "../network-interface" }
-nimiq-serde = { path = "../serde" }
+nimiq-network-interface = { workspace = true }
+nimiq-serde = { workspace = true }
 
 [dev-dependencies]
-nimiq-test-log = { path = "../test-log" }
+nimiq-test-log = { workspace = true }

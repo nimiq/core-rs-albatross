@@ -16,10 +16,10 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 serde = "1.0"
 thiserror = "1.0"
 
-nimiq-database = { path = "../../database" }
-nimiq-hash = { path = "../../hash" }
-nimiq-primitives = { path = "..", features = ["key-nibbles", "serde-derive", "trie"] }
-nimiq-serde = { path = "../../serde" }
+nimiq-database = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["key-nibbles", "serde-derive", "trie"] }
+nimiq-serde = { workspace = true }
 
 [dev-dependencies]
-nimiq-test-log = { path = "../../test-log" }
+nimiq-test-log = { workspace = true }

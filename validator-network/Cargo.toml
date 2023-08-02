@@ -25,7 +25,7 @@ serde = "1.0"
 thiserror = "1.0"
 tokio = { version = "1.29", features = ["rt"] }
 
-nimiq-network-interface = { path = "../network-interface" }
-nimiq-bls = { path = "../bls" }
-nimiq-serde = { path = "../serde" }
-nimiq-utils = { path = "../utils", features = ["tagged-signing"] }
+nimiq-bls = { workspace = true }
+nimiq-network-interface = { workspace = true }
+nimiq-serde = { workspace = true }
+nimiq-utils = { workspace = true, features = ["tagged-signing"] }

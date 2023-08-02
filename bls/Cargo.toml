@@ -30,14 +30,14 @@ ark-mnt6-753 = "0.4"
 ark-crypto-primitives = { version = "0.4", features = ["prf"] }
 ark-serialize = "0.4"
 
-nimiq-hash = { path = "../hash" }
-nimiq-hash_derive = { path = "../hash/hash_derive" }
-nimiq-serde = { path = "../serde", optional = true }
-nimiq-utils = { path = "../utils", features = ["key-rng"] }
+nimiq-hash = { workspace = true }
+nimiq-hash_derive = { workspace = true }
+nimiq-serde = { workspace = true, optional = true }
+nimiq-utils = { workspace = true, features = ["key-rng"] }
 
 [dev-dependencies]
-nimiq-test-log = { path = "../test-log" }
-nimiq-test-utils = { path = "../test-utils" }
+nimiq-test-log = { workspace = true }
+nimiq-test-utils = { workspace = true }
 
 [features]
 cache = ["lazy"]

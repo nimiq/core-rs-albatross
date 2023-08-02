@@ -21,20 +21,20 @@ thiserror = "1.0"
 tokio = { version = "1.29", features = ["rt", "time"] }
 tokio-stream = "0.1"
 
-nimiq-bls = { path = "../bls" }
-nimiq-collections = { path = "../collections" }
-nimiq-hash = { path = "../hash" }
-nimiq-macros = { path = "../macros" }
-nimiq-network-interface = { path = "../network-interface" }
-nimiq-primitives = { path = "../primitives", features = ["policy"] }
-nimiq-serde = { path = "../serde" }
-nimiq-utils = { path = "../utils", features = [
+nimiq-bls = { workspace = true }
+nimiq-collections = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-macros = { workspace = true }
+nimiq-network-interface = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["policy"] }
+nimiq-serde = { workspace = true }
+nimiq-utils = { workspace = true, features = [
     "math",
 ] }
 
 [dev-dependencies]
-nimiq-network-interface = { path = "../network-interface" }
-nimiq-network-mock = { path = "../network-mock" }
-nimiq-test-log = { path = "../test-log" }
+nimiq-network-interface = { workspace = true }
+nimiq-network-mock = { workspace = true }
+nimiq-test-log = { workspace = true }
 
 tokio = { version = "1.29", features = ["rt", "time", "macros"] }

@@ -21,11 +21,11 @@ byteorder = "1.2"
 regex = "1"
 serde = "1.0"
 
-nimiq-hash = { path = "../hash" }
-nimiq-keys = { path = "../keys", features = ["serde-derive"] }
-nimiq-serde = { path = "../serde" }
+nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true, features = ["serde-derive"] }
+nimiq-serde = { workspace = true }
 
 [dev-dependencies]
 hex = "0.4"
 
-nimiq-test-log = { path = "../test-log" }
+nimiq-test-log = { workspace = true }

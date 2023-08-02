@@ -24,10 +24,10 @@ rust-argon2 = "1.0"
 serde = "1.0"
 sha2 = "0.9"
 
-nimiq-database-value = { path = "../database/database-value" }
-nimiq-macros = { path = "../macros" }
-nimiq-mmr = { path = "../primitives/mmr" }
-nimiq-serde = { path = "../serde" }
+nimiq-database-value = { workspace = true }
+nimiq-macros = { workspace = true }
+nimiq-mmr = { workspace = true }
+nimiq-serde = { workspace = true }
 
 [dev-dependencies]
-nimiq-test-log = { path = "../test-log" }
+nimiq-test-log = { workspace = true }

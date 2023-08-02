@@ -31,45 +31,45 @@ thiserror = "1.0"
 tokio = { version = "1.29", features = ["rt", "sync", "time"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 
-nimiq-account = { path = "../primitives/account", default-features = false }
-nimiq-block = { path = "../primitives/block" }
-nimiq-blockchain-interface = { path = "../blockchain-interface" }
-nimiq-blockchain-proxy = { path = "../blockchain-proxy", default-features = false }
-nimiq-bls = { path = "../bls" }
-nimiq-blockchain = { path = "../blockchain", optional = true }
-nimiq-hash = { path = "../hash" }
-nimiq-keys = { path = "../keys" }
-nimiq-light-blockchain = { path = "../light-blockchain" }
-nimiq-macros = { path = "../macros" }
-nimiq-network-interface = { path = "../network-interface" }
-nimiq-primitives = { path = "../primitives", features = ["policy"] }
-nimiq-serde = { path = "../serde" }
-nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-utils = { path = "../utils", features = [
+nimiq-account = { workspace = true, default-features = false }
+nimiq-block = { workspace = true }
+nimiq-blockchain = { workspace = true, optional = true }
+nimiq-blockchain-interface = { workspace = true }
+nimiq-blockchain-proxy = { workspace = true, default-features = false }
+nimiq-bls = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true }
+nimiq-light-blockchain = { workspace = true }
+nimiq-macros = { workspace = true }
+nimiq-network-interface = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["policy"] }
+nimiq-serde = { workspace = true }
+nimiq-transaction = { workspace = true }
+nimiq-utils = { workspace = true, features = [
     "math",
     "merkle",
     "time",
 ] }
-nimiq-validator-network = { path = "../validator-network" }
-nimiq-zkp-component = { path = "../zkp-component" }
+nimiq-validator-network = { workspace = true }
+nimiq-zkp-component = { workspace = true }
 
 [dev-dependencies]
 hex = "0.4"
 
-nimiq-block-production = { path = "../block-production", features = ["test-utils"] }
-nimiq-bls = { path = "../bls" }
-nimiq-database = { path = "../database" }
-nimiq-genesis = { path = "../genesis" }
-nimiq-genesis-builder = { path = "../genesis-builder" }
-nimiq-keys = { path = "../keys" }
-nimiq-network-mock = { path = "../network-mock" }
-nimiq-network-libp2p = { path = "../network-libp2p" }
-nimiq-test-log = { path = "../test-log" }
+nimiq-block-production = { workspace = true, features = ["test-utils"] }
+nimiq-bls = { workspace = true }
+nimiq-database = { workspace = true }
+nimiq-genesis = { workspace = true }
+nimiq-genesis-builder = { workspace = true }
+nimiq-keys = { workspace = true }
+nimiq-network-mock = { workspace = true }
+nimiq-network-libp2p = { workspace = true }
+nimiq-test-log = { workspace = true }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/14167
-nimiq-test-utils = { path = "../test-utils" }
-nimiq-trie = { path = "../primitives/trie" }
-nimiq-zkp-component = { path = "../zkp-component", features = ["zkp-prover", "parallel"] }
+nimiq-test-utils = { workspace = true }
+nimiq-trie = { workspace = true }
+nimiq-zkp-component = { workspace = true, features = ["zkp-prover", "parallel"] }
 
 [features]
 full = ["nimiq-blockchain", "nimiq-blockchain-proxy/full"]

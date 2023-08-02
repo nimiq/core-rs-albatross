@@ -22,13 +22,13 @@ hex = "0.4"
 serde = "1.0"
 unicode-normalization = "0.1"
 
-nimiq-hash = { path = "../hash" }
-nimiq-key-derivation = { path = "../key-derivation", optional = true }
-nimiq-macros = { path = "../macros" }
-nimiq-utils = { path = "../utils", features = ["crc"] }
+nimiq-hash = { workspace = true }
+nimiq-key-derivation = { workspace = true, optional = true }
+nimiq-macros = { workspace = true }
+nimiq-utils = { workspace = true, features = ["crc"] }
 
 [dev-dependencies]
-nimiq-test-log = { path = "../test-log" }
+nimiq-test-log = { workspace = true }
 
 [features]
 default = ["key-derivation"]

@@ -29,35 +29,35 @@ tokio = { version = "1.29", features = ["rt", "rt-multi-thread", "sync", "tracin
 tokio-metrics = "0.1"
 tokio-stream = { version = "0.1", features = ["sync"] }
 
-nimiq-account = { path = "../primitives/account" }
-nimiq-block = { path = "../primitives/block" }
-nimiq-blockchain = { path = "../blockchain" }
-nimiq-blockchain-interface = { path = "../blockchain-interface" }
-nimiq-database = { path = "../database" }
-nimiq-hash = { path = "../hash" }
-nimiq-keys = { path = "../keys" }
-nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
-nimiq-network-interface = { path = "../network-interface" }
-nimiq-serde = { path = "../serde" }
-nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-utils = { path = "../utils", features = ["time"] }
+nimiq-account = { workspace = true }
+nimiq-block = { workspace = true }
+nimiq-blockchain = { workspace = true }
+nimiq-blockchain-interface = { workspace = true }
+nimiq-database = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true }
+nimiq-network-interface = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["coin", "networks"] }
+nimiq-serde = { workspace = true }
+nimiq-transaction = { workspace = true }
+nimiq-utils = { workspace = true, features = ["time"] }
 
 [dev-dependencies]
 hex = "0.4"
 rand = "0.8"
 
-nimiq-block = { path = "../primitives/block" }
-nimiq-blockchain = { path = "../blockchain" }
-nimiq-block-production = { path = "../block-production" }
-nimiq-bls = { path = "../bls" }
-nimiq-database = { path = "../database" }
-nimiq-genesis = { path = "../genesis" }
-nimiq-genesis-builder = { path = "../genesis-builder" }
-nimiq-network-mock = { path = "../network-mock" }
-nimiq-test-log = { path = "../test-log" }
-nimiq-test-utils = { path = "../test-utils" }
-nimiq-transaction-builder = { path = "../transaction-builder" }
-nimiq-vrf = { path = "../vrf" }
+nimiq-block = { workspace = true }
+nimiq-blockchain = { workspace = true }
+nimiq-block-production = { workspace = true }
+nimiq-bls = { workspace = true }
+nimiq-database = { workspace = true }
+nimiq-genesis = { workspace = true }
+nimiq-genesis-builder = { workspace = true }
+nimiq-network-mock = { workspace = true }
+nimiq-test-log = { workspace = true }
+nimiq-test-utils = { workspace = true }
+nimiq-transaction-builder = { workspace = true }
+nimiq-vrf = { workspace = true }
 
 [features]
 metrics = ["prometheus-client"]

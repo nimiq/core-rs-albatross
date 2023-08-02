@@ -29,20 +29,20 @@ rayon = { version = "^1.7", optional = true }
 serde = { version = "1.0" }
 thiserror = "1.0"
 
-nimiq-bls = { path = "../bls" }
-nimiq-hash = { path = "../hash" }
-nimiq-pedersen-generators = { path = "pedersen-generators" }
-nimiq-primitives = { path = "../primitives", features = ["policy"] }
-nimiq-serde = { path = "../serde" }
+nimiq-bls = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-pedersen-generators = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["policy"] }
+nimiq-serde = { workspace = true }
 
 [dev-dependencies]
-nimiq-block = { path = "../primitives/block" }
-nimiq-collections = { path = "../collections" }
-nimiq-keys = { path = "../keys" }
-nimiq-primitives = { path = "../primitives", features = ["slots"] }
-nimiq-test-log = { path = "../test-log" }
-nimiq-test-utils = { path = "../test-utils" }
-nimiq-utils = { path = "../utils" }
+nimiq-block = { workspace = true }
+nimiq-collections = { workspace = true }
+nimiq-keys = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["slots"] }
+nimiq-test-log = { workspace = true }
+nimiq-test-utils = { workspace = true }
+nimiq-utils = { workspace = true }
 
 [features]
 parallel = ["rayon", "ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "ark-groth16/parallel"]

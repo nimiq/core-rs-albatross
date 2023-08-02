@@ -28,34 +28,34 @@ serde = "1.0"
 tokio = { version = "1.29", features = ["rt", "time", "tracing"] }
 tokio-stream = "0.1"
 
-nimiq-account = { path = "../primitives/account" }
-nimiq-block = { path = "../primitives/block" }
-nimiq-blockchain = { path = "../blockchain" }
-nimiq-blockchain-interface = { path = "../blockchain-interface" }
-nimiq-blockchain-proxy = { path = "../blockchain-proxy" }
-nimiq-block-production = { path = "../block-production" }
-nimiq-bls = { path = "../bls" }
-nimiq-collections = { path = "../collections" }
-nimiq-consensus = { path = "../consensus" }
-nimiq-database = { path = "../database" }
-nimiq-genesis = { path = "../genesis" }
-nimiq-genesis-builder = { path = "../genesis-builder" }
-nimiq-hash = { path = "../hash" }
-nimiq-keys = { path = "../keys" }
-nimiq-mempool = { path = "../mempool" }
-nimiq-network-interface = { path = "../network-interface" }
-nimiq-network-libp2p = { path = "../network-libp2p" }
-nimiq-network-mock = { path = "../network-mock" }
-nimiq-primitives = { path = "../primitives" }
-nimiq-serde = { path = "../serde" }
-nimiq-tendermint = { path = "../tendermint" }
-nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-transaction-builder = { path = "../transaction-builder" }
-nimiq-trie = { path = "../primitives/trie" }
-nimiq-validator = { path = "../validator" }
-nimiq-validator-network = { path = "../validator-network" }
-nimiq-utils = { path = "../utils" }
-nimiq-vrf = { path = "../vrf" }
-nimiq-zkp-circuits = { path = "../zkp-circuits", features = ["test-setup", "zkp-prover", "parallel"] }
-nimiq-zkp-component = { path = "../zkp-component", features = ["database-storage", "zkp-prover", "parallel"] }
-nimiq-zkp-primitives = { path = "../zkp-primitives", features = ["parallel", "zkp-prover", "parallel"] }
+nimiq-account = { workspace = true }
+nimiq-block = { workspace = true }
+nimiq-blockchain = { workspace = true }
+nimiq-blockchain-interface = { workspace = true }
+nimiq-blockchain-proxy = { workspace = true }
+nimiq-block-production = { workspace = true }
+nimiq-bls = { workspace = true }
+nimiq-collections = { workspace = true }
+nimiq-consensus = { workspace = true }
+nimiq-database = { workspace = true }
+nimiq-genesis = { workspace = true }
+nimiq-genesis-builder = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true }
+nimiq-mempool = { workspace = true }
+nimiq-network-interface = { workspace = true }
+nimiq-network-libp2p = { workspace = true }
+nimiq-network-mock = { workspace = true }
+nimiq-primitives = { workspace = true }
+nimiq-serde = { workspace = true }
+nimiq-tendermint = { workspace = true }
+nimiq-transaction = { workspace = true }
+nimiq-transaction-builder = { workspace = true }
+nimiq-trie = { workspace = true }
+nimiq-utils = { workspace = true }
+nimiq-validator = { workspace = true }
+nimiq-validator-network = { workspace = true }
+nimiq-vrf = { workspace = true }
+nimiq-zkp-circuits = { workspace = true, features = ["test-setup", "zkp-prover", "parallel"] }
+nimiq-zkp-component = { workspace = true, features = ["database-storage", "zkp-prover", "parallel"] }
+nimiq-zkp-primitives = { workspace = true, features = ["parallel", "zkp-prover", "parallel"] }
