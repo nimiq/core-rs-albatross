@@ -199,7 +199,7 @@ impl Policy {
     pub fn epoch_index_at(block_number: u32) -> u32 {
         // Any block before the genesis is considered to be part of epoch 0
         if block_number < Self::genesis_block_number() {
-            panic!("There are no epochs prior to the genesis block");
+            block_number
         } else {
             let blocks_per_epoch = Self::blocks_per_epoch();
             (block_number + blocks_per_epoch - 1) % blocks_per_epoch
@@ -225,7 +225,7 @@ impl Policy {
     pub fn batch_index_at(block_number: u32) -> u32 {
         // No batches before the genesis block number
         if block_number < Self::genesis_block_number() {
-            panic!("There are no batches prior to the genesis block");
+            block_number
         } else {
             let blocks_per_batch = Self::blocks_per_batch();
             (block_number + blocks_per_batch - 1) % blocks_per_batch
