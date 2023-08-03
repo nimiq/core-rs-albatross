@@ -10,6 +10,7 @@ ignore:
   - tools
   - zkp-component/zkp-test-gen
   - zkp-circuits/zkp-setup
+  - zkp-circuits/zkp-constraints
 
 coverage:
   precision: 2
