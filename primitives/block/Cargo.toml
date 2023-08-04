@@ -38,7 +38,6 @@ nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
 nimiq-utils = { workspace = true, features = ["merkle"] }
 nimiq-vrf = { workspace = true, features = ["serde-derive"] }
-nimiq-zkp-primitives = { workspace = true }
 
 [dev-dependencies]
 nimiq-test-log = { workspace = true }

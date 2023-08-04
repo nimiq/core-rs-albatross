@@ -20,7 +20,6 @@ maintenance = { status = "experimental" }
 ark-ec = "0.4"
 ark-mnt6-753 = "0.4"
 ark-serialize = "0.4"
-bitvec = "1.0"
 byteorder = "1.2"
 hex = { version = "0.4", optional = true }
 log = { package = "tracing", version = "0.1", features = ["log"] }

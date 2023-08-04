@@ -16,5 +16,3 @@ is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
 is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
-[dependencies]
-log = { package = "tracing", version = "0.1", features = ["log"] }

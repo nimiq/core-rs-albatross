@@ -20,7 +20,6 @@ maintenance = { status = "experimental" }
 async-trait = "0.1"
 futures = { package = "futures-util", version = "0.3" }
 futures-executor = { version = "0.3" }
-gloo-timers = { version = "0.2.6", features = [ "futures" ]}
 instant = { version = "0.1", features = [ "wasm-bindgen" ] }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
@@ -50,7 +49,6 @@ nimiq-utils = { workspace = true, features = [
     "merkle",
     "time",
 ] }
-nimiq-validator-network = { workspace = true }
 nimiq-zkp-component = { workspace = true }
 
 [dev-dependencies]

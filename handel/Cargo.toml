@@ -25,8 +25,6 @@ nimiq-bls = { workspace = true }
 nimiq-collections = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-macros = { workspace = true }
-nimiq-network-interface = { workspace = true }
-nimiq-primitives = { workspace = true, features = ["policy"] }
 nimiq-serde = { workspace = true }
 nimiq-utils = { workspace = true, features = [
     "math",

@@ -34,7 +34,7 @@ nimiq-genesis = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true }
 nimiq-primitives = { workspace = true }
-nimiq-tendermint = { workspace = true }
+nimiq-tendermint = { workspace = true, optional = true }
 nimiq-transaction = { workspace = true }
 nimiq-vrf = { workspace = true }
 nimiq-utils = { workspace = true }
@@ -48,10 +48,11 @@ nimiq-test-log = { workspace = true }
 # See https://github.com/rust-analyzer/rust-analyzer/issues/14167
 nimiq-genesis-builder = { workspace = true }
 nimiq-serde = { workspace = true }
+nimiq-tendermint = { workspace = true }
 nimiq-test-utils = { workspace = true }
 nimiq-transaction-builder = { workspace = true }
 nimiq-trie = { workspace = true }
 
 [features]
 default = []
-test-utils = []
+test-utils = ["nimiq-tendermint"]
