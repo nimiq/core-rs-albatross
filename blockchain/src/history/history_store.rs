@@ -872,6 +872,22 @@ impl HistoryStore {
         Ok(root)
     }
 
+    /// Returns the block number of the last leaf in the history store
+    pub fn get_last_leaf_block_number(&self, txn_option: Option<&TransactionProxy>) -> Option<u32> {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        // Seek to the last leaf index of the block, if it exists.
+        let mut cursor = txn.cursor(&self.last_leaf_table);
+        cursor.last::<u32, u32>().map(|(key, _)| key)
+    }
+
     /// Gets an extended transaction by its hash. Note that this hash is the leaf hash (see MMRHash)
     /// of the transaction, not a simple Blake2b hash of the transaction.
     fn get_extended_tx(
