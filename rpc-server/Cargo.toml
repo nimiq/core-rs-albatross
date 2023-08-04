@@ -30,12 +30,12 @@ tokio-stream = "0.1"
 
 nimiq-account = { workspace = true }
 nimiq-block = { workspace = true }
-nimiq-blockchain-interface = { workspace = true }
-nimiq-blockchain-proxy = { workspace = true }
 nimiq-blockchain = { workspace = true }
+nimiq-blockchain-interface = { workspace = true }
+nimiq-blockchain-proxy = { workspace = true, features = ["full"] }
 nimiq-bls = { workspace = true, features = ["serde-derive"] }
 nimiq-collections = { workspace = true }
-nimiq-consensus = { workspace = true }
+nimiq-consensus = { workspace = true, features = ["full"] }
 nimiq-database = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-jsonrpc-core = { workspace = true }

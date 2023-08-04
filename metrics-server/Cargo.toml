@@ -31,8 +31,8 @@ tokio-metrics = "0.1"
 
 nimiq-blockchain = { workspace = true, features = ["metrics"] }
 nimiq-blockchain-interface = { workspace = true }
-nimiq-blockchain-proxy = { workspace = true }
-nimiq-consensus = { workspace = true }
+nimiq-blockchain-proxy = { workspace = true, features = ["full"] }
+nimiq-consensus = { workspace = true, features = ["full"] }
 nimiq-mempool = { workspace = true, features = ["metrics"] }
 nimiq-network-interface = { workspace = true }
 nimiq-network-libp2p = { workspace = true, features = ["metrics"] }

@@ -36,7 +36,7 @@ nimiq-blockchain-proxy = { workspace = true }
 nimiq-block-production = { workspace = true }
 nimiq-bls = { workspace = true }
 nimiq-collections = { workspace = true }
-nimiq-consensus = { workspace = true }
+nimiq-consensus = { workspace = true, features = ["full"] }
 nimiq-database = { workspace = true }
 nimiq-genesis = { workspace = true }
 nimiq-genesis-builder = { workspace = true }

@@ -28,7 +28,7 @@ thiserror = "1.0"
 tokio = { version = "1.29", features = ["sync"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 
-nimiq-account = { workspace = true }
+nimiq-account = { workspace = true, features = ["accounts"] }
 nimiq-block = { workspace = true }
 nimiq-blockchain-interface = { workspace = true }
 nimiq-bls = { workspace = true, features = ["serde-derive"] }

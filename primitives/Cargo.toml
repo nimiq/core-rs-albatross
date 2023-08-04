@@ -35,7 +35,7 @@ thiserror = { version = "1.0", optional = true }
 tsify = { version = "0.4", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 
-nimiq-bls = { workspace = true, features = ["serde-derive"], optional = true }
+nimiq-bls = { workspace = true, features = ["lazy", "serde-derive"], optional = true }
 nimiq-database-value = { workspace = true, optional = true }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true, optional = true, features = ["serde-derive"] }
