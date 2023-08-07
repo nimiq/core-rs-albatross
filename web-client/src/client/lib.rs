@@ -1037,7 +1037,7 @@ impl Client {
                         }
 
                         let staker_address = if let PlainTransactionRecipientData::AddStake(data) =
-                            &details.transaction.recipient_data
+                            &details.transaction.data
                         {
                             Some(
                                 nimiq_keys::Address::from_user_friendly_address(&data.staker)

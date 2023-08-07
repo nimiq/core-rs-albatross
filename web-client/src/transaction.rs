@@ -446,7 +446,7 @@ impl Transaction {
                     PlainTransactionSenderData::Raw(PlainRawData { raw: raw_data.raw })
                 }
             },
-            recipient_data: {
+            data: {
                 if self.inner.recipient_type == AccountType::Staking {
                     // Parse transaction data
                     let data = IncomingStakingTransactionData::parse(&self.inner).unwrap();
@@ -603,7 +603,7 @@ impl Transaction {
             })?),
             &Address::from_string(&plain.recipient)?,
             Some(plain.recipient_type.into()),
-            Some(hex::decode(match plain.recipient_data {
+            Some(hex::decode(match plain.data {
                 PlainTransactionRecipientData::Raw(ref data) => &data.raw,
                 PlainTransactionRecipientData::Vesting(ref data) => &data.raw,
                 PlainTransactionRecipientData::Htlc(ref data) => &data.raw,
@@ -782,15 +782,15 @@ pub struct PlainTransaction {
     /// Any flags that this transaction carries. `0b1 = 1` means it's a contract-creation transaction, `0b10 = 2`
     /// means it's a signalling transaction with 0 value.
     pub flags: u8,
-    /// The `recipient_data` field of a transaction serves different purposes based on the transaction's recipient type.
+    /// The `sender_data` field serves a purpose based on the transaction's sender type.
+    /// It is currently only used for extra information in transactions from the staking contract.
+    pub sender_data: PlainTransactionSenderData,
+    /// The `data` field of a transaction serves different purposes based on the transaction's recipient type.
     /// For transactions to "basic" address types, this field can contain up to 64 bytes of unstructured data.
     /// For transactions that create contracts or interact with the staking contract, the format of this field
     /// must follow a fixed structure and defines the new contracts' properties or how the staking contract is
     /// changed.
-    pub recipient_data: PlainTransactionRecipientData,
-    /// The `sender_data` field serves a purpose based on the transaction's recipient type.
-    /// It is currently only used for extra information in transactions from the staking contract.
-    pub sender_data: PlainTransactionSenderData,
+    pub data: PlainTransactionRecipientData,
     /// The `proof` field contains the signature of the eligible signer. The proof field's structure depends on
     /// the transaction's sender type. For transactions from contracts it can also contain additional structured
     /// data before the signature.
@@ -875,7 +875,7 @@ impl serde::Serialize for PlainTransactionDetails {
         plain.serialize_field("network", &self.transaction.network)?;
         plain.serialize_field("flags", &self.transaction.flags)?;
         plain.serialize_field("senderData", &self.transaction.sender_data)?;
-        plain.serialize_field("data", &self.transaction.recipient_data)?;
+        plain.serialize_field("data", &self.transaction.data)?;
         plain.serialize_field("proof", &self.transaction.proof)?;
         plain.serialize_field("size", &self.transaction.size)?;
         plain.serialize_field("valid", &self.transaction.valid)?;
