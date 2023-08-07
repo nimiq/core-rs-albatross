@@ -429,10 +429,10 @@ impl Transaction {
             flags: self.flags(),
             sender_data: {
                 let raw_data = PlainRawData {
-                    raw: hex::encode(self.recipient_data()),
+                    raw: hex::encode(self.sender_data()),
                 };
 
-                if self.inner.recipient_type == AccountType::Staking {
+                if self.inner.sender_type == AccountType::Staking {
                     let data = OutgoingStakingTransactionData::parse(&self.inner).unwrap();
                     match data {
                         OutgoingStakingTransactionData::DeleteValidator => {
@@ -858,7 +858,7 @@ impl serde::Serialize for PlainTransactionDetails {
     where
         S: serde::Serializer,
     {
-        let mut plain = serializer.serialize_struct("PlainTransactionDetails", 21)?;
+        let mut plain = serializer.serialize_struct("PlainTransactionDetails", 22)?;
         plain.serialize_field("transactionHash", &self.transaction.transaction_hash)?;
         plain.serialize_field("format", &self.transaction.format)?;
         plain.serialize_field("sender", &self.transaction.sender)?;
@@ -874,6 +874,7 @@ impl serde::Serialize for PlainTransactionDetails {
         )?;
         plain.serialize_field("network", &self.transaction.network)?;
         plain.serialize_field("flags", &self.transaction.flags)?;
+        plain.serialize_field("senderData", &self.transaction.sender_data)?;
         plain.serialize_field("data", &self.transaction.recipient_data)?;
         plain.serialize_field("proof", &self.transaction.proof)?;
         plain.serialize_field("size", &self.transaction.size)?;
