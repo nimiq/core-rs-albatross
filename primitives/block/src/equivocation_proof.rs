@@ -8,6 +8,7 @@ use nimiq_keys::{Address, PublicKey as SchnorrPublicKey, Signature as SchnorrSig
 use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_vrf::VrfSeed;
+use thiserror::Error;
 
 use crate::{MacroHeader, MicroHeader, TendermintIdentifier, TendermintVote};
 
@@ -49,6 +50,18 @@ impl EquivocationProof {
 impl From<ForkProof> for EquivocationProof {
     fn from(proof: ForkProof) -> EquivocationProof {
         EquivocationProof::Fork(proof)
+    }
+}
+
+impl From<DoubleProposalProof> for EquivocationProof {
+    fn from(proof: DoubleProposalProof) -> EquivocationProof {
+        EquivocationProof::DoubleProposal(proof)
+    }
+}
+
+impl From<DoubleVoteProof> for EquivocationProof {
+    fn from(proof: DoubleVoteProof) -> EquivocationProof {
+        EquivocationProof::DoubleVote(proof)
     }
 }
 
@@ -152,13 +165,19 @@ impl std::hash::Hash for ForkProof {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum EquivocationProofError {
+    #[error("Slot mismatch")]
     SlotMismatch,
+    #[error("No overlap between signer sets")]
     NoOverlap,
+    #[error("Invalid justification")]
     InvalidJustification,
+    #[error("Invalid validator address")]
     InvalidValidatorAddress,
+    #[error("Same header")]
     SameHeader,
+    #[error("Wrong order")]
     WrongOrder,
 }
 

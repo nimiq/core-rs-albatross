@@ -1,20 +1,25 @@
 use std::path::Path;
 
-use nimiq_block::{Block, BlockError};
+use nimiq_block::{Block, BlockError, DoubleProposalProof, EquivocationProofError, ForkProof};
 use nimiq_block_production::test_custom_block::{
     next_macro_block, next_micro_block, next_skip_block, BlockConfig,
 };
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{
-    AbstractBlockchain, PushError, PushError::InvalidBlock, PushResult,
+    AbstractBlockchain, PushError,
+    PushError::{InvalidBlock, InvalidEquivocationProof},
+    PushResult,
 };
-use nimiq_hash::{Blake2bHash, Blake2sHash};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
+use nimiq_keys::KeyPair;
 use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
+    test_rng::test_rng,
     zkp_test_data::{get_base_seed, simulate_merger_wrapper, ZKP_TEST_KEYS_PATH},
 };
+use nimiq_utils::key_rng::SecureGenerate;
 use nimiq_vrf::VrfSeed;
 use nimiq_zkp::ZKP_VERIFYING_KEY;
 
@@ -103,6 +108,7 @@ fn push_rebranch(config: &BlockConfig, expected_res: &Result<PushResult, PushErr
         Err(PushError::InvalidBlock(BlockError::InvalidSeed)) => {
             &Err(PushError::InvalidBlock(BlockError::InvalidSkipBlockProof))
         }
+        Err(PushError::InvalidEquivocationProof(_)) => &Ok(PushResult::Rebranched),
         _ => expected_res,
     };
 
@@ -412,6 +418,85 @@ fn it_validates_interlink() {
         },
         Err(InvalidBlock(BlockError::InvalidInterlink)),
     );
+}
+
+#[test]
+fn it_validates_fork_proofs() {
+    let mut rng = test_rng(true);
+
+    let signing_key = KeyPair::generate(&mut rng);
+
+    let header1 = TemporaryBlockProducer::new()
+        .next_block(vec![], false)
+        .unwrap_micro()
+        .header;
+    let mut header2 = header1.clone();
+    header2.timestamp += 1;
+    let header1_hash: Blake2bHash = header1.hash();
+    let header2_hash: Blake2bHash = header2.hash();
+    let justification1 = signing_key.sign(header1_hash.as_bytes());
+    let justification2 = signing_key.sign(header2_hash.as_bytes());
+
+    expect_push_micro_block(
+        BlockConfig {
+            equivocation_proofs: vec![ForkProof::new(
+                header1,
+                justification1,
+                header2,
+                justification2,
+                VrfSeed::default(),
+            )
+            .into()],
+            test_macro: false,
+            test_election: false,
+            ..Default::default()
+        },
+        Err(InvalidEquivocationProof(
+            EquivocationProofError::InvalidJustification,
+        )),
+    )
+}
+
+#[test]
+fn it_validates_double_proposal_proofs() {
+    let mut rng = test_rng(true);
+
+    let signing_key = KeyPair::generate(&mut rng);
+
+    let temp_producer = TemporaryBlockProducer::new();
+    for _ in 0..Policy::blocks_per_batch() - 1 {
+        temp_producer.next_block(vec![], false);
+    }
+    let header1 = temp_producer
+        .next_block(vec![], false)
+        .unwrap_macro()
+        .header;
+    let mut header2 = header1.clone();
+    header2.timestamp += 1;
+    let header1_hash: Blake2bHash = header1.hash();
+    let header2_hash: Blake2bHash = header2.hash();
+    let justification1 = signing_key.sign(header1_hash.as_bytes());
+    let justification2 = signing_key.sign(header2_hash.as_bytes());
+
+    expect_push_micro_block(
+        BlockConfig {
+            equivocation_proofs: vec![DoubleProposalProof::new(
+                header1,
+                justification1,
+                VrfSeed::default(),
+                header2,
+                justification2,
+                VrfSeed::default(),
+            )
+            .into()],
+            test_macro: false,
+            test_election: false,
+            ..Default::default()
+        },
+        Err(InvalidEquivocationProof(
+            EquivocationProofError::InvalidJustification,
+        )),
+    )
 }
 
 #[test]

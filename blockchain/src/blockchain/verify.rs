@@ -1,4 +1,4 @@
-use nimiq_block::{Block, BlockError, BlockHeader};
+use nimiq_block::{Block, BlockError, BlockHeader, EquivocationProof};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
 use nimiq_database::TransactionProxy as DBTransaction;
 
@@ -95,6 +95,9 @@ impl Blockchain {
 
             // Verify that the transactions in the block are valid.
             self.verify_transactions(block)?;
+
+            // Verify that the equivocation proofs are valid.
+            self.verify_equivocation_proofs(block, txn)?;
         }
 
         Ok(())
@@ -116,7 +119,6 @@ impl Blockchain {
     /// an account has enough funds).
     /// It receives a block as input but that block is only required to have a header (the body and
     /// justification are optional, we don't need them).
-    /// Macro block specific checks are done in `verify_macro_block_state`
     pub fn verify_block_state_post_commit(
         &self,
         state: &BlockchainState,
@@ -194,6 +196,48 @@ impl Blockchain {
             }
         }
 
+        Ok(())
+    }
+
+    pub fn verify_equivocation_proofs(
+        &self,
+        block: &Block,
+        txn: &DBTransaction,
+    ) -> Result<(), PushError> {
+        // We don't need to perform any checks if the given block is not a
+        // micro block as only micro blocks contain equivocation proofs.
+        let micro_block = match block {
+            Block::Macro(_) => return Ok(()),
+            Block::Micro(micro_block) => micro_block,
+        };
+
+        let body = micro_block
+            .body
+            .as_ref()
+            .expect("Block body must be present");
+
+        for equivocation_proof in &body.equivocation_proofs {
+            match equivocation_proof {
+                EquivocationProof::Fork(proof) => {
+                    let proposer_slot = self
+                        .get_proposer_for_fork_proof(proof, Some(txn))
+                        .expect("Couldn't calculate slot owner!");
+                    proof.verify(&proposer_slot.validator.signing_key)?;
+                }
+                EquivocationProof::DoubleProposal(proof) => {
+                    let proposer_slot = self
+                        .get_proposer_for_double_proposal_proof(proof, Some(txn))
+                        .expect("Couldn't calculate slot owner!");
+                    proof.verify(&proposer_slot.validator.signing_key)?;
+                }
+                EquivocationProof::DoubleVote(proof) => {
+                    let validators = self
+                        .get_validators_for_double_vote_proof(proof, Some(txn))
+                        .expect("Couldn't calculate validators");
+                    proof.verify(&validators)?;
+                }
+            }
+        }
         Ok(())
     }
 

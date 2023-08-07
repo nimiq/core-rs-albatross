@@ -93,12 +93,7 @@ impl Blockchain {
     ) -> Inherent {
         // Get the slot owner and slot number for this block number.
         let proposer_slot = self
-            .get_proposer_at(
-                fork_proof.block_number(),
-                fork_proof.block_number(),
-                fork_proof.prev_vrf_seed().entropy(),
-                txn_option,
-            )
+            .get_proposer_for_fork_proof(fork_proof, txn_option)
             .expect("Couldn't calculate slot owner!");
 
         // If the reporting block is in a new epoch, we check if the proposer is still a validator in this epoch
@@ -136,12 +131,7 @@ impl Blockchain {
     ) -> Inherent {
         // Get the slot owner and slot number for this block number.
         let proposer_slot = self
-            .get_proposer_at(
-                double_proposal_proof.block_number(),
-                double_proposal_proof.round(),
-                double_proposal_proof.prev_vrf_seed1().entropy(),
-                txn_option,
-            )
+            .get_proposer_for_double_proposal_proof(double_proposal_proof, txn_option)
             .expect("Couldn't calculate slot owner!");
 
         // If the reporting block is in a new epoch, we check if the proposer is still a validator in this epoch
@@ -178,12 +168,9 @@ impl Blockchain {
         double_vote_proof: &DoubleVoteProof,
         txn_option: Option<&db::TransactionProxy>,
     ) -> Inherent {
-        // Get the validator for this slot number.
+        // Get the validators for this epoch.
         let validators = self
-            .get_validators_for_epoch(
-                Policy::epoch_at(double_vote_proof.block_number()),
-                txn_option,
-            )
+            .get_validators_for_double_vote_proof(double_vote_proof, txn_option)
             .expect("Couldn't calculate validators");
         // `double_vote_proof.slot_number` is checked in `DoubleVoteProof::verify`.
         let validator = validators

@@ -1,3 +1,4 @@
+use nimiq_block::{DoubleProposalProof, DoubleVoteProof, ForkProof};
 use nimiq_blockchain_interface::BlockchainError;
 use nimiq_collections::BitSet;
 use nimiq_database::TransactionProxy;
@@ -95,6 +96,45 @@ impl Blockchain {
             band: slot_band,
             validator: validator.clone(),
         })
+    }
+
+    pub fn get_proposer_for_fork_proof(
+        &self,
+        fork_proof: &ForkProof,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Result<Slot, BlockchainError> {
+        self.get_proposer_at(
+            fork_proof.block_number(),
+            fork_proof.block_number(),
+            fork_proof.prev_vrf_seed().entropy(),
+            txn_option,
+        )
+    }
+
+    pub fn get_proposer_for_double_proposal_proof(
+        &self,
+        double_proposal_proof: &DoubleProposalProof,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Result<Slot, BlockchainError> {
+        self.get_proposer_at(
+            double_proposal_proof.block_number(),
+            double_proposal_proof.round(),
+            // It doesn't matter which VRF seed we choose, in the validation
+            // it will be checked that the validator has actually signed both.
+            double_proposal_proof.prev_vrf_seed1().entropy(),
+            txn_option,
+        )
+    }
+
+    pub fn get_validators_for_double_vote_proof(
+        &self,
+        double_vote_proof: &DoubleVoteProof,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Result<Validators, BlockchainError> {
+        self.get_validators_for_epoch(
+            Policy::epoch_at(double_vote_proof.block_number()),
+            txn_option,
+        )
     }
 
     fn compute_slot_number(offset: u32, vrf_entropy: VrfEntropy, disabled_slots: BitSet) -> u16 {
