@@ -199,9 +199,15 @@ impl Blockchain {
         // Correctly set flag for verifying the history root.
         let history_root = history_store
             .get_history_tree_root(Policy::epoch_at(main_chain.head.block_number()), None);
-        let can_verify_history = history_root
-            .map(|history_root| &history_root == main_chain.head.history_root())
-            .unwrap_or(false);
+        let can_verify_history = if main_chain.head.block_number() == Policy::genesis_block_number()
+        {
+            // We always can verify history for the genesis block
+            true
+        } else {
+            history_root
+                .map(|history_root| &history_root == main_chain.head.history_root())
+                .unwrap_or(false)
+        };
 
         // Load macro chain from store.
         let macro_chain_info = chain_store
