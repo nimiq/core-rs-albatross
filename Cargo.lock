@@ -3872,7 +3872,7 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-client"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#c57750dd6bb9a72d1db19e04827362d28fb02098"
+source = "git+https://github.com/nimiq/jsonrpc.git#33f8c09469db81f770d9b771b0716e9c89cd9c27"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -3886,14 +3886,14 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
- "tokio-tungstenite 0.19.0",
+ "tokio-tungstenite 0.20.0",
  "url",
 ]
 
 [[package]]
 name = "nimiq-jsonrpc-core"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#c57750dd6bb9a72d1db19e04827362d28fb02098"
+source = "git+https://github.com/nimiq/jsonrpc.git#33f8c09469db81f770d9b771b0716e9c89cd9c27"
 dependencies = [
  "log",
  "serde",
@@ -3904,7 +3904,7 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-derive"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#c57750dd6bb9a72d1db19e04827362d28fb02098"
+source = "git+https://github.com/nimiq/jsonrpc.git#33f8c09469db81f770d9b771b0716e9c89cd9c27"
 dependencies = [
  "darling 0.20.1",
  "heck",
@@ -3919,7 +3919,7 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-server"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#c57750dd6bb9a72d1db19e04827362d28fb02098"
+source = "git+https://github.com/nimiq/jsonrpc.git#33f8c09469db81f770d9b771b0716e9c89cd9c27"
 dependencies = [
  "async-trait",
  "bytes",
@@ -6782,14 +6782,14 @@ dependencies = [
 
 [[package]]
 name = "tokio-tungstenite"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec509ac96e9a0c43427c74f003127d953a265737636129424288d27cb5c4b12c"
+checksum = "2b2dbec703c26b00d74844519606ef15d09a7d6857860f84ad223dec002ddea2"
 dependencies = [
  "futures-util",
  "log",
  "tokio",
- "tungstenite 0.19.0",
+ "tungstenite 0.20.0",
 ]
 
 [[package]]
@@ -7128,9 +7128,9 @@ dependencies = [
 
 [[package]]
 name = "tungstenite"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15fba1a6d6bb030745759a9a2a588bfe8490fc8b4751a277db3a0be1c9ebbf67"
+checksum = "e862a1c4128df0112ab625f55cd5c934bcb4312ba80b39ae4b4835a3fd58e649"
 dependencies = [
  "byteorder",
  "bytes",
