@@ -600,9 +600,11 @@ impl AccountTransactionInteraction for StakingContract {
 
                 let staker = store.expect_staker(&staker_address)?;
 
+                self.can_remove_stake(&store, &staker, block_state.number)?;
+
                 reserved_balance.reserve_for(
                     &staker_address,
-                    staker.balance,
+                    staker.inactive_balance,
                     transaction.total_value(),
                 )
             }

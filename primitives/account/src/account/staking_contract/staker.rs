@@ -474,6 +474,41 @@ impl StakingContract {
         Ok(())
     }
 
+    pub(crate) fn can_remove_stake<S: StakingContractStoreReadOps>(
+        &self,
+        store: &S,
+        staker: &Staker,
+        block_number: u32,
+    ) -> Result<(), AccountError> {
+        // We only need to wait for the release time if stake is delegated.
+        if let Some(validator_address) = &staker.delegation {
+            // Fail if the release block height has not passed yet.
+            if let Some(inactive_release) = staker.inactive_release {
+                if block_number < inactive_release {
+                    debug!(
+                        ?staker.address,
+                        "Tried to remove stake while the inactive balance has not been released yet"
+                    );
+                    return Err(AccountError::InvalidForSender);
+                }
+            }
+
+            // Fail if validator is currently jailed.
+            if let Some(validator) = store.get_validator(validator_address) {
+                if let Some(jail_release) = validator.jail_release {
+                    if block_number < jail_release {
+                        debug!(
+                            ?staker.address,
+                            "Tried to remove stake that is currently delegated to a jailed validator"
+                        );
+                        return Err(AccountError::InvalidForSender);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Removes coins from a staker's balance. If the entire staker's balance is removed then the
     /// staker is deleted.
     pub fn remove_stake(
@@ -491,32 +526,7 @@ impl StakingContract {
         // `remove_staker_from_validator` needs the original balance intact.
         let new_balance = staker.inactive_balance.safe_sub(value)?;
 
-        // We only need to wait for the release time if stake is delegated.
-        if let Some(validator_address) = &staker.delegation {
-            // Fail if the release block height has not passed yet.
-            if let Some(inactive_release) = staker.inactive_release {
-                if block_number < inactive_release {
-                    debug!(
-                        ?staker_address,
-                        "Tried to remove stake while the inactive balance has not been released yet"
-                    );
-                    return Err(AccountError::InvalidForSender);
-                }
-            }
-
-            // Fail if validator is currently jailed.
-            if let Some(validator) = store.get_validator(validator_address) {
-                if let Some(jail_release) = validator.jail_release {
-                    if block_number < jail_release {
-                        debug!(
-                            ?staker_address,
-                            "Tried to remove stake that is currently delegated to a jailed validator"
-                        );
-                        return Err(AccountError::InvalidForSender);
-                    }
-                }
-            }
-        }
+        self.can_remove_stake(store, &staker, block_number)?;
 
         // All checks passed, not allowed to fail from here on!
 
