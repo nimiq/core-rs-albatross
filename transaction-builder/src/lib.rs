@@ -1001,12 +1001,13 @@ impl TransactionBuilder {
         key_pair: Option<&KeyPair>,
         staker_key_pair: &KeyPair,
         new_delegation: Option<Address>,
+        new_inactive_balance: Option<Coin>,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
-        recipient.update_staker(new_delegation);
+        recipient.update_staker(new_delegation, new_inactive_balance);
 
         let mut builder = Self::new();
         builder

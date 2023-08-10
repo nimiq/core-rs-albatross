@@ -254,6 +254,7 @@ pub trait ConsensusInterface {
         sender_wallet: Option<Address>,
         staker_wallet: Address,
         new_delegation: Option<Address>,
+        new_inactive_balance: Option<Coin>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error>;
@@ -263,6 +264,7 @@ pub trait ConsensusInterface {
         sender_wallet: Option<Address>,
         staker_wallet: Address,
         new_delegation: Option<Address>,
+        new_inactive_balance: Option<Coin>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;

@@ -71,6 +71,7 @@ fn it_can_create_staker_transactions() {
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateStaker {
             new_delegation: None,
+            new_inactive_balance: None,
             proof: Default::default(),
         },
         0,
@@ -80,6 +81,7 @@ fn it_can_create_staker_transactions() {
     let tx2 = TransactionBuilder::new_update_staker(
         Some(&key_pair),
         &key_pair,
+        None,
         None,
         100.try_into().unwrap(),
         1,
@@ -92,6 +94,7 @@ fn it_can_create_staker_transactions() {
     let tx2 = TransactionBuilder::new_update_staker(
         None,
         &key_pair,
+        None,
         None,
         100.try_into().unwrap(),
         1,

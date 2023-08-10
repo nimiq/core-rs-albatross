@@ -135,9 +135,14 @@ impl StakingRecipientBuilder {
 
     /// This method allows to change the delegation of a staker.
     /// It needs to be signed by the key pair corresponding to the staker address.
-    pub fn update_staker(&mut self, new_delegation: Option<Address>) -> &mut Self {
+    pub fn update_staker(
+        &mut self,
+        new_delegation: Option<Address>,
+        new_inactive_balance: Option<Coin>,
+    ) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::UpdateStaker {
             new_delegation,
+            new_inactive_balance,
             proof: Default::default(),
         });
         self

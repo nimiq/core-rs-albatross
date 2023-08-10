@@ -161,12 +161,22 @@ impl TransactionBuilder {
     pub fn new_update_staker(
         sender: &Address,
         new_delegation: &Address,
+        new_inactive_balance: Option<u64>,
         fee: Option<u64>,
         validity_start_height: u32,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
+        let new_inactive_balance = if let Some(new_inactive_balance) = new_inactive_balance {
+            Some(Coin::try_from(new_inactive_balance)?)
+        } else {
+            None
+        };
+
         let mut recipient = Recipient::new_staking_builder();
-        recipient.update_staker(Some(new_delegation.native_ref().clone()));
+        recipient.update_staker(
+            Some(new_delegation.native_ref().clone()),
+            new_inactive_balance,
+        );
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder

@@ -217,13 +217,15 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Updates the staker details. Right now you can only update the delegation.
-    /// Can only performed if there is no active stake.
+    /// Updates the staker details. Can update the delegation and the new inactive balance.
+    /// Can only be performed if there is no active stake or no delegation.
+    /// Inactive balance changes only take effect if the delegation can be updated.
     pub fn update_staker(
         &mut self,
         store: &mut StakingContractStoreWrite,
         staker_address: &Address,
-        delegation: Option<Address>,
+        new_delegation: Option<Address>,
+        new_inactive_balance: Option<Coin>,
         block_number: u32,
         tx_logger: &mut TransactionLog,
     ) -> Result<StakerReceipt, AccountError> {
@@ -231,7 +233,7 @@ impl StakingContract {
         let mut staker = store.expect_staker(staker_address)?;
 
         // Check that the delegated validator exists.
-        if let Some(new_validator_address) = &delegation {
+        if let Some(new_validator_address) = &new_delegation {
             store.expect_validator(new_validator_address)?;
         }
 
@@ -272,18 +274,24 @@ impl StakingContract {
             }
         }
 
-        // All checks passed, not allowed to fail from here on!
+        if let Some(new_inactive_balance) = new_inactive_balance {
+            // Fail if staker does not have sufficient funds.
+            let total_balance = staker.balance + staker.inactive_balance;
+            if total_balance < new_inactive_balance {
+                return Err(AccountError::InsufficientFunds {
+                    needed: new_inactive_balance,
+                    balance: total_balance,
+                });
+            }
+        }
 
-        // Create logs.
-        tx_logger.push_log(Log::UpdateStaker {
-            staker_address: staker_address.clone(),
-            old_validator_address: staker.delegation.clone(),
-            new_validator_address: delegation.clone(),
-        });
+        // All checks passed, not allowed to fail from here on!
 
         // Create the receipt.
         let receipt = StakerReceipt {
             delegation: staker.delegation.clone(),
+            active_balance: staker.balance,
+            inactive_release: staker.inactive_release,
         };
 
         // We allow updates only when the balance is zero (the staker's stake has been removed already)
@@ -294,13 +302,46 @@ impl StakingContract {
             self.unregister_staker_from_validator(store, validator_address);
         }
 
+        // Store old information for the log
+        let old_validator_address = staker.delegation.clone();
+        let old_active_balance = staker.balance;
+        let old_inactive_release = staker.inactive_release;
+
         // Update the staker's delegation.
-        staker.delegation = delegation;
+        staker.delegation = new_delegation;
+
+        if let Some(new_inactive_balance) = new_inactive_balance {
+            let total_balance = staker.balance + staker.inactive_balance;
+            let new_active_balance = total_balance - new_inactive_balance;
+
+            // Update the staker's balance.
+            staker.balance = new_active_balance;
+            staker.inactive_balance = new_inactive_balance;
+            staker.inactive_release = if new_inactive_balance.is_zero() {
+                None
+            } else {
+                // We release after the end of the reporting window.
+                Some(Policy::block_after_reporting_window(
+                    Policy::election_block_after(block_number),
+                ))
+            };
+        }
 
         // If we are now delegating to a validator we add ourselves to it.
         if let Some(validator_address) = &staker.delegation {
             self.register_staker_on_validator(store, validator_address, false);
         }
+
+        // Create log
+        tx_logger.push_log(Log::UpdateStaker {
+            staker_address: staker_address.clone(),
+            old_validator_address,
+            new_validator_address: staker.delegation.clone(),
+            old_active_balance,
+            new_active_balance: staker.balance,
+            old_inactive_release,
+            new_inactive_release: staker.inactive_release,
+        });
 
         // Update the staker entry.
         store.put_staker(staker_address, staker);
@@ -329,13 +370,24 @@ impl StakingContract {
             staker_address: staker_address.clone(),
             old_validator_address: receipt.delegation.clone(),
             new_validator_address: staker.delegation.clone(),
+            old_active_balance: receipt.active_balance,
+            new_active_balance: staker.balance,
+            old_inactive_release: receipt.inactive_release,
+            new_inactive_release: staker.inactive_release,
         });
 
         // Restore the previous delegation.
         staker.delegation = receipt.delegation;
+
         if let Some(validator_address) = &staker.delegation {
             self.register_staker_on_validator(store, validator_address, true);
         }
+
+        // Restore the previous balances
+        let total_balance = staker.balance + staker.inactive_balance;
+        staker.balance = receipt.active_balance;
+        staker.inactive_balance = total_balance - staker.balance;
+        staker.inactive_release = receipt.inactive_release;
 
         // Update the staker entry.
         store.put_staker(staker_address, staker);

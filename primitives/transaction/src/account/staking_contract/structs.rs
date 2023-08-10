@@ -74,6 +74,7 @@ pub enum IncomingStakingTransactionData {
     },
     UpdateStaker {
         new_delegation: Option<Address>,
+        new_inactive_balance: Option<Coin>,
         proof: SignatureProof,
     },
     SetInactiveStake {

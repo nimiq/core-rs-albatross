@@ -117,6 +117,10 @@ convert_receipt!(DeleteValidatorReceipt);
 pub struct StakerReceipt {
     // the delegation before this transaction is applied
     pub delegation: Option<Address>,
+    // the active balance before this transaction is applied
+    pub active_balance: Coin,
+    // the inactive release before this transaction is applied
+    pub inactive_release: Option<u32>,
 }
 convert_receipt!(StakerReceipt);
 

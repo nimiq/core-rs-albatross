@@ -61,7 +61,7 @@ pub enum TransactionCommand {
         /// The stake will be sent from this wallet. The sender wallet must be unlocked prior to this action.
         sender_wallet: Address,
 
-        /// The staker address. This wallet must be unlocked prior to this action.        
+        /// The staker address. This wallet must be unlocked prior to this action.
         staker_wallet: Address,
 
         /// Validator address to delegate stake to. If empty, no delegation will occur.
@@ -100,6 +100,10 @@ pub enum TransactionCommand {
         /// The new address for the delegation.
         #[clap(long)]
         new_delegation: Option<Address>,
+
+        /// The new inactive balance to set for the new delegation.
+        #[clap(long)]
+        new_inactive_balance: Option<Coin>,
 
         #[clap(flatten)]
         tx_commons: TxCommon,
@@ -415,6 +419,7 @@ impl HandleSubcommand for TransactionCommand {
                 sender_wallet,
                 staker_wallet,
                 new_delegation,
+                new_inactive_balance,
                 tx_commons,
             } => {
                 if tx_commons.dry {
@@ -424,6 +429,7 @@ impl HandleSubcommand for TransactionCommand {
                             sender_wallet,
                             staker_wallet,
                             new_delegation,
+                            new_inactive_balance,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
                         )
@@ -436,6 +442,7 @@ impl HandleSubcommand for TransactionCommand {
                             sender_wallet,
                             staker_wallet,
                             new_delegation,
+                            new_inactive_balance,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
                         )

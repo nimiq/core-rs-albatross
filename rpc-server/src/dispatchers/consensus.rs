@@ -643,6 +643,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         sender_wallet: Option<Address>,
         staker_wallet: Address,
         new_delegation: Option<Address>,
+        new_inactive_balance: Option<Coin>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error> {
@@ -655,6 +656,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             sender_key.as_ref(),
             &self.get_wallet_keypair(&staker_wallet)?,
             new_delegation,
+            new_inactive_balance,
             fee,
             self.validity_start_height(validity_start_height),
             self.get_network_id(),
@@ -671,6 +673,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         sender_wallet: Option<Address>,
         staker_wallet: Address,
         new_delegation: Option<Address>,
+        new_inactive_balance: Option<Coin>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
@@ -679,6 +682,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 sender_wallet,
                 staker_wallet,
                 new_delegation,
+                new_inactive_balance,
                 fee,
                 validity_start_height,
             )

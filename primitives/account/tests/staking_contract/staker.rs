@@ -385,6 +385,7 @@ fn update_staker_works() {
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateStaker {
             new_delegation: Some(other_validator_address.clone()),
+            new_inactive_balance: None,
             proof: SignatureProof::default(),
         },
         0,
@@ -417,6 +418,11 @@ fn update_staker_works() {
         Policy::block_after_reporting_window(Policy::election_block_after(2)),
         2,
     );
+
+    let staker = staking_contract
+        .get_staker(&data_store.read(&db_txn), &staker_address)
+        .expect("Staker should exist");
+
     let mut tx_logger = TransactionLog::empty();
     let receipt = staking_contract
         .commit_incoming_transaction(
@@ -429,6 +435,8 @@ fn update_staker_works() {
 
     let expected_receipt = StakerReceipt {
         delegation: Some(validator_address.clone()),
+        active_balance: staker.balance,
+        inactive_release: staker.inactive_release,
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
@@ -438,6 +446,10 @@ fn update_staker_works() {
             staker_address: staker_address.clone(),
             old_validator_address: Some(validator_address.clone()),
             new_validator_address: Some(other_validator_address.clone()),
+            old_active_balance: staker.balance,
+            new_active_balance: staker.balance,
+            old_inactive_release: staker.inactive_release,
+            new_inactive_release: staker.inactive_release,
         }]
     );
 
@@ -489,6 +501,7 @@ fn update_staker_works() {
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateStaker {
             new_delegation: Some(staker_address.clone()),
+            new_inactive_balance: None,
             proof: SignatureProof::default(),
         },
         0,
@@ -511,11 +524,16 @@ fn update_staker_works() {
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateStaker {
             new_delegation: None,
+            new_inactive_balance: None,
             proof: SignatureProof::default(),
         },
         0,
         &staker_keypair,
     );
+
+    let staker = staking_contract
+        .get_staker(&data_store.read(&db_txn), &staker_address)
+        .expect("Staker should exist");
 
     let mut tx_logger = TransactionLog::empty();
     let receipt = staking_contract
@@ -529,6 +547,8 @@ fn update_staker_works() {
 
     let expected_receipt = StakerReceipt {
         delegation: Some(other_validator_address.clone()),
+        active_balance: staker.balance,
+        inactive_release: staker.inactive_release,
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
@@ -538,6 +558,10 @@ fn update_staker_works() {
             staker_address: staker_address.clone(),
             old_validator_address: Some(other_validator_address.clone()),
             new_validator_address: None,
+            old_active_balance: staker.balance,
+            new_active_balance: staker.balance,
+            old_inactive_release: staker.inactive_release,
+            new_inactive_release: staker.inactive_release,
         }]
     );
 
@@ -582,12 +606,20 @@ fn update_staker_works() {
         )
         .expect("Failed to revert transaction");
 
+    let staker = staking_contract
+        .get_staker(&data_store.read(&db_txn), &staker_address)
+        .expect("Staker should exist");
+
     assert_eq!(
         tx_logger.logs,
         vec![Log::UpdateStaker {
             staker_address: staker_address.clone(),
             old_validator_address: Some(other_validator_address.clone()),
             new_validator_address: None,
+            old_active_balance: staker.balance,
+            new_active_balance: staker.balance,
+            old_inactive_release: staker.inactive_release,
+            new_inactive_release: staker.inactive_release,
         }]
     );
 
@@ -614,6 +646,7 @@ fn update_staker_works() {
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateStaker {
             new_delegation: None,
+            new_inactive_balance: None,
             proof: SignatureProof::default(),
         },
         0,
@@ -663,6 +696,7 @@ fn update_staker_same_validator() {
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateStaker {
             new_delegation: Some(validator_address.clone()),
+            new_inactive_balance: None,
             proof: SignatureProof::default(),
         },
         0,
@@ -696,6 +730,8 @@ fn update_staker_same_validator() {
 
     let expected_receipt = StakerReceipt {
         delegation: Some(validator_address.clone()),
+        active_balance: Coin::ZERO,
+        inactive_release: Some(block_state.number),
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
@@ -705,6 +741,10 @@ fn update_staker_same_validator() {
             staker_address: staker_address.clone(),
             old_validator_address: Some(validator_address.clone()),
             new_validator_address: Some(validator_address.clone()),
+            old_active_balance: Coin::ZERO,
+            new_active_balance: Coin::ZERO,
+            old_inactive_release: Some(block_state.number),
+            new_inactive_release: Some(block_state.number),
         }]
     );
 
@@ -759,6 +799,10 @@ fn update_staker_same_validator() {
             staker_address: staker_address.clone(),
             old_validator_address: Some(validator_address.clone()),
             new_validator_address: Some(validator_address.clone()),
+            old_active_balance: Coin::ZERO,
+            new_active_balance: Coin::ZERO,
+            old_inactive_release: Some(block_state.number),
+            new_inactive_release: Some(block_state.number),
         }]
     );
 
@@ -1332,6 +1376,7 @@ fn update_staker_jail_interaction() {
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateStaker {
             new_delegation: Some(other_validator_address.clone()),
+            new_inactive_balance: None,
             proof: SignatureProof::default(),
         },
         0,
@@ -1447,6 +1492,7 @@ fn can_only_redelegate_after_release() {
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateStaker {
             new_delegation: Some(other_validator_address.clone()),
+            new_inactive_balance: None,
             proof: SignatureProof::default(),
         },
         0,
@@ -1521,6 +1567,7 @@ fn cannot_redelegate_while_having_active_stake() {
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateStaker {
             new_delegation: Some(other_validator_address.clone()),
+            new_inactive_balance: None,
             proof: SignatureProof::default(),
         },
         0,

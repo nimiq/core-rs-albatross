@@ -558,6 +558,7 @@ fn update_staker() {
     let mut tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::UpdateStaker {
             new_delegation: Some(VALIDATOR_ADDRESS.parse().unwrap()),
+            new_inactive_balance: None,
             proof: SignatureProof::default(),
         },
         0,
@@ -565,8 +566,8 @@ fn update_staker() {
         None,
     );
 
-    let tx_hex = "018c551fabc6e6e00c609c3f0313257ad7e835643c000000000000000000000000000000000000000000010377070183fa05dbe31f85e719f4c4fd67ebdba2e444d9f8b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500912d064ba2b1497656f34918ba0f1e4c005269dac08867f7b96c3b259372dd808b8f4b72fbfe582054424dba778f8f2fad73f0751d62afcf6b1922d5d8e825030000000000000000000000000000006400000001040261b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd91050002380c4c37062c8c753fd7993c50c8cbb67b58e9c4c78e4d1873aeb0fc1810c4428fe4748658bf22ceb965b14c4734543b8f771928bf5a5802d50e0c3be39509";
-    let tx_size = 284;
+    let tx_hex = "018c551fabc6e6e00c609c3f0313257ad7e835643c000000000000000000000000000000000000000000010378070183fa05dbe31f85e719f4c4fd67ebdba2e444d9f800b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500ae3042a470b6b3f63e3d8d6d628d7150747b22cb4124725de2e4a5ef7802d7228a77450dace2445885284a7c39a15699be76c99232d4defd733bc5e65015650d0000000000000000000000000000006400000001040261b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500c3ac6a608156ce6044a1f48b5c0d0fd58a794a5ab0e4a79f952a27ae52233e91771762dce7cb2f92382fcae6946ebf711dc5482698f56ad511ad81f3f80aa308";
+    let tx_size = 285;
 
     let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
     assert_eq!(tx_size, tx.serialized_size());
@@ -593,6 +594,7 @@ fn update_staker() {
     let tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::UpdateStaker {
             new_delegation: None,
+            new_inactive_balance: None,
             proof: SignatureProof::default(),
         },
         0,
