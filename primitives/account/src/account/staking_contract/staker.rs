@@ -380,6 +380,9 @@ impl StakingContract {
             if new_active_balance.is_zero() {
                 self.remove_staker_from_validator(store, &staker)
                     .expect("inconsistent contract state");
+            } else if old_active_balance.is_zero() {
+                self.add_staker_to_validator(store, &staker)
+                    .expect("inconsistent contract state");
             } else {
                 self.update_stake_for_validator(
                     store,
@@ -447,6 +450,9 @@ impl StakingContract {
             // If the staker has previously been removed, we add it back.
             if old_balance.is_zero() {
                 self.add_staker_to_validator(store, &staker)
+                    .expect("inconsistent contract state");
+            } else if staker.balance.is_zero() {
+                self.remove_staker_from_validator(store, &staker)
                     .expect("inconsistent contract state");
             } else {
                 // Update the active stake of the validator.
