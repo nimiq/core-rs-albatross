@@ -68,7 +68,8 @@ init().then(async () => {
                 BigInt(fee),
                 await client.getHeadHeight(),
                 await client.getNetworkId(),
-            ).sign(keyPair);
+            );
+            transaction.sign(keyPair);
         } else {
             transaction = Nimiq.TransactionBuilder.newBasic(
                 keyPair.toAddress(),
@@ -77,7 +78,8 @@ init().then(async () => {
                 BigInt(fee),
                 await client.getHeadHeight(),
                 await client.getNetworkId(),
-            ).sign(keyPair);
+            );
+            transaction.sign(keyPair);
         }
 
         return client.sendTransaction(transaction.toHex());
@@ -104,7 +106,8 @@ init().then(async () => {
             BigInt(fee),
             await client.getHeadHeight(),
             await client.getNetworkId(),
-        ).sign(keyPair);
+        );
+        transaction.sign(keyPair);
 
         return client.sendTransaction(transaction.toHex());
     }
@@ -128,7 +131,8 @@ init().then(async () => {
             BigInt(fee),
             await client.getHeadHeight(),
             await client.getNetworkId(),
-        ).sign(keyPair);
+        );
+        transaction.sign(keyPair);
 
         return client.sendTransaction(transaction.toHex());
     }
@@ -152,7 +156,8 @@ init().then(async () => {
             BigInt(fee),
             await client.getHeadHeight(),
             await client.getNetworkId(),
-        ).sign(keyPair);
+        );
+        transaction.sign(keyPair);
 
         return client.sendTransaction(transaction.toHex());
     }

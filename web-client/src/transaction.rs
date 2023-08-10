@@ -140,12 +140,11 @@ impl Transaction {
     ///
     /// ### Limitations
     /// - HTLC redemption is not supported and will throw.
-    /// - Validator deletion transactions are not and cannot be supported.
     /// - For transaction to the staking contract, both signatures are made with the same keypair,
     ///   so it is not possible to interact with a staker that is different from the sender address
     ///   or using a different cold or signing key for validator transactions.
     #[cfg(feature = "primitives")]
-    pub fn sign(&self, key_pair: &KeyPair) -> Result<Transaction, JsError> {
+    pub fn sign(&mut self, key_pair: &KeyPair) -> Result<(), JsError> {
         let proof_builder = TransactionProofBuilder::new(self.native_ref().clone());
         let signed_transaction = match proof_builder {
             TransactionProofBuilder::Basic(mut builder) => {
@@ -196,7 +195,9 @@ impl Transaction {
             }
         };
 
-        Ok(Transaction::from_native(signed_transaction))
+        self.set_proof(signed_transaction.proof);
+
+        Ok(())
     }
 
     /// Computes the transaction's hash, which is used as its unique identifier on the blockchain.
