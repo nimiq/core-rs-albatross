@@ -639,14 +639,13 @@ fn update_staker_same_validator() {
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
-    let mut db_txn_og = env.write_transaction();
-    let mut db_txn = (&mut db_txn_og).into();
+    let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
+    let (validator_address, staker_address, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), Some(150_000_000));
+    let staker_address = staker_address.unwrap();
     let staker_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
-    let staker_address = staker_address();
-    let validator_address = validator_address();
 
     // Deactivate stake.
     let deactivate_tx = make_deactivate_stake_transaction(150_000_000);
@@ -1749,74 +1748,6 @@ fn can_update_inactive_balance() {
 }
 
 #[test]
-fn can_reserve_balance() {
-    // -----------------------------------
-    // Test setup:
-    // -----------------------------------
-    let staker_setup =
-        StakerSetup::setup_staker_with_inactive_balance(false, 40_000_000, 60_000_000);
-    let data_store = staker_setup
-        .accounts
-        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let mut db_txn = staker_setup.env.write_transaction();
-    let mut db_txn = (&mut db_txn).into();
-    let _write = data_store.write(&mut db_txn);
-
-    // -----------------------------------
-    // Test execution:
-    // -----------------------------------
-    // Can reserve balance for unstake.
-    let mut reserved_balance = ReservedBalance::new(staker_setup.staker_address);
-
-    let tx = make_unstake_transaction(50_000_000);
-    let result = staker_setup.staking_contract.reserve_balance(
-        &tx,
-        &mut reserved_balance,
-        &staker_setup.inactive_release_block_state,
-        data_store.read(&mut db_txn),
-    );
-    assert_eq!(
-        reserved_balance.balance(),
-        Coin::from_u64_unchecked(50_000_000)
-    );
-    assert!(result.is_ok());
-
-    // Can reserve balance for unstake of the remainder.
-    let tx = make_unstake_transaction(10_000_000);
-    let result = staker_setup.staking_contract.reserve_balance(
-        &tx,
-        &mut reserved_balance,
-        &staker_setup.inactive_release_block_state,
-        data_store.read(&mut db_txn),
-    );
-    assert_eq!(
-        reserved_balance.balance(),
-        Coin::from_u64_unchecked(60_000_000)
-    );
-    assert!(result.is_ok());
-
-    // Cannot reserve balance for further unstake transactions.
-    let tx = make_unstake_transaction(10_000_000);
-    let result = staker_setup.staking_contract.reserve_balance(
-        &tx,
-        &mut reserved_balance,
-        &staker_setup.inactive_release_block_state,
-        data_store.read(&mut db_txn),
-    );
-    assert_eq!(
-        reserved_balance.balance(),
-        Coin::from_u64_unchecked(60_000_000)
-    );
-    assert_eq!(
-        result,
-        Err(AccountError::InsufficientFunds {
-            needed: Coin::from_u64_unchecked(70_000_000),
-            balance: Coin::from_u64_unchecked(60_000_000)
-        })
-    );
-}
-
-#[test]
 fn can_reserve_and_release_balance() {
     // -----------------------------------
     // Test setup:
@@ -1831,9 +1762,26 @@ fn can_reserve_and_release_balance() {
     let _write = data_store.write(&mut db_txn);
 
     // Reserve balance for unstake.
-    let mut reserved_balance = ReservedBalance::new(staker_setup.staker_address);
+    let mut reserved_balance = ReservedBalance::new(staker_setup.staker_address.clone());
 
-    let tx = make_unstake_transaction(60_000_000);
+    let tx = make_unstake_transaction(50_000_000);
+    let result = staker_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &staker_setup.inactive_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(
+        reserved_balance.balance(),
+        Coin::from_u64_unchecked(50_000_000)
+    );
+    assert!(result.is_ok());
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Reserves the remaining stake.
+    let tx = make_unstake_transaction(10_000_000);
     let result = staker_setup.staking_contract.reserve_balance(
         &tx,
         &mut reserved_balance,
@@ -1846,9 +1794,6 @@ fn can_reserve_and_release_balance() {
     );
     assert!(result.is_ok());
 
-    // -----------------------------------
-    // Test execution:
-    // -----------------------------------
     // Cannot reserve balance for further unstake transactions.
     let tx = make_unstake_transaction(10_000_000);
     let result = staker_setup.staking_contract.reserve_balance(

@@ -2546,57 +2546,6 @@ fn jail_and_penalize_and_revert_twice() {
 }
 
 #[test]
-fn can_reserve_balance() {
-    // -----------------------------------
-    // Test setup:
-    // -----------------------------------
-    let retired_setup = ValidatorSetup::setup_retired_validator(None);
-    let data_store = retired_setup
-        .accounts
-        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let mut db_txn = retired_setup.env.write_transaction();
-    let mut db_txn = (&mut db_txn).into();
-    let _write = data_store.write(&mut db_txn);
-
-    // -----------------------------------
-    // Test execution:
-    // -----------------------------------
-    // Can reserve balance for delete validator transaction.
-    let mut reserved_balance = ReservedBalance::new(retired_setup.validator_address);
-    let tx = make_delete_validator_transaction();
-    let result = retired_setup.staking_contract.reserve_balance(
-        &tx,
-        &mut reserved_balance,
-        &retired_setup.state_release_block_state,
-        data_store.read(&mut db_txn),
-    );
-    assert_eq!(
-        reserved_balance.balance(),
-        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
-    );
-    assert!(result.is_ok());
-
-    // Cannot reserve balance for further unstake transactions.
-    let result = retired_setup.staking_contract.reserve_balance(
-        &tx,
-        &mut reserved_balance,
-        &retired_setup.state_release_block_state,
-        data_store.read(&mut db_txn),
-    );
-    assert_eq!(
-        reserved_balance.balance(),
-        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
-    );
-    assert_eq!(
-        result,
-        Err(AccountError::InsufficientFunds {
-            needed: Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT * 2),
-            balance: Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
-        })
-    );
-}
-
-#[test]
 fn can_reserve_and_release_balance() {
     // -----------------------------------
     // Test setup:
@@ -2609,7 +2558,7 @@ fn can_reserve_and_release_balance() {
     let mut db_txn = (&mut db_txn).into();
     let _write = data_store.write(&mut db_txn);
 
-    // Reserve balance for unstake.
+    // Reserve balance for delete validator tx.
     let mut reserved_balance = ReservedBalance::new(retired_setup.validator_address.clone());
 
     let tx = make_delete_validator_transaction();
@@ -2629,7 +2578,7 @@ fn can_reserve_and_release_balance() {
     // -----------------------------------
     // Test execution:
     // -----------------------------------
-    // Cannot reserve balance for further unstake transactions.
+    // Cannot reserve balance for further delete validator txs.
     let result = retired_setup.staking_contract.reserve_balance(
         &tx,
         &mut reserved_balance,
@@ -2657,7 +2606,7 @@ fn can_reserve_and_release_balance() {
     assert_eq!(reserved_balance.balance(), Coin::ZERO);
     assert!(result.is_ok());
 
-    // Can reserve balance for unstake of the remainder.
+    // Can reserve balance for delete validator tx after release.
     let result = retired_setup.staking_contract.reserve_balance(
         &tx,
         &mut reserved_balance,

@@ -1,8 +1,8 @@
 use std::convert::TryInto;
 
 use nimiq_account::{
-    Account, Accounts, BasicAccount, BlockLogger, BlockState, Log, TransactionLog,
-    TransactionOperationReceipt, TransactionReceipt,
+    Account, AccountTransactionInteraction, Accounts, BasicAccount, BlockLogger, BlockState, Log,
+    ReservedBalance, TransactionLog, TransactionOperationReceipt, TransactionReceipt,
 };
 use nimiq_database::traits::Database;
 use nimiq_keys::{Address, KeyPair, PrivateKey, SecureGenerate};
@@ -15,6 +15,57 @@ use nimiq_test_utils::{
 use nimiq_transaction::{SignatureProof, Transaction};
 
 const SECRET_KEY_1: &str = "d0fbb3690f5308f457e245a3cc65ae8d6945155eadcac60d489ffc5583a60b9b";
+
+fn init_tree() -> (TestCommitRevert, KeyPair, KeyPair) {
+    let accounts = TestCommitRevert::new();
+    let generator = TransactionsGenerator::new(
+        Accounts::new(accounts.env.clone()),
+        NetworkId::UnitAlbatross,
+        test_rng(true),
+    );
+
+    let mut rng = test_rng(true);
+
+    let key_1 = KeyPair::generate(&mut rng);
+    generator.put_account(
+        &Address::from(&key_1),
+        Account::Basic(BasicAccount {
+            balance: Coin::from_u64_unchecked(1000),
+        }),
+    );
+
+    let key_2 = KeyPair::generate(&mut rng);
+    generator.put_account(
+        &Address::from(&key_2),
+        Account::Basic(BasicAccount {
+            balance: Coin::from_u64_unchecked(1000),
+        }),
+    );
+
+    (accounts, key_1, key_2)
+}
+
+fn make_signed_transaction(value: u64, sender: Address, recipient: Address) -> Transaction {
+    let mut tx = Transaction::new_basic(
+        sender,
+        recipient,
+        value.try_into().unwrap(),
+        1.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    );
+
+    let key_pair = KeyPair::from(
+        PrivateKey::deserialize_from_vec(&hex::decode(SECRET_KEY_1).unwrap()).unwrap(),
+    );
+
+    let proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content()))
+        .serialize_to_vec();
+
+    tx.proof = proof;
+
+    tx
+}
 
 #[test]
 fn basic_transfer_works() {
@@ -150,53 +201,80 @@ fn create_and_prune_works() {
     );
 }
 
-fn init_tree() -> (TestCommitRevert, KeyPair, KeyPair) {
-    let accounts = TestCommitRevert::new();
-    let generator = TransactionsGenerator::new(
-        Accounts::new(accounts.env.clone()),
-        NetworkId::UnitAlbatross,
-        test_rng(true),
+#[test]
+fn reserve_release_balance_works() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let (accounts, key_1, key_2) = init_tree();
+
+    let sender_address = Address::from(&key_1);
+    let recipient_address = Address::from(&key_2);
+
+    let mut db_txn = accounts.env().write_transaction();
+    let sender_account = accounts.get_complete(&sender_address, Some(&db_txn));
+    let data_store = accounts.data_store(&sender_address);
+
+    let block_state = BlockState::new(1, 2);
+
+    let mut reserved_balance = ReservedBalance::new(sender_address.clone());
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Works in the normal case.
+    let tx = make_signed_transaction(100, sender_address.clone(), recipient_address.clone());
+
+    let result = sender_account.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(101));
+    assert!(result.is_ok());
+
+    // Reserve the remaining
+    let tx = make_signed_transaction(898, sender_address.clone(), recipient_address.clone());
+    let result = sender_account.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(1000));
+    assert!(result.is_ok());
+
+    // Doesn't work when there is not enough avl reserve.
+    let tx = make_signed_transaction(1, sender_address.clone(), recipient_address.clone());
+    let result = sender_account.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(1000));
+    assert_eq!(
+        result,
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(1002),
+            balance: Coin::from_u64_unchecked(1000)
+        })
     );
 
-    let mut rng = test_rng(true);
+    // Can release and reserve again.
+    let tx = make_signed_transaction(100, sender_address.clone(), recipient_address.clone());
+    let result =
+        sender_account.release_balance(&tx, &mut reserved_balance, data_store.read(&mut db_txn));
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(899));
+    assert!(result.is_ok());
 
-    let key_1 = KeyPair::generate(&mut rng);
-    generator.put_account(
-        &Address::from(&key_1),
-        Account::Basic(BasicAccount {
-            balance: Coin::from_u64_unchecked(1000),
-        }),
+    let tx = make_signed_transaction(100, sender_address.clone(), recipient_address.clone());
+    let result = sender_account.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &block_state,
+        data_store.read(&mut db_txn),
     );
-
-    let key_2 = KeyPair::generate(&mut rng);
-    generator.put_account(
-        &Address::from(&key_2),
-        Account::Basic(BasicAccount {
-            balance: Coin::from_u64_unchecked(1000),
-        }),
-    );
-
-    (accounts, key_1, key_2)
-}
-
-fn make_signed_transaction(value: u64, sender: Address, recipient: Address) -> Transaction {
-    let mut tx = Transaction::new_basic(
-        sender,
-        recipient,
-        value.try_into().unwrap(),
-        1.try_into().unwrap(),
-        1,
-        NetworkId::UnitAlbatross,
-    );
-
-    let key_pair = KeyPair::from(
-        PrivateKey::deserialize_from_vec(&hex::decode(SECRET_KEY_1).unwrap()).unwrap(),
-    );
-
-    let proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content()))
-        .serialize_to_vec();
-
-    tx.proof = proof;
-
-    tx
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(1000));
+    assert!(result.is_ok());
 }

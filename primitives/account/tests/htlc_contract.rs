@@ -1,9 +1,10 @@
 use std::convert::TryInto;
 
 use nimiq_account::{
-    Account, AccountPruningInteraction, Accounts, BasicAccount, BlockState,
-    HashedTimeLockedContract, Log, TransactionLog,
+    Account, AccountPruningInteraction, AccountTransactionInteraction, Accounts, BasicAccount,
+    BlockState, HashedTimeLockedContract, Log, ReservedBalance, TransactionLog,
 };
+use nimiq_database::traits::Database;
 use nimiq_hash::{Blake2bHasher, HashOutput, Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey, SecureGenerate};
 use nimiq_primitives::{
@@ -24,6 +25,101 @@ use nimiq_transaction::{
 };
 
 const HTLC: &str = "00000000000000001b215589344cf570d36bec770825eae30b73213924786862babbdb05e7c4430612135eb2a836812303daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f0100000000000296350000000000000001";
+
+fn prepare_outgoing_transaction() -> (
+    HashedTimeLockedContract,
+    Transaction,
+    PreImage,
+    SignatureProof,
+    SignatureProof,
+) {
+    let sender_priv_key: PrivateKey = Deserialize::deserialize_from_vec(
+        &hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap(),
+    )
+    .unwrap();
+    let recipient_priv_key: PrivateKey = Deserialize::deserialize_from_vec(
+        &hex::decode("bd1cfcd49a81048c8c8d22a25766bd01bfa0f6b2eb0030f65241189393af96a2").unwrap(),
+    )
+    .unwrap();
+
+    let sender_key_pair = KeyPair::from(sender_priv_key);
+    let recipient_key_pair = KeyPair::from(recipient_priv_key);
+    let sender = Address::from(&sender_key_pair.public);
+    let recipient = Address::from(&recipient_key_pair.public);
+    let pre_image = PreImage::PreImage32(AnyHash32::from([1u8; 32]));
+    let hash_root = AnyHash::from(
+        Blake2bHasher::default().digest(
+            Blake2bHasher::default()
+                .digest(pre_image.as_bytes())
+                .as_bytes(),
+        ),
+    );
+
+    let htlc = HashedTimeLockedContract {
+        balance: 1000.try_into().unwrap(),
+        sender,
+        recipient,
+        hash_root,
+        hash_count: 2,
+        timeout: 100,
+        total_amount: 1000.try_into().unwrap(),
+    };
+
+    let tx = Transaction::new_contract_creation(
+        Address::from([0u8; 20]),
+        AccountType::HTLC,
+        vec![],
+        AccountType::Basic,
+        vec![],
+        1000.try_into().unwrap(),
+        0.try_into().unwrap(),
+        1,
+        NetworkId::UnitAlbatross,
+    );
+
+    let sender_signature = sender_key_pair.sign(&tx.serialize_content()[..]);
+    let recipient_signature = recipient_key_pair.sign(&tx.serialize_content()[..]);
+    let sender_signature_proof = SignatureProof::from(sender_key_pair.public, sender_signature);
+    let recipient_signature_proof =
+        SignatureProof::from(recipient_key_pair.public, recipient_signature);
+
+    (
+        htlc,
+        tx,
+        pre_image,
+        sender_signature_proof,
+        recipient_signature_proof,
+    )
+}
+
+fn init_tree() -> (TestCommitRevert, KeyPair, KeyPair) {
+    let accounts = TestCommitRevert::new();
+    let generator = TransactionsGenerator::new(
+        Accounts::new(accounts.env.clone()),
+        NetworkId::UnitAlbatross,
+        test_rng(true),
+    );
+
+    let mut rng = test_rng(true);
+
+    let key_1 = KeyPair::generate(&mut rng);
+    generator.put_account(
+        &Address::from(&key_1),
+        Account::Basic(BasicAccount {
+            balance: Coin::from_u64_unchecked(1000),
+        }),
+    );
+
+    let key_2 = KeyPair::generate(&mut rng);
+    generator.put_account(
+        &Address::from(&key_2),
+        Account::Basic(BasicAccount {
+            balance: Coin::from_u64_unchecked(1000),
+        }),
+    );
+
+    (accounts, key_1, key_2)
+}
 
 // This function is used to create the HTLC constant above.
 #[test]
@@ -302,19 +398,19 @@ fn it_can_apply_and_revert_timeout_resolve() {
 fn it_refuses_invalid_transactions() {
     let (accounts, _key_1, _key_2) = init_tree();
 
-    let (start_contract, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) =
+    let (htlc, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) =
         prepare_outgoing_transaction();
 
     // regular transfer: timeout passed
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
         hash_depth: 2,
-        hash_root: start_contract.hash_root.clone(),
+        hash_root: htlc.hash_root.clone(),
         pre_image: pre_image.clone(),
         signature_proof: recipient_signature_proof.clone(),
     };
     tx.proof = proof.serialize_to_vec();
 
-    let mut htlc = start_contract.clone();
+    let mut htlc = htlc.clone();
 
     let block_state = BlockState::new(1, 101);
 
@@ -354,7 +450,7 @@ fn it_refuses_invalid_transactions() {
     // regular transfer: invalid signature
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
         hash_depth: 2,
-        hash_root: start_contract.hash_root.clone(),
+        hash_root: htlc.hash_root.clone(),
         pre_image: pre_image.clone(),
         signature_proof: sender_signature_proof.clone(),
     };
@@ -374,7 +470,7 @@ fn it_refuses_invalid_transactions() {
     // regular transfer: underflow
     let proof = OutgoingHTLCTransactionProof::RegularTransfer {
         hash_depth: 1,
-        hash_root: start_contract.hash_root,
+        hash_root: htlc.hash_root.clone(),
         pre_image: PreImage::from(Blake2bHasher::default().digest(pre_image.as_bytes())),
         signature_proof: recipient_signature_proof.clone(),
     };
@@ -452,97 +548,70 @@ fn it_refuses_invalid_transactions() {
     assert_eq!(result, Err(AccountError::InvalidSignature));
 }
 
-fn prepare_outgoing_transaction() -> (
-    HashedTimeLockedContract,
-    Transaction,
-    PreImage,
-    SignatureProof,
-    SignatureProof,
-) {
-    let sender_priv_key: PrivateKey = Deserialize::deserialize_from_vec(
-        &hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap(),
-    )
-    .unwrap();
-    let recipient_priv_key: PrivateKey = Deserialize::deserialize_from_vec(
-        &hex::decode("bd1cfcd49a81048c8c8d22a25766bd01bfa0f6b2eb0030f65241189393af96a2").unwrap(),
-    )
-    .unwrap();
+#[test]
+fn reserve_release_balance_works() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let (accounts, key_1, _key_2) = init_tree();
+    let (htlc, mut tx, pre_image, _sender_signature_proof, recipient_signature_proof) =
+        prepare_outgoing_transaction();
 
-    let sender_key_pair = KeyPair::from(sender_priv_key);
-    let recipient_key_pair = KeyPair::from(recipient_priv_key);
-    let sender = Address::from(&sender_key_pair.public);
-    let recipient = Address::from(&recipient_key_pair.public);
-    let pre_image = PreImage::PreImage32(AnyHash32::from([1u8; 32]));
-    let hash_root = AnyHash::from(
-        Blake2bHasher::default().digest(
-            Blake2bHasher::default()
-                .digest(pre_image.as_bytes())
-                .as_bytes(),
-        ),
-    );
+    let mut db_txn = accounts.env().write_transaction();
+    let sender_address = Address::from(&key_1);
+    let data_store = accounts.data_store(&sender_address);
 
-    let start_contract = HashedTimeLockedContract {
-        balance: 1000.try_into().unwrap(),
-        sender,
-        recipient,
-        hash_root,
-        hash_count: 2,
-        timeout: 100,
-        total_amount: 1000.try_into().unwrap(),
+    // regular transfer
+    let proof = OutgoingHTLCTransactionProof::RegularTransfer {
+        hash_depth: 2,
+        hash_root: htlc.hash_root.clone(),
+        pre_image: pre_image.clone(),
+        signature_proof: recipient_signature_proof,
     };
+    tx.proof = proof.serialize_to_vec();
+    let block_state = BlockState::new(2, 100);
 
-    let tx = Transaction::new_contract_creation(
-        Address::from([0u8; 20]),
-        AccountType::HTLC,
-        vec![],
-        AccountType::Basic,
-        vec![],
-        1000.try_into().unwrap(),
-        0.try_into().unwrap(),
-        1,
-        NetworkId::UnitAlbatross,
+    let mut reserved_balance = ReservedBalance::new(sender_address.clone());
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Works in the normal case.
+    let result = htlc.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(1000));
+    assert!(result.is_ok());
+
+    // Doesn't work when there is not enough avl reserve.
+    let result = htlc.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(1000));
+    assert_eq!(
+        result,
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(2000),
+            balance: Coin::from_u64_unchecked(1000)
+        })
     );
 
-    let sender_signature = sender_key_pair.sign(&tx.serialize_content()[..]);
-    let recipient_signature = recipient_key_pair.sign(&tx.serialize_content()[..]);
-    let sender_signature_proof = SignatureProof::from(sender_key_pair.public, sender_signature);
-    let recipient_signature_proof =
-        SignatureProof::from(recipient_key_pair.public, recipient_signature);
+    // Can release and reserve again.
+    let result = htlc.release_balance(&tx, &mut reserved_balance, data_store.read(&mut db_txn));
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(0));
+    assert!(result.is_ok());
 
-    (
-        start_contract,
-        tx,
-        pre_image,
-        sender_signature_proof,
-        recipient_signature_proof,
-    )
-}
-
-fn init_tree() -> (TestCommitRevert, KeyPair, KeyPair) {
-    let accounts = TestCommitRevert::new();
-    let generator = TransactionsGenerator::new(
-        Accounts::new(accounts.env.clone()),
-        NetworkId::UnitAlbatross,
-        test_rng(true),
+    let result = htlc.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &block_state,
+        data_store.read(&mut db_txn),
     );
-
-    let mut rng = test_rng(true);
-
-    let key_1 = KeyPair::generate(&mut rng);
-    generator.put_account(
-        &Address::from(&key_1),
-        Account::Basic(BasicAccount {
-            balance: Coin::from_u64_unchecked(1000),
-        }),
-    );
-
-    let key_2 = KeyPair::generate(&mut rng);
-    generator.put_account(
-        &Address::from(&key_2),
-        Account::Basic(BasicAccount {
-            balance: Coin::from_u64_unchecked(1000),
-        }),
-    );
-
-    (accounts, key_1, key_2)
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(1000));
+    assert!(result.is_ok());
 }

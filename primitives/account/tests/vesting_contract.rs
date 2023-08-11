@@ -1,8 +1,10 @@
 use std::convert::{TryFrom, TryInto};
 
 use nimiq_account::{
-    Account, Accounts, BasicAccount, BlockState, Log, TransactionLog, VestingContract,
+    Account, AccountTransactionInteraction, BasicAccount, BlockState, Log, ReservedBalance,
+    TransactionLog, VestingContract,
 };
+use nimiq_database::traits::Database;
 use nimiq_keys::{Address, KeyPair};
 use nimiq_primitives::{
     account::{AccountError, AccountType},
@@ -12,52 +14,56 @@ use nimiq_primitives::{
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
-use nimiq_test_utils::{
-    accounts_revert::TestCommitRevert, test_rng::test_rng, transactions::TransactionsGenerator,
-};
+use nimiq_test_utils::{accounts_revert::TestCommitRevert, test_rng::test_rng};
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_utils::key_rng::SecureGenerate;
 
 const CONTRACT: &str = "00002fbf9bd9c800fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a220000000000000001000000000003f480000002632e314a0000002fbf9bd9c800";
 
-fn generate_contract(key_pair: &KeyPair) -> VestingContract {
-    VestingContract {
+fn init_tree() -> (TestCommitRevert, VestingContract, KeyPair, KeyPair) {
+    let mut rng = test_rng(true);
+    let key_1 = KeyPair::generate(&mut rng);
+    let key_2 = KeyPair::generate(&mut rng);
+    let vesting_contract = VestingContract {
         balance: 1000.try_into().unwrap(),
-        owner: Address::from(&key_pair.public),
+        owner: Address::from(&key_1.public),
         start_time: 0,
         time_step: 100,
         step_amount: 100.try_into().unwrap(),
         total_amount: 1000.try_into().unwrap(),
-    }
+    };
+
+    let accounts = TestCommitRevert::with_initial_state(&[
+        (
+            Address::from(&key_1.public),
+            Account::Basic(BasicAccount {
+                balance: Coin::from_u64_unchecked(1000),
+            }),
+        ),
+        (
+            Address([1u8; 20]),
+            Account::Vesting(vesting_contract.clone()),
+        ),
+    ]);
+
+    (accounts, vesting_contract, key_1, key_2)
 }
 
-fn init_tree() -> (TestCommitRevert, KeyPair, KeyPair) {
-    let accounts = TestCommitRevert::new();
-    let generator = TransactionsGenerator::new(
-        Accounts::new(accounts.env.clone()),
+fn make_signed_transaction(key_1: KeyPair, key_2: KeyPair, value: u64) -> Transaction {
+    let mut tx = Transaction::new_basic(
+        Address::from(&key_1),
+        Address::from(&key_2),
+        Coin::from_u64_unchecked(value),
+        Coin::ZERO,
+        1,
         NetworkId::UnitAlbatross,
-        test_rng(true),
     );
+    tx.sender_type = AccountType::Vesting;
+    let signature = key_1.sign(&tx.serialize_content()[..]);
+    let signature_proof = SignatureProof::from(key_1.public, signature);
+    tx.proof = signature_proof.serialize_to_vec();
 
-    let mut rng = test_rng(true);
-
-    let key_1 = KeyPair::generate(&mut rng);
-    generator.put_account(
-        &Address::from(&key_1),
-        Account::Basic(BasicAccount {
-            balance: Coin::from_u64_unchecked(1000),
-        }),
-    );
-
-    let key_2 = KeyPair::generate(&mut rng);
-    generator.put_account(
-        &Address::from(&key_2),
-        Account::Basic(BasicAccount {
-            balance: Coin::from_u64_unchecked(1000),
-        }),
-    );
-
-    (accounts, key_1, key_2)
+    tx
 }
 
 // This function is used to create the CONTRACT constant above.
@@ -104,7 +110,7 @@ fn it_can_serialize_a_vesting_contract() {
 #[test]
 #[allow(unused_must_use)]
 fn it_can_create_contract_from_transaction() {
-    let (accounts, key_1, _key_2) = init_tree();
+    let (accounts, _vesting_contract, key_1, _key_2) = init_tree();
 
     let block_state = BlockState::new(1, 1);
 
@@ -255,7 +261,7 @@ fn it_can_create_contract_from_transaction() {
 
 #[test]
 fn it_does_not_support_incoming_transactions() {
-    let (accounts, key_1, key_2) = init_tree();
+    let (accounts, mut vesting_contract, key_1, key_2) = init_tree();
 
     let block_state = BlockState::new(1, 1);
 
@@ -269,11 +275,9 @@ fn it_does_not_support_incoming_transactions() {
     );
     tx.recipient_type = AccountType::Vesting;
 
-    let mut contract = generate_contract(&key_1);
-
     let mut tx_logger = TransactionLog::empty();
     let result = accounts.test_commit_incoming_transaction(
-        &mut contract,
+        &mut vesting_contract,
         &tx,
         &block_state,
         &mut tx_logger,
@@ -286,15 +290,12 @@ fn it_does_not_support_incoming_transactions() {
 
 #[test]
 fn it_can_apply_and_revert_valid_transaction() {
-    let (accounts, key_pair, key_2) = init_tree();
+    let (accounts, mut vesting_contract, key_1, key_2) = init_tree();
 
     let block_state = BlockState::new(2, 200);
 
-    let start_contract = generate_contract(&key_pair);
-    let mut contract = start_contract;
-
     let mut tx = Transaction::new_basic(
-        Address::from(&key_pair), // PITODO the new contract is not in the accounts
+        Address::from(&key_1),
         Address::from(&key_2),
         200.try_into().unwrap(),
         0.try_into().unwrap(),
@@ -303,16 +304,22 @@ fn it_can_apply_and_revert_valid_transaction() {
     );
     tx.sender_type = AccountType::Vesting;
 
-    let signature = key_pair.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::from(key_pair.public, signature);
+    let signature = key_1.sign(&tx.serialize_content()[..]);
+    let signature_proof = SignatureProof::from(key_1.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     let mut tx_logger = TransactionLog::empty();
     let _ = accounts
-        .test_commit_outgoing_transaction(&mut contract, &tx, &block_state, &mut tx_logger, true)
+        .test_commit_outgoing_transaction(
+            &mut vesting_contract,
+            &tx,
+            &block_state,
+            &mut tx_logger,
+            true,
+        )
         .expect("Failed to commit transaction");
 
-    assert_eq!(contract.balance, 800.try_into().unwrap());
+    assert_eq!(vesting_contract.balance, 800.try_into().unwrap());
     assert_eq!(
         tx_logger.logs,
         vec![
@@ -333,17 +340,21 @@ fn it_can_apply_and_revert_valid_transaction() {
 
     let mut tx_logger = TransactionLog::empty();
     let _ = accounts
-        .test_commit_outgoing_transaction(&mut contract, &tx, &block_state, &mut tx_logger, true)
+        .test_commit_outgoing_transaction(
+            &mut vesting_contract,
+            &tx,
+            &block_state,
+            &mut tx_logger,
+            true,
+        )
         .expect("Failed to commit transaction");
 
-    assert_eq!(contract.balance, 600.try_into().unwrap());
+    assert_eq!(vesting_contract.balance, 600.try_into().unwrap());
 }
 
 #[test]
 fn it_refuses_invalid_transactions() {
-    let (accounts, key_pair, key_pair_alt) = init_tree();
-
-    let mut contract = generate_contract(&key_pair);
+    let (accounts, mut vesting_contract, key_1, key_1_alt) = init_tree();
 
     let mut tx = Transaction::new_basic(
         Address::from([1u8; 20]),
@@ -356,15 +367,15 @@ fn it_refuses_invalid_transactions() {
     tx.sender_type = AccountType::Vesting;
 
     // Invalid signature
-    let signature = key_pair_alt.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::from(key_pair_alt.public, signature);
+    let signature = key_1_alt.sign(&tx.serialize_content()[..]);
+    let signature_proof = SignatureProof::from(key_1_alt.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     let block_state = BlockState::new(1, 200);
 
     let mut tx_logger = TransactionLog::empty();
     let result = accounts.test_commit_outgoing_transaction(
-        &mut contract,
+        &mut vesting_contract,
         &tx,
         &block_state,
         &mut tx_logger,
@@ -375,15 +386,15 @@ fn it_refuses_invalid_transactions() {
     assert_eq!(tx_logger.logs.len(), 0);
 
     // Funds still vested
-    let signature = key_pair.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::from(key_pair.public, signature);
+    let signature = key_1.sign(&tx.serialize_content()[..]);
+    let signature_proof = SignatureProof::from(key_1.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
-    let block_state = BlockState::new(1, 100);
+    let block_state = BlockState::new(100000, 100);
 
     let mut tx_logger = TransactionLog::empty();
     let result = accounts.test_commit_outgoing_transaction(
-        &mut contract,
+        &mut vesting_contract,
         &tx,
         &block_state,
         &mut tx_logger,
@@ -398,4 +409,149 @@ fn it_refuses_invalid_transactions() {
         })
     );
     assert_eq!(tx_logger.logs.len(), 0);
+}
+
+#[test]
+fn reserve_release_balance_works() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let (accounts, vesting_contract, key_1, key_2) = init_tree();
+    let mut db_txn = accounts.env().write_transaction();
+    let sender_address = Address::from(&key_1);
+    let data_store = accounts.data_store(&sender_address);
+
+    let block_state = BlockState::new(2, 200);
+
+    let mut reserved_balance = ReservedBalance::new(sender_address.clone());
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Works in the normal case.
+    let tx = make_signed_transaction(key_1.clone(), key_2.clone(), 190);
+    let result = vesting_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(190));
+    assert!(result.is_ok());
+
+    // Reserve the remaining
+    let tx = make_signed_transaction(key_1.clone(), key_2.clone(), 10);
+    let result = vesting_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(200));
+    assert!(result.is_ok());
+
+    // Doesn't work when there is not enough avl reserve.
+    let tx = make_signed_transaction(key_1.clone(), key_2.clone(), 1);
+    let result = vesting_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(200));
+    assert_eq!(
+        result,
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(201),
+            balance: Coin::from_u64_unchecked(200)
+        })
+    );
+
+    // Can release and reserve again.
+    let tx = make_signed_transaction(key_1.clone(), key_2.clone(), 10);
+    let result =
+        vesting_contract.release_balance(&tx, &mut reserved_balance, data_store.read(&mut db_txn));
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(190));
+    assert!(result.is_ok());
+
+    let result = vesting_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(200));
+    assert!(result.is_ok());
+}
+
+#[test]
+fn can_reserve_balance_after_time_step() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let (accounts, vesting_contract, key_1, key_2) = init_tree();
+    let mut db_txn = accounts.env().write_transaction();
+    let sender_address = Address::from(&key_1);
+    let data_store = accounts.data_store(&sender_address);
+
+    let block_state = BlockState::new(2, 200);
+
+    let mut reserved_balance = ReservedBalance::new(sender_address.clone());
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Works in the normal case.
+    let tx = make_signed_transaction(key_1.clone(), key_2.clone(), 200);
+    let result = vesting_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(200));
+    assert!(result.is_ok());
+
+    // Doesn't work when there is not enough avl reserve.
+    let tx = make_signed_transaction(key_1.clone(), key_2.clone(), 1);
+    let result = vesting_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(200));
+    assert_eq!(
+        result,
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(201),
+            balance: Coin::from_u64_unchecked(200)
+        })
+    );
+
+    // Advancing the block state should alow further reserve balance.
+    let block_state = BlockState::new(3, 300);
+
+    let tx = make_signed_transaction(key_1.clone(), key_2.clone(), 100);
+    let result = vesting_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(300));
+    assert!(result.is_ok());
+
+    let result = vesting_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(reserved_balance.balance(), Coin::from_u64_unchecked(300));
+    assert_eq!(
+        result,
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(400),
+            balance: Coin::from_u64_unchecked(300)
+        })
+    );
 }
