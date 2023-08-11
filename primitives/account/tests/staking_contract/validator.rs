@@ -6,11 +6,7 @@ use std::{
 use nimiq_account::{punished_slots::PunishedSlots, *};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_collections::BitSet;
-use nimiq_database::{
-    traits::{Database, WriteTransaction},
-    volatile::VolatileDatabase,
-    DatabaseProxy,
-};
+use nimiq_database::{traits::Database, volatile::VolatileDatabase};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
 use nimiq_primitives::{
@@ -111,82 +107,6 @@ fn revert_penalize_inherent(
         .contains(slot as usize));
 }
 
-struct JailedSetup {
-    env: DatabaseProxy,
-    accounts: Accounts,
-    staking_contract: StakingContract,
-    still_jailed_block_state: BlockState,
-    jail_release_block_state: BlockState,
-    validator_address: Address,
-}
-
-fn setup_jailed_validator() -> JailedSetup {
-    // -----------------------------------
-    // Test setup:
-    // -----------------------------------
-    let block_number: u32 = 1;
-    let jail_release: u32 = Policy::block_after_jail(block_number);
-    let before_jail_release: u32 = jail_release - 1;
-
-    let still_jailed_block_state = BlockState::new(before_jail_release, 1000);
-    let jail_release_block_state = BlockState::new(jail_release, 1000);
-
-    // 1. Create staking contract with validator
-    let env = VolatileDatabase::new(20).unwrap();
-    let accounts = Accounts::new(env.clone());
-    let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let mut db_txn_og = env.write_transaction();
-    let mut db_txn = (&mut db_txn_og).into();
-
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
-    let validator_address = validator_address();
-
-    // 2. Jail validator
-    let mut data_store_write = data_store.write(&mut db_txn);
-    let mut staking_contract_store = StakingContractStoreWrite::new(&mut data_store_write);
-    let result = staking_contract
-        .jail_validator(
-            &mut staking_contract_store,
-            &validator_address,
-            block_number,
-            jail_release,
-            &mut TransactionLog::empty(),
-        )
-        .unwrap();
-    assert_eq!(
-        result,
-        JailValidatorReceipt {
-            newly_deactivated: true,
-            old_jail_release: None
-        }
-    );
-
-    let validator = staking_contract
-        .get_validator(&data_store.read(&db_txn), &validator_address)
-        .unwrap();
-    assert_eq!(
-        validator.jail_release,
-        Some(Policy::block_after_jail(block_number))
-    );
-
-    // Make sure that the validator is still deactivated.
-    assert!(!staking_contract
-        .active_validators
-        .contains_key(&validator_address));
-
-    db_txn_og.commit();
-
-    JailedSetup {
-        env,
-        accounts,
-        staking_contract,
-        still_jailed_block_state,
-        jail_release_block_state,
-        validator_address,
-    }
-}
-
 // The following code is kept as a reference on how to generate the constants.
 #[ignore]
 #[test]
@@ -261,22 +181,26 @@ fn it_can_de_serialize_a_staking_contract() {
 }
 
 #[test]
-fn can_get_it() {
-    let env = VolatileDatabase::new(20).unwrap();
-    let accounts = Accounts::new(env.clone());
-    let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let mut db_txn = env.write_transaction();
+fn can_get_validator() {
+    let validator_setup = ValidatorSetup::new(Some(150_000_000));
+    let data_store = validator_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = validator_setup.env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
-
-    let staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
+    let _write = data_store.write(&mut db_txn);
 
     assert_eq!(
-        staking_contract.balance,
+        validator_setup.staking_contract.balance,
         Coin::from_u64_unchecked(150_000_000 + Policy::VALIDATOR_DEPOSIT)
     );
 
-    let validator = staking_contract
-        .get_validator(&data_store.read(&db_txn), &validator_address())
+    let validator = validator_setup
+        .staking_contract
+        .get_validator(
+            &data_store.read(&db_txn),
+            &validator_setup.validator_address,
+        )
         .expect("Validator should exist");
 
     assert_eq!(
@@ -295,8 +219,8 @@ fn create_validator_works() {
     let mut db_txn = (&mut db_txn).into();
 
     let mut staking_contract = StakingContract::default();
-
     let validator_address = validator_address();
+
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
     let signing_key = ed25519_public_key(VALIDATOR_SIGNING_KEY);
     let voting_key = bls_public_key(VALIDATOR_VOTING_KEY);
@@ -415,16 +339,14 @@ fn create_validator_works() {
 #[test]
 fn update_validator_works() {
     let mut rng = test_rng(false);
-    let env = VolatileDatabase::new(20).unwrap();
-    let accounts = Accounts::new(env.clone());
-    let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let block_state = BlockState::new(2, 2);
-    let mut db_txn = env.write_transaction();
+    let mut validator_setup = ValidatorSetup::new(Some(150_000_000));
+    let data_store = validator_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = validator_setup.env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
-    let validator_address = validator_address();
+    let block_state = BlockState::new(2, 2);
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
     let new_voting_keypair = BlsKeyPair::generate(&mut rng);
     let new_reward_address = Some(Address::from([77u8; 20]));
@@ -448,7 +370,8 @@ fn update_validator_works() {
     );
 
     let mut tx_logger = TransactionLog::empty();
-    let receipt = staking_contract
+    let receipt = validator_setup
+        .staking_contract
         .commit_incoming_transaction(
             &tx,
             &block_state,
@@ -459,7 +382,7 @@ fn update_validator_works() {
 
     let old_signing_key = ed25519_public_key(VALIDATOR_SIGNING_KEY);
     let old_voting_key = bls_public_key(VALIDATOR_VOTING_KEY);
-    let old_reward_address = validator_address.clone();
+    let old_reward_address = validator_setup.validator_address.clone();
 
     let expected_receipt = UpdateValidatorReceipt {
         old_signing_key,
@@ -472,17 +395,21 @@ fn update_validator_works() {
     assert_eq!(
         tx_logger.logs,
         vec![Log::UpdateValidator {
-            validator_address: validator_address.clone(),
+            validator_address: validator_setup.validator_address.clone(),
             old_reward_address: old_reward_address.clone(),
             new_reward_address: new_reward_address.clone(),
         }]
     );
 
-    let validator = staking_contract
-        .get_validator(&data_store.read(&db_txn), &validator_address)
+    let validator = validator_setup
+        .staking_contract
+        .get_validator(
+            &data_store.read(&db_txn),
+            &validator_setup.validator_address,
+        )
         .expect("Validator should exist");
 
-    assert_eq!(validator.address, validator_address);
+    assert_eq!(validator.address, validator_setup.validator_address);
     assert_eq!(validator.signing_key, PublicKey::from([88u8; 32]));
     assert_eq!(
         validator.voting_key,
@@ -499,7 +426,8 @@ fn update_validator_works() {
 
     // Revert the transaction.
     let mut tx_logger = TransactionLog::empty();
-    staking_contract
+    validator_setup
+        .staking_contract
         .revert_incoming_transaction(
             &tx,
             &block_state,
@@ -512,17 +440,21 @@ fn update_validator_works() {
     assert_eq!(
         tx_logger.logs,
         vec![Log::UpdateValidator {
-            validator_address: validator_address.clone(),
+            validator_address: validator_setup.validator_address.clone(),
             old_reward_address: old_reward_address.clone(),
             new_reward_address,
         }]
     );
 
-    let validator = staking_contract
-        .get_validator(&data_store.read(&db_txn), &validator_address)
+    let validator = validator_setup
+        .staking_contract
+        .get_validator(
+            &data_store.read(&db_txn),
+            &validator_setup.validator_address,
+        )
         .expect("Validator should exist");
 
-    assert_eq!(validator.address, validator_address);
+    assert_eq!(validator.address, validator_setup.validator_address);
     assert_eq!(validator.signing_key, old_signing_key);
     assert_eq!(validator.voting_key, old_voting_key);
     assert_eq!(validator.reward_address, old_reward_address);
@@ -555,12 +487,14 @@ fn update_validator_works() {
     );
 
     assert_eq!(
-        staking_contract.commit_incoming_transaction(
-            &tx,
-            &block_state,
-            data_store.write(&mut db_txn),
-            &mut TransactionLog::empty(),
-        ),
+        validator_setup
+            .staking_contract
+            .commit_incoming_transaction(
+                &tx,
+                &block_state,
+                data_store.write(&mut db_txn),
+                &mut TransactionLog::empty(),
+            ),
         Err(AccountError::NonExistentAddress {
             address: non_existent_address()
         })
@@ -576,9 +510,9 @@ fn deactivate_validator_works() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
+    let (validator_address, _, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), Some(150_000_000));
 
-    let validator_address = validator_address();
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
     let signing_key = ed25519_public_key(VALIDATOR_SIGNING_KEY);
     let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
@@ -736,9 +670,9 @@ fn retire_validator_works() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
+    let (validator_address, _, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), None);
 
-    let validator_address = validator_address();
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
     let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
 
@@ -832,7 +766,8 @@ fn delete_validator_works() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
+    let (validator_address, _, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), Some(150_000_000));
 
     // Doesn't work when the validator is still active.
     let tx = make_delete_validator_transaction();
@@ -850,7 +785,7 @@ fn delete_validator_works() {
     // Deactivate validator.
     let deactivate_tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::DeactivateValidator {
-            validator_address: validator_address(),
+            validator_address: validator_address.clone(),
             proof: SignatureProof::default(),
         },
         0,
@@ -911,7 +846,7 @@ fn delete_validator_works() {
     );
 
     // Works in the valid case.
-    let validator_address = validator_address();
+
     let signing_key = ed25519_public_key(VALIDATOR_SIGNING_KEY);
     let voting_key = bls_public_key(VALIDATOR_VOTING_KEY);
     let reward_address = validator_address.clone();
@@ -1052,9 +987,8 @@ fn reward_inherents_not_allowed() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
-    let validator_address = validator_address();
+    let (validator_address, _, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), None);
 
     let inherent = Inherent::Reward {
         target: validator_address,
@@ -1082,9 +1016,8 @@ fn jail_inherents_work() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
-    let validator_address = validator_address();
+    let (validator_address, _, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), None);
 
     // Prepare some data.
     let slot = PenalizedSlot {
@@ -1283,7 +1216,8 @@ fn finalize_batch_inherents_works() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
+    let (validator_address, _, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), None);
 
     // Prepare the staking contract.
     let mut set = BTreeSet::default();
@@ -1292,7 +1226,7 @@ fn finalize_batch_inherents_works() {
     staking_contract
         .punished_slots
         .current_batch_punished_slots
-        .insert(validator_address(), set);
+        .insert(validator_address, set);
     staking_contract
         .punished_slots
         .previous_batch_punished_slots
@@ -1346,9 +1280,8 @@ fn finalize_epoch_inherents_works() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
-    let validator_address = validator_address();
+    let (validator_address, _, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), None);
 
     // Pre populate the previous epoch and batch related sets.
     // To test proper behaviour upon epoch finalization.
@@ -1491,7 +1424,7 @@ fn reactivate_jail_interaction() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut jailed_setup = setup_jailed_validator();
+    let mut jailed_setup = ValidatorSetup::setup_jailed_validator(None);
     let data_store = jailed_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1514,7 +1447,7 @@ fn reactivate_jail_interaction() {
     // Should fail before jail release.
     let result = jailed_setup.staking_contract.commit_incoming_transaction(
         &reactivate_tx,
-        &jailed_setup.still_jailed_block_state,
+        &jailed_setup.before_state_release_block_state,
         data_store.write(&mut db_txn),
         &mut TransactionLog::empty(),
     );
@@ -1523,7 +1456,7 @@ fn reactivate_jail_interaction() {
     // // Should work after jail release.
     let result = jailed_setup.staking_contract.commit_incoming_transaction(
         &reactivate_tx,
-        &jailed_setup.jail_release_block_state,
+        &jailed_setup.state_release_block_state,
         data_store.write(&mut db_txn),
         &mut TransactionLog::empty(),
     );
@@ -1538,7 +1471,7 @@ fn deactivate_jail_interaction() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut jailed_setup = setup_jailed_validator();
+    let mut jailed_setup = ValidatorSetup::setup_jailed_validator(None);
     let data_store = jailed_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1561,7 +1494,7 @@ fn deactivate_jail_interaction() {
     // Should fail before jail release.
     let result = jailed_setup.staking_contract.commit_incoming_transaction(
         &deactivate_tx,
-        &jailed_setup.still_jailed_block_state,
+        &jailed_setup.before_state_release_block_state,
         data_store.write(&mut db_txn),
         &mut TransactionLog::empty(),
     );
@@ -1570,7 +1503,7 @@ fn deactivate_jail_interaction() {
     // Should fail after jail release.
     let result = jailed_setup.staking_contract.commit_incoming_transaction(
         &deactivate_tx,
-        &jailed_setup.jail_release_block_state,
+        &jailed_setup.state_release_block_state,
         data_store.write(&mut db_txn),
         &mut TransactionLog::empty(),
     );
@@ -1585,7 +1518,7 @@ fn delete_jail_interaction() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut jailed_setup = setup_jailed_validator();
+    let mut jailed_setup = ValidatorSetup::setup_jailed_validator(None);
     let data_store = jailed_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1614,7 +1547,7 @@ fn delete_jail_interaction() {
     // Should fail before jail release.
     let result = jailed_setup.staking_contract.commit_outgoing_transaction(
         &delete_tx,
-        &jailed_setup.still_jailed_block_state,
+        &jailed_setup.before_state_release_block_state,
         data_store.write(&mut db_txn),
         &mut TransactionLog::empty(),
     );
@@ -1623,7 +1556,7 @@ fn delete_jail_interaction() {
     // Should work after jail release.
     let result = jailed_setup.staking_contract.commit_outgoing_transaction(
         &delete_tx,
-        &jailed_setup.jail_release_block_state,
+        &jailed_setup.state_release_block_state,
         data_store.write(&mut db_txn),
         &mut TransactionLog::empty(),
     );
@@ -1646,9 +1579,8 @@ fn jail_and_revert() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
-    let validator_address = validator_address();
+    let (validator_address, _, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), None);
 
     // -----------------------------------
     // Test execution:
@@ -1752,9 +1684,8 @@ fn jail_inactive_and_revert() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
-    let validator_address = validator_address();
+    let (validator_address, _, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), None);
 
     // 2. Deactivate validator
     let mut data_store_write = data_store.write(&mut db_txn);
@@ -1861,7 +1792,7 @@ fn can_jail_twice() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut jailed_setup = setup_jailed_validator();
+    let mut jailed_setup = ValidatorSetup::setup_jailed_validator(None);
     let data_store = jailed_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1869,7 +1800,7 @@ fn can_jail_twice() {
     let mut db_txn = (&mut db_txn).into();
 
     // Prepare jail inherent.
-    let second_jail_block_state = BlockState::new(2, 200);
+    let second_jail_block_state = BlockState::new(3, 200);
     let inherent = Inherent::Jail {
         jailed_validator: JailedValidator {
             validator_address: jailed_setup.validator_address.clone(),
@@ -1897,7 +1828,16 @@ fn can_jail_twice() {
         .expect("Failed to commit inherent");
     let old_previous_batch_punished_slots = BitSet::default();
     let old_current_batch_punished_slots = None;
-    let old_jail_release = Some(jailed_setup.jail_release_block_state.number);
+    let old_jail_release = Some(jailed_setup.state_release_block_state.number);
+    log::error!(
+        "{:?}",
+        JailReceipt {
+            newly_deactivated: false,
+            old_previous_batch_punished_slots: old_previous_batch_punished_slots.clone(),
+            old_current_batch_punished_slots: old_current_batch_punished_slots.clone(),
+            old_jail_release,
+        }
+    );
     assert_eq!(
         receipt,
         Some(
@@ -1959,7 +1899,7 @@ fn can_jail_twice() {
         .unwrap();
     assert_eq!(
         validator.jail_release,
-        Some(jailed_setup.jail_release_block_state.number)
+        Some(jailed_setup.state_release_block_state.number)
     );
 
     assert!(!jailed_setup
@@ -1974,7 +1914,7 @@ fn can_retire_jailed_validator() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut jailed_setup = setup_jailed_validator();
+    let mut jailed_setup = ValidatorSetup::setup_jailed_validator(None);
     let data_store = jailed_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1998,7 +1938,7 @@ fn can_retire_jailed_validator() {
         .staking_contract
         .commit_incoming_transaction(
             &retire_tx,
-            &jailed_setup.still_jailed_block_state,
+            &jailed_setup.before_state_release_block_state,
             data_store.write(&mut db_txn),
             &mut TransactionLog::empty(),
         )
@@ -2019,7 +1959,7 @@ fn can_retire_jailed_validator() {
         .staking_contract
         .revert_incoming_transaction(
             &retire_tx,
-            &jailed_setup.still_jailed_block_state,
+            &jailed_setup.before_state_release_block_state,
             receipt,
             data_store.write(&mut db_txn),
             &mut TransactionLog::empty(),
@@ -2034,7 +1974,7 @@ fn can_retire_jailed_validator() {
     assert!(validator.inactive_since.is_some());
     assert_eq!(
         validator.jail_release,
-        Some(jailed_setup.jail_release_block_state.number)
+        Some(jailed_setup.state_release_block_state.number)
     );
     assert!(!jailed_setup
         .staking_contract
@@ -2058,9 +1998,8 @@ fn penalize_and_revert_twice() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
-    let validator_address = validator_address();
+    let (validator_address, _, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), None);
 
     // -----------------------------------
     // Test execution:
@@ -2227,9 +2166,8 @@ fn penalize_inactive_and_revert() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
-    let validator_address = validator_address();
+    let (validator_address, _, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), None);
 
     // 2. Deactivate validator
     let mut data_store_write = data_store.write(&mut db_txn);
@@ -2336,9 +2274,8 @@ fn penalize_and_jail_and_revert_twice() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
-    let validator_address = validator_address();
+    let (validator_address, _, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), None);
 
     // -----------------------------------
     // Test execution:
@@ -2511,7 +2448,7 @@ fn jail_and_penalize_and_revert_twice() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut jailed_setup = setup_jailed_validator();
+    let mut jailed_setup = ValidatorSetup::setup_jailed_validator(None);
     let data_store = jailed_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -2572,7 +2509,7 @@ fn jail_and_penalize_and_revert_twice() {
         .unwrap();
     assert_eq!(
         validator.jail_release,
-        Some(jailed_setup.jail_release_block_state.number)
+        Some(jailed_setup.state_release_block_state.number)
     );
 
     // Make sure that the validator is still deactivated.
@@ -2599,11 +2536,137 @@ fn jail_and_penalize_and_revert_twice() {
         .unwrap();
     assert_eq!(
         validator.jail_release,
-        Some(jailed_setup.jail_release_block_state.number)
+        Some(jailed_setup.state_release_block_state.number)
     );
 
     assert!(!jailed_setup
         .staking_contract
         .active_validators
         .contains_key(&jailed_setup.validator_address));
+}
+
+#[test]
+fn can_reserve_balance() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let retired_setup = ValidatorSetup::setup_retired_validator(None);
+    let data_store = retired_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = retired_setup.env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+    let _write = data_store.write(&mut db_txn);
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Can reserve balance for delete validator transaction.
+    let mut reserved_balance = ReservedBalance::new(retired_setup.validator_address);
+    let tx = make_delete_validator_transaction();
+    let result = retired_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &retired_setup.state_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(
+        reserved_balance.balance(),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
+    );
+    assert!(result.is_ok());
+
+    // Cannot reserve balance for further unstake transactions.
+    let result = retired_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &retired_setup.state_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(
+        reserved_balance.balance(),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
+    );
+    assert_eq!(
+        result,
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT * 2),
+            balance: Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
+        })
+    );
+}
+
+#[test]
+fn can_reserve_and_release_balance() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let retired_setup = ValidatorSetup::setup_retired_validator(None);
+    let data_store = retired_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = retired_setup.env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+    let _write = data_store.write(&mut db_txn);
+
+    // Reserve balance for unstake.
+    let mut reserved_balance = ReservedBalance::new(retired_setup.validator_address.clone());
+
+    let tx = make_delete_validator_transaction();
+    let result = retired_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &retired_setup.state_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+
+    assert_eq!(
+        reserved_balance.balance(),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
+    );
+    assert!(result.is_ok());
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Cannot reserve balance for further unstake transactions.
+    let result = retired_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &retired_setup.state_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(
+        reserved_balance.balance(),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
+    );
+    assert_eq!(
+        result,
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT * 2),
+            balance: Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
+        })
+    );
+
+    // Can release balance.
+    let result = retired_setup.staking_contract.release_balance(
+        &tx,
+        &mut reserved_balance,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(reserved_balance.balance(), Coin::ZERO);
+    assert!(result.is_ok());
+
+    // Can reserve balance for unstake of the remainder.
+    let result = retired_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &retired_setup.state_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(
+        reserved_balance.balance(),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
+    );
+    assert!(result.is_ok());
 }

@@ -1,9 +1,5 @@
 use nimiq_account::*;
-use nimiq_database::{
-    traits::{Database, WriteTransaction},
-    volatile::VolatileDatabase,
-    DatabaseProxy,
-};
+use nimiq_database::{traits::Database, volatile::VolatileDatabase};
 use nimiq_keys::Address;
 use nimiq_primitives::{account::AccountError, coin::Coin, policy::Policy};
 use nimiq_test_log::test;
@@ -54,122 +50,19 @@ fn make_unstake_transaction(value: u64) -> Transaction {
     tx
 }
 
-struct StakerSetup {
-    env: DatabaseProxy,
-    accounts: Accounts,
-    staking_contract: StakingContract,
-    before_release_block_state: BlockState,
-    inactive_release_block_state: BlockState,
-    validator_address: Address,
-    staker_address: Address,
-    active_stake: Coin,
-    inactive_stake: Coin,
-    jail_release: Option<u32>,
-}
-
-fn setup_staker_with_inactive_balance(
-    validator_is_jailed: bool,
-    active_stake: u64,
-    inactive_stake: u64,
-) -> StakerSetup {
-    let deactivation_block_state = BlockState::new(2, 2);
-    let inactive_release_block_state = BlockState::new(
-        Policy::block_after_reporting_window(Policy::election_block_after(
-            deactivation_block_state.number,
-        )),
-        2,
-    );
-    let before_release_block_state = BlockState::new(inactive_release_block_state.number - 1, 2);
-    let jail_release = if validator_is_jailed {
-        Some(Policy::block_after_jail(deactivation_block_state.number))
-    } else {
-        None
-    };
-
-    let env = VolatileDatabase::new(20).unwrap();
-    let accounts = Accounts::new(env.clone());
-    let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let mut db_txn_og = env.write_transaction();
-    let mut db_txn = (&mut db_txn_og).into();
-
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), false);
-
-    let staker_address = staker_address();
-    let active_stake = Coin::from_u64_unchecked(active_stake);
-    let inactive_stake = Coin::from_u64_unchecked(inactive_stake);
-    let validator_address = validator_address();
-
-    // Create staker.
-    let mut data_store_write = data_store.write(&mut db_txn);
-    let mut staking_contract_store = StakingContractStoreWrite::new(&mut data_store_write);
-    staking_contract
-        .create_staker(
-            &mut staking_contract_store,
-            &staker_address,
-            active_stake + inactive_stake,
-            Some(validator_address.clone()),
-            &mut TransactionLog::empty(),
-        )
-        .expect("Failed to create staker");
-
-    // Deactivate part of the stake.
-    staking_contract
-        .set_inactive_stake(
-            &mut staking_contract_store,
-            &staker_address,
-            inactive_stake,
-            deactivation_block_state.number,
-            &mut TransactionLog::empty(),
-        )
-        .expect("Failed to set inactive stake");
-
-    if let Some(jail_release) = jail_release {
-        let result = staking_contract
-            .jail_validator(
-                &mut staking_contract_store,
-                &validator_address,
-                deactivation_block_state.number,
-                jail_release,
-                &mut TransactionLog::empty(),
-            )
-            .unwrap();
-        assert_eq!(
-            result,
-            JailValidatorReceipt {
-                newly_deactivated: true,
-                old_jail_release: None
-            }
-        );
-    }
-
-    db_txn_og.commit();
-
-    StakerSetup {
-        env,
-        accounts,
-        staking_contract,
-        before_release_block_state,
-        inactive_release_block_state,
-        validator_address,
-        staker_address,
-        active_stake,
-        inactive_stake,
-        jail_release,
-    }
-}
-
 #[test]
-fn can_get_it() {
+fn can_get_staker() {
     let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
+    let (_, staker_address, staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), Some(150_000_000));
 
     let staker = staking_contract
-        .get_staker(&data_store.read(&db_txn), &staker_address())
+        .get_staker(&data_store.read(&db_txn), &staker_address.unwrap())
         .expect("Staker should exist");
 
     assert_eq!(staker.balance, Coin::from_u64_unchecked(150_000_000));
@@ -183,10 +76,11 @@ fn can_iter_stakers() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
+    let (validator_address, _, staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), Some(150_000_000));
 
     let stakers =
-        staking_contract.get_stakers_for_validator(&data_store.read(&db_txn), &validator_address());
+        staking_contract.get_stakers_for_validator(&data_store.read(&db_txn), &validator_address);
 
     assert_eq!(stakers.len(), 1);
     assert_eq!(stakers[0].balance, Coin::from_u64_unchecked(150_000_000));
@@ -201,11 +95,11 @@ fn create_staker_works() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), false);
+    let (validator_address, _, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), None);
 
     let staker_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
     let staker_address = staker_address();
-    let validator_address = validator_address();
 
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
@@ -336,11 +230,10 @@ fn stake_works() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
+    let (validator_address, staker_address, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), Some(150_000_000));
+    let staker_address = staker_address.unwrap();
     let staker_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
-    let staker_address = staker_address();
-    let validator_address = validator_address();
 
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
@@ -462,11 +355,11 @@ fn update_staker_works() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
+    let (validator_address, staker_address, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), Some(150_000_000));
+    let staker_address = staker_address.unwrap();
     let staker_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
-    let staker_address = staker_address();
-    let validator_address = validator_address();
+
     let other_validator_address = Address::from([69u8; 20]);
     let signing_key = ed25519_public_key(VALIDATOR_SIGNING_KEY);
     let voting_key = bls_public_key(VALIDATOR_VOTING_KEY);
@@ -895,11 +788,9 @@ fn unstake_works() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
-    let staker_address = staker_address();
-    let validator_address = validator_address();
-
+    let (validator_address, staker_address, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), Some(150_000_000));
+    let staker_address = staker_address.unwrap();
     // Deactivate stake first.
     let tx = make_deactivate_stake_transaction(150_000_000);
     let _receipt = staking_contract
@@ -1148,11 +1039,9 @@ fn unstake_from_tombstone_works() {
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
-    let mut staking_contract = make_sample_contract(data_store.write(&mut db_txn), true);
-
-    let staker_address = staker_address();
-    let validator_address = validator_address();
-
+    let (validator_address, staker_address, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), Some(150_000_000));
+    let staker_address = staker_address.unwrap();
     let mut data_store_write = data_store.write(&mut db_txn);
     let mut store = StakingContractStoreWrite::new(&mut data_store_write);
     staking_contract
@@ -1296,7 +1185,8 @@ fn can_only_unstake_inactive_balance() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut staker_setup = setup_staker_with_inactive_balance(false, 50_000_000, 50_000_000);
+    let mut staker_setup =
+        StakerSetup::setup_staker_with_inactive_balance(false, 50_000_000, 50_000_000);
     let data_store = staker_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1366,7 +1256,8 @@ fn unstake_jail_interaction() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut staker_setup = setup_staker_with_inactive_balance(true, 50_000_000, 50_000_000);
+    let mut staker_setup =
+        StakerSetup::setup_staker_with_inactive_balance(true, 50_000_000, 50_000_000);
     let data_store = staker_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1401,13 +1292,13 @@ fn unstake_jail_interaction() {
         .expect("Failed to commit transaction");
 }
 
-/// Staker cannot redelegate while jailed (although it is already released)
+/// Staker cannot re delegate while jailed (although it is already released)
 #[test]
 fn update_staker_jail_interaction() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut staker_setup = setup_staker_with_inactive_balance(true, 0, 50_000_000);
+    let mut staker_setup = StakerSetup::setup_staker_with_inactive_balance(true, 0, 50_000_000);
     let data_store = staker_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1480,7 +1371,8 @@ fn can_only_unstake_after_release() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut staker_setup = setup_staker_with_inactive_balance(false, 50_000_000, 50_000_000);
+    let mut staker_setup =
+        StakerSetup::setup_staker_with_inactive_balance(false, 50_000_000, 50_000_000);
     let data_store = staker_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1515,13 +1407,13 @@ fn can_only_unstake_after_release() {
         .expect("Failed to commit transaction");
 }
 
-/// Staker cannot redelegate before release
+/// Staker cannot re delegate before release
 #[test]
 fn can_only_redelegate_after_release() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut staker_setup = setup_staker_with_inactive_balance(false, 0, 50_000_000);
+    let mut staker_setup = StakerSetup::setup_staker_with_inactive_balance(false, 0, 50_000_000);
     let data_store = staker_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1588,13 +1480,14 @@ fn can_only_redelegate_after_release() {
         .expect("Failed to commit transaction");
 }
 
-/// Staker cannot redelegate while having active stake
+/// Staker cannot re delegate while having active stake
 #[test]
 fn cannot_redelegate_while_having_active_stake() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut staker_setup = setup_staker_with_inactive_balance(false, 50_000_000, 50_000_000);
+    let mut staker_setup =
+        StakerSetup::setup_staker_with_inactive_balance(false, 50_000_000, 50_000_000);
     let data_store = staker_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1667,7 +1560,8 @@ fn can_update_inactive_balance() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut staker_setup = setup_staker_with_inactive_balance(false, 50_000_000, 50_000_000);
+    let mut staker_setup =
+        StakerSetup::setup_staker_with_inactive_balance(false, 50_000_000, 50_000_000);
     let data_store = staker_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1852,4 +1746,153 @@ fn can_update_inactive_balance() {
         validator.total_stake,
         Coin::from_u64_unchecked(50_000_000 + Policy::VALIDATOR_DEPOSIT)
     );
+}
+
+#[test]
+fn can_reserve_balance() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let staker_setup =
+        StakerSetup::setup_staker_with_inactive_balance(false, 40_000_000, 60_000_000);
+    let data_store = staker_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = staker_setup.env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+    let _write = data_store.write(&mut db_txn);
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Can reserve balance for unstake.
+    let mut reserved_balance = ReservedBalance::new(staker_setup.staker_address);
+
+    let tx = make_unstake_transaction(50_000_000);
+    let result = staker_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &staker_setup.inactive_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(
+        reserved_balance.balance(),
+        Coin::from_u64_unchecked(50_000_000)
+    );
+    assert!(result.is_ok());
+
+    // Can reserve balance for unstake of the remainder.
+    let tx = make_unstake_transaction(10_000_000);
+    let result = staker_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &staker_setup.inactive_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(
+        reserved_balance.balance(),
+        Coin::from_u64_unchecked(60_000_000)
+    );
+    assert!(result.is_ok());
+
+    // Cannot reserve balance for further unstake transactions.
+    let tx = make_unstake_transaction(10_000_000);
+    let result = staker_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &staker_setup.inactive_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(
+        reserved_balance.balance(),
+        Coin::from_u64_unchecked(60_000_000)
+    );
+    assert_eq!(
+        result,
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(70_000_000),
+            balance: Coin::from_u64_unchecked(60_000_000)
+        })
+    );
+}
+
+#[test]
+fn can_reserve_and_release_balance() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let staker_setup =
+        StakerSetup::setup_staker_with_inactive_balance(false, 40_000_000, 60_000_000);
+    let data_store = staker_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = staker_setup.env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+    let _write = data_store.write(&mut db_txn);
+
+    // Reserve balance for unstake.
+    let mut reserved_balance = ReservedBalance::new(staker_setup.staker_address);
+
+    let tx = make_unstake_transaction(60_000_000);
+    let result = staker_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &staker_setup.inactive_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(
+        reserved_balance.balance(),
+        Coin::from_u64_unchecked(60_000_000)
+    );
+    assert!(result.is_ok());
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Cannot reserve balance for further unstake transactions.
+    let tx = make_unstake_transaction(10_000_000);
+    let result = staker_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &staker_setup.inactive_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(
+        reserved_balance.balance(),
+        Coin::from_u64_unchecked(60_000_000)
+    );
+    assert_eq!(
+        result,
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(70_000_000),
+            balance: Coin::from_u64_unchecked(60_000_000)
+        })
+    );
+
+    // Can release balance.
+    let tx = make_unstake_transaction(10_000_000);
+    let result = staker_setup.staking_contract.release_balance(
+        &tx,
+        &mut reserved_balance,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(
+        reserved_balance.balance(),
+        Coin::from_u64_unchecked(50_000_000)
+    );
+    assert!(result.is_ok());
+
+    // Can reserve balance for unstake of the remainder.
+    let tx = make_unstake_transaction(10_000_000);
+    let result = staker_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &staker_setup.inactive_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(
+        reserved_balance.balance(),
+        Coin::from_u64_unchecked(60_000_000)
+    );
+    assert!(result.is_ok());
 }

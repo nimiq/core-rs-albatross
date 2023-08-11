@@ -1,8 +1,16 @@
 use std::vec;
 
-use nimiq_account::{DataStoreWrite, StakingContract, StakingContractStoreWrite, TransactionLog};
+use nimiq_account::{
+    AccountTransactionInteraction, Accounts, BlockState, DataStoreWrite, StakingContract,
+    StakingContractStoreWrite, TransactionLog,
+};
 use nimiq_bls::{
     CompressedPublicKey as BlsPublicKey, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey,
+};
+use nimiq_database::{
+    traits::{Database, WriteTransaction},
+    volatile::VolatileDatabase,
+    DatabaseProxy,
 };
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
@@ -61,49 +69,6 @@ fn ed25519_key_pair(sk: &str) -> KeyPair {
 
 fn ed25519_public_key(pk: &str) -> PublicKey {
     PublicKey::deserialize_from_vec(&hex::decode(pk).unwrap()).unwrap()
-}
-
-fn make_sample_contract(mut data_store: DataStoreWrite, with_staker: bool) -> StakingContract {
-    let staker_address = staker_address();
-
-    let cold_address = validator_address();
-
-    let signing_key =
-        PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
-
-    let voting_key =
-        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_VOTING_KEY).unwrap()).unwrap();
-
-    let mut contract = StakingContract::default();
-
-    let mut store = StakingContractStoreWrite::new(&mut data_store);
-
-    contract
-        .create_validator(
-            &mut store,
-            &cold_address,
-            signing_key,
-            voting_key,
-            cold_address.clone(),
-            None,
-            Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
-            &mut TransactionLog::empty(),
-        )
-        .unwrap();
-
-    if with_staker {
-        contract
-            .create_staker(
-                &mut store,
-                &staker_address,
-                Coin::from_u64_unchecked(150_000_000),
-                Some(cold_address),
-                &mut TransactionLog::empty(),
-            )
-            .unwrap();
-    }
-
-    contract
 }
 
 fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -> Transaction {
@@ -165,4 +130,259 @@ fn make_signed_incoming_transaction(
     tx.proof = out_proof;
 
     tx
+}
+
+fn make_sample_contract(
+    mut data_store: DataStoreWrite,
+    staker_active_balance: Option<u64>,
+) -> (Address, Option<Address>, StakingContract) {
+    let validator_address = validator_address();
+    let staker_address = staker_address();
+
+    let signing_key =
+        PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
+
+    let voting_key =
+        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_VOTING_KEY).unwrap()).unwrap();
+
+    let mut contract = StakingContract::default();
+
+    let mut store = StakingContractStoreWrite::new(&mut data_store);
+
+    contract
+        .create_validator(
+            &mut store,
+            &validator_address,
+            signing_key,
+            voting_key,
+            validator_address.clone(),
+            None,
+            Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
+            &mut TransactionLog::empty(),
+        )
+        .unwrap();
+
+    if let Some(staker_active_balance) = staker_active_balance {
+        contract
+            .create_staker(
+                &mut store,
+                &staker_address,
+                Coin::from_u64_unchecked(staker_active_balance),
+                Some(validator_address.clone()),
+                &mut TransactionLog::empty(),
+            )
+            .unwrap();
+    }
+    (validator_address, Some(staker_address), contract)
+}
+
+struct ValidatorSetup {
+    env: DatabaseProxy,
+    accounts: Accounts,
+    staking_contract: StakingContract,
+    before_state_release_block_state: BlockState,
+    state_release_block_state: BlockState,
+    validator_address: Address,
+    staker_address: Option<Address>,
+}
+
+impl ValidatorSetup {
+    fn setup(
+        before_state_release_block_state: BlockState,
+        state_release_block_state: BlockState,
+        staker_active_balance: Option<u64>,
+    ) -> ValidatorSetup {
+        let env = VolatileDatabase::new(20).unwrap();
+        let accounts = Accounts::new(env.clone());
+        let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+        let mut db_txn_og = env.write_transaction();
+        let mut db_txn = (&mut db_txn_og).into();
+
+        let (validator_address, staker_address, staking_contract) =
+            make_sample_contract(data_store.write(&mut db_txn), staker_active_balance);
+
+        db_txn_og.commit();
+
+        ValidatorSetup {
+            env,
+            accounts,
+            staking_contract,
+            before_state_release_block_state,
+            state_release_block_state,
+            validator_address,
+            staker_address,
+        }
+    }
+
+    fn new(staker_active_balance: Option<u64>) -> ValidatorSetup {
+        Self::setup(
+            BlockState::default(),
+            BlockState::default(),
+            staker_active_balance,
+        )
+    }
+
+    fn setup_retired_validator(staker_active_balance: Option<u64>) -> Self {
+        let mut validator_setup = ValidatorSetup::new(staker_active_balance);
+        let data_store = validator_setup
+            .accounts
+            .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+        let mut db_txn_og = validator_setup.env.write_transaction();
+        let mut db_txn = (&mut db_txn_og).into();
+
+        // Retire the validator.
+        let retire_tx = make_signed_incoming_transaction(
+            IncomingStakingTransactionData::RetireValidator {
+                proof: SignatureProof::default(),
+            },
+            0,
+            &ed25519_key_pair(VALIDATOR_PRIVATE_KEY),
+        );
+
+        let block_state = BlockState::new(3, 3);
+        validator_setup
+            .staking_contract
+            .commit_incoming_transaction(
+                &retire_tx,
+                &block_state,
+                data_store.write(&mut db_txn),
+                &mut TransactionLog::empty(),
+            )
+            .expect("Failed to commit transaction");
+
+        let after_cooldown =
+            Policy::block_after_reporting_window(Policy::election_block_after(block_state.number));
+        let after_cooldown = BlockState::new(after_cooldown, 1000);
+        let before_cooldown = BlockState::new(after_cooldown.number - 1, 9000);
+
+        db_txn_og.commit();
+
+        validator_setup.set_block_state(before_cooldown, after_cooldown);
+        validator_setup
+    }
+
+    fn setup_jailed_validator(staker_active_balance: Option<u64>) -> ValidatorSetup {
+        let jailing_inherent_block_state = BlockState::new(2, 2);
+        let jail_release_block_state = BlockState::new(
+            Policy::block_after_jail(jailing_inherent_block_state.number),
+            2,
+        );
+        let before_release_block_state = BlockState::new(jail_release_block_state.number - 1, 2);
+
+        // -----------------------------------
+        // Test setup:
+        // -----------------------------------
+        let mut validator_setup = ValidatorSetup::new(staker_active_balance);
+        let data_store = validator_setup
+            .accounts
+            .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+        let mut db_txn_og = validator_setup.env.write_transaction();
+        let mut db_txn = (&mut db_txn_og).into();
+
+        // 2. Jail validator
+        let mut data_store_write = data_store.write(&mut db_txn);
+        let mut staking_contract_store = StakingContractStoreWrite::new(&mut data_store_write);
+        let _result = validator_setup
+            .staking_contract
+            .jail_validator(
+                &mut staking_contract_store,
+                &validator_setup.validator_address,
+                jailing_inherent_block_state.number,
+                jail_release_block_state.number,
+                &mut TransactionLog::empty(),
+            )
+            .unwrap();
+
+        db_txn_og.commit();
+        validator_setup.set_block_state(before_release_block_state, jail_release_block_state);
+
+        validator_setup
+    }
+
+    fn set_block_state(
+        &mut self,
+        before_state_release_block_state: BlockState,
+        state_release_block_state: BlockState,
+    ) {
+        self.before_state_release_block_state = before_state_release_block_state;
+        self.state_release_block_state = state_release_block_state;
+    }
+}
+
+struct StakerSetup {
+    env: DatabaseProxy,
+    accounts: Accounts,
+    staking_contract: StakingContract,
+    before_release_block_state: BlockState,
+    inactive_release_block_state: BlockState,
+    validator_address: Address,
+    staker_address: Address,
+    active_stake: Coin,
+    inactive_stake: Coin,
+    jail_release: Option<u32>,
+}
+
+impl StakerSetup {
+    fn setup_staker_with_inactive_balance(
+        validator_is_jailed: bool,
+        active_stake: u64,
+        inactive_stake: u64,
+    ) -> Self {
+        // Setup jailed validator
+        let mut jail_release = None;
+        let mut validator_setup = if validator_is_jailed {
+            let validator_setup =
+                ValidatorSetup::setup_jailed_validator(Some(active_stake + inactive_stake));
+            jail_release = Some(validator_setup.state_release_block_state.number);
+            validator_setup
+        } else {
+            ValidatorSetup::new(Some(active_stake + inactive_stake))
+        };
+
+        let data_store = validator_setup
+            .accounts
+            .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+        let mut db_txn_og = validator_setup.env.write_transaction();
+        let mut db_txn = (&mut db_txn_og).into();
+        let mut data_store_write = data_store.write(&mut db_txn);
+        let mut staking_contract_store = StakingContractStoreWrite::new(&mut data_store_write);
+
+        let active_stake = Coin::from_u64_unchecked(active_stake);
+        let inactive_stake = Coin::from_u64_unchecked(inactive_stake);
+        let staker_address = validator_setup.staker_address.unwrap();
+        let deactivation_block = 2;
+        let inactive_release_block_state = BlockState::new(
+            Policy::block_after_reporting_window(Policy::election_block_after(deactivation_block)),
+            2,
+        );
+        let before_release_block_state =
+            BlockState::new(inactive_release_block_state.number - 1, 2);
+
+        // Deactivate part of the stake.
+        validator_setup
+            .staking_contract
+            .set_inactive_stake(
+                &mut staking_contract_store,
+                &staker_address,
+                inactive_stake,
+                deactivation_block,
+                &mut TransactionLog::empty(),
+            )
+            .expect("Failed to set inactive stake");
+
+        db_txn_og.commit();
+
+        StakerSetup {
+            env: validator_setup.env,
+            accounts: validator_setup.accounts,
+            staking_contract: validator_setup.staking_contract,
+            before_release_block_state,
+            inactive_release_block_state,
+            validator_address: validator_setup.validator_address,
+            staker_address,
+            active_stake,
+            inactive_stake,
+            jail_release,
+        }
+    }
 }
