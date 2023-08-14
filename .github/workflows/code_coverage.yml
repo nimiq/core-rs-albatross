@@ -39,7 +39,6 @@ jobs:
         swap-storage: true
     - name: Remove large packages
       run: |
-        sudo apt-get remove -y '^dotnet-.*'
         sudo apt-get remove -y 'php.*'
         sudo apt-get remove -y '^mongodb-.*'
         sudo apt-get remove -y '^mysql-.*'
