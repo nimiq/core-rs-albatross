@@ -1,3 +1,6 @@
-main-wasm
-worker-wasm
-types
+dist/*/main-wasm
+dist/*/worker-wasm
+dist/types
+dist/lib
+
+node_modules
