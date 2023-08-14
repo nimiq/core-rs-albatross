@@ -1552,6 +1552,13 @@ fn can_update_inactive_balance() {
         ))
     );
 
+    let validator = staker_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &staker_setup.validator_address)
+        .expect("Validator should exist");
+
+    assert_eq!(validator.num_stakers, 0);
+
     // Reverts correctly.
     staker_setup
         .staking_contract
@@ -1575,6 +1582,13 @@ fn can_update_inactive_balance() {
         staker.inactive_release,
         Some(staker_setup.inactive_release_block_state.number)
     );
+
+    let validator = staker_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &staker_setup.validator_address)
+        .expect("Validator should exist");
+
+    assert_eq!(validator.num_stakers, 1);
 
     // Can update inactive stake to 0.
     let tx = make_deactivate_stake_transaction(0);
@@ -1609,6 +1623,13 @@ fn can_update_inactive_balance() {
     assert_eq!(staker.inactive_balance, Coin::ZERO);
     assert_eq!(staker.inactive_release, None);
 
+    let validator = staker_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &staker_setup.validator_address)
+        .expect("Validator should exist");
+
+    assert_eq!(validator.num_stakers, 1);
+
     // Reverts correctly.
     staker_setup
         .staking_contract
@@ -1632,4 +1653,86 @@ fn can_update_inactive_balance() {
         staker.inactive_release,
         Some(staker_setup.inactive_release_block_state.number)
     );
+
+    let validator = staker_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &staker_setup.validator_address)
+        .expect("Validator should exist");
+
+    assert_eq!(validator.num_stakers, 1);
+}
+
+#[test]
+fn validator_correctly_counts_num_stakers_when_reactivating() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let mut staker_setup = setup_staker_with_inactive_balance(false, 100_000_000, 0);
+    let data_store = staker_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = staker_setup.env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Inactivate everything
+    let tx = make_deactivate_stake_transaction(staker_setup.active_stake.into());
+
+    staker_setup
+        .staking_contract
+        .commit_incoming_transaction(
+            &tx,
+            &staker_setup.before_release_block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
+        .expect("Failed to commit transaction");
+
+    let validator = staker_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &staker_setup.validator_address)
+        .expect("Validator should exist");
+
+    assert_eq!(validator.num_stakers, 0);
+
+    // Reactivate everything
+    let tx = make_deactivate_stake_transaction(0);
+
+    let receipt = staker_setup
+        .staking_contract
+        .commit_incoming_transaction(
+            &tx,
+            &staker_setup.before_release_block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
+        .expect("Failed to commit transaction");
+
+    let validator = staker_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &staker_setup.validator_address)
+        .expect("Validator should exist");
+
+    assert_eq!(validator.num_stakers, 1);
+
+    // Reverts correctly.
+    staker_setup
+        .staking_contract
+        .revert_incoming_transaction(
+            &tx,
+            &staker_setup.before_release_block_state,
+            receipt,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
+        .expect("Failed to commit transaction");
+
+    let validator = staker_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &staker_setup.validator_address)
+        .expect("Validator should exist");
+
+    assert_eq!(validator.num_stakers, 0);
 }
