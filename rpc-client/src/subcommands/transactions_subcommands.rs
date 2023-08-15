@@ -101,9 +101,9 @@ pub enum TransactionCommand {
         #[clap(long)]
         new_delegation: Option<Address>,
 
-        /// The new inactive balance to set for the new delegation.
+        /// Activate all stake to the new delegation.
         #[clap(long)]
-        new_inactive_balance: Option<Coin>,
+        reactivate_all_stake: bool,
 
         #[clap(flatten)]
         tx_commons: TxCommon,
@@ -419,7 +419,7 @@ impl HandleSubcommand for TransactionCommand {
                 sender_wallet,
                 staker_wallet,
                 new_delegation,
-                new_inactive_balance,
+                reactivate_all_stake,
                 tx_commons,
             } => {
                 if tx_commons.dry {
@@ -429,7 +429,7 @@ impl HandleSubcommand for TransactionCommand {
                             sender_wallet,
                             staker_wallet,
                             new_delegation,
-                            new_inactive_balance,
+                            reactivate_all_stake,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
                         )
@@ -442,7 +442,7 @@ impl HandleSubcommand for TransactionCommand {
                             sender_wallet,
                             staker_wallet,
                             new_delegation,
-                            new_inactive_balance,
+                            reactivate_all_stake,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
                         )

@@ -177,7 +177,7 @@ impl AccountTransactionInteraction for StakingContract {
                 .map(|_| None),
             IncomingStakingTransactionData::UpdateStaker {
                 new_delegation,
-                new_inactive_balance,
+                reactivate_all_stake,
                 proof,
             } => {
                 // Get the staker address from the proof.
@@ -187,7 +187,7 @@ impl AccountTransactionInteraction for StakingContract {
                     &mut store,
                     &staker_address,
                     new_delegation,
-                    new_inactive_balance,
+                    reactivate_all_stake,
                     block_state.number,
                     tx_logger,
                 )

@@ -708,7 +708,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 IncomingAccountData::Staking {
                     parameters: IncomingStakingTransactionData::UpdateStaker {
                         new_delegation: Some(Address::from(&validator_key_pair)),
-                        new_inactive_balance: None,
+                        reactivate_all_stake: false,
                         proof: SignatureProof::default(),
                     },
                     validator_key_pair,

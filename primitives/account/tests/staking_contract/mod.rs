@@ -16,7 +16,8 @@ use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
-    account::staking_contract::IncomingStakingTransactionData, SignatureProof, Transaction,
+    account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionData},
+    SignatureProof, Transaction,
 };
 
 mod punished_slots;
@@ -132,6 +133,30 @@ fn make_signed_incoming_transaction(
     tx
 }
 
+fn make_delete_validator_transaction() -> Transaction {
+    let mut tx = Transaction::new_extended(
+        Policy::STAKING_CONTRACT_ADDRESS,
+        AccountType::Staking,
+        OutgoingStakingTransactionData::DeleteValidator.serialize_to_vec(),
+        non_existent_address(),
+        AccountType::Basic,
+        vec![],
+        (Policy::VALIDATOR_DEPOSIT - 100).try_into().unwrap(),
+        100.try_into().unwrap(),
+        1,
+        NetworkId::Dummy,
+    );
+
+    let private_key =
+        PrivateKey::deserialize_from_vec(&hex::decode(VALIDATOR_PRIVATE_KEY).unwrap()).unwrap();
+
+    let key_pair = KeyPair::from(private_key);
+    let signature = key_pair.sign(&tx.serialize_content());
+    tx.proof = SignatureProof::from(key_pair.public, signature).serialize_to_vec();
+
+    tx
+}
+
 fn make_sample_contract(
     mut data_store: DataStoreWrite,
     staker_active_balance: Option<u64>,
@@ -174,6 +199,14 @@ fn make_sample_contract(
             .unwrap();
     }
     (validator_address, Some(staker_address), contract)
+}
+
+#[allow(dead_code)]
+enum ValidatorState {
+    Active,
+    Jailed,
+    Retired,
+    Deleted,
 }
 
 struct ValidatorSetup {
@@ -261,6 +294,34 @@ impl ValidatorSetup {
         validator_setup
     }
 
+    fn setup_deleted_validator(staker_active_balance: Option<u64>) -> Self {
+        let mut validator_setup = Self::setup_retired_validator(staker_active_balance);
+        let data_store = validator_setup
+            .accounts
+            .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+        let mut db_txn_og = validator_setup.env.write_transaction();
+        let mut db_txn = (&mut db_txn_og).into();
+
+        // Delete the validator.
+        let delete_tx = make_delete_validator_transaction();
+
+        let block_state = BlockState::new(validator_setup.state_release_block_state.number, 4);
+        validator_setup
+            .staking_contract
+            .commit_outgoing_transaction(
+                &delete_tx,
+                &block_state,
+                data_store.write(&mut db_txn),
+                &mut TransactionLog::empty(),
+            )
+            .expect("Failed to commit transaction");
+
+        db_txn_og.commit();
+
+        validator_setup.set_block_state(BlockState::default(), BlockState::default());
+        validator_setup
+    }
+
     fn setup_jailed_validator(staker_active_balance: Option<u64>) -> ValidatorSetup {
         let jailing_inherent_block_state = BlockState::new(2, 2);
         let jail_release_block_state = BlockState::new(
@@ -319,24 +380,36 @@ struct StakerSetup {
     staker_address: Address,
     active_stake: Coin,
     inactive_stake: Coin,
-    jail_release: Option<u32>,
+    validator_state_release: Option<u32>,
 }
 
 impl StakerSetup {
     fn setup_staker_with_inactive_balance(
-        validator_is_jailed: bool,
+        validator_state: ValidatorState,
         active_stake: u64,
         inactive_stake: u64,
     ) -> Self {
         // Setup jailed validator
-        let mut jail_release = None;
-        let mut validator_setup = if validator_is_jailed {
-            let validator_setup =
-                ValidatorSetup::setup_jailed_validator(Some(active_stake + inactive_stake));
-            jail_release = Some(validator_setup.state_release_block_state.number);
-            validator_setup
-        } else {
-            ValidatorSetup::new(Some(active_stake + inactive_stake))
+        let mut validator_state_release = None;
+        let mut validator_setup = match validator_state {
+            ValidatorState::Active => ValidatorSetup::new(Some(active_stake + inactive_stake)),
+            ValidatorState::Jailed => {
+                let validator_setup =
+                    ValidatorSetup::setup_jailed_validator(Some(active_stake + inactive_stake));
+                validator_state_release = Some(validator_setup.state_release_block_state.number);
+                validator_setup
+            }
+            ValidatorState::Retired => {
+                let validator_setup =
+                    ValidatorSetup::setup_retired_validator(Some(active_stake + inactive_stake));
+                validator_state_release = Some(validator_setup.state_release_block_state.number);
+                validator_setup
+            }
+            ValidatorState::Deleted => {
+                let validator_setup =
+                    ValidatorSetup::setup_deleted_validator(Some(active_stake + inactive_stake));
+                validator_setup
+            }
         };
 
         let data_store = validator_setup
@@ -382,7 +455,7 @@ impl StakerSetup {
             staker_address,
             active_stake,
             inactive_stake,
-            jail_release,
+            validator_state_release,
         }
     }
 }

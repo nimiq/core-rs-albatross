@@ -116,10 +116,8 @@ pub enum Log {
         staker_address: Address,
         old_validator_address: Option<Address>,
         new_validator_address: Option<Address>,
-        old_active_balance: Coin,
-        new_active_balance: Coin,
-        old_inactive_release: Option<u32>,
-        new_inactive_release: Option<u32>,
+        active_balance: Coin,
+        inactive_release: Option<u32>,
     },
 
     #[serde(rename_all = "camelCase")]
@@ -267,10 +265,7 @@ impl Log {
                 staker_address,
                 old_validator_address,
                 new_validator_address,
-                old_active_balance: _,
-                new_active_balance: _,
-                old_inactive_release: _,
-                new_inactive_release: _,
+                ..
             } => {
                 staker_address == address
                     || old_validator_address

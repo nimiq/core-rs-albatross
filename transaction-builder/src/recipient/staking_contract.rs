@@ -138,11 +138,11 @@ impl StakingRecipientBuilder {
     pub fn update_staker(
         &mut self,
         new_delegation: Option<Address>,
-        new_inactive_balance: Option<Coin>,
+        reactivate_all_stake: bool,
     ) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::UpdateStaker {
             new_delegation,
-            new_inactive_balance,
+            reactivate_all_stake,
             proof: Default::default(),
         });
         self

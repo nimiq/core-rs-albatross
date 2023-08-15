@@ -558,7 +558,7 @@ fn update_staker() {
     let mut tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::UpdateStaker {
             new_delegation: Some(VALIDATOR_ADDRESS.parse().unwrap()),
-            new_inactive_balance: None,
+            reactivate_all_stake: false,
             proof: SignatureProof::default(),
         },
         0,
@@ -594,7 +594,7 @@ fn update_staker() {
     let tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::UpdateStaker {
             new_delegation: None,
-            new_inactive_balance: None,
+            reactivate_all_stake: false,
             proof: SignatureProof::default(),
         },
         0,

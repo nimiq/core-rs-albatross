@@ -985,6 +985,7 @@ impl TransactionBuilder {
     ///  - `staker_key_pair`:       The key pair used to sign the incoming transaction. The staker
     ///                             address will be derived from this key pair.
     ///  - `delegation`:            The new delegation.
+    ///  - `reactivate_all_stake`:  If it should activate all inactive stake to the new delegation.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
     ///  - `network_id`:            ID of network for which the transaction is meant.
@@ -1001,13 +1002,13 @@ impl TransactionBuilder {
         key_pair: Option<&KeyPair>,
         staker_key_pair: &KeyPair,
         new_delegation: Option<Address>,
-        new_inactive_balance: Option<Coin>,
+        reactivate_all_stake: bool,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
-        recipient.update_staker(new_delegation, new_inactive_balance);
+        recipient.update_staker(new_delegation, reactivate_all_stake);
 
         let mut builder = Self::new();
         builder
