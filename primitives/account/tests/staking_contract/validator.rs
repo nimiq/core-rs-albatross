@@ -1305,7 +1305,7 @@ fn finalize_epoch_inherents_works() {
     let env = VolatileDatabase::new(20).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
-    let block_state = BlockState::new(Policy::blocks_per_epoch(), 1000);
+    let block_state = BlockState::new(Policy::macro_block_after(Policy::blocks_per_epoch()), 1000);
     let mut db_txn = env.write_transaction();
     let mut db_txn = (&mut db_txn).into();
 
@@ -1414,7 +1414,10 @@ fn finalize_epoch_inherents_works() {
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .expect("Validator should exist");
 
-    assert_eq!(validator.inactive_since, Some(Policy::blocks_per_epoch()));
+    assert_eq!(
+        validator.inactive_since,
+        Some(Policy::macro_block_after(Policy::blocks_per_epoch()))
+    );
 
     // Now we finalize the epoch
     let finalize_epoch_inherent = Inherent::FinalizeEpoch;

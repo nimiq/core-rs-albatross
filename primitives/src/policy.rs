@@ -202,6 +202,7 @@ impl Policy {
             block_number
         } else {
             let blocks_per_epoch = Self::blocks_per_epoch();
+            let block_number = block_number - Self::genesis_block_number();
             (block_number + blocks_per_epoch - 1) % blocks_per_epoch
         }
     }
@@ -228,6 +229,7 @@ impl Policy {
             block_number
         } else {
             let blocks_per_batch = Self::blocks_per_batch();
+            let block_number = block_number - Self::genesis_block_number();
             (block_number + blocks_per_batch - 1) % blocks_per_batch
         }
     }
@@ -240,7 +242,9 @@ impl Policy {
             Self::genesis_block_number()
         } else {
             let blocks_per_epoch = Self::blocks_per_epoch();
-            (block_number / blocks_per_epoch + 1) * blocks_per_epoch
+            let block_number = block_number - Self::genesis_block_number();
+            ((block_number / blocks_per_epoch + 1) * blocks_per_epoch)
+                + Self::genesis_block_number()
         }
     }
 
@@ -248,11 +252,20 @@ impl Policy {
     /// If the given block number is an election macro block, it returns the election macro block before it.
     #[inline]
     pub fn election_block_before(block_number: u32) -> u32 {
-        if block_number < Self::genesis_block_number() {
-            panic!("No election blocks before the genesis block");
-        } else {
-            let blocks_per_epoch = Self::blocks_per_epoch();
-            (block_number - 1) / blocks_per_epoch * blocks_per_epoch
+        match block_number.cmp(&Self::genesis_block_number()) {
+            std::cmp::Ordering::Less => {
+                panic!("No election blocks before the genesis block");
+            }
+            std::cmp::Ordering::Equal => {
+                // The genesis is the first election block
+                Self::genesis_block_number()
+            }
+            std::cmp::Ordering::Greater => {
+                let blocks_per_epoch = Self::blocks_per_epoch();
+                let block_number = block_number - Self::genesis_block_number();
+                ((block_number - 1) / blocks_per_epoch * blocks_per_epoch)
+                    + Self::genesis_block_number()
+            }
         }
     }
 
@@ -265,7 +278,8 @@ impl Policy {
             panic!("No election blocks before the genesis block");
         } else {
             let blocks_per_epoch = Self::blocks_per_epoch();
-            block_number / blocks_per_epoch * blocks_per_epoch
+            let block_number = block_number - Self::genesis_block_number();
+            (block_number / blocks_per_epoch * blocks_per_epoch) + Self::genesis_block_number()
         }
     }
 
@@ -282,8 +296,10 @@ impl Policy {
         if block_number < Self::genesis_block_number() {
             Self::genesis_block_number()
         } else {
+            let block_number = block_number - Self::genesis_block_number();
             let blocks_per_batch = Self::blocks_per_batch();
-            (block_number / blocks_per_batch + 1) * blocks_per_batch
+            ((block_number / blocks_per_batch + 1) * blocks_per_batch)
+                + Self::genesis_block_number()
         }
     }
 
@@ -295,7 +311,9 @@ impl Policy {
             panic!("No macro blocks before genesis block");
         } else {
             let blocks_per_batch = Self::blocks_per_batch();
-            (block_number - 1) / blocks_per_batch * blocks_per_batch
+            let block_number = block_number - Self::genesis_block_number();
+            ((block_number - 1) / blocks_per_batch * blocks_per_batch)
+                + Self::genesis_block_number()
         }
     }
 
@@ -308,7 +326,8 @@ impl Policy {
             panic!("No macro blocks before genesis block");
         } else {
             let blocks_per_batch = Self::blocks_per_batch();
-            block_number / blocks_per_batch * blocks_per_batch
+            let block_number = block_number - Self::genesis_block_number();
+            (block_number / blocks_per_batch * blocks_per_batch) + Self::genesis_block_number()
         }
     }
 
@@ -471,7 +490,7 @@ mod tests {
 
     fn initialize_policy() {
         let mut policy_config = TEST_POLICY;
-        policy_config.genesis_block_number = 128;
+        policy_config.genesis_block_number = 200;
 
         let _ = Policy::get_or_init(policy_config);
     }
@@ -748,6 +767,25 @@ mod tests {
             Policy::macro_block_before(130 + Policy::genesis_block_number()),
             Policy::genesis_block_number() + Policy::blocks_per_epoch() as u32
         );
+        assert_eq!(
+            Policy::last_macro_block(Policy::genesis_block_number()),
+            Policy::genesis_block_number()
+        );
+        assert_eq!(
+            Policy::last_macro_block(1 + Policy::genesis_block_number()),
+            Policy::genesis_block_number()
+        );
+        assert_eq!(
+            Policy::last_macro_block(31 + Policy::genesis_block_number()),
+            Policy::genesis_block_number()
+        );
+
+        assert_eq!(
+            Policy::last_macro_block(
+                Policy::blocks_per_batch() + Policy::genesis_block_number() + 1
+            ),
+            Policy::genesis_block_number() + 32
+        );
     }
 
     #[test]
@@ -838,7 +876,10 @@ mod tests {
             Policy::first_block_of(1),
             Some(Policy::genesis_block_number() + 1)
         );
-        assert_eq!(Policy::first_block_of(2), Some(257));
+        assert_eq!(
+            Policy::first_block_of(2),
+            Some(Policy::genesis_block_number() + Policy::blocks_per_epoch() + 1)
+        );
 
         assert_eq!(
             Policy::first_block_of_batch(1),
@@ -906,9 +947,10 @@ mod tests {
         // Epoch 1 starts at genesis + 1
         assert_eq!(Policy::epoch_at(1 + Policy::genesis_block_number()), 1);
 
+        // If genesis is 200, this corresponds to block 401.
         assert_eq!(
             Policy::epoch_index_at(2 * Policy::genesis_block_number() + 1),
-            0
+            401 - (Policy::genesis_block_number() + Policy::blocks_per_epoch()) - 1
         );
 
         //First batch starts after genesis

@@ -22,7 +22,6 @@ use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 
 #[test]
 fn it_can_create_batch_finalization_inherents() {
-    let genesis_block_number = Policy::genesis_block_number();
     let time = Arc::new(OffsetTime::new());
     let env = VolatileDatabase::new(20).unwrap();
     let blockchain = Arc::new(
@@ -37,7 +36,7 @@ fn it_can_create_batch_finalization_inherents() {
 
     let macro_header = MacroHeader {
         version: 1,
-        block_number: Policy::macro_block_of(2).unwrap() + genesis_block_number,
+        block_number: Policy::macro_block_of(2).unwrap(),
         round: 0,
         timestamp: blockchain.state().election_head.header.timestamp + 1,
         parent_hash: Blake2bHash::default(),

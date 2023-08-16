@@ -993,7 +993,10 @@ fn can_finalize_epoch() {
     let current_punished_slots = punished_slots.current_batch_punished_slots();
 
     // Finalize the epoch and check sets.
-    punished_slots.finalize_batch(Policy::blocks_per_epoch(), &BTreeMap::default());
+    punished_slots.finalize_batch(
+        Policy::macro_block_after(Policy::blocks_per_epoch()),
+        &BTreeMap::default(),
+    );
 
     assert!(punished_slots.current_batch_punished_slots().is_empty());
     assert_eq!(

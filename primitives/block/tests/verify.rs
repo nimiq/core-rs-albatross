@@ -388,7 +388,7 @@ fn test_verify_micro_block_body_fork_proofs() {
 fn test_verify_election_macro_body() {
     let mut macro_header = MacroHeader {
         version: Policy::VERSION,
-        block_number: Policy::blocks_per_epoch(),
+        block_number: Policy::genesis_block_number() + Policy::blocks_per_epoch(),
         round: 0,
         timestamp: 0,
         parent_hash: Blake2bHash::default(),

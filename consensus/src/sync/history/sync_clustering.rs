@@ -609,8 +609,10 @@ mod tests {
                 checkpoint_id[9] = 1;
             }
 
-            let block_number = (first_epoch_number + len) as u32 * Policy::blocks_per_epoch()
-                + Policy::blocks_per_batch();
+            let block_number = ((first_epoch_number + len) as u32 * Policy::blocks_per_epoch()
+                + Policy::blocks_per_batch())
+                + Policy::genesis_block_number();
+
             Some(Checkpoint {
                 hash: Blake2bHash::from(checkpoint_id),
                 block_number,

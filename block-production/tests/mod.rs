@@ -989,10 +989,14 @@ fn it_can_consume_all_validator_deposit() {
     let last_block_of_reporting_window = Policy::last_block_of_reporting_window(
         Policy::election_block_after(1 + Policy::genesis_block_number()),
     );
+
+    // Use the genesis block number as an offset
+    let macro_blocks_to_produce = last_block_of_reporting_window - Policy::genesis_block_number();
+
     produce_macro_blocks(
         &producer,
         &blockchain,
-        last_block_of_reporting_window.ceiling_div(Policy::blocks_per_batch()) as usize,
+        macro_blocks_to_produce.ceiling_div(Policy::blocks_per_batch()) as usize,
     );
 
     // This is an invalid tx since the recipient type doesn't match.
@@ -1028,7 +1032,7 @@ fn it_can_consume_all_validator_deposit() {
 
     assert_eq!(
         blockchain.read().block_number(),
-        last_block_of_reporting_window + 1 + Policy::genesis_block_number()
+        macro_blocks_to_produce + 1 + Policy::genesis_block_number()
     );
 
     // Now we need to verify that the validator deposit was reduced because of the failing txn
@@ -1085,7 +1089,7 @@ fn it_can_consume_all_validator_deposit() {
 
     assert_eq!(
         blockchain.read().block_number(),
-        last_block_of_reporting_window + 2 + Policy::genesis_block_number()
+        macro_blocks_to_produce + 2 + Policy::genesis_block_number()
     );
 
     // Now we need to verify that the validator no longer exists
@@ -1198,10 +1202,14 @@ fn it_can_revert_failed_delete_validator() {
     let last_block_of_reporting_window = Policy::last_block_of_reporting_window(
         Policy::election_block_after(1 + Policy::genesis_block_number()),
     );
+
+    // Here we need to take into consideration the genesis block number as an offset
+    let macro_blocks_to_produce = last_block_of_reporting_window - Policy::genesis_block_number();
+
     produce_macro_blocks(
         &producer,
         &blockchain,
-        last_block_of_reporting_window.ceiling_div(Policy::blocks_per_batch()) as usize,
+        macro_blocks_to_produce.ceiling_div(Policy::blocks_per_batch()) as usize,
     );
 
     // This is an invalid tx since the recipient type doesn't match.
@@ -1236,7 +1244,7 @@ fn it_can_revert_failed_delete_validator() {
 
     assert_eq!(
         blockchain.read().block_number(),
-        last_block_of_reporting_window + 1 + Policy::genesis_block_number()
+        macro_blocks_to_produce + 1 + Policy::genesis_block_number()
     );
 
     // Now we need to verify that the validator deposit was reduced because of the failing txn
