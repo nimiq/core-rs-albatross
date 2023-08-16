@@ -1,0 +1,65 @@
+[package]
+name = "nimiq-pow-migration"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "Nimiq Proof-Of-Work migration tools"
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+keywords.workspace = true
+
+[badges]
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
+maintenance = { status = "experimental" }
+
+[dependencies]
+clap = { version = "4.3", features = ["derive"] }
+hex = "0.4"
+humantime = "2.1"
+indicatif = "0.17"
+jsonrpsee = { version = "0.20", features = ["client-core"] }
+log = { package = "tracing", version = "0.1", features = ["log"] }
+nimiq-blockchain = { workspace = true }
+nimiq-bls = { workspace = true }
+nimiq-database = { workspace = true }
+nimiq-genesis-builder = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true }
+nimiq-lib = { workspace = true, features = [
+    "database-storage",
+    "deadlock",
+    "full-consensus",
+    "logging",
+    "loki",
+    "metrics-server",
+    "panic",
+    "rpc-server",
+    "signal-handling",
+    "validator",
+    "wallet",
+    "zkp-prover",
+    "parallel",
+] }
+nimiq-primitives = { workspace = true, features = ["policy"]}
+nimiq-serde = { workspace = true }
+nimiq-transaction = { workspace = true }
+nimiq-vrf = { workspace = true }
+nimiq_rpc = { git = "https://github.com/jsdanielh/rust-client.git" }
+percentage = "0.1"
+rand = "0.8"
+serde = "1.0"
+serde_derive = "1.0"
+thiserror = "1.0"
+time = "0.3"
+tokio = { version = "1.29", features = [
+    "macros",
+    "rt-multi-thread",
+    "tracing",
+] }
+toml = "0.7"
+tracing-subscriber = { version = "0.3", features = ["registry"] }
+url = "2.4"

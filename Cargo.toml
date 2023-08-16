@@ -30,6 +30,7 @@ members = [
   "network-interface",
   "network-libp2p",
   "network-mock",
+  "pow-migration",
   "primitives",
   "primitives/account",
   "primitives/block",
