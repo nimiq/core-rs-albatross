@@ -129,7 +129,7 @@ impl StakingContract {
 
         // If we are delegating to a validator, we need to update it.
         if let Some(validator_address) = &staker.delegation {
-            self.decrease_stake_from_validator(store, &validator_address, staker.balance);
+            self.decrease_stake_from_validator(store, validator_address, staker.balance);
             self.unregister_staker_from_validator(store, validator_address);
         }
 
