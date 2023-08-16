@@ -485,7 +485,9 @@ impl<N: Network> Stream for StateQueue<N> {
         // Reset on a rebranch (since we potentially revert to an incomplete state).
         while let Poll::Ready(Some(event)) = self.blockchain_rx.poll_next_unpin(cx) {
             match event {
-                BlockchainEvent::Finalized(_) | BlockchainEvent::EpochFinalized(_) => {
+                BlockchainEvent::Finalized(_)
+                | BlockchainEvent::EpochFinalized(_)
+                | BlockchainEvent::Extended(_) => {
                     let blockchain_state_complete = self.blockchain.read().accounts_complete();
                     if !self.start_key.is_complete() && blockchain_state_complete {
                         // Mark state sync as complete after passing a macro block.
