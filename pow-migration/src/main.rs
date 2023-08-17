@@ -206,13 +206,24 @@ async fn main() {
 
     log::debug!("This is the list of registered validators:");
 
+    let mut registered_validator = false;
+
     for validator in &registered_validators {
+        if validator.validator.validator_address == validator_address {
+            registered_validator = true;
+        }
+
         log::debug!(
             validator_address = validator
                 .validator
                 .validator_address
                 .to_user_friendly_address()
         );
+    }
+
+    if !registered_validator {
+        log::warn!(" The validator address that is being used was not registered before! ");
+        log::warn!(" Therefore this validator cannot participate in the readiness voting process");
     }
 
     // Now we obtain the stake distribution
@@ -262,9 +273,8 @@ async fn main() {
             previous_election_block = block_windows.pre_stake_end;
         }
 
-        if !reported_ready {
+        if !reported_ready && registered_validator {
             // Obtain all the transactions that we have sent previously.
-            // TODO: We need to check that this validator is part of the list of the registered validators!
             let transactions = get_ready_txns(
                 &client,
                 validator_address.to_user_friendly_address(),
