@@ -11,7 +11,10 @@ static TESTNET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     registration_end: 2660000,
     pre_stake_start: 2660000,
     pre_stake_end: 2663100,
+    election_candidate: 2664100,
     block_confirmations: 10,
+    // This corresponds to ~24 hours.
+    readiness_window: 1440,
 };
 
 static MAINET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
@@ -19,7 +22,10 @@ static MAINET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     registration_end: 2660000,
     pre_stake_start: 2660000,
     pre_stake_end: 2663100,
+    election_candidate: 2664100,
     block_confirmations: 10,
+    // This corresponds to ~24 hours.
+    readiness_window: 1440,
 };
 
 /// PoW block registration window
@@ -56,9 +62,18 @@ pub struct BlockWindows {
     pub pre_stake_start: u32,
     /// Block number of the pre stake registration window end.
     pub pre_stake_end: u32,
+
+    /// The final block from the PoW that is used to create the first PoS election block.
+    pub election_candidate: u32,
+
     /// Number of confirmations after the final block needed for the PoS chain to
     /// start.
     pub block_confirmations: u32,
+
+    /// If not enough validators are ready to start the PoS chain,
+    /// a new candidate is elected after readiness_window blocks.
+    /// This process is repeated until we start the PoS chain.
+    pub readiness_window: u32,
 }
 
 /// Error types that can be returned

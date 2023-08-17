@@ -18,11 +18,10 @@ use nimiq_pow_migration::{
     get_block_windows,
     monitor::{
         check_validators_ready, generate_ready_tx, get_ready_txns, send_tx,
-        types::{ValidatorsReadiness, ACTIVATION_HEIGHT},
+        types::ValidatorsReadiness,
     },
     state::{get_stakers, get_validators},
 };
-use nimiq_primitives::policy::Policy;
 use nimiq_rpc::Client;
 use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 use url::Url;
@@ -241,15 +240,26 @@ async fn main() {
     }
 
     let mut reported_ready = false;
+    let mut next_election_block;
+    let mut previous_election_block;
     loop {
         let current_height = client.block_number().await.unwrap();
         info!(current_height);
 
-        let next_election_block = Policy::election_block_after(current_height);
-        let mut previous_election_block = Policy::election_block_before(current_height);
+        // We are past the election candidate, so we are now in one of the activation windows
+        if current_height > block_windows.election_candidate {
+            // First we calculate how many blocks past the candidate we are currently at
+            let diff = current_height - block_windows.election_candidate;
+            // We calculate in which activation window we are
+            let mul = diff / block_windows.readiness_window;
 
-        if previous_election_block < ACTIVATION_HEIGHT {
-            previous_election_block = ACTIVATION_HEIGHT;
+            previous_election_block =
+                block_windows.election_candidate + mul * block_windows.readiness_window;
+            next_election_block =
+                block_windows.election_candidate + (mul + 1) * block_windows.readiness_window;
+        } else {
+            next_election_block = block_windows.election_candidate;
+            previous_election_block = block_windows.pre_stake_end;
         }
 
         if !reported_ready {
@@ -298,15 +308,14 @@ async fn main() {
 
         sleep(Duration::from_secs(60));
 
-        // If at this point we have a new nex_election_block, it means that we are in a new epoch, so we need to report we are ready again.
-        if next_election_block != Policy::election_block_after(client.block_number().await.unwrap())
-        {
+        // We need to check if we are still in the same readiness window.
+        if next_election_block < client.block_number().await.unwrap() {
             reported_ready = false;
         }
     }
 
-    // Now that we have enough validators ready, we need to pick the next election block candidate
-    let candidate = Policy::election_block_after(client.block_number().await.unwrap());
+    // Now that we have enough validators ready, we know the exact block that we are going to use
+    let candidate = next_election_block;
 
     info!(next_election_candidate = candidate);
 
