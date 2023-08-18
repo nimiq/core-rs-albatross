@@ -27,6 +27,9 @@ pub enum Error {
     /// IO error
     #[error("I/O error: {0}")]
     IO(#[from] std::io::Error),
+    /// Invalid Network ID
+    #[error("Invalid network ID {0}")]
+    InvalidNetworkId(nimiq_primitives::networks::NetworkId),
 }
 
 /// PoW registration window

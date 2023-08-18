@@ -337,6 +337,7 @@ async fn main() {
     let genesis_config = match get_pos_genesis(
         &client,
         &pow_registration_window,
+        config.network_id,
         env,
         Some(PoSRegisteredAgents {
             validators,

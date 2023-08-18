@@ -79,8 +79,7 @@ fn from_pow_transaction(pow_transaction: &PoWTransaction) -> Result<Transaction,
     } else {
         [].to_vec()
     };
-    // FixMe
-    //let validity_start_height = u32::try_from(pow_transaction.valid)
+
     let validity_start_height = pow_transaction.validity_start_height;
     let network_id = from_pow_network_id(pow_transaction.network_id)?;
     let mut tx = Transaction::new_extended(

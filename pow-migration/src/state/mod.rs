@@ -23,7 +23,7 @@ use crate::state::types::{Error, GenesisAccounts, GenesisValidator};
 // POW estimated block time in milliseconds
 const POW_BLOCK_TIME_MS: u64 = 60 * 1000; // 1 min
                                           // PoS validator deposit
-const VALIDATOR_DEPOSIT: u64 = 10;
+const VALIDATOR_DEPOSIT: u64 = 10; // FixMe: This should match the actual PoS validator deposit.
 
 fn pos_basic_account_from_account(pow_account: &PoWBasicAccount) -> Result<GenesisAccount, Error> {
     let address = Address::from_user_friendly_address(&pow_account.address)?;
