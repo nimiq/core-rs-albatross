@@ -256,7 +256,7 @@ impl TransactionBuilder {
         Ok(Transaction::from_native(tx))
     }
 
-    /// Registers a new validator in the staking contract
+    /// Registers a new validator in the staking contract.
     ///
     /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
     ///
