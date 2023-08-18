@@ -254,36 +254,41 @@ impl TransactionBuilder {
     }
 
     /// Registers a new validator in the staking contract
-    /// 
+    ///
     /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
-    /// 
+    ///
     /// Throws when the numbers given for fee do not fit within a u64 or the networkId is unknown.
 
     #[wasm_bindgen(js_name = newCreateValidator)]
     pub fn new_create_validator(
-       sender: &Address,
-       reward_address: &Address,
-       signing_key: PublicKey,
-       voting_key_pair: BLSKeyPair, 
-       fee : Option<u64>,
-       validity_start_height: u32,
-       network_id: u8,
+        sender: &Address,
+        reward_address: &Address,
+        signing_key: PublicKey,
+        voting_key_pair: BLSKeyPair,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
     ) -> Result<Transaction, JsError> {
-       let mut recipient = Recipient::new_staking_builder();
-       recipient.create_validator(signing_key.native_ref().clone(), &voting_key_pair.native_ref().clone(), reward_address.native_ref().clone(),None);
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.create_validator(
+            signing_key.native_ref().clone(),
+            &voting_key_pair.native_ref().clone(),
+            reward_address.native_ref().clone(),
+            None,
+        );
 
-       let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
-       builder
-           .with_sender(Sender::new_basic(sender.native_ref().clone()))
-           .with_recipient(recipient.generate().unwrap())
-           .with_value(Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT))
-           .with_fee(Coin::try_from(fee.unwrap_or(0))?)
-           .with_validity_start_height(validity_start_height)
-           .with_network_id(to_network_id(network_id)?);
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT))
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
 
-           let proof_builder = builder.generate()?;
-           let tx = proof_builder.preliminary_transaction().to_owned();
-       Ok(Transaction::from_native(tx))
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from_native(tx))
     }
 
     // pub fn new_update_validator()
