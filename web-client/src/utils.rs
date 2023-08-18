@@ -13,6 +13,7 @@ pub fn from_network_id(network_id: NetworkId) -> u8 {
         NetworkId::TestAlbatross => 5,
         NetworkId::DevAlbatross => 6,
         NetworkId::UnitAlbatross => 7,
+        NetworkId::MainAlbatross => 24,
     }
 }
 
@@ -28,6 +29,7 @@ pub fn to_network_id(network_id: u8) -> Result<NetworkId, JsError> {
         5 => Ok(NetworkId::TestAlbatross),
         6 => Ok(NetworkId::DevAlbatross),
         7 => Ok(NetworkId::UnitAlbatross),
+        24 => Ok(NetworkId::MainAlbatross),
 
         _ => Err(JsError::new("Unknown network ID")),
     }

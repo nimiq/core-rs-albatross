@@ -14,9 +14,7 @@ static TESTNET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     block_confirmations: 10,
 };
 
-// Currently not used because there is still no network ID for PoS MainNet
-#[allow(dead_code)]
-static MAINNET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
+static MAINET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     registration_start: 2590000,
     registration_end: 2660000,
     pre_stake_start: 2660000,
@@ -74,6 +72,7 @@ pub enum Error {
 pub fn get_block_windows(network_id: NetworkId) -> Result<&'static BlockWindows, Error> {
     match network_id {
         NetworkId::TestAlbatross => Ok(TESTNET_BLOCK_WINDOWS),
+        NetworkId::MainAlbatross => Ok(MAINET_BLOCK_WINDOWS),
         _ => Err(Error::InvalidNetworkID(network_id)),
     }
 }

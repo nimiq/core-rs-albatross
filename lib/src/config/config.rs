@@ -45,10 +45,6 @@ use crate::{
 
 /// The sync mode
 ///
-/// # Notes
-///
-/// core-rs / Albatross currently only supports history sync.
-///
 /// # ToDo
 ///
 /// * We'll probably have this enum somewhere in the primitives. So this is a placeholder.
@@ -617,16 +613,16 @@ pub struct ClientConfig {
     pub consensus: ConsensusConfig,
 
     /// The Nimiq network the client should connect to. Usually this should be either `Test` or
-    /// `Main` for the Nimiq 1.0 networks. For Albatross there is currently only `TestAlbatross`
+    /// `Main` for the Nimiq 1.0 networks. For Albatross there is `MainAlbatross`, `TestAlbatross`
     /// and `DevAlbatross` available. Since Albatross is still in development at time of writing,
-    /// it is recommended to use `DevAlbatross`.
+    /// it is recommended to use `TestAlbatross`.
     ///
-    /// Default is `DevAlbatross`
+    /// Default is `TestAlbatross`
     ///
     /// # TODO
     ///
     ///  - Rename, to avoid confusion with the libp2p network
-    #[builder(default = "NetworkId::DevAlbatross")]
+    #[builder(default = "NetworkId::TestAlbatross")]
     pub network_id: NetworkId,
 
     /// Determines where the database is stored.
