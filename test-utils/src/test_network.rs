@@ -88,13 +88,13 @@ impl TestNetwork for Network {
     }
 
     async fn connect_networks(networks: &[Arc<Network>], seed_peer_id: u64) {
-        for network in networks {
+        let seed = multiaddr![Memory(seed_peer_id)];
+        // Skip the last network assuming the last one is the seed and doesn't make
+        // sense for the seed to connect to itself.
+        for network in &networks[0..networks.len() - 1] {
             // Tell the network to connect to seed nodes
-            let seed = multiaddr![Memory(seed_peer_id)];
-            log::debug!("Dialing seed: {:?}", seed);
-
             network
-                .dial_address(seed)
+                .dial_address(seed.clone())
                 .await
                 .expect("Failed to dial seed");
         }

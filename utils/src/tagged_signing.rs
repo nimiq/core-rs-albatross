@@ -237,7 +237,7 @@ mod tests {
 
 #[cfg(feature = "libp2p")]
 mod impl_for_libp2p {
-    use libp2p_core::identity::{Keypair, PublicKey};
+    use libp2p_identity::{Keypair, PublicKey};
 
     use super::{TaggedKeypair, TaggedPublicKey};
 

@@ -10,11 +10,12 @@ use futures::StreamExt;
 use instant::Instant;
 use ip_network::IpNetwork;
 use libp2p::{
-    core::{connection::ConnectionId, multiaddr::Protocol, ConnectedPoint},
+    core::{multiaddr::Protocol, ConnectedPoint, Endpoint},
     swarm::{
+        behaviour::{ConnectionClosed, ConnectionEstablished, DialFailure},
         dial_opts::{DialOpts, PeerCondition},
-        ConnectionHandler, DialError, IntoConnectionHandler, NetworkBehaviour,
-        NetworkBehaviourAction, NotifyHandler, PollParameters,
+        dummy, CloseConnection, ConnectionDenied, ConnectionId, DialError, FromSwarm,
+        NetworkBehaviour, THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
     },
     Multiaddr, PeerId, TransportError,
 };
@@ -22,20 +23,21 @@ use nimiq_macros::store_waker;
 use nimiq_network_interface::{network::CloseReason, peer_info::Services};
 use parking_lot::RwLock;
 use rand::{seq::IteratorRandom, thread_rng};
+use void::Void;
 use wasm_timer::Interval;
 
-use super::handler::{ConnectionPoolHandler, ConnectionPoolHandlerError};
+use super::Error;
 use crate::discovery::peer_contacts::PeerContactBook;
 
 #[derive(Clone, Debug)]
-struct ConnectionPoolLimits {
+struct Limits {
     ip_count: HashMap<IpAddr, usize>,
     ip_subnet_count: HashMap<IpNetwork, usize>,
     peer_count: usize,
 }
 
 #[derive(Clone, Debug)]
-struct ConnectionPoolConfig {
+struct Config {
     peer_count_desired: usize,
     peer_count_max: usize,
     peer_count_per_ip_max: usize,
@@ -56,7 +58,7 @@ struct IpInfo {
     ip: IpAddr,
 }
 
-impl Default for ConnectionPoolConfig {
+impl Default for Config {
     fn default() -> Self {
         Self {
             peer_count_desired: 12,
@@ -150,7 +152,12 @@ impl<T: Ord> ConnectionState<T> {
     /// Also if the connection ID has been marked more that `self.max_failures`
     /// as failed then the connection ID will be marked as down.
     fn mark_failed(&mut self, id: T) {
-        self.dialing.remove(&id);
+        let dialing = self.dialing.remove(&id);
+        if dialing && self.connected.contains(&id) {
+            // We attempted a dial to an already connected peer.
+            // This could happen dialing a peer that is also dialing us
+            return;
+        }
 
         // TODO Ignore failures if down?
 
@@ -222,13 +229,12 @@ impl<T> std::fmt::Display for ConnectionState<T> {
 
 /// Connection pool behaviour events
 #[derive(Debug)]
-pub enum ConnectionPoolEvent {
+pub enum Event {
     /// A peer has joined
     PeerJoined { peer_id: PeerId },
 }
 
-type PoolNetworkBehaviourAction =
-    NetworkBehaviourAction<ConnectionPoolEvent, ConnectionPoolHandler>;
+type PoolToSwarm = ToSwarm<Event, Void>;
 
 /// Connection pool behaviour
 ///
@@ -237,7 +243,7 @@ type PoolNetworkBehaviourAction =
 /// the peer is connected, is being dialed, is down or has failed.
 /// Also watches if we have received more connections than the allowed
 /// configured maximum per peer, IP or subnet.
-pub struct ConnectionPoolBehaviour {
+pub struct Behaviour {
     /// Peer contact book. This is the data structure where information of all
     /// known peers is store. This information includes known addresses and
     /// services of each of the peers.
@@ -259,16 +265,16 @@ pub struct ConnectionPoolBehaviour {
     addresses: ConnectionState<Multiaddr>,
 
     /// Queue of actions this behaviour will emit for handler execution.
-    actions: VecDeque<PoolNetworkBehaviourAction>,
+    actions: VecDeque<PoolToSwarm>,
 
     /// Tells whether the connection pool behaviour is active or not
     active: bool,
 
     /// Counters per connection limits
-    limits: ConnectionPoolLimits,
+    limits: Limits,
 
     /// Configuration for the connection pool behaviour
-    config: ConnectionPoolConfig,
+    config: Config,
 
     /// Waker to signal when this behaviour needs to be polled again
     waker: Option<Waker>,
@@ -277,19 +283,19 @@ pub struct ConnectionPoolBehaviour {
     housekeeping_timer: Interval,
 }
 
-impl ConnectionPoolBehaviour {
+impl Behaviour {
     pub fn new(
         contacts: Arc<RwLock<PeerContactBook>>,
         own_peer_id: PeerId,
         seeds: Vec<Multiaddr>,
         required_services: Services,
     ) -> Self {
-        let limits = ConnectionPoolLimits {
+        let limits = Limits {
             ip_count: HashMap::new(),
             ip_subnet_count: HashMap::new(),
             peer_count: 0,
         };
-        let config = ConnectionPoolConfig::default();
+        let config = Config::default();
         let housekeeping_timer = wasm_timer::Interval::new(config.housekeeping_interval);
 
         Self {
@@ -350,12 +356,10 @@ impl ConnectionPoolBehaviour {
             // Dial peers from the contact book.
             for peer_id in self.choose_peers_to_dial() {
                 self.peer_ids.mark_dialing(peer_id);
-                let handler = self.new_handler();
-                self.actions.push_back(NetworkBehaviourAction::Dial {
+                self.actions.push_back(ToSwarm::Dial {
                     opts: DialOpts::peer_id(peer_id)
                         .condition(PeerCondition::Disconnected)
                         .build(),
-                    handler,
                 });
             }
 
@@ -363,10 +367,8 @@ impl ConnectionPoolBehaviour {
             for address in self.choose_seeds_to_dial() {
                 debug!(%address, "Dialing seed");
                 self.addresses.mark_dialing(address.clone());
-                let handler = self.new_handler();
-                self.actions.push_back(NetworkBehaviourAction::Dial {
+                self.actions.push_back(ToSwarm::Dial {
                     opts: DialOpts::unknown_peer_id().address(address).build(),
-                    handler,
                 });
             }
         }
@@ -403,12 +405,10 @@ impl ConnectionPoolBehaviour {
     /// - The close reason `MaliciousPeer` will cause the peer to be banned.
     /// - Going offline will signal the network to stop connecting to peers.
     pub fn close_connection(&mut self, peer_id: PeerId, reason: CloseReason) {
-        self.actions
-            .push_back(NetworkBehaviourAction::NotifyHandler {
-                peer_id,
-                handler: NotifyHandler::Any,
-                event: ConnectionPoolHandlerError::Other(reason),
-            });
+        self.actions.push_back(ToSwarm::CloseConnection {
+            peer_id,
+            connection: CloseConnection::All,
+        });
         self.wake();
 
         match reason {
@@ -539,37 +539,20 @@ impl ConnectionPoolBehaviour {
             }
         }
     }
-}
 
-impl NetworkBehaviour for ConnectionPoolBehaviour {
-    type ConnectionHandler = ConnectionPoolHandler;
-    type OutEvent = ConnectionPoolEvent;
-
-    fn new_handler(&mut self) -> Self::ConnectionHandler {
-        ConnectionPoolHandler::default()
-    }
-
-    fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-        self.contacts
-            .read()
-            .get(peer_id)
-            .map(|e| e.contact().addresses.clone())
-            .unwrap_or_default()
-    }
-
-    fn inject_connection_established(
+    fn on_connection_established(
         &mut self,
         peer_id: &PeerId,
         connection_id: &ConnectionId,
         endpoint: &ConnectedPoint,
-        failed_addresses: Option<&Vec<Multiaddr>>,
+        failed_addresses: &[Multiaddr],
         other_established: usize,
     ) {
+        let address = endpoint.get_remote_address();
+
         // Mark failed addresses as such.
-        if let Some(addresses) = failed_addresses {
-            for address in addresses {
-                self.addresses.mark_failed(address.clone());
-            }
+        for address in failed_addresses {
+            self.addresses.mark_failed(address.clone());
         }
 
         // Ignore connection if another connection to this peer already exists.
@@ -589,96 +572,28 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
             // does it.
             if *peer_id <= self.own_peer_id {
                 // Notify the handler that the connection must be closed
-                self.actions
-                    .push_back(NetworkBehaviourAction::NotifyHandler {
-                        peer_id: *peer_id,
-                        handler: NotifyHandler::One(*connection_id),
-                        event: ConnectionPoolHandlerError::AlreadyConnected,
-                    });
+                self.actions.push_back(ToSwarm::CloseConnection {
+                    peer_id: *peer_id,
+                    connection: CloseConnection::One(*connection_id),
+                });
                 self.wake();
             }
             return;
         }
 
-        let address = endpoint.get_remote_address();
-        let mut close_reason = None;
-        if self.addresses.is_banned(address.clone()) {
-            debug!(%address, "Address is banned");
-            close_reason = Some(ConnectionPoolHandlerError::BannedIp);
-        } else if self.peer_ids.is_banned(*peer_id) {
-            debug!(%peer_id, "Peer is banned");
-            close_reason = Some(ConnectionPoolHandlerError::BannedPeer);
-        }
-
         // Get IP from multiaddress if it exists.
         let ip_info = self.get_ip_info_from_multiaddr(address);
-
-        // If we have an IP, check connection limits per IP.
-        if let Some(ip_info) = ip_info.clone() {
-            if self.config.peer_count_per_ip_max
-                < self
-                    .limits
-                    .ip_count
-                    .get(&ip_info.ip)
-                    .unwrap_or(&0)
-                    .saturating_add(1)
-            {
-                // Subnet mask
-                debug!(ip=%ip_info.ip, limit=self.config.peer_count_per_ip_max, "Max peer connections per IP limit reached");
-                close_reason = Some(ConnectionPoolHandlerError::MaxPeerPerIPConnectionsReached);
-            }
-
-            // If we have the subnet IP, check connection limits per subnet
-            if let Some(subnet_ip) = ip_info.subnet_ip {
-                if self.config.peer_count_per_subnet_max
-                    < self
-                        .limits
-                        .ip_subnet_count
-                        .get(&subnet_ip)
-                        .unwrap_or(&0)
-                        .saturating_add(1)
-                {
-                    // Subnet mask
-                    debug!(%subnet_ip, limit=self.config.peer_count_per_subnet_max, "Max peer connections per IP subnet limit reached");
-                    close_reason = Some(ConnectionPoolHandlerError::MaxSubnetConnectionsReached);
-                }
-            }
-        }
-
-        // Check for the maximum peer count limit
-        if self.config.peer_count_max < self.limits.peer_count.saturating_add(1) {
-            debug!(
-                connections = self.limits.peer_count,
-                "Max peer connections limit reached"
-            );
-            close_reason = Some(ConnectionPoolHandlerError::MaxPeerConnectionsReached);
-        }
-
         if let Some(ip_info) = ip_info {
-            if close_reason.is_none() {
-                // Increment peer counts per IP if we are not going to close the connection
-                if let Some(subnet_ip) = ip_info.subnet_ip {
-                    let value = self.limits.ip_subnet_count.entry(subnet_ip).or_insert(0);
-                    *value = value.saturating_add(1);
-                }
-
-                let value = self.limits.ip_count.entry(ip_info.ip).or_insert(0);
+            // Increment peer counts per IP
+            if let Some(subnet_ip) = ip_info.subnet_ip {
+                let value = self.limits.ip_subnet_count.entry(subnet_ip).or_insert(0);
                 *value = value.saturating_add(1);
-
-                self.limits.peer_count = self.limits.peer_count.saturating_add(1);
             }
-        }
 
-        if let Some(close_reason) = close_reason {
-            // Notify the handler that the connection must be closed
-            self.actions
-                .push_back(NetworkBehaviourAction::NotifyHandler {
-                    peer_id: *peer_id,
-                    handler: NotifyHandler::One(*connection_id),
-                    event: close_reason,
-                });
-            self.wake();
-            return;
+            let value = self.limits.ip_count.entry(ip_info.ip).or_insert(0);
+            *value = value.saturating_add(1);
+
+            self.limits.peer_count = self.limits.peer_count.saturating_add(1);
         }
 
         // Peer is connected, mark it as such.
@@ -686,20 +601,18 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         self.addresses.mark_connected(address.clone());
 
         self.actions
-            .push_back(NetworkBehaviourAction::GenerateEvent(
-                ConnectionPoolEvent::PeerJoined { peer_id: *peer_id },
-            ));
+            .push_back(ToSwarm::GenerateEvent(Event::PeerJoined {
+                peer_id: *peer_id,
+            }));
         self.wake();
 
         self.maintain_peers();
     }
 
-    fn inject_connection_closed(
+    fn on_connection_closed(
         &mut self,
         peer_id: &PeerId,
-        _conn: &ConnectionId,
         endpoint: &ConnectedPoint,
-        _handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
         remaining_established: usize,
     ) {
         // Check there are no more remaining connections to this peer
@@ -741,20 +654,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         self.maintain_peers();
     }
 
-    fn inject_event(
-        &mut self,
-        _peer_id: PeerId,
-        _connection: ConnectionId,
-        _event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
-    ) {
-    }
-
-    fn inject_dial_failure(
-        &mut self,
-        peer_id: Option<PeerId>,
-        _handler: Self::ConnectionHandler,
-        error: &DialError,
-    ) {
+    fn on_dial_failure(&mut self, peer_id: Option<PeerId>, error: &DialError) {
         let error_msg = match error {
             DialError::Transport(errors) => {
                 let str = errors
@@ -779,20 +679,16 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
 
                 format!("No transport: {}", str)
             }
-            DialError::ConnectionIo(error) => error.to_string(),
             e => e.to_string(),
         };
 
         match error {
-            DialError::Banned
-            | DialError::ConnectionLimit(_)
-            | DialError::LocalPeerId
-            | DialError::InvalidPeerId(_)
+            DialError::LocalPeerId { .. }
             | DialError::WrongPeerId { .. }
             | DialError::Aborted
-            | DialError::ConnectionIo(_)
             | DialError::Transport(_)
-            | DialError::NoAddresses => {
+            | DialError::NoAddresses
+            | DialError::Denied { .. } => {
                 let peer_id = match peer_id {
                     Some(id) => id,
                     // Not interested in dial failures to unknown peers right now.
@@ -804,7 +700,9 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 self.maintain_peers();
             }
             DialError::DialPeerConditionFalse(
-                PeerCondition::Disconnected | PeerCondition::NotDialing,
+                PeerCondition::Disconnected
+                | PeerCondition::NotDialing
+                | PeerCondition::DisconnectedAndNotDialing,
             ) => {
                 // We might (still) be connected, or about to be connected, thus do not report the
                 // failure.
@@ -814,12 +712,162 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
             }
         }
     }
+}
+
+impl NetworkBehaviour for Behaviour {
+    type ConnectionHandler = dummy::ConnectionHandler;
+    type ToSwarm = Event;
+
+    fn on_swarm_event(&mut self, event: FromSwarm) {
+        match event {
+            FromSwarm::ConnectionEstablished(ConnectionEstablished {
+                peer_id,
+                connection_id,
+                endpoint,
+                failed_addresses,
+                other_established,
+            }) => {
+                self.on_connection_established(
+                    &peer_id,
+                    &connection_id,
+                    endpoint,
+                    failed_addresses,
+                    other_established,
+                );
+            }
+            FromSwarm::ConnectionClosed(ConnectionClosed {
+                peer_id,
+                endpoint,
+                remaining_established,
+                ..
+            }) => {
+                self.on_connection_closed(&peer_id, endpoint, remaining_established);
+            }
+            FromSwarm::DialFailure(DialFailure { peer_id, error, .. }) => {
+                self.on_dial_failure(peer_id, error)
+            }
+            _ => {}
+        }
+    }
+
+    fn on_connection_handler_event(
+        &mut self,
+        _peer_id: PeerId,
+        _connection_id: ConnectionId,
+        event: THandlerOutEvent<Self>,
+    ) {
+        void::unreachable(event)
+    }
+
+    fn handle_pending_outbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        maybe_peer: Option<PeerId>,
+        _addresses: &[Multiaddr],
+        _effective_role: Endpoint,
+    ) -> Result<Vec<Multiaddr>, ConnectionDenied> {
+        let peer_id = match maybe_peer {
+            None => return Ok(vec![]),
+            Some(peer) => peer,
+        };
+
+        Ok(self
+            .contacts
+            .read()
+            .get(&peer_id)
+            .map(|e| e.contact().addresses.clone())
+            .unwrap_or_default())
+    }
+
+    fn handle_pending_inbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        _local_addr: &Multiaddr,
+        remote_addr: &Multiaddr,
+    ) -> Result<(), ConnectionDenied> {
+        if self.addresses.is_banned(remote_addr.clone()) {
+            debug!(%remote_addr, "Address is banned");
+            return Err(ConnectionDenied::new(Error::BannedIp));
+        }
+
+        // Get IP from multiaddress if it exists.
+        let ip_info = self.get_ip_info_from_multiaddr(remote_addr);
+
+        // If we have an IP, check connection limits per IP.
+        if let Some(ip_info) = ip_info.clone() {
+            if self.config.peer_count_per_ip_max
+                < self
+                    .limits
+                    .ip_count
+                    .get(&ip_info.ip)
+                    .unwrap_or(&0)
+                    .saturating_add(1)
+            {
+                // Subnet mask
+                debug!(ip=%ip_info.ip, limit=self.config.peer_count_per_ip_max, "Max peer connections per IP limit reached");
+                return Err(ConnectionDenied::new(Error::MaxPeerPerIPConnectionsReached));
+            }
+
+            // If we have the subnet IP, check connection limits per subnet
+            if let Some(subnet_ip) = ip_info.subnet_ip {
+                if self.config.peer_count_per_subnet_max
+                    < self
+                        .limits
+                        .ip_subnet_count
+                        .get(&subnet_ip)
+                        .unwrap_or(&0)
+                        .saturating_add(1)
+                {
+                    // Subnet mask
+                    debug!(%subnet_ip, limit=self.config.peer_count_per_subnet_max, "Max peer connections per IP subnet limit reached");
+                    return Err(ConnectionDenied::new(Error::MaxSubnetConnectionsReached));
+                }
+            }
+        }
+
+        // Check for the maximum peer count limit
+        if self.config.peer_count_max < self.limits.peer_count.saturating_add(1) {
+            debug!(
+                connections = self.limits.peer_count,
+                "Max peer connections limit reached"
+            );
+            return Err(ConnectionDenied::new(Error::MaxPeerConnectionsReached));
+        }
+
+        Ok(())
+    }
+
+    fn handle_established_inbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        peer: PeerId,
+        _local_addr: &Multiaddr,
+        _remote_addr: &Multiaddr,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        // Peer IDs checks are performed here since it is in this point where we have
+        // this information.
+        if self.peer_ids.is_banned(peer) {
+            debug!(peer_id=%peer, "Peer is banned");
+            return Err(ConnectionDenied::new(Error::BannedPeer));
+        }
+
+        Ok(dummy::ConnectionHandler)
+    }
+
+    fn handle_established_outbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        _peer: PeerId,
+        _addr: &Multiaddr,
+        _role_override: Endpoint,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        Ok(dummy::ConnectionHandler)
+    }
 
     fn poll(
         &mut self,
         cx: &mut Context<'_>,
-        _params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+    ) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         // Dispatch pending actions.
         if let Some(action) = self.actions.pop_front() {
             return Poll::Ready(action);

@@ -24,7 +24,6 @@ futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
 instant = { version = "0.1", features = [ "wasm-bindgen" ] }
 ip_network = "0.4"
-libp2p-websys-transport = { git = "https://github.com/jsdanielh/libp2p-websys-transport.git", optional = true }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 pin-project = "1.1"
@@ -36,6 +35,8 @@ serde-big-array = "0.5"
 thiserror = "1.0"
 tokio = { version = "1.32", features = ["macros", "rt", "tracing"] }
 tokio-stream = "0.1"
+unsigned-varint = "0.8"
+void = "1.0"
 wasm-timer = "0.2"
 
 nimiq-bls = { workspace = true }
@@ -51,8 +52,9 @@ nimiq-utils = { workspace = true, features = [
 ] }
 nimiq-validator-network = { workspace = true }
 
+# For now we need to use a fork
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", default-features = false, features = [
+libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", branch = "libp2p_0.53.1", default-features = false, features = [
     "gossipsub",
     "identify",
     "kad",
@@ -61,11 +63,13 @@ libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", default-feature
     "ping",
     "request-response",
     "serde",
+    "tokio",
     "yamux",
 ] }
 
+# For now we need to use a fork
 [target.'cfg(target_family = "wasm")'.dependencies]
-libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", default-features = false, features = [
+libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", branch = "libp2p_0.53.1", default-features = false, features = [
     "gossipsub",
     "identify",
     "kad",
@@ -76,6 +80,7 @@ libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", default-feature
     "serde",
     "yamux",
     "wasm-bindgen",
+    "websocket-websys",
 ] }
 
 [dev-dependencies]
@@ -88,4 +93,3 @@ nimiq-test-log = { workspace = true }
 metrics = ["prometheus-client"]
 tokio-time = ["tokio/time"]
 tokio-websocket = ["libp2p/dns", "libp2p/tcp", "libp2p/tokio", "libp2p/websocket"]
-wasm-websocket = ["libp2p-websys-transport"]

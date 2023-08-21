@@ -86,7 +86,7 @@ pub enum DiscoveryMessage {
 pub struct DiscoveryProtocol;
 
 impl UpgradeInfo for DiscoveryProtocol {
-    type Info = &'static [u8];
+    type Info = &'static str;
     type InfoIter = std::iter::Once<Self::Info>;
 
     fn protocol_info(&self) -> Self::InfoIter {

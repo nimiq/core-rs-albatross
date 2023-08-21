@@ -10,6 +10,7 @@ pub fn assert_peer_joined(event: &NetworkEvent<PeerId>, wanted_peer_id: &PeerId)
     }
 }
 
+#[allow(unused)]
 pub fn assert_peer_left(event: &NetworkEvent<PeerId>, wanted_peer_id: &PeerId) {
     if let NetworkEvent::PeerLeft(peer_id) = event {
         assert_eq!(peer_id, wanted_peer_id);

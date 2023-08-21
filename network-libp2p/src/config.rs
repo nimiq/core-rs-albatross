@@ -4,16 +4,11 @@ use std::{
     time::Duration,
 };
 
-use libp2p::{
-    gossipsub::{GossipsubConfig, GossipsubConfigBuilder, MessageId},
-    identity::Keypair,
-    kad::{KademliaBucketInserts, KademliaConfig, KademliaStoreInserts},
-    Multiaddr,
-};
+use libp2p::{gossipsub, identity::Keypair, kad, Multiaddr};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::peer_info::Services;
 
-use crate::discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact};
+use crate::discovery::{self, peer_contacts::PeerContact};
 
 /// TLS settings for configuring a secure WebSocket
 pub struct TlsConfig {
@@ -29,9 +24,9 @@ pub struct Config {
     pub keypair: Keypair,
     pub peer_contact: PeerContact,
     pub seeds: Vec<Multiaddr>,
-    pub discovery: DiscoveryConfig,
-    pub kademlia: KademliaConfig,
-    pub gossipsub: GossipsubConfig,
+    pub discovery: discovery::Config,
+    pub kademlia: kad::Config,
+    pub gossipsub: gossipsub::Config,
     pub memory_transport: bool,
     pub required_services: Services,
     pub tls: Option<TlsConfig>,
@@ -49,7 +44,7 @@ impl Config {
     ) -> Self {
         // Hardcoding the minimum number of peers in mesh network before adding more
         // TODO: Maybe change this to a mesh limits configuration argument of this function
-        let gossipsub = GossipsubConfigBuilder::default()
+        let gossipsub = gossipsub::ConfigBuilder::default()
             .mesh_n_low(3)
             .validate_messages()
             .max_transmit_size(1_000_000) // TODO find a reasonable value for this parameter
@@ -61,25 +56,25 @@ impl Config {
                 let mut s = DefaultHasher::new();
                 message.topic.hash(&mut s);
                 message.data.hash(&mut s);
-                MessageId::from(s.finish().to_string())
+                gossipsub::MessageId::from(s.finish().to_string())
             })
             .build()
             .expect("Invalid Gossipsub config");
 
-        let mut kademlia = KademliaConfig::default();
-        kademlia.set_kbucket_inserts(KademliaBucketInserts::OnConnected);
+        let mut kademlia = kad::Config::default();
+        kademlia.set_kbucket_inserts(kad::BucketInserts::OnConnected);
         kademlia.set_record_ttl(Some(Duration::from_secs(5 * 60)));
         kademlia.set_publication_interval(Some(Duration::from_secs(60)));
 
         // Since we have a record TTL of 5 minutes, record replication is not needed right now
         kademlia.set_replication_interval(None);
-        kademlia.set_record_filtering(KademliaStoreInserts::FilterBoth);
+        kademlia.set_record_filtering(kad::StoreInserts::FilterBoth);
 
         Self {
             keypair,
             peer_contact,
             seeds,
-            discovery: DiscoveryConfig::new(genesis_hash, required_services),
+            discovery: discovery::Config::new(genesis_hash, required_services),
             kademlia,
             gossipsub,
             memory_transport,

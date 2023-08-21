@@ -76,7 +76,7 @@ pub trait ValidatorNetwork: Send + Sync {
         close_reason: CloseReason,
     );
 
-    /// Signals that a Gossipsup'd message with `id` was verified successfully and can be relayed.
+    /// Signals that a Gossipsub'd message with `id` was verified successfully and can be relayed.
     fn validate_message<TTopic>(&self, id: Self::PubsubId, acceptance: MsgAcceptance)
     where
         TTopic: Topic + Sync;

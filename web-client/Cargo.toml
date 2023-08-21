@@ -54,7 +54,6 @@ version = "0.1"
 default-features = false
 features = [
     "panic",
-    "wasm-websocket",
     "web-logging",
 ]
 

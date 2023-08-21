@@ -2,17 +2,16 @@ use std::{sync::Arc, time::Duration};
 
 use futures::{Stream, StreamExt};
 use libp2p::{
-    gossipsub::GossipsubConfigBuilder,
+    gossipsub,
     identity::Keypair,
     multiaddr::{multiaddr, Multiaddr},
-    swarm::KeepAlive,
 };
 use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, Topic},
     peer_info::Services,
 };
 use nimiq_network_libp2p::{
-    discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact},
+    discovery::{self, peer_contacts::PeerContact},
     Config, Network,
 };
 use nimiq_test_log::test;
@@ -22,7 +21,6 @@ use serde::{Deserialize, Serialize};
 use tokio::time::timeout;
 
 mod helper;
-use self::helper::*;
 
 fn network_config(address: Multiaddr) -> Config {
     let keypair = Keypair::generate_ed25519();
@@ -35,7 +33,7 @@ fn network_config(address: Multiaddr) -> Config {
     };
     peer_contact.set_current_time();
 
-    let gossipsub = GossipsubConfigBuilder::default()
+    let gossipsub = gossipsub::ConfigBuilder::default()
         .validation_mode(libp2p::gossipsub::ValidationMode::Permissive)
         .build()
         .expect("Invalid Gossipsub config");
@@ -44,7 +42,7 @@ fn network_config(address: Multiaddr) -> Config {
         keypair,
         peer_contact,
         seeds: Vec::new(),
-        discovery: DiscoveryConfig {
+        discovery: discovery::Config {
             genesis_hash: Default::default(),
             update_interval: Duration::from_secs(60),
             min_recv_update_interval: Duration::from_secs(30),
@@ -52,7 +50,7 @@ fn network_config(address: Multiaddr) -> Config {
             required_services: Services::all(),
             min_send_update_interval: Duration::from_secs(30),
             house_keeping_interval: Duration::from_secs(60),
-            keep_alive: KeepAlive::No,
+            keep_alive: false,
         },
         kademlia: Default::default(),
         gossipsub,
@@ -147,13 +145,13 @@ async fn create_connected_networks() -> (Network, Network) {
 
     log::debug!("Waiting for join events");
 
-    let event1 = get_next_peer_event(&mut events1).await;
+    let event1 = helper::get_next_peer_event(&mut events1).await;
     log::trace!(event = ?event1, "Event 1");
-    assert_peer_joined(&event1, &net2.get_local_peer_id());
+    helper::assert_peer_joined(&event1, &net2.get_local_peer_id());
 
-    let event2 = get_next_peer_event(&mut events2).await;
+    let event2 = helper::get_next_peer_event(&mut events2).await;
     log::trace!(event = ?event2, "Event 2");
-    assert_peer_joined(&event2, &net1.get_local_peer_id());
+    helper::assert_peer_joined(&event2, &net1.get_local_peer_id());
 
     (net1, net2)
 }
@@ -195,13 +193,13 @@ async fn create_double_connected_networks() -> (Network, Network) {
 
     log::debug!("Waiting for join events");
 
-    let event1 = get_next_peer_event(&mut events1).await;
+    let event1 = helper::get_next_peer_event(&mut events1).await;
     log::trace!(event = ?event1, "Event 1");
-    assert_peer_joined(&event1, &net2.get_local_peer_id());
+    helper::assert_peer_joined(&event1, &net2.get_local_peer_id());
 
-    let event2 = get_next_peer_event(&mut events2).await;
+    let event2 = helper::get_next_peer_event(&mut events2).await;
     log::trace!(event = ?event2, "Event 2");
-    assert_peer_joined(&event2, &net1.get_local_peer_id());
+    helper::assert_peer_joined(&event2, &net1.get_local_peer_id());
 
     (net1, net2)
 }
@@ -231,8 +229,13 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
         network.listen_on(vec![addr.clone()]).await;
 
         log::debug!(address = %addr, peer_id = %network.get_local_peer_id(), "Network {}", peer);
+        let local_peer_id = network.get_local_peer_id();
 
-        events.push(network.subscribe_events());
+        events.push(
+            network
+                .subscribe_events()
+                .map(move |event| (local_peer_id, event)),
+        );
         networks.push(network);
     }
 
@@ -249,10 +252,10 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
     // Wait for all PeerJoined events
     let all_joined = futures::stream::select_all(events)
         .take(n_peers * (n_peers - 1 + 1/*1 x DHT bootstrapped*/))
-        .for_each(|event| async move {
+        .for_each(|(local_peer_id, event)| async move {
             match event {
                 Ok(NetworkEvent::PeerJoined(peer_id, _)) => {
-                    log::info!(%peer_id, "Received peer joined event");
+                    log::info!(%local_peer_id, %peer_id, "Received peer joined event");
                 }
                 Ok(NetworkEvent::DhtBootstrapped) => {}
                 _ => log::error!(?event, "Unexpected NetworkEvent"),
@@ -260,7 +263,7 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
         });
 
     if timeout(Duration::from_secs(120), all_joined).await.is_err() {
-        log::warn!("Timeout triggered while waiting for peers to join");
+        assert!(false, "Timeout triggered while waiting for peers to join");
     };
 
     // Verify that each network has all the other peers connected
@@ -306,12 +309,12 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
             .await;
 
         // Assert the peer has left both networks
-        let close_event1 = get_next_peer_event(&mut events1).await;
-        assert_peer_left(&close_event1, peer_id2);
+        let close_event1 = helper::get_next_peer_event(&mut events1).await;
+        helper::assert_peer_left(&close_event1, peer_id2);
         drop(events1);
 
-        let close_event2 = get_next_peer_event(&mut events2).await;
-        assert_peer_left(&close_event2, peer_id1);
+        let close_event2 = helper::get_next_peer_event(&mut events2).await;
+        helper::assert_peer_left(&close_event2, peer_id1);
         drop(events2);
 
         // Now reconnect the peer
@@ -324,11 +327,11 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
             .unwrap();
 
         // Assert the peer rejoined the network
-        let join_event1 = get_next_peer_event(&mut events1).await;
-        assert_peer_joined(&join_event1, peer_id2);
+        let join_event1 = helper::get_next_peer_event(&mut events1).await;
+        helper::assert_peer_joined(&join_event1, peer_id2);
 
-        let join_event2 = get_next_peer_event(&mut events2).await;
-        assert_peer_joined(&join_event2, peer_id1);
+        let join_event2 = helper::get_next_peer_event(&mut events2).await;
+        helper::assert_peer_joined(&join_event2, peer_id1);
 
         // Verify all peers are connected again
         assert_eq!(network1.get_peers().len(), n_peers - 1);
@@ -391,12 +394,12 @@ async fn connections_are_properly_closed_events() {
         .await;
     log::debug!("Closed peer");
 
-    let event1 = get_next_peer_event(&mut events1).await;
-    assert_peer_left(&event1, net2.local_peer_id());
+    let event1 = helper::get_next_peer_event(&mut events1).await;
+    helper::assert_peer_left(&event1, net2.local_peer_id());
     log::trace!(event = ?event1, "Event 1");
 
-    let event2 = get_next_peer_event(&mut events2).await;
-    assert_peer_left(&event2, net1.local_peer_id());
+    let event2 = helper::get_next_peer_event(&mut events2).await;
+    helper::assert_peer_left(&event2, net1.local_peer_id());
     log::trace!(event = ?event2, "Event 2");
 }
 
@@ -415,8 +418,8 @@ async fn connections_are_properly_closed_peers() {
         .await;
     log::debug!("Closed peer");
 
-    let event2 = get_next_peer_event(&mut events2).await;
-    assert_peer_left(&event2, &net1_peer_id);
+    let event2 = helper::get_next_peer_event(&mut events2).await;
+    helper::assert_peer_left(&event2, &net1_peer_id);
     log::trace!(event = ?event2, "Event 2");
 
     assert_eq!(net2.get_peers(), &[]);
@@ -459,7 +462,7 @@ async fn ban_peer() {
     log::debug!("Closed peer");
 
     let event2 = events2.next().await.unwrap().unwrap();
-    assert_peer_left(&event2, &net1_peer_id);
+    helper::assert_peer_left(&event2, &net1_peer_id);
     log::trace!(event = ?event2, "Event 2");
 
     assert_eq!(net2.get_peers(), &[]);
@@ -467,11 +470,7 @@ async fn ban_peer() {
     // Now try to reconnect peer 1
     net1.dial_peer(net2_peer_id).await.unwrap();
 
-    // Check that the connection to peer 1 (from peer 2 perspective) was closed
-    let event2 = get_next_peer_event(&mut events2).await;
-    assert_peer_left(&event2, &net1_peer_id);
-    log::trace!(event = ?event2, "Event 2");
-
+    // We shouldn't have any peer since the last connection shouldn't have succeeded.
     assert_eq!(net2.get_peers(), &[]);
 }
 

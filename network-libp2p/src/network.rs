@@ -12,35 +12,31 @@ use bytes::Bytes;
 use futures::{future::BoxFuture, ready, stream::BoxStream, Stream, StreamExt};
 #[cfg(not(feature = "tokio-time"))]
 use instant::Instant;
+#[cfg(all(target_family = "wasm", not(feature = "tokio-websocket")))]
+use libp2p::websocket_websys;
 use libp2p::{
     core,
     core::{
         muxing::StreamMuxerBox,
         transport::{Boxed, MemoryTransport},
     },
-    gossipsub::{
-        error::PublishError, GossipsubEvent, GossipsubMessage, IdentTopic, MessageAcceptance,
-        MessageId, PeerScoreParams, TopicHash, TopicScoreParams,
-    },
-    identify::Event as IdentifyEvent,
+    gossipsub, identify,
     identity::Keypair,
     kad::{
-        store::RecordStore, GetRecordOk, InboundRequest, KademliaEvent, QueryId, QueryResult,
-        Quorum, Record,
+        self, store::RecordStore, GetRecordOk, InboundRequest, QueryId, QueryResult, Quorum, Record,
     },
     noise,
-    ping::Success as PingSuccess,
-    request_response::{OutboundFailure, RequestId, RequestResponseMessage, ResponseChannel},
+    request_response::{
+        self, InboundRequestId, OutboundFailure, OutboundRequestId, ResponseChannel,
+    },
     swarm::{
         dial_opts::{DialOpts, PeerCondition},
-        ConnectionLimits, NetworkInfo, SwarmBuilder, SwarmEvent,
+        NetworkInfo, SwarmEvent,
     },
-    yamux, Multiaddr, PeerId, Swarm, Transport,
+    yamux, Multiaddr, PeerId, Swarm, SwarmBuilder, Transport,
 };
 #[cfg(feature = "tokio-websocket")]
 use libp2p::{dns, tcp, websocket};
-#[cfg(all(feature = "wasm-websocket", not(feature = "tokio-websocket")))]
-use libp2p_websys_transport::WebsocketTransport;
 use log::Instrument;
 use nimiq_bls::CompressedPublicKey;
 use nimiq_network_interface::{
@@ -69,18 +65,14 @@ use wasm_timer::Interval;
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;
 use crate::{
-    behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError, RequestResponseEvent},
-    connection_pool::behaviour::ConnectionPoolEvent,
-    discovery::{behaviour::DiscoveryEvent, peer_contacts::PeerContactBook},
+    behaviour, connection_pool,
+    discovery::{behaviour::Event, peer_contacts::PeerContactBook},
     dispatch::codecs::typed::{IncomingRequest, OutgoingResponse},
     rate_limiting::{PendingDeletion, RateLimit},
     Config, NetworkError, TlsConfig,
 };
 
-/// Maximum simultaneous libp2p connections per peer
-const MAX_CONNECTIONS_PER_PEER: u32 = 2;
-
-type NimiqSwarm = Swarm<NimiqBehaviour>;
+type NimiqSwarm = Swarm<behaviour::Behaviour>;
 
 #[derive(Debug)]
 pub(crate) enum NetworkAction {
@@ -106,7 +98,10 @@ pub(crate) enum NetworkAction {
         buffer_size: usize,
         validate: bool,
         output: oneshot::Sender<
-            Result<mpsc::Receiver<(GossipsubMessage, MessageId, PeerId)>, NetworkError>,
+            Result<
+                mpsc::Receiver<(gossipsub::Message, gossipsub::MessageId, PeerId)>,
+                NetworkError,
+            >,
         >,
     },
     Unsubscribe {
@@ -123,17 +118,17 @@ pub(crate) enum NetworkAction {
     },
     ReceiveRequests {
         type_id: RequestType,
-        output: mpsc::Sender<(Bytes, RequestId, PeerId)>,
+        output: mpsc::Sender<(Bytes, InboundRequestId, PeerId)>,
     },
     SendRequest {
         peer_id: PeerId,
         request: IncomingRequest,
         request_type_id: RequestType,
         response_channel: oneshot::Sender<Result<Bytes, RequestError>>,
-        output: oneshot::Sender<RequestId>,
+        output: oneshot::Sender<OutboundRequestId>,
     },
     SendResponse {
-        request_id: RequestId,
+        request_id: InboundRequestId,
         response: OutgoingResponse,
         output: oneshot::Sender<Result<(), NetworkError>>,
     },
@@ -158,7 +153,7 @@ pub(crate) enum NetworkAction {
 
 struct ValidateMessage<P: Clone> {
     pubsub_id: GossipsubId<P>,
-    acceptance: MessageAcceptance,
+    acceptance: gossipsub::MessageAcceptance,
     topic: &'static str,
 }
 
@@ -170,9 +165,9 @@ impl<P: Clone> ValidateMessage<P> {
         Self {
             pubsub_id,
             acceptance: match acceptance {
-                MsgAcceptance::Accept => MessageAcceptance::Accept,
-                MsgAcceptance::Ignore => MessageAcceptance::Ignore,
-                MsgAcceptance::Reject => MessageAcceptance::Reject,
+                MsgAcceptance::Accept => gossipsub::MessageAcceptance::Accept,
+                MsgAcceptance::Ignore => gossipsub::MessageAcceptance::Ignore,
+                MsgAcceptance::Reject => gossipsub::MessageAcceptance::Reject,
             },
             topic: <T as Topic>::NAME,
         }
@@ -183,18 +178,24 @@ impl<P: Clone> ValidateMessage<P> {
 struct TaskState {
     dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
     dht_gets: HashMap<QueryId, oneshot::Sender<Result<Vec<u8>, NetworkError>>>,
-    gossip_topics: HashMap<TopicHash, (mpsc::Sender<(GossipsubMessage, MessageId, PeerId)>, bool)>,
+    gossip_topics: HashMap<
+        gossipsub::TopicHash,
+        (
+            mpsc::Sender<(gossipsub::Message, gossipsub::MessageId, PeerId)>,
+            bool,
+        ),
+    >,
     is_bootstrapped: bool,
-    requests: HashMap<RequestId, oneshot::Sender<Result<Bytes, RequestError>>>,
+    requests: HashMap<OutboundRequestId, oneshot::Sender<Result<Bytes, RequestError>>>,
     #[cfg(feature = "metrics")]
-    requests_initiated: HashMap<RequestId, Instant>,
-    response_channels: HashMap<RequestId, ResponseChannel<OutgoingResponse>>,
-    receive_requests: HashMap<RequestType, mpsc::Sender<(Bytes, RequestId, PeerId)>>,
+    requests_initiated: HashMap<OutboundRequestId, Instant>,
+    response_channels: HashMap<InboundRequestId, ResponseChannel<OutgoingResponse>>,
+    receive_requests: HashMap<RequestType, mpsc::Sender<(Bytes, InboundRequestId, PeerId)>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct GossipsubId<P: Clone> {
-    message_id: MessageId,
+    message_id: gossipsub::MessageId,
     propagation_source: P,
 }
 
@@ -246,17 +247,11 @@ impl Network {
         let contacts = Arc::new(RwLock::new(PeerContactBook::new(
             own_peer_contact.sign(&config.keypair),
         )));
-        let params = PeerScoreParams {
+        let params = gossipsub::PeerScoreParams {
             ip_colocation_factor_threshold: 20.0,
             ..Default::default()
         };
-        let swarm = Self::new_swarm(
-            clock,
-            config,
-            Arc::clone(&contacts),
-            params.clone(),
-            executor.clone(),
-        );
+        let swarm = Self::new_swarm(clock, config, Arc::clone(&contacts), params.clone());
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
         let connected_peers = Arc::new(RwLock::new(HashMap::new()));
@@ -312,7 +307,7 @@ impl Network {
             // TODO: Use websocket over the memory transport
 
             #[cfg(feature = "tokio-websocket")]
-            let mut transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
+            let mut transport = websocket::WsConfig::new(dns::tokio::Transport::system(
                 tcp::tokio::Transport::new(tcp::Config::default().nodelay(true)),
             )?);
 
@@ -337,22 +332,18 @@ impl Network {
             let transport = MemoryTransport::default();
             // Fixme: Handle wasm compatible transport
 
-            let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
-                .into_authentic(keypair)
-                .unwrap();
-
-            let mut yamux = yamux::YamuxConfig::default();
+            let mut yamux = yamux::Config::default();
             yamux.set_window_update_mode(yamux::WindowUpdateMode::on_read());
 
             Ok(transport
                 .upgrade(core::upgrade::Version::V1)
-                .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
+                .authenticate(noise::Config::new(keypair).unwrap())
                 .multiplex(yamux)
                 .timeout(std::time::Duration::from_secs(20))
                 .boxed())
         } else {
             #[cfg(feature = "tokio-websocket")]
-            let mut transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
+            let mut transport = websocket::WsConfig::new(dns::tokio::Transport::system(
                 tcp::tokio::Transport::new(tcp::Config::default().nodelay(true)),
             )?);
 
@@ -370,22 +361,18 @@ impl Network {
                     .set_tls_config(websocket::tls::Config::new(priv_key, certificates).unwrap());
             }
 
-            #[cfg(all(feature = "wasm-websocket", not(feature = "tokio-websocket")))]
-            let transport = WebsocketTransport::default();
+            #[cfg(all(target_family = "wasm", not(feature = "tokio-websocket")))]
+            let transport = websocket_websys::Transport::default();
 
-            #[cfg(all(not(feature = "tokio-websocket"), not(feature = "wasm-websocket")))]
+            #[cfg(all(not(feature = "tokio-websocket"), not(target_family = "wasm")))]
             let transport = MemoryTransport::default();
 
-            let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
-                .into_authentic(keypair)
-                .unwrap();
-
-            let mut yamux = yamux::YamuxConfig::default();
+            let mut yamux = yamux::Config::default();
             yamux.set_window_update_mode(yamux::WindowUpdateMode::on_read());
 
             Ok(transport
                 .upgrade(core::upgrade::Version::V1)
-                .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
+                .authenticate(noise::Config::new(keypair).unwrap())
                 .multiplex(yamux)
                 .timeout(std::time::Duration::from_secs(20))
                 .boxed())
@@ -396,34 +383,32 @@ impl Network {
         clock: Arc<OffsetTime>,
         config: Config,
         contacts: Arc<RwLock<PeerContactBook>>,
-        peer_score_params: PeerScoreParams,
-        executor: impl TaskExecutor + Clone + Send + 'static,
-    ) -> Swarm<NimiqBehaviour> {
-        let local_peer_id = PeerId::from(config.keypair.public());
-
+        peer_score_params: gossipsub::PeerScoreParams,
+    ) -> Swarm<behaviour::Behaviour> {
+        let keypair = config.keypair.clone();
         let transport =
-            Self::new_transport(&config.keypair, config.memory_transport, &config.tls).unwrap();
+            Self::new_transport(&keypair, config.memory_transport, &config.tls).unwrap();
 
-        let behaviour = NimiqBehaviour::new(config, clock, contacts, peer_score_params);
-
-        let limits = ConnectionLimits::default()
-            .with_max_pending_incoming(Some(16))
-            .with_max_pending_outgoing(Some(16))
-            .with_max_established_incoming(Some(4800))
-            .with_max_established_outgoing(Some(4800))
-            .with_max_established_per_peer(Some(MAX_CONNECTIONS_PER_PEER));
+        let behaviour = behaviour::Behaviour::new(config, clock, contacts, peer_score_params);
 
         // TODO add proper config
-        SwarmBuilder::with_executor(
-            transport,
-            behaviour,
-            local_peer_id,
-            Box::new(move |fut| {
-                executor.exec(fut);
-            }),
-        )
-        .connection_limits(limits)
-        .build()
+        #[cfg(not(target_family = "wasm"))]
+        let swarm = SwarmBuilder::with_existing_identity(keypair)
+            .with_tokio()
+            .with_other_transport(|_| transport)
+            .unwrap()
+            .with_behaviour(|_| behaviour)
+            .unwrap()
+            .build();
+        #[cfg(target_family = "wasm")]
+        let swarm = SwarmBuilder::with_existing_identity(keypair)
+            .with_wasm_bindgen()
+            .with_other_transport(|_| transport)
+            .unwrap()
+            .with_behaviour(|_| behaviour)
+            .unwrap()
+            .build();
+        swarm
     }
 
     pub fn local_peer_id(&self) -> &PeerId {
@@ -454,7 +439,7 @@ impl Network {
                     validate_msg = validate_rx.recv() => {
                         if let Some(validate_msg) = validate_msg {
                             let topic = validate_msg.topic;
-                            let result: Result<bool, PublishError> = swarm
+                            let result: Result<bool, gossipsub::PublishError> = swarm
                                 .behaviour_mut()
                                 .gossipsub
                                 .report_message_validation_result(
@@ -522,7 +507,7 @@ impl Network {
                     validate_msg = validate_rx.recv() => {
                         if let Some(validate_msg) = validate_msg {
                             let topic = validate_msg.topic;
-                            let result: Result<bool, PublishError> = swarm
+                            let result: Result<bool, gossipsub::PublishError> = swarm
                                 .behaviour_mut()
                                 .gossipsub
                                 .report_message_validation_result(
@@ -563,7 +548,7 @@ impl Network {
     }
 
     fn handle_event(
-        event: SwarmEvent<NimiqEvent, NimiqNetworkBehaviourError>,
+        event: SwarmEvent<behaviour::BehaviourEvent>,
         events_tx: &broadcast::Sender<NetworkEvent<PeerId>>,
         swarm: &mut NimiqSwarm,
         state: &mut TaskState,
@@ -574,16 +559,20 @@ impl Network {
     ) {
         match event {
             SwarmEvent::ConnectionEstablished {
+                connection_id,
                 peer_id,
                 endpoint,
                 num_established,
                 concurrent_dial_errors,
+                established_in,
             } => {
                 debug!(
+                    %connection_id,
                     %peer_id,
                     address = %endpoint.get_remote_address(),
                     direction = if endpoint.is_dialer() { "outbound" } else { "inbound" },
                     connections = num_established,
+                    ?established_in,
                     "Connection established",
                 );
 
@@ -621,12 +610,14 @@ impl Network {
             }
 
             SwarmEvent::ConnectionClosed {
+                connection_id,
                 peer_id,
                 endpoint,
                 num_established,
                 cause,
             } => {
                 info!(
+                    %connection_id,
                     %peer_id,
                     ?endpoint,
                     connections = num_established,
@@ -654,10 +645,12 @@ impl Network {
                 }
             }
             SwarmEvent::IncomingConnection {
+                connection_id,
                 local_addr,
                 send_back_addr,
             } => {
                 debug!(
+                    %connection_id,
                     address = %send_back_addr,
                     listen_address = %local_addr,
                     "Incoming connection",
@@ -665,11 +658,13 @@ impl Network {
             }
 
             SwarmEvent::IncomingConnectionError {
+                connection_id,
                 local_addr,
                 send_back_addr,
                 error,
             } => {
                 debug!(
+                    %connection_id,
                     address = %send_back_addr,
                     listen_address = %local_addr,
                     %error,
@@ -677,16 +672,20 @@ impl Network {
                 );
             }
 
-            SwarmEvent::Dialing(peer_id) => {
+            SwarmEvent::Dialing {
+                peer_id,
+                connection_id: _,
+            } => {
                 // This event is only triggered if the network behaviour performs the dial
-                debug!(%peer_id, "Dialing peer");
+                debug!(?peer_id, "Dialing peer");
             }
 
             SwarmEvent::Behaviour(event) => {
                 match event {
-                    NimiqEvent::Dht(event) => {
+                    behaviour::BehaviourEvent::ConnectionLimits(_) => {}
+                    behaviour::BehaviourEvent::Dht(event) => {
                         match event {
-                            KademliaEvent::OutboundQueryProgressed {
+                            kad::Event::OutboundQueryProgressed {
                                 id,
                                 result,
                                 stats: _,
@@ -755,7 +754,7 @@ impl Network {
                                     _ => {}
                                 }
                             }
-                            KademliaEvent::InboundRequest {
+                            kad::Event::InboundRequest {
                                 request:
                                     InboundRequest::PutRecord {
                                         source: _,
@@ -804,10 +803,10 @@ impl Network {
                             _ => {}
                         }
                     }
-                    NimiqEvent::Discovery(event) => {
+                    behaviour::BehaviourEvent::Discovery(event) => {
                         swarm.behaviour_mut().pool.maintain_peers();
                         match event {
-                            DiscoveryEvent::Established {
+                            Event::Established {
                                 peer_id,
                                 peer_address,
                                 peer_contact,
@@ -825,11 +824,11 @@ impl Network {
                                     error!(%peer_id, "Peer joined but it already exists");
                                 }
                             }
-                            DiscoveryEvent::Update => {}
+                            Event::Update => {}
                         }
                     }
-                    NimiqEvent::Gossip(event) => match event {
-                        GossipsubEvent::Message {
+                    behaviour::BehaviourEvent::Gossipsub(event) => match event {
+                        gossipsub::Event::Message {
                             propagation_source,
                             message_id,
                             message,
@@ -844,7 +843,7 @@ impl Network {
                                         .report_message_validation_result(
                                             &message_id,
                                             &propagation_source,
-                                            MessageAcceptance::Accept,
+                                            gossipsub::MessageAcceptance::Accept,
                                         )
                                     {
                                         error!(%message_id, %error, "could not send message validation result to channel");
@@ -866,19 +865,19 @@ impl Network {
                             #[cfg(feature = "metrics")]
                             metrics.note_received_pubsub_message(&topic);
                         }
-                        GossipsubEvent::Subscribed { peer_id, topic } => {
+                        gossipsub::Event::Subscribed { peer_id, topic } => {
                             trace!(%peer_id, %topic, "peer subscribed to topic");
                         }
-                        GossipsubEvent::Unsubscribed { peer_id, topic } => {
+                        gossipsub::Event::Unsubscribed { peer_id, topic } => {
                             trace!(%peer_id, %topic, "peer unsubscribed");
                         }
-                        GossipsubEvent::GossipsubNotSupported { peer_id } => {
+                        gossipsub::Event::GossipsubNotSupported { peer_id } => {
                             debug!(%peer_id, "gossipsub not supported");
                         }
                     },
-                    NimiqEvent::Identify(event) => {
+                    behaviour::BehaviourEvent::Identify(event) => {
                         match event {
-                            IdentifyEvent::Received { peer_id, info } => {
+                            identify::Event::Received { peer_id, info } => {
                                 debug!(
                                     %peer_id,
                                     address = %info.observed_addr,
@@ -900,13 +899,13 @@ impl Network {
                                     }
                                 }
                             }
-                            IdentifyEvent::Pushed { peer_id } => {
-                                trace!(%peer_id, "Pushed identity to peer");
+                            identify::Event::Pushed { peer_id, info } => {
+                                trace!(%peer_id, ?info, "Pushed identity information to peer");
                             }
-                            IdentifyEvent::Sent { peer_id } => {
-                                trace!(%peer_id, "Sent identity to peer");
+                            identify::Event::Sent { peer_id } => {
+                                trace!(%peer_id, "Sent identity information to peer");
                             }
-                            IdentifyEvent::Error { peer_id, error } => {
+                            identify::Event::Error { peer_id, error } => {
                                 error!(
                                     %peer_id,
                                     %error,
@@ -915,34 +914,27 @@ impl Network {
                             }
                         }
                     }
-                    NimiqEvent::Ping(event) => {
+                    behaviour::BehaviourEvent::Ping(event) => {
                         match event.result {
                             Err(error) => {
                                 log::debug!(%error, ?event.peer, "Ping failed with peer");
                             }
-                            Ok(PingSuccess::Pong) => {
-                                log::trace!(?event.peer, "Responded Ping from peer");
-                            }
-                            Ok(PingSuccess::Ping { rtt }) => {
-                                log::trace!(
-                                    ?event.peer,
-                                    ?rtt,
-                                    "Sent Ping and received response to/from peer",
-                                );
+                            Ok(duration) => {
+                                log::trace!(?event.peer, ?duration, "Successful ping from peer");
                             }
                         };
                     }
-                    NimiqEvent::Pool(event) => {
+                    behaviour::BehaviourEvent::Pool(event) => {
                         match event {
-                            ConnectionPoolEvent::PeerJoined { peer_id: _ } => {}
+                            connection_pool::Event::PeerJoined { peer_id: _ } => {}
                         };
                     }
-                    NimiqEvent::RequestResponse(event) => match event {
-                        RequestResponseEvent::Message {
+                    behaviour::BehaviourEvent::RequestResponse(event) => match event {
+                        request_response::Event::Message {
                             peer: peer_id,
                             message,
                         } => match message {
-                            RequestResponseMessage::Request {
+                            request_response::Message::Request {
                                 request_id,
                                 request,
                                 channel,
@@ -1033,7 +1025,7 @@ impl Network {
                                     );
                                 }
                             }
-                            RequestResponseMessage::Response {
+                            request_response::Message::Response {
                                 request_id,
                                 response,
                             } => {
@@ -1061,7 +1053,7 @@ impl Network {
                                 }
                             }
                         },
-                        RequestResponseEvent::OutboundFailure {
+                        request_response::Event::OutboundFailure {
                             peer: peer_id,
                             request_id,
                             error,
@@ -1084,7 +1076,7 @@ impl Network {
                                 );
                             }
                         }
-                        RequestResponseEvent::InboundFailure {
+                        request_response::Event::InboundFailure {
                             peer,
                             request_id,
                             error,
@@ -1096,7 +1088,7 @@ impl Network {
                                 "Response to request sent from peer failed",
                             );
                         }
-                        RequestResponseEvent::ResponseSent { peer, request_id } => {
+                        request_response::Event::ResponseSent { peer, request_id } => {
                             trace!(
                                 %request_id,
                                 peer_id = %peer,
@@ -1177,7 +1169,7 @@ impl Network {
                 validate,
                 output,
             } => {
-                let topic = IdentTopic::new(topic_name.clone());
+                let topic = gossipsub::IdentTopic::new(topic_name.clone());
 
                 match swarm.behaviour_mut().gossipsub.subscribe(&topic) {
                     // New subscription. Insert the sender into our subscription table.
@@ -1189,7 +1181,7 @@ impl Network {
                         match swarm
                             .behaviour_mut()
                             .gossipsub
-                            .set_topic_params(topic, TopicScoreParams::default())
+                            .set_topic_params(topic, gossipsub::TopicScoreParams::default())
                         {
                             Ok(_) => {
                                 if output.send(Ok(rx)).is_err() {
@@ -1231,7 +1223,7 @@ impl Network {
                 }
             }
             NetworkAction::Unsubscribe { topic_name, output } => {
-                let topic = IdentTopic::new(topic_name.clone());
+                let topic = gossipsub::IdentTopic::new(topic_name.clone());
 
                 if state.gossip_topics.get_mut(&topic.hash()).is_some() {
                     match swarm.behaviour_mut().gossipsub.unsubscribe(&topic) {
@@ -1280,7 +1272,7 @@ impl Network {
                 data,
                 output,
             } => {
-                let topic = IdentTopic::new(topic_name.clone());
+                let topic = gossipsub::IdentTopic::new(topic_name.clone());
 
                 if output
                     .send(
@@ -1290,7 +1282,7 @@ impl Network {
                             .publish(topic, data)
                             .map(|_| ())
                             .or_else(|e| match e {
-                                PublishError::Duplicate => Ok(()),
+                                gossipsub::PublishError::Duplicate => Ok(()),
                                 _ => Err(e),
                             })
                             .map_err(Into::into),
@@ -1546,18 +1538,20 @@ impl Network {
 
     fn receive_requests_impl<Req: RequestCommon>(
         &self,
-    ) -> BoxStream<'static, (Req, RequestId, PeerId)> {
+    ) -> BoxStream<'static, (Req, InboundRequestId, PeerId)> {
         enum ReceiveStream {
-            WaitingForRegister(BoxFuture<'static, mpsc::Receiver<(Bytes, RequestId, PeerId)>>),
-            Registered(mpsc::Receiver<(Bytes, RequestId, PeerId)>),
+            WaitingForRegister(
+                BoxFuture<'static, mpsc::Receiver<(Bytes, InboundRequestId, PeerId)>>,
+            ),
+            Registered(mpsc::Receiver<(Bytes, InboundRequestId, PeerId)>),
         }
 
         impl Stream for ReceiveStream {
-            type Item = (Bytes, RequestId, PeerId);
+            type Item = (Bytes, InboundRequestId, PeerId);
             fn poll_next(
                 self: Pin<&mut Self>,
                 cx: &mut Context<'_>,
-            ) -> Poll<Option<(Bytes, RequestId, PeerId)>> {
+            ) -> Poll<Option<(Bytes, InboundRequestId, PeerId)>> {
                 let self_ = self.get_mut();
                 loop {
                     use ReceiveStream::*;
@@ -1652,6 +1646,9 @@ impl Network {
             OutboundFailure::UnsupportedProtocols => {
                 RequestError::OutboundRequest(OutboundRequestError::UnsupportedProtocols)
             }
+            OutboundFailure::Io(error) => {
+                RequestError::OutboundRequest(OutboundRequestError::Other(error.to_string()))
+            }
         }
     }
 
@@ -1676,7 +1673,7 @@ impl Network {
     fn is_under_the_rate_limits<Req: RequestCommon>(
         peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
         peer_id: PeerId,
-        request_id: RequestId,
+        request_id: InboundRequestId,
     ) -> bool {
         // Gets lock of peer requests limits read and write on it.
         let mut peer_request_limits = peer_request_limits.lock();
@@ -1788,7 +1785,7 @@ impl Network {
 
     async fn respond_with_error<Req: RequestCommon>(
         action_tx: mpsc::Sender<NetworkAction>,
-        request_id: RequestId,
+        request_id: InboundRequestId,
         response: InboundRequestError,
     ) -> Result<(), NetworkError> {
         let (output_tx, output_rx) = oneshot::channel();
@@ -1891,7 +1888,7 @@ impl NetworkInterface for Network {
     type AddressType = Multiaddr;
     type Error = NetworkError;
     type PubsubId = GossipsubId<PeerId>;
-    type RequestId = RequestId;
+    type RequestId = InboundRequestId;
 
     fn get_peers(&self) -> Vec<PeerId> {
         self.connected_peers.read().keys().copied().collect()
@@ -2133,13 +2130,15 @@ impl NetworkInterface for Network {
             .boxed()
     }
 
-    fn receive_requests<Req: Request>(&self) -> BoxStream<'static, (Req, RequestId, PeerId)> {
+    fn receive_requests<Req: Request>(
+        &self,
+    ) -> BoxStream<'static, (Req, InboundRequestId, PeerId)> {
         self.receive_requests_impl()
     }
 
     async fn respond<Req: Request>(
         &self,
-        request_id: RequestId,
+        request_id: InboundRequestId,
         response: Req::Response,
     ) -> Result<(), Self::Error> {
         let (output_tx, output_rx) = oneshot::channel();

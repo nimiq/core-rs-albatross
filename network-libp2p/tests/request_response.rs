@@ -3,9 +3,8 @@ use std::sync::Arc;
 use futures::{future::join_all, StreamExt};
 use libp2p::{
     core::multiaddr::{multiaddr, Multiaddr},
-    gossipsub::GossipsubConfigBuilder,
+    gossipsub,
     identity::Keypair,
-    swarm::KeepAlive,
 };
 #[cfg(feature = "tokio-time")]
 use nimiq_network_interface::network::CloseReason;
@@ -18,7 +17,7 @@ use nimiq_network_interface::{
     },
 };
 use nimiq_network_libp2p::{
-    discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact},
+    discovery::{self, peer_contacts::PeerContact},
     Config, Network,
 };
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
@@ -30,7 +29,6 @@ use tokio::time::Duration;
 use tokio::time::Instant;
 
 mod helper;
-use self::helper::*;
 
 /// The max number of TestRequests per peer (used for regular tests only).
 const MAX_REQUEST_RESPONSE_TEST_REQUEST: u32 = 1000;
@@ -170,13 +168,13 @@ impl TestNetwork {
 
         log::debug!("Waiting for join events");
 
-        let event1 = get_next_peer_event(&mut events1).await;
+        let event1 = helper::get_next_peer_event(&mut events1).await;
         log::trace!(event = ?event1, "Event 1");
-        assert_peer_joined(&event1, &net2.get_local_peer_id());
+        helper::assert_peer_joined(&event1, &net2.get_local_peer_id());
 
-        let event2 = get_next_peer_event(&mut events2).await;
+        let event2 = helper::get_next_peer_event(&mut events2).await;
         log::trace!(event = ?event2, "Event 2");
-        assert_peer_joined(&event2, &net1.get_local_peer_id());
+        helper::assert_peer_joined(&event2, &net1.get_local_peer_id());
 
         (net1, net2)
     }
@@ -256,21 +254,21 @@ impl TestNetwork {
 
         log::debug!("Waiting for join events");
 
-        let event1 = get_next_peer_event(&mut events1).await;
+        let event1 = helper::get_next_peer_event(&mut events1).await;
         log::trace!(event = ?event1, "Event 1");
-        assert_peer_joined(&event1, &net2.get_local_peer_id());
+        helper::assert_peer_joined(&event1, &net2.get_local_peer_id());
 
-        let event2 = get_next_peer_event(&mut events2).await;
+        let event2 = helper::get_next_peer_event(&mut events2).await;
         log::trace!(event = ?event2, "Event 2");
-        assert_peer_joined(&event2, &net1.get_local_peer_id());
+        helper::assert_peer_joined(&event2, &net1.get_local_peer_id());
 
-        let event3 = get_next_peer_event(&mut events3).await;
+        let event3 = helper::get_next_peer_event(&mut events3).await;
         log::trace!(event = ?event3, "Event 3");
-        assert_peer_joined(&event3, &net1.get_local_peer_id());
+        helper::assert_peer_joined(&event3, &net1.get_local_peer_id());
 
-        let event4 = get_next_peer_event(&mut events4).await;
+        let event4 = helper::get_next_peer_event(&mut events4).await;
         log::trace!(event = ?event4, "Event 4");
-        assert_peer_joined(&event4, &net1.get_local_peer_id());
+        helper::assert_peer_joined(&event4, &net1.get_local_peer_id());
 
         ((net1, addr1), (net2, addr2), (net3, addr3), (net4, addr4))
     }
@@ -287,7 +285,7 @@ fn network_config(address: Multiaddr) -> Config {
     };
     peer_contact.set_current_time();
 
-    let gossipsub = GossipsubConfigBuilder::default()
+    let gossipsub = gossipsub::ConfigBuilder::default()
         .validation_mode(libp2p::gossipsub::ValidationMode::Permissive)
         .build()
         .expect("Invalid Gossipsub config");
@@ -296,7 +294,7 @@ fn network_config(address: Multiaddr) -> Config {
         keypair,
         peer_contact,
         seeds: Vec::new(),
-        discovery: DiscoveryConfig {
+        discovery: discovery::Config {
             genesis_hash: Default::default(),
             update_interval: Duration::from_secs(60),
             min_recv_update_interval: Duration::from_secs(30),
@@ -304,7 +302,7 @@ fn network_config(address: Multiaddr) -> Config {
             required_services: Services::all(),
             min_send_update_interval: Duration::from_secs(30),
             house_keeping_interval: Duration::from_secs(60),
-            keep_alive: KeepAlive::Yes,
+            keep_alive: true,
         },
         kademlia: Default::default(),
         gossipsub,
@@ -517,13 +515,13 @@ async fn disconnect_successfully(net1: &Arc<Network>, net2: &Arc<Network>) {
 
     log::debug!("Waiting for disconnect events");
 
-    let event1 = get_next_peer_event(&mut events1).await;
+    let event1 = helper::get_next_peer_event(&mut events1).await;
     log::trace!(event = ?event1, "Event 1");
-    assert_peer_left(&event1, &net2.get_local_peer_id());
+    helper::assert_peer_left(&event1, &net2.get_local_peer_id());
 
-    let event2 = get_next_peer_event(&mut events2).await;
+    let event2 = helper::get_next_peer_event(&mut events2).await;
     log::trace!(event = ?event2, "Event 2");
-    assert_peer_left(&event2, &net1.get_local_peer_id());
+    helper::assert_peer_left(&event2, &net1.get_local_peer_id());
 }
 
 #[cfg(feature = "tokio-time")]
@@ -538,13 +536,13 @@ async fn reconnect_successfully(net1: &Arc<Network>, addr1: Multiaddr, net2: &Ar
 
     log::debug!("Waiting for join events");
 
-    let event1 = get_next_peer_event(&mut events1).await;
+    let event1 = helper::get_next_peer_event(&mut events1).await;
     log::trace!(event = ?event1, "Event 1");
-    assert_peer_joined(&event1, &net2.get_local_peer_id());
+    helper::assert_peer_joined(&event1, &net2.get_local_peer_id());
 
-    let event2 = get_next_peer_event(&mut events2).await;
+    let event2 = helper::get_next_peer_event(&mut events2).await;
     log::trace!(event = ?event2, "Event 2");
-    assert_peer_joined(&event2, &net1.get_local_peer_id());
+    helper::assert_peer_joined(&event2, &net1.get_local_peer_id());
 }
 
 #[cfg(feature = "tokio-time")]

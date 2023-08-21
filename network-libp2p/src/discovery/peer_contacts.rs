@@ -6,7 +6,7 @@ use std::{
 
 use instant::SystemTime;
 use libp2p::{
-    gossipsub::Gossipsub,
+    gossipsub,
     identity::{Keypair, PublicKey},
     Multiaddr, PeerId,
 };
@@ -344,7 +344,7 @@ impl PeerContactBook {
 
     /// Updates the score of every peer in the contact book with the gossipsub
     /// peer score.
-    pub fn update_scores(&self, gossipsub: &Gossipsub) {
+    pub fn update_scores(&self, gossipsub: &gossipsub::Behaviour) {
         let contacts = self.peer_contacts.iter();
 
         for contact in contacts {
@@ -427,14 +427,19 @@ impl PeerContactBook {
 
 mod serde_public_key {
     use libp2p::identity::PublicKey;
-    use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
+    use serde::{
+        de::Error, ser::Error as SerializationError, Deserialize, Deserializer, Serialize,
+        Serializer,
+    };
 
     pub fn serialize<S>(public_key: &PublicKey, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        match public_key {
-            PublicKey::Ed25519(pk) => Serialize::serialize(&pk.encode(), serializer),
+        if let Ok(pk) = public_key.clone().try_into_ed25519() {
+            Serialize::serialize(&pk.to_bytes(), serializer)
+        } else {
+            Err(S::Error::custom("Unsupported key type"))
         }
     }
 
@@ -444,9 +449,9 @@ mod serde_public_key {
     {
         let hex_encoded: [u8; 32] = Deserialize::deserialize(deserializer)?;
 
-        let pk = libp2p::identity::ed25519::PublicKey::decode(&hex_encoded)
+        let pk = libp2p::identity::ed25519::PublicKey::try_from_bytes(&hex_encoded)
             .map_err(|_| D::Error::custom("Invalid value"))?;
 
-        Ok(PublicKey::Ed25519(pk))
+        Ok(PublicKey::from(pk))
     }
 }

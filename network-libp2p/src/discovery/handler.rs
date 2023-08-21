@@ -10,8 +10,10 @@ use instant::Instant;
 use libp2p::{
     identity::Keypair,
     swarm::{
-        ConnectionHandler, ConnectionHandlerEvent, ConnectionHandlerUpgrErr, KeepAlive,
-        NegotiatedSubstream, SubstreamProtocol,
+        handler::{
+            ConnectionEvent, DialUpgradeError, FullyNegotiatedInbound, FullyNegotiatedOutbound,
+        },
+        ConnectionHandler, ConnectionHandlerEvent, Stream, SubstreamProtocol,
     },
     Multiaddr,
 };
@@ -25,7 +27,7 @@ use thiserror::Error;
 use wasm_timer::Interval;
 
 use super::{
-    behaviour::DiscoveryConfig,
+    behaviour::Config,
     message_codec::{MessageReader, MessageWriter},
     peer_contacts::{PeerContactBook, SignedPeerContact},
     protocol::{ChallengeNonce, DiscoveryMessage, DiscoveryProtocol},
@@ -39,7 +41,7 @@ pub enum HandlerInEvent {
     ObservedAddress(Multiaddr),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum HandlerOutEvent {
     /// List of observed addresses for the peer
     ObservedAddresses {
@@ -51,10 +53,12 @@ pub enum HandlerOutEvent {
         peer_contact: SignedPeerContact,
     },
     Update,
+    /// An error occurred
+    Error(Error),
 }
 
 #[derive(Debug, Error)]
-pub enum DiscoveryHandlerError {
+pub enum Error {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -80,7 +84,7 @@ pub enum DiscoveryHandlerError {
     ChallengeResponseFailed,
 
     #[error("Signing error: {0}")]
-    Signing(#[from] libp2p::identity::error::SigningError),
+    Signing(#[from] libp2p::identity::SigningError),
 
     #[error("Received too frequent updates: {}", .interval.as_secs())]
     TooFrequentUpdates { interval: Duration },
@@ -89,7 +93,7 @@ pub enum DiscoveryHandlerError {
     UpdateLimitExceeded { num_peer_contacts: usize },
 }
 
-impl DiscoveryHandlerError {
+impl Error {
     /// Short-hand to create an IO error variant with an ConnectionReset error.
     pub fn connection_reset() -> Self {
         Self::Io(std::io::ErrorKind::ConnectionReset.into())
@@ -117,9 +121,9 @@ pub enum HandlerState {
     Established,
 }
 
-pub struct DiscoveryHandler {
+pub struct Handler {
     /// Configuration for peer discovery.
-    config: DiscoveryConfig,
+    config: Config,
 
     /// Identity keypair for this node.
     keypair: Keypair,
@@ -152,18 +156,18 @@ pub struct DiscoveryHandler {
     last_update_time: Option<Instant>,
 
     /// The inbound message stream.
-    inbound: Option<MessageReader<NegotiatedSubstream, DiscoveryMessage>>,
+    inbound: Option<MessageReader<Stream, DiscoveryMessage>>,
 
     /// The outbound message stream.
-    outbound: Option<MessageWriter<NegotiatedSubstream, DiscoveryMessage>>,
+    outbound: Option<MessageWriter<Stream, DiscoveryMessage>>,
 
     /// Waker used when opening a substream.
     waker: Option<Waker>,
 }
 
-impl DiscoveryHandler {
+impl Handler {
     pub fn new(
-        config: DiscoveryConfig,
+        config: Config,
         keypair: Keypair,
         peer_contact_book: Arc<RwLock<PeerContactBook>>,
     ) -> Self {
@@ -232,10 +236,9 @@ impl DiscoveryHandler {
     }
 }
 
-impl ConnectionHandler for DiscoveryHandler {
-    type InEvent = HandlerInEvent;
-    type OutEvent = HandlerOutEvent;
-    type Error = DiscoveryHandlerError;
+impl ConnectionHandler for Handler {
+    type FromBehaviour = HandlerInEvent;
+    type ToBehaviour = HandlerOutEvent;
     type InboundProtocol = DiscoveryProtocol;
     type OutboundProtocol = DiscoveryProtocol;
     type InboundOpenInfo = ();
@@ -245,39 +248,45 @@ impl ConnectionHandler for DiscoveryHandler {
         SubstreamProtocol::new(DiscoveryProtocol, ())
     }
 
-    fn inject_fully_negotiated_inbound(
+    fn on_connection_event(
         &mut self,
-        protocol: MessageReader<NegotiatedSubstream, DiscoveryMessage>,
-        _info: (),
+        event: ConnectionEvent<
+            Self::InboundProtocol,
+            Self::OutboundProtocol,
+            Self::InboundOpenInfo,
+            Self::OutboundOpenInfo,
+        >,
     ) {
-        if self.inbound.is_some() {
-            panic!("Inbound already connected");
+        match event {
+            ConnectionEvent::FullyNegotiatedInbound(FullyNegotiatedInbound {
+                protocol, ..
+            }) => {
+                if self.inbound.is_some() {
+                    panic!("Inbound already connected");
+                }
+                self.inbound = Some(protocol);
+                self.check_initialized();
+            }
+            ConnectionEvent::FullyNegotiatedOutbound(FullyNegotiatedOutbound {
+                protocol, ..
+            }) => {
+                if self.outbound.is_some() {
+                    panic!("Outbound already connected");
+                }
+                if self.state != HandlerState::OpenSubstream {
+                    panic!("Unexpected outbound");
+                }
+                self.outbound = Some(protocol);
+                self.check_initialized();
+            }
+            ConnectionEvent::DialUpgradeError(DialUpgradeError { error, .. }) => {
+                error!(%error, "inject_dial_upgrade_error");
+            }
+            _ => {}
         }
-
-        self.inbound = Some(protocol);
-
-        self.check_initialized();
     }
 
-    fn inject_fully_negotiated_outbound(
-        &mut self,
-        protocol: MessageWriter<NegotiatedSubstream, DiscoveryMessage>,
-        _info: (),
-    ) {
-        if self.outbound.is_some() {
-            panic!("Outbound already connected");
-        }
-
-        if self.state != HandlerState::OpenSubstream {
-            panic!("Unexpected outbound");
-        }
-
-        self.outbound = Some(protocol);
-
-        self.check_initialized();
-    }
-
-    fn inject_event(&mut self, event: HandlerInEvent) {
+    fn on_behaviour_event(&mut self, event: HandlerInEvent) {
         match event {
             HandlerInEvent::ConnectionAddress(address) => {
                 self.peer_address = Some(address);
@@ -290,31 +299,23 @@ impl ConnectionHandler for DiscoveryHandler {
         }
     }
 
-    fn inject_dial_upgrade_error(
-        &mut self,
-        _info: Self::OutboundOpenInfo,
-        error: ConnectionHandlerUpgrErr<DeserializeError>,
-    ) {
-        error!(%error, "inject_dial_upgrade_error");
-    }
-
-    fn connection_keep_alive(&self) -> KeepAlive {
+    fn connection_keep_alive(&self) -> bool {
         self.config.keep_alive
     }
 
     fn poll(
         &mut self,
         cx: &mut Context,
-    ) -> Poll<
-        ConnectionHandlerEvent<Self::OutboundProtocol, (), HandlerOutEvent, DiscoveryHandlerError>,
-    > {
+    ) -> Poll<ConnectionHandlerEvent<Self::OutboundProtocol, (), HandlerOutEvent>> {
         loop {
             // Send message
             // This should be done first, so we can flush the outbound sink's buffer.
             if let Some(outbound) = self.outbound.as_mut() {
                 match outbound.poll_ready_unpin(cx) {
                     Poll::Ready(Err(e)) => {
-                        return Poll::Ready(ConnectionHandlerEvent::Close(e.into()))
+                        return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
+                            HandlerOutEvent::Error(e.into()),
+                        ))
                     }
 
                     // Make sure the outbound sink is ready before we continue.
@@ -355,12 +356,14 @@ impl ConnectionHandler for DiscoveryHandler {
                         genesis_hash: self.config.genesis_hash.clone(),
                         limit: self.config.update_limit,
                         services: self.config.required_services,
-                        // TODO: If we really include this here, put this in `DiscoveryConfig`
+                        // TODO: If we really include this here, put this in `Config`
                         user_agent: "TODO".to_string(),
                     };
 
                     if let Err(e) = self.send(&msg) {
-                        return Poll::Ready(ConnectionHandlerEvent::Close(e.into()));
+                        return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
+                            HandlerOutEvent::Error(e.into()),
+                        ));
                     }
 
                     self.state = HandlerState::ReceiveHandshake;
@@ -381,12 +384,16 @@ impl ConnectionHandler for DiscoveryHandler {
                                 } => {
                                     // Check if the received genesis hash matches.
                                     if genesis_hash != self.config.genesis_hash {
-                                        return Poll::Ready(ConnectionHandlerEvent::Close(
-                                            DiscoveryHandlerError::GenesisHashMismatch {
-                                                expected: self.config.genesis_hash.clone(),
-                                                received: genesis_hash,
-                                            },
-                                        ));
+                                        return Poll::Ready(
+                                            ConnectionHandlerEvent::NotifyBehaviour(
+                                                HandlerOutEvent::Error(
+                                                    Error::GenesisHashMismatch {
+                                                        expected: self.config.genesis_hash.clone(),
+                                                        received: genesis_hash,
+                                                    },
+                                                ),
+                                            ),
+                                        );
                                     }
 
                                     let mut peer_contact_book = self.peer_contact_book.write();
@@ -420,35 +427,39 @@ impl ConnectionHandler for DiscoveryHandler {
                                     drop(peer_contact_book);
 
                                     if let Err(e) = self.send(&msg) {
-                                        return Poll::Ready(ConnectionHandlerEvent::Close(
-                                            e.into(),
-                                        ));
+                                        return Poll::Ready(
+                                            ConnectionHandlerEvent::NotifyBehaviour(
+                                                HandlerOutEvent::Error(e.into()),
+                                            ),
+                                        );
                                     }
 
                                     self.state = HandlerState::ReceiveHandshakeAck;
 
-                                    return Poll::Ready(ConnectionHandlerEvent::Custom(
+                                    return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
                                         HandlerOutEvent::ObservedAddresses { observed_addresses },
                                     ));
                                 }
 
                                 _ => {
-                                    return Poll::Ready(ConnectionHandlerEvent::Close(
-                                        DiscoveryHandlerError::UnexpectedMessage {
+                                    return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
+                                        HandlerOutEvent::Error(Error::UnexpectedMessage {
                                             message,
                                             state: self.state,
-                                        },
+                                        }),
                                     ))
                                 }
                             }
                         }
                         Poll::Ready(None) => {
-                            return Poll::Ready(ConnectionHandlerEvent::Close(
-                                DiscoveryHandlerError::connection_reset(),
+                            return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
+                                HandlerOutEvent::Error(Error::connection_reset()),
                             ))
                         }
                         Poll::Ready(Some(Err(e))) => {
-                            return Poll::Ready(ConnectionHandlerEvent::Close(e.into()))
+                            return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
+                                HandlerOutEvent::Error(e.into()),
+                            ))
                         }
                         Poll::Pending => break,
                     }
@@ -467,11 +478,15 @@ impl ConnectionHandler for DiscoveryHandler {
                                 } => {
                                     // Check the peer contact for a valid signature.
                                     if !peer_contact.verify() {
-                                        return Poll::Ready(ConnectionHandlerEvent::Close(
-                                            DiscoveryHandlerError::InvalidPeerContactSignature {
-                                                peer_contact,
-                                            },
-                                        ));
+                                        return Poll::Ready(
+                                            ConnectionHandlerEvent::NotifyBehaviour(
+                                                HandlerOutEvent::Error(
+                                                    Error::InvalidPeerContactSignature {
+                                                        peer_contact,
+                                                    },
+                                                ),
+                                            ),
+                                        );
                                     }
 
                                     // TODO: Do we need to check other stuff in the peer contact?
@@ -483,9 +498,13 @@ impl ConnectionHandler for DiscoveryHandler {
                                         &self.challenge_nonce,
                                         peer_contact.public_key(),
                                     ) {
-                                        return Poll::Ready(ConnectionHandlerEvent::Close(
-                                            DiscoveryHandlerError::ChallengeResponseFailed,
-                                        ));
+                                        return Poll::Ready(
+                                            ConnectionHandlerEvent::NotifyBehaviour(
+                                                HandlerOutEvent::Error(
+                                                    Error::ChallengeResponseFailed,
+                                                ),
+                                            ),
+                                        );
                                     }
 
                                     let mut peer_contact_book = self.peer_contact_book.write();
@@ -520,7 +539,7 @@ impl ConnectionHandler for DiscoveryHandler {
                                     self.state = HandlerState::Established;
 
                                     // Return an event that we established PEX with a new peer.
-                                    return Poll::Ready(ConnectionHandlerEvent::Custom(
+                                    return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
                                         HandlerOutEvent::PeerExchangeEstablished {
                                             peer_contact,
                                             peer_address: self
@@ -532,22 +551,24 @@ impl ConnectionHandler for DiscoveryHandler {
                                 }
 
                                 _ => {
-                                    return Poll::Ready(ConnectionHandlerEvent::Close(
-                                        DiscoveryHandlerError::UnexpectedMessage {
+                                    return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
+                                        HandlerOutEvent::Error(Error::UnexpectedMessage {
                                             message,
                                             state: self.state,
-                                        },
+                                        }),
                                     ))
                                 }
                             }
                         }
                         Poll::Ready(None) => {
-                            return Poll::Ready(ConnectionHandlerEvent::Close(
-                                DiscoveryHandlerError::connection_reset(),
+                            return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
+                                HandlerOutEvent::Error(Error::connection_reset()),
                             ))
                         }
                         Poll::Ready(Some(Err(e))) => {
-                            return Poll::Ready(ConnectionHandlerEvent::Close(e.into()))
+                            return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
+                                HandlerOutEvent::Error(e.into()),
+                            ))
                         }
                         Poll::Pending => break,
                     }
@@ -565,22 +586,28 @@ impl ConnectionHandler for DiscoveryHandler {
                                         let interval = now - last_update_time;
                                         if interval < self.config.min_recv_update_interval {
                                             // TODO: Should we just close, or ban?
-                                            return Poll::Ready(ConnectionHandlerEvent::Close(
-                                                DiscoveryHandlerError::TooFrequentUpdates {
-                                                    interval,
-                                                },
-                                            ));
+                                            return Poll::Ready(
+                                                ConnectionHandlerEvent::NotifyBehaviour(
+                                                    HandlerOutEvent::Error(
+                                                        Error::TooFrequentUpdates { interval },
+                                                    ),
+                                                ),
+                                            );
                                         }
                                     }
                                     self.last_update_time = Some(now);
 
                                     // Check if the update is not too large.
                                     if peer_contacts.len() > self.config.update_limit as usize {
-                                        return Poll::Ready(ConnectionHandlerEvent::Close(
-                                            DiscoveryHandlerError::UpdateLimitExceeded {
-                                                num_peer_contacts: peer_contacts.len(),
-                                            },
-                                        ));
+                                        return Poll::Ready(
+                                            ConnectionHandlerEvent::NotifyBehaviour(
+                                                HandlerOutEvent::Error(
+                                                    Error::UpdateLimitExceeded {
+                                                        num_peer_contacts: peer_contacts.len(),
+                                                    },
+                                                ),
+                                            ),
+                                        );
                                     }
 
                                     // Insert the new peer contacts into the peer contact book.
@@ -589,28 +616,30 @@ impl ConnectionHandler for DiscoveryHandler {
                                         self.config.required_services,
                                     );
 
-                                    return Poll::Ready(ConnectionHandlerEvent::Custom(
+                                    return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
                                         HandlerOutEvent::Update,
                                     ));
                                 }
 
                                 _ => {
-                                    return Poll::Ready(ConnectionHandlerEvent::Close(
-                                        DiscoveryHandlerError::UnexpectedMessage {
+                                    return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
+                                        HandlerOutEvent::Error(Error::UnexpectedMessage {
                                             message,
                                             state: self.state,
-                                        },
+                                        }),
                                     ))
                                 }
                             }
                         }
                         Poll::Ready(None) => {
-                            return Poll::Ready(ConnectionHandlerEvent::Close(
-                                DiscoveryHandlerError::connection_reset(),
+                            return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
+                                HandlerOutEvent::Error(Error::connection_reset()),
                             ))
                         }
                         Poll::Ready(Some(Err(e))) => {
-                            return Poll::Ready(ConnectionHandlerEvent::Close(e.into()))
+                            return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
+                                HandlerOutEvent::Error(e.into()),
+                            ))
                         }
                         Poll::Pending => {}
                     }
@@ -626,9 +655,11 @@ impl ConnectionHandler for DiscoveryHandler {
                                     let msg = DiscoveryMessage::PeerAddresses { peer_contacts };
 
                                     if let Err(e) = self.send(&msg) {
-                                        return Poll::Ready(ConnectionHandlerEvent::Close(
-                                            e.into(),
-                                        ));
+                                        return Poll::Ready(
+                                            ConnectionHandlerEvent::NotifyBehaviour(
+                                                HandlerOutEvent::Error(e.into()),
+                                            ),
+                                        );
                                     }
                                 }
                             }

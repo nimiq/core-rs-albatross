@@ -1,141 +1,64 @@
 use std::{iter, sync::Arc};
 
 use libp2p::{
-    core::either::EitherError,
-    gossipsub::{
-        error::GossipsubHandlerError, Gossipsub, GossipsubEvent, MessageAuthenticity,
-        PeerScoreParams, PeerScoreThresholds,
-    },
-    identify::{Behaviour as IdentifyBehaviour, Config as IdentifyConfig, Event as IdentifyEvent},
-    kad::{store::MemoryStore, Kademlia, KademliaEvent},
-    ping::{
-        Behaviour as PingBehaviour, Config as PingConfig, Event as PingEvent,
-        Failure as PingFailure,
-    },
-    request_response::{
-        ProtocolSupport, RequestResponse, RequestResponseConfig,
-        RequestResponseEvent as ReqResEvent,
-    },
-    swarm::{ConnectionHandlerUpgrErr, NetworkBehaviour},
-    Multiaddr, PeerId,
+    connection_limits, gossipsub, identify,
+    kad::{self, store::MemoryStore},
+    ping, request_response,
+    swarm::NetworkBehaviour,
+    Multiaddr, PeerId, StreamProtocol,
 };
 use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
 
 use crate::{
-    connection_pool::{
-        behaviour::{ConnectionPoolBehaviour, ConnectionPoolEvent},
-        handler::ConnectionPoolHandlerError,
-    },
-    discovery::{
-        behaviour::{DiscoveryBehaviour, DiscoveryEvent},
-        handler::DiscoveryHandlerError,
-        peer_contacts::PeerContactBook,
-    },
-    dispatch::codecs::typed::{IncomingRequest, MessageCodec, OutgoingResponse, ReqResProtocol},
+    connection_pool,
+    discovery::{self, peer_contacts::PeerContactBook},
+    dispatch::codecs::typed::MessageCodec,
     Config,
 };
 
-pub type NimiqNetworkBehaviourError = EitherError<
-    EitherError<
-        EitherError<
-            EitherError<
-                EitherError<
-                    EitherError<std::io::Error, DiscoveryHandlerError>,
-                    GossipsubHandlerError,
-                >,
-                std::io::Error,
-            >,
-            PingFailure,
-        >,
-        ConnectionPoolHandlerError,
-    >,
-    ConnectionHandlerUpgrErr<std::io::Error>,
->;
+/// Maximum simultaneous libp2p connections per peer
+const MAX_CONNECTIONS_PER_PEER: u32 = 2;
 
-pub type RequestResponseEvent = ReqResEvent<IncomingRequest, OutgoingResponse>;
-
-#[derive(Debug)]
-pub enum NimiqEvent {
-    Dht(KademliaEvent),
-    Discovery(DiscoveryEvent),
-    Gossip(GossipsubEvent),
-    Identify(IdentifyEvent),
-    Ping(PingEvent),
-    Pool(ConnectionPoolEvent),
-    RequestResponse(RequestResponseEvent),
-}
-
-impl From<KademliaEvent> for NimiqEvent {
-    fn from(event: KademliaEvent) -> Self {
-        Self::Dht(event)
-    }
-}
-
-impl From<DiscoveryEvent> for NimiqEvent {
-    fn from(event: DiscoveryEvent) -> Self {
-        Self::Discovery(event)
-    }
-}
-
-impl From<GossipsubEvent> for NimiqEvent {
-    fn from(event: GossipsubEvent) -> Self {
-        Self::Gossip(event)
-    }
-}
-
-impl From<IdentifyEvent> for NimiqEvent {
-    fn from(event: IdentifyEvent) -> Self {
-        Self::Identify(event)
-    }
-}
-
-impl From<ConnectionPoolEvent> for NimiqEvent {
-    fn from(event: ConnectionPoolEvent) -> Self {
-        Self::Pool(event)
-    }
-}
-
-impl From<PingEvent> for NimiqEvent {
-    fn from(event: PingEvent) -> Self {
-        Self::Ping(event)
-    }
-}
-
-impl From<RequestResponseEvent> for NimiqEvent {
-    fn from(event: RequestResponseEvent) -> Self {
-        Self::RequestResponse(event)
-    }
-}
-
+/// Network behaviour.
+/// This is composed of several other behaviours that build a tree of behaviours using
+/// the `NetworkBehaviour` macro and the order of listed behaviours matters.
+/// The first behaviours are behaviours that can close connections before establishing them
+/// such as connection limits and the connection pool. They must be at the top since they
+/// other behaviours such as request-response do not handle well that a connection is
+/// denied in a behaviour that is "after".
+/// See: https://github.com/libp2p/rust-libp2p/pull/4777#discussion_r1389951783.
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "NimiqEvent")]
-pub struct NimiqBehaviour {
-    pub dht: Kademlia<MemoryStore>,
-    pub discovery: DiscoveryBehaviour,
-    pub gossipsub: Gossipsub,
-    pub identify: IdentifyBehaviour,
-    pub ping: PingBehaviour,
-    pub pool: ConnectionPoolBehaviour,
-    pub request_response: RequestResponse<MessageCodec>,
+pub struct Behaviour {
+    pub connection_limits: connection_limits::Behaviour,
+    pub pool: connection_pool::Behaviour,
+    pub discovery: discovery::Behaviour,
+    pub dht: kad::Behaviour<MemoryStore>,
+    pub gossipsub: gossipsub::Behaviour,
+    pub identify: identify::Behaviour,
+    pub ping: ping::Behaviour,
+    pub request_response: request_response::Behaviour<MessageCodec>,
 }
 
-impl NimiqBehaviour {
+impl Behaviour {
     pub fn new(
         config: Config,
         clock: Arc<OffsetTime>,
         contacts: Arc<RwLock<PeerContactBook>>,
-        peer_score_params: PeerScoreParams,
+        peer_score_params: gossipsub::PeerScoreParams,
     ) -> Self {
         let public_key = config.keypair.public();
         let peer_id = public_key.to_peer_id();
 
         // DHT behaviour
         let store = MemoryStore::new(peer_id);
-        let dht = Kademlia::with_config(peer_id, store, config.kademlia);
+        let mut dht = kad::Behaviour::with_config(peer_id, store, config.kademlia);
+        // Fixme: This could be avoided with a protocol such as Autonat that properly set external addresses to the
+        // swarm and also avoids us to add addresses that are purely connection candidates.
+        dht.set_mode(Some(kad::Mode::Server));
 
         // Discovery behaviour
-        let discovery = DiscoveryBehaviour::new(
+        let discovery = discovery::Behaviour::new(
             config.discovery.clone(),
             config.keypair.clone(),
             Arc::clone(&contacts),
@@ -143,24 +66,27 @@ impl NimiqBehaviour {
         );
 
         // Gossipsub behaviour
-        let thresholds = PeerScoreThresholds::default();
-        let mut gossipsub = Gossipsub::new(MessageAuthenticity::Author(peer_id), config.gossipsub)
-            .expect("Wrong configuration");
+        let thresholds = gossipsub::PeerScoreThresholds::default();
+        let mut gossipsub = gossipsub::Behaviour::new(
+            gossipsub::MessageAuthenticity::Author(peer_id),
+            config.gossipsub,
+        )
+        .expect("Wrong configuration");
         gossipsub
             .with_peer_score(peer_score_params, thresholds)
             .expect("Valid score params and thresholds");
 
         // Identify behaviour
-        let identify_config = IdentifyConfig::new("/albatross/2.0".to_string(), public_key);
-        let identify = IdentifyBehaviour::new(identify_config);
+        let identify_config = identify::Config::new("/albatross/2.0".to_string(), public_key);
+        let identify = identify::Behaviour::new(identify_config);
 
         // Ping behaviour:
         // - Send a ping every 15 seconds and timeout at 20 seconds.
         // - The ping behaviour will close the connection if a ping timeouts.
-        let ping = PingBehaviour::new(PingConfig::new());
+        let ping = ping::Behaviour::new(ping::Config::new());
 
         // Connection pool behaviour
-        let pool = ConnectionPoolBehaviour::new(
+        let pool = connection_pool::Behaviour::new(
             Arc::clone(&contacts),
             peer_id,
             config.seeds,
@@ -168,11 +94,21 @@ impl NimiqBehaviour {
         );
 
         // Request Response behaviour
-        let codec = MessageCodec::default();
-        let protocol = ReqResProtocol::Version1;
-        let config = RequestResponseConfig::default();
-        let request_response =
-            RequestResponse::new(codec, iter::once((protocol, ProtocolSupport::Full)), config);
+        let protocol = StreamProtocol::new("/nimiq/reqres/0.0.1");
+        let config = request_response::Config::default();
+        let request_response = request_response::Behaviour::new(
+            iter::once((protocol, request_response::ProtocolSupport::Full)),
+            config,
+        );
+
+        // Connection limits behaviour
+        let limits = connection_limits::ConnectionLimits::default()
+            .with_max_pending_incoming(Some(16))
+            .with_max_pending_outgoing(Some(16))
+            .with_max_established_incoming(Some(4800))
+            .with_max_established_outgoing(Some(4800))
+            .with_max_established_per_peer(Some(MAX_CONNECTIONS_PER_PEER));
+        let connection_limits = connection_limits::Behaviour::new(limits);
 
         Self {
             dht,
@@ -182,6 +118,7 @@ impl NimiqBehaviour {
             ping,
             pool,
             request_response,
+            connection_limits,
         }
     }
 

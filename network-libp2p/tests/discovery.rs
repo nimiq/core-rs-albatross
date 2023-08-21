@@ -8,18 +8,17 @@ use libp2p::{
         upgrade::Version,
     },
     identity::Keypair,
-    noise::{self, NoiseConfig},
+    noise,
     swarm::{
         dial_opts::{DialOpts, PeerCondition},
-        KeepAlive, Swarm, SwarmEvent,
+        Swarm, SwarmEvent,
     },
-    yamux::YamuxConfig,
-    PeerId, Transport,
+    yamux, PeerId, SwarmBuilder, Transport,
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::peer_info::Services;
 use nimiq_network_libp2p::discovery::{
-    behaviour::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
+    self,
     peer_contacts::{PeerContact, PeerContactBook, SignedPeerContact},
 };
 use nimiq_test_log::test;
@@ -29,7 +28,7 @@ use rand::{thread_rng, Rng};
 
 struct TestNode {
     peer_id: PeerId,
-    swarm: Swarm<DiscoveryBehaviour>,
+    swarm: Swarm<discovery::Behaviour>,
     peer_contact_book: Arc<RwLock<PeerContactBook>>,
     address: Multiaddr,
 }
@@ -44,18 +43,14 @@ impl TestNode {
 
         log::info!(%peer_id, %address);
 
-        let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
-            .into_authentic(&keypair)
-            .unwrap();
-
         let transport = base_transport
             .upgrade(Version::V1) // `Version::V1Lazy` Allows for 0-RTT negotiation
-            .authenticate(NoiseConfig::xx(noise_keys).into_authenticated())
-            .multiplex(YamuxConfig::default())
+            .authenticate(noise::Config::new(&keypair).unwrap())
+            .multiplex(yamux::Config::default())
             .timeout(Duration::from_secs(20))
             .boxed();
 
-        let config = DiscoveryConfig {
+        let config = discovery::Config {
             genesis_hash: Blake2bHash::default(),
             update_interval: Duration::from_secs(10),
             min_send_update_interval: Duration::from_secs(5),
@@ -63,7 +58,7 @@ impl TestNode {
             required_services: Services::FULL_BLOCKS,
             min_recv_update_interval: Duration::from_secs(1),
             house_keeping_interval: Duration::from_secs(1),
-            keep_alive: KeepAlive::Yes,
+            keep_alive: true,
         };
 
         let peer_contact = PeerContact {
@@ -77,10 +72,20 @@ impl TestNode {
         let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(peer_contact)));
 
         let clock = Arc::new(OffsetTime::new());
-        let behaviour =
-            DiscoveryBehaviour::new(config, keypair, Arc::clone(&peer_contact_book), clock);
+        let behaviour = discovery::Behaviour::new(
+            config,
+            keypair.clone(),
+            Arc::clone(&peer_contact_book),
+            clock,
+        );
 
-        let mut swarm = Swarm::with_threadpool_executor(transport, behaviour, peer_id);
+        let mut swarm = SwarmBuilder::with_existing_identity(keypair)
+            .with_tokio()
+            .with_other_transport(|_| transport)
+            .unwrap()
+            .with_behaviour(|_| behaviour)
+            .unwrap()
+            .build();
 
         Swarm::listen_on(&mut swarm, address.clone()).unwrap();
 
@@ -181,7 +186,7 @@ pub async fn test_exchanging_peers() {
         .take_while(move |e| {
             log::info!(event = ?e, "Swarm event");
 
-            if let SwarmEvent::Behaviour(DiscoveryEvent::Update) = e {
+            if let SwarmEvent::Behaviour(discovery::Event::Update) = e {
                 t += 1;
             }
 
@@ -223,7 +228,7 @@ pub async fn test_dialing_peer_from_contacts() {
         node2.swarm.for_each(|_| async {}).await;
     });
 
-    if let Some(SwarmEvent::Behaviour(DiscoveryEvent::Established {
+    if let Some(SwarmEvent::Behaviour(discovery::Event::Established {
         peer_id,
         peer_address: _,
         peer_contact: _,

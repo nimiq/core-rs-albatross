@@ -7,11 +7,12 @@ use std::{
 
 use futures::StreamExt;
 use libp2p::{
-    core::connection::{ConnectedPoint, ConnectionId},
+    core::Endpoint,
     identity::Keypair,
     swarm::{
-        AddressScore, KeepAlive, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler,
-        PollParameters,
+        behaviour::{ConnectionClosed, ConnectionEstablished},
+        CloseConnection, ConnectionDenied, ConnectionId, FromSwarm, NetworkBehaviour,
+        NotifyHandler, ToSwarm,
     },
     Multiaddr, PeerId,
 };
@@ -22,12 +23,12 @@ use parking_lot::RwLock;
 use wasm_timer::Interval;
 
 use super::{
-    handler::{DiscoveryHandler, HandlerInEvent, HandlerOutEvent},
+    handler::{Handler, HandlerInEvent, HandlerOutEvent},
     peer_contacts::{PeerContact, PeerContactBook},
 };
 
 #[derive(Clone, Debug)]
-pub struct DiscoveryConfig {
+pub struct Config {
     /// Genesis hash for the network we want to be connected to.
     pub genesis_hash: Blake2bHash,
 
@@ -51,10 +52,10 @@ pub struct DiscoveryConfig {
     pub house_keeping_interval: Duration,
 
     /// Whether to keep the connection alive, even if no other behaviour uses it.
-    pub keep_alive: KeepAlive,
+    pub keep_alive: bool,
 }
 
-impl DiscoveryConfig {
+impl Config {
     pub fn new(genesis_hash: Blake2bHash, required_services: Services) -> Self {
         Self {
             genesis_hash,
@@ -64,13 +65,13 @@ impl DiscoveryConfig {
             update_limit: 64,
             required_services,
             house_keeping_interval: Duration::from_secs(60),
-            keep_alive: KeepAlive::Yes,
+            keep_alive: true,
         }
     }
 }
 
 #[derive(Clone, Debug)]
-pub enum DiscoveryEvent {
+pub enum Event {
     Established {
         peer_id: PeerId,
         peer_address: Multiaddr,
@@ -79,7 +80,7 @@ pub enum DiscoveryEvent {
     Update,
 }
 
-type DiscoveryNetworkBehaviourAction = NetworkBehaviourAction<DiscoveryEvent, DiscoveryHandler>;
+type DiscoveryToSwarm = ToSwarm<Event, HandlerInEvent>;
 
 /// Network behaviour for peer exchange.
 ///
@@ -90,9 +91,9 @@ type DiscoveryNetworkBehaviourAction = NetworkBehaviourAction<DiscoveryEvent, Di
 ///
 ///  - Exchange clock time with other peers.
 ///
-pub struct DiscoveryBehaviour {
+pub struct Behaviour {
     /// Configuration for the discovery behaviour
-    config: DiscoveryConfig,
+    config: Config,
 
     /// Identity key pair
     keypair: Keypair,
@@ -107,15 +108,15 @@ pub struct DiscoveryBehaviour {
     clock: Arc<OffsetTime>,
 
     /// Queue with events to emit.
-    pub events: VecDeque<DiscoveryNetworkBehaviourAction>,
+    pub events: VecDeque<DiscoveryToSwarm>,
 
     /// Timer to do house-keeping in the peer address book.
     house_keeping_timer: Interval,
 }
 
-impl DiscoveryBehaviour {
+impl Behaviour {
     pub fn new(
-        config: DiscoveryConfig,
+        config: Config,
         keypair: Keypair,
         peer_contact_book: Arc<RwLock<PeerContactBook>>,
         clock: Arc<OffsetTime>,
@@ -139,126 +140,59 @@ impl DiscoveryBehaviour {
     }
 }
 
-impl NetworkBehaviour for DiscoveryBehaviour {
-    type ConnectionHandler = DiscoveryHandler;
-    type OutEvent = DiscoveryEvent;
+impl NetworkBehaviour for Behaviour {
+    type ConnectionHandler = Handler;
+    type ToSwarm = Event;
 
-    fn new_handler(&mut self) -> Self::ConnectionHandler {
-        DiscoveryHandler::new(
+    fn handle_established_inbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        _peer: PeerId,
+        _local_addr: &Multiaddr,
+        _remote_addr: &Multiaddr,
+    ) -> Result<Handler, ConnectionDenied> {
+        Ok(Handler::new(
             self.config.clone(),
             self.keypair.clone(),
             self.peer_contact_book(),
-        )
+        ))
     }
 
-    fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-        self.peer_contact_book
+    fn handle_established_outbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        _peer: PeerId,
+        _addr: &Multiaddr,
+        _role_override: Endpoint,
+    ) -> Result<Handler, ConnectionDenied> {
+        Ok(Handler::new(
+            self.config.clone(),
+            self.keypair.clone(),
+            self.peer_contact_book(),
+        ))
+    }
+
+    fn handle_pending_outbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        maybe_peer: Option<PeerId>,
+        _addresses: &[Multiaddr],
+        _effective_role: Endpoint,
+    ) -> Result<Vec<Multiaddr>, ConnectionDenied> {
+        let peer_id = match maybe_peer {
+            None => return Ok(vec![]),
+            Some(peer) => peer,
+        };
+
+        Ok(self
+            .peer_contact_book
             .read()
-            .get(peer_id)
-            .map(|addresses_opt| addresses_opt.addresses().cloned().collect())
-            .unwrap_or_default()
+            .get(&peer_id)
+            .map(|e| e.contact().addresses.clone())
+            .unwrap_or_default())
     }
 
-    fn inject_connection_closed(
-        &mut self,
-        peer_id: &PeerId,
-        _: &ConnectionId,
-        _: &ConnectedPoint,
-        _: Self::ConnectionHandler,
-        remaining_established: usize,
-    ) {
-        if remaining_established == 0 {
-            // There are no more remaining connections to this peer
-            self.connected_peers.remove(peer_id);
-        }
-    }
-
-    fn inject_connection_established(
-        &mut self,
-        peer_id: &PeerId,
-        connection_id: &ConnectionId,
-        endpoint: &ConnectedPoint,
-        failed_addresses: Option<&Vec<Multiaddr>>,
-        other_established: usize,
-    ) {
-        let peer_address = endpoint.get_remote_address().clone();
-
-        // Signal to the handler the address that got us a connection
-        self.events
-            .push_back(NetworkBehaviourAction::NotifyHandler {
-                peer_id: *peer_id,
-                handler: NotifyHandler::One(*connection_id),
-                event: HandlerInEvent::ConnectionAddress(peer_address.clone()),
-            });
-
-        if other_established == 0 {
-            trace!(%peer_id, ?connection_id, ?endpoint, "DiscoveryBehaviour::inject_connection_established:");
-
-            // This is the first connection to this peer
-            self.connected_peers.insert(*peer_id);
-
-            // Report the observed addresses of the endpoint if a peer successfully connected to us
-            if endpoint.is_listener() {
-                self.events
-                    .push_back(NetworkBehaviourAction::NotifyHandler {
-                        peer_id: *peer_id,
-                        handler: NotifyHandler::One(*connection_id),
-                        event: HandlerInEvent::ObservedAddress(peer_address),
-                    });
-                // Peer failed to connect with some of our own addresses, remove them from our own addresses
-                if let Some(failed_addresses) = failed_addresses {
-                    if !failed_addresses.is_empty() {
-                        debug!(
-                            ?failed_addresses,
-                            "Removing failed address from own addresses"
-                        );
-                        self.peer_contact_book
-                            .write()
-                            .remove_own_addresses(failed_addresses.clone(), &self.keypair)
-                    }
-                }
-            }
-        } else {
-            trace!(%peer_id, "DiscoveryBehaviour::inject_connection_established: Already have a connection established to peer");
-        }
-    }
-
-    fn inject_event(&mut self, peer_id: PeerId, _connection: ConnectionId, event: HandlerOutEvent) {
-        trace!(%peer_id, ?event, "inject_event");
-
-        match event {
-            HandlerOutEvent::PeerExchangeEstablished {
-                peer_address,
-                peer_contact: signed_peer_contact,
-            } => {
-                if let Some(peer_contact) = self.peer_contact_book.read().get(&peer_id) {
-                    self.events.push_back(NetworkBehaviourAction::GenerateEvent(
-                        DiscoveryEvent::Established {
-                            peer_id: signed_peer_contact.public_key().clone().to_peer_id(),
-                            peer_address,
-                            peer_contact: peer_contact.contact().clone(),
-                        },
-                    ));
-                }
-            }
-            HandlerOutEvent::ObservedAddresses { observed_addresses } => {
-                let score = AddressScore::Infinite;
-                for address in observed_addresses {
-                    self.events
-                        .push_back(NetworkBehaviourAction::ReportObservedAddr { address, score });
-                }
-            }
-            HandlerOutEvent::Update => self.events.push_back(
-                NetworkBehaviourAction::GenerateEvent(DiscoveryEvent::Update),
-            ),
-        }
-    }
-
-    fn poll(
-        &mut self,
-        cx: &mut Context,
-        _params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+    fn poll(&mut self, cx: &mut Context) -> Poll<DiscoveryToSwarm> {
         // Emit events
         if let Some(event) = self.events.pop_front() {
             return Poll::Ready(event);
@@ -277,5 +211,102 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         }
 
         Poll::Pending
+    }
+
+    fn on_swarm_event(&mut self, event: FromSwarm) {
+        match event {
+            FromSwarm::ConnectionClosed(ConnectionClosed {
+                peer_id,
+                remaining_established,
+                ..
+            }) => {
+                if remaining_established == 0 {
+                    // There are no more remaining connections to this peer
+                    self.connected_peers.remove(&peer_id);
+                }
+            }
+            FromSwarm::ConnectionEstablished(ConnectionEstablished {
+                peer_id,
+                connection_id,
+                endpoint,
+                failed_addresses,
+                other_established,
+            }) => {
+                let peer_address = endpoint.get_remote_address().clone();
+
+                // Signal to the handler the address that got us a connection
+                self.events.push_back(ToSwarm::NotifyHandler {
+                    peer_id,
+                    handler: NotifyHandler::One(connection_id),
+                    event: HandlerInEvent::ConnectionAddress(peer_address.clone()),
+                });
+
+                if other_established == 0 {
+                    trace!(%peer_id, ?connection_id, ?endpoint, "Behaviour::inject_connection_established:");
+
+                    // This is the first connection to this peer
+                    self.connected_peers.insert(peer_id);
+
+                    // Report the observed addresses of the endpoint if a peer successfully connected to us
+                    if endpoint.is_listener() {
+                        self.events.push_back(ToSwarm::NotifyHandler {
+                            peer_id,
+                            handler: NotifyHandler::One(connection_id),
+                            event: HandlerInEvent::ObservedAddress(peer_address),
+                        });
+                        // Peer failed to connect with some of our own addresses, remove them from our own addresses
+                        if !failed_addresses.is_empty() {
+                            debug!(
+                                ?failed_addresses,
+                                "Removing failed address from own addresses"
+                            );
+                            self.peer_contact_book.write().remove_own_addresses(
+                                failed_addresses.iter().cloned(),
+                                &self.keypair,
+                            )
+                        }
+                    }
+                } else {
+                    trace!(%peer_id, "Behaviour::inject_connection_established: Already have a connection established to peer");
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn on_connection_handler_event(
+        &mut self,
+        peer_id: PeerId,
+        _connection: ConnectionId,
+        event: HandlerOutEvent,
+    ) {
+        trace!(%peer_id, ?event, "on_connection_handler_event");
+
+        match event {
+            HandlerOutEvent::PeerExchangeEstablished {
+                peer_address,
+                peer_contact: signed_peer_contact,
+            } => {
+                if let Some(peer_contact) = self.peer_contact_book.read().get(&peer_id) {
+                    self.events
+                        .push_back(ToSwarm::GenerateEvent(Event::Established {
+                            peer_id: signed_peer_contact.public_key().clone().to_peer_id(),
+                            peer_address,
+                            peer_contact: peer_contact.contact().clone(),
+                        }));
+                }
+            }
+            HandlerOutEvent::ObservedAddresses { observed_addresses } => {
+                for address in observed_addresses {
+                    self.events
+                        .push_back(ToSwarm::NewExternalAddrCandidate(address));
+                }
+            }
+            HandlerOutEvent::Update => self.events.push_back(ToSwarm::GenerateEvent(Event::Update)),
+            HandlerOutEvent::Error(_) => self.events.push_back(ToSwarm::CloseConnection {
+                peer_id,
+                connection: CloseConnection::All,
+            }),
+        }
     }
 }

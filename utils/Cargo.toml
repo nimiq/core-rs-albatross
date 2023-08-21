@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 clear_on_drop = { version = "0.2", optional = true }
 futures = { package = "futures-util", version = "0.3" }
 hex = { version = "0.4", optional = true }
-libp2p-core = { git = "https://github.com/jsdanielh/rust-libp2p.git", optional = true }
+libp2p-identity = { version = "0.2", optional = true }
 log = { package = "tracing", version = "0.1", optional = true, features = ["log"] }
 parking_lot = "0.12"
 rand = { version = "0.8", optional = true }
@@ -43,7 +43,7 @@ nimiq-test-utils = { workspace = true }
 crc = []
 key-rng = ["rand", "rand_core"]
 key-store = ["log", "thiserror"]
-libp2p = ["libp2p-core"]
+libp2p = ["libp2p-identity"]
 math = []
 merkle = [
     "math",

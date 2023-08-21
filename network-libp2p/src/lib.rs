@@ -12,9 +12,7 @@ mod network;
 mod network_metrics;
 mod rate_limiting;
 
-pub const REQRES_PROTOCOL: &[u8] = b"/nimiq/reqres/0.0.1";
-pub const MESSAGE_PROTOCOL: &[u8] = b"/nimiq/message/0.0.1";
-pub const DISCOVERY_PROTOCOL: &[u8] = b"/nimiq/discovery/0.0.1";
+pub const DISCOVERY_PROTOCOL: &str = "/nimiq/discovery/0.0.1";
 
 pub use config::{Config, TlsConfig};
 pub use error::NetworkError;
@@ -25,9 +23,11 @@ pub use libp2p::{
     PeerId,
 };
 pub use network::Network;
-use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{
+    de::Error, ser::Error as SerializationError, Deserialize, Deserializer, Serialize, Serializer,
+};
 
-/// Wrapper to libp2p Keypair indetity that implements SerDe Serialize/Deserialize
+/// Wrapper to libp2p Keypair identity that implements SerDe Serialize/Deserialize
 #[derive(Clone, Debug)]
 pub struct Libp2pKeyPair(pub libp2p::identity::Keypair);
 
@@ -36,10 +36,10 @@ impl Serialize for Libp2pKeyPair {
     where
         S: Serializer,
     {
-        match &self.0 {
-            Keypair::Ed25519(keypair) => {
-                serde_big_array::BigArray::serialize(&keypair.encode(), serializer)
-            }
+        if let Ok(pk) = self.0.clone().try_into_ed25519() {
+            serde_big_array::BigArray::serialize(&pk.to_bytes(), serializer)
+        } else {
+            Err(S::Error::custom("Unsupported key type"))
         }
     }
 }
@@ -51,8 +51,9 @@ impl<'de> Deserialize<'de> for Libp2pKeyPair {
     {
         let mut hex_encoded: [u8; 64] = serde_big_array::BigArray::deserialize(deserializer)?;
 
-        let pk = libp2p::identity::ed25519::Keypair::decode(&mut hex_encoded)
+        let keypair = libp2p::identity::ed25519::Keypair::try_from_bytes(&mut hex_encoded)
             .map_err(|_| D::Error::custom("Invalid value"))?;
-        Ok(Libp2pKeyPair(Keypair::Ed25519(pk)))
+
+        Ok(Libp2pKeyPair(Keypair::from(keypair)))
     }
 }
