@@ -1,5 +1,5 @@
 use bitflags::bitflags;
-use libp2p::Multiaddr;
+use multiaddr::Multiaddr;
 use nimiq_serde::{Deserialize, Serialize};
 
 bitflags! {
