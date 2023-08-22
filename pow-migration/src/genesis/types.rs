@@ -34,8 +34,11 @@ pub enum Error {
 /// The registration window is a set of blocks in the PoW chain that marks
 /// the start and end of different windows as follows:
 ///
+/// ```text
 ///     1                  2                  3                  4         5
 /// --- | ---------------- | ---------------- | ---------------- | ------- |
+///
+/// ```
 ///
 /// 1. Validator registration window start block.
 /// 2. Validator registration window end block. This block is also the pre-stake
