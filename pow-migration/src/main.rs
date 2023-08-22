@@ -329,8 +329,9 @@ async fn main() {
 
     info!(next_election_candidate = candidate);
 
+    //  We wait until the candidate block is mined
     loop {
-        if client.block_number().await.unwrap() >= candidate + block_windows.block_confirmations {
+        if client.block_number().await.unwrap() >= candidate {
             info!("We are ready to start the migration process..");
             break;
         } else {
@@ -341,36 +342,8 @@ async fn main() {
             sleep(Duration::from_secs(60));
         }
     }
-    // Obtain the genesis candidate block
-    let block = client.get_block_by_number(candidate, false).await.unwrap();
 
-    // Start the genesis generation process
-    let pow_registration_window = PoWRegistrationWindow {
-        pre_stake_start: block_windows.pre_stake_start,
-        pre_stake_end: block_windows.pre_stake_end,
-        validator_start: block_windows.registration_start,
-        final_block: block.hash,
-        confirmations: block_windows.block_confirmations,
-    };
-
-    let genesis_config = match get_pos_genesis(
-        &client,
-        &pow_registration_window,
-        config.network_id,
-        env,
-        Some(PoSRegisteredAgents {
-            validators,
-            stakers,
-        }),
-    )
-    .await
-    {
-        Ok(config) => config,
-        Err(error) => {
-            log::error!(?error, "Failed to build PoS genesis");
-            exit(1);
-        }
-    };
+    let mut previous_hash = "0".to_string();
 
     // Create directory where the genesis file will be written if it doesn't exist
     let genesis_dir = current_exe_dir.join("genesis");
@@ -380,18 +353,73 @@ async fn main() {
             exit(1);
         }
     }
-
-    // Generate genesis filename and write it to the FS
     let genesis_file =
         genesis_dir.join(config.network_id.to_string().to_case(Case::Kebab) + ".toml");
-    if let Err(error) = write_pos_genesis(&genesis_file, genesis_config) {
-        log::error!(?error, "Could not write genesis config file");
-        exit(1);
+
+    loop {
+        // If we have enough confirmations, we can start the 2.0 client
+        if client.block_number().await.unwrap() >= candidate + block_windows.block_confirmations {
+            info!("We are ready to start the Nimiq PoS Client..");
+            break;
+        } else {
+            // Start the PoS genesis generation process
+
+            // Obtain the genesis candidate block
+            let block = client.get_block_by_number(candidate, false).await.unwrap();
+
+            let current_hash = block.hash.clone();
+            info!(current_hash = current_hash, "Current genesis hash");
+
+            if previous_hash != current_hash {
+                // Start the genesis generation process
+                let pow_registration_window = PoWRegistrationWindow {
+                    pre_stake_start: block_windows.pre_stake_start,
+                    pre_stake_end: block_windows.pre_stake_end,
+                    validator_start: block_windows.registration_start,
+                    final_block: block.hash,
+                    confirmations: block_windows.block_confirmations,
+                };
+
+                let genesis_config = match get_pos_genesis(
+                    &client,
+                    &pow_registration_window,
+                    config.network_id,
+                    env.clone(),
+                    Some(PoSRegisteredAgents {
+                        validators: validators.clone(),
+                        stakers: stakers.clone(),
+                    }),
+                )
+                .await
+                {
+                    Ok(config) => config,
+                    Err(error) => {
+                        log::error!(?error, "Failed to build PoS genesis");
+                        exit(1);
+                    }
+                };
+
+                // Generate genesis filename and write it to the FS
+                if let Err(error) = write_pos_genesis(&genesis_file, genesis_config) {
+                    log::error!(?error, "Could not write genesis config file");
+                    exit(1);
+                }
+                log::info!(
+                    filename = ?genesis_file,
+                    "Finished writing PoS genesis to file"
+                );
+
+                // Update block hash
+                previous_hash = current_hash;
+            } else {
+                // Wait for more confirmations
+                let current_confirmations = client.block_number().await.unwrap() - candidate;
+                info!(" Waiting for more confirmations to start the nimiq 2.0 client");
+                info!(" Current confirmations {}", current_confirmations);
+                sleep(Duration::from_secs(60));
+            }
+        }
     }
-    log::info!(
-        filename = ?genesis_file,
-        "Finished writing PoS genesis to file"
-    );
 
     // Start the nimiq 2.0 client with the generated genesis file
     log::info!(
