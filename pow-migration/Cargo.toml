@@ -18,6 +18,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 clap = { version = "4.3", features = ["derive"] }
+convert_case = "0.6"
 hex = "0.4"
 humantime = "2.1"
 indicatif = "0.17"

@@ -1,6 +1,12 @@
-use std::{fs, process::exit, thread::sleep, time::Duration};
+use std::{
+    fs,
+    process::{exit, Command},
+    thread::sleep,
+    time::Duration,
+};
 
 use clap::Parser;
+use convert_case::{Case, Casing};
 use log::{info, level_filters::LevelFilter};
 use nimiq_lib::config::{config::ClientConfig, config_file::ConfigFile};
 use nimiq_pow_migration::{
@@ -18,7 +24,6 @@ use nimiq_pow_migration::{
 };
 use nimiq_primitives::policy::Policy;
 use nimiq_rpc::Client;
-use serde::Deserialize;
 use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 use url::Url;
 
@@ -29,9 +34,6 @@ struct Args {
     /// Path to the PoS configuration file
     #[arg(short, long)]
     config: String,
-    /// Path to the wrapper settings file
-    #[arg(short, long)]
-    settings: String,
     /// PoS RPC server URL
     #[arg(short, long)]
     url: String,
@@ -41,12 +43,6 @@ struct Args {
     /// Optional PoS RPC server password
     #[arg(short, long)]
     password: Option<String>,
-}
-
-// Top level struct to hold the TOML data.
-#[derive(Deserialize)]
-struct Data {
-    genesis: String,
 }
 
 fn initialize_logging() {
@@ -75,6 +71,20 @@ async fn main() {
     initialize_logging();
 
     let args = Args::parse();
+
+    let current_exe_dir = match std::env::current_exe() {
+        Ok(mut path) => {
+            path.pop();
+            path
+        }
+        Err(error) => {
+            log::error!(
+                ?error,
+                "Could not find full filesystem path of the current running executable"
+            );
+            exit(1);
+        }
+    };
 
     let contents = match fs::read_to_string(&args.config) {
         Ok(c) => c,
@@ -111,23 +121,6 @@ async fn main() {
                 ?error,
                 "Error parsing configuration file"
             );
-            exit(1);
-        }
-    };
-
-    let contents = match fs::read_to_string(&args.settings) {
-        Ok(c) => c,
-
-        Err(_) => {
-            log::error!(file = args.config, "Could not read file");
-            exit(1);
-        }
-    };
-
-    let settings: Data = match toml::from_str(&contents) {
-        Ok(d) => d,
-        Err(error) => {
-            log::error!(file = args.config, ?error, "Unable to read settings file");
             exit(1);
         }
     };
@@ -359,13 +352,54 @@ async fn main() {
         }
     };
 
-    if let Err(error) = write_pos_genesis(&settings.genesis, genesis_config) {
+    // Create directory where the genesis file will be written if it doesn't exist
+    let genesis_dir = current_exe_dir.join("genesis");
+    if !genesis_dir.exists() {
+        if let Err(error) = std::fs::create_dir(genesis_dir.clone()) {
+            log::error!(?error, "Could not create genesis directory");
+            exit(1);
+        }
+    }
+
+    // Generate genesis filename and write it to the FS
+    let genesis_file =
+        genesis_dir.join(config.network_id.to_string().to_case(Case::Kebab) + ".toml");
+    if let Err(error) = write_pos_genesis(&genesis_file, genesis_config) {
         log::error!(?error, "Could not write genesis config file");
         exit(1);
     }
     log::info!(
-        filename = settings.genesis,
+        filename = ?genesis_file,
         "Finished writing PoS genesis to file"
     );
+
     // Start the nimiq 2.0 client with the generated genesis file
+    log::info!(
+        filename = ?genesis_file,
+        "Launching PoS client with generated genesis"
+    );
+
+    // Set the genesis file environment variable
+    std::env::set_var("NIMIQ_OVERRIDE_MAINET_CONFIG", genesis_file);
+    let pos_client = current_exe_dir.join("nimiq-client");
+    if !pos_client.exists() {
+        log::error!("Could not find PoS client, run `cargo build [--release]`");
+        exit(1);
+    };
+
+    // Launch the client
+    let mut child = match Command::new(pos_client).arg("-c").arg(args.config).spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            log::error!(?error, "Could not launch PoS client");
+            exit(1);
+        }
+    };
+
+    // Check that we were able to launch the client
+    match child.try_wait() {
+        Ok(Some(status)) => log::error!(%status, "Pos client unexpectedly exited"),
+        Ok(None) => log::info!(pid = child.id(), "Pos client running"),
+        Err(error) => log::error!(?error, "Error waiting for the PoS client to run"),
+    }
 }

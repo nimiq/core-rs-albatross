@@ -1,6 +1,6 @@
 pub mod types;
 
-use std::{fs, str::FromStr, time::Instant};
+use std::{fs, path::PathBuf, str::FromStr, time::Instant};
 
 use nimiq_database::DatabaseProxy;
 use nimiq_genesis_builder::config::GenesisConfig;
@@ -119,6 +119,6 @@ pub async fn get_pos_genesis(
 }
 
 /// Write the genesis config file to a TOML file
-pub fn write_pos_genesis(file_path: &str, genesis_config: GenesisConfig) -> Result<(), Error> {
+pub fn write_pos_genesis(file_path: &PathBuf, genesis_config: GenesisConfig) -> Result<(), Error> {
     Ok(fs::write(file_path, toml::to_string(&genesis_config)?)?)
 }
