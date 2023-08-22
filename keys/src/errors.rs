@@ -1,8 +1,6 @@
-use ed25519_zebra::Error;
+pub use ed25519_zebra::{ed25519::Error as SignatureError, Error as KeysError};
 use hex::FromHexError;
 use thiserror::Error;
-
-pub type KeysError = Error;
 
 #[derive(Debug, Error)]
 pub enum ParseError {
@@ -10,4 +8,6 @@ pub enum ParseError {
     FromHex(#[from] FromHexError),
     #[error("{0}")]
     KeysError(#[from] KeysError),
+    #[error("{0}")]
+    SignatureError(#[from] SignatureError),
 }

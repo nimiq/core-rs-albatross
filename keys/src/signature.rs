@@ -2,7 +2,7 @@ use std::{convert::TryFrom, fmt, str::FromStr};
 
 use hex::FromHex;
 
-use crate::errors::{KeysError, ParseError};
+use crate::errors::{ParseError, SignatureError};
 
 #[derive(Debug, Clone)]
 pub struct Signature(pub(super) ed25519_zebra::Signature);
@@ -21,7 +21,7 @@ impl Signature {
     }
 
     #[inline]
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, KeysError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, SignatureError> {
         Ok(Signature(ed25519_zebra::Signature::try_from(bytes)?))
     }
 
