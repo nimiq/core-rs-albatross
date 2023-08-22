@@ -74,6 +74,9 @@ jobs:
     #    verbose: true
     - name: Run tests
       run: cargo nextest run --all-features
+    # Currently `nextest` doesn't support doctest so we have to run them apart
+    - name: Run doctest
+      run: cargo test --doc
 
   clippy:
     if: github.event_name != 'push' || github.event.pusher.name != 'dependabot[bot]'
