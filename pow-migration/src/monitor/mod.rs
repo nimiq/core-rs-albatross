@@ -19,16 +19,18 @@ use crate::{
 /// Stake percentage that is considered to indicate that the validators are ready
 pub const READY_PERCENTAGE: u8 = 80;
 
-// Sends a transaction to the Nimiq PoW chain to report that we are ready
-// The transaction format is defined as follow:
-//   Sender: Validator address
-//   Recipient: Burn address
-//   Value: 100 Lunas
-//   Data: TBD
-//
-//
+/// Sends a transaction to the Nimiq PoW chain to report that we are ready
+/// The transaction format is defined as follow:
+///   Sender: Validator address
+///   Recipient: Burn address
+///   Value: 100 Lunas
+///   Data: TBD
+///
 pub fn generate_ready_tx(validator: String) -> OutgoingTransaction {
-    info!(" Generating ready transaction, from {} ", validator);
+    info!(
+        validator_address = validator,
+        "Generating ready transaction"
+    );
     OutgoingTransaction {
         from: validator,
         to: Address::burn_address().to_user_friendly_address(),
@@ -37,7 +39,7 @@ pub fn generate_ready_tx(validator: String) -> OutgoingTransaction {
     }
 }
 
-// Checks if we have seen a ready transaction from a validator in the specified range
+/// Checks if we have seen a ready transaction from a validator in the specified range
 pub async fn get_ready_txns(
     client: &Client,
     validator: String,
@@ -60,23 +62,23 @@ pub async fn get_ready_txns(
     }
 }
 
-// Sends a transaction into the Nimiq PoW chain
+/// Sends a transaction into the Nimiq PoW chain
 pub async fn send_tx(client: &Client, transaction: OutgoingTransaction) -> Result<(), Error> {
     match client.send_transaction(&transaction).await {
         Ok(_) => {
-            info!(" Sent transaction to the Nimiq PoW network");
+            info!("Sent transaction to the Nimiq PoW network");
             Ok(())
         }
-        Err(err) => {
-            error!(" Failed sending transaction, error: {}", err);
+        Err(error) => {
+            error!(?error, "Failed sending transaction");
             Err(Error::Rpc)
         }
     }
 }
 
-// Checks if enough validators are ready
-// If thats the case, the number of slots which are ready are returned
-// The validators_allocation is a HashMap from Validator to number of slots owned by that validator
+/// Checks if enough validators are ready.
+/// If thats the case, the number of slots which are ready are returned.
+/// The validators_allocation is a HashMap from Validator to number of slots owned by that validator.
 pub async fn check_validators_ready(
     client: &Client,
     validators: Vec<GenesisValidator>,
@@ -84,7 +86,7 @@ pub async fn check_validators_ready(
     // First calculate the total amount of stake
     let total_stake: Coin = validators.iter().map(|validator| validator.balance).sum();
 
-    log::debug!(" The total registered stake is {}", total_stake);
+    log::debug!(registered_stake = %total_stake);
 
     // First we need to obtain the validator list, along with the slot allocation for the first epoch.
     let mut validator_list = HashMap::new();
@@ -105,7 +107,7 @@ pub async fn check_validators_ready(
 
     log::info!("Starting to collect transactions from validators...");
 
-    // Now we need to collect all the transations for each validator
+    // Now we need to collect all the transactions for each validator
     for validator in validators {
         let address = validator
             .validator
@@ -113,9 +115,9 @@ pub async fn check_validators_ready(
             .to_user_friendly_address();
         if let Ok(transactions) = client.get_transactions_by_address(&address, 10).await {
             info!(
-                "There are {} transactions from {}",
-                transactions.len(),
-                address
+                num_transactions = transactions.len(),
+                from_address = address,
+                "Transactions found for validator"
             );
             // We only keep the ones past the activation window that met the activation criteria
             let filtered_txns: Vec<TransactionDetails> = transactions
@@ -128,8 +130,8 @@ pub async fn check_validators_ready(
                 })
                 .collect();
             info!(
-                "Transactions that met the readiness criteria: {}",
-                filtered_txns.len()
+                num_transactions = filtered_txns.len(),
+                "Transactions that met the readiness criteria",
             );
             if !filtered_txns.is_empty() {
                 ready_validators.push(validator);
@@ -144,30 +146,29 @@ pub async fn check_validators_ready(
         ready_stake += ready_validator.balance;
 
         info!(
-            " Validator {} is ready with {} stake.",
-            ready_validator
+            address = ready_validator
                 .validator
                 .validator_address
                 .to_user_friendly_address(),
-            ready_validator.balance
+            stake = %ready_validator.balance,
+            "Validator is ready",
         );
     }
 
-    info!(" We have {} total stake ready", u64::from(ready_stake));
     let percent = Percentage::from(READY_PERCENTAGE);
-
     let needed_stake = percent.apply_to(u64::from(total_stake));
 
-    info!(" We need at least {} stake to be ready", needed_stake);
+    info!(
+        needed_stake,
+        stake_ready = u64::from(ready_stake),
+        "Stake needed vs ready"
+    );
 
     if u64::from(ready_stake) >= needed_stake {
-        info!(" Enough validators are ready to start the PoS Chain! ");
+        info!("Enough validators are ready to start the PoS Chain!");
         ValidatorsReadiness::Ready(ready_stake)
     } else {
-        info!(
-            " Not enough validators are ready, we need at least {} stake ",
-            needed_stake
-        );
+        info!(needed_stake, "Not enough validators are ready");
         ValidatorsReadiness::NotReady(ready_stake)
     }
 }
