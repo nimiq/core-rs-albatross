@@ -224,6 +224,32 @@ async fn main() {
     if !registered_validator {
         log::warn!("The validator address that is being used was not registered before! ");
         log::warn!("Therefore this validator cannot participate in the readiness voting process");
+    } else {
+        // If the validator was registered we need to check if the RPC server we are connected to
+        //  has the account of the validator address in the PoW client wallet.
+        // This is necessary to send validator readiness transactions.
+        let wallet_addresses = client
+            .accounts()
+            .await
+            .expect("Failed obtaining the list of accounts owned by the RPC server");
+
+        let mut imported_address = false;
+
+        for account in wallet_addresses {
+            if let nimiq_rpc::primitives::Account::Basic(basic_account) = account {
+                if basic_account.address == validator_address.to_user_friendly_address() {
+                    imported_address = true;
+                    break;
+                }
+            }
+        }
+
+        if !imported_address {
+            log::error!(
+                "The validator was registered but its account was not imported into the PoW client"
+            );
+            exit(1)
+        }
     }
 
     // Now we obtain the stake distribution
@@ -414,14 +440,16 @@ async fn main() {
             } else {
                 // Wait for more confirmations
                 let current_confirmations = client.block_number().await.unwrap() - candidate;
-                info!("Waiting for more confirmations to start the nimiq 2.0 client");
-                info!("Current confirmations {}", current_confirmations);
+                info!(
+                    current_confirmations,
+                    "Waiting for more confirmations to start the Nimiq PoS client"
+                );
                 sleep(Duration::from_secs(60));
             }
         }
     }
 
-    // Start the nimiq 2.0 client with the generated genesis file
+    // Start the nimiq PoS client with the generated genesis file
     log::info!(
         filename = ?genesis_file,
         "Launching PoS client with generated genesis"
