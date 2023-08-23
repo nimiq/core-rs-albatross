@@ -21,8 +21,6 @@ use crate::{
 };
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde-derive", serde(rename_all = "camelCase"))]
 pub struct VestingContract {
     /// Total balance of the contract.
     pub balance: Coin,

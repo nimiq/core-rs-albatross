@@ -47,7 +47,6 @@ nimiq-hash = { workspace = true }
 nimiq-serde = { workspace = true }
 nimiq-utils = { workspace = true, features = [
     "tagged-signing",
-    "serde-derive",
     "libp2p",
     "time",
 ] }

@@ -14,7 +14,6 @@ use crate::{
 
 /// The proof for a block produced by Tendermint.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct TendermintProof {
     // The round when the block was completed. This is necessary to verify the signature.
     pub round: u32,

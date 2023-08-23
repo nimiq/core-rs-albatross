@@ -79,7 +79,6 @@ pub enum IncomingStakingTransactionData {
     },
     SetInactiveStake {
         new_inactive_balance: Coin,
-        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
 }
