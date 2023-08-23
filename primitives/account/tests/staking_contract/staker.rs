@@ -421,7 +421,7 @@ fn update_staker_works() {
     let expected_receipt = StakerReceipt {
         delegation: Some(validator_address1.clone()),
         active_balance: staker.balance,
-        inactive_release: staker.inactive_release,
+        inactive_from: staker.inactive_from,
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
@@ -434,7 +434,7 @@ fn update_staker_works() {
 
             active_balance: staker.balance,
 
-            inactive_release: staker.inactive_release,
+            inactive_from: staker.inactive_from,
         }]
     );
 
@@ -542,7 +542,7 @@ fn update_staker_works() {
     let expected_receipt = StakerReceipt {
         delegation: Some(validator_address2.clone()),
         active_balance: staker.balance,
-        inactive_release: staker.inactive_release,
+        inactive_from: staker.inactive_from,
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
@@ -555,7 +555,7 @@ fn update_staker_works() {
 
             active_balance: staker.balance,
 
-            inactive_release: staker.inactive_release,
+            inactive_from: staker.inactive_from,
         }]
     );
 
@@ -618,7 +618,7 @@ fn update_staker_works() {
 
             active_balance: staker.balance,
 
-            inactive_release: staker.inactive_release,
+            inactive_from: staker.inactive_from,
         }]
     );
 
@@ -737,7 +737,7 @@ fn update_staker_with_stake_reactivation_works() {
     let expected_receipt = StakerReceipt {
         delegation: Some(validator_address1.clone()),
         active_balance: Coin::ZERO,
-        inactive_release: Some(block_state.number),
+        inactive_from: Some(staker_setup.effective_inactivation_block_state.number),
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
@@ -753,11 +753,11 @@ fn update_staker_with_stake_reactivation_works() {
             old_validator_address: Some(validator_address1.clone()),
             new_validator_address: Some(validator_address2.clone()),
             active_balance: staker_after.balance,
-            inactive_release: staker_after.inactive_release,
+            inactive_from: staker_after.inactive_from,
         }]
     );
 
-    assert!(staker_after.inactive_release.is_none());
+    assert!(staker_after.inactive_from.is_none());
     assert_eq!(staker_after.address, staker_address);
     assert_eq!(staker_after.inactive_balance, Coin::ZERO);
     assert_eq!(staker_after.balance, Coin::from_u64_unchecked(150_000_000));
@@ -821,7 +821,7 @@ fn update_staker_with_stake_reactivation_works() {
             old_validator_address: Some(validator_address1.clone()),
             new_validator_address: Some(validator_address2.clone()),
             active_balance: staker_after.balance,
-            inactive_release: staker_after.inactive_release,
+            inactive_from: staker_after.inactive_from,
         }]
     );
 
@@ -914,7 +914,7 @@ fn update_staker_remove_delegation_with_stake_reactivation_works() {
     let expected_receipt = StakerReceipt {
         delegation: Some(validator_address1.clone()),
         active_balance: Coin::ZERO,
-        inactive_release: Some(block_state.number),
+        inactive_from: Some(staker_setup.effective_inactivation_block_state.number),
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
@@ -930,7 +930,7 @@ fn update_staker_remove_delegation_with_stake_reactivation_works() {
             old_validator_address: Some(validator_address1.clone()),
             new_validator_address: None,
             active_balance: staker_after.balance,
-            inactive_release: staker_after.inactive_release,
+            inactive_from: staker_after.inactive_from,
         }]
     );
 
@@ -938,7 +938,7 @@ fn update_staker_remove_delegation_with_stake_reactivation_works() {
     assert_eq!(staker_after.inactive_balance, Coin::ZERO);
     assert_eq!(staker_after.balance, Coin::from_u64_unchecked(150_000_000));
     assert_eq!(staker_after.delegation, None);
-    assert!(staker_after.inactive_release.is_none());
+    assert!(staker_after.inactive_from.is_none());
 
     let validator2 = staker_setup
         .staking_contract
@@ -981,7 +981,7 @@ fn update_staker_remove_delegation_with_stake_reactivation_works() {
 
             active_balance: staker_after.balance,
 
-            inactive_release: staker_after.inactive_release,
+            inactive_from: staker_after.inactive_from,
         }]
     );
 
@@ -1075,7 +1075,7 @@ fn update_staker_with_no_delegation_no_reactivation() {
     let expected_receipt = StakerReceipt {
         delegation: None,
         active_balance: Coin::from_u64_unchecked(150_000_000),
-        inactive_release: None,
+        inactive_from: None,
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
@@ -1091,7 +1091,7 @@ fn update_staker_with_no_delegation_no_reactivation() {
             old_validator_address: None,
             new_validator_address: Some(validator_address1.clone()),
             active_balance: staker_after.balance,
-            inactive_release: staker_after.inactive_release,
+            inactive_from: staker_after.inactive_from,
         }]
     );
 
@@ -1099,7 +1099,7 @@ fn update_staker_with_no_delegation_no_reactivation() {
     assert_eq!(staker_after.inactive_balance, Coin::ZERO);
     assert_eq!(staker_after.balance, Coin::from_u64_unchecked(150_000_000));
     assert_eq!(staker_after.delegation, Some(validator_address1.clone()));
-    assert!(staker_after.inactive_release.is_none());
+    assert!(staker_after.inactive_from.is_none());
 
     let validator1 = validator_setup
         .staking_contract
@@ -1142,7 +1142,7 @@ fn update_staker_with_no_delegation_no_reactivation() {
             old_validator_address: None,
             new_validator_address: Some(validator_address1.clone()),
             active_balance: staker_after.balance,
-            inactive_release: staker_after.inactive_release,
+            inactive_from: staker_after.inactive_from,
         }]
     );
 
@@ -1228,7 +1228,7 @@ fn update_staker_same_validator() {
     let expected_receipt = StakerReceipt {
         delegation: Some(validator_address.clone()),
         active_balance: Coin::ZERO,
-        inactive_release: Some(block_state.number),
+        inactive_from: Some(staker_setup.effective_inactivation_block_state.number),
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
@@ -1239,7 +1239,7 @@ fn update_staker_same_validator() {
             old_validator_address: Some(validator_address.clone()),
             new_validator_address: Some(validator_address.clone()),
             active_balance: Coin::ZERO,
-            inactive_release: Some(block_state.number),
+            inactive_from: Some(staker_setup.effective_inactivation_block_state.number),
         }]
     );
 
@@ -1304,7 +1304,7 @@ fn update_staker_same_validator() {
             old_validator_address: Some(validator_address.clone()),
             new_validator_address: Some(validator_address.clone()),
             active_balance: Coin::ZERO,
-            inactive_release: Some(block_state.number),
+            inactive_from: Some(staker_setup.effective_inactivation_block_state.number),
         }]
     );
 
@@ -1384,7 +1384,7 @@ fn unstake_works() {
 
     let expected_receipt = RemoveStakeReceipt {
         delegation: Some(validator_address.clone()),
-        inactive_release: Some(block_state.number),
+        inactive_from: Some(staker_setup.effective_inactivation_block_state.number),
     };
 
     assert_eq!(receipt, Some(expected_receipt.into()));
@@ -1467,7 +1467,7 @@ fn unstake_works() {
 
     let expected_receipt = RemoveStakeReceipt {
         delegation: Some(validator_address.clone()),
-        inactive_release: Some(block_state.number),
+        inactive_from: Some(staker_setup.effective_inactivation_block_state.number),
     };
 
     assert_eq!(receipt, Some(expected_receipt.into()));
@@ -1632,7 +1632,7 @@ fn unstake_from_tombstone_works() {
 
     let expected_receipt = RemoveStakeReceipt {
         delegation: Some(validator_address.clone()),
-        inactive_release: Some(unstake_block_state.number),
+        inactive_from: Some(staker_setup.effective_inactivation_block_state.number),
     };
     assert_eq!(unstake_receipt, Some(expected_receipt.into()));
 
@@ -2104,7 +2104,7 @@ fn can_update_inactive_balance() {
         receipt,
         Some(
             SetInactiveStakeReceipt {
-                old_inactive_release: Some(staker_setup.inactive_release_block_state.number),
+                old_inactive_from: Some(staker_setup.effective_inactivation_block_state.number),
                 old_active_balance: staker_setup.active_stake,
             }
             .into()
@@ -2117,8 +2117,8 @@ fn can_update_inactive_balance() {
             staker_address: staker_setup.staker_address.clone(),
             validator_address: Some(staker_setup.validator_address.clone()),
             value: Coin::from_u64_unchecked(100_000_000),
-            inactive_release: Some(Policy::block_after_reporting_window(
-                Policy::election_block_after(staker_setup.before_release_block_state.number)
+            inactive_from: Some(Policy::election_block_after(
+                staker_setup.before_release_block_state.number
             ))
         }]
     );
@@ -2134,9 +2134,9 @@ fn can_update_inactive_balance() {
         Coin::from_u64_unchecked(100_000_000)
     );
     assert_eq!(
-        staker.inactive_release,
-        Some(Policy::block_after_reporting_window(
-            Policy::election_block_after(staker_setup.before_release_block_state.number)
+        staker.inactive_from,
+        Some(Policy::election_block_after(
+            staker_setup.before_release_block_state.number
         ))
     );
 
@@ -2171,8 +2171,8 @@ fn can_update_inactive_balance() {
     assert_eq!(staker.balance, staker_setup.active_stake);
     assert_eq!(staker.inactive_balance, staker_setup.inactive_stake);
     assert_eq!(
-        staker.inactive_release,
-        Some(staker_setup.inactive_release_block_state.number)
+        staker.inactive_from,
+        Some(staker_setup.effective_inactivation_block_state.number)
     );
 
     let validator = staker_setup
@@ -2202,7 +2202,7 @@ fn can_update_inactive_balance() {
         receipt,
         Some(
             SetInactiveStakeReceipt {
-                old_inactive_release: Some(staker_setup.inactive_release_block_state.number),
+                old_inactive_from: Some(staker_setup.effective_inactivation_block_state.number),
                 old_active_balance: staker_setup.active_stake,
             }
             .into()
@@ -2216,7 +2216,7 @@ fn can_update_inactive_balance() {
 
     assert_eq!(staker.balance, Coin::from_u64_unchecked(100_000_000));
     assert_eq!(staker.inactive_balance, Coin::ZERO);
-    assert_eq!(staker.inactive_release, None);
+    assert_eq!(staker.inactive_from, None);
 
     let validator = staker_setup
         .staking_contract
@@ -2248,8 +2248,8 @@ fn can_update_inactive_balance() {
     assert_eq!(staker.balance, staker_setup.active_stake);
     assert_eq!(staker.inactive_balance, staker_setup.inactive_stake);
     assert_eq!(
-        staker.inactive_release,
-        Some(staker_setup.inactive_release_block_state.number)
+        staker.inactive_from,
+        Some(staker_setup.effective_inactivation_block_state.number)
     );
 
     let validator = staker_setup

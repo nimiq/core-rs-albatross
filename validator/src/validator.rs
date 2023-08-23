@@ -699,8 +699,8 @@ where
             .get_validator(&data_store.read(&txn), &validator_address)
             .map_or(
                 ValidatorStakingState::NoStake,
-                |validator| match validator.inactive_since {
-                    Some(_) => ValidatorStakingState::Inactive(validator.jailed_since),
+                |validator| match validator.inactive_from {
+                    Some(_) => ValidatorStakingState::Inactive(validator.jailed_from),
                     None => ValidatorStakingState::Active,
                 },
             )
@@ -860,11 +860,11 @@ where
                         info!("Automatically reactivated.");
                     }
                 }
-                ValidatorStakingState::Inactive(jailed_since) => {
+                ValidatorStakingState::Inactive(jailed_from) => {
                     if self.validator_state.is_none()
-                        && jailed_since
-                            .map(|jailed_since| {
-                                blockchain.block_number() >= Policy::block_after_jail(jailed_since)
+                        && jailed_from
+                            .map(|jailed_from| {
+                                blockchain.block_number() >= Policy::block_after_jail(jailed_from)
                             })
                             .unwrap_or(true)
                         && self.automatic_reactivate.load(Ordering::Acquire)

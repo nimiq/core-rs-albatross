@@ -1268,8 +1268,10 @@ fn it_can_revert_failed_delete_validator() {
 
         // Now the validator should be inactive because of the failing txn.
         assert_eq!(
-            validator.inactive_since,
-            Some(1 + Policy::genesis_block_number())
+            validator.inactive_from,
+            Some(Policy::election_block_after(
+                1 + Policy::genesis_block_number()
+            ))
         );
     }
 

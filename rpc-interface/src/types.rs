@@ -701,7 +701,7 @@ pub struct Staker {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delegation: Option<Address>,
     pub inactive_balance: Coin,
-    pub inactive_release: Option<u32>,
+    pub inactive_from: Option<u32>,
 }
 
 impl Staker {
@@ -711,7 +711,7 @@ impl Staker {
             balance: staker.balance,
             delegation: staker.delegation.clone(),
             inactive_balance: staker.inactive_balance,
-            inactive_release: staker.inactive_release,
+            inactive_from: staker.inactive_from,
         }
     }
 }
@@ -731,7 +731,7 @@ pub struct Validator {
     pub inactivity_flag: Option<u32>,
     pub retired: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub jailed_since: Option<u32>,
+    pub jailed_from: Option<u32>,
 }
 
 impl Validator {
@@ -744,9 +744,9 @@ impl Validator {
             signal_data: validator.signal_data.clone(),
             balance: validator.total_stake,
             num_stakers: validator.num_stakers,
-            inactivity_flag: validator.inactive_since,
+            inactivity_flag: validator.inactive_from,
             retired: validator.retired,
-            jailed_since: validator.jailed_since,
+            jailed_from: validator.jailed_from,
         }
     }
 }

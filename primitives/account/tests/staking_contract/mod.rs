@@ -392,6 +392,7 @@ struct StakerSetup {
     env: DatabaseProxy,
     accounts: Accounts,
     staking_contract: StakingContract,
+    effective_inactivation_block_state: BlockState,
     before_release_block_state: BlockState,
     inactive_release_block_state: BlockState,
     validator_address: Address,
@@ -442,8 +443,11 @@ impl StakerSetup {
         let inactive_stake = Coin::from_u64_unchecked(inactive_stake);
         let staker_address = validator_setup.staker_address.unwrap();
         let deactivation_block = 2;
+
+        let effective_inactivation_block_state =
+            BlockState::new(Policy::election_block_after(deactivation_block), 2);
         let inactive_release_block_state = BlockState::new(
-            Policy::block_after_reporting_window(Policy::election_block_after(deactivation_block)),
+            Policy::block_after_reporting_window(effective_inactivation_block_state.number),
             2,
         );
         let before_release_block_state =
@@ -467,6 +471,7 @@ impl StakerSetup {
             env: validator_setup.env,
             accounts: validator_setup.accounts,
             staking_contract: validator_setup.staking_contract,
+            effective_inactivation_block_state,
             before_release_block_state,
             inactive_release_block_state,
             validator_address: validator_setup.validator_address,

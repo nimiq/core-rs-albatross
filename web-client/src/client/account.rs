@@ -140,12 +140,12 @@ pub struct PlainStaker {
     /// The staker's inactive balance. Only released inactive balance can be withdrawn from the staking contract.
     /// Stake can only be re-delegated if the whole balance of the staker is inactive and released
     /// (or if there was no prior delegation). For inactive balance to be released, the maximum of
-    /// the `inactive_release` and the validator's `jailed_since` must have passed.
+    /// the inactive and the validator's jailed periods must have passed.
     inactive_balance: u64,
-    /// The earliest block number at which the inactive balance is released for withdrawal or re-delegation.
+    /// The block number at which the inactive balance was inactivated for withdrawal or re-delegation.
     /// If the stake is currently delegated to a jailed validator, the maximum of its jail release
     /// and the inactive release is taken. Re-delegation requires the whole balance of the staker to be inactive.
-    inactive_release: Option<u32>,
+    inactive_from: Option<u32>,
 }
 
 impl PlainStaker {
@@ -157,7 +157,7 @@ impl PlainStaker {
                 .map(|address| address.to_user_friendly_address()),
             balance: staker.balance.into(),
             inactive_balance: staker.inactive_balance.into(),
-            inactive_release: staker.inactive_release,
+            inactive_from: staker.inactive_from,
         }
     }
 }
@@ -186,12 +186,12 @@ pub struct PlainValidator {
     pub num_stakers: u64,
     /// An option indicating if the validator is inactive. If it is inactive, then it contains the
     /// block height at which it became inactive.
-    pub inactive_since: Option<u32>,
+    pub inactive_from: Option<u32>,
     /// A flag indicating if the validator is retired.
     pub retired: bool,
     /// An option indication if the validator is jailed. If it is jailed, then it contains the
     /// block height at which it became jailed.
-    pub jailed_since: Option<u32>,
+    pub jailed_from: Option<u32>,
 }
 
 impl PlainValidator {
@@ -204,9 +204,9 @@ impl PlainValidator {
             total_stake: validator.total_stake.into(),
             deposit: validator.deposit.into(),
             num_stakers: validator.num_stakers,
-            inactive_since: validator.inactive_since,
+            inactive_from: validator.inactive_from,
             retired: validator.retired,
-            jailed_since: validator.jailed_since,
+            jailed_from: validator.jailed_from,
         }
     }
 }
