@@ -222,8 +222,8 @@ async fn main() {
     }
 
     if !registered_validator {
-        log::warn!(" The validator address that is being used was not registered before! ");
-        log::warn!(" Therefore this validator cannot participate in the readiness voting process");
+        log::warn!("The validator address that is being used was not registered before! ");
+        log::warn!("Therefore this validator cannot participate in the readiness voting process");
     }
 
     // Now we obtain the stake distribution
@@ -399,7 +399,7 @@ async fn main() {
                     }
                 };
 
-                // Generate genesis filename and write it to the FS
+                // Write the genesis into the FS
                 if let Err(error) = write_pos_genesis(&genesis_file, genesis_config) {
                     log::error!(?error, "Could not write genesis config file");
                     exit(1);
@@ -414,8 +414,8 @@ async fn main() {
             } else {
                 // Wait for more confirmations
                 let current_confirmations = client.block_number().await.unwrap() - candidate;
-                info!(" Waiting for more confirmations to start the nimiq 2.0 client");
-                info!(" Current confirmations {}", current_confirmations);
+                info!("Waiting for more confirmations to start the nimiq 2.0 client");
+                info!("Current confirmations {}", current_confirmations);
                 sleep(Duration::from_secs(60));
             }
         }

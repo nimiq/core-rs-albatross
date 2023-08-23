@@ -70,7 +70,7 @@ pub struct BlockWindows {
     /// start.
     pub block_confirmations: u32,
 
-    /// If not enough validators are ready to start the PoS chain,
+    /// If not enough validators are ready to start the PoS chain at the election candidate,
     /// a new candidate is elected after readiness_window blocks.
     /// This process is repeated until we start the PoS chain.
     pub readiness_window: u32,
