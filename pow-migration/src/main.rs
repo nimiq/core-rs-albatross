@@ -22,6 +22,7 @@ use nimiq_pow_migration::{
     },
     state::{get_stakers, get_validators},
 };
+use nimiq_primitives::networks::NetworkId;
 use nimiq_rpc::Client;
 use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 use url::Url;
@@ -166,6 +167,23 @@ async fn main() {
             log::error!(?error, "Couldn't get block windows");
             std::process::exit(1);
         }
+    };
+
+    // Check that we are doing the migration for a supported network ID and set the genesis environment variable name
+    let genesis_env_var_name = match config.network_id {
+        NetworkId::TestAlbatross => "NIMIQ_OVERRIDE_TESTNET_CONFIG",
+        NetworkId::MainAlbatross => "NIMIQ_OVERRIDE_MAINET_CONFIG",
+        _ => {
+            log::error!(%config.network_id, "Unsupported network ID as a target for the migration process");
+            exit(1);
+        }
+    };
+
+    // Check that the `nimiq-client` exists
+    let pos_client = current_exe_dir.join("nimiq-client");
+    if !pos_client.exists() {
+        log::error!("Could not find PoS client, run `cargo build [--release]`");
+        exit(1);
     };
 
     loop {
@@ -456,12 +474,7 @@ async fn main() {
     );
 
     // Set the genesis file environment variable
-    std::env::set_var("NIMIQ_OVERRIDE_MAINET_CONFIG", genesis_file);
-    let pos_client = current_exe_dir.join("nimiq-client");
-    if !pos_client.exists() {
-        log::error!("Could not find PoS client, run `cargo build [--release]`");
-        exit(1);
-    };
+    std::env::set_var(genesis_env_var_name, genesis_file);
 
     // Launch the client
     let mut child = match Command::new(pos_client).arg("-c").arg(args.config).spawn() {
