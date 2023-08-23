@@ -700,7 +700,7 @@ where
             .map_or(
                 ValidatorStakingState::NoStake,
                 |validator| match validator.inactive_since {
-                    Some(_) => ValidatorStakingState::Inactive(validator.jail_release),
+                    Some(_) => ValidatorStakingState::Inactive(validator.jailed_since),
                     None => ValidatorStakingState::Active,
                 },
             )
@@ -860,10 +860,12 @@ where
                         info!("Automatically reactivated.");
                     }
                 }
-                ValidatorStakingState::Inactive(jail_release) => {
+                ValidatorStakingState::Inactive(jailed_since) => {
                     if self.validator_state.is_none()
-                        && jail_release
-                            .map(|jail_release| blockchain.block_number() >= jail_release)
+                        && jailed_since
+                            .map(|jailed_since| {
+                                blockchain.block_number() >= Policy::block_after_jail(jailed_since)
+                            })
                             .unwrap_or(true)
                         && self.automatic_reactivate.load(Ordering::Acquire)
                     {

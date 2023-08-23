@@ -88,7 +88,7 @@ pub enum Log {
     #[serde(rename_all = "camelCase")]
     JailValidator {
         validator_address: Address,
-        jail_release: u32,
+        jailed_since: u32,
     },
 
     #[serde(rename_all = "camelCase")]

@@ -731,7 +731,7 @@ pub struct Validator {
     pub inactivity_flag: Option<u32>,
     pub retired: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub jail_release: Option<u32>,
+    pub jailed_since: Option<u32>,
 }
 
 impl Validator {
@@ -746,7 +746,7 @@ impl Validator {
             num_stakers: validator.num_stakers,
             inactivity_flag: validator.inactive_since,
             retired: validator.retired,
-            jail_release: validator.jail_release,
+            jailed_since: validator.jailed_since,
         }
     }
 }

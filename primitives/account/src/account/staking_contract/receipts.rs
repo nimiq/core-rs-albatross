@@ -34,8 +34,8 @@ pub struct JailReceipt {
     pub old_previous_batch_punished_slots: BitSet,
     /// the current batch punished slots of the affected validator before this jail is applied
     pub old_current_batch_punished_slots: Option<BTreeSet<u16>>,
-    /// the jail release before this jail is applied
-    pub old_jail_release: Option<u32>,
+    /// the jailed block height before this jail is applied
+    pub old_jailed_since: Option<u32>,
 }
 convert_receipt!(JailReceipt);
 
@@ -60,8 +60,8 @@ convert_receipt!(UpdateValidatorReceipt);
 pub struct JailValidatorReceipt {
     /// true if corresponding validator was deactivated by this jail
     pub newly_deactivated: bool,
-    /// the jail release before this jail is applied
-    pub old_jail_release: Option<u32>,
+    /// the jail block height before this jail is applied
+    pub old_jailed_since: Option<u32>,
 }
 convert_receipt!(JailValidatorReceipt);
 
@@ -69,7 +69,7 @@ impl From<&JailReceipt> for JailValidatorReceipt {
     fn from(value: &JailReceipt) -> Self {
         Self {
             newly_deactivated: value.newly_deactivated,
-            old_jail_release: value.old_jail_release,
+            old_jailed_since: value.old_jailed_since,
         }
     }
 }
@@ -107,7 +107,7 @@ pub struct DeleteValidatorReceipt {
     /// the value of `inactive_since` before this transaction is applied
     pub inactive_since: u32,
     /// the jail release before this transaction is applied
-    pub jail_release: Option<u32>,
+    pub jailed_since: Option<u32>,
 }
 convert_receipt!(DeleteValidatorReceipt);
 

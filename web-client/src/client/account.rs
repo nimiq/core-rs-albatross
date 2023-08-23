@@ -140,7 +140,7 @@ pub struct PlainStaker {
     /// The staker's inactive balance. Only released inactive balance can be withdrawn from the staking contract.
     /// Stake can only be re-delegated if the whole balance of the staker is inactive and released
     /// (or if there was no prior delegation). For inactive balance to be released, the maximum of
-    /// the `inactive_release` and the validator's `jail_release` must have passed.
+    /// the `inactive_release` and the validator's `jailed_since` must have passed.
     inactive_balance: u64,
     /// The earliest block number at which the inactive balance is released for withdrawal or re-delegation.
     /// If the stake is currently delegated to a jailed validator, the maximum of its jail release
@@ -190,8 +190,8 @@ pub struct PlainValidator {
     /// A flag indicating if the validator is retired.
     pub retired: bool,
     /// An option indication if the validator is jailed. If it is jailed, then it contains the
-    /// block height at which the jail period ends.
-    pub jail_release: Option<u32>,
+    /// block height at which it became jailed.
+    pub jailed_since: Option<u32>,
 }
 
 impl PlainValidator {
@@ -206,7 +206,7 @@ impl PlainValidator {
             num_stakers: validator.num_stakers,
             inactive_since: validator.inactive_since,
             retired: validator.retired,
-            jail_release: validator.jail_release,
+            jailed_since: validator.jailed_since,
         }
     }
 }

@@ -543,7 +543,10 @@ fn deactivate_validator_works() {
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
-    assert_eq!(validator.inactive_since, Some(2));
+    assert_eq!(
+        validator.inactive_since,
+        Some(Policy::election_block_after(block_state.number))
+    );
 
     assert!(!validator_setup
         .staking_contract
@@ -814,10 +817,10 @@ fn delete_validator_works() {
             &mut TransactionLog::empty(),
         )
         .expect("Failed to commit transaction");
+    let effective_deactivation_block = Policy::election_block_after(block_state.number);
 
     // Doesn't work with a deactivated but not retired validator.
-    let after_cooldown = Policy::block_after_reporting_window(Policy::election_block_after(2));
-    let block_state = BlockState::new(after_cooldown, 1000);
+    let block_state = BlockState::new(effective_deactivation_block + 1, 1000);
 
     assert_eq!(
         validator_setup
@@ -840,7 +843,6 @@ fn delete_validator_works() {
         &ed25519_key_pair(VALIDATOR_PRIVATE_KEY),
     );
 
-    let block_state = BlockState::new(3, 3);
     validator_setup
         .staking_contract
         .commit_incoming_transaction(
@@ -850,6 +852,9 @@ fn delete_validator_works() {
             &mut TransactionLog::empty(),
         )
         .expect("Failed to commit transaction");
+
+    let effective_retire_block = Policy::election_block_after(block_state.number);
+    let after_cooldown = Policy::block_after_reporting_window(effective_retire_block);
 
     // Doesn't work if the cooldown hasn't expired.
     assert_eq!(
@@ -889,8 +894,8 @@ fn delete_validator_works() {
         voting_key: voting_key.clone(),
         reward_address: reward_address.clone(),
         signal_data: None,
-        inactive_since: 2,
-        jail_release: None,
+        inactive_since: effective_deactivation_block,
+        jailed_since: None,
     };
     assert_eq!(receipt, Some(expected_receipt.into()));
 
@@ -991,7 +996,7 @@ fn delete_validator_works() {
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert_eq!(validator.num_stakers, 1);
-    assert_eq!(validator.inactive_since, Some(2));
+    assert_eq!(validator.inactive_since, Some(effective_deactivation_block));
     assert_eq!(validator.retired, true);
 
     assert_eq!(
@@ -1324,11 +1329,12 @@ fn finalize_epoch_inherents_works() {
         .insert(Address::END_ADDRESS, BTreeSet::new());
 
     // Penalize the validator slot
+    let offense_event_block = block_state.number - 1;
     let inherent = Inherent::Penalize {
         slot: PenalizedSlot {
             slot: 1,
             validator_address: validator_address.clone(),
-            offense_event_block: Policy::blocks_per_epoch() - 1,
+            offense_event_block,
         },
     };
     let mut logs = vec![];
@@ -1360,7 +1366,7 @@ fn finalize_epoch_inherents_works() {
             },
             Log::Penalize {
                 validator_address: validator_address.clone(),
-                offense_event_block: Policy::blocks_per_epoch() - 1,
+                offense_event_block,
                 slot: 1,
                 newly_deactivated: true
             },
@@ -1416,7 +1422,7 @@ fn finalize_epoch_inherents_works() {
 
     assert_eq!(
         validator.inactive_since,
-        Some(Policy::macro_block_after(Policy::blocks_per_epoch()))
+        Some(Policy::election_block_after(block_state.number))
     );
 
     // Now we finalize the epoch
@@ -1640,7 +1646,7 @@ fn jail_and_revert() {
         .expect("Failed to commit inherent");
     let old_previous_batch_punished_slots = BitSet::default();
     let old_current_batch_punished_slots = None;
-    let old_jail_release = None;
+    let old_jailed_since = None;
     assert_eq!(
         receipt,
         Some(
@@ -1648,7 +1654,7 @@ fn jail_and_revert() {
                 newly_deactivated: true,
                 old_previous_batch_punished_slots,
                 old_current_batch_punished_slots,
-                old_jail_release
+                old_jailed_since
             }
             .into()
         )
@@ -1658,7 +1664,7 @@ fn jail_and_revert() {
         vec![
             Log::JailValidator {
                 validator_address: validator_address.clone(),
-                jail_release: Policy::block_after_jail(block_state.number)
+                jailed_since: Policy::election_block_after(block_state.number)
             },
             Log::DeactivateValidator {
                 validator_address: validator_address.clone(),
@@ -1673,7 +1679,10 @@ fn jail_and_revert() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert!(validator.jail_release.is_some());
+    assert_eq!(
+        validator.jailed_since,
+        Some(Policy::election_block_after(block_state.number))
+    );
 
     assert!(!staking_contract
         .active_validators
@@ -1693,7 +1702,7 @@ fn jail_and_revert() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert!(validator.jail_release.is_none());
+    assert!(validator.jailed_since.is_none());
 
     assert!(staking_contract
         .active_validators
@@ -1760,7 +1769,7 @@ fn jail_inactive_and_revert() {
         .expect("Failed to commit inherent");
     let old_previous_batch_punished_slots = BitSet::default();
     let old_current_batch_punished_slots = None;
-    let old_jail_release = None;
+    let old_jailed_since = None;
     assert_eq!(
         receipt,
         Some(
@@ -1768,7 +1777,7 @@ fn jail_inactive_and_revert() {
                 newly_deactivated: false,
                 old_previous_batch_punished_slots,
                 old_current_batch_punished_slots,
-                old_jail_release
+                old_jailed_since
             }
             .into()
         )
@@ -1778,7 +1787,7 @@ fn jail_inactive_and_revert() {
         vec![
             Log::JailValidator {
                 validator_address: validator_address.clone(),
-                jail_release: Policy::block_after_jail(block_state.number)
+                jailed_since: Policy::election_block_after(block_state.number)
             },
             Log::Jail {
                 validator_address: validator_address.clone(),
@@ -1790,7 +1799,10 @@ fn jail_inactive_and_revert() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert!(validator.jail_release.is_some());
+    assert_eq!(
+        validator.jailed_since,
+        Some(Policy::election_block_after(block_state.number))
+    );
 
     assert!(!staking_contract
         .active_validators
@@ -1811,7 +1823,7 @@ fn jail_inactive_and_revert() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert!(validator.jail_release.is_none());
+    assert!(validator.jailed_since.is_none());
 
     assert!(!staking_contract
         .active_validators
@@ -1860,14 +1872,14 @@ fn can_jail_twice() {
         .expect("Failed to commit inherent");
     let old_previous_batch_punished_slots = BitSet::default();
     let old_current_batch_punished_slots = None;
-    let old_jail_release = Some(jailed_setup.state_release_block_state.number);
+    let old_jailed_since = Some(jailed_setup.effective_state_block_state.number);
     log::error!(
         "{:?}",
         JailReceipt {
             newly_deactivated: false,
             old_previous_batch_punished_slots: old_previous_batch_punished_slots.clone(),
             old_current_batch_punished_slots: old_current_batch_punished_slots.clone(),
-            old_jail_release,
+            old_jailed_since,
         }
     );
     assert_eq!(
@@ -1877,17 +1889,18 @@ fn can_jail_twice() {
                 newly_deactivated: false,
                 old_previous_batch_punished_slots,
                 old_current_batch_punished_slots,
-                old_jail_release,
+                old_jailed_since,
             }
             .into()
         )
     );
+    let effective_jail_since = Policy::election_block_after(second_jail_block_state.number);
     assert_eq!(
         logs,
         vec![
             Log::JailValidator {
                 validator_address: jailed_setup.validator_address.clone(),
-                jail_release: Policy::block_after_jail(second_jail_block_state.number),
+                jailed_since: effective_jail_since,
             },
             Log::Jail {
                 validator_address: jailed_setup.validator_address.clone(),
@@ -1902,10 +1915,7 @@ fn can_jail_twice() {
         .staking_contract
         .get_validator(&data_store.read(&db_txn), &jailed_setup.validator_address)
         .unwrap();
-    assert_eq!(
-        validator.jail_release,
-        Some(Policy::block_after_jail(second_jail_block_state.number))
-    );
+    assert_eq!(validator.jailed_since, Some(effective_jail_since));
 
     // Make sure that the validator is still deactivated.
     assert!(!jailed_setup
@@ -1930,8 +1940,8 @@ fn can_jail_twice() {
         .get_validator(&data_store.read(&db_txn), &jailed_setup.validator_address)
         .unwrap();
     assert_eq!(
-        validator.jail_release,
-        Some(jailed_setup.state_release_block_state.number)
+        validator.jailed_since,
+        Some(jailed_setup.effective_state_block_state.number)
     );
 
     assert!(!jailed_setup
@@ -2005,8 +2015,8 @@ fn can_retire_jailed_validator() {
     assert!(!validator.retired);
     assert!(validator.inactive_since.is_some());
     assert_eq!(
-        validator.jail_release,
-        Some(jailed_setup.state_release_block_state.number)
+        validator.jailed_since,
+        Some(jailed_setup.effective_state_block_state.number)
     );
     assert!(!jailed_setup
         .staking_contract
@@ -2093,7 +2103,7 @@ fn penalize_and_revert_twice() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert!(validator.jail_release.is_none());
+    assert!(validator.jailed_since.is_none());
 
     assert!(!staking_contract
         .active_validators
@@ -2134,7 +2144,7 @@ fn penalize_and_revert_twice() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert!(validator.jail_release.is_none());
+    assert!(validator.jailed_since.is_none());
 
     assert!(!staking_contract
         .active_validators
@@ -2155,7 +2165,7 @@ fn penalize_and_revert_twice() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert!(validator.jail_release.is_none());
+    assert!(validator.jailed_since.is_none());
 
     assert!(!staking_contract
         .active_validators
@@ -2175,7 +2185,7 @@ fn penalize_and_revert_twice() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert!(validator.jail_release.is_none());
+    assert!(validator.jailed_since.is_none());
 
     assert!(staking_contract
         .active_validators
@@ -2262,7 +2272,7 @@ fn penalize_inactive_and_revert() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert!(validator.jail_release.is_none());
+    assert!(validator.jailed_since.is_none());
 
     assert!(!staking_contract
         .active_validators
@@ -2283,7 +2293,7 @@ fn penalize_inactive_and_revert() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert!(validator.jail_release.is_none());
+    assert!(validator.jailed_since.is_none());
 
     assert!(!staking_contract
         .active_validators
@@ -2370,7 +2380,7 @@ fn penalize_and_jail_and_revert_twice() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert!(validator.jail_release.is_none());
+    assert!(validator.jailed_since.is_none());
 
     assert!(!staking_contract
         .active_validators
@@ -2392,7 +2402,8 @@ fn penalize_and_jail_and_revert_twice() {
     let mut old_current_batch_punished_slots = BTreeSet::new();
     old_current_batch_punished_slots.insert(1);
     let old_current_batch_punished_slots = Some(old_current_batch_punished_slots);
-    let old_jail_release = None;
+    let old_jailed_since = None;
+    let effective_jail_block = Policy::election_block_after(block_state.number);
     assert_eq!(
         receipt2,
         Some(
@@ -2400,7 +2411,7 @@ fn penalize_and_jail_and_revert_twice() {
                 newly_deactivated: false,
                 old_previous_batch_punished_slots,
                 old_current_batch_punished_slots,
-                old_jail_release,
+                old_jailed_since,
             }
             .into()
         )
@@ -2410,7 +2421,7 @@ fn penalize_and_jail_and_revert_twice() {
         vec![
             Log::JailValidator {
                 validator_address: validator_address.clone(),
-                jail_release: Policy::block_after_jail(block_state.number),
+                jailed_since: effective_jail_block,
             },
             Log::Jail {
                 validator_address: validator_address.clone(),
@@ -2423,10 +2434,7 @@ fn penalize_and_jail_and_revert_twice() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert_eq!(
-        validator.jail_release,
-        Some(Policy::block_after_jail(block_state.number))
-    );
+    assert_eq!(validator.jailed_since, Some(effective_jail_block));
 
     assert!(!staking_contract
         .active_validators
@@ -2447,7 +2455,7 @@ fn penalize_and_jail_and_revert_twice() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert!(validator.jail_release.is_none());
+    assert!(validator.jailed_since.is_none());
 
     assert!(!staking_contract
         .active_validators
@@ -2467,7 +2475,7 @@ fn penalize_and_jail_and_revert_twice() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert!(validator.jail_release.is_none());
+    assert!(validator.jailed_since.is_none());
 
     assert!(staking_contract
         .active_validators
@@ -2540,8 +2548,8 @@ fn jail_and_penalize_and_revert_twice() {
         .get_validator(&data_store.read(&db_txn), &jailed_setup.validator_address)
         .unwrap();
     assert_eq!(
-        validator.jail_release,
-        Some(jailed_setup.state_release_block_state.number)
+        validator.jailed_since,
+        Some(jailed_setup.effective_state_block_state.number)
     );
 
     // Make sure that the validator is still deactivated.
@@ -2567,8 +2575,8 @@ fn jail_and_penalize_and_revert_twice() {
         .get_validator(&data_store.read(&db_txn), &jailed_setup.validator_address)
         .unwrap();
     assert_eq!(
-        validator.jail_release,
-        Some(jailed_setup.state_release_block_state.number)
+        validator.jailed_since,
+        Some(jailed_setup.effective_state_block_state.number)
     );
 
     assert!(!jailed_setup

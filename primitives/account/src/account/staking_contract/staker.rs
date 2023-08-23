@@ -51,7 +51,7 @@ pub struct Staker {
     /// The staker's inactive balance.
     pub inactive_balance: Coin,
     /// The inactive balance release block height. The effective release block height
-    /// is also affected by the delegation jail release.
+    /// is also affected by the delegation jail state.
     pub inactive_release: Option<u32>,
     /// The address of the validator for which the staker is delegating its stake for. If it is not
     /// delegating to any validator, this will be set to None.
@@ -262,14 +262,12 @@ impl StakingContract {
 
             // Fail if validator is currently jailed.
             if let Some(validator) = store.get_validator(validator_address) {
-                if let Some(jail_release) = validator.jail_release {
-                    if block_number < jail_release {
-                        debug!(
-                            ?staker_address,
-                            "Tried to update staker that currently delegates to a jailed validator"
-                        );
-                        return Err(AccountError::InvalidForRecipient);
-                    }
+                if validator.is_jailed(block_number) {
+                    debug!(
+                        ?staker_address,
+                        "Tried to update staker that currently delegates to a jailed validator"
+                    );
+                    return Err(AccountError::InvalidForRecipient);
                 }
             }
         }
@@ -512,14 +510,12 @@ impl StakingContract {
 
             // Fail if validator is currently jailed.
             if let Some(validator) = store.get_validator(validator_address) {
-                if let Some(jail_release) = validator.jail_release {
-                    if block_number < jail_release {
-                        debug!(
-                            ?staker.address,
-                            "Tried to remove stake that is currently delegated to a jailed validator"
-                        );
-                        return Err(AccountError::InvalidForSender);
-                    }
+                if validator.is_jailed(block_number) {
+                    debug!(
+                        ?staker.address,
+                        "Tried to remove stake that is currently delegated to a jailed validator"
+                    );
+                    return Err(AccountError::InvalidForSender);
                 }
             }
         }
