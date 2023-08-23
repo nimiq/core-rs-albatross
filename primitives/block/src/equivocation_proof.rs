@@ -19,9 +19,23 @@ pub enum EquivocationProof {
     DoubleVote(DoubleVoteProof),
 }
 
+const fn max3(a: usize, b: usize, c: usize) -> usize {
+    if a > b && a > c {
+        a
+    } else if b > c {
+        b
+    } else {
+        c
+    }
+}
+
 impl EquivocationProof {
     /// The size of a single equivocation proof. This is the maximum possible size.
-    pub const SIZE: usize = ForkProof::SIZE + 1;
+    pub const SIZE: usize = 1 + max3(
+        ForkProof::SIZE,
+        DoubleProposalProof::SIZE,
+        DoubleVoteProof::SIZE,
+    );
 
     /// Returns the block number of an equivocation proof. This assumes that the equivocation proof
     /// is valid.
@@ -194,6 +208,10 @@ pub struct DoubleProposalProof {
 }
 
 impl DoubleProposalProof {
+    /// The maximum size of a double proposal proof.
+    pub const SIZE: usize =
+        2 * MacroHeader::MAX_SIZE + 2 * SchnorrSignature::SIZE + 2 * VrfSeed::SIZE;
+
     pub fn new(
         mut header1: MacroHeader,
         mut justification1: SchnorrSignature,
@@ -298,6 +316,12 @@ pub struct DoubleVoteProof {
 }
 
 impl DoubleVoteProof {
+    /// The maximum size of a double proposal proof.
+    pub const SIZE: usize = 2 * MacroHeader::MAX_SIZE
+        + 2 * nimiq_serde::option_size(Blake2sHash::SIZE)
+        + 2 * AggregateSignature::SIZE
+        + 2 * BitSet::size(Policy::SLOTS as usize);
+
     pub fn new(
         tendermint_id: TendermintIdentifier,
         validator_address: Address,

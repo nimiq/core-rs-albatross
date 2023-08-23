@@ -187,11 +187,17 @@ pub struct MicroHeader {
 impl MicroHeader {
     /// Returns the size, in bytes, of a Micro block header. This represents the maximum possible
     /// size since we assume that the extra_data field is completely filled.
-    pub const MAX_SIZE: usize =
-        /*version*/
-        2 + /*block_number*/ 4 + /*timestamp*/ 8 + /*parent_hash*/ 32
-            + /*seed*/ VrfSeed::SIZE + /*extra_data*/ 32 + /*state_root*/ 32
-            + /*body_root*/ 32 + /*history_root*/ 32;
+    pub const MAX_SIZE: usize = 0
+        + /*version*/ nimiq_serde::U16_SIZE
+        + /*block_number*/ nimiq_serde::U32_SIZE
+        + /*timestamp*/ nimiq_serde::U64_SIZE
+        + /*parent_hash*/ Blake2bHash::SIZE
+        + /*seed*/ VrfSeed::SIZE
+        + /*extra_data*/ nimiq_serde::vec_size(nimiq_serde::U8_SIZE, 32)
+        + /*state_root*/ Blake2bHash::SIZE
+        + /*body_root*/ Blake2sHash::SIZE
+        + /*diff_root*/ Blake2bHash::SIZE
+        + /*history_root*/ Blake2bHash::SIZE;
 }
 
 impl fmt::Display for MicroHeader {

@@ -45,6 +45,30 @@ impl fmt::Display for DeserializeError {
 
 impl Error for DeserializeError {}
 
+pub const I8_SIZE: usize = 1;
+pub const U8_SIZE: usize = 1;
+
+pub const I16_SIZE: usize = (16 + 6) / 7;
+pub const U16_SIZE: usize = (16 + 6) / 7;
+pub const I32_SIZE: usize = (32 + 6) / 7;
+pub const U32_SIZE: usize = (32 + 6) / 7;
+pub const I64_SIZE: usize = (64 + 6) / 7;
+pub const U64_SIZE: usize = (64 + 6) / 7;
+
+pub const fn uint_size(max_value: u64) -> usize {
+    let bits = match max_value.checked_ilog2() {
+        Some(n) => n + 1,
+        None => 1,
+    };
+    ((bits + 6) / 7) as usize
+}
+pub const fn option_size(inner_size: usize) -> usize {
+    1 + inner_size
+}
+pub const fn vec_size(inner_size: usize, max_elems: usize) -> usize {
+    uint_size(max_elems as u64) + inner_size * max_elems
+}
+
 /// The Nimiq human readable array serialization helper trait
 ///
 /// ```

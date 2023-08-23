@@ -15,6 +15,8 @@ use crate::{CompressedSignature, Signature};
 pub struct AggregateSignature(pub Signature);
 
 impl AggregateSignature {
+    pub const SIZE: usize = Signature::SIZE;
+
     /// Creates a new "empty" aggregate signature. It is simply the identity element of the elliptic curve, also known as the point at infinity.
     pub fn new() -> Self {
         let signature = G1Projective::zero();

@@ -86,6 +86,10 @@ pub enum TendermintStep {
     Propose = PREFIX_TENDERMINT_PROPOSAL,
 }
 
+impl TendermintStep {
+    pub const SIZE: usize = 1;
+}
+
 /// Unique identifier for a single instance of TendermintAggregation
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct TendermintIdentifier {
@@ -95,6 +99,10 @@ pub struct TendermintIdentifier {
     pub round_number: u32,
     /// the Step for which contributions are accepted
     pub step: TendermintStep,
+}
+
+impl TendermintIdentifier {
+    pub const SIZE: usize = 2 * nimiq_serde::U32_SIZE + TendermintStep::SIZE;
 }
 
 // Multiple things this needs to take care of when it comes to what needs signing here:

@@ -143,6 +143,10 @@ mod serde_derive {
 
     use super::{CompressedSignature, Signature};
 
+    impl Signature {
+        pub const SIZE: usize = CompressedSignature::SIZE;
+    }
+
     impl Serialize for Signature {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where

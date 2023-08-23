@@ -370,6 +370,13 @@ impl FromIterator<usize> for BitSet {
     }
 }
 
+impl BitSet {
+    pub const fn size(largest_bit_index: usize) -> usize {
+        let num_u64 = (largest_bit_index + 63) / 64;
+        nimiq_serde::vec_size(nimiq_serde::U64_SIZE, num_u64)
+    }
+}
+
 impl Serialize for BitSet {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
