@@ -24,7 +24,7 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 rand = "0.8.5"
 serde = "1.0"
 tokio = { version = "1.29", features = ["rt-multi-thread", "time", "tracing"] }
-tokio-metrics = { version = "0.1" }
+tokio-metrics = { version = "0.2" }
 toml = "0.7"
 
 nimiq-block = { workspace = true }
