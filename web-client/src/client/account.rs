@@ -142,9 +142,11 @@ pub struct PlainStaker {
     /// (or if there was no prior delegation). For inactive balance to be released, the maximum of
     /// the inactive and the validator's jailed periods must have passed.
     inactive_balance: u64,
-    /// The block number at which the inactive balance was inactivated for withdrawal or re-delegation.
+    /// The block number at which the inactive balance was last inactivated for withdrawal or re-delegation.
     /// If the stake is currently delegated to a jailed validator, the maximum of its jail release
     /// and the inactive release is taken. Re-delegation requires the whole balance of the staker to be inactive.
+    /// The stake can only effectively become inactive on the next election block. Thus, this may contain a
+    /// future block height.
     inactive_from: Option<u32>,
 }
 
@@ -184,13 +186,17 @@ pub struct PlainValidator {
     pub deposit: u64,
     /// The number of stakers that are delegating to this validator.
     pub num_stakers: u64,
-    /// An option indicating if the validator is inactive. If it is inactive, then it contains the
-    /// block height at which it became inactive.
+    /// An option indicating if the validator is marked as inactive. If it is, then it contains the
+    /// block height at which it becomes inactive.
+    /// A validator can only effectively become inactive on the next election block. Thus, this may
+    /// contain a block height in the future.
     pub inactive_from: Option<u32>,
     /// A flag indicating if the validator is retired.
     pub retired: bool,
-    /// An option indication if the validator is jailed. If it is jailed, then it contains the
+    /// An option indicating if the validator is jailed. If it is, then it contains the
     /// block height at which it became jailed.
+    /// Opposed to the inactive_from, the jailing can and should take effect immediately to prevent
+    /// the validator and its stakers from modifying their funds and or delegation.
     pub jailed_from: Option<u32>,
 }
 

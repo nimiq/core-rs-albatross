@@ -358,10 +358,7 @@ impl ValidatorSetup {
 
         db_txn_og.commit();
 
-        let effective_state_block_state = BlockState::new(
-            Policy::election_block_after(jailing_inherent_block_state.number),
-            2,
-        );
+        let effective_state_block_state = BlockState::new(jailing_inherent_block_state.number, 2);
         let jail_release_block_state = BlockState::new(
             Policy::block_after_jail(effective_state_block_state.number),
             2,

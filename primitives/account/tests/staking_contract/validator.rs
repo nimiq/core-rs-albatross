@@ -1725,7 +1725,7 @@ fn jail_and_revert() {
         vec![
             Log::JailValidator {
                 validator_address: validator_address.clone(),
-                jailed_from: Policy::election_block_after(block_state.number)
+                jailed_from: block_state.number
             },
             Log::DeactivateValidator {
                 validator_address: validator_address.clone(),
@@ -1741,10 +1741,7 @@ fn jail_and_revert() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert_eq!(
-        validator.jailed_from,
-        Some(Policy::election_block_after(block_state.number))
-    );
+    assert_eq!(validator.jailed_from, Some(block_state.number));
 
     assert!(!staking_contract
         .active_validators
@@ -1849,7 +1846,7 @@ fn jail_inactive_and_revert() {
         vec![
             Log::JailValidator {
                 validator_address: validator_address.clone(),
-                jailed_from: Policy::election_block_after(block_state.number)
+                jailed_from: block_state.number
             },
             Log::Jail {
                 validator_address: validator_address.clone(),
@@ -1861,10 +1858,7 @@ fn jail_inactive_and_revert() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert_eq!(
-        validator.jailed_from,
-        Some(Policy::election_block_after(block_state.number))
-    );
+    assert_eq!(validator.jailed_from, Some(block_state.number));
 
     assert!(!staking_contract
         .active_validators
@@ -1935,15 +1929,7 @@ fn can_jail_twice() {
     let old_previous_batch_punished_slots = BitSet::default();
     let old_current_batch_punished_slots = None;
     let old_jailed_from = Some(jailed_setup.effective_state_block_state.number);
-    log::error!(
-        "{:?}",
-        JailReceipt {
-            newly_deactivated: false,
-            old_previous_batch_punished_slots: old_previous_batch_punished_slots.clone(),
-            old_current_batch_punished_slots: old_current_batch_punished_slots.clone(),
-            old_jailed_from,
-        }
-    );
+
     assert_eq!(
         receipt,
         Some(
@@ -1956,13 +1942,13 @@ fn can_jail_twice() {
             .into()
         )
     );
-    let effective_jail_since = Policy::election_block_after(second_jail_block_state.number);
+
     assert_eq!(
         logs,
         vec![
             Log::JailValidator {
                 validator_address: jailed_setup.validator_address.clone(),
-                jailed_from: effective_jail_since,
+                jailed_from: second_jail_block_state.number,
             },
             Log::Jail {
                 validator_address: jailed_setup.validator_address.clone(),
@@ -1977,7 +1963,7 @@ fn can_jail_twice() {
         .staking_contract
         .get_validator(&data_store.read(&db_txn), &jailed_setup.validator_address)
         .unwrap();
-    assert_eq!(validator.jailed_from, Some(effective_jail_since));
+    assert_eq!(validator.jailed_from, Some(second_jail_block_state.number));
 
     // Make sure that the validator is still deactivated.
     assert!(!jailed_setup
@@ -2467,7 +2453,6 @@ fn penalize_and_jail_and_revert_twice() {
     old_current_batch_punished_slots.insert(1);
     let old_current_batch_punished_slots = Some(old_current_batch_punished_slots);
     let old_jailed_from = None;
-    let effective_jail_block = Policy::election_block_after(block_state.number);
     assert_eq!(
         receipt2,
         Some(
@@ -2485,7 +2470,7 @@ fn penalize_and_jail_and_revert_twice() {
         vec![
             Log::JailValidator {
                 validator_address: validator_address.clone(),
-                jailed_from: effective_jail_block,
+                jailed_from: block_state.number,
             },
             Log::Jail {
                 validator_address: validator_address.clone(),
@@ -2498,7 +2483,7 @@ fn penalize_and_jail_and_revert_twice() {
     let validator = staking_contract
         .get_validator(&data_store.read(&db_txn), &validator_address)
         .unwrap();
-    assert_eq!(validator.jailed_from, Some(effective_jail_block));
+    assert_eq!(validator.jailed_from, Some(block_state.number));
 
     assert!(!staking_contract
         .active_validators

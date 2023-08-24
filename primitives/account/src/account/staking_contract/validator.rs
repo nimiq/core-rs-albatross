@@ -77,17 +77,17 @@ pub struct Validator {
     /// An option indicating if the validator is marked as inactive. If it is, then it contains the
     /// block height at which it becomes inactive.
     /// A validator can only effectively become inactive on the next election block. Thus, this may
-    /// contain a block height in the future.
+    /// contain a future block height.
     pub inactive_from: Option<u32>,
-    /// An option indicating if the validator is marked as jailed. If it is, then it contains the
-    /// block height at which it becomes jailed.
-    /// A validator can only effectively become jailed on the next election block. Thus, this may
-    /// contain a block height in the future.
+    /// An option indicating if the validator is jailed. If it is, then it contains the
+    /// block height at which it became jailed.
+    /// Opposed to the inactive_from, the jailing can and should take effect immediately to prevent
+    /// the validator and its stakers from modifying their funds and or delegation.
     pub jailed_from: Option<u32>,
     /// A flag indicating if the validator is retired.
     pub retired: bool,
 }
-
+#[cfg(feature = "interaction-traits")]
 impl Validator {
     pub fn is_active(&self) -> bool {
         self.inactive_from.is_none()
@@ -96,8 +96,7 @@ impl Validator {
     /// Checks if a validator is currently jailed.
     pub fn is_jailed(&self, block_number: u32) -> bool {
         if let Some(jailed_from) = self.jailed_from {
-            return jailed_from <= block_number
-                && block_number < Policy::block_after_jail(jailed_from);
+            return block_number < Policy::block_after_jail(jailed_from);
         }
         false
     }
@@ -391,16 +390,15 @@ impl StakingContract {
                 .expect("inconsistent contract state");
         }
 
-        // Mark validator as Jailed.
-        // A validator can only effectively become jailed on the next election block.
-        validator.jailed_from = Some(next_election_block);
+        // Jail validator immediately.
+        validator.jailed_from = Some(block_number);
 
         // Update validator entry.
         store.put_validator(validator_address, validator);
 
         tx_logger.push_log(Log::JailValidator {
             validator_address: validator_address.clone(),
-            jailed_from: next_election_block,
+            jailed_from: block_number,
         });
         if newly_deactivated {
             tx_logger.push_log(Log::DeactivateValidator {

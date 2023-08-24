@@ -48,10 +48,16 @@ pub struct Staker {
     pub address: Address,
     /// The staker's active balance.
     pub balance: Coin,
-    /// The staker's inactive balance.
+    /// The staker's inactive balance. Only released inactive balance can be withdrawn from the staking contract.
+    /// Stake can only be re-delegated if the whole balance of the staker is inactive and released
+    /// (or if there was no prior delegation). For inactive balance to be released, the maximum of
+    /// the inactive and the validator's jailed periods must have passed.
     pub inactive_balance: Coin,
-    /// An option indicating the last stake inactivation. The stake can only effectively become inactive
-    /// on the next election block. Thus, this may contain a block height in the future.
+    /// The block number at which the inactive balance was last inactivated for withdrawal or re-delegation.
+    /// If the stake is currently delegated to a jailed validator, the maximum of its jail release
+    /// and the inactive release is taken. Re-delegation requires the whole balance of the staker to be inactive.
+    /// The stake can only effectively become inactive on the next election block. Thus, this may contain a
+    /// future block height.
     pub inactive_from: Option<u32>,
     /// The address of the validator for which the staker is delegating its stake for. If it is not
     /// delegating to any validator, this will be set to None.
