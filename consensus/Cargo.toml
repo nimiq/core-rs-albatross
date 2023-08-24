@@ -40,6 +40,7 @@ nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true }
 nimiq-light-blockchain = { workspace = true }
 nimiq-macros = { workspace = true }
+nimiq-mmr = { workspace = true }
 nimiq-network-interface = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["policy"] }
 nimiq-serde = { workspace = true }

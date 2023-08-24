@@ -90,59 +90,56 @@ impl<N: Network> Handle<N, BatchSetInfo, Arc<RwLock<Blockchain>>> for RequestBat
     fn handle(&self, _peer_id: N::PeerId, blockchain: &Arc<RwLock<Blockchain>>) -> BatchSetInfo {
         let blockchain = blockchain.read();
 
-        if let Ok(Block::Macro(block)) = blockchain.get_block(&self.hash, true, None) {
-            let (batch_sets, total_history_len) = if let Ok(macro_hashes) = blockchain
-                .chain_store
-                .get_epoch_chunks(block.block_number(), None)
-            {
-                let mut total_history_len = 0usize;
-                let mut previous_length = 0u32;
-                let mut batch_sets = vec![];
-                for macro_hash in macro_hashes {
-                    let macro_block = blockchain
-                        .get_block(&macro_hash, true, None)
-                        .expect("Macro block must exist since it can't be pruned");
-                    let tot_history_len = blockchain
-                        .history_store
-                        .length_at(macro_block.block_number(), None);
-                    let history_len = tot_history_len - previous_length;
-                    let batch_set = BatchSet {
-                        macro_block: Some(macro_block.unwrap_macro()),
-                        history_len,
-                    };
-                    batch_sets.push(batch_set);
-                    total_history_len += history_len as usize;
-                    previous_length += history_len / CHUNK_SIZE as u32 * CHUNK_SIZE as u32;
-                }
-                (batch_sets, total_history_len)
-            } else {
+        let block = match blockchain.get_block(&self.hash, true, None) {
+            Ok(Block::Macro(block)) => block,
+            _ => return BatchSetInfo::default(),
+        };
+
+        let batch_sets = if let Ok(macro_hashes) = blockchain
+            .chain_store
+            .get_epoch_chunks(block.block_number(), None)
+        {
+            let mut batch_sets = vec![];
+            for macro_hash in macro_hashes {
+                let macro_block = blockchain
+                    .get_block(&macro_hash, true, None)
+                    .expect("Macro block must exist since it can't be pruned");
+
                 let history_len = blockchain
                     .history_store
-                    .length_at(block.block_number(), None);
+                    .prove_num_leaves(block.block_number(), None)
+                    .expect("Failed to prove history size");
+
                 let batch_set = BatchSet {
-                    macro_block: Some(block.clone()),
+                    macro_block: macro_block.unwrap_macro(),
                     history_len,
                 };
-                (vec![batch_set], history_len as usize)
-            };
-
-            let election_macro_block = if block.is_election_block() {
-                Some(block)
-            } else {
-                None
-            };
-
-            BatchSetInfo {
-                election_macro_block,
-                batch_sets,
-                total_history_len: total_history_len as u64,
+                batch_sets.push(batch_set);
             }
+            batch_sets
         } else {
-            BatchSetInfo {
-                election_macro_block: None,
-                batch_sets: vec![],
-                total_history_len: 0,
-            }
+            let history_len = blockchain
+                .history_store
+                .prove_num_leaves(block.block_number(), None)
+                .expect("Failed to prove history size");
+
+            let batch_set = BatchSet {
+                macro_block: block.clone(),
+                history_len,
+            };
+            vec![batch_set]
+        };
+
+        // FIXME Don't send the same macro block twice.
+        let election_macro_block = if block.is_election_block() {
+            Some(block)
+        } else {
+            None
+        };
+
+        BatchSetInfo {
+            election_macro_block,
+            batch_sets,
         }
     }
 }

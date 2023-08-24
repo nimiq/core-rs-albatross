@@ -41,6 +41,9 @@ pub enum HistoryRequestError {
     /// Macro block obtained is invalid
     #[error("Invalid Macro Block")]
     InvalidMacroBlock,
+    /// History size proof is invalid
+    #[error("Invalid Size Proof")]
+    InvalidSizeProof,
 }
 
 struct PendingBatchSet {
@@ -101,6 +104,7 @@ pub struct SyncCluster<TNetwork: Network> {
 
     pending_batch_sets: VecDeque<PendingBatchSet>,
     num_epochs_finished: usize,
+    last_macro_block_emitted: Option<MacroBlock>,
 
     blockchain: Arc<RwLock<Blockchain>>,
     network: Arc<TNetwork>,
@@ -214,6 +218,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             history_queue,
             pending_batch_sets: VecDeque::with_capacity(Self::NUM_PENDING_BATCH_SETS),
             num_epochs_finished: 0,
+            last_macro_block_emitted: None,
             blockchain,
             network,
         }
@@ -259,35 +264,34 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             Self::verify_macro_block(&block, predecessor_macro_block, validators)?;
         }
 
-        let mut last_batch_set_block_number = 0;
         let mut last_seen_macro_block = predecessor_macro_block.clone();
 
-        // Now do some basic consistency checks for batch sets and verify the respective macro block
+        // Now do some basic consistency checks for batch sets and verify the respective
+        // macro block and size proof.
         for batch_set in &batch_set_info.batch_sets {
-            if let Some(macro_block) = &batch_set.macro_block {
-                let block = Block::Macro(macro_block.clone());
+            let block = Block::Macro(batch_set.macro_block.clone());
 
-                // Check that the received blocks within the batch sets are in order
-                if block.block_number() <= last_batch_set_block_number {
-                    warn!(%block, reason = "Decreasing block number", "Block has a decreasing block number");
-                    return Err(HistoryRequestError::BatchSetInfoMismatch);
-                }
-
-                last_batch_set_block_number = block.block_number();
-
-                // Don't verify blocks that are known from an epoch since they are
-                // going to be dismissed later
-                if block.block_number() <= blockchain_head_block_number {
-                    continue;
-                }
-
-                // Check the macro block of the batch set
-                Self::verify_macro_block(&block, &last_seen_macro_block, validators)?;
-
-                last_seen_macro_block = block;
-            } else {
-                return Err(HistoryRequestError::InvalidBatchSetInfo);
+            // Check that the received blocks within the batch sets are in order.
+            if block.block_number() <= last_seen_macro_block.block_number() {
+                warn!(%block, reason = "Decreasing block number", "Block has a decreasing block number");
+                return Err(HistoryRequestError::BatchSetInfoMismatch);
             }
+
+            // Don't verify blocks that are known from an epoch since they are
+            // going to be dismissed later.
+            if block.block_number() <= blockchain_head_block_number {
+                continue;
+            }
+
+            // Check the macro block of the batch set.
+            Self::verify_macro_block(&block, &last_seen_macro_block, validators)?;
+
+            // Check the history size proof.
+            if !batch_set.history_len.verify(block.history_root()) {
+                return Err(HistoryRequestError::InvalidSizeProof);
+            }
+
+            last_seen_macro_block = block;
         }
 
         Ok(())
@@ -306,7 +310,6 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
                 .expect("Batch sets should not be empty")
                 .macro_block
                 .clone()
-                .expect("Macro block should exist for batch set")
         };
 
         info!(
@@ -314,7 +317,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             block.epoch_number(),
             self.first_epoch_number + self.len() - 1,
             epoch.batch_sets.len(),
-            epoch.total_history_len
+            epoch.total_history_len(),
         );
 
         let epoch_number = block.epoch_number();
@@ -325,8 +328,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         let num_known_txs = if epoch_number == current_epoch_number {
             blockchain
                 .history_store
-                .get_final_epoch_transactions(epoch_number, None)
-                .len()
+                .get_number_final_epoch_transactions(epoch_number, None)
         } else {
             0
         };
@@ -336,21 +338,34 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             return Err(SyncClusterResult::Outdated);
         }
 
-        let last_known_validators =
-            if let Some(last_pending_batch_set) = self.pending_batch_sets.back() {
-                last_pending_batch_set.macro_block.get_validators().unwrap()
-            } else {
-                // The pending batch set is empty, so the last known block number comes from the blockchain
-                blockchain.current_validators().unwrap()
-            };
+        // The last known validators:
+        // 1. The validators of the last epoch pending to download, which are only present if the
+        //    epoch is complete (i.e. the corresponding macro block is an election block).
+        // 2. The validators defined in the last macro block we returned from this cluster if it was
+        //    an election block.
+        // 3. The blockchain's current validators.
+        let last_known_validators = self
+            .pending_batch_sets
+            .back()
+            .and_then(|batch_set| batch_set.macro_block.get_validators())
+            .or_else(|| {
+                self.last_macro_block_emitted
+                    .as_ref()
+                    .and_then(|macro_block| macro_block.get_validators())
+            })
+            .or_else(|| blockchain.current_validators())
+            .expect("Failed to determine last known validators");
 
         // The expected predecessor macro block:
         // 1. The macro block of the last epoch pending to download
-        // 2. The macro head of the blockchain
+        // 2. The last macro block we returned from this cluster (might not have been pushed onto the chain yet)
+        // 3. The macro head of the blockchain
         let macro_head = blockchain.macro_head();
         let predecessor_macro = if let Some(last_pending_batch_set) = self.pending_batch_sets.back()
         {
             &last_pending_batch_set.macro_block
+        } else if let Some(last_macro_block) = self.last_macro_block_emitted.as_ref() {
+            last_macro_block
         } else {
             // The pending batch set is empty, so the predecessor comes from the blockchain
             &macro_head
@@ -369,58 +384,51 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         .map_err(|_| SyncClusterResult::InvalidBatchSet)?;
 
         let mut previous_history_size = 0usize;
-        let mut chunk_index_offset = 0usize;
 
         for (index, batch_set) in epoch.batch_sets.iter().enumerate() {
-            // If the batch_set is in the same epoch, skip already known history.
+            // If the batch_set is in the current epoch, skip already known history.
             // We can only skip if the batch_set is not empty, otherwise we can't tell by the
             // history size if it was already adopted or not.
-            let batch_set_epoch_boundary =
-                previous_history_size / CHUNK_SIZE * CHUNK_SIZE + batch_set.history_len as usize;
-            if batch_set.history_len > 0 && num_known_txs >= batch_set_epoch_boundary {
+            let batch_set_epoch_boundary = previous_history_size / CHUNK_SIZE * CHUNK_SIZE
+                + batch_set.history_len.size() as usize;
+            if batch_set.history_len.size() > 0 && num_known_txs >= batch_set_epoch_boundary {
                 // This chunk is already known to the blockchain
-                previous_history_size += batch_set.history_len as usize / CHUNK_SIZE * CHUNK_SIZE;
-                chunk_index_offset += batch_set.history_len as usize / CHUNK_SIZE;
+                previous_history_size = batch_set.history_len.size() as usize;
                 continue;
             }
 
             // Compute the index of the first transaction to download.
             let start_txn = if current_epoch_number == epoch_number {
-                num_known_txs.saturating_sub(previous_history_size)
+                num_known_txs.saturating_sub(previous_history_size / CHUNK_SIZE * CHUNK_SIZE)
             } else {
                 0
             };
 
             // Prepare pending info.
             let pending_batch_set = PendingBatchSet {
-                macro_block: batch_set
-                    .macro_block
-                    .as_ref()
-                    .expect("Chunk received without expected macro block")
-                    .clone(),
-                history_len: batch_set.history_len as usize,
+                macro_block: batch_set.macro_block.clone(),
+                history_len: batch_set.history_len.size() as usize - previous_history_size,
                 history_offset: start_txn / CHUNK_SIZE * CHUNK_SIZE,
                 batch_index: index,
                 history: Vec::new(),
             };
 
             log::debug!(
-                "Adding pending batch: Epoch {}, Block {}, index {}, offset index {}, Items: {}",
-                pending_batch_set.macro_block.epoch_number(),
-                pending_batch_set.macro_block.block_number(),
-                index,
-                chunk_index_offset,
-                batch_set.history_len
+                epoch = %batch_set.macro_block.epoch_number(),
+                block = %batch_set.macro_block,
+                history_len = batch_set.history_len.size(),
+                batch_index = index,
+                "Adding pending batch",
             );
 
             // Queue history chunks for the given batch set for download.
             let history_chunk_ids: Vec<(u32, u32, usize)> = (start_txn / CHUNK_SIZE
-                ..((batch_set.history_len as usize).ceiling_div(CHUNK_SIZE)))
+                ..((batch_set.history_len.size() as usize).ceiling_div(CHUNK_SIZE)))
                 .map(|i| {
                     (
                         epoch_number,
                         pending_batch_set.macro_block.header.block_number,
-                        chunk_index_offset + i,
+                        previous_history_size / CHUNK_SIZE + i,
                     )
                 })
                 .collect();
@@ -429,9 +437,8 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             // We keep the epoch in pending_epochs while the history is downloading.
             self.pending_batch_sets.push_back(pending_batch_set);
 
-            // Set the previous history size and previous chunk index
-            previous_history_size += batch_set.history_len as usize / CHUNK_SIZE * CHUNK_SIZE;
-            chunk_index_offset += batch_set.history_len as usize / CHUNK_SIZE;
+            // Set the previous history size.
+            previous_history_size = batch_set.history_len.size() as usize;
         }
 
         Ok(())
@@ -605,8 +612,6 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
                 .last()
                 .ok_or(HistoryRequestError::InvalidBatchSetInfo)?
                 .macro_block
-                .clone()
-                .ok_or(HistoryRequestError::InvalidBatchSetInfo)?
                 .hash()
         };
         if hash != block_hash {
@@ -638,7 +643,9 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
     fn pop_complete_epoch(&mut self) -> Option<PendingBatchSet> {
         if !self.pending_batch_sets.is_empty() && self.pending_batch_sets[0].is_complete() {
             self.num_epochs_finished += 1;
-            Some(self.pending_batch_sets.pop_front().unwrap())
+            let epoch = self.pending_batch_sets.pop_front().unwrap();
+            self.last_macro_block_emitted = Some(epoch.macro_block.clone());
+            Some(epoch)
         } else {
             None
         }

@@ -299,9 +299,12 @@ async fn sync_ingredients() {
     let epoch = SyncCluster::request_epoch(Arc::clone(&net2), peer_id, epochs[0].clone())
         .await
         .expect("Should yield epoch");
-    let block1 = epoch.election_macro_block.expect("Should have block");
+    let block1 = epoch
+        .election_macro_block
+        .as_ref()
+        .expect("Should have block");
 
-    assert_eq!(epoch.total_history_len, 3);
+    assert_eq!(epoch.total_history_len(), 3);
     assert_eq!(
         block1.hash(),
         consensus1.blockchain.read().election_head_hash()
@@ -355,10 +358,9 @@ async fn sync_ingredients() {
         .last()
         .expect("Should have a batch set")
         .macro_block
-        .clone()
-        .expect("Should have block");
+        .clone();
 
-    assert_eq!(epoch.total_history_len, 1);
+    assert_eq!(epoch.total_history_len(), 1);
     assert_eq!(
         block2.hash(),
         consensus1.blockchain.read().macro_head_hash()

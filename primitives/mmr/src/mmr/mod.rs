@@ -146,16 +146,32 @@ impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
     }
 
     /// Generates the size proof.
+    /// If the verifier has a MMR that is a subtree of the prover's MMR (meaning that the prover's
+    /// MMR is simply the verifier's MMR with more leaves added), you can set `verifier_state` to
+    /// the length of the verifier's MMR. This will construct a proof that is valid to the verifier.
     pub fn prove_num_leaves<T: Hash<H>, F: Fn(H) -> Option<T>>(
         &self,
         f: F,
+        verifier_state: Option<usize>,
     ) -> Result<SizeProof<H, T>, Error> {
         // Return the history root.
         if self.is_empty() {
             return Ok(SizeProof::EmptyTree);
         }
 
-        let it = self.rev_peaks().map(|peak_pos| {
+        // Determine length.
+        let length = match verifier_state {
+            None => self.len(),
+            Some(x) => {
+                if x > self.len() {
+                    return Err(Error::ProveInvalidLeaves);
+                } else {
+                    x
+                }
+            }
+        };
+
+        let it = RevPeakIterator::new(length).map(|peak_pos| {
             Ok((
                 self.store
                     .get(peak_pos.index)
@@ -500,13 +516,17 @@ mod tests {
 
         // Check empty size proof.
         let size_proof = mmr
-            .prove_num_leaves(|hash| hashes.iter().position(|h| h == &hash).map(|pos| nodes[pos]))
+            .prove_num_leaves(
+                |hash| hashes.iter().position(|h| h == &hash).map(|pos| nodes[pos]),
+                None,
+            )
             .unwrap();
 
         assert!(size_proof.verify(&mmr.get_root().unwrap()));
         assert_eq!(size_proof.size(), 0);
 
         // Check size proof for multiple sizes.
+        let mut root_hashes = vec![];
         for (i, v) in nodes.clone().into_iter().enumerate() {
             // Add value.
             let index = mmr.push(&v).unwrap();
@@ -514,12 +534,29 @@ mod tests {
             hashes.push(hash);
 
             let size_proof = mmr
-                .prove_num_leaves(|hash| {
-                    hashes.iter().position(|h| h == &hash).map(|pos| nodes[pos])
-                })
+                .prove_num_leaves(
+                    |hash| hashes.iter().position(|h| h == &hash).map(|pos| nodes[pos]),
+                    None,
+                )
                 .unwrap();
 
-            assert!(size_proof.verify(&mmr.get_root().unwrap()));
+            let root_hash = mmr.get_root().unwrap();
+            assert!(size_proof.verify(&root_hash));
+            assert_eq!(size_proof.size() as usize, i + 1);
+
+            root_hashes.push(root_hash);
+        }
+
+        // Check size proof for different verifier states.
+        for i in 0..mmr.num_leaves {
+            let size_proof = mmr
+                .prove_num_leaves(
+                    |hash| hashes.iter().position(|h| h == &hash).map(|pos| nodes[pos]),
+                    Some(leaf_number_to_index(i + 1)),
+                )
+                .unwrap();
+
+            assert!(size_proof.verify(&root_hashes[i]));
             assert_eq!(size_proof.size() as usize, i + 1);
         }
     }

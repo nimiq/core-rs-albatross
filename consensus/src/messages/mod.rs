@@ -5,12 +5,15 @@ use nimiq_block::{Block, BlockInclusionProof, MacroBlock};
 use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
+use nimiq_mmr::mmr::proof::SizeProof;
 use nimiq_network_interface::{
     network::Topic,
     request::{RequestCommon, RequestMarker},
 };
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
-use nimiq_transaction::history_proof::HistoryTreeProof;
+use nimiq_transaction::{
+    extended_transaction::ExtendedTransaction, history_proof::HistoryTreeProof,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::error::SubscribeToAddressesError;
@@ -107,17 +110,25 @@ impl RequestCommon for RequestBatchSet {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BatchSet {
-    pub macro_block: Option<MacroBlock>,
-    pub history_len: u32,
+    pub macro_block: MacroBlock,
+    pub history_len: SizeProof<Blake2bHash, ExtendedTransaction>,
 }
 
 /// This message contains a macro block and the number of extended transactions (transitions)
 /// within this epoch.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct BatchSetInfo {
     pub election_macro_block: Option<MacroBlock>,
     pub batch_sets: Vec<BatchSet>,
-    pub total_history_len: u64,
+}
+
+impl BatchSetInfo {
+    pub fn total_history_len(&self) -> u64 {
+        self.batch_sets
+            .last()
+            .map(|batch_set| batch_set.history_len.size())
+            .unwrap_or(0)
+    }
 }
 
 impl Debug for BatchSetInfo {
@@ -128,7 +139,7 @@ impl Debug for BatchSetInfo {
                 .field("election_epoch_number", &block.epoch_number())
                 .field("election_block_number", &block.block_number());
         }
-        debug_struct.field("total_history_len", &self.total_history_len);
+        debug_struct.field("total_history_len", &self.total_history_len());
         debug_struct.field("batch_sets_len", &self.batch_sets.len());
         debug_struct.finish()
     }
