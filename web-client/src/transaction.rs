@@ -186,9 +186,10 @@ impl Transaction {
                 // It is possible to add an additional argument `secondary_key_pair: Option<&KeyPair>` with
                 // https://docs.rs/wasm-bindgen-derive/latest/wasm_bindgen_derive/#optional-arguments.
                 // TODO: Support signing for differing staker and validator signing & cold keys.
-                let secondary_key_pair: Option<&KeyPair> = None;
+                // let secondary_key_pair: Option<&KeyPair> = None;
+                // builder.sign_with_key_pair(secondary_key_pair.unwrap_or(key_pair).native_ref());
 
-                builder.sign_with_key_pair(secondary_key_pair.unwrap_or(key_pair).native_ref());
+                builder.sign_with_key_pair(key_pair.native_ref());
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair.native_ref());
                 builder.generate().unwrap()
