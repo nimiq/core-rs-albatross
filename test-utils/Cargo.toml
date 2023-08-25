@@ -25,7 +25,7 @@ paste = "1.0"
 rand = "0.8"
 rand_chacha = "0.3.1"
 serde = "1.0"
-tokio = { version = "1.29", features = ["rt", "time", "tracing"] }
+tokio = { version = "1.32", features = ["rt", "time", "tracing"] }
 tokio-stream = "0.1"
 
 nimiq-account = { workspace = true }

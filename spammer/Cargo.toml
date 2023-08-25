@@ -23,7 +23,7 @@ futures = { package = "futures-util", version = "0.3" }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 rand = "0.8.5"
 serde = "1.0"
-tokio = { version = "1.29", features = ["rt-multi-thread", "time", "tracing"] }
+tokio = { version = "1.32", features = ["rt-multi-thread", "time", "tracing"] }
 tokio-metrics = { version = "0.1" }
 toml = "0.7"
 

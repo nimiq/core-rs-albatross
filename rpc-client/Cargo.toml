@@ -26,7 +26,7 @@ anyhow = "1.0"
 clap = { version = "4.4", features = ["derive"] }
 dotenv = "0.15"
 futures = { package = "futures-util", version = "0.3" }
-tokio = { version = "1.29", features = [
+tokio = { version = "1.32", features = [
     "macros",
     "rt-multi-thread",
     "tracing",
