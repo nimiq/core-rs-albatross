@@ -71,7 +71,7 @@ pub async fn send_tx(client: &Client, transaction: OutgoingTransaction) -> Resul
         }
         Err(error) => {
             error!(?error, "Failed sending transaction");
-            Err(Error::Rpc)
+            Err(Error::Rpc(error))
         }
     }
 }
