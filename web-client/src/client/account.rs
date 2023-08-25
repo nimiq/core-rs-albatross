@@ -1,3 +1,4 @@
+use nimiq_primitives::policy::Policy;
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 
@@ -142,12 +143,16 @@ pub struct PlainStaker {
     /// (or if there was no prior delegation). For inactive balance to be released, the maximum of
     /// the inactive and the validator's jailed periods must have passed.
     inactive_balance: u64,
-    /// The block number at which the inactive balance was last inactivated for withdrawal or re-delegation.
-    /// If the stake is currently delegated to a jailed validator, the maximum of its jail release
-    /// and the inactive release is taken. Re-delegation requires the whole balance of the staker to be inactive.
-    /// The stake can only effectively become inactive on the next election block. Thus, this may contain a
+    /// The block number from which the staker's `inactive_balance` becomes inactive.
+    /// Stake can only effectively become inactive on the next election block. Thus, this may contain a
     /// future block height.
+    /// Re-delegation requires the whole balance of the staker to be inactive and released, as well as
+    /// its delegated validator to not currently be jailed.
     inactive_from: Option<u32>,
+    /// The block number from which the staker's `inactive_balance` gets released, e.g. for unstaking.
+    /// Re-delegation requires the whole balance of the staker to be inactive and released, as well as
+    /// its delegated validator to not currently be jailed.
+    inactive_release: Option<u32>,
 }
 
 impl PlainStaker {
@@ -160,6 +165,9 @@ impl PlainStaker {
             balance: staker.balance.into(),
             inactive_balance: staker.inactive_balance.into(),
             inactive_from: staker.inactive_from,
+            inactive_release: staker
+                .inactive_from
+                .map(Policy::block_after_reporting_window),
         }
     }
 }
@@ -191,6 +199,9 @@ pub struct PlainValidator {
     /// A validator can only effectively become inactive on the next election block. Thus, this may
     /// contain a block height in the future.
     pub inactive_from: Option<u32>,
+    /// An option indicating if the validator is marked as inactive. If it is, then it contains the
+    /// block height at which the inactive stake gets released and the validator can be retired.
+    pub inactive_release: Option<u32>,
     /// A flag indicating if the validator is retired.
     pub retired: bool,
     /// An option indicating if the validator is jailed. If it is, then it contains the
@@ -198,6 +209,9 @@ pub struct PlainValidator {
     /// Opposed to the inactive_from, the jailing can and should take effect immediately to prevent
     /// the validator and its stakers from modifying their funds and or delegation.
     pub jailed_from: Option<u32>,
+    /// An option indicating if the validator is jailed. If it is, then it contains the
+    /// block height at which the jail period ends and the validator becomes interactive again.
+    pub jailed_release: Option<u32>,
 }
 
 impl PlainValidator {
@@ -211,8 +225,12 @@ impl PlainValidator {
             deposit: validator.deposit.into(),
             num_stakers: validator.num_stakers,
             inactive_from: validator.inactive_from,
+            inactive_release: validator
+                .inactive_from
+                .map(Policy::block_after_reporting_window),
             retired: validator.retired,
             jailed_from: validator.jailed_from,
+            jailed_release: validator.jailed_from.map(Policy::block_after_jail),
         }
     }
 }
