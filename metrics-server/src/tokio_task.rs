@@ -21,23 +21,31 @@ static TOKIO_TASK_METRICS_NAME: &[&str] = &[
     "total_fast_poll_duration",
     "total_slow_poll_count",
     "total_slow_poll_duration",
+    "total_short_delay_count",
+    "total_long_delay_count",
+    "total_short_delay_duration",
+    "total_long_delay_duration",
 ];
 
 static TOKIO_TASK_METRICS_DESC: &[&str] = &[
-    "instrumented count",
-    "dropped count",
-    "first poll count",
-    "total first poll delay",
-    "total idled count",
-    "total idle duration",
-    "total schedule count count",
-    "total schedule duration",
-    "total poll count",
-    "total poll duration",
-    "total fast poll count",
-    "total fast poll duration",
-    "total slow poll count",
-    "total slow poll duration",
+    "number of tasks instrumented",
+    "number of tasks dropped",
+    "number of tasks polled for the first time",
+    "total duration elapsed between the instant tasks are instrumented, and the instant they are first polled",
+    "total number of times that tasks idled, waiting to be awoken",
+    "total duration that tasks idled",
+    "total number of times that tasks were awoken (and then, presumably, scheduled for execution)",
+    "total duration that tasks spent waiting to be polled after awakening",
+    "total number of times that tasks were polled",
+    "total duration elapsed during polls",
+    "total number of times that polling tasks completed swiftly",
+    "total duration of fast polls",
+    "total number of times that polling tasks completed slowly",
+    "total duration of slow polls",
+    "total count of tasks with short scheduling delay",
+    "total count of tasks with long scheduling delays",
+    "total duration of tasks with short scheduling delays",
+    "total duration of tasks with long scheduling delays",
 ];
 
 pub struct TokioTaskMetrics {
@@ -152,6 +160,22 @@ impl TokioTaskMetrics {
         self.update_metric_value(
             format!("{}_{}", task_name, TOKIO_TASK_METRICS_NAME[13]),
             interval.total_slow_poll_duration.as_micros() as u64,
+        );
+        self.update_metric_value(
+            format!("{}_{}", task_name, TOKIO_TASK_METRICS_NAME[14]),
+            interval.total_short_delay_count,
+        );
+        self.update_metric_value(
+            format!("{}_{}", task_name, TOKIO_TASK_METRICS_NAME[15]),
+            interval.total_long_delay_count,
+        );
+        self.update_metric_value(
+            format!("{}_{}", task_name, TOKIO_TASK_METRICS_NAME[16]),
+            interval.total_short_delay_duration.as_micros() as u64,
+        );
+        self.update_metric_value(
+            format!("{}_{}", task_name, TOKIO_TASK_METRICS_NAME[17]),
+            interval.total_long_delay_duration.as_micros() as u64,
         );
     }
 }
