@@ -1,6 +1,6 @@
 pub mod types;
 
-use std::{collections::HashMap, ops::Range};
+use std::ops::Range;
 
 use log::{error, info};
 use nimiq_keys::Address;
@@ -87,21 +87,6 @@ pub async fn check_validators_ready(
     let total_stake: Coin = validators.iter().map(|validator| validator.balance).sum();
 
     log::debug!(registered_stake = %total_stake);
-
-    // First we need to obtain the validator list, along with the slot allocation for the first epoch.
-    let mut validator_list = HashMap::new();
-
-    // This is a mock list for testing purposes(for now)
-    // The validator address and the slots assigned to each address
-    validator_list.insert(
-        "NQ28 GSPY V07Q DJTK Y8TG DFYD KR5Q 9KBF HV5A".to_string(),
-        100u16,
-    );
-
-    validator_list.insert(
-        "NQ56 7L0M GQPS GNCU VGGT LV4S 4HHN F701 2DEF".to_string(),
-        412u16,
-    );
 
     let mut ready_validators = Vec::new();
 
