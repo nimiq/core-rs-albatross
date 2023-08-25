@@ -35,7 +35,7 @@ rand = "0.8"
 serde = "1.0"
 serde-big-array = "0.5"
 thiserror = "1.0"
-tokio = { version = "1.29", features = ["macros", "rt", "tracing"] }
+tokio = { version = "1.32", features = ["macros", "rt", "tracing"] }
 tokio-stream = "0.1"
 wasm-timer = "0.2"
 
@@ -82,7 +82,7 @@ libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", default-feature
 
 [dev-dependencies]
 # In dev/testing we require more tokio features
-tokio = { version = "1.29", features = ["macros", "rt", "rt-multi-thread", "test-util", "tracing"] }
+tokio = { version = "1.32", features = ["macros", "rt", "rt-multi-thread", "test-util", "tracing"] }
 
 nimiq-test-log = { workspace = true }
 
