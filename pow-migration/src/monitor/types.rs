@@ -1,10 +1,6 @@
 use nimiq_primitives::coin::Coin;
 use thiserror::Error;
 
-/// Block height of the validator activation window start
-/// Fixme: This shouldn't be hardwired.
-pub const ACTIVATION_HEIGHT: u32 = 100;
-
 /// Readiness state of all of the validators registered in the PoW chain
 pub enum ValidatorsReadiness {
     /// Validators are not ready.

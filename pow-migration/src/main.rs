@@ -346,7 +346,12 @@ async fn main() {
         }
 
         // Check if we have enough validators ready at this point
-        let validators_status = check_validators_ready(&client, validators.clone()).await;
+        let validators_status = check_validators_ready(
+            &client,
+            validators.clone(),
+            previous_election_block..next_election_block,
+        )
+        .await;
         match validators_status {
             ValidatorsReadiness::NotReady(stake) => {
                 info!(stake_ready = %stake, "Not enough validators are ready yet",);

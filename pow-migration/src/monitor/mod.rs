@@ -12,7 +12,7 @@ use nimiq_rpc::{
 use percentage::Percentage;
 
 use crate::{
-    monitor::types::{Error, ValidatorsReadiness, ACTIVATION_HEIGHT},
+    monitor::types::{Error, ValidatorsReadiness},
     state::types::GenesisValidator,
 };
 
@@ -50,9 +50,8 @@ pub async fn get_ready_txns(
             .into_iter()
             .filter(|txn| {
                 // Here we filter by current epoch
-                (txn.block_number > block_window.start)
-                    && (txn.block_number < block_window.end)
-                    && (txn.to_address == Address::burn_address().to_user_friendly_address())
+                block_window.contains(&txn.block_number)
+                    && txn.to_address == Address::burn_address().to_user_friendly_address()
                     && txn.value == 1
             })
             .collect();
@@ -78,10 +77,10 @@ pub async fn send_tx(client: &Client, transaction: OutgoingTransaction) -> Resul
 
 /// Checks if enough validators are ready.
 /// If thats the case, the number of slots which are ready are returned.
-/// The validators_allocation is a HashMap from Validator to number of slots owned by that validator.
 pub async fn check_validators_ready(
     client: &Client,
     validators: Vec<GenesisValidator>,
+    activation_block_window: Range<u32>,
 ) -> ValidatorsReadiness {
     // First calculate the total amount of stake
     let total_stake: Coin = validators.iter().map(|validator| validator.balance).sum();
@@ -109,8 +108,8 @@ pub async fn check_validators_ready(
                 .into_iter()
                 .filter(|txn| {
                     // Here we filter by the readiness criteria, TBD
-                    (txn.block_number > ACTIVATION_HEIGHT)
-                        && (txn.to_address == Address::burn_address().to_user_friendly_address())
+                    activation_block_window.contains(&txn.block_number)
+                        && txn.to_address == Address::burn_address().to_user_friendly_address()
                         && txn.value == 1
                 })
                 .collect();
