@@ -144,6 +144,7 @@ mod serde_derive {
     use super::{CompressedSignature, Signature};
 
     impl Signature {
+        /// Maximum size in bytes for a single `Signature` in binary serialization.
         pub const SIZE: usize = CompressedSignature::SIZE;
     }
 

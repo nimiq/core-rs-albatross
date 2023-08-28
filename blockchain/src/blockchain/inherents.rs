@@ -47,8 +47,8 @@ impl Blockchain {
 
         for equivocation_proof in equivocation_proofs {
             trace!(
-                "Creating inherent from equivocation proof: {:?}",
-                equivocation_proof,
+                ?equivocation_proof,
+                "Creating inherent from equivocation proof",
             );
             inherents.push(self.inherent_from_equivocation_proof(
                 block_number,
@@ -108,7 +108,6 @@ impl Blockchain {
                 None
             };
 
-        // Create the JailedValidator struct.
         let jailed_validator = JailedValidator {
             slots: proposer_slot.validator.slots,
             validator_address: proposer_slot.validator.address,
@@ -147,7 +146,6 @@ impl Blockchain {
             None
         };
 
-        // Create the JailedValidator struct.
         let jailed_validator = JailedValidator {
             slots: proposer_slot.validator.slots,
             validator_address: proposer_slot.validator.address,
@@ -190,7 +188,6 @@ impl Blockchain {
             None
         };
 
-        // Create the JailedValidator struct.
         let jailed_validator = JailedValidator {
             slots: validator.slots.clone(),
             validator_address: validator.address.clone(),

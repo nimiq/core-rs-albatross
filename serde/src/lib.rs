@@ -45,28 +45,44 @@ impl fmt::Display for DeserializeError {
 
 impl Error for DeserializeError {}
 
+/// Size in bytes for a single `i8` in binary serialization.
 pub const I8_SIZE: usize = 1;
+/// Size in bytes for a single `u8` in binary serialization.
 pub const U8_SIZE: usize = 1;
 
-pub const I16_SIZE: usize = (16 + 6) / 7;
-pub const U16_SIZE: usize = (16 + 6) / 7;
-pub const I32_SIZE: usize = (32 + 6) / 7;
-pub const U32_SIZE: usize = (32 + 6) / 7;
-pub const I64_SIZE: usize = (64 + 6) / 7;
-pub const U64_SIZE: usize = (64 + 6) / 7;
+/// Maximum size in bytes for a single `i16` in binary serialization.
+pub const I16_MAX_SIZE: usize = (16 + 6) / 7;
+/// Maximum size in bytes for a single `u16` in binary serialization.
+pub const U16_MAX_SIZE: usize = (16 + 6) / 7;
+/// Maximum size in bytes for a single `i32` in binary serialization.
+pub const I32_MAX_SIZE: usize = (32 + 6) / 7;
+/// Maximum size in bytes for a single `u32` in binary serialization.
+pub const U32_MAX_SIZE: usize = (32 + 6) / 7;
+/// Maximum size in bytes for a single `i64` in binary serialization.
+pub const I64_MAX_SIZE: usize = (64 + 6) / 7;
+/// Maximum size in bytes for a single `u64` in binary serialization.
+pub const U64_MAX_SIZE: usize = (64 + 6) / 7;
 
-pub const fn uint_size(max_value: u64) -> usize {
+/// Maximum size in bytes for a integer value in binary serialization, given its maximum value.
+pub const fn uint_max_size(max_value: u64) -> usize {
     let bits = match max_value.checked_ilog2() {
         Some(n) => n + 1,
         None => 1,
     };
     ((bits + 6) / 7) as usize
 }
-pub const fn option_size(inner_size: usize) -> usize {
+/// Maximum size in bytes for an `Option<T>` value in binary serialization.
+///
+/// `inner_size` is the maximum size of its inner value `T`.
+pub const fn option_max_size(inner_size: usize) -> usize {
     1 + inner_size
 }
-pub const fn vec_size(inner_size: usize, max_elems: usize) -> usize {
-    uint_size(max_elems as u64) + inner_size * max_elems
+/// Maximum size in bytes for a `Vec<T>` value in binary serialization.
+///
+/// `inner_size` is the maximum size of its inner value `T`. `max_elems` is the maximum number of
+/// elements in that `Vec<T>`.
+pub const fn vec_max_size(inner_size: usize, max_elems: usize) -> usize {
+    uint_max_size(max_elems as u64) + inner_size * max_elems
 }
 
 /// The Nimiq human readable array serialization helper trait

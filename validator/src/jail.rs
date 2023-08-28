@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use nimiq_block::{Block, EquivocationProof, MacroBlock, MacroHeader, MicroBlock};
 use nimiq_serde::Serialize;
 
+/// Pool for holding distinct equivocation proofs that haven't been seen in blocks yet.
 #[derive(Default)]
 pub struct EquivocationProofPool {
     equivocation_proofs: HashSet<EquivocationProof>,
@@ -13,7 +14,7 @@ impl EquivocationProofPool {
         Self::default()
     }
 
-    /// Adds a equivocation proof if it is not yet part of the pool.
+    /// Adds an equivocation proof if it is not yet part of the pool.
     /// Returns whether it has been added.
     pub fn insert(&mut self, equivocation_proof: EquivocationProof) -> bool {
         self.equivocation_proofs.insert(equivocation_proof)

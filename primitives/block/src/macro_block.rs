@@ -197,16 +197,17 @@ pub struct MacroHeader {
 impl MacroHeader {
     /// Returns the size, in bytes, of a Macro block header. This represents the maximum possible
     /// size since we assume that the extra_data field is completely filled.
+    #[allow(clippy::identity_op)]
     pub const MAX_SIZE: usize = 0
-        + /*version*/ nimiq_serde::U16_SIZE
-        + /*block_number*/ nimiq_serde::U32_SIZE
-        + /*round*/ nimiq_serde::U32_SIZE
-        + /*timestamp*/ nimiq_serde::U64_SIZE
+        + /*version*/ nimiq_serde::U16_MAX_SIZE
+        + /*block_number*/ nimiq_serde::U32_MAX_SIZE
+        + /*round*/ nimiq_serde::U32_MAX_SIZE
+        + /*timestamp*/ nimiq_serde::U64_MAX_SIZE
         + /*parent_hash*/ Blake2bHash::SIZE
         + /*parent_election_hash*/ Blake2bHash::SIZE
-        + /*interlink*/ nimiq_serde::option_size(nimiq_serde::vec_size(Blake2bHash::SIZE, 32))
+        + /*interlink*/ nimiq_serde::option_max_size(nimiq_serde::vec_max_size(Blake2bHash::SIZE, 32))
         + /*seed*/ VrfSeed::SIZE
-        + /*extra_data*/ nimiq_serde::vec_size(nimiq_serde::U8_SIZE, 32)
+        + /*extra_data*/ nimiq_serde::vec_max_size(nimiq_serde::U8_SIZE, 32)
         + /*state_root*/ Blake2bHash::SIZE
         + /*body_root*/ Blake2sHash::SIZE
         + /*diff_root*/ Blake2bHash::SIZE

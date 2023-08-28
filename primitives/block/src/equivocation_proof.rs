@@ -12,6 +12,10 @@ use thiserror::Error;
 
 use crate::{MacroHeader, MicroHeader, TendermintIdentifier, TendermintVote};
 
+/// An equivocation proof proves that a validator misbehaved.
+///
+/// This can come in several forms, but e.g. producing two blocks in a single slot or voting twice
+/// in the same round.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, SerializeContent)]
 pub enum EquivocationProof {
     Fork(ForkProof),
@@ -31,10 +35,10 @@ const fn max3(a: usize, b: usize, c: usize) -> usize {
 
 impl EquivocationProof {
     /// The size of a single equivocation proof. This is the maximum possible size.
-    pub const SIZE: usize = 1 + max3(
-        ForkProof::SIZE,
-        DoubleProposalProof::SIZE,
-        DoubleVoteProof::SIZE,
+    pub const MAX_SIZE: usize = 1 + max3(
+        ForkProof::MAX_SIZE,
+        DoubleProposalProof::MAX_SIZE,
+        DoubleVoteProof::MAX_SIZE,
     );
 
     /// Returns the block number of an equivocation proof. This assumes that the equivocation proof
@@ -92,7 +96,7 @@ pub struct ForkProof {
     justification1: SchnorrSignature,
     /// Justification for header number 2.
     justification2: SchnorrSignature,
-    /// Vrf seed of the previous block. Used to determine the slot.
+    /// VRF seed of the previous block. Used to determine the slot.
     prev_vrf_seed: VrfSeed,
 }
 
@@ -100,7 +104,8 @@ impl ForkProof {
     /// The size of a single fork proof. This is the maximum possible size, since the Micro header
     /// has a variable size (because of the extra data field) and here we assume that the header
     /// has the maximum size.
-    pub const SIZE: usize = 2 * MicroHeader::MAX_SIZE + 2 * SchnorrSignature::SIZE + VrfSeed::SIZE;
+    pub const MAX_SIZE: usize =
+        2 * MicroHeader::MAX_SIZE + 2 * SchnorrSignature::SIZE + VrfSeed::SIZE;
 
     pub fn new(
         mut header1: MicroHeader,
@@ -124,15 +129,19 @@ impl ForkProof {
         }
     }
 
+    /// Hash of header number 1.
     pub fn header1_hash(&self) -> Blake2bHash {
         self.header1.hash()
     }
+    /// Hash of header number 2.
     pub fn header2_hash(&self) -> Blake2bHash {
         self.header2.hash()
     }
+    /// Block number.
     pub fn block_number(&self) -> u32 {
         self.header1.block_number
     }
+    /// VRF seed of the previous blocks. Used to determine the slot.
     pub fn prev_vrf_seed(&self) -> &VrfSeed {
         &self.prev_vrf_seed
     }
@@ -156,8 +165,8 @@ impl ForkProof {
             return Err(EquivocationProofError::SlotMismatch);
         }
 
-        if let Err(e) = self.header1.seed.verify(&self.prev_vrf_seed, signing_key) {
-            error!("ForkProof: VrfSeed failed to verify: {:?}", e);
+        if let Err(error) = self.header1.seed.verify(&self.prev_vrf_seed, signing_key) {
+            error!(?error, "ForkProof: VrfSeed failed to verify");
             return Err(EquivocationProofError::InvalidJustification);
         }
 
@@ -179,6 +188,7 @@ impl std::hash::Hash for ForkProof {
     }
 }
 
+/// Possible equivocation proof validation errors.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum EquivocationProofError {
     #[error("Slot mismatch")]
@@ -199,17 +209,23 @@ pub enum EquivocationProofError {
 /// validator created two macro block proposals at the same height, in the same round.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializeContent)]
 pub struct DoubleProposalProof {
+    /// Header number 1.
     header1: MacroHeader,
+    /// Header number 2.
     header2: MacroHeader,
+    /// Justification for header number 1.
     justification1: SchnorrSignature,
+    /// Justification for header number 2.
     justification2: SchnorrSignature,
+    /// VRF seed of the previous block for header 1. Used to determine the slot.
     prev_vrf_seed1: VrfSeed,
+    /// VRF seed of the previous block for header 2. Used to determine the slot.
     prev_vrf_seed2: VrfSeed,
 }
 
 impl DoubleProposalProof {
     /// The maximum size of a double proposal proof.
-    pub const SIZE: usize =
+    pub const MAX_SIZE: usize =
         2 * MacroHeader::MAX_SIZE + 2 * SchnorrSignature::SIZE + 2 * VrfSeed::SIZE;
 
     pub fn new(
@@ -237,21 +253,27 @@ impl DoubleProposalProof {
         }
     }
 
+    /// Block number.
     pub fn block_number(&self) -> u32 {
         self.header1.block_number
     }
+    /// Round of the proposals.
     pub fn round(&self) -> u32 {
         self.header1.round
     }
+    /// Hash of header number 1.
     pub fn header1_hash(&self) -> Blake2bHash {
         self.header1.hash()
     }
+    /// Hash of header number 2.
     pub fn header2_hash(&self) -> Blake2bHash {
         self.header2.hash()
     }
+    /// VRF seed of the previous block for header 1. Used to determine the slot.
     pub fn prev_vrf_seed1(&self) -> &VrfSeed {
         &self.prev_vrf_seed1
     }
+    /// VRF seed of the previous block for header 2. Used to determine the slot.
     pub fn prev_vrf_seed2(&self) -> &VrfSeed {
         &self.prev_vrf_seed2
     }
@@ -274,13 +296,13 @@ impl DoubleProposalProof {
             return Err(EquivocationProofError::SlotMismatch);
         }
 
-        if let Err(e) = self.header1.seed.verify(&self.prev_vrf_seed1, signing_key) {
-            error!("DoubleProposalProof: VrfSeed 1 failed to verify: {:?}", e);
+        if let Err(error) = self.header1.seed.verify(&self.prev_vrf_seed1, signing_key) {
+            error!(?error, "DoubleProposalProof: VrfSeed 1 failed to verify");
             return Err(EquivocationProofError::InvalidJustification);
         }
 
-        if let Err(e) = self.header2.seed.verify(&self.prev_vrf_seed2, signing_key) {
-            error!("DoubleProposalProof: VrfSeed 2 failed to verify: {:?}", e);
+        if let Err(error) = self.header2.seed.verify(&self.prev_vrf_seed2, signing_key) {
+            error!(?error, "DoubleProposalProof: VrfSeed 2 failed to verify");
             return Err(EquivocationProofError::InvalidJustification);
         }
 
@@ -305,22 +327,30 @@ impl std::hash::Hash for DoubleProposalProof {
 /// validator voted twice at same height, in the same round.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializeContent)]
 pub struct DoubleVoteProof {
+    /// Round and block height information.
     tendermint_id: TendermintIdentifier,
+    /// Address of the offending validator.
     validator_address: Address,
+    /// Hash of proposal number 1.
     proposal_hash1: Option<Blake2sHash>,
+    /// Hash of proposal number 2.
     proposal_hash2: Option<Blake2sHash>,
+    /// Aggregate signature for proposal 1.
     signature1: AggregateSignature,
+    /// Aggregate signature for proposal 2.
     signature2: AggregateSignature,
+    /// Signers for proposal 1.
     signers1: BitSet,
+    /// Signers for proposal 2.
     signers2: BitSet,
 }
 
 impl DoubleVoteProof {
     /// The maximum size of a double proposal proof.
-    pub const SIZE: usize = 2 * MacroHeader::MAX_SIZE
-        + 2 * nimiq_serde::option_size(Blake2sHash::SIZE)
+    pub const MAX_SIZE: usize = 2 * MacroHeader::MAX_SIZE
+        + 2 * nimiq_serde::option_max_size(Blake2sHash::SIZE)
         + 2 * AggregateSignature::SIZE
-        + 2 * BitSet::size(Policy::SLOTS as usize);
+        + 2 * BitSet::max_size(Policy::SLOTS as usize);
 
     pub fn new(
         tendermint_id: TendermintIdentifier,
@@ -349,9 +379,11 @@ impl DoubleVoteProof {
         }
     }
 
+    /// Block number.
     pub fn block_number(&self) -> u32 {
         self.tendermint_id.block_number
     }
+    /// Address of the offending validator.
     pub fn validator_address(&self) -> &Address {
         &self.validator_address
     }

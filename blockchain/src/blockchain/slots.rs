@@ -98,6 +98,7 @@ impl Blockchain {
         })
     }
 
+    /// Get the proposer slot for a given fork proof.
     pub fn get_proposer_for_fork_proof(
         &self,
         fork_proof: &ForkProof,
@@ -111,6 +112,7 @@ impl Blockchain {
         )
     }
 
+    /// Get the proposer slot for a given double proposal proof.
     pub fn get_proposer_for_double_proposal_proof(
         &self,
         double_proposal_proof: &DoubleProposalProof,
@@ -126,6 +128,7 @@ impl Blockchain {
         )
     }
 
+    /// Get the validators currently active for a given double vote proof.
     pub fn get_validators_for_double_vote_proof(
         &self,
         double_vote_proof: &DoubleVoteProof,

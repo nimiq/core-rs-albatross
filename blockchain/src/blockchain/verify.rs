@@ -199,6 +199,7 @@ impl Blockchain {
         Ok(())
     }
 
+    /// Verify that all the given equivocation proofs of a block are actually valid offenses.
     pub fn verify_equivocation_proofs(
         &self,
         block: &Block,

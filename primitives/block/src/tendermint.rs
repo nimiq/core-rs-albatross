@@ -87,6 +87,7 @@ pub enum TendermintStep {
 }
 
 impl TendermintStep {
+    /// Size in bytes for a `TendermintStep` in binary serialization.
     pub const SIZE: usize = 1;
 }
 
@@ -102,7 +103,8 @@ pub struct TendermintIdentifier {
 }
 
 impl TendermintIdentifier {
-    pub const SIZE: usize = 2 * nimiq_serde::U32_SIZE + TendermintStep::SIZE;
+    /// Maximum size in bytes for a `TendermintIdentifier` in binary serialization.
+    pub const MAX_SIZE: usize = 2 * nimiq_serde::U32_MAX_SIZE + TendermintStep::SIZE;
 }
 
 // Multiple things this needs to take care of when it comes to what needs signing here:

@@ -378,6 +378,10 @@ pub struct PenalizedSlots {
     pub disabled: BitSet,
 }
 
+/// An equivocation proof proves that a validator misbehaved.
+///
+/// This can come in several forms, but e.g. producing two blocks in a single slot or voting twice
+/// in the same round.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum EquivocationProof {
@@ -400,6 +404,9 @@ impl From<nimiq_block::EquivocationProof> for EquivocationProof {
     }
 }
 
+/// Struct representing a fork proof. A fork proof proves that a given validator created or
+/// continued a fork. For this it is enough to provide two different headers, with the same block
+/// number, signed by the same validator.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ForkProof {
@@ -416,6 +423,8 @@ impl From<nimiq_block::ForkProof> for ForkProof {
     }
 }
 
+/// Struct representing a double proposal proof. A double proposal proof proves that a given
+/// validator created two macro block proposals at the same height, in the same round.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DoubleProposalProof {
@@ -435,6 +444,8 @@ impl From<nimiq_block::DoubleProposalProof> for DoubleProposalProof {
     }
 }
 
+/// Struct representing a double vote proof. A double vote proof proves that a given
+/// validator voted twice at same height, in the same round.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DoubleVoteProof {

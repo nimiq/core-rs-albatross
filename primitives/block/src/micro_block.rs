@@ -52,7 +52,7 @@ impl MicroBlock {
     /// Returns the available size, in bytes, in a micro block body for transactions.
     pub fn get_available_bytes(num_equivocation_proofs: usize) -> usize {
         Policy::MAX_SIZE_MICRO_BODY
-            - (/*equivocation_proofs vector length*/2 + num_equivocation_proofs * EquivocationProof::SIZE
+            - (/*equivocation_proofs vector length*/2 + num_equivocation_proofs * EquivocationProof::MAX_SIZE
             + /*transactions vector length*/ 2)
     }
 
@@ -187,13 +187,14 @@ pub struct MicroHeader {
 impl MicroHeader {
     /// Returns the size, in bytes, of a Micro block header. This represents the maximum possible
     /// size since we assume that the extra_data field is completely filled.
+    #[allow(clippy::identity_op)]
     pub const MAX_SIZE: usize = 0
-        + /*version*/ nimiq_serde::U16_SIZE
-        + /*block_number*/ nimiq_serde::U32_SIZE
-        + /*timestamp*/ nimiq_serde::U64_SIZE
+        + /*version*/ nimiq_serde::U16_MAX_SIZE
+        + /*block_number*/ nimiq_serde::U32_MAX_SIZE
+        + /*timestamp*/ nimiq_serde::U64_MAX_SIZE
         + /*parent_hash*/ Blake2bHash::SIZE
         + /*seed*/ VrfSeed::SIZE
-        + /*extra_data*/ nimiq_serde::vec_size(nimiq_serde::U8_SIZE, 32)
+        + /*extra_data*/ nimiq_serde::vec_max_size(nimiq_serde::U8_SIZE, 32)
         + /*state_root*/ Blake2bHash::SIZE
         + /*body_root*/ Blake2sHash::SIZE
         + /*diff_root*/ Blake2bHash::SIZE
