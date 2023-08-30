@@ -206,7 +206,7 @@ pub struct PlainValidator {
     pub retired: bool,
     /// An option indicating if the validator is jailed. If it is, then it contains the
     /// block height at which it became jailed.
-    /// Opposed to the inactive_from, the jailing can and should take effect immediately to prevent
+    /// Opposed to `inactive_from`, jailing can and should take effect immediately to prevent
     /// the validator and its stakers from modifying their funds and or delegation.
     pub jailed_from: Option<u32>,
     /// An option indicating if the validator is jailed. If it is, then it contains the

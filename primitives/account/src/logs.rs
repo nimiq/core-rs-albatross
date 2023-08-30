@@ -82,12 +82,16 @@ pub enum Log {
         fee: Coin,
     },
 
+    /// The validator with the given address has been marked for deactivation.
+    /// It will be inactive from the given block number.
     #[serde(rename_all = "camelCase")]
     DeactivateValidator {
         validator_address: Address,
         inactive_from: u32,
     },
 
+    /// The validator with the given address has been jailed.
+    /// It is jailed from the given block number.
     #[serde(rename_all = "camelCase")]
     JailValidator {
         validator_address: Address,
