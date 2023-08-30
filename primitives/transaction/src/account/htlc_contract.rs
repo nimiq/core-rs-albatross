@@ -79,6 +79,17 @@ pub enum AnyHash {
     Sha512(AnyHash64),
 }
 
+impl AnyHash {
+    /// Returns the hex string representation of a hash
+    pub fn to_hex(&self) -> String {
+        match self {
+            AnyHash::Blake2b(hash) => hash.to_hex(),
+            AnyHash::Sha256(hash) => hash.to_hex(),
+            AnyHash::Sha512(hash) => hash.to_hex(),
+        }
+    }
+}
+
 impl Default for AnyHash {
     fn default() -> Self {
         AnyHash::Blake2b(AnyHash32::default())
