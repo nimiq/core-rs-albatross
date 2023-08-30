@@ -11,17 +11,20 @@ pub enum Error {
     #[error("RPC error: {0}")]
     Rpc(#[from] jsonrpsee::core::Error),
     /// Address parsing error
-    #[error("Failed to parse Nimiq address")]
+    #[error("Failed to parse Nimiq address: {0}")]
     Address(#[from] AddressParseError),
     /// Coin conversion error
-    #[error("Failed to convert to coin")]
+    #[error("Failed to convert to coin: {0}")]
     Coin(#[from] CoinConvertError),
     /// Hex conversion error
-    #[error("Failed to decode string as hex")]
+    #[error("Failed to decode string as hex: {0}")]
     Hex(#[from] FromHexError),
     /// Invalid value
     #[error("Invalid value")]
     InvalidValue,
+    /// Invalid Genesis timestamp
+    #[error("Invalid genesis timestamp: {0}")]
+    InvalidTimestamp(u64),
 }
 
 /// Genesis accounts for the genesis state
