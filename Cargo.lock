@@ -4014,7 +4014,7 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-client"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#33f8c09469db81f770d9b771b0716e9c89cd9c27"
+source = "git+https://github.com/nimiq/jsonrpc.git#f1360ec4877c1bd00d4631c7af010b59d10e8502"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -4035,7 +4035,7 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-core"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#33f8c09469db81f770d9b771b0716e9c89cd9c27"
+source = "git+https://github.com/nimiq/jsonrpc.git#f1360ec4877c1bd00d4631c7af010b59d10e8502"
 dependencies = [
  "log",
  "serde",
@@ -4046,7 +4046,7 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-derive"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#33f8c09469db81f770d9b771b0716e9c89cd9c27"
+source = "git+https://github.com/nimiq/jsonrpc.git#f1360ec4877c1bd00d4631c7af010b59d10e8502"
 dependencies = [
  "darling 0.20.3",
  "heck",
@@ -4061,7 +4061,7 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-server"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#33f8c09469db81f770d9b771b0716e9c89cd9c27"
+source = "git+https://github.com/nimiq/jsonrpc.git#f1360ec4877c1bd00d4631c7af010b59d10e8502"
 dependencies = [
  "async-trait",
  "bytes",
