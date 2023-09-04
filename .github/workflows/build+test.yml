@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: nightly
@@ -40,7 +40,7 @@ jobs:
         haskell: true
         large-packages: false
         swap-storage: true
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: "Check for duplicate message IDs"
       run: "! grep -rEoh --exclude-dir tests --exclude-dir target 'TYPE_ID: u16 = [^;]+;' | sort | uniq -d | grep '^'"
     - uses: dtolnay/rust-toolchain@stable
@@ -83,7 +83,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
@@ -115,7 +115,7 @@ jobs:
         haskell: true
         large-packages: false
         swap-storage: true
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
@@ -135,7 +135,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions/setup-python@v4
       with:
         python-version: '3.8'
