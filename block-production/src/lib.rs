@@ -40,7 +40,8 @@ impl BlockProducer {
         // The timestamp for the block.
         timestamp: u64,
         // Proofs of any misbehavior by malicious validators. An equivocation proof may be submitted
-        // during the batch when it happened or in the next one, but not after that.
+        // during the batch when it happened or until the end of the reporting window, but not after
+        // that.
         equivocation_proofs: Vec<EquivocationProof>,
         // The transactions to be included in the block body.
         transactions: Vec<Transaction>,
@@ -68,7 +69,8 @@ impl BlockProducer {
         // The timestamp for the block.
         timestamp: u64,
         // Proofs of any misbehavior by malicious validators. An equivocation proof may be submitted
-        // during the batch when it happened or in the next one, but not after that.
+        // during the batch when it happened or until the end of the reporting window, but not after
+        // that.
         equivocation_proofs: Vec<EquivocationProof>,
         // The transactions to be included in the block body.
         transactions: Vec<Transaction>,
