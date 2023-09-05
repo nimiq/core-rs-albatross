@@ -1,8 +1,5 @@
 use nimiq_account::StakingContract;
-use nimiq_block::{
-    DoubleProposalProof, DoubleVoteProof, EquivocationProof, ForkProof, MacroBlock, MacroHeader,
-    SkipBlockInfo,
-};
+use nimiq_block::{EquivocationProof, MacroBlock, MacroHeader, SkipBlockInfo};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_database as db;
 use nimiq_keys::Address;
@@ -72,113 +69,34 @@ impl Blockchain {
         equivocation_proof: &EquivocationProof,
         txn_option: Option<&db::TransactionProxy>,
     ) -> Inherent {
-        use self::EquivocationProof::*;
-        match equivocation_proof {
-            Fork(fork) => self.inherent_from_fork_proof(block_number, fork, txn_option),
-            DoubleProposal(double_proposal) => {
-                self.inherent_from_double_proposal_proof(block_number, double_proposal, txn_option)
+        let validator = match equivocation_proof {
+            EquivocationProof::Fork(fork) => {
+                self.get_proposer_for_fork_proof(fork, txn_option)
+                    .expect("Couldn't calculate slot owner")
+                    .validator
             }
-            DoubleVote(double_vote) => {
-                self.inherent_from_double_vote_proof(block_number, double_vote, txn_option)
+            EquivocationProof::DoubleProposal(double_proposal) => {
+                self.get_proposer_for_double_proposal_proof(double_proposal, txn_option)
+                    .expect("Couldn't calculate slot owner")
+                    .validator
             }
-        }
-    }
-
-    /// It creates a jail inherent from a fork proof. It expects a *verified* fork proof!
-    pub fn inherent_from_fork_proof(
-        &self,
-        reporting_block: u32, // PITODO: we can get it from the blockchain, should be head block number + 1
-        fork_proof: &ForkProof,
-        txn_option: Option<&db::TransactionProxy>,
-    ) -> Inherent {
-        // Get the slot owner and slot number for this block number.
-        let proposer_slot = self
-            .get_proposer_for_fork_proof(fork_proof, txn_option)
-            .expect("Couldn't calculate slot owner!");
+            EquivocationProof::DoubleVote(double_vote) => {
+                // Get the validators for this epoch.
+                let validators = self
+                    .get_validators_for_double_vote_proof(double_vote, txn_option)
+                    .expect("Couldn't calculate validators");
+                // `double_vote_proof.slot_number` is checked in `DoubleVoteProof::verify`.
+                validators
+                    .get_validator_by_address(double_vote.validator_address())
+                    .expect("Validator must have been present")
+                    .clone()
+            }
+        };
 
         // If the reporting block is in a new epoch, we check if the proposer is still a validator in this epoch
         // and retrieve its new slots.
-        let new_epoch_slot_range =
-            if Policy::epoch_at(reporting_block) > Policy::epoch_at(fork_proof.block_number()) {
-                self.current_validators()
-                    .expect("We need to have validators")
-                    .get_validator_by_address(&proposer_slot.validator.address)
-                    .map(|validator| validator.slots.clone())
-            } else {
-                None
-            };
-
-        let jailed_validator = JailedValidator {
-            slots: proposer_slot.validator.slots,
-            validator_address: proposer_slot.validator.address,
-            offense_event_block: fork_proof.block_number(),
-        };
-
-        // Create the corresponding jail inherent.
-        Inherent::Jail {
-            jailed_validator,
-            new_epoch_slot_range,
-        }
-    }
-
-    /// It creates a jail inherent from a double proposal proof. It expects a *verified* double proposal proof!
-    pub fn inherent_from_double_proposal_proof(
-        &self,
-        reporting_block: u32, // PITODO: we can get it from the blockchain, should be head block number + 1
-        double_proposal_proof: &DoubleProposalProof,
-        txn_option: Option<&db::TransactionProxy>,
-    ) -> Inherent {
-        // Get the slot owner and slot number for this block number.
-        let proposer_slot = self
-            .get_proposer_for_double_proposal_proof(double_proposal_proof, txn_option)
-            .expect("Couldn't calculate slot owner!");
-
-        // If the reporting block is in a new epoch, we check if the proposer is still a validator in this epoch
-        // and retrieve its new slots.
-        let new_epoch_slot_range = if Policy::epoch_at(reporting_block)
-            > Policy::epoch_at(double_proposal_proof.block_number())
-        {
-            self.current_validators()
-                .expect("We need to have validators")
-                .get_validator_by_address(&proposer_slot.validator.address)
-                .map(|validator| validator.slots.clone())
-        } else {
-            None
-        };
-
-        let jailed_validator = JailedValidator {
-            slots: proposer_slot.validator.slots,
-            validator_address: proposer_slot.validator.address,
-            offense_event_block: double_proposal_proof.block_number(),
-        };
-
-        // Create the corresponding jail inherent.
-        Inherent::Jail {
-            jailed_validator,
-            new_epoch_slot_range,
-        }
-    }
-
-    /// It creates a jail inherent from a double vote proof. It expects a *verified* double vote proof!
-    pub fn inherent_from_double_vote_proof(
-        &self,
-        reporting_block: u32, // PITODO: we can get it from the blockchain, should be head block number + 1
-        double_vote_proof: &DoubleVoteProof,
-        txn_option: Option<&db::TransactionProxy>,
-    ) -> Inherent {
-        // Get the validators for this epoch.
-        let validators = self
-            .get_validators_for_double_vote_proof(double_vote_proof, txn_option)
-            .expect("Couldn't calculate validators");
-        // `double_vote_proof.slot_number` is checked in `DoubleVoteProof::verify`.
-        let validator = validators
-            .get_validator_by_address(double_vote_proof.validator_address())
-            .expect("Validator must have been present");
-
-        // If the reporting block is in a new epoch, we check if the proposer is still a validator in this epoch
-        // and retrieve its new slots.
-        let new_epoch_slot_range = if Policy::epoch_at(reporting_block)
-            > Policy::epoch_at(double_vote_proof.block_number())
+        let new_epoch_slot_range = if Policy::epoch_at(block_number)
+            > Policy::epoch_at(equivocation_proof.block_number())
         {
             self.current_validators()
                 .expect("We need to have validators")
@@ -189,9 +107,9 @@ impl Blockchain {
         };
 
         let jailed_validator = JailedValidator {
-            slots: validator.slots.clone(),
-            validator_address: validator.address.clone(),
-            offense_event_block: double_vote_proof.block_number(),
+            slots: validator.slots,
+            validator_address: validator.address,
+            offense_event_block: equivocation_proof.block_number(),
         };
 
         // Create the corresponding jail inherent.
