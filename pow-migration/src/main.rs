@@ -34,7 +34,7 @@ struct Args {
     /// Path to the PoS configuration file
     #[arg(short, long)]
     config: String,
-    /// PoS RPC server URL
+    /// PoW RPC server URL
     #[arg(short, long)]
     url: String,
     /// Optional PoS RPC server username
@@ -155,7 +155,7 @@ async fn main() {
         }
     };
 
-    let client = if args.username.is_some() && args.password.is_some() {
+    let pow_client = if args.username.is_some() && args.password.is_some() {
         Client::new_with_credentials(url, args.username.unwrap(), args.password.unwrap())
     } else {
         Client::new(url)
@@ -187,21 +187,21 @@ async fn main() {
     };
 
     loop {
-        let status = client.consensus().await.unwrap();
+        let status = pow_client.consensus().await.unwrap();
         if status.eq("established") {
             info!("Consensus is established");
 
             break;
         }
         info!(
-            current_block_height = client.block_number().await.unwrap(),
+            current_block_height = pow_client.block_number().await.unwrap(),
             "Consensus has not been established yet.."
         );
         sleep(Duration::from_secs(10));
     }
 
     // This tool is intended to be used past the pre-stake window
-    if client.block_number().await.unwrap()
+    if pow_client.block_number().await.unwrap()
         < block_windows.pre_stake_end + block_windows.block_confirmations
     {
         log::error!("This tool is intended to be used during the activation period");
@@ -210,7 +210,7 @@ async fn main() {
 
     // First we obtain the list of registered validators
     let registered_validators = match get_validators(
-        &client,
+        &pow_client,
         block_windows.registration_start..block_windows.registration_end,
     )
     .await
@@ -246,7 +246,7 @@ async fn main() {
         // If the validator was registered we need to check if the RPC server we are connected to
         //  has the account of the validator address in the PoW client wallet.
         // This is necessary to send validator readiness transactions.
-        let wallet_addresses = client
+        let wallet_addresses = pow_client
             .accounts()
             .await
             .expect("Failed obtaining the list of accounts owned by the RPC server");
@@ -272,7 +272,7 @@ async fn main() {
 
     // Now we obtain the stake distribution
     let (stakers, validators) = match get_stakers(
-        &client,
+        &pow_client,
         &registered_validators,
         block_windows.pre_stake_start..block_windows.pre_stake_end,
     )
@@ -298,7 +298,7 @@ async fn main() {
     let mut next_election_block;
     let mut previous_election_block;
     loop {
-        let current_height = client.block_number().await.unwrap();
+        let current_height = pow_client.block_number().await.unwrap();
         info!(current_height);
 
         // We are past the election candidate, so we are now in one of the activation windows
@@ -320,7 +320,7 @@ async fn main() {
         if !reported_ready && registered_validator {
             // Obtain all the transactions that we have sent previously.
             let transactions = get_ready_txns(
-                &client,
+                &pow_client,
                 validator_address.to_user_friendly_address(),
                 previous_election_block..next_election_block,
             )
@@ -335,7 +335,7 @@ async fn main() {
                 // Report we are ready to the Nimiq PoW chain:
                 let transaction = generate_ready_tx(validator_address.to_user_friendly_address());
 
-                match send_tx(&client, transaction).await {
+                match send_tx(&pow_client, transaction).await {
                     Ok(_) => reported_ready = true,
                     Err(_) => exit(1),
                 }
@@ -347,7 +347,7 @@ async fn main() {
 
         // Check if we have enough validators ready at this point
         let validators_status = check_validators_ready(
-            &client,
+            &pow_client,
             validators.clone(),
             previous_election_block..next_election_block,
         )
@@ -368,7 +368,7 @@ async fn main() {
         sleep(Duration::from_secs(60));
 
         // We need to check if we are still in the same readiness window.
-        if next_election_block < client.block_number().await.unwrap() {
+        if next_election_block < pow_client.block_number().await.unwrap() {
             reported_ready = false;
         }
     }
@@ -380,13 +380,13 @@ async fn main() {
 
     //  We wait until the candidate block is mined
     loop {
-        if client.block_number().await.unwrap() >= candidate {
+        if pow_client.block_number().await.unwrap() >= candidate {
             info!("We are ready to start the migration process..");
             break;
         } else {
             info!(
                 election_candidate = candidate,
-                current_height = client.block_number().await.unwrap()
+                current_height = pow_client.block_number().await.unwrap()
             );
             sleep(Duration::from_secs(60));
         }
@@ -407,14 +407,18 @@ async fn main() {
 
     loop {
         // If we have enough confirmations, we can start the 2.0 client
-        if client.block_number().await.unwrap() >= candidate + block_windows.block_confirmations {
+        if pow_client.block_number().await.unwrap() >= candidate + block_windows.block_confirmations
+        {
             info!("We are ready to start the Nimiq PoS Client..");
             break;
         } else {
             // Start the PoS genesis generation process
 
             // Obtain the genesis candidate block
-            let block = client.get_block_by_number(candidate, false).await.unwrap();
+            let block = pow_client
+                .get_block_by_number(candidate, false)
+                .await
+                .unwrap();
 
             let current_hash = block.hash.clone();
             info!(current_hash = current_hash, "Current genesis hash");
@@ -430,7 +434,7 @@ async fn main() {
                 };
 
                 let genesis_config = match get_pos_genesis(
-                    &client,
+                    &pow_client,
                     &pow_registration_window,
                     config.network_id,
                     env.clone(),
@@ -462,7 +466,7 @@ async fn main() {
                 previous_hash = current_hash;
             } else {
                 // Wait for more confirmations
-                let current_confirmations = client.block_number().await.unwrap() - candidate;
+                let current_confirmations = pow_client.block_number().await.unwrap() - candidate;
                 info!(
                     current_confirmations,
                     "Waiting for more confirmations to start the Nimiq PoS client"
@@ -481,7 +485,7 @@ async fn main() {
     // Set the genesis file environment variable
     std::env::set_var(genesis_env_var_name, genesis_file);
 
-    // Launch the client
+    // Launch the PoS client
     let mut child = match Command::new(pos_client).arg("-c").arg(args.config).spawn() {
         Ok(child) => child,
         Err(error) => {
@@ -490,7 +494,7 @@ async fn main() {
         }
     };
 
-    // Check that we were able to launch the client
+    // Check that we were able to launch the PoS client
     match child.try_wait() {
         Ok(Some(status)) => log::error!(%status, "Pos client unexpectedly exited"),
         Ok(None) => log::info!(pid = child.id(), "Pos client running"),
