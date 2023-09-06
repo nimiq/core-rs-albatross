@@ -1,11 +1,15 @@
 use std::sync::Arc;
 
 use nimiq_account::{BlockLogger, BlockState};
-use nimiq_block::{ForkProof, MacroBlock, MacroBody, MacroHeader, SkipBlockInfo};
+use nimiq_block::{
+    Block, DoubleProposalProof, DoubleVoteProof, ForkProof, MacroBlock, MacroBody, MacroHeader,
+    SkipBlockInfo, TendermintIdentifier, TendermintStep, TendermintVote,
+};
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_bls::AggregateSignature;
 use nimiq_database::{traits::WriteTransaction, volatile::VolatileDatabase};
-use nimiq_hash::{Blake2bHash, Blake2sHash};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
 use nimiq_keys::Address;
 use nimiq_primitives::{
     coin::Coin,
@@ -14,7 +18,10 @@ use nimiq_primitives::{
     slots_allocation::{JailedValidator, PenalizedSlot},
 };
 use nimiq_test_log::test;
-use nimiq_test_utils::block_production::TemporaryBlockProducer;
+use nimiq_test_utils::{
+    block_production::TemporaryBlockProducer,
+    blockchain::{signing_key, voting_key},
+};
 use nimiq_transaction::inherent::Inherent;
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfSeed;
@@ -464,6 +471,177 @@ fn it_correctly_creates_inherents_in_next_epoch_from_fork_proof() {
                 offense_event_block: micro_block_fork1.block_number(),
             },
             new_epoch_slot_range: Some(current_epoch_validator.slots)
+        }]
+    );
+}
+
+/// Create a block with double proposal proof and check that correct inherents are produced.
+#[test]
+fn it_correctly_creates_inherents_from_double_proposal_proof() {
+    let signing_key = signing_key();
+
+    let temp_producer = TemporaryBlockProducer::new();
+    for _ in 0..Policy::blocks_per_batch() - 1 {
+        temp_producer.next_block(vec![], false);
+    }
+    let prev_vrf_seed = temp_producer.blockchain.read().head().seed().clone();
+    let header1 = temp_producer
+        .next_block_no_push(vec![], false)
+        .unwrap_macro()
+        .header;
+    let header2 = temp_producer
+        .next_block(vec![], false)
+        .unwrap_macro()
+        .header;
+    let header1_hash: Blake2bHash = header1.hash();
+    let header2_hash: Blake2bHash = header2.hash();
+    let justification1 = signing_key.sign(header1_hash.as_bytes());
+    let justification2 = signing_key.sign(header2_hash.as_bytes());
+
+    // Produce the double proposal proof.
+    let double_proposal_proof = DoubleProposalProof::new(
+        header1.clone(),
+        justification1,
+        prev_vrf_seed.clone(),
+        header2,
+        justification2,
+        prev_vrf_seed,
+    );
+
+    let mut reporting_micro_block = temp_producer.next_block(vec![], false).unwrap_micro();
+    reporting_micro_block
+        .body
+        .as_mut()
+        .unwrap()
+        .equivocation_proofs
+        .push(double_proposal_proof.clone().into());
+    let blockchain = temp_producer.blockchain.read();
+
+    // Check that the double proposal proof is valid.
+    blockchain
+        .verify_equivocation_proofs(
+            &Block::Micro(reporting_micro_block),
+            &blockchain.read_transaction(),
+        )
+        .unwrap();
+
+    let blockchain = temp_producer.blockchain.read();
+    let (validator, _slot) = blockchain
+        .get_slot_owner_at(header1.block_number, header1.round, None)
+        .unwrap();
+
+    // Create the inherents from the double proposal proof.
+    let inherents = blockchain.create_punishment_inherents(
+        header1.block_number + 1,
+        &[double_proposal_proof.into()],
+        None,
+        None,
+    );
+
+    // Check inherents are correct.
+    assert_eq!(
+        inherents,
+        vec![Inherent::Jail {
+            jailed_validator: JailedValidator {
+                slots: validator.slots,
+                validator_address: validator.address,
+                offense_event_block: header1.block_number,
+            },
+            new_epoch_slot_range: None
+        }]
+    );
+}
+
+/// Create a block with double vote proof and check that correct inherents are produced.
+#[test]
+fn it_correctly_creates_inherents_from_double_vote_proof() {
+    let voting_key = voting_key();
+
+    let temp_producer = TemporaryBlockProducer::new();
+    for _ in 0..Policy::blocks_per_batch() - 1 {
+        temp_producer.next_block(vec![], false);
+    }
+    let header = temp_producer
+        .next_block(vec![], false)
+        .unwrap_macro()
+        .header;
+
+    // Produce the double vote proof.
+    let validators = temp_producer
+        .blockchain
+        .read()
+        .get_validators_for_epoch(Policy::epoch_at(header.block_number), None)
+        .unwrap();
+    let validator = validators.validators[0].clone();
+    let tendermint_id = TendermintIdentifier {
+        block_number: header.block_number,
+        round_number: header.round,
+        step: TendermintStep::PreVote,
+    };
+    let signature1 = voting_key.sign(&TendermintVote {
+        proposal_hash: None,
+        id: tendermint_id.clone(),
+    });
+    let signature2 = voting_key.sign(&TendermintVote {
+        proposal_hash: Some(Blake2sHash::default()),
+        id: tendermint_id.clone(),
+    });
+    let slots1 = validator.slots.clone();
+    let mut slots2 = validator.slots.clone();
+    slots2.next().unwrap();
+    let double_vote_proof = DoubleVoteProof::new(
+        tendermint_id,
+        validator.address,
+        None,
+        Some(Blake2sHash::default()),
+        AggregateSignature::from_signatures(
+            &slots1.clone().map(|_| signature1).collect::<Vec<_>>(),
+        ),
+        AggregateSignature::from_signatures(
+            &slots2.clone().map(|_| signature2).collect::<Vec<_>>(),
+        ),
+        slots1.clone().map(|i| i.into()).collect(),
+        slots2.clone().map(|i| i.into()).collect(),
+    );
+    let mut reporting_micro_block = temp_producer.next_block(vec![], false).unwrap_micro();
+    reporting_micro_block
+        .body
+        .as_mut()
+        .unwrap()
+        .equivocation_proofs
+        .push(double_vote_proof.clone().into());
+
+    let blockchain = temp_producer.blockchain.read();
+    let (validator, _slot) = blockchain
+        .get_slot_owner_at(header.block_number, header.round, None)
+        .unwrap();
+
+    // Check that the double vote proof is valid.
+    blockchain
+        .verify_equivocation_proofs(
+            &Block::Micro(reporting_micro_block),
+            &blockchain.read_transaction(),
+        )
+        .unwrap();
+
+    // Create the inherents from the double vote proof.
+    let inherents = blockchain.create_punishment_inherents(
+        header.block_number + 1,
+        &[double_vote_proof.into()],
+        None,
+        None,
+    );
+
+    // Check inherents are correct.
+    assert_eq!(
+        inherents,
+        vec![Inherent::Jail {
+            jailed_validator: JailedValidator {
+                slots: validator.slots,
+                validator_address: validator.address,
+                offense_event_block: header.block_number,
+            },
+            new_epoch_slot_range: None
         }]
     );
 }

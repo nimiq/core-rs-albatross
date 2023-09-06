@@ -1,6 +1,9 @@
 use std::path::Path;
 
-use nimiq_block::{Block, BlockError, DoubleProposalProof, EquivocationProofError, ForkProof};
+use nimiq_block::{
+    Block, BlockError, DoubleProposalProof, DoubleVoteProof, EquivocationProofError, ForkProof,
+    TendermintIdentifier, TendermintStep,
+};
 use nimiq_block_production::test_custom_block::{
     next_macro_block, next_micro_block, next_skip_block, BlockConfig,
 };
@@ -10,6 +13,7 @@ use nimiq_blockchain_interface::{
     PushError::{InvalidBlock, InvalidEquivocationProof},
     PushResult,
 };
+use nimiq_bls::AggregateSignature;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
 use nimiq_keys::KeyPair;
 use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy};
@@ -487,6 +491,51 @@ fn it_validates_double_proposal_proofs() {
                 header2,
                 justification2,
                 VrfSeed::default(),
+            )
+            .into()],
+            test_macro: false,
+            test_election: false,
+            ..Default::default()
+        },
+        Err(InvalidEquivocationProof(
+            EquivocationProofError::InvalidJustification,
+        )),
+    )
+}
+
+#[test]
+fn it_validates_double_vote_proofs() {
+    let temp_producer = TemporaryBlockProducer::new();
+    for _ in 0..Policy::blocks_per_batch() - 1 {
+        temp_producer.next_block(vec![], false);
+    }
+    let macro_header = temp_producer
+        .next_block(vec![], false)
+        .unwrap_macro()
+        .header;
+
+    let validators = temp_producer
+        .blockchain
+        .read()
+        .get_validators_for_epoch(Policy::epoch_at(macro_header.block_number), None)
+        .unwrap();
+    let validator = validators.validators[0].clone();
+
+    expect_push_micro_block(
+        BlockConfig {
+            equivocation_proofs: vec![DoubleVoteProof::new(
+                TendermintIdentifier {
+                    block_number: macro_header.block_number,
+                    round_number: 0,
+                    step: TendermintStep::PreVote,
+                },
+                validator.address,
+                None,
+                Some(Blake2sHash::default()),
+                AggregateSignature::new(),
+                AggregateSignature::new(),
+                validator.slots.clone().map(|i| i.into()).collect(),
+                validator.slots.clone().map(|i| i.into()).collect(),
             )
             .into()],
             test_macro: false,
