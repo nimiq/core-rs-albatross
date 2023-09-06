@@ -1,29 +1,15 @@
-use std::{
-    fs,
-    process::{exit, Command},
-    thread::sleep,
-    time::Duration,
-};
+use std::{fs, process::exit, time::Duration};
 
 use clap::Parser;
 use convert_case::{Case, Casing};
 use log::{info, level_filters::LevelFilter};
 use nimiq_lib::config::{config::ClientConfig, config_file::ConfigFile};
 use nimiq_pow_migration::{
-    genesis::{
-        get_pos_genesis,
-        types::{PoSRegisteredAgents, PoWRegistrationWindow},
-        write_pos_genesis,
-    },
-    get_block_windows,
-    monitor::{
-        check_validators_ready, generate_ready_tx, get_ready_txns, send_tx,
-        types::ValidatorsReadiness,
-    },
-    state::{get_stakers, get_validators},
+    genesis::write_pos_genesis, get_block_windows, launch_pos_client, migrate,
 };
 use nimiq_primitives::networks::NetworkId;
 use nimiq_rpc::Client;
+use tokio::time::sleep;
 use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 use url::Url;
 
@@ -186,6 +172,7 @@ async fn main() {
         exit(1);
     };
 
+    // Check to see if the client already has consensus
     loop {
         let status = pow_client.consensus().await.unwrap();
         if status.eq("established") {
@@ -197,7 +184,7 @@ async fn main() {
             current_block_height = pow_client.block_number().await.unwrap(),
             "Consensus has not been established yet.."
         );
-        sleep(Duration::from_secs(10));
+        sleep(Duration::from_secs(10)).await;
     }
 
     // This tool is intended to be used past the pre-stake window
@@ -207,192 +194,6 @@ async fn main() {
         log::error!("This tool is intended to be used during the activation period");
         exit(1);
     }
-
-    // First we obtain the list of registered validators
-    let registered_validators = match get_validators(
-        &pow_client,
-        block_windows.registration_start..block_windows.registration_end,
-    )
-    .await
-    {
-        Ok(validators) => validators,
-        Err(error) => {
-            log::error!(?error, "Error obtaining the list of registered validators");
-            exit(1)
-        }
-    };
-
-    log::debug!("This is the list of registered validators:");
-
-    let mut registered_validator = false;
-
-    for validator in &registered_validators {
-        if validator.validator.validator_address == validator_address {
-            registered_validator = true;
-        }
-
-        log::debug!(
-            validator_address = validator
-                .validator
-                .validator_address
-                .to_user_friendly_address()
-        );
-    }
-
-    if !registered_validator {
-        log::warn!("The validator address that is being used was not registered before! ");
-        log::warn!("Therefore this validator cannot participate in the readiness voting process");
-    } else {
-        // If the validator was registered we need to check if the RPC server we are connected to
-        //  has the account of the validator address in the PoW client wallet.
-        // This is necessary to send validator readiness transactions.
-        let wallet_addresses = pow_client
-            .accounts()
-            .await
-            .expect("Failed obtaining the list of accounts owned by the RPC server");
-
-        let mut imported_address = false;
-
-        for account in wallet_addresses {
-            if let nimiq_rpc::primitives::Account::Basic(basic_account) = account {
-                if basic_account.address == validator_address.to_user_friendly_address() {
-                    imported_address = true;
-                    break;
-                }
-            }
-        }
-
-        if !imported_address {
-            log::error!(
-                "The validator was registered but its account was not imported into the PoW client"
-            );
-            exit(1)
-        }
-    }
-
-    // Now we obtain the stake distribution
-    let (stakers, validators) = match get_stakers(
-        &pow_client,
-        &registered_validators,
-        block_windows.pre_stake_start..block_windows.pre_stake_end,
-    )
-    .await
-    {
-        Ok((stakers, validators)) => (stakers, validators),
-        Err(error) => {
-            log::error!(?error, "Error obtaining the list of stakers");
-            exit(1)
-        }
-    };
-
-    log::debug!("This is the list of stakers:");
-
-    for staker in &stakers {
-        log::debug!(
-            staker_address = %staker.staker_address,
-            balance = %staker.balance
-        );
-    }
-
-    let mut reported_ready = false;
-    let mut next_election_block;
-    let mut previous_election_block;
-    loop {
-        let current_height = pow_client.block_number().await.unwrap();
-        info!(current_height);
-
-        // We are past the election candidate, so we are now in one of the activation windows
-        if current_height > block_windows.election_candidate {
-            // First we calculate how many blocks past the candidate we are currently at
-            let diff = current_height - block_windows.election_candidate;
-            // We calculate in which activation window we are
-            let mul = diff / block_windows.readiness_window;
-
-            previous_election_block =
-                block_windows.election_candidate + mul * block_windows.readiness_window;
-            next_election_block =
-                block_windows.election_candidate + (mul + 1) * block_windows.readiness_window;
-        } else {
-            next_election_block = block_windows.election_candidate;
-            previous_election_block = block_windows.pre_stake_end;
-        }
-
-        if !reported_ready && registered_validator {
-            // Obtain all the transactions that we have sent previously.
-            let transactions = get_ready_txns(
-                &pow_client,
-                validator_address.to_user_friendly_address(),
-                previous_election_block..next_election_block,
-            )
-            .await;
-
-            if transactions.is_empty() {
-                log::info!(
-                    previous_election_block,
-                    next_election_block,
-                    "We didn't find a ready transaction from our validator in this window"
-                );
-                // Report we are ready to the Nimiq PoW chain:
-                let transaction = generate_ready_tx(validator_address.to_user_friendly_address());
-
-                match send_tx(&pow_client, transaction).await {
-                    Ok(_) => reported_ready = true,
-                    Err(_) => exit(1),
-                }
-            } else {
-                log::info!("We found a ready transaction from our validator");
-                reported_ready = true;
-            }
-        }
-
-        // Check if we have enough validators ready at this point
-        let validators_status = check_validators_ready(
-            &pow_client,
-            validators.clone(),
-            previous_election_block..next_election_block,
-        )
-        .await;
-        match validators_status {
-            ValidatorsReadiness::NotReady(stake) => {
-                info!(stake_ready = %stake, "Not enough validators are ready yet",);
-            }
-            ValidatorsReadiness::Ready(stake) => {
-                info!(
-                    stake_ready = %stake,
-                    "Enough validators are ready to start the PoS chain",
-                );
-                break;
-            }
-        }
-
-        sleep(Duration::from_secs(60));
-
-        // We need to check if we are still in the same readiness window.
-        if next_election_block < pow_client.block_number().await.unwrap() {
-            reported_ready = false;
-        }
-    }
-
-    // Now that we have enough validators ready, we know the exact block that we are going to use
-    let candidate = next_election_block;
-
-    info!(next_election_candidate = candidate);
-
-    //  We wait until the candidate block is mined
-    loop {
-        if pow_client.block_number().await.unwrap() >= candidate {
-            info!("We are ready to start the migration process..");
-            break;
-        } else {
-            info!(
-                election_candidate = candidate,
-                current_height = pow_client.block_number().await.unwrap()
-            );
-            sleep(Duration::from_secs(60));
-        }
-    }
-
-    let mut previous_hash = "0".to_string();
 
     // Create directory where the genesis file will be written if it doesn't exist
     let genesis_dir = current_exe_dir.join("genesis");
@@ -405,99 +206,41 @@ async fn main() {
     let genesis_file =
         genesis_dir.join(config.network_id.to_string().to_case(Case::Kebab) + ".toml");
 
-    loop {
-        // If we have enough confirmations, we can start the 2.0 client
-        if pow_client.block_number().await.unwrap() >= candidate + block_windows.block_confirmations
-        {
-            info!("We are ready to start the Nimiq PoS Client..");
-            break;
-        } else {
-            // Start the PoS genesis generation process
-
-            // Obtain the genesis candidate block
-            let block = pow_client
-                .get_block_by_number(candidate, false)
-                .await
-                .unwrap();
-
-            let current_hash = block.hash.clone();
-            info!(current_hash = current_hash, "Current genesis hash");
-
-            if previous_hash != current_hash {
-                // Start the genesis generation process
-                let pow_registration_window = PoWRegistrationWindow {
-                    pre_stake_start: block_windows.pre_stake_start,
-                    pre_stake_end: block_windows.pre_stake_end,
-                    validator_start: block_windows.registration_start,
-                    final_block: block.hash,
-                    confirmations: block_windows.block_confirmations,
-                };
-
-                let genesis_config = match get_pos_genesis(
-                    &pow_client,
-                    &pow_registration_window,
-                    config.network_id,
-                    env.clone(),
-                    Some(PoSRegisteredAgents {
-                        validators: validators.clone(),
-                        stakers: stakers.clone(),
-                    }),
-                )
-                .await
-                {
-                    Ok(config) => config,
-                    Err(error) => {
-                        log::error!(?error, "Failed to build PoS genesis");
-                        exit(1);
-                    }
-                };
-
-                // Write the genesis into the FS
-                if let Err(error) = write_pos_genesis(&genesis_file, genesis_config) {
-                    log::error!(?error, "Could not write genesis config file");
-                    exit(1);
-                }
-                log::info!(
-                    filename = ?genesis_file,
-                    "Finished writing PoS genesis to file"
-                );
-
-                // Update block hash
-                previous_hash = current_hash;
-            } else {
-                // Wait for more confirmations
-                let current_confirmations = pow_client.block_number().await.unwrap() - candidate;
-                info!(
-                    current_confirmations,
-                    "Waiting for more confirmations to start the Nimiq PoS client"
-                );
-                sleep(Duration::from_secs(60));
-            }
-        }
-    }
-
-    // Start the nimiq PoS client with the generated genesis file
-    log::info!(
-        filename = ?genesis_file,
-        "Launching PoS client with generated genesis"
-    );
-
-    // Set the genesis file environment variable
-    std::env::set_var(genesis_env_var_name, genesis_file);
-
-    // Launch the PoS client
-    let mut child = match Command::new(pos_client).arg("-c").arg(args.config).spawn() {
-        Ok(child) => child,
+    // Do the migration
+    let genesis_config = match migrate(
+        &pow_client,
+        block_windows,
+        env,
+        &validator_address,
+        config.network_id,
+    )
+    .await
+    {
+        Ok(genesis_config) => genesis_config,
         Err(error) => {
-            log::error!(?error, "Could not launch PoS client");
+            log::error!(?error, "Could not migrate");
             exit(1);
         }
     };
 
-    // Check that we were able to launch the PoS client
-    match child.try_wait() {
-        Ok(Some(status)) => log::error!(%status, "Pos client unexpectedly exited"),
-        Ok(None) => log::info!(pid = child.id(), "Pos client running"),
-        Err(error) => log::error!(?error, "Error waiting for the PoS client to run"),
+    // Write the genesis into the FS
+    if let Err(error) = write_pos_genesis(&genesis_file, genesis_config) {
+        log::error!(?error, "Could not write genesis config file");
+        exit(1);
+    }
+    log::info!(
+        filename = ?genesis_file,
+        "Finished writing PoS genesis to file"
+    );
+
+    // Launch PoS client
+    if let Err(error) = launch_pos_client(
+        &pos_client,
+        &genesis_file,
+        &args.config,
+        genesis_env_var_name,
+    ) {
+        log::error!(?error, "Failed to launch POS client");
+        exit(1);
     }
 }
