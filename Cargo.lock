@@ -4422,6 +4422,7 @@ dependencies = [
  "nimiq-lib",
  "nimiq-primitives",
  "nimiq-serde",
+ "nimiq-test-log",
  "nimiq-transaction",
  "nimiq-vrf",
  "nimiq_rpc",

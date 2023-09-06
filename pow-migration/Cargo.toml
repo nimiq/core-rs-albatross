@@ -67,3 +67,8 @@ url = "2.4"
 
 [dev-dependencies]
 serde_json = "1.0"
+
+nimiq-test-log = { workspace = true }
+
+[features]
+pow-migration-tests = []
