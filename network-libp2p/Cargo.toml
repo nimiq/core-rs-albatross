@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 async-trait = "0.1"
 base64 = "0.21"
 bitflags = "1.2"
-bytes = "1.4"
+bytes = "1.5"
 futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
 instant = { version = "0.1", features = [ "wasm-bindgen" ] }
