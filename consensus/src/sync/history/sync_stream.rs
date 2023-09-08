@@ -88,6 +88,11 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
     fn poll_cluster(&mut self, cx: &mut Context<'_>) {
         // Initialize active_cluster if there is none.
         if self.active_cluster.is_none() {
+            // Wait for all pending jobs to finish first to ensure that blockchain is up to date.
+            // XXX This breaks pipelining across clusters.
+            if !self.job_queue.is_empty() {
+                return;
+            }
             self.active_cluster = self.pop_next_cluster();
         }
 

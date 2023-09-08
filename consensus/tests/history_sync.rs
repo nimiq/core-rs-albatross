@@ -11,7 +11,10 @@ use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::{
     consensus::Consensus,
     sync::{
-        history::{cluster::SyncCluster, HistoryMacroSync},
+        history::{
+            cluster::{HistoryChunkRequest, SyncCluster},
+            HistoryMacroSync,
+        },
         syncer_proxy::SyncerProxy,
     },
 };
@@ -311,17 +314,18 @@ async fn sync_ingredients() {
     );
 
     // Request history chunk of epoch 1.
-    let chunk =
-        SyncCluster::request_history_chunk(Arc::clone(&net2), peer_id, 1, block1.block_number(), 0)
-            .await
-            .expect("Should yield history chunk")
-            .chunk
-            .expect("Should yield history chunk");
+    let chunk = SyncCluster::request_history_chunk(
+        Arc::clone(&net2),
+        peer_id,
+        HistoryChunkRequest::from_block(block1, 0),
+    )
+    .await
+    .expect("Should yield history chunk");
 
     assert_eq!(chunk.history.len(), 3);
     assert_eq!(
         chunk.verify(
-            consensus1
+            &consensus1
                 .blockchain
                 .read()
                 .election_head()
@@ -367,17 +371,18 @@ async fn sync_ingredients() {
     );
 
     // Request HistoryChunk for epoch 2 containing the checkpoint
-    let chunk =
-        SyncCluster::request_history_chunk(Arc::clone(&net2), peer_id, 2, block2.block_number(), 0)
-            .await
-            .expect("Should yield history chunk")
-            .chunk
-            .expect("Should yield history chunk");
+    let chunk = SyncCluster::request_history_chunk(
+        Arc::clone(&net2),
+        peer_id,
+        HistoryChunkRequest::from_block(&block2, 0),
+    )
+    .await
+    .expect("Should yield history chunk");
 
     assert_eq!(chunk.history.len(), 1);
     assert_eq!(
         chunk.verify(
-            consensus1
+            &consensus1
                 .blockchain
                 .read()
                 .macro_head()

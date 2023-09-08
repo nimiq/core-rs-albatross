@@ -129,6 +129,16 @@ impl BatchSetInfo {
             .map(|batch_set| batch_set.history_len.size())
             .unwrap_or(0)
     }
+
+    pub fn final_macro_block(&self) -> &MacroBlock {
+        self.election_macro_block.as_ref().unwrap_or_else(|| {
+            &self
+                .batch_sets
+                .last()
+                .expect("BatchSet must not be empty")
+                .macro_block
+        })
+    }
 }
 
 impl Debug for BatchSetInfo {

@@ -32,9 +32,9 @@ impl Debug for HistoryTreeChunk {
 
 impl HistoryTreeChunk {
     /// Tries to verify
-    pub fn verify(&self, expected_root: Blake2bHash, leaf_index: usize) -> Option<bool> {
+    pub fn verify(&self, expected_root: &Blake2bHash, leaf_index: usize) -> Option<bool> {
         self.proof
-            .verify_with_start(&expected_root, leaf_index, &self.history)
+            .verify_with_start(expected_root, leaf_index, &self.history)
             .ok()
     }
 }
