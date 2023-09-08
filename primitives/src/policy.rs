@@ -6,6 +6,12 @@ use once_cell::sync::OnceCell;
 /// Global policy
 static GLOBAL_POLICY: OnceCell<Policy> = OnceCell::new();
 
+#[cfg_attr(
+    feature = "ts-types",
+    derive(nimiq_serde::Serialize),
+    serde(rename_all = "camelCase"),
+    wasm_bindgen::prelude::wasm_bindgen
+)]
 #[derive(Clone, Copy)]
 pub struct Policy {
     /// Length of a batch including the macro block
@@ -180,8 +186,17 @@ impl Policy {
             .state_chunks_max_size
     }
 
+    #[inline]
+    pub fn get_or_init(policy: Policy) -> Policy {
+        *GLOBAL_POLICY.get_or_init(|| policy)
+    }
+}
+
+#[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen)]
+impl Policy {
     /// Returns the epoch number at a given block number (height).
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = epochAt))]
     pub fn epoch_at(block_number: u32) -> u32 {
         // If the block number is less than the genesis, we are at epoch 0
         if block_number <= Self::genesis_block_number() {
@@ -196,6 +211,7 @@ impl Policy {
     /// Returns the epoch index at a given block number. The epoch index is the number of a block relative
     /// to the epoch it is in. For example, the first block of any epoch always has an epoch index of 0.
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = epochIndexAt))]
     pub fn epoch_index_at(block_number: u32) -> u32 {
         // Any block before the genesis is considered to be part of epoch 0
         if block_number < Self::genesis_block_number() {
@@ -209,6 +225,7 @@ impl Policy {
 
     /// Returns the batch number at a given `block_number` (height)
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = batchAt))]
     pub fn batch_at(block_number: u32) -> u32 {
         // If the block number is less than the genesis, we are at batch 0
         if block_number <= Self::genesis_block_number() {
@@ -223,6 +240,7 @@ impl Policy {
     /// Returns the batch index at a given block number. The batch index is the number of a block relative
     /// to the batch it is in. For example, the first block of any batch always has an batch index of 0.
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = batchIndexAt))]
     pub fn batch_index_at(block_number: u32) -> u32 {
         // No batches before the genesis block number
         if block_number < Self::genesis_block_number() {
@@ -236,6 +254,7 @@ impl Policy {
 
     /// Returns the number (height) of the next election macro block after a given block number (height).
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = electionBlockAfter))]
     pub fn election_block_after(block_number: u32) -> u32 {
         // The next election block of any block before the genesis, is the genesis itself
         if block_number < Self::genesis_block_number() {
@@ -251,6 +270,7 @@ impl Policy {
     /// Returns the block number (height) of the preceding election macro block before a given block number (height).
     /// If the given block number is an election macro block, it returns the election macro block before it.
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = electionBlockBefore))]
     pub fn election_block_before(block_number: u32) -> u32 {
         match block_number.cmp(&Self::genesis_block_number()) {
             std::cmp::Ordering::Less => {
@@ -272,6 +292,7 @@ impl Policy {
     /// Returns the block number (height) of the last election macro block at a given block number (height).
     /// If the given block number is an election macro block, then it returns that block number.
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = lastElectionBlock))]
     pub fn last_election_block(block_number: u32) -> u32 {
         // The last election block of any block before the genesis, is the genesis itself
         if block_number < Self::genesis_block_number() {
@@ -285,12 +306,14 @@ impl Policy {
 
     /// Returns a boolean expressing if the block at a given block number (height) is an election macro block.
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = isElectionBlockAt))]
     pub fn is_election_block_at(block_number: u32) -> bool {
         Self::epoch_index_at(block_number) == Self::blocks_per_epoch() - 1
     }
 
     /// Returns the block number (height) of the next macro block after a given block number (height).
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = macroBlockAfter))]
     pub fn macro_block_after(block_number: u32) -> u32 {
         // The next macro block of any block before the genesis, is the genesis itself
         if block_number < Self::genesis_block_number() {
@@ -306,6 +329,7 @@ impl Policy {
     /// Returns the block number (height) of the preceding macro block before a given block number (height).
     /// If the given block number is a macro block, it returns the macro block before it.
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = macroBlockBefore))]
     pub fn macro_block_before(block_number: u32) -> u32 {
         if block_number <= Self::genesis_block_number() {
             panic!("No macro blocks before genesis block");
@@ -320,6 +344,7 @@ impl Policy {
     /// Returns the block number (height) of the last macro block at a given block number (height).
     /// If the given block number is a macro block, then it returns that block number.
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = lastMacroBlock))]
     pub fn last_macro_block(block_number: u32) -> u32 {
         // There is no macro block before the genesis
         if block_number < Self::genesis_block_number() {
@@ -333,6 +358,7 @@ impl Policy {
 
     /// Returns a boolean expressing if the block at a given block number (height) is a macro block.
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = isMacroBlockAt))]
     pub fn is_macro_block_at(block_number: u32) -> bool {
         // No macro blocks before genesis
         if block_number < Self::genesis_block_number() {
@@ -344,6 +370,7 @@ impl Policy {
 
     /// Returns a boolean expressing if the block at a given block number (height) is a micro block.
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = isMicroBlockAt))]
     pub fn is_micro_block_at(block_number: u32) -> bool {
         // No micro blocks before genesis
         if block_number < Self::genesis_block_number() {
@@ -355,6 +382,7 @@ impl Policy {
 
     /// Returns the block number of the first block of the given epoch (which is always a micro block).
     /// If the index is out of bounds, None is returned
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = firstBlockOf))]
     pub fn first_block_of(epoch: u32) -> Option<u32> {
         if epoch == 0 {
             panic!("Called first_block_of for epoch 0");
@@ -368,6 +396,7 @@ impl Policy {
 
     /// Returns the block number of the first block of the given batch (which is always a micro block).
     /// If the index is out of bounds, None is returned
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = firstBlockOfBatch))]
     pub fn first_block_of_batch(batch: u32) -> Option<u32> {
         if batch == 0 {
             panic!("Called first_block_of_batch for batch 0");
@@ -381,6 +410,7 @@ impl Policy {
 
     /// Returns the block number of the election macro block of the given epoch (which is always the last block).
     /// If the index is out of bounds, None is returned
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = electionBlockOf))]
     pub fn election_block_of(epoch: u32) -> Option<u32> {
         epoch
             .checked_mul(Self::blocks_per_epoch())?
@@ -390,6 +420,7 @@ impl Policy {
     /// Returns the block number of the macro block (checkpoint or election) of the given batch (which
     /// is always the last block).
     /// If the index is out of bounds, None is returned
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = macroBlockOf))]
     pub fn macro_block_of(batch: u32) -> Option<u32> {
         batch
             .checked_mul(Self::blocks_per_batch())?
@@ -399,6 +430,7 @@ impl Policy {
     /// Returns a boolean expressing if the batch at a given block number (height) is the first batch
     /// of the epoch.
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = firstBatchOfEpoch))]
     pub fn first_batch_of_epoch(block_number: u32) -> bool {
         Self::epoch_index_at(block_number) < Self::blocks_per_batch()
     }
@@ -406,18 +438,21 @@ impl Policy {
     /// Returns the block height for the last block of the reporting window of a given block number.
     /// Note: This window is meant for reporting malicious behaviour (aka `jailable` behaviour).
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = lastBlockOfReportingWindow))]
     pub fn last_block_of_reporting_window(block_number: u32) -> u32 {
         block_number + Self::blocks_per_epoch()
     }
 
     /// Returns the first block after the reporting window of a given block number has ended.
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = blockAfterReportingWindow))]
     pub fn block_after_reporting_window(block_number: u32) -> u32 {
         Self::last_block_of_reporting_window(block_number) + 1
     }
 
     /// Returns the first block after the jail period of a given block number has ended.
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = blockAfterJail))]
     pub fn block_after_jail(block_number: u32) -> u32 {
         block_number + Self::blocks_per_epoch() * Self::JAIL_EPOCHS + 1
     }
@@ -427,6 +462,7 @@ impl Policy {
     /// Supply (t) = Genesis_supply + Initial_supply_velocity / Supply_decay * (1 - e^(- Supply_decay * t))
     /// Where e is the exponential function, t is the time in milliseconds since the genesis block and
     /// Genesis_supply is the supply at the genesis of the Nimiq 2.0 chain.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = supplyAt))]
     pub fn supply_at(genesis_supply: u64, genesis_time: u64, current_time: u64) -> u64 {
         assert!(current_time >= genesis_time);
 
@@ -445,16 +481,12 @@ impl Policy {
     /// I.e 1 means that the full rewards should be given, whereas 0.5 means that half of the rewards should be given
     /// The input to this function is the batch delay, in milliseconds
     /// The function is: [(1 - MINIMUM_REWARDS_PERCENTAGE) * e ^(-BLOCKS_DELAY_DECAY * t^2)] + MINIMUM_REWARDS_PERCENTAGE
+    #[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen(js_name = batchDelayPenalty))]
     pub fn batch_delay_penalty(delay: u64) -> f64 {
         let t = delay as f64;
         let exponent = -Self::BLOCKS_DELAY_DECAY * t * t;
 
         (1.0 - Self::MINIMUM_REWARDS_PERCENTAGE) * exponent.exp() + Self::MINIMUM_REWARDS_PERCENTAGE
-    }
-
-    #[inline]
-    pub fn get_or_init(policy: Policy) -> Policy {
-        *GLOBAL_POLICY.get_or_init(|| policy)
     }
 }
 

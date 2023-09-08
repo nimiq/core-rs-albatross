@@ -387,6 +387,14 @@ impl Client {
         self.inner.blockchain_head().block_number()
     }
 
+    /// Returns the policy information.
+    #[wasm_bindgen(js_name = policy)]
+    pub async fn policy(&self) -> Result<JsValue, JsError> {
+        Ok(serde_wasm_bindgen::to_value(&Policy::get_or_init(
+            Policy::default(),
+        ))?)
+    }
+
     /// Returns the current blockchain head block.
     /// Note that the web client is a light client and does not have block bodies, i.e. no transactions.
     #[wasm_bindgen(js_name = getHeadBlock)]
