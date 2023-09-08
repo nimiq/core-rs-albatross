@@ -30,6 +30,8 @@ pub struct ConfigFile {
     #[serde(default)]
     pub network: NetworkSettings,
     #[serde(default)]
+    pub tainted: TaintedSettings,
+    #[serde(default)]
     pub consensus: ConsensusSettings,
     #[serde(default)]
     pub zkp: Option<ZKPSettings>,
@@ -153,6 +155,21 @@ pub struct TlsSettings {
     /// Path to a file containing the certificates (in PEM-encoded X.509 format). In this file several certificates
     /// could be added for certificate chaining.
     pub certificates: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+/// Different knobs used to tweak the consensus mechanism and settings
+pub struct TaintedSettings {
+    #[serde(default)]
+    // Produce blocks even when is not our turn.
+    pub always_produce: bool,
+    #[serde(default)]
+    // Fork blocks (produce two different blocks at the same height)
+    pub fork_blocks: bool,
+    #[serde(default)]
+    // Produce invalid blocks
+    pub invalid_blocks: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]

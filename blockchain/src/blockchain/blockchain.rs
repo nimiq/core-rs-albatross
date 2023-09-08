@@ -60,6 +60,25 @@ pub struct Blockchain {
     pub(crate) genesis_block_number: u32,
 }
 
+pub struct TaintedConfig {
+    // Produce blocks even when is not our turn.
+    pub always_produce: bool,
+    // Fork blocks (produce two different blocks at the same height)
+    pub fork_blocks: bool,
+    // Produce invalid blocks
+    pub invalid_blocks: bool,
+}
+
+impl Default for TaintedConfig {
+    fn default() -> Self {
+        Self {
+            always_produce: false,
+            fork_blocks: false,
+            invalid_blocks: false,
+        }
+    }
+}
+
 /// Contains various blockchain configuration knobs
 pub struct BlockchainConfig {
     /// Flag indicating if the full history should be stored
@@ -67,6 +86,8 @@ pub struct BlockchainConfig {
     /// Maximum number of epochs (other than the current one) that the ChainStore will store fully.
     /// Epochs older than this number will be pruned.
     pub max_epochs_stored: u32,
+    /// Tainted configuration.
+    pub tainted_blockchain: TaintedConfig,
 }
 
 impl Default for BlockchainConfig {
@@ -74,6 +95,7 @@ impl Default for BlockchainConfig {
         Self {
             keep_history: true,
             max_epochs_stored: Policy::MIN_EPOCHS_STORED,
+            tainted_blockchain: TaintedConfig::default(),
         }
     }
 }

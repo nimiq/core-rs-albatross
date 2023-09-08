@@ -90,6 +90,31 @@ impl Default for ConsensusConfig {
     }
 }
 
+#[derive(Debug, Clone, Builder)]
+#[builder(setter(into))]
+/// Tainted Client settings configuration
+pub struct TaintedConfig {
+    #[builder(default = "false")]
+    // Produce blocks even when is not our turn.
+    pub always_produce: bool,
+    #[builder(default = "false")]
+    // Fork blocks (produce two different blocks at the same height)
+    pub fork_blocks: bool,
+    #[builder(default = "false")]
+    // Produce invalid blocks
+    pub invalid_blocks: bool,
+}
+
+impl Default for TaintedConfig {
+    fn default() -> Self {
+        TaintedConfig {
+            always_produce: false,
+            fork_blocks: false,
+            invalid_blocks: false,
+        }
+    }
+}
+
 /// Network config
 #[derive(Debug, Clone, Builder, Default)]
 #[builder(setter(into))]
@@ -608,6 +633,9 @@ pub struct ClientConfig {
     #[builder(default)]
     pub network: NetworkConfig,
 
+    /// Tainted config
+    pub tainted: TaintedConfig,
+
     /// Consensus config
     #[builder(default)]
     pub consensus: ConsensusConfig,
@@ -774,6 +802,14 @@ impl ClientConfigBuilder {
             consensus.min_peers = min_peers;
         }
         self.consensus(consensus);
+
+        let tainted = TaintedConfig {
+            always_produce: config_file.tainted.always_produce,
+            fork_blocks: config_file.tainted.fork_blocks,
+            invalid_blocks: config_file.tainted.invalid_blocks,
+        };
+
+        self.tainted(tainted);
 
         // Configure network
         self.network_id(config_file.consensus.network);
