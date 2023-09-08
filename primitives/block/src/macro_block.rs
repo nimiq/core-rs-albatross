@@ -53,11 +53,12 @@ impl MacroBlock {
             .interlink
             .clone()
             .expect("Election blocks have interlinks");
-        let number_hashes_to_update = if self.block_number() == 0 {
+        let number_hashes_to_update = if self.block_number() == Policy::genesis_block_number() {
             // 0.trailing_zeros() would be 32, thus we need an exception for it
             0
         } else {
-            (self.block_number() / Policy::blocks_per_epoch()).trailing_zeros() as usize
+            ((self.block_number() - Policy::genesis_block_number()) / Policy::blocks_per_epoch())
+                .trailing_zeros() as usize
         };
         if number_hashes_to_update > interlink.len() {
             interlink.push(self.hash());
