@@ -96,10 +96,10 @@ impl Transaction {
             nimiq_transaction::Transaction::new_extended(
                 sender.native_ref().clone(),
                 AccountType::try_from(sender_type.unwrap_or(0))?,
-                sender_data.unwrap_or(Vec::new()),
+                sender_data.unwrap_or_default(),
                 recipient.native_ref().clone(),
                 AccountType::try_from(recipient_type.unwrap_or(0))?,
-                recipient_data.unwrap_or(Vec::new()),
+                recipient_data.unwrap_or_default(),
                 Coin::try_from(value)?,
                 Coin::try_from(fee)?,
                 validity_start_height,
