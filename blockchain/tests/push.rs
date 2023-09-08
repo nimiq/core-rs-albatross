@@ -20,6 +20,7 @@ use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
+    blockchain::validator_address,
     test_rng::test_rng,
     zkp_test_data::{get_base_seed, simulate_merger_wrapper, ZKP_TEST_KEYS_PATH},
 };
@@ -444,11 +445,11 @@ fn it_validates_fork_proofs() {
     expect_push_micro_block(
         BlockConfig {
             equivocation_proofs: vec![ForkProof::new(
+                validator_address(),
                 header1,
                 justification1,
                 header2,
                 justification2,
-                VrfSeed::default(),
             )
             .into()],
             test_macro: false,
@@ -485,12 +486,11 @@ fn it_validates_double_proposal_proofs() {
     expect_push_micro_block(
         BlockConfig {
             equivocation_proofs: vec![DoubleProposalProof::new(
+                validator_address(),
                 header1,
                 justification1,
-                VrfSeed::default(),
                 header2,
                 justification2,
-                VrfSeed::default(),
             )
             .into()],
             test_macro: false,
@@ -531,10 +531,10 @@ fn it_validates_double_vote_proofs() {
                 },
                 validator.address,
                 None,
-                Some(Blake2sHash::default()),
-                AggregateSignature::new(),
                 AggregateSignature::new(),
                 validator.slots.clone().map(|i| i.into()).collect(),
+                Some(Blake2sHash::default()),
+                AggregateSignature::new(),
                 validator.slots.clone().map(|i| i.into()).collect(),
             )
             .into()],

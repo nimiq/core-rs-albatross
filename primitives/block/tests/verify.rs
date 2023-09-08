@@ -10,7 +10,7 @@ use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::{Address, KeyPair, PublicKey as SchnorrPublicKey, Signature};
 use nimiq_primitives::{networks::NetworkId, policy::Policy, slots_allocation::ValidatorsBuilder};
 use nimiq_test_log::test;
-use nimiq_test_utils::blockchain::generate_transactions;
+use nimiq_test_utils::blockchain::{generate_transactions, validator_address};
 use nimiq_transaction::ExecutedTransaction;
 use nimiq_vrf::VrfSeed;
 
@@ -291,33 +291,37 @@ fn test_verify_micro_block_body_fork_proofs() {
     };
 
     let mut micro_header_1 = micro_header.clone();
-    micro_header_1.block_number += 1;
-
-    let mut micro_header_2 = micro_header_1.clone();
-    micro_header_2.block_number += 1;
+    let mut micro_header_2 = micro_header.clone();
+    micro_header_2.timestamp += 1;
 
     let fork_proof_1 = ForkProof::new(
-        micro_header.clone(),
-        Signature::default(),
+        validator_address(),
         micro_header_1.clone(),
         Signature::default(),
-        VrfSeed::default(),
+        micro_header_2.clone(),
+        Signature::default(),
     );
+
+    micro_header_1.block_number += 1;
+    micro_header_2.block_number += 1;
 
     let fork_proof_2 = ForkProof::new(
+        validator_address(),
         micro_header_1.clone(),
         Signature::default(),
         micro_header_2.clone(),
         Signature::default(),
-        VrfSeed::default(),
     );
 
+    micro_header_1.block_number += 1;
+    micro_header_2.block_number += 1;
+
     let fork_proof_3 = ForkProof::new(
-        micro_header.clone(),
+        validator_address(),
+        micro_header_1.clone(),
         Signature::default(),
         micro_header_2.clone(),
         Signature::default(),
-        VrfSeed::default(),
     );
 
     let micro_justification = MicroJustification::Micro(Signature::default());
@@ -378,14 +382,14 @@ fn test_verify_micro_block_body_fork_proofs() {
     micro_header_large_block_number_1.block_number =
         Policy::blocks_per_epoch() + genesis_block_number;
     let mut micro_header_large_block_number_2 = micro_header_large_block_number_1.clone();
-    micro_header_large_block_number_2.block_number += 1;
+    micro_header_large_block_number_2.timestamp += 1;
     fork_proofs.pop().unwrap();
     fork_proofs.push(ForkProof::new(
+        validator_address(),
         micro_header_large_block_number_1,
         Signature::default(),
         micro_header_large_block_number_2,
         Signature::default(),
-        VrfSeed::default(),
     ));
     fork_proofs.sort_by_key(|p| EquivocationProof::from(p.clone()).sort_key());
 

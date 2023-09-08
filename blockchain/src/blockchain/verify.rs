@@ -1,6 +1,7 @@
-use nimiq_block::{Block, BlockError, BlockHeader, EquivocationProof};
+use nimiq_block::{Block, BlockError, BlockHeader};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
 use nimiq_database::TransactionProxy as DBTransaction;
+use nimiq_primitives::policy::Policy;
 
 use crate::{blockchain_state::BlockchainState, Blockchain};
 
@@ -218,26 +219,13 @@ impl Blockchain {
             .expect("Block body must be present");
 
         for equivocation_proof in &body.equivocation_proofs {
-            match equivocation_proof {
-                EquivocationProof::Fork(proof) => {
-                    let proposer_slot = self
-                        .get_proposer_for_fork_proof(proof, Some(txn))
-                        .expect("Couldn't calculate slot owner!");
-                    proof.verify(&proposer_slot.validator.signing_key)?;
-                }
-                EquivocationProof::DoubleProposal(proof) => {
-                    let proposer_slot = self
-                        .get_proposer_for_double_proposal_proof(proof, Some(txn))
-                        .expect("Couldn't calculate slot owner!");
-                    proof.verify(&proposer_slot.validator.signing_key)?;
-                }
-                EquivocationProof::DoubleVote(proof) => {
-                    let validators = self
-                        .get_validators_for_double_vote_proof(proof, Some(txn))
-                        .expect("Couldn't calculate validators");
-                    proof.verify(&validators)?;
-                }
-            }
+            let validators = &self
+                .get_validators_for_epoch(
+                    Policy::epoch_at(equivocation_proof.block_number()),
+                    Some(txn),
+                )
+                .expect("Couldn't calculate validators");
+            equivocation_proof.verify(&validators)?;
         }
         Ok(())
     }

@@ -23,6 +23,7 @@ nimiq-blockchain-interface = { workspace = true }
 nimiq-collections = { workspace = true }
 nimiq-genesis = { workspace = true, default-features = false }
 nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["policy"] }
 nimiq-utils = { workspace = true, features = ["time"] }
 nimiq-vrf = { workspace = true }

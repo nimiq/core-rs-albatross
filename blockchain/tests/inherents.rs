@@ -20,7 +20,7 @@ use nimiq_primitives::{
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
-    blockchain::{signing_key, voting_key},
+    blockchain::{signing_key, validator_address, voting_key},
 };
 use nimiq_transaction::inherent::Inherent;
 use nimiq_utils::time::OffsetTime;
@@ -330,6 +330,7 @@ fn it_correctly_creates_inherents_from_fork_proof() {
 
     // Produce and add the fork proof.
     let fork_proof = ForkProof::new(
+        validator_address(),
         micro_block_fork1.header.clone(),
         micro_block_fork1
             .justification
@@ -342,7 +343,6 @@ fn it_correctly_creates_inherents_from_fork_proof() {
             .clone()
             .unwrap()
             .unwrap_micro(),
-        micro_block_fork2.header.seed.clone(),
     );
     reporting_micro_block
         .body
@@ -415,6 +415,7 @@ fn it_correctly_creates_inherents_in_next_epoch_from_fork_proof() {
 
     // Produce and add the fork proof.
     let fork_proof = ForkProof::new(
+        validator_address(),
         micro_block_fork1.header.clone(),
         micro_block_fork1
             .justification
@@ -427,7 +428,6 @@ fn it_correctly_creates_inherents_in_next_epoch_from_fork_proof() {
             .clone()
             .unwrap()
             .unwrap_micro(),
-        micro_block_fork2.header.seed.clone(),
     );
     reporting_micro_block
         .body
@@ -484,7 +484,6 @@ fn it_correctly_creates_inherents_from_double_proposal_proof() {
     for _ in 0..Policy::blocks_per_batch() - 1 {
         temp_producer.next_block(vec![], false);
     }
-    let prev_vrf_seed = temp_producer.blockchain.read().head().seed().clone();
     let header1 = temp_producer
         .next_block_no_push(vec![], false)
         .unwrap_macro()
@@ -500,12 +499,11 @@ fn it_correctly_creates_inherents_from_double_proposal_proof() {
 
     // Produce the double proposal proof.
     let double_proposal_proof = DoubleProposalProof::new(
+        validator_address(),
         header1.clone(),
         justification1,
-        prev_vrf_seed.clone(),
         header2,
         justification2,
-        prev_vrf_seed,
     );
 
     let mut reporting_micro_block = temp_producer.next_block(vec![], false).unwrap_micro();
@@ -593,14 +591,14 @@ fn it_correctly_creates_inherents_from_double_vote_proof() {
         tendermint_id,
         validator.address,
         None,
-        Some(Blake2sHash::default()),
         AggregateSignature::from_signatures(
             &slots1.clone().map(|_| signature1).collect::<Vec<_>>(),
         ),
+        slots1.clone().map(|i| i.into()).collect(),
+        Some(Blake2sHash::default()),
         AggregateSignature::from_signatures(
             &slots2.clone().map(|_| signature2).collect::<Vec<_>>(),
         ),
-        slots1.clone().map(|i| i.into()).collect(),
         slots2.clone().map(|i| i.into()).collect(),
     );
     let mut reporting_micro_block = temp_producer.next_block(vec![], false).unwrap_micro();

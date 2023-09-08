@@ -69,30 +69,6 @@ impl Blockchain {
         equivocation_proof: &EquivocationProof,
         txn_option: Option<&db::TransactionProxy>,
     ) -> Inherent {
-        let validator = match equivocation_proof {
-            EquivocationProof::Fork(fork) => {
-                self.get_proposer_for_fork_proof(fork, txn_option)
-                    .expect("Couldn't calculate slot owner")
-                    .validator
-            }
-            EquivocationProof::DoubleProposal(double_proposal) => {
-                self.get_proposer_for_double_proposal_proof(double_proposal, txn_option)
-                    .expect("Couldn't calculate slot owner")
-                    .validator
-            }
-            EquivocationProof::DoubleVote(double_vote) => {
-                // Get the validators for this epoch.
-                let validators = self
-                    .get_validators_for_double_vote_proof(double_vote, txn_option)
-                    .expect("Couldn't calculate validators");
-                // `double_vote_proof.slot_number` is checked in `DoubleVoteProof::verify`.
-                validators
-                    .get_validator_by_address(double_vote.validator_address())
-                    .expect("Validator must have been present")
-                    .clone()
-            }
-        };
-
         // If the reporting block is in a new epoch, we check if the proposer is still a validator in this epoch
         // and retrieve its new slots.
         let new_epoch_slot_range = if Policy::epoch_at(block_number)
@@ -100,15 +76,26 @@ impl Blockchain {
         {
             self.current_validators()
                 .expect("We need to have validators")
-                .get_validator_by_address(&validator.address)
+                .get_validator_by_address(equivocation_proof.validator_address())
                 .map(|validator| validator.slots.clone())
         } else {
             None
         };
 
+        let validators = self
+            .get_validators_for_epoch(
+                Policy::epoch_at(equivocation_proof.block_number()),
+                txn_option,
+            )
+            .expect("Couldn't calculate validators");
+        // `equivocation_proof.validator_address()` is checked in `EquivocationProof::verify`.
+        let validator = validators
+            .get_validator_by_address(equivocation_proof.validator_address())
+            .expect("Validator must have been present");
+
         let jailed_validator = JailedValidator {
-            slots: validator.slots,
-            validator_address: validator.address,
+            slots: validator.slots.clone(),
+            validator_address: equivocation_proof.validator_address().clone(),
             offense_event_block: equivocation_proof.block_number(),
         };
 

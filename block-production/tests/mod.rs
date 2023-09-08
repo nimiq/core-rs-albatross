@@ -19,7 +19,7 @@ use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
     blockchain::{
         fill_micro_blocks, fill_micro_blocks_with_txns, produce_macro_blocks, sign_macro_block,
-        signing_key, voting_key,
+        signing_key, validator_address, voting_key,
     },
     test_rng::test_rng,
 };
@@ -55,9 +55,6 @@ fn it_can_produce_micro_blocks() {
 
     let bc = blockchain.upgradable_read();
 
-    // Store seed before pushing a block as it is needed for the fork proof.
-    let prev_vrf_seed = bc.head().seed().clone();
-
     // #1.0: Empty standard micro block
     let block = producer.next_micro_block(
         &bc,
@@ -92,11 +89,11 @@ fn it_can_produce_micro_blocks() {
         let hash2 = header2.hash::<Blake2bHash>();
         let justification2 = signing_key().sign(hash2.as_slice());
         ForkProof::new(
+            validator_address(),
             header1,
             justification1,
             header2,
             justification2,
-            prev_vrf_seed,
         )
     };
 

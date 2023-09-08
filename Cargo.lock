@@ -4185,6 +4185,7 @@ dependencies = [
  "nimiq-collections",
  "nimiq-genesis",
  "nimiq-hash",
+ "nimiq-keys",
  "nimiq-primitives",
  "nimiq-test-log",
  "nimiq-test-utils",
