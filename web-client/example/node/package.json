@@ -4,6 +4,9 @@
   "main": "index.js",
   "module": "index.mjs",
   "dependencies": {
-    "@nimiq/core-web": "link:../../dist"
+    "@nimiq/core-web": "../../dist"
+  },
+  "scripts": {
+    "preinstall": "cd ../.. && ./scripts/build-launcher.sh"
   }
 }
