@@ -17,7 +17,7 @@
     "client-proxy.js",
     "transfer-handlers.js"
   ],
-  "main": "./node/index.mjs",
+  "main": "./node/index.js",
   "module": "./bundler/index.js",
   "types": "./types/index.d.ts",
   "exports": {
