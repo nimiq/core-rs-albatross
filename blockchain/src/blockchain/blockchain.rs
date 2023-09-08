@@ -60,7 +60,7 @@ pub struct Blockchain {
     pub(crate) genesis_block_number: u32,
 }
 
-pub struct TaintedConfig {
+pub struct TaintedBlockchainConfig {
     // Produce blocks even when is not our turn.
     pub always_produce: bool,
     // Fork blocks (produce two different blocks at the same height)
@@ -69,7 +69,7 @@ pub struct TaintedConfig {
     pub invalid_blocks: bool,
 }
 
-impl Default for TaintedConfig {
+impl Default for TaintedBlockchainConfig {
     fn default() -> Self {
         Self {
             always_produce: false,
@@ -87,7 +87,7 @@ pub struct BlockchainConfig {
     /// Epochs older than this number will be pruned.
     pub max_epochs_stored: u32,
     /// Tainted configuration.
-    pub tainted_blockchain: TaintedConfig,
+    pub tainted_blockchain: TaintedBlockchainConfig,
 }
 
 impl Default for BlockchainConfig {
@@ -95,7 +95,7 @@ impl Default for BlockchainConfig {
         Self {
             keep_history: true,
             max_epochs_stored: Policy::MIN_EPOCHS_STORED,
-            tainted_blockchain: TaintedConfig::default(),
+            tainted_blockchain: TaintedBlockchainConfig::default(),
         }
     }
 }
