@@ -21,6 +21,7 @@ ark-ec = "0.4"
 ark-mnt6-753 = "0.4"
 ark-serialize = "0.4"
 byteorder = "1.2"
+cfg_eval = "0.1"
 hex = { version = "0.4", optional = true }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 num-traits = { version = "0.2", optional = true }

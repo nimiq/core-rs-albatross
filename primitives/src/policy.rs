@@ -8,32 +8,34 @@ use wasm_bindgen::prelude::*;
 /// Global policy
 static GLOBAL_POLICY: OnceCell<Policy> = OnceCell::new();
 
-#[cfg_attr(
-    feature = "ts-types",
-    derive(nimiq_serde::Serialize),
-    serde(rename_all = "camelCase"),
-    wasm_bindgen::prelude::wasm_bindgen
-)]
+#[cfg_attr(feature = "ts-types", cfg_eval::cfg_eval, wasm_bindgen)]
 #[derive(Clone, Copy)]
 pub struct Policy {
     /// Length of a batch including the macro block
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
     pub blocks_per_batch: u32,
     /// How many batches constitute an epoch
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
     pub batches_per_epoch: u16,
     /// Tendermint's initial timeout, in milliseconds.
     ///
     /// See <https://arxiv.org/abs/1807.04938v3> for more information.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
     pub tendermint_timeout_init: u64,
     /// Tendermint's timeout delta, in milliseconds.
     ///
     /// See <https://arxiv.org/abs/1807.04938v3> for more information.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
     pub tendermint_timeout_delta: u64,
     /// Maximum size of accounts trie chunks.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
     pub state_chunks_max_size: u32,
     /// Number of blocks a transaction is valid with Albatross consensus.
     /// This should be a multiple of `blocks_per_batch`.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
     pub transaction_validity_window: u32,
     /// Genesis block number
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
     pub genesis_block_number: u32,
 }
 
