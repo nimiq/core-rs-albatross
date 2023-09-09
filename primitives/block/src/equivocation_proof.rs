@@ -482,6 +482,7 @@ impl DoubleVoteProof {
         }
 
         // Check that at least one of the validator's slots is actually contained in both signer sets.
+        #[allow(clippy::redundant_clone)]
         if !validator_slots
             .clone()
             .any(|s| self.signers1.contains(s as usize) && self.signers2.contains(s as usize))
