@@ -510,6 +510,152 @@ impl Policy {
     }
 }
 
+// wasm_bindgen does not support exposing `pub const` struct fields, so we reimplement those consts
+// as getters when compiling for WASM.
+#[cfg(feature = "ts-types")]
+#[wasm_bindgen]
+impl Policy {
+    /// This is the address for the staking contract.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = STAKING_CONTRACT_ADDRESS))]
+    pub fn wasm_staking_contract_address() -> String {
+        Self::STAKING_CONTRACT_ADDRESS.to_user_friendly_address()
+    }
+
+    /// This is the address for the coinbase. Note that this is not a real account, it is just the
+    /// address we use to denote that some coins originated from a coinbase event.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = COINBASE_ADDRESS))]
+    pub fn wasm_coinbase_address() -> String {
+        Self::COINBASE_ADDRESS.to_user_friendly_address()
+    }
+
+    /// The maximum allowed size, in bytes, for a micro block body.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = MAX_SIZE_MICRO_BODY))]
+    pub fn wasm_max_size_micro_body() -> usize {
+        Self::MAX_SIZE_MICRO_BODY
+    }
+
+    /// The current version number of the protocol. Changing this always results in a hard fork.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = VERSION))]
+    pub fn wasm_version() -> u16 {
+        Self::VERSION
+    }
+
+    /// Number of available validator slots. Note that a single validator may own several validator slots.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = SLOTS))]
+    pub fn wasm_slots() -> u16 {
+        Self::SLOTS
+    }
+
+    /// Calculates 2f+1 slots which is the minimum number of slots necessary to produce a macro block,
+    /// a skip block and other actions.
+    /// It is also the minimum number of slots necessary to be guaranteed to have a majority of honest
+    /// slots. That's because from a total of 3f+1 slots at most f will be malicious. If in a group of
+    /// 2f+1 slots we have f malicious ones (which is the worst case scenario), that still leaves us
+    /// with f+1 honest slots. Which is more than the f slots that are not in this group (which must all
+    /// be honest).
+    /// It is calculated as `ceil(SLOTS*2/3)` and we use the formula `ceil(x/y) = (x+y-1)/y` for the
+    /// ceiling division.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = TWO_F_PLUS_ONE))]
+    pub fn wasm_two_f_plus_one() -> u16 {
+        Self::TWO_F_PLUS_ONE
+    }
+
+    /// Calculates f+1 slots which is the minimum number of slots necessary to be guaranteed to have at
+    /// least one honest slots. That's because from a total of 3f+1 slots at most f will be malicious.
+    /// It is calculated as `ceil(SLOTS/3)` and we use the formula `ceil(x/y) = (x+y-1)/y` for the
+    /// ceiling division.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = F_PLUS_ONE))]
+    pub fn wasm_f_plus_one() -> u16 {
+        Self::F_PLUS_ONE
+    }
+
+    /// The timeout in milliseconds for a validator to produce a block (2s)
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = BLOCK_PRODUCER_TIMEOUT))]
+    pub fn wasm_block_producer_timeout() -> u64 {
+        Self::BLOCK_PRODUCER_TIMEOUT
+    }
+
+    /// The optimal time in milliseconds between blocks (1s)
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = BLOCK_SEPARATION_TIME))]
+    pub fn wasm_block_separation_time() -> u64 {
+        Self::BLOCK_SEPARATION_TIME
+    }
+
+    /// Minimum number of epochs that the ChainStore will store fully
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = MIN_EPOCHS_STORED))]
+    pub fn wasm_min_epochs_stored() -> u32 {
+        Self::MIN_EPOCHS_STORED
+    }
+
+    /// The maximum drift, in milliseconds, that is allowed between any block's timestamp and the node's
+    /// system time. We only care about drifting to the future.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = TIMESTAMP_MAX_DRIFT))]
+    pub fn wasm_timestamp_max_drift() -> u64 {
+        Self::TIMESTAMP_MAX_DRIFT
+    }
+
+    /// The slope of the exponential decay used to punish validators for not producing block in time
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = BLOCKS_DELAY_DECAY))]
+    pub fn wasm_blocks_delay_decay() -> f64 {
+        Self::BLOCKS_DELAY_DECAY
+    }
+
+    /// The minimum rewards percentage that we allow
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = MINIMUM_REWARDS_PERCENTAGE))]
+    pub fn wasm_minimum_rewards_percentage() -> f64 {
+        Self::MINIMUM_REWARDS_PERCENTAGE
+    }
+
+    /// The deposit necessary to create a validator in Lunas (1 NIM = 100,000 Lunas).
+    /// A validator is someone who actually participates in block production. They are akin to miners
+    /// in proof-of-work.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = VALIDATOR_DEPOSIT))]
+    pub fn wasm_validator_deposit() -> u64 {
+        Self::VALIDATOR_DEPOSIT
+    }
+
+    /// The number of epochs a validator is put in jail for. The jailing only happens for severe offenses.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = JAIL_EPOCHS))]
+    pub fn wasm_jail_epochs() -> u32 {
+        Self::JAIL_EPOCHS
+    }
+
+    /// Total supply in units.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = TOTAL_SUPPLY))]
+    pub fn wasm_total_supply() -> u64 {
+        Self::TOTAL_SUPPLY
+    }
+
+    /// This is the number of Lunas (1 NIM = 100,000 Lunas) created by millisecond at the genesis of the
+    /// Nimiq 2.0 chain. The velocity then decreases following the formula:
+    /// Supply_velocity (t) = Initial_supply_velocity * e^(- Supply_decay * t)
+    /// Where e is the exponential function and t is the time in milliseconds since the genesis block.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = INITIAL_SUPPLY_VELOCITY))]
+    pub fn wasm_initial_supply_velocity() -> f64 {
+        Self::INITIAL_SUPPLY_VELOCITY
+    }
+
+    /// The supply decay is a constant that is calculated so that the supply velocity decreases at a
+    /// steady 1.47% per year.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = SUPPLY_DECAY))]
+    pub fn wasm_supply_decay() -> f64 {
+        Self::SUPPLY_DECAY
+    }
+
+    /// The maximum size of the BLS public key cache.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = BLS_CACHE_MAX_CAPACITY))]
+    pub fn wasm_bls_cache_max_capacity() -> usize {
+        Self::BLS_CACHE_MAX_CAPACITY
+    }
+
+    /// Maximum size of history chunks.
+    /// 25 MB.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = HISTORY_CHUNKS_MAX_SIZE))]
+    pub fn wasm_history_chunks_max_size() -> u64 {
+        Self::HISTORY_CHUNKS_MAX_SIZE
+    }
+}
+
 impl Default for Policy {
     fn default() -> Self {
         Policy {
