@@ -132,70 +132,86 @@ impl Policy {
     }
 
     #[inline]
-    fn get_genesis_block_number(&self) -> u32 {
-        self.genesis_block_number
+    pub fn get_or_init(policy: Policy) -> Policy {
+        *GLOBAL_POLICY.get_or_init(|| policy)
     }
+}
 
+#[cfg_attr(feature = "ts-types", wasm_bindgen)]
+impl Policy {
+    /// Number of blocks a transaction is valid with Albatross consensus.
+    /// This should be a multiple of `blocks_per_batch`.
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = transactionValidityWindow))]
     pub fn transaction_validity_window() -> u32 {
         GLOBAL_POLICY
             .get_or_init(Self::default)
             .transaction_validity_window
     }
 
+    /// How many batches constitute an epoch
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = batchesPerEpoch))]
     pub fn batches_per_epoch() -> u16 {
         GLOBAL_POLICY.get_or_init(Self::default).batches_per_epoch
     }
 
+    /// Length of a batch including the macro block
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = blocksPerBatch))]
     pub fn blocks_per_batch() -> u32 {
         GLOBAL_POLICY.get_or_init(Self::default).blocks_per_batch
     }
 
+    /// Length of an epoch including the election block
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = blocksPerEpoch))]
     pub fn blocks_per_epoch() -> u32 {
         GLOBAL_POLICY
             .get_or_init(Self::default)
             .get_blocks_per_epoch()
     }
 
+    /// Genesis block number
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = genesisBlockNumber))]
     pub fn genesis_block_number() -> u32 {
         GLOBAL_POLICY
             .get_or_init(Self::default)
-            .get_genesis_block_number()
+            .genesis_block_number
     }
 
+    /// Tendermint's initial timeout, in milliseconds.
+    ///
+    /// See <https://arxiv.org/abs/1807.04938v3> for more information.
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = tendermintTimeoutInit))]
     pub fn tendermint_timeout_init() -> u64 {
         GLOBAL_POLICY
             .get_or_init(Self::default)
             .tendermint_timeout_init
     }
 
+    /// Tendermint's timeout delta, in milliseconds.
+    ///
+    /// See <https://arxiv.org/abs/1807.04938v3> for more information.
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = tendermintTimeoutDelta))]
     pub fn tendermint_timeout_delta() -> u64 {
         GLOBAL_POLICY
             .get_or_init(Self::default)
             .tendermint_timeout_delta
     }
 
+    /// Maximum size of accounts trie chunks.
     #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = stateChunksMaxSize))]
     pub fn state_chunks_max_size() -> u32 {
         GLOBAL_POLICY
             .get_or_init(Policy::default)
             .state_chunks_max_size
     }
 
-    #[inline]
-    pub fn get_or_init(policy: Policy) -> Policy {
-        *GLOBAL_POLICY.get_or_init(|| policy)
-    }
-}
-
-#[cfg_attr(feature = "ts-types", wasm_bindgen::prelude::wasm_bindgen)]
-impl Policy {
     /// Returns the epoch number at a given block number (height).
     #[inline]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = epochAt))]
