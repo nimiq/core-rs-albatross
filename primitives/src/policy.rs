@@ -144,7 +144,7 @@ impl Policy {
     /// Number of blocks a transaction is valid with Albatross consensus.
     /// This should be a multiple of `blocks_per_batch`.
     #[inline]
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = transactionValidityWindow))]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = TRANSACTION_VALIDITY_WINDOW))]
     pub fn transaction_validity_window() -> u32 {
         GLOBAL_POLICY
             .get_or_init(Self::default)
@@ -153,21 +153,21 @@ impl Policy {
 
     /// How many batches constitute an epoch
     #[inline]
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = batchesPerEpoch))]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = BATCHES_PER_EPOCH))]
     pub fn batches_per_epoch() -> u16 {
         GLOBAL_POLICY.get_or_init(Self::default).batches_per_epoch
     }
 
     /// Length of a batch including the macro block
     #[inline]
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = blocksPerBatch))]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = BLOCKS_PER_BATCH))]
     pub fn blocks_per_batch() -> u32 {
         GLOBAL_POLICY.get_or_init(Self::default).blocks_per_batch
     }
 
     /// Length of an epoch including the election block
     #[inline]
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = blocksPerEpoch))]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = BLOCKS_PER_EPOCH))]
     pub fn blocks_per_epoch() -> u32 {
         GLOBAL_POLICY
             .get_or_init(Self::default)
@@ -176,7 +176,7 @@ impl Policy {
 
     /// Genesis block number
     #[inline]
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = genesisBlockNumber))]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = GENESIS_BLOCK_NUMBER))]
     pub fn genesis_block_number() -> u32 {
         GLOBAL_POLICY
             .get_or_init(Self::default)
@@ -187,7 +187,7 @@ impl Policy {
     ///
     /// See <https://arxiv.org/abs/1807.04938v3> for more information.
     #[inline]
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = tendermintTimeoutInit))]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = TENDERMINT_TIMEOUT_INIT))]
     pub fn tendermint_timeout_init() -> u64 {
         GLOBAL_POLICY
             .get_or_init(Self::default)
@@ -198,7 +198,7 @@ impl Policy {
     ///
     /// See <https://arxiv.org/abs/1807.04938v3> for more information.
     #[inline]
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = tendermintTimeoutDelta))]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = TENDERMINT_TIMEOUT_DELTA))]
     pub fn tendermint_timeout_delta() -> u64 {
         GLOBAL_POLICY
             .get_or_init(Self::default)
@@ -207,7 +207,7 @@ impl Policy {
 
     /// Maximum size of accounts trie chunks.
     #[inline]
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = stateChunksMaxSize))]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = STATE_CHUNKS_MAX_SIZE))]
     pub fn state_chunks_max_size() -> u32 {
         GLOBAL_POLICY
             .get_or_init(Policy::default)
