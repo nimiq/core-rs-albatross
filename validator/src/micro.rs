@@ -10,6 +10,7 @@ use futures::{future::BoxFuture, ready, FutureExt, Stream};
 use nimiq_block::{Block, EquivocationProof, MicroBlock, SkipBlockInfo};
 use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
+use nimiq_hash::Blake2bHash;
 use nimiq_mempool::mempool::Mempool;
 use nimiq_utils::time::systemtime_to_timestamp;
 use nimiq_validator_network::ValidatorNetwork;
@@ -126,7 +127,9 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                             num_transactions
                         );
 
-                        let block1 = block.clone();
+                        let mut block1 = block.clone();
+
+                        let invalid_blocks = blockchain.config.tainted_blockchain.invalid_blocks;
 
                         if blockchain.config.tainted_blockchain.fork_blocks {
                             let mut block2 = block.clone();
@@ -145,6 +148,10 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
 
                         if let Err(e) = &result {
                             error!("Failed to push our own block onto the chain: {:?}", e);
+                        }
+
+                        if invalid_blocks {
+                            block1.header.state_root = Blake2bHash::default();
                         }
 
                         let event = result
