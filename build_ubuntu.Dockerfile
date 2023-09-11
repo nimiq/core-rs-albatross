@@ -3,7 +3,7 @@
 # Builds an albatross image from sources.
 # Requires Docker buildkit.
 
-ARG RUST_IMAGE=rust:slim
+ARG RUST_IMAGE=rust:slim-bookworm
 FROM $RUST_IMAGE AS builder
 
 # Fetch dependencies.
@@ -24,11 +24,11 @@ RUN \
   NIMIQ_OVERRIDE_DEVNET_CONFIG=$PWD/genesis/src/genesis/dev-albatross-4-validators.toml cargo build --bin nimiq-client && cp /build/target/debug/nimiq-client /build/
 
 # This is where the final image is created
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 # Install dependencies and tini.
 RUN apt-get update \
-    && apt-get --no-install-recommends -y install libssl1.1 tini \
+    && apt-get --no-install-recommends -y install libssl3 tini \
     && rm -rf /var/lib/apt/lists/*
 
 # Run as unprivileged user.
