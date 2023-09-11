@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{env, str::FromStr, sync::Arc};
 
 use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
 use nimiq_block_production::BlockProducer;
@@ -784,6 +784,9 @@ async fn multiple_transactions_multiple_senders() {
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
 async fn mempool_tps() {
+    let min_tps = env::var("MIN_TPS")
+        .map(|min| usize::from_str(&min).expect("Min tps must be a number."))
+        .unwrap_or(100);
     let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
     let env = VolatileDatabase::new(20).unwrap();
@@ -853,7 +856,7 @@ async fn mempool_tps() {
 
     // Expect at least 100 of the transactions in the mempool
     assert!(
-        txns.len() > 100,
+        txns.len() > min_tps,
         "Min TPS of 100 wasn't achieved: TPS obtained {}",
         txns.len()
     );

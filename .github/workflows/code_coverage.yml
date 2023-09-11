@@ -61,6 +61,8 @@ jobs:
       run: df -h /
     - name: Run test with coverage instrumentation
       shell: bash
+      env: 
+        MIN_TPS: 3
       run: |
         set +o pipefail
 
