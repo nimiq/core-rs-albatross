@@ -135,7 +135,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                             let mut block2 = block.clone();
 
                             block2.header.timestamp += 1;
-
+                            warn!(" We are going to produce some forks.... ha-ha-ha");
                             ProduceMicroBlockEvent::MicroBlock(block2, PushResult::Extended);
                         }
 
@@ -151,6 +151,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                         }
 
                         if invalid_blocks {
+                            warn!(" We are going to produce some invalid blocks.... ha-ha-ha");
                             block1.header.state_root = Blake2bHash::default();
                         }
 
@@ -273,6 +274,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
 
     fn is_our_turn(&self, blockchain: &Blockchain) -> bool {
         if blockchain.config.tainted_blockchain.always_produce {
+            warn!(" We are going to produce blocks.... ha-ha-ha");
             return true;
         }
 
