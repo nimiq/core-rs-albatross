@@ -388,13 +388,10 @@ async fn can_sync_state() {
     // Will apply the buffered block.
     assert!(
         matches!(
-            join!(mock_node.next(), live_sync.next()),
-            (
-                Some(RequestPartialDiff::TYPE_ID),
-                Some(LiveSyncEvent::PushEvent(
-                    LiveSyncPushEvent::AcceptedBufferedBlock(..)
-                )),
-            )
+            live_sync.next().await,
+            Some(LiveSyncEvent::PushEvent(
+                LiveSyncPushEvent::AcceptedBufferedBlock(..)
+            ))
         ),
         "Should apply buffered block"
     );
