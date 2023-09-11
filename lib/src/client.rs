@@ -334,6 +334,8 @@ impl ClientInner {
             always_produce: config.tainted.always_produce,
             fork_blocks: config.tainted.fork_blocks,
             invalid_blocks: config.tainted.invalid_blocks,
+            tainted_voting_key: config.tainted.tainted_voting_key,
+            tainted_signing_key: config.tainted.tainted_signing_key,
         };
 
         #[cfg(feature = "full-consensus")]

@@ -67,6 +67,10 @@ pub struct TaintedBlockchainConfig {
     pub fork_blocks: bool,
     // Produce invalid blocks
     pub invalid_blocks: bool,
+    // Tainted voting key
+    pub tainted_voting_key: bool,
+    // Tainted signing key
+    pub tainted_signing_key: bool,
 }
 
 impl Default for TaintedBlockchainConfig {
@@ -75,6 +79,8 @@ impl Default for TaintedBlockchainConfig {
             always_produce: false,
             fork_blocks: false,
             invalid_blocks: false,
+            tainted_voting_key: false,
+            tainted_signing_key: false,
         }
     }
 }

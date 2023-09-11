@@ -12,6 +12,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_collections::BitSet;
 use nimiq_handel::{aggregation::Aggregation, identity::IdentityRegistry};
 use nimiq_hash::{Blake2sHash, Blake2sHasher, Hash, Hasher, SerializeContent};
+use nimiq_keys::SecureGenerate;
 use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_primitives::{
     policy::Policy, slots_allocation::Validators, TendermintIdentifier, TendermintStep,
@@ -499,9 +500,25 @@ where
             id: id.clone(),
         };
 
+        let tainted_voting_key = self
+            .blockchain
+            .read()
+            .config
+            .tainted_blockchain
+            .tainted_voting_key;
+
+        let secret_key = if tainted_voting_key {
+            warn!(" Going to cause some voting key trouble... ha ha ha");
+            let key_pair = nimiq_bls::KeyPair::generate_default_csprng();
+
+            key_pair.secret_key
+        } else {
+            self.block_producer.voting_key.secret_key
+        };
+
         let own_contribution = TendermintContribution::from_vote(
             tendermint_vote,
-            &self.block_producer.voting_key.secret_key,
+            &secret_key,
             self.validator_registry.get_slots(self.validator_slot_band),
         );
 

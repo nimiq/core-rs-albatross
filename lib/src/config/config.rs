@@ -103,6 +103,12 @@ pub struct TaintedConfig {
     #[builder(default = "false")]
     // Produce invalid blocks
     pub invalid_blocks: bool,
+    #[builder(default = "false")]
+    // Produce invalid blocks
+    pub tainted_voting_key: bool,
+    #[builder(default = "false")]
+    // Produce invalid blocks
+    pub tainted_signing_key: bool,
 }
 
 impl Default for TaintedConfig {
@@ -111,6 +117,8 @@ impl Default for TaintedConfig {
             always_produce: false,
             fork_blocks: false,
             invalid_blocks: false,
+            tainted_voting_key: false,
+            tainted_signing_key: false,
         }
     }
 }
@@ -807,6 +815,8 @@ impl ClientConfigBuilder {
             always_produce: config_file.tainted.always_produce,
             fork_blocks: config_file.tainted.fork_blocks,
             invalid_blocks: config_file.tainted.invalid_blocks,
+            tainted_voting_key: config_file.tainted.tainted_voting_key,
+            tainted_signing_key: config_file.tainted.tainted_signing_key,
         };
 
         self.tainted(tainted);

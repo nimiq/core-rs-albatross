@@ -170,6 +170,12 @@ pub struct TaintedSettings {
     #[serde(default)]
     // Produce invalid blocks
     pub invalid_blocks: bool,
+    #[serde(default)]
+    // Tainted validator voting key
+    pub tainted_voting_key: bool,
+    #[serde(default)]
+    // Tainted validator signing key
+    pub tainted_signing_key: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]
