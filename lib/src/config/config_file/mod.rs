@@ -176,6 +176,9 @@ pub struct TaintedSettings {
     #[serde(default)]
     // Tainted validator signing key
     pub tainted_signing_key: bool,
+    #[serde(default)]
+    // Produce tainted macro chain responses
+    pub tainted_request_macro_chain: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]

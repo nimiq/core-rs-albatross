@@ -109,6 +109,9 @@ pub struct TaintedConfig {
     #[builder(default = "false")]
     // Produce invalid blocks
     pub tainted_signing_key: bool,
+    #[builder(default = "false")]
+    // Produce tainted macro chain responses
+    pub tainted_request_macro_chain: bool,
 }
 
 impl Default for TaintedConfig {
@@ -119,6 +122,7 @@ impl Default for TaintedConfig {
             invalid_blocks: false,
             tainted_voting_key: false,
             tainted_signing_key: false,
+            tainted_request_macro_chain: false,
         }
     }
 }
@@ -817,6 +821,7 @@ impl ClientConfigBuilder {
             invalid_blocks: config_file.tainted.invalid_blocks,
             tainted_voting_key: config_file.tainted.tainted_voting_key,
             tainted_signing_key: config_file.tainted.tainted_signing_key,
+            tainted_request_macro_chain: config_file.tainted.tainted_request_macro_chain,
         };
 
         self.tainted(tainted);

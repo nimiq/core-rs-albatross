@@ -336,6 +336,7 @@ impl ClientInner {
             invalid_blocks: config.tainted.invalid_blocks,
             tainted_voting_key: config.tainted.tainted_voting_key,
             tainted_signing_key: config.tainted.tainted_signing_key,
+            tainted_request_macro_chain: config.tainted.tainted_request_macro_chain,
         };
 
         #[cfg(feature = "full-consensus")]
