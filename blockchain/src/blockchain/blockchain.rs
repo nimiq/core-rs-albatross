@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use nimiq_account::{Accounts, BlockLog};
 use nimiq_block::Block;
-use nimiq_blockchain_interface::{BlockchainError, BlockchainEvent, ChainInfo, ForkEvent};
+use nimiq_blockchain_interface::{
+    BlockchainError, BlockchainEvent, ChainInfo, ForkEvent, TaintedBlockchainConfig,
+};
 use nimiq_database::{
     traits::{Database, WriteTransaction},
     DatabaseProxy, TransactionProxy, WriteTransactionProxy,
@@ -58,34 +60,6 @@ pub struct Blockchain {
     pub(crate) genesis_timestamp: u64,
     /// The Genesis block number
     pub(crate) genesis_block_number: u32,
-}
-
-pub struct TaintedBlockchainConfig {
-    // Produce blocks even when is not our turn.
-    pub always_produce: bool,
-    // Fork blocks (produce two different blocks at the same height)
-    pub fork_blocks: bool,
-    // Produce invalid blocks
-    pub invalid_blocks: bool,
-    // Tainted voting key
-    pub tainted_voting_key: bool,
-    // Tainted signing key
-    pub tainted_signing_key: bool,
-    // Tainted signing key
-    pub tainted_request_macro_chain: bool,
-}
-
-impl Default for TaintedBlockchainConfig {
-    fn default() -> Self {
-        Self {
-            always_produce: false,
-            fork_blocks: false,
-            invalid_blocks: false,
-            tainted_voting_key: false,
-            tainted_signing_key: false,
-            tainted_request_macro_chain: false,
-        }
-    }
 }
 
 /// Contains various blockchain configuration knobs

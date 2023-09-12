@@ -2,6 +2,7 @@ use futures::{future, stream::BoxStream, StreamExt};
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, Direction, ForkEvent,
+    TaintedBlockchainConfig,
 };
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
@@ -122,5 +123,9 @@ impl AbstractBlockchain for LightBlockchain {
         BroadcastStream::new(self.fork_notifier.subscribe())
             .filter_map(|x| future::ready(x.ok()))
             .boxed()
+    }
+
+    fn get_tainted_config(&self) -> &TaintedBlockchainConfig {
+        todo!()
     }
 }

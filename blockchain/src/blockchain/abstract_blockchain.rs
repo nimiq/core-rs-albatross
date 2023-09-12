@@ -121,4 +121,8 @@ impl AbstractBlockchain for Blockchain {
             .filter_map(|x| future::ready(x.ok()))
             .boxed()
     }
+
+    fn get_tainted_config(&self) -> &nimiq_blockchain_interface::TaintedBlockchainConfig {
+        &self.config.tainted_blockchain
+    }
 }

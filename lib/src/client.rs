@@ -1,10 +1,9 @@
 use std::{fs, sync::Arc};
 
 use nimiq_block::Block;
-use nimiq_blockchain::TaintedBlockchainConfig;
 #[cfg(feature = "full-consensus")]
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
-use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_blockchain_interface::{AbstractBlockchain, TaintedBlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::{

@@ -12,10 +12,40 @@ use crate::{
     ChainInfo, ForkEvent,
 };
 
+pub struct TaintedBlockchainConfig {
+    // Produce blocks even when is not our turn.
+    pub always_produce: bool,
+    // Fork blocks (produce two different blocks at the same height)
+    pub fork_blocks: bool,
+    // Produce invalid blocks
+    pub invalid_blocks: bool,
+    // Tainted voting key
+    pub tainted_voting_key: bool,
+    // Tainted signing key
+    pub tainted_signing_key: bool,
+    // Tainted signing key
+    pub tainted_request_macro_chain: bool,
+}
+
+impl Default for TaintedBlockchainConfig {
+    fn default() -> Self {
+        Self {
+            always_produce: false,
+            fork_blocks: false,
+            invalid_blocks: false,
+            tainted_voting_key: false,
+            tainted_signing_key: false,
+            tainted_request_macro_chain: false,
+        }
+    }
+}
+
 /// Defines several basic methods for blockchains.
 pub trait AbstractBlockchain {
     /// Returns the network id.
     fn network_id(&self) -> NetworkId;
+
+    fn get_tainted_config(&self) -> &TaintedBlockchainConfig;
 
     /// Returns the current time.
     fn now(&self) -> u64;

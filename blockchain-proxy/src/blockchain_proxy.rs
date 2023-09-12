@@ -218,4 +218,8 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
     fn fork_notifier_as_stream(&self) -> BoxStream<'static, ForkEvent> {
         gen_blockchain_match!(self, BlockchainReadProxy, fork_notifier_as_stream)
     }
+
+    fn get_tainted_config(&self) -> &nimiq_blockchain_interface::TaintedBlockchainConfig {
+        gen_blockchain_match!(self, BlockchainReadProxy, get_tainted_config)
+    }
 }

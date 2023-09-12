@@ -2,9 +2,7 @@
 extern crate log;
 
 pub use block_production::BlockProducer;
-pub use blockchain::blockchain::{
-    Blockchain, BlockchainConfig, TransactionVerificationCache, TaintedBlockchainConfig, TransactionVerificationCache,
-};
+pub use blockchain::blockchain::{Blockchain, BlockchainConfig, TransactionVerificationCache};
 pub use history::*;
 
 pub(crate) mod block_production;
