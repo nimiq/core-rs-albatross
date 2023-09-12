@@ -13,6 +13,7 @@ use nimiq_network_interface::{network::Network, request::Handle};
 use nimiq_primitives::policy::Policy;
 #[cfg(feature = "full")]
 use parking_lot::RwLock;
+use rand::{thread_rng, Rng};
 
 use crate::messages::*;
 #[cfg(feature = "full")]
@@ -24,6 +25,8 @@ use crate::sync::live::{
 impl<N: Network> Handle<N, MacroChain, BlockchainProxy> for RequestMacroChain {
     fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> MacroChain {
         let blockchain = blockchain.read();
+
+        let mut rng = thread_rng();
 
         // A peer has the macro chain. Check all block locator hashes in the given order and pick
         // the first hash that is found on our main chain, ignore the rest.
@@ -49,16 +52,33 @@ impl<N: Network> Handle<N, MacroChain, BlockchainProxy> for RequestMacroChain {
 
         // Get up to `self.max_blocks` macro blocks from our chain starting at `start_block_hash`.
         // TODO We don't need the actual macro block headers here, the hash of each block would suffice.
+
+        let tainted_config = blockchain.get_tainted_config();
+
+        let direction = if tainted_config.tainted_request_macro_chain && rng.gen_bool(1.0 / 4.0) {
+            warn!(" Messing up the direction of the response of request-macro-chain.... bua ha ha");
+            Direction::Backward
+        } else {
+            Direction::Forward
+        };
+
         let election_blocks = blockchain
             .get_macro_blocks(
                 &start_block_hash,
                 self.max_epochs as u32,
                 false,
-                Direction::Forward,
+                direction,
                 true,
             )
             .unwrap(); // We made sure that start_block_hash is on our chain.
-        let epochs: Vec<_> = election_blocks.iter().map(|block| block.hash()).collect();
+        let mut epochs: Vec<_> = election_blocks.iter().map(|block| block.hash()).collect();
+
+        if tainted_config.tainted_request_macro_chain && rng.gen_bool(1.0 / 4.0) {
+            warn!(
+                " Truncating the epoch ids from the response of request-macro-chain.... bua ha ha"
+            );
+            epochs.truncate(1 as usize);
+        }
 
         // Add latest checkpoint block if all of the following conditions are met:
         // * the requester has caught up, i.e. it already knows the last epoch (epochs.is_empty())
@@ -70,17 +90,40 @@ impl<N: Network> Handle<N, MacroChain, BlockchainProxy> for RequestMacroChain {
             && !checkpoint_block.is_election_block()
             && checkpoint_hash != start_block_hash
         {
-            Some(Checkpoint {
-                block_number: checkpoint_block.block_number(),
-                hash: checkpoint_hash,
-            })
+            if tainted_config.tainted_request_macro_chain && rng.gen_bool(1.0 / 4.0) {
+                warn!(
+                    " Returning None checkpoint from the response of request-macro-chain.... bua ha ha"
+                );
+                None
+            } else {
+                Some(Checkpoint {
+                    block_number: checkpoint_block.block_number(),
+                    hash: checkpoint_hash,
+                })
+            }
         } else {
-            None
+            if tainted_config.tainted_request_macro_chain && rng.gen_bool(1.0 / 4.0) {
+                warn!(" Returning Some checkpoint from the response of request-macro-chain.... bua ha ha");
+                Some(Checkpoint {
+                    block_number: checkpoint_block.block_number(),
+                    hash: checkpoint_hash,
+                })
+            } else {
+                None
+            }
         };
 
-        MacroChain {
-            epochs: Some(epochs),
-            checkpoint,
+        if tainted_config.tainted_request_macro_chain && rng.gen_bool(1.0 / 4.0) {
+            warn!(" Messing up the response of request-macro-chain.... bua ha ha");
+            MacroChain {
+                epochs: None,
+                checkpoint: None,
+            }
+        } else {
+            MacroChain {
+                epochs: Some(epochs),
+                checkpoint,
+            }
         }
     }
 }
