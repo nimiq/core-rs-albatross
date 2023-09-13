@@ -6,7 +6,6 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::{account::AccountError, policy::Policy};
 use serde::{Deserialize, Serialize};
 
-use crate::JailValidatorReceipt;
 #[cfg(feature = "interaction-traits")]
 use crate::{
     account::staking_contract::{
@@ -16,7 +15,7 @@ use crate::{
         },
         StakingContract,
     },
-    Log, RetireValidatorReceipt, TransactionLog,
+    JailValidatorReceipt, Log, RetireValidatorReceipt, TransactionLog,
 };
 
 /// Struct representing a validator in the staking contract.

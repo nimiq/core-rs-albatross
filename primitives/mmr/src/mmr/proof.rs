@@ -1,7 +1,5 @@
 use std::collections::VecDeque;
 
-use nimiq_serde::{Deserialize, Serialize};
-
 use crate::{
     error::Error,
     hash::{Hash, Merge},
@@ -12,7 +10,11 @@ use crate::{
     },
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
+#[cfg_attr(
+    feature = "serde-derive",
+    derive(nimiq_serde::Serialize, nimiq_serde::Deserialize)
+)]
 pub enum SizeProof<H: Merge, T: Hash<H>> {
     EmptyTree,
     SingleElement(u64, T),

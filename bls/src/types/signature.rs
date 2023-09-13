@@ -23,6 +23,9 @@ pub struct Signature {
 }
 
 impl Signature {
+    /// Maximum size in bytes for a single `Signature` in binary serialization.
+    pub const SIZE: usize = CompressedSignature::SIZE;
+
     /// Maps an hash to a elliptic curve point in the G1 group, it is known as
     /// "hash-to-curve". It is required to create signatures. We use the
     /// try-and-increment method to create the EC point.
@@ -142,11 +145,6 @@ mod serde_derive {
     };
 
     use super::{CompressedSignature, Signature};
-
-    impl Signature {
-        /// Maximum size in bytes for a single `Signature` in binary serialization.
-        pub const SIZE: usize = CompressedSignature::SIZE;
-    }
 
     impl Serialize for Signature {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

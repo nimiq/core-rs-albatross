@@ -1,9 +1,12 @@
+#[cfg(feature = "interaction-traits")]
 use std::cmp::Ordering;
 
 use nimiq_keys::Address;
 #[cfg(feature = "interaction-traits")]
 use nimiq_primitives::account::AccountError;
-use nimiq_primitives::{coin::Coin, policy::Policy};
+use nimiq_primitives::coin::Coin;
+#[cfg(feature = "interaction-traits")]
+use nimiq_primitives::policy::Policy;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "interaction-traits")]
@@ -14,9 +17,8 @@ use crate::{
         },
         StakerReceipt, StakingContract, Tombstone,
     },
-    Log, TransactionLog,
+    Log, RemoveStakeReceipt, SetInactiveStakeReceipt, TransactionLog,
 };
-use crate::{RemoveStakeReceipt, SetInactiveStakeReceipt};
 
 /// Struct representing a staker in the staking contract.
 /// The staker's balance is divided into active and inactive stake.
