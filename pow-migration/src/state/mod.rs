@@ -246,6 +246,9 @@ pub async fn get_validators(
                         signing_key,
                         voting_key,
                         reward_address: address.clone(),
+                        inactive_from: None,
+                        jailed_from: None,
+                        retired: false,
                     },
                 };
                 log::debug!(%address, "Found possible validator");
@@ -315,6 +318,8 @@ pub async fn get_stakers(
                 staker_address: validator.validator.validator_address.clone(),
                 balance: validator.balance - Coin::from_u64_unchecked(VALIDATOR_DEPOSIT),
                 delegation: validator.validator.validator_address.clone(),
+                inactive_balance: Coin::ZERO,
+                inactive_from: None,
             })
         }
     }
@@ -346,6 +351,8 @@ pub async fn get_stakers(
                                         staker_address,
                                         balance: stake,
                                         delegation: validator.validator.validator_address.clone(),
+                                        inactive_balance: Coin::ZERO,
+                                        inactive_from: None,
                                     });
                                 } else {
                                     log::error!(

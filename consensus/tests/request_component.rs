@@ -32,6 +32,9 @@ async fn test_request_component() {
             sgn_key.public,
             vtn_key.public_key,
             Address::default(),
+            None,
+            None,
+            false,
         )
         .generate(env)
         .unwrap();

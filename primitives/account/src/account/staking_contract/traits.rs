@@ -88,6 +88,9 @@ impl AccountTransactionInteraction for StakingContract {
                     reward_address,
                     signal_data,
                     transaction.value,
+                    None,
+                    None,
+                    false,
                     tx_logger,
                 )
                 .map(|_| None)
@@ -167,6 +170,8 @@ impl AccountTransactionInteraction for StakingContract {
                     &staker_address,
                     transaction.value,
                     delegation,
+                    Coin::ZERO,
+                    None,
                     tx_logger,
                 )
                 .map(|_| None)

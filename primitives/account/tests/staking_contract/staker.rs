@@ -380,6 +380,9 @@ fn update_staker_works() {
             validator_address2.clone(),
             None,
             Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
+            None,
+            None,
+            false,
             &mut TransactionLog::empty(),
         )
         .expect("Failed to create validator");
@@ -701,6 +704,9 @@ fn update_staker_with_stake_reactivation_works() {
             validator_address2.clone(),
             None,
             Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
+            None,
+            None,
+            false,
             &mut TransactionLog::empty(),
         )
         .expect("Failed to create validator");
@@ -1826,6 +1832,9 @@ fn update_staker_jail_interaction() {
             validator_address2.clone(),
             None,
             Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
+            None,
+            None,
+            false,
             &mut TransactionLog::empty(),
         )
         .expect("Failed to create validator");
@@ -1946,6 +1955,9 @@ fn can_only_redelegate_after_release() {
             validator_address2.clone(),
             None,
             Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
+            None,
+            None,
+            false,
             &mut TransactionLog::empty(),
         )
         .expect("Failed to create validator");
@@ -2024,6 +2036,9 @@ fn cannot_redelegate_while_having_active_stake() {
             validator_address2.clone(),
             None,
             Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
+            None,
+            None,
+            false,
             &mut TransactionLog::empty(),
         )
         .expect("Failed to create validator");

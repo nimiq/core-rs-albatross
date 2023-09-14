@@ -322,6 +322,9 @@ async fn push_same_tx_twice() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
@@ -440,6 +443,9 @@ async fn push_tx_with_wrong_signature() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
@@ -511,6 +517,9 @@ async fn mempool_get_txn_max_size() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
@@ -592,6 +601,9 @@ async fn mempool_get_txn_ordered() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
@@ -674,6 +686,9 @@ async fn push_tx_with_insufficient_balance() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
@@ -746,6 +761,9 @@ async fn multiple_transactions_multiple_senders() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
@@ -828,6 +846,9 @@ async fn mempool_tps() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     // Generate the genesis and blockchain
@@ -916,6 +937,9 @@ async fn multiple_start_stop() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     // Generate the genesis and blockchain
@@ -1062,6 +1086,9 @@ async fn mempool_update() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     // Generate the genesis and blockchain
@@ -1189,6 +1216,9 @@ async fn mempool_update_aged_transaction() {
         signing_key().public,
         voting_key().public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     // Generate the genesis and blockchain
@@ -1336,6 +1366,9 @@ async fn mempool_update_not_enough_balance() {
         signing_key().public,
         voting_key().public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     // Generate the genesis and blockchain
@@ -1492,6 +1525,9 @@ async fn mempool_update_pruned_account() {
         signing_key().public,
         voting_key().public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     // Generate the genesis and blockchain
@@ -1699,6 +1735,9 @@ async fn mempool_regular_and_control_tx() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
@@ -1836,6 +1875,9 @@ async fn applies_total_tx_size_limits() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();

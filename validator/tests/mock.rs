@@ -53,6 +53,9 @@ async fn one_validator_can_create_micro_blocks() {
             signing_key.public,
             voting_key.public_key,
             Address::default(),
+            None,
+            None,
+            false,
         )
         .generate(env)
         .unwrap();

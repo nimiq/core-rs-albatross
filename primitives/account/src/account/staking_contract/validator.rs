@@ -121,6 +121,9 @@ impl StakingContract {
         reward_address: Address,
         signal_data: Option<Blake2bHash>,
         deposit: Coin,
+        inactive_from: Option<u32>,
+        jailed_from: Option<u32>,
+        retired: bool,
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Fail if the validator already exists.
@@ -147,16 +150,18 @@ impl StakingContract {
             total_stake: deposit,
             deposit,
             num_stakers: 0,
-            inactive_from: None,
-            jailed_from: None,
-            retired: false,
+            inactive_from,
+            jailed_from,
+            retired,
         };
 
         // Update our balance.
         self.balance += deposit;
 
-        self.active_validators
-            .insert(validator_address.clone(), validator.total_stake);
+        if !retired && inactive_from.is_none() {
+            self.active_validators
+                .insert(validator_address.clone(), validator.total_stake);
+        }
 
         tx_logger.push_log(Log::CreateValidator {
             validator_address: validator_address.clone(),

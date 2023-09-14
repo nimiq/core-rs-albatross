@@ -165,12 +165,18 @@ impl GenesisBuilder {
         signing_key: SchnorrPublicKey,
         voting_key: BlsPublicKey,
         reward_address: Address,
+        inactive_from: Option<u32>,
+        jailed_from: Option<u32>,
+        retired: bool,
     ) -> &mut Self {
         self.validators.push(config::GenesisValidator {
             validator_address,
             signing_key,
             voting_key,
             reward_address,
+            inactive_from,
+            jailed_from,
+            retired,
         });
         self
     }
@@ -180,11 +186,15 @@ impl GenesisBuilder {
         staker_address: Address,
         validator_address: Address,
         balance: Coin,
+        inactive_balance: Coin,
+        inactive_from: Option<u32>,
     ) -> &mut Self {
         self.stakers.push(config::GenesisStaker {
             staker_address,
             balance,
             delegation: validator_address,
+            inactive_balance,
+            inactive_from,
         });
         self
     }
@@ -402,6 +412,9 @@ impl GenesisBuilder {
                 validator.reward_address.clone(),
                 None,
                 deposit,
+                validator.inactive_from,
+                validator.jailed_from,
+                validator.retired,
                 &mut TransactionLog::empty(),
             )?;
         }
@@ -412,6 +425,8 @@ impl GenesisBuilder {
                 &staker.staker_address,
                 staker.balance,
                 Some(staker.delegation.clone()),
+                staker.inactive_balance,
+                staker.inactive_from,
                 &mut TransactionLog::empty(),
             )?;
         }

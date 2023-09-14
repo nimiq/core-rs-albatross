@@ -183,6 +183,9 @@ fn make_sample_contract(
             validator_address.clone(),
             None,
             Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
+            None,
+            None,
+            false,
             &mut TransactionLog::empty(),
         )
         .unwrap();
@@ -194,6 +197,8 @@ fn make_sample_contract(
                 &staker_address,
                 Coin::from_u64_unchecked(staker_active_balance),
                 Some(validator_address.clone()),
+                Coin::ZERO,
+                None,
                 &mut TransactionLog::empty(),
             )
             .unwrap();

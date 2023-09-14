@@ -760,6 +760,9 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 Address::from(&validator_key_pair),
                 None,
                 deposit,
+                None,
+                None,
+                false,
                 &mut TransactionLog::empty(),
             )
             .expect("Failed to create validator");
@@ -797,6 +800,8 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 &Address::from(&staker_key_pair),
                 balance,
                 Some(Address::from(&validator_key_pair)),
+                Coin::ZERO,
+                None,
                 &mut TransactionLog::empty(),
             )
             .expect("Failed to create staker");

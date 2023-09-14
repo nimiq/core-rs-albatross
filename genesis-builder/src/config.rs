@@ -62,6 +62,10 @@ pub struct GenesisValidator {
     pub signing_key: SchnorrPublicKey,
     pub voting_key: BlsPublicKey,
     pub reward_address: Address,
+    pub inactive_from: Option<u32>,
+    pub jailed_from: Option<u32>,
+    #[serde(default)]
+    pub retired: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -69,6 +73,9 @@ pub struct GenesisStaker {
     pub staker_address: Address,
     pub balance: Coin,
     pub delegation: Address,
+    #[serde(default)]
+    pub inactive_balance: Coin,
+    pub inactive_from: Option<u32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

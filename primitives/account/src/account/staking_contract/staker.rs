@@ -75,6 +75,8 @@ impl StakingContract {
         staker_address: &Address,
         value: Coin,
         delegation: Option<Address>,
+        inactive_balance: Coin,
+        inactive_from: Option<u32>,
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // See if the staker already exists.
@@ -93,8 +95,8 @@ impl StakingContract {
         let staker = Staker {
             address: staker_address.clone(),
             balance: value,
-            inactive_balance: Coin::ZERO,
-            inactive_from: None,
+            inactive_balance,
+            inactive_from,
             delegation,
         };
 
