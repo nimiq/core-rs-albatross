@@ -1,6 +1,7 @@
 pub mod bls_key_pair;
 pub mod bls_public_key;
 pub mod bls_secret_key;
+pub mod hash;
 pub mod key_pair;
 pub mod private_key;
 pub mod public_key;
