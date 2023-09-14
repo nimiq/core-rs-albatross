@@ -115,6 +115,9 @@ pub struct TaintedConfig {
     #[builder(default = "false")]
     // Produce tainted batch set responses
     pub tainted_request_batch_set: bool,
+    #[builder(default = "false")]
+    // Produce tainted batch set responses
+    pub tainted_request_history_chunk: bool,
 }
 
 impl Default for TaintedConfig {
@@ -127,6 +130,7 @@ impl Default for TaintedConfig {
             tainted_signing_key: false,
             tainted_request_macro_chain: false,
             tainted_request_batch_set: false,
+            tainted_request_history_chunk: false,
         }
     }
 }
@@ -827,6 +831,7 @@ impl ClientConfigBuilder {
             tainted_signing_key: config_file.tainted.tainted_signing_key,
             tainted_request_macro_chain: config_file.tainted.tainted_request_macro_chain,
             tainted_request_batch_set: config_file.tainted.tainted_request_batch_set,
+            tainted_request_history_chunk: config_file.tainted.tainted_request_history_chunk,
         };
 
         self.tainted(tainted);
