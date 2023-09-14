@@ -338,6 +338,7 @@ impl ClientInner {
             tainted_request_macro_chain: config.tainted.tainted_request_macro_chain,
             tainted_request_batch_set: config.tainted.tainted_request_batch_set,
             tainted_request_history_chunk: config.tainted.tainted_request_history_chunk,
+            tainted_request_block: config.tainted.tainted_request_block,
         };
 
         #[cfg(feature = "full-consensus")]
