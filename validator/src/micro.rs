@@ -139,7 +139,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                             warn!(" We are going to produce a fork block.... bua-ha-ha-ha");
                             thread::sleep(time::Duration::from_millis(100));
                             let fork_block = self.produce_micro_block(&blockchain);
-                            warn!(hash = %block.hash(), " Fork block hash");
+                            warn!(hash = %fork_block.hash(), " Fork block hash");
                             ProduceMicroBlockEvent::MicroBlock(fork_block, PushResult::Extended);
                         }
 
