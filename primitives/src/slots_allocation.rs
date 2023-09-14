@@ -74,10 +74,6 @@ pub struct PenalizedSlot {
     pub offense_event_block: u32,
 }
 
-impl PenalizedSlot {
-    pub const SIZE: usize = 2 + Address::SIZE + 4;
-}
-
 /// Identifies a jail slot by the validator's address.
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -87,10 +83,6 @@ pub struct JailedValidator {
     pub validator_address: Address,
     /// The `offense_event_block` identifies the block at which the malicious behaviour occurred.
     pub offense_event_block: u32,
-}
-
-impl JailedValidator {
-    pub const SIZE: usize = Address::SIZE + 4;
 }
 
 /// A collection of Validators. This struct is normally used to hold the validators for a specific

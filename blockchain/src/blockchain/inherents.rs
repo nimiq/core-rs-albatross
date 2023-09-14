@@ -279,7 +279,7 @@ impl Blockchain {
                     .get_validator(&data_store.read(&txn), &validator_slot.address)
                     .expect("Couldn't find validator in the accounts trie when paying rewards!");
 
-                let tx: RewardTransaction = RewardTransaction {
+                let tx = RewardTransaction {
                     recipient: validator.reward_address.clone(),
                     value: reward,
                 };

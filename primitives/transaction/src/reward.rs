@@ -8,9 +8,3 @@ pub struct RewardTransaction {
     pub recipient: Address,
     pub value: Coin,
 }
-
-impl RewardTransaction {
-    pub fn new(recipient: Address, value: Coin) -> Self {
-        Self { recipient, value }
-    }
-}
