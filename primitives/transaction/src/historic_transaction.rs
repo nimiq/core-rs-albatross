@@ -2,6 +2,7 @@ use std::{error, fmt, io};
 
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::Address;
 use nimiq_mmr::hash::Hash as MMRHash;
 use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
@@ -198,6 +199,19 @@ impl FromDatabaseValue for HistoricTransaction {
 pub enum HistoricTransactionData {
     /// A basic transaction. It simply contains the transaction as contained in the block.
     Basic(ExecutedTransaction),
-    /// An inherent transaction. It simply contains the inherent as implied by the block.
-    Inherent(Inherent),
+    Reward(RewardEvent),
+    Equivocation(EquivocationEvent),
+}
+
+pub struct EquivocationEvent {
+    locator: EquivocationLocator,
+}
+
+pub struct RewardEvent {
+    validator_address: Address,
+    reward_address: Address,
+}
+
+enum Event {
+    Equivocation(EquivocationLocator),
 }

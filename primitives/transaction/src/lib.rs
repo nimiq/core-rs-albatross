@@ -23,11 +23,17 @@ use thiserror::Error;
 
 use crate::account::AccountTransactionVerification;
 
+mod equivocation_locator;
+
 pub mod account;
 pub mod historic_transaction;
 pub mod history_proof;
 pub mod inherent;
 pub mod reward;
+
+pub use self::equivocation_locator::{
+    DoubleProposalLocator, DoubleVoteLocator, EquivocationLocator, ForkLocator,
+};
 
 /// Transaction topic for the Mempool to request transactions from the network
 #[derive(Clone, Debug, Default)]

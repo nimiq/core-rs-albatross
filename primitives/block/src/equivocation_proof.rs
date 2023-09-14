@@ -1,9 +1,8 @@
 use std::{cmp::Ordering, hash::Hasher, io, mem, ops::Range};
 
-use byteorder::WriteBytesExt;
 use nimiq_bls::{AggregatePublicKey, AggregateSignature};
 use nimiq_collections::BitSet;
-use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput, SerializeContent};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash as _, HashOutput, SerializeContent};
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey, Signature as SchnorrSignature};
 use nimiq_primitives::{
     policy::Policy,
@@ -19,7 +18,7 @@ use crate::{MacroHeader, MicroHeader};
 ///
 /// This can come in several forms, but e.g. producing two blocks in a single slot or voting twice
 /// in the same round.
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum EquivocationProof {
     Fork(ForkProof),
     DoubleProposal(DoubleProposalProof),
@@ -52,6 +51,16 @@ impl EquivocationProof {
         DoubleProposalProof::MAX_SIZE,
         DoubleVoteProof::MAX_SIZE,
     );
+
+    /// Locator of this proof.
+    pub fn locator(&self) -> EquivocationLocator {
+        use self::EquivocationProof::*;
+        match self {
+            Fork(proof) => proof.locator().into(),
+            DoubleProposal(proof) => proof.locator().into(),
+            DoubleVote(proof) => proof.locator().into(),
+        }
+    }
 
     /// Address of the offending validator.
     pub fn validator_address(&self) -> &Address {
@@ -132,23 +141,15 @@ impl From<DoubleVoteProof> for EquivocationProof {
     }
 }
 
+impl std::hash::Hash for EquivocationProof {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(&self.locator(), state)
+    }
+}
+
 impl SerializeContent for EquivocationProof {
     fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
-        use self::EquivocationProof::*;
-        match self {
-            Fork(proof) => {
-                writer.write_u8(0)?;
-                proof.serialize_content::<_, H>(writer)
-            }
-            DoubleProposal(proof) => {
-                writer.write_u8(1)?;
-                proof.serialize_content::<_, H>(writer)
-            }
-            DoubleVote(proof) => {
-                writer.write_u8(2)?;
-                proof.serialize_content::<_, H>(writer)
-            }
-        }
+        self.locator().serialize_content::<_, H>(writer)
     }
 }
 
@@ -195,6 +196,14 @@ impl ForkProof {
             header2,
             justification1,
             justification2,
+        }
+    }
+
+    /// Locator of this proof.
+    pub fn locator(&self) -> ForkLocator {
+        ForkLocator {
+            validator_address: self.validator_address().clone(),
+            block_number: self.block_number(),
         }
     }
 
@@ -252,16 +261,13 @@ impl ForkProof {
 
 impl std::hash::Hash for ForkProof {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write(self.header1.hash::<Blake2bHash>().as_bytes());
-        state.write(self.header2.hash::<Blake2bHash>().as_bytes());
+        std::hash::Hash::hash(&self.locator(), state)
     }
 }
 
 impl SerializeContent for ForkProof {
     fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
-        writer.write_all(self.validator_address().as_bytes())?;
-        self.block_number().serialize_to_writer(writer)?;
-        Ok(())
+        self.locator().serialize_content::<_, H>(writer)
     }
 }
 
@@ -325,6 +331,15 @@ impl DoubleProposalProof {
         }
     }
 
+    /// Locator of this proof.
+    pub fn locator(&self) -> DoubleProposalLocator {
+        DoubleProposalLocator {
+            validator_address: self.validator_address().clone(),
+            block_number: self.block_number(),
+            round: self.round(),
+        }
+    }
+
     /// Address of the offending validator.
     pub fn validator_address(&self) -> &Address {
         &self.validator_address
@@ -380,16 +395,13 @@ impl DoubleProposalProof {
 
 impl std::hash::Hash for DoubleProposalProof {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write(Hash::hash::<Blake2bHash>(self).as_bytes());
+        std::hash::Hash::hash(&self.locator(), state)
     }
 }
 
 impl SerializeContent for DoubleProposalProof {
     fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
-        writer.write_all(self.validator_address().as_bytes())?;
-        self.block_number().serialize_to_writer(writer)?;
-        self.round().serialize_to_writer(writer)?;
-        Ok(())
+        self.locator().serialize_content::<_, H>(writer)
     }
 }
 
@@ -446,6 +458,16 @@ impl DoubleVoteProof {
             signature2,
             signers1,
             signers2,
+        }
+    }
+
+    /// Locator of this proof.
+    pub fn locator(&self) -> DoubleVoteLocator {
+        DoubleVoteLocator {
+            validator_address: self.validator_address().clone(),
+            block_number: self.block_number(),
+            round: self.round(),
+            step: self.step(),
         }
     }
 
@@ -527,17 +549,13 @@ impl DoubleVoteProof {
 
 impl std::hash::Hash for DoubleVoteProof {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write(Hash::hash::<Blake2bHash>(self).as_bytes());
+        std::hash::Hash::hash(&self.locator(), state)
     }
 }
 
 impl SerializeContent for DoubleVoteProof {
     fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
-        writer.write_all(self.validator_address().as_bytes())?;
-        self.block_number().serialize_to_writer(writer)?;
-        self.round().serialize_to_writer(writer)?;
-        self.step().serialize_to_writer(writer)?;
-        Ok(())
+        self.locator().serialize_content::<_, H>(writer)
     }
 }
 
