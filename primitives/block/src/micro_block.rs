@@ -254,7 +254,7 @@ impl MicroBody {
             return Err(BlockError::InvalidSkipBlockBody);
         }
 
-        // Ensure that fork proofs are ordered, unique and within their reporting window.
+        // Ensure that equivocation proofs are ordered, unique and within their reporting window.
         let mut previous_proof: Option<&EquivocationProof> = None;
         for proof in &self.equivocation_proofs {
             // Check reporting window.
