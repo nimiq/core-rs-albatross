@@ -703,13 +703,13 @@ mod serde_derive {
         {
             let sender: Address = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
             let sender_type: AccountType = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
             let sender_data: Vec<u8> = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
             let recipient: Address = seq
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
@@ -718,25 +718,25 @@ mod serde_derive {
                 .ok_or_else(|| serde::de::Error::invalid_length(4, &self))?;
             let recipient_data: Vec<u8> = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(5, &self))?;
             let value: Coin = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(5, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(6, &self))?;
             let fee: Coin = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(6, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(7, &self))?;
             let validity_start_height: [u8; 4] = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(7, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(8, &self))?;
             let network_id: NetworkId = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(8, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(9, &self))?;
             let flags: TransactionFlags = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(9, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(10, &self))?;
             let proof: Vec<u8> = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(10, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(11, &self))?;
             Ok(Transaction {
                 sender,
                 sender_type,
