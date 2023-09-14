@@ -20,7 +20,7 @@ use nimiq_rpc::{
     Client,
 };
 use nimiq_transaction::{
-    extended_transaction::ExtendedTransaction, ExecutedTransaction, Transaction, TransactionFlags,
+    historic_transaction::HistoricTransaction, ExecutedTransaction, Transaction, TransactionFlags,
 };
 use thiserror::Error;
 
@@ -178,7 +178,7 @@ pub async fn get_history_root(
         history_store.add_to_history(
             &mut txn,
             0,
-            &ExtendedTransaction::from(
+            &HistoricTransaction::from(
                 network_id,
                 block_height,
                 block.timestamp.into(),

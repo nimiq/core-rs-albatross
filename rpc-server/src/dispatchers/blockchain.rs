@@ -180,26 +180,26 @@ impl BlockchainInterface for BlockchainDispatcher {
         hash: Blake2bHash,
     ) -> RPCResult<ExecutedTransaction, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
-            // Get all the extended transactions that correspond to this hash.
-            let mut extended_tx_vec = blockchain.history_store.get_ext_tx_by_hash(&hash, None);
+            // Get all the historic transactions that correspond to this hash.
+            let mut historic_tx_vec = blockchain.history_store.get_hist_tx_by_hash(&hash, None);
 
             // Unpack the transaction or raise an error.
-            let extended_tx = match extended_tx_vec.len() {
+            let historic_tx = match historic_tx_vec.len() {
                 0 => {
                     return Err(Error::TransactionNotFound(hash));
                 }
-                1 => extended_tx_vec.pop().unwrap(),
+                1 => historic_tx_vec.pop().unwrap(),
                 _ => {
                     return Err(Error::MultipleTransactionsFound(hash));
                 }
             };
 
-            // Convert the extended transaction into a regular transaction. This will also convert
+            // Convert the historic transaction into a regular transaction. This will also convert
             // reward inherents.
-            let block_number = extended_tx.block_number;
-            let timestamp = extended_tx.block_time;
+            let block_number = historic_tx.block_number;
+            let timestamp = historic_tx.block_time;
 
-            return match extended_tx.into_transaction() {
+            return match historic_tx.into_transaction() {
                 Ok(tx) => Ok(ExecutedTransaction::from_blockchain(
                     tx,
                     block_number,
@@ -221,21 +221,21 @@ impl BlockchainInterface for BlockchainDispatcher {
         block_number: u32,
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
-            // Get all the extended transactions that correspond to this block.
-            let extended_tx_vec = blockchain
+            // Get all the historic transactions that correspond to this block.
+            let historic_tx_vec = blockchain
                 .history_store
                 .get_block_transactions(block_number, None);
 
-            // Get the timestamp of the block from one of the extended transactions. This complicated
+            // Get the timestamp of the block from one of the historic transactions. This complicated
             // setup is because we might not have any transactions.
-            let timestamp = extended_tx_vec.first().map(|x| x.block_time).unwrap_or(0);
+            let timestamp = historic_tx_vec.first().map(|x| x.block_time).unwrap_or(0);
 
-            // Convert the extended transactions into regular transactions. This will also convert
+            // Convert the historic transactions into regular transactions. This will also convert
             // reward inherents.
             let mut transactions = vec![];
 
-            for ext_tx in extended_tx_vec {
-                if let Ok(tx) = ext_tx.into_transaction() {
+            for hist_tx in historic_tx_vec {
+                if let Ok(tx) = hist_tx.into_transaction() {
                     transactions.push(ExecutedTransaction::from_blockchain(
                         tx,
                         block_number,
@@ -258,22 +258,22 @@ impl BlockchainInterface for BlockchainDispatcher {
         block_number: u32,
     ) -> RPCResult<Vec<Inherent>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
-            // Get all the extended transactions that correspond to this block.
-            let extended_tx_vec = blockchain
+            // Get all the historic transactions that correspond to this block.
+            let historic_tx_vec = blockchain
                 .history_store
                 .get_block_transactions(block_number, None);
 
-            // Get the timestamp of the block from one of the extended transactions. This complicated
+            // Get the timestamp of the block from one of the historic transactions. This complicated
             // setup is because we might not have any transactions.
-            let timestamp = extended_tx_vec.first().map(|x| x.block_time).unwrap_or(0);
+            let timestamp = historic_tx_vec.first().map(|x| x.block_time).unwrap_or(0);
 
             // Get only the inherents. This includes reward inherents.
             let mut inherents = vec![];
 
-            for ext_tx in extended_tx_vec {
-                if ext_tx.is_inherent() {
+            for hist_tx in historic_tx_vec {
+                if hist_tx.is_inherent() {
                     inherents.push(Inherent::from(
-                        ext_tx.unwrap_inherent().clone(),
+                        hist_tx.unwrap_inherent().clone(),
                         block_number,
                         timestamp,
                     ));
@@ -305,16 +305,16 @@ impl BlockchainInterface for BlockchainDispatcher {
             let mut transactions = vec![];
 
             for i in first_block..=last_block {
-                let ext_txs = blockchain.history_store.get_block_transactions(i, None);
+                let hist_txs = blockchain.history_store.get_block_transactions(i, None);
 
-                // Get the timestamp of the block from one of the extended transactions. This complicated
+                // Get the timestamp of the block from one of the historic transactions. This complicated
                 // setup is because we might not have any transactions.
-                let timestamp = ext_txs.first().map(|x| x.block_time).unwrap_or(0);
+                let timestamp = hist_txs.first().map(|x| x.block_time).unwrap_or(0);
 
-                // Convert the extended transactions into regular transactions. This will also convert
+                // Convert the historic transactions into regular transactions. This will also convert
                 // reward inherents.
-                for ext_tx in ext_txs {
-                    if let Ok(tx) = ext_tx.into_transaction() {
+                for hist_tx in hist_txs {
+                    if let Ok(tx) = hist_tx.into_transaction() {
                         transactions.push(ExecutedTransaction::from_blockchain(
                             tx,
                             i,
@@ -351,11 +351,11 @@ impl BlockchainInterface for BlockchainDispatcher {
             let last_micro_block = macro_block_number - 1;
 
             for i in first_micro_block..=last_micro_block {
-                let micro_ext_tx_vec = blockchain.history_store.get_block_transactions(i, None);
+                let micro_hist_tx_vec = blockchain.history_store.get_block_transactions(i, None);
 
-                for ext_tx in micro_ext_tx_vec {
-                    if ext_tx.is_inherent() {
-                        inherent_tx_vec.push(ext_tx);
+                for hist_tx in micro_hist_tx_vec {
+                    if hist_tx.is_inherent() {
+                        inherent_tx_vec.push(hist_tx);
                     }
                 }
             }
@@ -371,11 +371,11 @@ impl BlockchainInterface for BlockchainDispatcher {
 
             Ok(inherent_tx_vec
                 .into_iter()
-                .map(|ext_tx| {
+                .map(|hist_tx| {
                     Inherent::from(
-                        ext_tx.unwrap_inherent().clone(),
-                        ext_tx.block_number,
-                        ext_tx.block_time,
+                        hist_tx.unwrap_inherent().clone(),
+                        hist_tx.block_number,
+                        hist_tx.block_time,
                     )
                 })
                 .collect::<Vec<_>>()
@@ -425,26 +425,26 @@ impl BlockchainInterface for BlockchainDispatcher {
             let mut txs = vec![];
 
             for hash in tx_hashes {
-                // Get all the extended transactions that correspond to this hash.
-                let mut extended_tx_vec = blockchain.history_store.get_ext_tx_by_hash(&hash, None);
+                // Get all the historic transactions that correspond to this hash.
+                let mut historic_tx_vec = blockchain.history_store.get_hist_tx_by_hash(&hash, None);
 
                 // Unpack the transaction or raise an error.
-                let extended_tx = match extended_tx_vec.len() {
+                let historic_tx = match historic_tx_vec.len() {
                     0 => {
                         return Err(Error::TransactionNotFound(hash));
                     }
-                    1 => extended_tx_vec.pop().unwrap(),
+                    1 => historic_tx_vec.pop().unwrap(),
                     _ => {
                         return Err(Error::MultipleTransactionsFound(hash));
                     }
                 };
 
-                // Convert the extended transaction into a regular transaction. This will also convert
+                // Convert the historic transaction into a regular transaction. This will also convert
                 // reward inherents.
-                let block_number = extended_tx.block_number;
-                let timestamp = extended_tx.block_time;
+                let block_number = historic_tx.block_number;
+                let timestamp = historic_tx.block_time;
 
-                if let Ok(tx) = extended_tx.into_transaction() {
+                if let Ok(tx) = historic_tx.into_transaction() {
                     txs.push(ExecutedTransaction::from_blockchain(
                         tx,
                         block_number,

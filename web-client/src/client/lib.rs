@@ -604,9 +604,9 @@ impl Client {
             .await?
             .into_iter()
             .next()
-            .map(|ext_tx| {
-                PlainTransactionDetails::from_extended_transaction(
-                    &ext_tx,
+            .map(|hist_tx| {
+                PlainTransactionDetails::from_historic_transaction(
+                    &hist_tx,
                     self.inner.blockchain_head().block_number(),
                 )
             })
@@ -712,8 +712,8 @@ impl Client {
 
         let plain_tx_details: Vec<_> = transactions
             .into_iter()
-            .map(|ext_tx| {
-                PlainTransactionDetails::from_extended_transaction(&ext_tx, current_height)
+            .map(|hist_tx| {
+                PlainTransactionDetails::from_historic_transaction(&hist_tx, current_height)
             })
             .collect();
 
@@ -1009,7 +1009,7 @@ impl Client {
                     .map(|(hash, block_number)| (hash, Some(block_number)))
                     .collect();
 
-                if let Ok(ext_txs) = consensus
+                if let Ok(hist_txs) = consensus
                     .prove_transactions_from_receipts(receipts, 1)
                     .await
                     .map_err(|e| {
@@ -1018,11 +1018,11 @@ impl Client {
                 {
                     let this = JsValue::null();
 
-                    for ext_tx in ext_txs {
-                        let block_number = ext_tx.block_number;
-                        let block_time = ext_tx.block_time;
+                    for hist_tx in hist_txs {
+                        let block_number = hist_tx.block_number;
+                        let block_time = hist_tx.block_time;
 
-                        let exe_tx = ext_tx.into_transaction().unwrap();
+                        let exe_tx = hist_tx.into_transaction().unwrap();
                         let tx = exe_tx.get_raw_transaction();
 
                         let details = PlainTransactionDetails::new(

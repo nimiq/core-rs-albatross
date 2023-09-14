@@ -16,7 +16,7 @@ use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestError};
 use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
-use nimiq_transaction::extended_transaction::ExtendedTransaction;
+use nimiq_transaction::historic_transaction::HistoricTransaction;
 use nimiq_utils::math::CeilingDiv;
 use parking_lot::RwLock;
 use thiserror::Error;
@@ -54,7 +54,7 @@ struct PendingBatchSet {
     history_len: usize,
     history_offset: usize,
     batch_index: usize,
-    history: Vec<ExtendedTransaction>,
+    history: Vec<HistoricTransaction>,
 }
 impl PendingBatchSet {
     fn is_complete(&self) -> bool {
@@ -68,7 +68,7 @@ impl PendingBatchSet {
 
 pub struct BatchSet {
     pub block: MacroBlock,
-    pub history: Vec<ExtendedTransaction>,
+    pub history: Vec<HistoricTransaction>,
     pub batch_index: usize,
 }
 

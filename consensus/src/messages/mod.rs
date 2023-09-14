@@ -12,7 +12,7 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
 use nimiq_transaction::{
-    extended_transaction::ExtendedTransaction, history_proof::HistoryTreeProof,
+    historic_transaction::HistoricTransaction, history_proof::HistoryTreeProof,
 };
 use serde::{Deserialize, Serialize};
 
@@ -111,10 +111,10 @@ impl RequestCommon for RequestBatchSet {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BatchSet {
     pub macro_block: MacroBlock,
-    pub history_len: SizeProof<Blake2bHash, ExtendedTransaction>,
+    pub history_len: SizeProof<Blake2bHash, HistoricTransaction>,
 }
 
-/// This message contains a macro block and the number of extended transactions (transitions)
+/// This message contains a macro block and the number of historic transactions (transitions)
 /// within this epoch.
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct BatchSetInfo {

@@ -10,7 +10,7 @@ use nimiq_primitives::{
     trie::{trie_diff::TrieDiff, trie_proof::TrieProof},
 };
 use nimiq_serde::Deserialize;
-use nimiq_transaction::extended_transaction::ExtendedTransaction;
+use nimiq_transaction::historic_transaction::HistoricTransaction;
 use nimiq_trie::WriteTransactionProxy;
 
 use crate::{blockchain_state::BlockchainState, Blockchain};
@@ -62,7 +62,7 @@ impl Blockchain {
                 // Store the transactions and the inherents into the History tree.
                 let mut total_tx_size = 0;
                 if state.can_verify_history {
-                    let ext_txs = ExtendedTransaction::from(
+                    let hist_txs = HistoricTransaction::from(
                         self.network_id,
                         macro_block.header.block_number,
                         macro_block.header.timestamp,
@@ -71,7 +71,7 @@ impl Blockchain {
                     );
                     total_tx_size = self
                         .history_store
-                        .add_to_history(txn.raw(), macro_block.epoch_number(), &ext_txs)
+                        .add_to_history(txn.raw(), macro_block.epoch_number(), &hist_txs)
                         .expect("Failed to store history")
                         .1
                 };
@@ -142,7 +142,7 @@ impl Blockchain {
                 // Store the transactions and the inherents into the History tree.
                 let mut total_tx_size = 0;
                 if state.can_verify_history {
-                    let ext_txs = ExtendedTransaction::from(
+                    let hist_txs = HistoricTransaction::from(
                         self.network_id,
                         micro_block.header.block_number,
                         micro_block.header.timestamp,
@@ -151,7 +151,7 @@ impl Blockchain {
                     );
                     total_tx_size = self
                         .history_store
-                        .add_to_history(txn.raw(), micro_block.epoch_number(), &ext_txs)
+                        .add_to_history(txn.raw(), micro_block.epoch_number(), &hist_txs)
                         .expect("Failed to store history")
                         .1
                 };

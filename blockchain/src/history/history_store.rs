@@ -23,7 +23,7 @@ use nimiq_mmr::{
 use nimiq_primitives::policy::Policy;
 use nimiq_serde::Serialize;
 use nimiq_transaction::{
-    extended_transaction::{ExtTxData, ExtendedTransaction},
+    historic_transaction::{HistoricTransaction, HistoricTransactionData},
     history_proof::HistoryTreeProof,
     inherent::Inherent,
 };
@@ -31,7 +31,7 @@ use nimiq_transaction::{
 use crate::history::{mmr_store::MMRStore, ordered_hash::OrderedHash, HistoryTreeChunk};
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
-/// constructed from the list of extended transactions in an epoch) and extended transactions (which
+/// constructed from the list of historic transactions in an epoch) and historic transactions (which
 /// are representations of transactions).
 /// The history trees allow a node in possession of a transaction to prove to another node (that
 /// only has macro block headers) that that given transaction happened.
@@ -41,9 +41,9 @@ pub struct HistoryStore {
     db: DatabaseProxy,
     /// A database of all history trees indexed by their epoch number.
     hist_tree_table: TableProxy,
-    /// A database of all extended transactions indexed by their hash (= leaf hash in the history
+    /// A database of all historic transactions indexed by their hash (= leaf hash in the history
     /// tree).
-    ext_tx_table: TableProxy,
+    hist_tx_table: TableProxy,
     /// A database of all leaf hashes and indexes indexed by the hash of the transaction. This way we
     /// can start with a transaction hash and find it in the MMR.
     tx_hash_table: TableProxy,
@@ -56,7 +56,7 @@ pub struct HistoryStore {
 
 impl HistoryStore {
     const HIST_TREE_DB_NAME: &'static str = "HistoryTrees";
-    const EXT_TX_DB_NAME: &'static str = "ExtendedTransactions";
+    const HIST_TX_DB_NAME: &'static str = "HistoricTransactions";
     const TX_HASH_DB_NAME: &'static str = "LeafHashesByTxHash";
     const LAST_LEAF_DB_NAME: &'static str = "LastLeafIndexesByBlock";
     const ADDRESS_DB_NAME: &'static str = "TxHashesByAddress";
@@ -64,7 +64,7 @@ impl HistoryStore {
     /// Creates a new HistoryStore.
     pub fn new(db: DatabaseProxy) -> Self {
         let hist_tree_table = db.open_table(Self::HIST_TREE_DB_NAME.to_string());
-        let ext_tx_table = db.open_table(Self::EXT_TX_DB_NAME.to_string());
+        let hist_tx_table = db.open_table(Self::HIST_TX_DB_NAME.to_string());
         let tx_hash_table = db.open_table_with_flags(
             Self::TX_HASH_DB_NAME.to_string(),
             TableFlags::DUPLICATE_KEYS | TableFlags::DUP_FIXED_SIZE_VALUES,
@@ -79,7 +79,7 @@ impl HistoryStore {
         HistoryStore {
             db,
             hist_tree_table,
-            ext_tx_table,
+            hist_tx_table,
             tx_hash_table,
             last_leaf_table,
             address_table,
@@ -88,7 +88,7 @@ impl HistoryStore {
 
     pub fn clear(&self, txn: &mut WriteTransactionProxy) {
         txn.clear_database(&self.hist_tree_table);
-        txn.clear_database(&self.ext_tx_table);
+        txn.clear_database(&self.hist_tx_table);
         txn.clear_database(&self.tx_hash_table);
         txn.clear_database(&self.last_leaf_table);
         txn.clear_database(&self.address_table);
@@ -157,7 +157,7 @@ impl HistoryStore {
         tree.len()
     }
 
-    /// Add a list of extended transactions to an existing history tree. It returns the root of the
+    /// Add a list of historic transactions to an existing history tree. It returns the root of the
     /// resulting tree and the total size of the transactions added.
     /// This function assumes that:
     ///     1. The transactions are pushed in increasing block number order.
@@ -167,7 +167,7 @@ impl HistoryStore {
         &self,
         txn: &mut WriteTransactionProxy,
         epoch_number: u32,
-        ext_txs: &[ExtendedTransaction],
+        hist_txs: &[HistoricTransaction],
     ) -> Option<(Blake2bHash, u64)> {
         // Get the history tree.
         let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
@@ -176,10 +176,10 @@ impl HistoryStore {
             epoch_number,
         ));
 
-        // Append the extended transactions to the history tree and keep the respective leaf indexes.
+        // Append the historic transactions to the history tree and keep the respective leaf indexes.
         let mut leaf_idx = vec![];
 
-        for tx in ext_txs {
+        for tx in hist_txs {
             let i = tree.push(tx).ok()?;
             leaf_idx.push(i as u32);
         }
@@ -187,11 +187,11 @@ impl HistoryStore {
         let root = tree.get_root().ok()?;
         let mut txns_size = 0u64;
 
-        // Add the extended transactions into the respective database.
+        // Add the historic transactions into the respective database.
         // We need to do this separately due to the borrowing rules of Rust.
-        for (tx, i) in ext_txs.iter().zip(leaf_idx.iter()) {
+        for (tx, i) in hist_txs.iter().zip(leaf_idx.iter()) {
             // The prefix is one because it is a leaf.
-            txns_size += self.put_extended_tx(txn, &tx.hash(1), *i, tx) as u64;
+            txns_size += self.put_historic_tx(txn, &tx.hash(1), *i, tx) as u64;
         }
 
         // Return the history root.
@@ -211,18 +211,18 @@ impl HistoryStore {
         let mut txns_size = 0u64;
 
         for (leaf_index, leaf_hash) in hashes {
-            let tx_opt: Option<ExtendedTransaction> = txn.get(&self.ext_tx_table, &leaf_hash);
+            let tx_opt: Option<HistoricTransaction> = txn.get(&self.hist_tx_table, &leaf_hash);
 
-            let ext_tx = match tx_opt {
+            let hist_tx = match tx_opt {
                 Some(v) => v,
                 None => continue,
             };
 
-            // Remove it from the extended transaction database.
-            txn.remove(&self.ext_tx_table, &leaf_hash);
+            // Remove it from the historic transaction database.
+            txn.remove(&self.hist_tx_table, &leaf_hash);
 
             // Remove it from the transaction hash database.
-            let tx_hash = ext_tx.tx_hash();
+            let tx_hash = hist_tx.tx_hash();
 
             txn.remove_item(
                 &self.tx_hash_table,
@@ -233,12 +233,12 @@ impl HistoryStore {
                 },
             );
 
-            txns_size += ext_tx.serialized_size() as u64;
+            txns_size += hist_tx.serialized_size() as u64;
 
             // Remove it from the leaf index database.
-            // Check if you are removing the last extended transaction for this block. If yes,
+            // Check if you are removing the last historic transaction for this block. If yes,
             // completely remove the block, if not just decrement the last leaf index.
-            let block_number = ext_tx.block_number;
+            let block_number = hist_tx.block_number;
             let (start, end) = self.get_indexes_for_block(block_number, Some(txn));
 
             if end - start == 1 {
@@ -252,13 +252,13 @@ impl HistoryStore {
             }
             removed_txs.insert(tx_hash);
 
-            match &ext_tx.data {
-                ExtTxData::Basic(tx) => {
+            match &hist_tx.data {
+                HistoricTransactionData::Basic(tx) => {
                     let tx = tx.get_raw_transaction();
                     affected_addresses.insert(tx.sender.clone());
                     affected_addresses.insert(tx.recipient.clone());
                 }
-                ExtTxData::Inherent(tx) => {
+                HistoricTransactionData::Inherent(tx) => {
                     if let Inherent::Reward { target, .. } = tx {
                         affected_addresses.insert(target.clone());
                     }
@@ -290,13 +290,13 @@ impl HistoryStore {
         txns_size
     }
 
-    /// Removes a number of extended transactions from an existing history tree. It returns the root
+    /// Removes a number of historic transactions from an existing history tree. It returns the root
     /// of the resulting tree and the total size of of the transactions removed.
     pub fn remove_partial_history(
         &self,
         txn: &mut WriteTransactionProxy,
         epoch_number: u32,
-        num_ext_txs: usize,
+        num_hist_txs: usize,
     ) -> Option<(Blake2bHash, u64)> {
         // Get the history tree.
         let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
@@ -309,17 +309,17 @@ impl HistoryStore {
         let root = tree.get_root().ok()?;
 
         // Remove all leaves from the history tree and remember the respective hashes and indexes.
-        let mut hashes = Vec::with_capacity(num_ext_txs);
+        let mut hashes = Vec::with_capacity(num_hist_txs);
 
         let num_leaves = tree.num_leaves();
 
-        for i in 0..cmp::min(num_ext_txs, num_leaves) {
+        for i in 0..cmp::min(num_hist_txs, num_leaves) {
             let leaf_hash = tree.get_leaf(num_leaves - i - 1).unwrap();
             tree.remove_back().ok()?;
             hashes.push((num_leaves - i - 1, leaf_hash));
         }
 
-        // Remove each of the extended transactions in the history tree from the extended
+        // Remove each of the historic transactions in the history tree from the extended
         // transaction database.
         let txns_size = self.remove_txns_from_history(txn, hashes);
 
@@ -327,7 +327,7 @@ impl HistoryStore {
         Some((root, txns_size))
     }
 
-    /// Removes an existing history tree and all the extended transactions that were part of it.
+    /// Removes an existing history tree and all the historic transactions that were part of it.
     /// Returns None if there's no history tree corresponding to the given epoch number.
     pub fn remove_history(&self, txn: &mut WriteTransactionProxy, epoch_number: u32) -> Option<()> {
         // Get the history tree.
@@ -377,14 +377,14 @@ impl HistoryStore {
         tree.get_root().ok()
     }
 
-    /// Calculates the history tree root from a vector of extended transactions. It doesn't use the
+    /// Calculates the history tree root from a vector of historic transactions. It doesn't use the
     /// database, it is just used to check the correctness of the history root when syncing.
-    pub fn root_from_ext_txs(ext_txs: &[ExtendedTransaction]) -> Option<Blake2bHash> {
+    pub fn root_from_hist_txs(hist_txs: &[HistoricTransaction]) -> Option<Blake2bHash> {
         // Create a new history tree.
         let mut tree = MerkleMountainRange::new(MemoryStore::new());
 
-        // Append the extended transactions to the history tree.
-        for tx in ext_txs {
+        // Append the historic transactions to the history tree.
+        for tx in hist_txs {
             tree.push(tx).ok()?;
         }
 
@@ -392,12 +392,12 @@ impl HistoryStore {
         tree.get_root().ok()
     }
 
-    /// Gets an extended transaction given its transaction hash.
-    pub fn get_ext_tx_by_hash(
+    /// Gets an historic transaction given its transaction hash.
+    pub fn get_hist_tx_by_hash(
         &self,
         tx_hash: &Blake2bHash,
         txn_option: Option<&TransactionProxy>,
-    ) -> Vec<ExtendedTransaction> {
+    ) -> Vec<HistoricTransaction> {
         let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -410,23 +410,23 @@ impl HistoryStore {
         // Get leaf hash(es).
         let leaves = self.get_leaves_by_tx_hash(tx_hash, Some(txn));
 
-        // Get extended transactions.
-        let mut ext_txs = vec![];
+        // Get historic transactions.
+        let mut hist_txs = vec![];
 
         for leaf in leaves {
-            ext_txs.push(self.get_extended_tx(&leaf.hash, Some(txn)).unwrap());
+            hist_txs.push(self.get_historic_tx(&leaf.hash, Some(txn)).unwrap());
         }
 
-        ext_txs
+        hist_txs
     }
 
-    /// Gets all extended transactions for a given block number.
+    /// Gets all historic transactions for a given block number.
     /// This method returns the transactions in the same order that they appear in the block.
     pub fn get_block_transactions(
         &self,
         block_number: u32,
         txn_option: Option<&TransactionProxy>,
-    ) -> Vec<ExtendedTransaction> {
+    ) -> Vec<HistoricTransaction> {
         let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -446,24 +446,24 @@ impl HistoryStore {
         // Get the range of leaf indexes at this height.
         let (start, end) = self.get_indexes_for_block(block_number, Some(txn));
 
-        // Get each extended transaction.
-        let mut ext_txs = vec![];
+        // Get each historic transaction.
+        let mut hist_txs = vec![];
 
         for i in start..end {
             let leaf_hash = tree.get_leaf(i as usize).unwrap();
-            let ext_tx = self.get_extended_tx(&leaf_hash, Some(txn)).unwrap();
-            ext_txs.push(ext_tx);
+            let hist_tx = self.get_historic_tx(&leaf_hash, Some(txn)).unwrap();
+            hist_txs.push(hist_tx);
         }
 
-        ext_txs
+        hist_txs
     }
 
-    /// Gets all extended transactions for a given epoch.
+    /// Gets all historic transactions for a given epoch.
     pub fn get_epoch_transactions(
         &self,
         epoch_number: u32,
         txn_option: Option<&TransactionProxy>,
-    ) -> Vec<ExtendedTransaction> {
+    ) -> Vec<HistoricTransaction> {
         let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -480,18 +480,18 @@ impl HistoryStore {
             epoch_number,
         ));
 
-        // Get each extended transaction from the tree.
-        let mut ext_txs = vec![];
+        // Get each historic transaction from the tree.
+        let mut hist_txs = vec![];
 
         for i in 0..tree.num_leaves() {
             let leaf_hash = tree.get_leaf(i).unwrap();
-            ext_txs.push(self.get_extended_tx(&leaf_hash, Some(txn)).unwrap());
+            hist_txs.push(self.get_historic_tx(&leaf_hash, Some(txn)).unwrap());
         }
 
-        ext_txs
+        hist_txs
     }
 
-    /// Returns the number of extended transactions for a given epoch.
+    /// Returns the number of historic transactions for a given epoch.
     pub fn num_epoch_transactions(
         &self,
         epoch_number: u32,
@@ -516,12 +516,12 @@ impl HistoryStore {
         tree.num_leaves()
     }
 
-    /// Gets all finalized extended transactions for a given epoch.
+    /// Gets all finalized historic transactions for a given epoch.
     pub fn get_final_epoch_transactions(
         &self,
         epoch_number: u32,
         txn_option: Option<&TransactionProxy>,
-    ) -> Vec<ExtendedTransaction> {
+    ) -> Vec<HistoricTransaction> {
         let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -546,25 +546,25 @@ impl HistoryStore {
 
         // Find the number of the last macro stored for the given epoch.
         let last_leaf = tree.get_leaf(num_leaves - 1).unwrap();
-        let last_tx = self.get_extended_tx(&last_leaf, Some(txn)).unwrap();
+        let last_tx = self.get_historic_tx(&last_leaf, Some(txn)).unwrap();
         let last_macro_block = Policy::last_macro_block(last_tx.block_number);
 
-        // Count the extended transactions up to the last macro block.
-        let mut ext_txs = Vec::new();
+        // Count the historic transactions up to the last macro block.
+        let mut hist_txs = Vec::new();
 
         for i in 0..tree.num_leaves() {
             let leaf_hash = tree.get_leaf(i).unwrap();
-            let ext_tx = self.get_extended_tx(&leaf_hash, Some(txn)).unwrap();
-            if ext_tx.block_number > last_macro_block {
+            let hist_tx = self.get_historic_tx(&leaf_hash, Some(txn)).unwrap();
+            if hist_tx.block_number > last_macro_block {
                 break;
             }
-            ext_txs.push(ext_tx);
+            hist_txs.push(hist_tx);
         }
 
-        ext_txs
+        hist_txs
     }
 
-    /// Gets the number of all finalized extended transactions for a given epoch.
+    /// Gets the number of all finalized historic transactions for a given epoch.
     /// This is basically an optimization of calling `get_final_epoch_transactions(..).len()`
     /// since the latter is very expensive
     pub fn get_number_final_epoch_transactions(
@@ -596,15 +596,15 @@ impl HistoryStore {
 
         // Find the number of the last macro stored for the given epoch.
         let last_leaf = tree.get_leaf(num_leaves - 1).unwrap();
-        let last_tx = self.get_extended_tx(&last_leaf, Some(txn)).unwrap();
+        let last_tx = self.get_historic_tx(&last_leaf, Some(txn)).unwrap();
         let last_macro_block = Policy::last_macro_block(last_tx.block_number);
 
         // Iterate backwards and check when we find a transaction of a block that is before the last macro block
         let mut count = tree.num_leaves();
         for i in (0..tree.num_leaves()).rev() {
             let leaf_hash = tree.get_leaf(i).unwrap();
-            let ext_tx = self.get_extended_tx(&leaf_hash, Some(txn)).unwrap();
-            if ext_tx.block_number > last_macro_block {
+            let hist_tx = self.get_historic_tx(&leaf_hash, Some(txn)).unwrap();
+            if hist_tx.block_number > last_macro_block {
                 count -= 1;
             } else {
                 break;
@@ -614,12 +614,12 @@ impl HistoryStore {
         count
     }
 
-    /// Gets all non-finalized extended transactions for a given epoch.
+    /// Gets all non-finalized historic transactions for a given epoch.
     pub fn get_nonfinal_epoch_transactions(
         &self,
         epoch_number: u32,
         txn_option: Option<&TransactionProxy>,
-    ) -> Vec<ExtendedTransaction> {
+    ) -> Vec<HistoricTransaction> {
         let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -644,22 +644,22 @@ impl HistoryStore {
 
         // Find the block number of the last macro stored for the given epoch.
         let last_leaf = tree.get_leaf(num_leaves - 1).unwrap();
-        let last_tx = self.get_extended_tx(&last_leaf, Some(txn)).unwrap();
+        let last_tx = self.get_historic_tx(&last_leaf, Some(txn)).unwrap();
         let last_macro_block = Policy::last_macro_block(last_tx.block_number);
 
-        // Get each extended transaction after the last macro block from the tree.
-        let mut ext_txs = VecDeque::new();
+        // Get each historic transaction after the last macro block from the tree.
+        let mut hist_txs = VecDeque::new();
 
         for i in (num_leaves - 1)..0 {
             let leaf_hash = tree.get_leaf(i).unwrap();
-            let ext_tx = self.get_extended_tx(&leaf_hash, Some(txn)).unwrap();
-            if ext_tx.block_number <= last_macro_block {
+            let hist_tx = self.get_historic_tx(&leaf_hash, Some(txn)).unwrap();
+            if hist_tx.block_number <= last_macro_block {
                 break;
             }
-            ext_txs.push_front(ext_tx);
+            hist_txs.push_front(hist_tx);
         }
 
-        ext_txs.into()
+        hist_txs.into()
     }
 
     /// Returns a vector containing all transaction (and reward inherents) hashes corresponding to the given
@@ -735,8 +735,8 @@ impl HistoryStore {
         self.prove_with_position(epoch_number, positions, verifier_state, txn_option)
     }
 
-    /// Returns a proof for all the extended transactions at the given positions (leaf indexes). The
-    /// proof also includes the extended transactions.
+    /// Returns a proof for all the historic transactions at the given positions (leaf indexes). The
+    /// proof also includes the historic transactions.
     fn prove_with_position(
         &self,
         epoch_number: u32,
@@ -763,23 +763,23 @@ impl HistoryStore {
         // Create Merkle proof.
         let proof = tree.prove(&positions, verifier_state).ok()?;
 
-        // Get each extended transaction from the tree.
-        let mut ext_txs = vec![];
+        // Get each historic transaction from the tree.
+        let mut hist_txs = vec![];
 
         for i in &positions {
             let leaf_hash = tree.get_leaf(*i).unwrap();
-            ext_txs.push(self.get_extended_tx(&leaf_hash, Some(txn)).unwrap());
+            hist_txs.push(self.get_historic_tx(&leaf_hash, Some(txn)).unwrap());
         }
 
         Some(HistoryTreeProof {
             proof,
             positions,
-            history: ext_txs,
+            history: hist_txs,
         })
     }
 
     /// Returns the `chunk_index`th chunk of size `chunk_size` for a given epoch.
-    /// The return value consists of a vector of all the extended transactions in that chunk
+    /// The return value consists of a vector of all the historic transactions in that chunk
     /// and a proof for these in the MMR.
     pub fn prove_chunk(
         &self,
@@ -819,17 +819,17 @@ impl HistoryStore {
             .prove_range(start..end, Some(number_of_nodes), false)
             .ok()?;
 
-        // Get each extended transaction from the tree.
-        let mut ext_txs = vec![];
+        // Get each historic transaction from the tree.
+        let mut hist_txs = vec![];
 
         for i in start..end {
             let leaf_hash = tree.get_leaf(i).unwrap();
-            ext_txs.push(self.get_extended_tx(&leaf_hash, Some(txn)).unwrap());
+            hist_txs.push(self.get_historic_tx(&leaf_hash, Some(txn)).unwrap());
         }
 
         Some(HistoryTreeChunk {
             proof,
-            history: ext_txs,
+            history: hist_txs,
         })
     }
 
@@ -837,7 +837,7 @@ impl HistoryStore {
     pub fn tree_from_chunks(
         &self,
         epoch_number: u32,
-        chunks: Vec<(Vec<ExtendedTransaction>, RangeProof<Blake2bHash>)>,
+        chunks: Vec<(Vec<HistoricTransaction>, RangeProof<Blake2bHash>)>,
         txn: &mut WriteTransactionProxy,
     ) -> Result<Blake2bHash, MMRError> {
         // Get partial history tree for given epoch.
@@ -866,7 +866,7 @@ impl HistoryStore {
         // Then add all transactions to the database as the tree is finished.
         for (i, leaf) in all_leaves.iter().enumerate() {
             // The prefix is one because it is a leaf.
-            self.put_extended_tx(txn, &leaf.hash(1), i as u32, leaf);
+            self.put_historic_tx(txn, &leaf.hash(1), i as u32, leaf);
         }
 
         Ok(root)
@@ -888,13 +888,13 @@ impl HistoryStore {
         cursor.last::<u32, u32>().map(|(key, _)| key)
     }
 
-    /// Gets an extended transaction by its hash. Note that this hash is the leaf hash (see MMRHash)
+    /// Gets an historic transaction by its hash. Note that this hash is the leaf hash (see MMRHash)
     /// of the transaction, not a simple Blake2b hash of the transaction.
-    fn get_extended_tx(
+    fn get_historic_tx(
         &self,
         leaf_hash: &Blake2bHash,
         txn_option: Option<&TransactionProxy>,
-    ) -> Option<ExtendedTransaction> {
+    ) -> Option<HistoricTransaction> {
         let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -904,21 +904,21 @@ impl HistoryStore {
             }
         };
 
-        txn.get(&self.ext_tx_table, leaf_hash)
+        txn.get(&self.hist_tx_table, leaf_hash)
     }
 
-    /// Inserts a extended transaction into the History Store's transaction databases.
+    /// Inserts a historic transaction into the History Store's transaction databases.
     /// Returns the size of the serialized transaction
-    fn put_extended_tx(
+    fn put_historic_tx(
         &self,
         txn: &mut WriteTransactionProxy,
         leaf_hash: &Blake2bHash,
         leaf_index: u32,
-        ext_tx: &ExtendedTransaction,
+        hist_tx: &HistoricTransaction,
     ) -> usize {
-        txn.put_reserve(&self.ext_tx_table, leaf_hash, ext_tx);
+        txn.put_reserve(&self.hist_tx_table, leaf_hash, hist_tx);
 
-        let tx_hash = ext_tx.tx_hash();
+        let tx_hash = hist_tx.tx_hash();
 
         txn.put(
             &self.tx_hash_table,
@@ -931,10 +931,10 @@ impl HistoryStore {
 
         // We need to convert the block number to big-endian since that's how the LMDB database
         // orders the keys.
-        txn.put(&self.last_leaf_table, &ext_tx.block_number, &leaf_index);
+        txn.put(&self.last_leaf_table, &hist_tx.block_number, &leaf_index);
 
-        match &ext_tx.data {
-            ExtTxData::Basic(tx) => {
+        match &hist_tx.data {
+            HistoricTransactionData::Basic(tx) => {
                 let tx = tx.get_raw_transaction();
 
                 let index_tx_sender = self.get_last_tx_index_for_address(&tx.sender, Some(txn)) + 1;
@@ -960,7 +960,7 @@ impl HistoryStore {
                     },
                 );
             }
-            ExtTxData::Inherent(tx) => {
+            HistoricTransactionData::Inherent(tx) => {
                 // We only add reward inherents to the address database.
                 if let Inherent::Reward { target, .. } = tx {
                     let index_tx_recipient =
@@ -977,7 +977,7 @@ impl HistoryStore {
                 }
             }
         }
-        ext_tx.serialized_size()
+        hist_tx.serialized_size()
     }
 
     /// Returns a vector containing all leaf hashes and indexes corresponding to the given
@@ -1087,7 +1087,7 @@ impl HistoryStore {
         &self,
         block_number: u32,
         txn_option: Option<&TransactionProxy>,
-    ) -> Result<SizeProof<Blake2bHash, ExtendedTransaction>, MMRError> {
+    ) -> Result<SizeProof<Blake2bHash, HistoricTransaction>, MMRError> {
         let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -1105,7 +1105,7 @@ impl HistoryStore {
             epoch_number,
         ));
 
-        let f = |leaf_hash| self.get_extended_tx(&leaf_hash, txn_option);
+        let f = |leaf_hash| self.get_historic_tx(&leaf_hash, txn_option);
 
         // Calculate number of nodes in the verifier's history tree.
         let leaf_count = self.length_at(block_number, Some(txn)) as usize;
@@ -1132,17 +1132,19 @@ mod tests {
         let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
-        // Create extended transactions.
+        // Create historic transactions.
         let ext_0 = create_transaction(1, 0);
         let ext_1 = create_transaction(3, 1);
         let ext_2 = create_transaction(7, 2);
         let ext_3 = create_transaction(8, 3);
 
-        let ext_txs = vec![ext_0, ext_1, ext_2, ext_3];
+        let hist_txs = vec![ext_0, ext_1, ext_2, ext_3];
 
-        // Add extended transactions to History Store.
+        // Add historic transactions to History Store.
         let mut txn = env.write_transaction();
-        let (history_root, _) = history_store.add_to_history(&mut txn, 0, &ext_txs).unwrap();
+        let (history_root, _) = history_store
+            .add_to_history(&mut txn, 0, &hist_txs)
+            .unwrap();
 
         // Prove number of leaves.
         let size_proof = history_store
@@ -1160,17 +1162,17 @@ mod tests {
         let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
-        // Create extended transactions.
+        // Create historic transactions.
         let ext_0 = create_transaction(1, 0);
         let ext_1 = create_transaction(3, 1);
         let ext_2 = create_transaction(7, 2);
         let ext_3 = create_transaction(8, 3);
 
-        let ext_txs = vec![ext_0, ext_1, ext_2, ext_3];
+        let hist_txs = vec![ext_0, ext_1, ext_2, ext_3];
 
-        // Add extended transactions to History Store.
+        // Add historic transactions to History Store.
         let mut txn = env.write_transaction();
-        history_store.add_to_history(&mut txn, 1, &ext_txs);
+        history_store.add_to_history(&mut txn, 1, &hist_txs);
 
         // Verify method works.
         assert_eq!(history_store.length_at(0, Some(&txn)), 0);
@@ -1183,48 +1185,48 @@ mod tests {
     }
 
     #[test]
-    fn get_root_from_ext_txs_works() {
+    fn get_root_from_hist_txs_works() {
         // Initialize History Store.
         let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
-        // Create extended transactions.
-        let ext_txs = gen_ext_txs();
+        // Create historic transactions.
+        let hist_txs = gen_hist_txs();
 
-        // Add extended transactions to History Store.
+        // Add historic transactions to History Store.
         let mut txn = env.write_transaction();
-        history_store.add_to_history(&mut txn, 0, &ext_txs[..3]);
-        history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
+        history_store.add_to_history(&mut txn, 0, &hist_txs[..3]);
+        history_store.add_to_history(&mut txn, 1, &hist_txs[3..]);
 
         // Verify method works.
         let real_root_0 = history_store.get_history_tree_root(0, Some(&txn));
-        let calc_root_0 = HistoryStore::root_from_ext_txs(&ext_txs[..3]);
+        let calc_root_0 = HistoryStore::root_from_hist_txs(&hist_txs[..3]);
 
         assert_eq!(real_root_0, calc_root_0);
 
         let real_root_1 = history_store.get_history_tree_root(1, Some(&txn));
-        let calc_root_1 = HistoryStore::root_from_ext_txs(&ext_txs[3..]);
+        let calc_root_1 = HistoryStore::root_from_hist_txs(&hist_txs[3..]);
 
         assert_eq!(real_root_1, calc_root_1);
     }
 
     #[test]
-    fn get_ext_tx_by_hash_works() {
+    fn get_hist_tx_by_hash_works() {
         // Initialize History Store.
         let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
-        // Create extended transactions.
-        let ext_txs = gen_ext_txs();
+        // Create historic transactions.
+        let hist_txs = gen_hist_txs();
 
-        // Add extended transactions to History Store.
+        // Add historic transactions to History Store.
         let mut txn = env.write_transaction();
-        history_store.add_to_history(&mut txn, 0, &ext_txs[..3]);
-        history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
+        history_store.add_to_history(&mut txn, 0, &hist_txs[..3]);
+        history_store.add_to_history(&mut txn, 1, &hist_txs[3..]);
 
         // Verify method works.
         assert_eq!(
-            history_store.get_ext_tx_by_hash(&ext_txs[0].tx_hash(), Some(&txn))[0]
+            history_store.get_hist_tx_by_hash(&hist_txs[0].tx_hash(), Some(&txn))[0]
                 .unwrap_basic()
                 .get_raw_transaction()
                 .value,
@@ -1233,14 +1235,14 @@ mod tests {
 
         assert_eq!(
             reward_inherent_value(
-                history_store.get_ext_tx_by_hash(&ext_txs[2].tx_hash(), Some(&txn))[0]
+                history_store.get_hist_tx_by_hash(&hist_txs[2].tx_hash(), Some(&txn))[0]
                     .unwrap_inherent()
             ),
             Coin::from_u64_unchecked(2),
         );
 
         assert_eq!(
-            history_store.get_ext_tx_by_hash(&ext_txs[3].tx_hash(), Some(&txn))[0]
+            history_store.get_hist_tx_by_hash(&hist_txs[3].tx_hash(), Some(&txn))[0]
                 .unwrap_basic()
                 .get_raw_transaction()
                 .value,
@@ -1255,13 +1257,13 @@ mod tests {
         let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
-        // Create extended transactions.
-        let ext_txs = gen_ext_txs();
+        // Create historic transactions.
+        let hist_txs = gen_hist_txs();
 
-        // Add extended transactions to History Store.
+        // Add historic transactions to History Store.
         let mut txn = env.write_transaction();
-        history_store.add_to_history(&mut txn, 0, &ext_txs[..3]);
-        history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
+        history_store.add_to_history(&mut txn, 0, &hist_txs[..3]);
+        history_store.add_to_history(&mut txn, 1, &hist_txs[3..]);
 
         // Verify method works. Note that the block transactions are returned in the same
         // order they were inserted.
@@ -1327,7 +1329,7 @@ mod tests {
             Coin::from_u64_unchecked(7)
         );
 
-        // Remove extended transactions from History Store.
+        // Remove historic transactions from History Store.
         history_store.remove_partial_history(&mut txn, 0, 2);
         history_store.remove_partial_history(&mut txn, 1, 3);
 
@@ -1370,13 +1372,13 @@ mod tests {
         let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
-        // Create extended transactions.
-        let ext_txs = gen_ext_txs();
+        // Create historic transactions.
+        let hist_txs = gen_hist_txs();
 
-        // Add extended transactions to History Store.
+        // Add historic transactions to History Store.
         let mut txn = env.write_transaction();
-        history_store.add_to_history(&mut txn, 0, &ext_txs[..3]);
-        history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
+        history_store.add_to_history(&mut txn, 0, &hist_txs[..3]);
+        history_store.add_to_history(&mut txn, 1, &hist_txs[3..]);
 
         // Verify method works.
         let query = history_store.get_epoch_transactions(0, Some(&txn));
@@ -1439,7 +1441,7 @@ mod tests {
             Coin::from_u64_unchecked(7)
         );
 
-        // Remove extended transactions to History Store.
+        // Remove historic transactions to History Store.
         history_store.remove_partial_history(&mut txn, 1, 3);
 
         // Verify method works.
@@ -1484,25 +1486,25 @@ mod tests {
     }
 
     #[test]
-    fn get_num_extended_transactions_works() {
+    fn get_num_historic_transactions_works() {
         // Initialize History Store.
         let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
-        // Create extended transactions.
-        let ext_txs = gen_ext_txs();
+        // Create historic transactions.
+        let hist_txs = gen_hist_txs();
 
-        // Add extended transactions to History Store.
+        // Add historic transactions to History Store.
         let mut txn = env.write_transaction();
-        history_store.add_to_history(&mut txn, 0, &ext_txs[..3]);
-        history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
+        history_store.add_to_history(&mut txn, 0, &hist_txs[..3]);
+        history_store.add_to_history(&mut txn, 1, &hist_txs[3..]);
 
         // Verify method works.
         assert_eq!(history_store.num_epoch_transactions(0, Some(&txn)), 3);
 
         assert_eq!(history_store.num_epoch_transactions(1, Some(&txn)), 5);
 
-        // Remove extended transactions to History Store.
+        // Remove historic transactions to History Store.
         history_store.remove_partial_history(&mut txn, 1, 3);
 
         // Verify method works.
@@ -1517,13 +1519,13 @@ mod tests {
         let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
-        // Create extended transactions.
-        let ext_txs = gen_ext_txs();
+        // Create historic transactions.
+        let hist_txs = gen_hist_txs();
 
-        // Add extended transactions to History Store.
+        // Add historic transactions to History Store.
         let mut txn = env.write_transaction();
-        history_store.add_to_history(&mut txn, 0, &ext_txs[..3]);
-        history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
+        history_store.add_to_history(&mut txn, 0, &hist_txs[..3]);
+        history_store.add_to_history(&mut txn, 1, &hist_txs[3..]);
 
         // Verify method works.
         let query_1 = history_store.get_tx_hashes_by_address(
@@ -1534,18 +1536,18 @@ mod tests {
         );
 
         assert_eq!(query_1.len(), 5);
-        assert_eq!(query_1[0], ext_txs[6].tx_hash());
-        assert_eq!(query_1[1], ext_txs[5].tx_hash());
-        assert_eq!(query_1[2], ext_txs[3].tx_hash());
-        assert_eq!(query_1[3], ext_txs[1].tx_hash());
-        assert_eq!(query_1[4], ext_txs[0].tx_hash());
+        assert_eq!(query_1[0], hist_txs[6].tx_hash());
+        assert_eq!(query_1[1], hist_txs[5].tx_hash());
+        assert_eq!(query_1[2], hist_txs[3].tx_hash());
+        assert_eq!(query_1[3], hist_txs[1].tx_hash());
+        assert_eq!(query_1[4], hist_txs[0].tx_hash());
 
         let query_2 =
             history_store.get_tx_hashes_by_address(&Address::burn_address(), 2, Some(&txn));
 
         assert_eq!(query_2.len(), 2);
-        assert_eq!(query_2[0], ext_txs[6].tx_hash());
-        assert_eq!(query_2[1], ext_txs[5].tx_hash());
+        assert_eq!(query_2[0], hist_txs[6].tx_hash());
+        assert_eq!(query_2[1], hist_txs[5].tx_hash());
 
         let query_3 = history_store.get_tx_hashes_by_address(
             &Address::from_user_friendly_address("NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T")
@@ -1555,9 +1557,9 @@ mod tests {
         );
 
         assert_eq!(query_3.len(), 3);
-        assert_eq!(query_3[0], ext_txs[7].tx_hash());
-        assert_eq!(query_3[1], ext_txs[4].tx_hash());
-        assert_eq!(query_3[2], ext_txs[2].tx_hash());
+        assert_eq!(query_3[0], hist_txs[7].tx_hash());
+        assert_eq!(query_3[1], hist_txs[4].tx_hash());
+        assert_eq!(query_3[2], hist_txs[2].tx_hash());
 
         let query_4 = history_store.get_tx_hashes_by_address(
             &Address::from_user_friendly_address("NQ28 1U7R M38P GN5A 7J8R GE62 8QS7 PK2S 4S31")
@@ -1575,13 +1577,13 @@ mod tests {
         let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
-        // Create extended transactions.
-        let ext_txs = gen_ext_txs();
+        // Create historic transactions.
+        let hist_txs = gen_hist_txs();
 
-        // Add extended transactions to History Store.
+        // Add historic transactions to History Store.
         let mut txn = env.write_transaction();
-        history_store.add_to_history(&mut txn, 0, &ext_txs[..3]);
-        history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
+        history_store.add_to_history(&mut txn, 0, &hist_txs[..3]);
+        history_store.add_to_history(&mut txn, 1, &hist_txs[3..]);
 
         // Verify method works.
         let root = history_store.get_history_tree_root(0, Some(&txn)).unwrap();
@@ -1589,7 +1591,7 @@ mod tests {
         let proof = history_store
             .prove(
                 0,
-                vec![&ext_txs[0].tx_hash(), &ext_txs[2].tx_hash()],
+                vec![&hist_txs[0].tx_hash(), &hist_txs[2].tx_hash()],
                 None,
                 Some(&txn),
             )
@@ -1600,8 +1602,8 @@ mod tests {
         assert_eq!(proof.positions[1], 2);
 
         assert_eq!(proof.history.len(), 2);
-        assert_eq!(proof.history[0].tx_hash(), ext_txs[0].tx_hash());
-        assert_eq!(proof.history[1].tx_hash(), ext_txs[2].tx_hash());
+        assert_eq!(proof.history[0].tx_hash(), hist_txs[0].tx_hash());
+        assert_eq!(proof.history[1].tx_hash(), hist_txs[2].tx_hash());
 
         assert!(proof.verify(root).unwrap());
 
@@ -1611,9 +1613,9 @@ mod tests {
             .prove(
                 1,
                 vec![
-                    &ext_txs[3].tx_hash(),
-                    &ext_txs[4].tx_hash(),
-                    &ext_txs[6].tx_hash(),
+                    &hist_txs[3].tx_hash(),
+                    &hist_txs[4].tx_hash(),
+                    &hist_txs[6].tx_hash(),
                 ],
                 None,
                 Some(&txn),
@@ -1626,9 +1628,9 @@ mod tests {
         assert_eq!(proof.positions[2], 3);
 
         assert_eq!(proof.history.len(), 3);
-        assert_eq!(proof.history[0].tx_hash(), ext_txs[3].tx_hash());
-        assert_eq!(proof.history[1].tx_hash(), ext_txs[4].tx_hash());
-        assert_eq!(proof.history[2].tx_hash(), ext_txs[6].tx_hash());
+        assert_eq!(proof.history[0].tx_hash(), hist_txs[3].tx_hash());
+        assert_eq!(proof.history[1].tx_hash(), hist_txs[4].tx_hash());
+        assert_eq!(proof.history[2].tx_hash(), hist_txs[6].tx_hash());
 
         assert!(proof.verify(root).unwrap());
     }
@@ -1662,14 +1664,14 @@ mod tests {
 
         for i in genesis_block_number..=(16 * Policy::blocks_per_batch() + genesis_block_number) {
             if Policy::is_macro_block_at(i) {
-                let ext_txs = vec![
+                let hist_txs = vec![
                     create_inherent(i, 1),
                     create_inherent(i, 2),
                     create_inherent(i, 3),
                     create_inherent(i, 4),
                 ];
 
-                history_store.add_to_history(&mut txn, Policy::epoch_at(i), &ext_txs);
+                history_store.add_to_history(&mut txn, Policy::epoch_at(i), &hist_txs);
             }
         }
 
@@ -1685,7 +1687,7 @@ mod tests {
             );
         }
 
-        // Remove extended transactions from History Store.
+        // Remove historic transactions from History Store.
         for i in (1..=16).rev() {
             history_store.remove_partial_history(
                 &mut txn,
@@ -1702,12 +1704,12 @@ mod tests {
         }
     }
 
-    fn create_inherent(block: u32, value: u64) -> ExtendedTransaction {
-        ExtendedTransaction {
+    fn create_inherent(block: u32, value: u64) -> HistoricTransaction {
+        HistoricTransaction {
             network_id: NetworkId::UnitAlbatross,
             block_number: block,
             block_time: 0,
-            data: ExtTxData::Inherent(Inherent::Reward {
+            data: HistoricTransactionData::Inherent(Inherent::Reward {
                 target: Address::from_user_friendly_address(
                     "NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T",
                 )
@@ -1717,24 +1719,28 @@ mod tests {
         }
     }
 
-    fn create_transaction(block: u32, value: u64) -> ExtendedTransaction {
-        ExtendedTransaction {
+    fn create_transaction(block: u32, value: u64) -> HistoricTransaction {
+        HistoricTransaction {
             network_id: NetworkId::UnitAlbatross,
             block_number: block,
             block_time: 0,
-            data: ExtTxData::Basic(ExecutedTransaction::Ok(BlockchainTransaction::new_basic(
-                Address::from_user_friendly_address("NQ09 VF5Y 1PKV MRM4 5LE1 55KV P6R2 GXYJ XYQF")
+            data: HistoricTransactionData::Basic(ExecutedTransaction::Ok(
+                BlockchainTransaction::new_basic(
+                    Address::from_user_friendly_address(
+                        "NQ09 VF5Y 1PKV MRM4 5LE1 55KV P6R2 GXYJ XYQF",
+                    )
                     .unwrap(),
-                Address::burn_address(),
-                Coin::from_u64_unchecked(value),
-                Coin::from_u64_unchecked(0),
-                0,
-                NetworkId::Dummy,
-            ))),
+                    Address::burn_address(),
+                    Coin::from_u64_unchecked(value),
+                    Coin::from_u64_unchecked(0),
+                    0,
+                    NetworkId::Dummy,
+                ),
+            )),
         }
     }
 
-    fn gen_ext_txs() -> Vec<ExtendedTransaction> {
+    fn gen_hist_txs() -> Vec<HistoricTransaction> {
         let genesis_block_number = Policy::genesis_block_number();
         let ext_0 = create_transaction(genesis_block_number + 0, 0);
         let ext_1 = create_transaction(genesis_block_number + 0, 1);

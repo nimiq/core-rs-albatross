@@ -18,8 +18,8 @@ pub struct ChainInfo {
     pub main_chain_successor: Option<Blake2bHash>,
     /// The sum of all transaction fees in this chain. It resets every batch.
     pub cum_tx_fees: Coin,
-    /// The accumulated extended transaction size. It resets every other macro block.
-    pub cum_ext_tx_size: u64,
+    /// The accumulated historic transaction size. It resets every other macro block.
+    pub cum_hist_tx_size: u64,
     /// The total length of the history tree up to the current block.
     pub history_tree_len: u64,
     /// A boolean stating if this block can be pruned.
@@ -39,7 +39,7 @@ impl ChainInfo {
             on_main_chain,
             main_chain_successor: None,
             cum_tx_fees: Coin::ZERO,
-            cum_ext_tx_size: 0,
+            cum_hist_tx_size: 0,
             history_tree_len: 0,
             prunable,
             prev_missing_range: None,
@@ -69,31 +69,31 @@ impl ChainInfo {
             main_chain_successor: None,
             head: block,
             cum_tx_fees,
-            cum_ext_tx_size: 0,
+            cum_hist_tx_size: 0,
             history_tree_len: 0,
             prunable,
             prev_missing_range,
         }
     }
 
-    /// Sets the value for the cumulative extended transaction size and the prunable flag
-    pub fn set_cumulative_ext_tx_size(&mut self, prev_info: &ChainInfo, block_ext_tx_size: u64) {
-        // Reset the cumulative extended transaction size if the previous block
+    /// Sets the value for the cumulative historic transaction size and the prunable flag
+    pub fn set_cumulative_hist_tx_size(&mut self, prev_info: &ChainInfo, block_hist_tx_size: u64) {
+        // Reset the cumulative historic transaction size if the previous block
         // was an election macro block or it was a checkpoint macro block and such checkpoint macro
         // block was not pruned.
         // Also set prunable to `false` if we exceeded the policy::HISTORY_CHUNKS_MAX_SIZE
         if Policy::is_election_block_at(prev_info.head.block_number())
             || (Policy::is_macro_block_at(prev_info.head.block_number()) && !prev_info.prunable)
         {
-            self.cum_ext_tx_size = block_ext_tx_size;
+            self.cum_hist_tx_size = block_hist_tx_size;
             self.prunable = true;
         } else if Policy::is_macro_block_at(self.head.block_number())
-            && prev_info.cum_ext_tx_size + block_ext_tx_size > Policy::HISTORY_CHUNKS_MAX_SIZE
+            && prev_info.cum_hist_tx_size + block_hist_tx_size > Policy::HISTORY_CHUNKS_MAX_SIZE
         {
-            self.cum_ext_tx_size = prev_info.cum_ext_tx_size + block_ext_tx_size;
+            self.cum_hist_tx_size = prev_info.cum_hist_tx_size + block_hist_tx_size;
             self.prunable = false;
         } else {
-            self.cum_ext_tx_size = prev_info.cum_ext_tx_size + block_ext_tx_size;
+            self.cum_hist_tx_size = prev_info.cum_hist_tx_size + block_hist_tx_size;
             self.prunable = true;
         }
     }

@@ -185,16 +185,16 @@ impl Blockchain {
         txn_opt: Option<&DBTransaction>,
     ) -> bool {
         // Get a vector with all transactions corresponding to the given hash.
-        let ext_hash_vec = self.history_store.get_ext_tx_by_hash(tx_hash, txn_opt);
+        let ext_hash_vec = self.history_store.get_hist_tx_by_hash(tx_hash, txn_opt);
 
         // If the vector is empty then we have never seen a transaction with this hash.
         if ext_hash_vec.is_empty() {
             return false;
         }
 
-        for ext_tx in ext_hash_vec {
+        for hist_tx in ext_hash_vec {
             // If the transaction is inside the validity window, return true.
-            if ext_tx.block_number >= validity_window_start {
+            if hist_tx.block_number >= validity_window_start {
                 return true;
             }
         }

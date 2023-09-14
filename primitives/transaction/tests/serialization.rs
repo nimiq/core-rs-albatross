@@ -11,7 +11,7 @@ const BASIC_TRANSACTION: &str = "000222666efadc937148a6d61589ce6d4aeecca97fda4c3
 const INVALID_EXTENDED_TRANSACTION: &str = "014a88aaad038f9b8248865c4b9249efc554960e16000000ad25610feb43d75307763d3f010822a75702742900000000000746a52880000000000000000000000136c32a0500e20e4712ea5b1703873529dd195b2b8f014c295ab352a12e3332d8f30cfc2db9680480c77af04feb0d89bdb5d5d9432d4ca17866abf3b4d6c1a05fa0fbdaed056181eaff68db063c759a0964bceb5f262f7335ed97c5471e773429926c106eae50881b998c516581e6d93933bb92feb2edcdbdb1b118fc000f8f1df8715538840b79e74721c631efe0f9977ccd88773b022a07b3935f2e8546e20ed7f7e1a0c77da7a7e1737bf0625170610846792ea16bc0f6d8cf9ded8a9da1d467f4191a3a97d5fc17d08d699dfa486787f70eb09e2cdbd5b63fd1a8357e1cd24cd37aa2f3408400";
 
 #[test]
-fn it_can_deserialize_extended_transaction() {
+fn it_can_deserialize_historic_transaction() {
     let v: Vec<u8> = hex::decode(EXTENDED_TRANSACTION).unwrap();
     let t: Transaction = Deserialize::deserialize_from_vec(&v[..]).unwrap();
     assert_eq!(t.recipient_data, Vec::<u8>::new());
@@ -41,7 +41,7 @@ fn deserialize_fails_on_invalid_transaction_flags() {
 }
 
 #[test]
-fn it_can_serialize_extended_transaction() {
+fn it_can_serialize_historic_transaction() {
     let v: Vec<u8> = hex::decode(EXTENDED_TRANSACTION).unwrap();
     let t: Transaction = Deserialize::deserialize_from_vec(&v[..]).unwrap();
     let mut v2: Vec<u8> = Vec::with_capacity(t.serialized_size());

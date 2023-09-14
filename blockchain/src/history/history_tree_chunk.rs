@@ -2,7 +2,7 @@ use std::fmt::{self, Debug, Formatter};
 
 use nimiq_hash::Blake2bHash;
 use nimiq_mmr::mmr::proof::RangeProof;
-use nimiq_transaction::extended_transaction::ExtendedTransaction;
+use nimiq_transaction::historic_transaction::HistoricTransaction;
 use serde::{Deserialize, Serialize};
 
 /// The chunk size used in our protocol.
@@ -12,7 +12,7 @@ pub const CHUNK_SIZE: usize = 1024;
 #[derive(Serialize, Deserialize)]
 pub struct HistoryTreeChunk {
     pub(crate) proof: RangeProof<Blake2bHash>,
-    pub history: Vec<ExtendedTransaction>,
+    pub history: Vec<HistoricTransaction>,
 }
 
 impl Debug for HistoryTreeChunk {

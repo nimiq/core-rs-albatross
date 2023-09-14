@@ -2,15 +2,15 @@ use nimiq_hash::Blake2bHash;
 use nimiq_mmr::mmr::proof::Proof;
 use nimiq_serde::{Deserialize, Serialize};
 
-use crate::extended_transaction::ExtendedTransaction;
+use crate::historic_transaction::HistoricTransaction;
 
-/// Struct containing a vector of extended transactions together with a Merkle proof for them. It
+/// Struct containing a vector of historic transactions together with a Merkle proof for them. It
 /// allows one to prove/verify that specific transactions are part of the History Tree.
 #[derive(Serialize, Deserialize)]
 pub struct HistoryTreeProof {
     pub proof: Proof<Blake2bHash>,
     pub positions: Vec<usize>,
-    pub history: Vec<ExtendedTransaction>,
+    pub history: Vec<HistoricTransaction>,
 }
 
 impl HistoryTreeProof {

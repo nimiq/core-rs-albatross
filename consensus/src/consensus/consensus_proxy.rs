@@ -20,7 +20,7 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::{account::AccountType, key_nibbles::KeyNibbles, policy::Policy};
 use nimiq_transaction::{
-    extended_transaction::ExtendedTransaction, ControlTransactionTopic, Transaction,
+    historic_transaction::HistoricTransaction, ControlTransactionTopic, Transaction,
     TransactionTopic,
 };
 use tokio::sync::broadcast::Sender as BroadcastSender;
@@ -141,7 +141,7 @@ impl<N: Network> ConsensusProxy<N> {
         ignored_hashes: Vec<Blake2bHash>,
         min_peers: usize,
         max: Option<u16>,
-    ) -> Result<Vec<ExtendedTransaction>, RequestError> {
+    ) -> Result<Vec<HistoricTransaction>, RequestError> {
         let receipts: Vec<_> = self
             .request_transaction_receipts_by_address(address, min_peers, max)
             .await?
@@ -165,7 +165,7 @@ impl<N: Network> ConsensusProxy<N> {
         tx_hash: Blake2bHash,
         block_number: u32,
         min_peers: usize,
-    ) -> Result<ExtendedTransaction, RequestError> {
+    ) -> Result<HistoricTransaction, RequestError> {
         let receipts = vec![(tx_hash, Some(block_number))];
         let mut txs = self
             .prove_transactions_from_receipts(receipts, min_peers)
@@ -182,7 +182,7 @@ impl<N: Network> ConsensusProxy<N> {
         &self,
         tx_hash: Blake2bHash,
         min_peers: usize,
-    ) -> Result<ExtendedTransaction, RequestError> {
+    ) -> Result<HistoricTransaction, RequestError> {
         let receipts = vec![(tx_hash, None)];
         let mut txs = self
             .prove_transactions_from_receipts(receipts, min_peers)
@@ -219,7 +219,7 @@ impl<N: Network> ConsensusProxy<N> {
         &self,
         receipts: Vec<(Blake2bHash, Option<u32>)>,
         min_peers: usize,
-    ) -> Result<Vec<ExtendedTransaction>, RequestError> {
+    ) -> Result<Vec<HistoricTransaction>, RequestError> {
         let blockchain = self.blockchain.read();
         let election_head = blockchain.election_head();
         let checkpoint_head = blockchain.macro_head();
@@ -426,7 +426,7 @@ impl<N: Network> ConsensusProxy<N> {
 
         // Sort transactions by block_number
         let mut transactions: Vec<_> = verified_transactions.into_values().collect();
-        transactions.sort_unstable_by_key(|ext_tx| ext_tx.block_number);
+        transactions.sort_unstable_by_key(|hist_tx| hist_tx.block_number);
         transactions.reverse(); // Return newest transaction (highest block_number) first
 
         Ok(transactions)

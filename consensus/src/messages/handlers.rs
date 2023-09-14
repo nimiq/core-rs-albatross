@@ -472,15 +472,15 @@ fn prove_transaction(
     let election_head = blockchain.election_head().block_number();
     let macro_head = blockchain.macro_head().block_number();
 
-    // Get the extended transaction from the history store
-    let mut extended_transactions = blockchain
+    // Get the historic transaction from the history store
+    let mut historic_transactions = blockchain
         .history_store
-        .get_ext_tx_by_hash(transaction, None);
+        .get_hist_tx_by_hash(transaction, None);
 
-    // Due to the history store implementation, potentially, we could have multiple extended transactions at this hash
+    // Due to the history store implementation, potentially, we could have multiple historic transactions at this hash
     // So we just pick any transaction
-    if let Some(ext_txn) = extended_transactions.pop() {
-        let block_number = ext_txn.block_number;
+    if let Some(hist_txn) = historic_transactions.pop() {
+        let block_number = hist_txn.block_number;
 
         let proving_block_number = if block_number <= election_head {
             // If the txn is in a finalized epoch, we use the last election block
@@ -490,7 +490,7 @@ fn prove_transaction(
             macro_head
         } else {
             // If the txn is in the current batch, we use the transaction's block
-            ext_txn.block_number
+            hist_txn.block_number
         };
 
         let block = blockchain
@@ -589,13 +589,13 @@ impl<N: Network> Handle<N, ResponseTransactionReceiptsByAddress, Arc<RwLock<Bloc
         let mut receipts = vec![];
 
         for hash in tx_hashes {
-            // Get all the extended transactions that correspond to this hash.
+            // Get all the historic transactions that correspond to this hash.
             receipts.extend(
                 blockchain
                     .history_store
-                    .get_ext_tx_by_hash(&hash, None)
+                    .get_hist_tx_by_hash(&hash, None)
                     .iter()
-                    .map(|ext_tx| (ext_tx.tx_hash(), ext_tx.block_number)),
+                    .map(|hist_tx| (hist_tx.tx_hash(), hist_tx.block_number)),
             );
         }
 

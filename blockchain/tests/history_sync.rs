@@ -78,14 +78,14 @@ fn history_sync_works() {
 
     let mut checkpoint_txs_2_1 = vec![];
 
-    for ext_tx in &election_txs_2 {
-        if ext_tx.block_number
+    for hist_tx in &election_txs_2 {
+        if hist_tx.block_number
             > Policy::blocks_per_epoch() + Policy::blocks_per_batch() + genesis_block_number
         {
             break;
         }
 
-        checkpoint_txs_2_1.push(ext_tx.clone());
+        checkpoint_txs_2_1.push(hist_tx.clone());
     }
 
     let checkpoint_block_2_3 = blockchain
@@ -99,14 +99,14 @@ fn history_sync_works() {
 
     let mut checkpoint_txs_2_3 = vec![];
 
-    for ext_tx in &election_txs_2 {
-        if ext_tx.block_number
+    for hist_tx in &election_txs_2 {
+        if hist_tx.block_number
             > Policy::blocks_per_epoch() + 3 * Policy::blocks_per_batch() + genesis_block_number
         {
             break;
         }
 
-        checkpoint_txs_2_3.push(ext_tx.clone());
+        checkpoint_txs_2_3.push(hist_tx.clone());
     }
 
     let checkpoint_block_3_1 = blockchain
@@ -246,14 +246,14 @@ fn history_sync_works_with_micro_blocks() {
 
     let mut checkpoint_txs_2_1 = vec![];
 
-    for ext_tx in &election_txs_2 {
-        if ext_tx.block_number
+    for hist_tx in &election_txs_2 {
+        if hist_tx.block_number
             > Policy::blocks_per_epoch() + Policy::blocks_per_batch() + genesis_block_number
         {
             break;
         }
 
-        checkpoint_txs_2_1.push(ext_tx.clone());
+        checkpoint_txs_2_1.push(hist_tx.clone());
     }
 
     let checkpoint_block_3_2 = blockchain

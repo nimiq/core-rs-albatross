@@ -11,7 +11,7 @@ use crate::{inherent::Inherent, ExecutedTransaction, Transaction as BlockchainTr
 /// A single struct that stores information that represents any possible transaction (basic
 /// transaction or inherent) on the blockchain.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ExtendedTransaction {
+pub struct HistoricTransaction {
     /// The ID of the network where the transaction happened.
     pub network_id: NetworkId,
     /// The number of the block when the transaction happened.
@@ -19,7 +19,7 @@ pub struct ExtendedTransaction {
     /// The timestamp of the block when the transaction happened.
     pub block_time: u64,
     /// A struct containing the transaction data.
-    pub data: ExtTxData,
+    pub data: HistoricTransactionData,
 }
 
 #[derive(Clone, Debug)]
@@ -32,7 +32,7 @@ impl fmt::Display for IntoTransactionError {
         use IntoTransactionError::*;
         match self {
             NoBasicTransactionMapping => {
-                "no basic transaction mapping for this extended transaction"
+                "no basic transaction mapping for this historic transaction"
             }
         }
         .fmt(f)
@@ -40,9 +40,9 @@ impl fmt::Display for IntoTransactionError {
 }
 impl error::Error for IntoTransactionError {}
 
-impl ExtendedTransaction {
+impl HistoricTransaction {
     /// Convert a set of inherents and basic transactions (together with a network id, a block
-    /// number and a block timestamp) into a vector of extended transactions.
+    /// number and a block timestamp) into a vector of historic transactions.
     /// We only want to store punishments and reward inherents, so we ignore the other inherent types.
     pub fn from(
         network_id: NetworkId,
@@ -50,26 +50,26 @@ impl ExtendedTransaction {
         block_time: u64,
         transactions: Vec<ExecutedTransaction>,
         inherents: Vec<Inherent>,
-    ) -> Vec<ExtendedTransaction> {
-        let mut ext_txs = vec![];
+    ) -> Vec<HistoricTransaction> {
+        let mut hist_txs = vec![];
 
         for transaction in transactions {
-            ext_txs.push(ExtendedTransaction {
+            hist_txs.push(HistoricTransaction {
                 network_id,
                 block_number,
                 block_time,
-                data: ExtTxData::Basic(transaction),
+                data: HistoricTransactionData::Basic(transaction),
             })
         }
 
         for inherent in inherents {
             match inherent {
                 Inherent::Penalize { .. } | Inherent::Reward { .. } | Inherent::Jail { .. } => {
-                    ext_txs.push(ExtendedTransaction {
+                    hist_txs.push(HistoricTransaction {
                         network_id,
                         block_number,
                         block_time,
-                        data: ExtTxData::Inherent(inherent),
+                        data: HistoricTransactionData::Inherent(inherent),
                     })
                 }
                 // These special types of inherents do not generate extended transactions
@@ -77,45 +77,45 @@ impl ExtendedTransaction {
             }
         }
 
-        ext_txs
+        hist_txs
     }
 
-    /// Convert a set of extended transactions into a vector of inherents and a vector of basic
+    /// Convert a set of historic transactions into a vector of inherents and a vector of basic
     /// transactions.
-    pub fn to(ext_txs: Vec<ExtendedTransaction>) -> (Vec<ExecutedTransaction>, Vec<Inherent>) {
+    pub fn to(hist_txs: Vec<HistoricTransaction>) -> (Vec<ExecutedTransaction>, Vec<Inherent>) {
         let mut transactions = vec![];
         let mut inherents = vec![];
 
-        for ext_tx in ext_txs {
-            match ext_tx.data {
-                ExtTxData::Basic(tx) => transactions.push(tx),
-                ExtTxData::Inherent(tx) => inherents.push(tx),
+        for hist_tx in hist_txs {
+            match hist_tx.data {
+                HistoricTransactionData::Basic(tx) => transactions.push(tx),
+                HistoricTransactionData::Inherent(tx) => inherents.push(tx),
             }
         }
 
         (transactions, inherents)
     }
 
-    /// Checks if the extended transaction is an inherent.
+    /// Checks if the historic transaction is an inherent.
     pub fn is_inherent(&self) -> bool {
         match self.data {
-            ExtTxData::Basic(_) => false,
-            ExtTxData::Inherent(_) => true,
+            HistoricTransactionData::Basic(_) => false,
+            HistoricTransactionData::Inherent(_) => true,
         }
     }
 
-    /// Unwraps the extended transaction and returns a reference to the underlying executed transaction.
+    /// Unwraps the historic transaction and returns a reference to the underlying executed transaction.
     pub fn unwrap_basic(&self) -> &ExecutedTransaction {
-        if let ExtTxData::Basic(ref tx) = self.data {
+        if let HistoricTransactionData::Basic(ref tx) = self.data {
             tx
         } else {
             unreachable!()
         }
     }
 
-    /// Unwraps the extended transaction and returns a reference to the underlying inherent.
+    /// Unwraps the historic transaction and returns a reference to the underlying inherent.
     pub fn unwrap_inherent(&self) -> &Inherent {
-        if let ExtTxData::Inherent(ref tx) = self.data {
+        if let HistoricTransactionData::Inherent(ref tx) = self.data {
             tx
         } else {
             unreachable!()
@@ -128,20 +128,20 @@ impl ExtendedTransaction {
     /// their transaction hash.
     pub fn tx_hash(&self) -> Blake2bHash {
         match &self.data {
-            ExtTxData::Basic(tx) => tx.hash(),
-            ExtTxData::Inherent(v) => match v {
+            HistoricTransactionData::Basic(tx) => tx.hash(),
+            HistoricTransactionData::Inherent(v) => match v {
                 Inherent::Reward { .. } => self.clone().into_transaction().unwrap().hash(),
                 _ => v.hash(),
             },
         }
     }
 
-    /// Tries to convert an extended transaction into a regular transaction. This will work for all
-    /// extended transactions that wrap over regular transactions and reward inherents.
+    /// Tries to convert an historic transaction into a regular transaction. This will work for all
+    /// historic transactions that wrap over regular transactions and reward inherents.
     pub fn into_transaction(self) -> Result<ExecutedTransaction, IntoTransactionError> {
         match self.data {
-            ExtTxData::Basic(tx) => Ok(tx),
-            ExtTxData::Inherent(inherent) => {
+            HistoricTransactionData::Basic(tx) => Ok(tx),
+            HistoricTransactionData::Inherent(inherent) => {
                 if let Inherent::Reward { target, value } = inherent {
                     let txn = BlockchainTransaction::new_basic(
                         Policy::COINBASE_ADDRESS,
@@ -160,8 +160,8 @@ impl ExtendedTransaction {
     }
 }
 
-impl MMRHash<Blake2bHash> for ExtendedTransaction {
-    /// Hashes a prefix and an extended transaction into a Blake2bHash. The prefix is necessary
+impl MMRHash<Blake2bHash> for HistoricTransaction {
+    /// Hashes a prefix and an historic transaction into a Blake2bHash. The prefix is necessary
     /// to include it into the History Tree.
     fn hash(&self, prefix: u64) -> Blake2bHash {
         let mut message = prefix.to_be_bytes().to_vec();
@@ -170,7 +170,7 @@ impl MMRHash<Blake2bHash> for ExtendedTransaction {
     }
 }
 
-impl IntoDatabaseValue for ExtendedTransaction {
+impl IntoDatabaseValue for HistoricTransaction {
     fn database_byte_size(&self) -> usize {
         self.serialized_size()
     }
@@ -180,7 +180,7 @@ impl IntoDatabaseValue for ExtendedTransaction {
     }
 }
 
-impl FromDatabaseValue for ExtendedTransaction {
+impl FromDatabaseValue for HistoricTransaction {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
     where
         Self: Sized,
@@ -195,9 +195,9 @@ impl FromDatabaseValue for ExtendedTransaction {
 // TODO: The transactions include a lot of unnecessary information (ex: the signature). Don't
 //       include all of it here.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub enum ExtTxData {
+pub enum HistoricTransactionData {
     /// A basic transaction. It simply contains the transaction as contained in the block.
     Basic(ExecutedTransaction),
-    /// An inherent transaction. It simply contains the transaction as contained in the block.
+    /// An inherent transaction. It simply contains the inherent as implied by the block.
     Inherent(Inherent),
 }

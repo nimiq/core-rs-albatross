@@ -14,7 +14,7 @@ use nimiq_keys::KeyPair as SchnorrKeyPair;
 use nimiq_primitives::{policy::Policy, TendermintIdentifier, TendermintStep, TendermintVote};
 use nimiq_tendermint::ProposalMessage;
 use nimiq_transaction::{
-    extended_transaction::ExtendedTransaction, inherent::Inherent, Transaction,
+    historic_transaction::HistoricTransaction, inherent::Inherent, Transaction,
 };
 use nimiq_vrf::VrfSeed;
 
@@ -116,7 +116,7 @@ pub fn next_micro_block(
         .exercise_transactions(&transactions, &inherents, &block_state)
         .expect("Failed to compute accounts hash during block production");
 
-    let ext_txs = ExtendedTransaction::from(
+    let hist_txs = HistoricTransaction::from(
         blockchain.network_id,
         block_number,
         timestamp,
@@ -129,7 +129,7 @@ pub fn next_micro_block(
     let history_root = config.history_root.clone().unwrap_or_else(|| {
         blockchain
             .history_store
-            .add_to_history(&mut txn, Policy::epoch_at(block_number), &ext_txs)
+            .add_to_history(&mut txn, Policy::epoch_at(block_number), &hist_txs)
             .expect("Failed to compute history root during block production.")
             .0
     });
@@ -209,7 +209,7 @@ pub fn next_skip_block(
     let state_root = config.state_root.clone().unwrap_or(real_state_root);
     let diff_root = config.diff_root.clone().unwrap_or(real_diff_root);
 
-    let ext_txs = ExtendedTransaction::from(
+    let hist_txs = HistoricTransaction::from(
         blockchain.network_id,
         block_number,
         timestamp,
@@ -222,7 +222,7 @@ pub fn next_skip_block(
     let history_root = config.history_root.clone().unwrap_or_else(|| {
         blockchain
             .history_store
-            .add_to_history(&mut txn, Policy::epoch_at(block_number), &ext_txs)
+            .add_to_history(&mut txn, Policy::epoch_at(block_number), &hist_txs)
             .expect("Failed to compute history root during block production.")
             .0
     });
@@ -351,7 +351,7 @@ pub fn next_macro_block_proposal(
     macro_block.header.state_root = state_root;
     macro_block.header.diff_root = diff_root;
 
-    let ext_txs = ExtendedTransaction::from(
+    let hist_txs = HistoricTransaction::from(
         blockchain.network_id,
         block_number,
         timestamp,
@@ -363,7 +363,7 @@ pub fn next_macro_block_proposal(
 
     macro_block.header.history_root = blockchain
         .history_store
-        .add_to_history(&mut txn, Policy::epoch_at(block_number), &ext_txs)
+        .add_to_history(&mut txn, Policy::epoch_at(block_number), &hist_txs)
         .expect("Failed to compute history root during block production.")
         .0;
 

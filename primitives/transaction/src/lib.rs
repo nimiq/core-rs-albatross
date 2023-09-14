@@ -24,7 +24,7 @@ use thiserror::Error;
 use crate::account::AccountTransactionVerification;
 
 pub mod account;
-pub mod extended_transaction;
+pub mod historic_transaction;
 pub mod history_proof;
 pub mod inherent;
 pub mod reward;
@@ -556,7 +556,7 @@ mod serde_derive {
 
     struct TransactionVisitor;
     struct BasicTransactionVisitor;
-    struct ExtendedTransactionVisitor;
+    struct HistoricTransactionVisitor;
 
     impl serde::Serialize for Transaction {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -634,7 +634,7 @@ mod serde_derive {
             let (index, tx_variant) = value.variant()?;
             match index {
                 0 => tx_variant.struct_variant(BASIC_FIELDS, BasicTransactionVisitor),
-                1 => tx_variant.struct_variant(EXTENDED_FIELDS, ExtendedTransactionVisitor),
+                1 => tx_variant.struct_variant(EXTENDED_FIELDS, HistoricTransactionVisitor),
                 _ => Err(A::Error::custom("Undefined transaction type")),
             }
         }
@@ -690,11 +690,11 @@ mod serde_derive {
         }
     }
 
-    impl<'de> Visitor<'de> for ExtendedTransactionVisitor {
+    impl<'de> Visitor<'de> for HistoricTransactionVisitor {
         type Value = Transaction;
 
         fn expecting(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-            write!(f, "an ExtendedTransaction")
+            write!(f, "an HistoricTransaction")
         }
 
         fn visit_seq<A>(self, mut seq: A) -> Result<Transaction, A::Error>

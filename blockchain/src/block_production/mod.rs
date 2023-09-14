@@ -10,7 +10,7 @@ use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::KeyPair as SchnorrKeyPair;
 use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{
-    extended_transaction::ExtendedTransaction, inherent::Inherent, Transaction,
+    historic_transaction::HistoricTransaction, inherent::Inherent, Transaction,
 };
 use rand::{CryptoRng, Rng, RngCore};
 
@@ -132,8 +132,8 @@ impl BlockProducer {
             .exercise_transactions(&transactions, &inherents, &block_state)
             .expect("Failed to compute accounts hash during block production");
 
-        // Calculate the extended transactions from the transactions and the inherents.
-        let ext_txs = ExtendedTransaction::from(
+        // Calculate the historic transactions from the transactions and the inherents.
+        let hist_txs = HistoricTransaction::from(
             blockchain.network_id,
             block_number,
             timestamp,
@@ -141,12 +141,12 @@ impl BlockProducer {
             inherents,
         );
 
-        // Store the extended transactions into the history tree and calculate the history root.
+        // Store the historic transactions into the history tree and calculate the history root.
         let mut txn = blockchain.write_transaction();
 
         let (history_root, _) = blockchain
             .history_store
-            .add_to_history(&mut txn, Policy::epoch_at(block_number), &ext_txs)
+            .add_to_history(&mut txn, Policy::epoch_at(block_number), &hist_txs)
             .expect("Failed to compute history root during block production.");
 
         // Not strictly necessary to drop the lock here, but sign as well as compress might be somewhat expensive
@@ -306,8 +306,8 @@ impl BlockProducer {
         macro_block.header.state_root = state_root;
         macro_block.header.diff_root = diff_root;
 
-        // Calculate the extended transactions from the transactions and the inherents.
-        let ext_txs = ExtendedTransaction::from(
+        // Calculate the historic transactions from the transactions and the inherents.
+        let hist_txs = HistoricTransaction::from(
             blockchain.network_id,
             block_number,
             timestamp,
@@ -315,12 +315,12 @@ impl BlockProducer {
             inherents,
         );
 
-        // Store the extended transactions into the history tree and calculate the history root.
+        // Store the historic transactions into the history tree and calculate the history root.
         let mut txn = blockchain.write_transaction();
 
         macro_block.header.history_root = blockchain
             .history_store
-            .add_to_history(&mut txn, Policy::epoch_at(block_number), &ext_txs)
+            .add_to_history(&mut txn, Policy::epoch_at(block_number), &hist_txs)
             .expect("Failed to compute history root during block production.")
             .0;
 

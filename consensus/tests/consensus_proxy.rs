@@ -16,7 +16,9 @@ use nimiq_test_utils::{
     },
     node::TESTING_BLS_CACHE_MAX_CAPACITY,
 };
-use nimiq_transaction::{extended_transaction::ExtTxData, ExecutedTransaction, TransactionFormat};
+use nimiq_transaction::{
+    historic_transaction::HistoricTransactionData, ExecutedTransaction, TransactionFormat,
+};
 use nimiq_utils::time::OffsetTime;
 use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
@@ -106,7 +108,9 @@ async fn test_request_transactions_by_address() {
     assert_eq!(
         txs.iter()
             .filter(|tx| {
-                if let ExtTxData::Basic(ExecutedTransaction::Ok(transaction)) = &tx.data {
+                if let HistoricTransactionData::Basic(ExecutedTransaction::Ok(transaction)) =
+                    &tx.data
+                {
                     return transaction.format() == TransactionFormat::Basic;
                 }
                 false

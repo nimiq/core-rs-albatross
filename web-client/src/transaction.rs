@@ -6,7 +6,7 @@ use nimiq_primitives::policy::Policy;
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
 use nimiq_serde::{Deserialize, Serialize};
 #[cfg(feature = "client")]
-use nimiq_transaction::extended_transaction::ExtendedTransaction;
+use nimiq_transaction::historic_transaction::HistoricTransaction;
 use nimiq_transaction::{
     account::{
         htlc_contract::CreationTransactionData as HtlcCreationTransactionData,
@@ -921,10 +921,10 @@ impl PlainTransactionDetails {
         }
     }
 
-    /// Creates a PlainTransactionDetails struct that can be serialized to JS from a native [ExtendedTransaction].
-    pub fn from_extended_transaction(ext_tx: &ExtendedTransaction, current_block: u32) -> Self {
-        let block_number = ext_tx.block_number;
-        let block_time = ext_tx.block_time;
+    /// Creates a PlainTransactionDetails struct that can be serialized to JS from a native [HistoricTransaction].
+    pub fn from_historic_transaction(hist_tx: &HistoricTransaction, current_block: u32) -> Self {
+        let block_number = hist_tx.block_number;
+        let block_time = hist_tx.block_time;
 
         let last_macro_block = Policy::last_macro_block(current_block);
 
@@ -934,7 +934,7 @@ impl PlainTransactionDetails {
             TransactionState::Included
         };
 
-        let executed_transaction = ext_tx.clone().into_transaction().unwrap();
+        let executed_transaction = hist_tx.clone().into_transaction().unwrap();
 
         Self {
             transaction: Transaction::from_native(
