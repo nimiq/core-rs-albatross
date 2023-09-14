@@ -16,6 +16,13 @@ pub struct Address {
 
 #[wasm_bindgen]
 impl Address {
+    #[wasm_bindgen(constructor)]
+    pub fn new(bytes: &[u8]) -> Result<Address, JsError> {
+        Ok(Address::from_native(nimiq_keys::Address::from(
+            &bytes[0..nimiq_keys::Address::len()],
+        )))
+    }
+
     /// Parses an address from an {@link Address} instance or a string representation.
     ///
     /// Throws when an address cannot be parsed from the argument.
