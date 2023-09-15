@@ -345,9 +345,10 @@ impl<
                     match item {
                         Some(todo) => {
                             // verify the contribution
-                            let result = self.protocol.verify(&todo.contribution).await;
-
-                            if result.is_ok() {
+                            // Tainted validators do not care about protocol verification
+                            //let result = self.protocol.verify(&todo.contribution).await;
+                            let result = true;
+                            if result {
                                 // special case of full contributions
                                 if todo.level == self.protocol.partitioner().levels() {
                                     return (todo.contribution, Some(self));

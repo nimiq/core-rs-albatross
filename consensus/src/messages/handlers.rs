@@ -263,17 +263,41 @@ impl<N: Network> Handle<N, HistoryChunk, Arc<RwLock<Blockchain>>> for RequestHis
 impl<N: Network> Handle<N, Option<Block>, BlockchainProxy> for RequestBlock {
     fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> Option<Block> {
         let blockchain = blockchain.read();
-        if let Ok(block) = blockchain.get_block(&self.hash, false) {
+
+        let mut rng = thread_rng();
+        let tainted_config = blockchain.get_tainted_config();
+
+        // Lets return a different block than the one that is requested
+        let hash = if tainted_config.tainted_request_history_chunk && rng.gen_bool(1.0 / 2.0) {
+            if let Ok(block) = blockchain.get_block(&self.hash, false) {
+                warn!(" Messing up the block request response.... =)");
+                block.parent_hash().clone()
+            } else {
+                return None;
+            }
+        } else {
+            self.hash.clone()
+        };
+
+        if let Ok(block) = blockchain.get_block(&hash, false) {
             let block = match block {
                 // Macro bodies are always needed
-                Block::Macro(_) => match blockchain.get_block(&self.hash, true) {
+                Block::Macro(_) => match blockchain.get_block(&hash, true) {
                     Ok(block) => block,
                     Err(_) => return None,
                 },
                 // Micro bodies are requested based on `include_micro_bodies`
                 Block::Micro(_) => {
-                    if self.include_micro_bodies {
-                        match blockchain.get_block(&self.hash, true) {
+                    // We can also mess the include bodies flag.. because why not?
+                    let mut include_micro_bodies = self.include_micro_bodies;
+
+                    if tainted_config.tainted_request_history_chunk && rng.gen_bool(1.0 / 3.0) {
+                        warn!(" Messing up the include micro bodies flag... bua ha ha ha");
+                        include_micro_bodies = !include_micro_bodies;
+                    }
+
+                    if include_micro_bodies {
+                        match blockchain.get_block(&hash, true) {
                             Ok(block) => block,
                             Err(_) => return None,
                         }
