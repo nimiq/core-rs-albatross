@@ -2,11 +2,13 @@ use std::fmt::Debug;
 
 use nimiq_bls::AggregatePublicKey;
 use nimiq_hash_derive::SerializeContent;
-use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
+use nimiq_primitives::{
+    policy::Policy, slots_allocation::Validators, Message, SignedMessage, PREFIX_SKIP_BLOCK_INFO,
+};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_vrf::VrfEntropy;
 
-use crate::{Message, MicroBlock, MultiSignature, SignedMessage, PREFIX_SKIP_BLOCK_INFO};
+use crate::{MicroBlock, MultiSignature};
 
 pub type SignedSkipBlockInfo = SignedMessage<SkipBlockInfo>;
 

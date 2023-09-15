@@ -2,7 +2,7 @@ use std::{str::FromStr, sync::Arc, time::Instant};
 
 use nimiq_block::{
     Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
-    SkipBlockProof, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
+    SkipBlockProof, TendermintProof,
 };
 use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
@@ -12,7 +12,9 @@ use nimiq_genesis::NetworkId;
 use nimiq_keys::{
     Address, KeyPair as SchnorrKeyPair, KeyPair, PrivateKey as SchnorrPrivateKey, PrivateKey,
 };
-use nimiq_primitives::{coin::Coin, policy::Policy};
+use nimiq_primitives::{
+    coin::Coin, policy::Policy, TendermintIdentifier, TendermintStep, TendermintVote,
+};
 use nimiq_serde::Deserialize;
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;

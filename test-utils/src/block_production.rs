@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use nimiq_block::{
     Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
-    SkipBlockProof, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
+    SkipBlockProof, TendermintProof,
 };
 use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{
@@ -20,6 +20,7 @@ use nimiq_primitives::{
     key_nibbles::KeyNibbles,
     policy::Policy,
     trie::{trie_chunk::TrieChunkWithStart, trie_diff::TrieDiff},
+    TendermintIdentifier, TendermintStep, TendermintVote,
 };
 use nimiq_serde::Deserialize;
 use nimiq_tendermint::ProposalMessage;

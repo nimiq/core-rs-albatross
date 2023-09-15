@@ -2,7 +2,6 @@ use std::path::Path;
 
 use nimiq_block::{
     Block, BlockError, DoubleProposalProof, DoubleVoteProof, EquivocationProofError, ForkProof,
-    TendermintIdentifier, TendermintStep,
 };
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{
@@ -13,7 +12,9 @@ use nimiq_blockchain_interface::{
 use nimiq_bls::AggregateSignature;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
 use nimiq_keys::KeyPair;
-use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy};
+use nimiq_primitives::{
+    key_nibbles::KeyNibbles, policy::Policy, TendermintIdentifier, TendermintStep,
+};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,

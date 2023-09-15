@@ -3,7 +3,7 @@ use std::sync::Arc;
 use nimiq_account::{BlockLogger, BlockState};
 use nimiq_block::{
     Block, DoubleProposalProof, DoubleVoteProof, ForkProof, MacroBlock, MacroBody, MacroHeader,
-    SkipBlockInfo, TendermintIdentifier, TendermintStep, TendermintVote,
+    SkipBlockInfo,
 };
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::AbstractBlockchain;
@@ -16,6 +16,7 @@ use nimiq_primitives::{
     networks::NetworkId,
     policy::Policy,
     slots_allocation::{JailedValidator, PenalizedSlot},
+    TendermintIdentifier, TendermintStep, TendermintVote,
 };
 use nimiq_test_log::test;
 use nimiq_test_utils::{

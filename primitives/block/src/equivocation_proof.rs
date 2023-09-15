@@ -8,11 +8,12 @@ use nimiq_keys::{Address, PublicKey as SchnorrPublicKey, Signature as SchnorrSig
 use nimiq_primitives::{
     policy::Policy,
     slots_allocation::{Validator, Validators},
+    TendermintIdentifier, TendermintStep, TendermintVote,
 };
 use nimiq_serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{MacroHeader, MicroHeader, TendermintIdentifier, TendermintStep, TendermintVote};
+use crate::{MacroHeader, MicroHeader};
 
 /// An equivocation proof proves that a validator misbehaved.
 ///
@@ -546,13 +547,13 @@ mod test {
     use nimiq_collections::BitSet;
     use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
     use nimiq_keys::{Address, KeyPair, PrivateKey};
-    use nimiq_primitives::policy::Policy;
+    use nimiq_primitives::{policy::Policy, TendermintIdentifier, TendermintStep, TendermintVote};
     use nimiq_serde::Deserialize;
     use nimiq_vrf::VrfSeed;
 
     use crate::{
         DoubleProposalProof, DoubleVoteProof, EquivocationProof, ForkProof, MacroHeader,
-        MicroHeader, TendermintIdentifier, TendermintStep, TendermintVote,
+        MicroHeader,
     };
 
     #[test]

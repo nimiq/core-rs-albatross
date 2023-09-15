@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use nimiq_block::TendermintIdentifier;
 use nimiq_handel::{
     evaluator::WeightedVote, partitioner::BinomialPartitioner, protocol::Protocol,
     store::ReplaceStore,
 };
+use nimiq_primitives::TendermintIdentifier;
 use parking_lot::RwLock;
 
 use super::{

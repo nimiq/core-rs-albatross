@@ -33,7 +33,7 @@ nimiq-hash_derive = { workspace = true }
 nimiq-keys = { workspace = true }
 nimiq-macros = { workspace = true }
 nimiq-network-interface = { workspace = true }
-nimiq-primitives = { workspace = true, features = ["coin", "networks", "policy", "slots"] }
+nimiq-primitives = { workspace = true, features = ["coin", "networks", "policy", "slots", "tendermint"] }
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
 nimiq-utils = { workspace = true, features = ["merkle"] }

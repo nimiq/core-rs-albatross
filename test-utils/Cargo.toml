@@ -45,7 +45,7 @@ nimiq-mempool = { workspace = true }
 nimiq-network-interface = { workspace = true }
 nimiq-network-libp2p = { workspace = true }
 nimiq-network-mock = { workspace = true }
-nimiq-primitives = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["tendermint"] }
 nimiq-serde = { workspace = true }
 nimiq-tendermint = { workspace = true }
 nimiq-transaction = { workspace = true }

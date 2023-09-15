@@ -2,7 +2,7 @@ use nimiq_account::BlockState;
 use nimiq_block::{
     Block, EquivocationProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody,
     MicroHeader, MicroJustification, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
-    SkipBlockProof, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
+    SkipBlockProof, TendermintProof,
 };
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
@@ -11,7 +11,7 @@ use nimiq_collections::BitSet;
 use nimiq_database::traits::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::KeyPair as SchnorrKeyPair;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{policy::Policy, TendermintIdentifier, TendermintStep, TendermintVote};
 use nimiq_tendermint::ProposalMessage;
 use nimiq_transaction::{
     extended_transaction::ExtendedTransaction, inherent::Inherent, Transaction,

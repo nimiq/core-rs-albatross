@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, ops};
 
-use nimiq_block::{MultiSignature, TendermintVote};
+use nimiq_block::MultiSignature;
 use nimiq_bls::{AggregateSignature, SecretKey};
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::{
@@ -8,6 +8,7 @@ use nimiq_handel::{
     update::LevelUpdate,
 };
 use nimiq_hash::Blake2sHash;
+use nimiq_primitives::TendermintVote;
 use nimiq_tendermint::Aggregation;
 use serde::{Deserialize, Serialize};
 

@@ -44,7 +44,7 @@ nimiq-keys = { workspace = true }
 nimiq-macros = { workspace = true }
 nimiq-mempool = { workspace = true }
 nimiq-network-interface = { workspace = true }
-nimiq-primitives = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["tendermint"] }
 nimiq-serde = { workspace = true }
 nimiq-tendermint = { workspace = true }
 nimiq-transaction-builder = { workspace = true }

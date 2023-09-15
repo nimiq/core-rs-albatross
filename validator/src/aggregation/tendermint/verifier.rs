@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use nimiq_block::{TendermintIdentifier, TendermintVote};
 use nimiq_bls::AggregatePublicKey;
 use nimiq_handel::{
     identity::IdentityRegistry,
     verifier::{VerificationResult, Verifier},
 };
 use nimiq_hash::Hash;
+use nimiq_primitives::{TendermintIdentifier, TendermintVote};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tokio::task;
 

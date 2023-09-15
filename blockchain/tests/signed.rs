@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use nimiq_block::{
-    MacroBlock, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof,
-    TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
+    MacroBlock, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof, TendermintProof,
 };
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::AbstractBlockchain;
@@ -14,6 +13,7 @@ use nimiq_keys::{Address, PublicKey};
 use nimiq_primitives::{
     policy::Policy,
     slots_allocation::{Validator, Validators},
+    TendermintIdentifier, TendermintStep, TendermintVote,
 };
 use nimiq_serde::Deserialize;
 use nimiq_test_log::test;

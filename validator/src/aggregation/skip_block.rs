@@ -11,7 +11,7 @@ use futures::{
     ready,
     stream::{select, BoxStream, Stream, StreamExt},
 };
-use nimiq_block::{Message, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof};
+use nimiq_block::{MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof};
 use nimiq_bls::{AggregateSignature, KeyPair};
 use nimiq_collections::BitSet;
 use nimiq_handel::{
@@ -27,7 +27,7 @@ use nimiq_handel::{
 };
 use nimiq_hash::Blake2sHash;
 use nimiq_network_interface::request::{MessageMarker, RequestCommon};
-use nimiq_primitives::{policy, slots_allocation::Validators};
+use nimiq_primitives::{policy, slots_allocation::Validators, Message};
 use nimiq_validator_network::ValidatorNetwork;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};

@@ -8,7 +8,6 @@ pub use macro_block::*;
 pub use micro_block::*;
 pub use multisig::*;
 use nimiq_primitives::transaction::TransactionError;
-pub use signed::*;
 pub use skip_block::*;
 pub use tendermint::*;
 use thiserror::Error;
@@ -19,7 +18,6 @@ mod equivocation_proof;
 mod macro_block;
 mod micro_block;
 mod multisig;
-mod signed;
 mod skip_block;
 mod tendermint;
 

@@ -8,17 +8,14 @@ use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{
     policy::Policy,
     slots_allocation::{Validators, ValidatorsBuilder},
+    Message, PREFIX_TENDERMINT_PROPOSAL,
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::reward::RewardTransaction;
 use nimiq_vrf::VrfSeed;
 use thiserror::Error;
 
-use crate::{
-    signed::{Message, PREFIX_TENDERMINT_PROPOSAL},
-    tendermint::TendermintProof,
-    BlockError,
-};
+use crate::{tendermint::TendermintProof, BlockError};
 
 /// The struct representing a Macro block (can be either checkpoint or election).
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]

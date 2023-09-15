@@ -46,7 +46,7 @@ nimiq-bls = { workspace = true }
 nimiq-genesis = { workspace = true, default-features = false }
 nimiq-hash = { workspace = true }
 nimiq-pedersen-generators = { workspace = true }
-nimiq-primitives = { workspace = true, features = ["policy"] }
+nimiq-primitives = { workspace = true, features = ["policy", "tendermint"] }
 nimiq-serde = { workspace = true }
 nimiq-zkp-primitives = { workspace = true }
 nimiq-keys = { workspace = true }

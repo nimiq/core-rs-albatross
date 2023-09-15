@@ -13,9 +13,9 @@ use ark_r1cs_std::{
 };
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 use ark_std::Zero;
-use nimiq_block::{MacroBlock, TendermintStep};
+use nimiq_block::MacroBlock;
 use nimiq_hash::{Blake2sHash, Hash, HashOutput, SerializeContent};
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{policy::Policy, TendermintStep};
 
 use crate::{
     blake2s::evaluate_blake2s,
