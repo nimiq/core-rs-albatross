@@ -6,18 +6,17 @@ use nimiq_block::{
 };
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
-use nimiq_bls::AggregateSignature;
+use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair};
 use nimiq_collections::BitSet;
 use nimiq_database::traits::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
+use nimiq_keys::KeyPair as SchnorrKeyPair;
 use nimiq_primitives::policy::Policy;
 use nimiq_tendermint::ProposalMessage;
 use nimiq_transaction::{
     extended_transaction::ExtendedTransaction, inherent::Inherent, Transaction,
 };
 use nimiq_vrf::VrfSeed;
-
-use crate::{BlsKeyPair, SchnorrKeyPair};
 
 #[derive(Clone)]
 pub struct BlockConfig {

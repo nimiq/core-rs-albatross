@@ -252,8 +252,7 @@ mod tests {
     use std::{sync::Arc, task::Poll};
 
     use futures::{Stream, StreamExt};
-    use nimiq_block_production::BlockProducer;
-    use nimiq_blockchain::{Blockchain, BlockchainConfig};
+    use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
     use nimiq_blockchain_interface::AbstractBlockchain;
     use nimiq_blockchain_proxy::BlockchainProxy;
     use nimiq_database::volatile::VolatileDatabase;

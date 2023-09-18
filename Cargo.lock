@@ -3705,39 +3705,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nimiq-block-production"
-version = "0.1.0"
-dependencies = [
- "hex",
- "nimiq-account",
- "nimiq-block",
- "nimiq-blockchain",
- "nimiq-blockchain-interface",
- "nimiq-bls",
- "nimiq-collections",
- "nimiq-database",
- "nimiq-genesis",
- "nimiq-genesis-builder",
- "nimiq-hash",
- "nimiq-keys",
- "nimiq-primitives",
- "nimiq-serde",
- "nimiq-tendermint",
- "nimiq-test-log",
- "nimiq-test-utils",
- "nimiq-transaction",
- "nimiq-transaction-builder",
- "nimiq-trie",
- "nimiq-utils",
- "nimiq-vrf",
- "parking_lot 0.12.1",
- "rand 0.8.5",
- "serde",
- "tempfile",
- "tracing",
-]
-
-[[package]]
 name = "nimiq-blockchain"
 version = "0.1.0"
 dependencies = [
@@ -3745,7 +3712,6 @@ dependencies = [
  "hex",
  "nimiq-account",
  "nimiq-block",
- "nimiq-block-production",
  "nimiq-blockchain-interface",
  "nimiq-bls",
  "nimiq-collections",
@@ -3772,6 +3738,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "serde",
+ "tempfile",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -3874,7 +3841,6 @@ dependencies = [
  "instant",
  "nimiq-account",
  "nimiq-block",
- "nimiq-block-production",
  "nimiq-blockchain",
  "nimiq-blockchain-interface",
  "nimiq-blockchain-proxy",
@@ -4191,7 +4157,6 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "nimiq-block",
- "nimiq-block-production",
  "nimiq-blockchain",
  "nimiq-blockchain-interface",
  "nimiq-collections",
@@ -4243,7 +4208,6 @@ dependencies = [
  "linked-hash-map",
  "nimiq-account",
  "nimiq-block",
- "nimiq-block-production",
  "nimiq-blockchain",
  "nimiq-blockchain-interface",
  "nimiq-bls",
@@ -4675,7 +4639,6 @@ dependencies = [
  "hex",
  "nimiq-account",
  "nimiq-block",
- "nimiq-block-production",
  "nimiq-blockchain",
  "nimiq-blockchain-interface",
  "nimiq-blockchain-proxy",
@@ -4830,7 +4793,6 @@ dependencies = [
  "linked-hash-map",
  "nimiq-account",
  "nimiq-block",
- "nimiq-block-production",
  "nimiq-blockchain",
  "nimiq-blockchain-interface",
  "nimiq-bls",
@@ -5049,7 +5011,6 @@ dependencies = [
  "futures-util",
  "hex",
  "nimiq-block",
- "nimiq-block-production",
  "nimiq-blockchain",
  "nimiq-blockchain-interface",
  "nimiq-blockchain-proxy",
@@ -5125,7 +5086,6 @@ version = "0.1.0"
 dependencies = [
  "hex",
  "nimiq-block",
- "nimiq-block-production",
  "nimiq-blockchain",
  "nimiq-blockchain-interface",
  "nimiq-blockchain-proxy",

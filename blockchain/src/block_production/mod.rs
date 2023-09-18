@@ -3,7 +3,6 @@ use nimiq_block::{
     EquivocationProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader,
     MicroJustification, SkipBlockInfo, SkipBlockProof,
 };
-use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::traits::WriteTransaction;
@@ -14,6 +13,8 @@ use nimiq_transaction::{
     extended_transaction::ExtendedTransaction, inherent::Inherent, Transaction,
 };
 use rand::{CryptoRng, Rng, RngCore};
+
+use crate::Blockchain;
 
 /// Struct that contains all necessary information to actually produce blocks.
 /// It has the validator keys for this validator.
@@ -360,6 +361,3 @@ impl BlockProducer {
         }
     }
 }
-
-#[cfg(any(test, feature = "test-utils"))]
-pub mod test_custom_block;

@@ -13,8 +13,7 @@ use std::{
 use futures::stream::{BoxStream, Stream, StreamExt};
 use linked_hash_map::LinkedHashMap;
 use nimiq_block::{Block, BlockHeaderTopic, BlockTopic, BlockType};
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::Blockchain;
+use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, ForkEvent, PushResult};
 use nimiq_bls::{lazy::LazyPublicKey, KeyPair as BlsKeyPair};
 use nimiq_consensus::{Consensus, ConsensusEvent, ConsensusProxy};

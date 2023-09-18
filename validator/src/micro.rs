@@ -8,8 +8,7 @@ use std::{
 
 use futures::{future::BoxFuture, ready, FutureExt, Stream};
 use nimiq_block::{Block, EquivocationProof, MicroBlock, SkipBlockInfo};
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::Blockchain;
+use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_mempool::mempool::Mempool;
 use nimiq_utils::time::systemtime_to_timestamp;

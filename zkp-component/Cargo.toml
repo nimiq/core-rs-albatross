@@ -64,7 +64,6 @@ nimiq-zkp-primitives = { workspace = true }
 [dev-dependencies]
 tempfile = "3.6"
 
-nimiq-block-production = { workspace = true }
 nimiq-bls = { workspace = true }
 nimiq-genesis-builder = { workspace = true }
 nimiq-keys = { workspace = true }

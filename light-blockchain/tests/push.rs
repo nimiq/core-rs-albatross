@@ -1,11 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use nimiq_block::{Block, BlockError, SkipBlockProof};
-use nimiq_block_production::{
-    test_custom_block::{next_macro_block, next_micro_block, next_skip_block, BlockConfig},
-    BlockProducer,
-};
-use nimiq_blockchain::Blockchain;
+use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, PushError, PushError::InvalidBlock, PushResult,
 };
@@ -16,6 +12,7 @@ use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
+    test_custom_block::{next_macro_block, next_micro_block, next_skip_block, BlockConfig},
     zkp_test_data::{get_base_seed, simulate_merger_wrapper, ZKP_TEST_KEYS_PATH},
 };
 use nimiq_vrf::VrfSeed;

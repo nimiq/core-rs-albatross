@@ -55,7 +55,6 @@ nimiq-zkp-component = { workspace = true }
 [dev-dependencies]
 hex = "0.4"
 
-nimiq-block-production = { workspace = true, features = ["test-utils"] }
 nimiq-bls = { workspace = true }
 nimiq-database = { workspace = true }
 nimiq-genesis = { workspace = true }

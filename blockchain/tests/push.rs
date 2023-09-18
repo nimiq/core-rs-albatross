@@ -4,9 +4,6 @@ use nimiq_block::{
     Block, BlockError, DoubleProposalProof, DoubleVoteProof, EquivocationProofError, ForkProof,
     TendermintIdentifier, TendermintStep,
 };
-use nimiq_block_production::test_custom_block::{
-    next_macro_block, next_micro_block, next_skip_block, BlockConfig,
-};
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{
     AbstractBlockchain, PushError,
@@ -21,6 +18,7 @@ use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
     blockchain::validator_address,
+    test_custom_block::{next_macro_block, next_micro_block, next_skip_block, BlockConfig},
     test_rng::test_rng,
     zkp_test_data::{get_base_seed, simulate_merger_wrapper, ZKP_TEST_KEYS_PATH},
 };

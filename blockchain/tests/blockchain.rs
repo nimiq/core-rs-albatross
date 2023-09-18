@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use nimiq_block::{Block, BlockError};
-use nimiq_block_production::test_custom_block::{finalize_macro_block, next_macro_block_proposal};
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
 use nimiq_hash::Hash;
@@ -9,7 +8,9 @@ use nimiq_primitives::{policy::Policy, trie::trie_diff::TrieDiff};
 use nimiq_tendermint::ProposalMessage;
 use nimiq_test_log::test;
 use nimiq_test_utils::{
-    block_production::TemporaryBlockProducer, blockchain::produce_macro_blocks,
+    block_production::TemporaryBlockProducer,
+    blockchain::produce_macro_blocks,
+    test_custom_block::{finalize_macro_block, next_macro_block_proposal},
 };
 
 #[test(tokio::test)]

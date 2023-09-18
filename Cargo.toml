@@ -3,7 +3,6 @@
 ## !!! NOTE: If you add a nimiq module here, also add it to log/src/lib.rs !!!
 ##
 members = [
-  "block-production",
   "blockchain",
   "blockchain-interface",
   "blockchain-proxy",
@@ -158,7 +157,6 @@ keywords = ["nimiq", "cryptocurrency", "blockchain"]
 [workspace.dependencies]
 nimiq-account = { path = "primitives/account", default-features = false }
 nimiq-block = { path = "primitives/block", default-features = false }
-nimiq-block-production = { path = "block-production", default-features = false }
 nimiq-blockchain = { path = "blockchain", default-features = false }
 nimiq-blockchain-interface = { path = "blockchain-interface", default-features = false }
 nimiq-blockchain-proxy = { path = "blockchain-proxy", default-features = false }

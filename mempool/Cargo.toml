@@ -48,7 +48,6 @@ rand = "0.8"
 
 nimiq-block = { workspace = true }
 nimiq-blockchain = { workspace = true }
-nimiq-block-production = { workspace = true }
 nimiq-bls = { workspace = true }
 nimiq-database = { workspace = true }
 nimiq-genesis = { workspace = true }

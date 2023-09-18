@@ -1,8 +1,7 @@
 use std::{env, str::FromStr, sync::Arc};
 
 use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::volatile::VolatileDatabase;

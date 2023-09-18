@@ -19,7 +19,6 @@ tokio = { version = "1.32", features = ["macros", "rt", "sync"] }
 tracing-subscriber = { version = "0.3" }
 
 nimiq-block = { workspace = true }
-nimiq-block-production = { workspace = true }
 nimiq-blockchain = { workspace = true }
 nimiq-blockchain-interface = { workspace = true }
 nimiq-blockchain-proxy = { workspace = true }

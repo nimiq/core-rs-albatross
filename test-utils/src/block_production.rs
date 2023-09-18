@@ -4,8 +4,7 @@ use nimiq_block::{
     Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
     SkipBlockProof, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
 };
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, ChunksPushError, ChunksPushResult, PushError, PushResult,
 };

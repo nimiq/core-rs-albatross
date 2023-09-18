@@ -1,7 +1,6 @@
 use std::{path::Path, sync::Arc};
 
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database::volatile::VolatileDatabase;
 use nimiq_network_mock::MockHub;

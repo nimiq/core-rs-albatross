@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use futures::{future, StreamExt};
 use nimiq_block::{BlockHeaderTopic, BlockTopic};
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;

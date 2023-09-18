@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_database::volatile::VolatileDatabase;
 use nimiq_genesis::NetworkId;
