@@ -30,8 +30,6 @@ use parking_lot::RwLock;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-const NUM_TXNS_START_STOP: usize = 100;
-
 pub const ACCOUNT_SECRET_KEY: &str =
     "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
 
@@ -40,6 +38,12 @@ pub const VALIDATOR_SECRET_KEY: &str =
 
 const STAKER_ADDRESS: &str = "NQ20TSB0DFSMUH9C15GQGAGJTTE4D3MA859E";
 const VALIDATOR_ADDRESS: &str = "NQ20 TSB0 DFSM UH9C 15GQ GAGJ TTE4 D3MA 859E";
+
+fn tps_setting(default: usize) -> usize {
+    env::var("MIN_TPS")
+        .map(|min| usize::from_str(&min).expect("Min tps must be a number."))
+        .unwrap_or(default)
+}
 
 fn ed25519_key_pair(secret_key: &str) -> SchnorrKeyPair {
     let priv_key: SchnorrPrivateKey =
@@ -136,6 +140,8 @@ async fn multiple_start_stop_send(
     blockchain: Arc<RwLock<Blockchain>>,
     transactions: Vec<Transaction>,
 ) {
+    let min_tps = tps_setting(100);
+
     // Create a MPSC channel to directly send transactions to the mempool
     let (txn_stream_tx, txn_stream_rx) = mpsc::channel(64);
 
@@ -176,7 +182,7 @@ async fn multiple_start_stop_send(
     let (obtained_txns, _) = mempool.get_transactions_for_block(usize::MAX);
 
     // We should obtain the same amount of transactions
-    assert_eq!(obtained_txns.len(), NUM_TXNS_START_STOP);
+    assert_eq!(obtained_txns.len(), min_tps);
 
     // Now send more transactions via the transaction stream.
     let txns = transactions.clone();
@@ -242,7 +248,7 @@ async fn multiple_start_stop_send(
     let (obtained_txns, _) = mempool.get_transactions_for_block(usize::MAX);
 
     // We should obtain same number of txns
-    assert_eq!(obtained_txns.len(), NUM_TXNS_START_STOP);
+    assert_eq!(obtained_txns.len(), min_tps);
 }
 
 fn create_dummy_micro_block(transactions: Option<Vec<Transaction>>) -> Block {
@@ -784,9 +790,7 @@ async fn multiple_transactions_multiple_senders() {
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
 async fn mempool_tps() {
-    let min_tps = env::var("MIN_TPS")
-        .map(|min| usize::from_str(&min).expect("Min tps must be a number."))
-        .unwrap_or(100);
+    let min_tps = tps_setting(100);
     let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
     let env = VolatileDatabase::new(20).unwrap();
@@ -882,7 +886,7 @@ async fn multiple_start_stop() {
     log::debug!("Generating transactions and accounts");
 
     let balance = 100;
-    let num_txns = NUM_TXNS_START_STOP as u64;
+    let num_txns = tps_setting(100) as u64;
     let mut mempool_transactions = vec![];
     let sender_balances = vec![balance + num_txns * num_txns; num_txns as usize];
     let recipient_balances = vec![0; num_txns as usize];
