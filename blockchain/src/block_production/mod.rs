@@ -5,7 +5,7 @@ use nimiq_block::{
 };
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::KeyPair as BlsKeyPair;
-use nimiq_database::traits::WriteTransaction;
+use nimiq_database::{traits::WriteTransaction, TransactionProxy as DBTransaction};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::KeyPair as SchnorrKeyPair;
 use nimiq_primitives::policy::Policy;
@@ -281,7 +281,7 @@ impl BlockProducer {
         };
 
         // Create the body for the macro block.
-        let body = Self::next_macro_body(blockchain, &header);
+        let body = Self::next_macro_body(blockchain, &header, None);
 
         // Add the root of the body to the header.
         header.body_root = body.hash();
@@ -328,9 +328,15 @@ impl BlockProducer {
         macro_block
     }
 
-    pub fn next_macro_body(blockchain: &Blockchain, macro_header: &MacroHeader) -> MacroBody {
+    pub fn next_macro_body(
+        blockchain: &Blockchain,
+        macro_header: &MacroHeader,
+        txn_option: Option<&DBTransaction>,
+    ) -> MacroBody {
         // Get the staking contract PRIOR to any state changes.
-        let staking_contract = blockchain.get_staking_contract();
+        let staking_contract = blockchain
+            .get_staking_contract_if_complete(txn_option)
+            .expect("Staking Contract must be complete to create a macro body");
 
         // Calculate the punished set for the next batch.
         let next_batch_initial_punished_set = staking_contract
