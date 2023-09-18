@@ -6,10 +6,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     address::Address,
-    primitives::{
-        private_key::PrivateKey, public_key::PublicKey, signature::Signature,
-        signature_proof::SignatureProof,
-    },
+    primitives::{private_key::PrivateKey, public_key::PublicKey, signature::Signature},
     transaction::Transaction,
 };
 
@@ -78,10 +75,8 @@ impl KeyPair {
 
     /// Signs a transaction and sets the signature proof on the transaction object.
     #[wasm_bindgen(js_name = signTransaction)]
-    pub fn sign_transaction(&self, transaction: &mut Transaction) {
-        let signature = self.sign(transaction.serialize_content().as_ref());
-        let proof = SignatureProof::single_sig(&self.public_key(), &signature);
-        transaction.set_proof(proof.serialize());
+    pub fn sign_transaction(&self, transaction: &mut Transaction) -> Result<(), JsError> {
+        transaction.sign(self)
     }
 
     /// Gets the keypair's private key.
