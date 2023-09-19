@@ -429,6 +429,31 @@ impl RequestMissingBlocks {
     ) -> Result<ResponseBlocks, ResponseBlocksError> {
         let blockchain = blockchain.read();
 
+        let mut rng = thread_rng();
+        let tainted_config = blockchain.get_tainted_config();
+
+        // If we are tainted.. we just return random blocks, because why not?
+        if tainted_config.tainted_request_history_chunk && rng.gen_bool(1.0 / 2.0) {
+            let head = blockchain.block_number();
+            let mut block_numbers = vec![];
+            block_numbers.push(rng.gen_range(0..head));
+            block_numbers.push(rng.gen_range(0..head));
+            block_numbers.push(rng.gen_range(0..head));
+
+            let mut blocks = vec![];
+
+            for block_number in block_numbers {
+                if let Ok(block) = blockchain.get_block_at(block_number, rng.gen_bool(1.0 / 2.0)) {
+                    blocks.push(block);
+                }
+            }
+            warn!(" Returning some random blocks for the missing block request.. bua ha ha ha");
+
+            return ResponseBlocks {
+                blocks: Some(blocks),
+            };
+        }
+
         // Check that we know the target hash and that it is located on our main chain.
         let target_block = match blockchain.get_chain_info(&self.target_hash, false) {
             Ok(target_block) => {
