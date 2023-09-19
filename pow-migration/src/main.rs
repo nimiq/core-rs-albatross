@@ -21,7 +21,7 @@ struct Args {
     #[arg(short, long)]
     config: String,
     /// PoW RPC server URL
-    #[arg(short, long)]
+    #[arg(long)]
     url: String,
     /// Optional PoS RPC server username
     #[arg(short, long)]

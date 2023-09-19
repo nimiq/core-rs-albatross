@@ -225,7 +225,8 @@ pub async fn migrate(
         if current_height > block_windows.election_candidate {
             // First we calculate how many blocks past the candidate we are currently at
             let diff = current_height - block_windows.election_candidate;
-            // We calculate in which activation window we are
+            // TODO: We need to iterate all the previous readiness windows to know if the
+            // readiness condition was hit before.
             let mul = diff / block_windows.readiness_window;
 
             previous_election_block =
