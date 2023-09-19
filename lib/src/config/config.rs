@@ -121,6 +121,9 @@ pub struct TaintedConfig {
     #[builder(default = "false")]
     // Produce tainted block request responses
     pub tainted_request_block: bool,
+    #[builder(default = "false")]
+    // Produce tainted missing blocks request responses
+    pub tainted_request_missing_blocks: bool,
 }
 
 impl Default for TaintedConfig {
@@ -135,6 +138,7 @@ impl Default for TaintedConfig {
             tainted_request_batch_set: false,
             tainted_request_history_chunk: false,
             tainted_request_block: false,
+            tainted_request_missing_blocks: false,
         }
     }
 }
@@ -837,6 +841,7 @@ impl ClientConfigBuilder {
             tainted_request_batch_set: config_file.tainted.tainted_request_batch_set,
             tainted_request_history_chunk: config_file.tainted.tainted_request_history_chunk,
             tainted_request_block: config_file.tainted.tainted_request_block,
+            tainted_request_missing_blocks: config_file.tainted.tainted_request_missing_blocks,
         };
 
         self.tainted(tainted);

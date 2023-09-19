@@ -188,6 +188,9 @@ pub struct TaintedSettings {
     #[serde(default)]
     // Produce tainted macro chain responses
     pub tainted_request_block: bool,
+    #[serde(default)]
+    // Produce tainted missing blocks responses
+    pub tainted_request_missing_blocks: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]
