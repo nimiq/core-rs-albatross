@@ -102,7 +102,7 @@ pub trait Protocol: Clone + Send + Sync + Unpin + Sized + 'static {
     ) -> Self::ProposalSignature;
 
     /// Verifies a given `proposal`. Optionally a precomputed `precalculated_inherent` can be provided if the inherent has been computed before.
-    /// as well as all checks can be skipped except for the signature verification.
+    /// All checks except for the signature verification can be skipped using the `signature_only` flag
     fn verify_proposal(
         &self,
         proposal: &SignedProposalMessage<Self::Proposal, Self::ProposalSignature>,
