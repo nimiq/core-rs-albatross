@@ -260,8 +260,7 @@ impl TransactionBuilder {
     ///
     /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
     ///
-    /// Throws when the numbers given for fee do not fit within a u64 or the networkId is unknown.
-
+    /// Throws when the fee does not fit within a u64 or the `networkId` is unknown.
     #[wasm_bindgen(js_name = newCreateValidator)]
     pub fn new_create_validator(
         sender: &Address,
