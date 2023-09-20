@@ -102,6 +102,7 @@ fn it_can_serialize_and_deserialize_signature_proofs() {
         .unwrap(),
         host: "localhost:3000".to_string(),
         authenticator_data_suffix: vec![1, 101, 1, 154, 108],
+        client_data_flags: WebauthnClientDataFlags::default(),
         client_data_extra_fields: "".to_string(),
     };
 

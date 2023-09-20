@@ -35,6 +35,8 @@ impl SignatureProof {
         signature: &Signature,
         host: String,
         authenticator_data: &[u8],
+        // TODO: Improve DX by taking the raw clientDataJSON bytes and converting them to what we need internally.
+        client_data_flags: Option<u8>,
         client_data_extra_fields: Option<String>,
     ) -> SignatureProof {
         SignatureProof::from_native(nimiq_transaction::SignatureProof::ECDSA(
@@ -44,6 +46,9 @@ impl SignatureProof {
                 host.to_string(),
                 // TODO: Calculate RP ID from `host` and verify it against the first 32 bytes of `authenticator_data`.
                 authenticator_data[32..].to_vec(),
+                nimiq_transaction::WebauthnClientDataFlags::from_bits_truncate(
+                    client_data_flags.unwrap_or(0),
+                ),
                 client_data_extra_fields.unwrap_or("".to_string()),
             ),
         ))
