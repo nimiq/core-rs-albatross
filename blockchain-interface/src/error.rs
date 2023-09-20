@@ -99,6 +99,8 @@ pub enum PushError {
     InvalidHistoricTransaction,
     #[error("Proof for equivocation already included")]
     EquivocationAlreadyIncluded(EquivocationLocator),
+    #[error("Accounts trie is incomplete and thus cannot be verified.")]
+    IncompleteAccountsTrie,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
