@@ -1,9 +1,14 @@
-use nimiq_block::{Block, BlockError, BlockHeader};
-use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
-use nimiq_database::TransactionProxy as DBTransaction;
+use nimiq_account::BlockLogger;
+use nimiq_block::{Block, BlockError, BlockHeader, MacroBlock, MacroBody};
+use nimiq_blockchain_interface::{AbstractBlockchain, ChainInfo, PushError};
+use nimiq_database::{
+    traits::{ReadTransaction, WriteTransaction},
+    TransactionProxy as DBTransaction, WriteTransactionProxy,
+};
+use nimiq_keys::Signature;
 use nimiq_primitives::policy::Policy;
 
-use crate::{blockchain_state::BlockchainState, Blockchain};
+use crate::{blockchain_state::BlockchainState, BlockProducer, Blockchain};
 
 /// Implements methods to verify the validity of blocks.
 impl Blockchain {
@@ -303,5 +308,246 @@ impl Blockchain {
         }
 
         Ok(())
+    }
+
+    /// Verifies a `proposed_block`, given the round it is proposed in as well as its valid round if applicable.
+    ///
+    /// For signature verification the signature as well as the supposedly signed payload are needed. They are
+    /// different from the eventual justification as the signature here is a Schnorr signature from the proposer,
+    /// whereas the final proof will be an aggregated bls key of all contributing validators.
+    pub fn verify_macro_block_proposal(
+        &self,
+        proposed_block: MacroBlock,
+        round: u32,
+        valid_round: Option<u32>,
+        signed_data: Vec<u8>,
+        signature: &Signature,
+        signature_only: bool,
+    ) -> Result<MacroBody, PushError> {
+        // If the accounts tree is not complete nothing can be done
+        if !self.accounts_complete() {
+            // Maybe introduce a proper error here. Is this even needed?
+            return Err(PushError::IncompleteAccountsTrie);
+        }
+
+        // No inherent was given, but signature verification is the only required step, independent from
+        // the result this can never work, as the inherent would have to be returned.
+        if proposed_block.body.is_none() && signature_only {
+            return Err(PushError::InvalidBlock(BlockError::MissingBody));
+        }
+
+        // Get the seed of the preceding block.
+        let prev_header = self
+            .get_block(&proposed_block.header.parent_hash, false, None)
+            .map_err(PushError::BlockchainError)?
+            .header();
+
+        // Create a read transaction to use in the following queries.
+        // It is not necessary for the correct execution and only is created to not create 3 different
+        // ones within the 3 function calls making use of it here.
+        let txn = self.read_transaction();
+
+        // Get the validator for this round.
+        let mut proposer = self
+            .get_proposer_at(
+                proposed_block.block_number(),
+                round,
+                prev_header.seed().entropy(),
+                Some(&txn),
+            )
+            .expect("Couldn't find slot owner!")
+            .validator
+            .signing_key;
+
+        // Verify the signature. The proposal is signed by the proposer of the round the proposal is used in.
+        if !proposer.verify(signature, signed_data.as_slice()) {
+            return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
+        }
+
+        if signature_only {
+            return Ok(proposed_block.body.unwrap());
+        }
+
+        // If a valid round is set, the VRF seed will be signed by the proposer of that round.
+        // So get that proposer.
+        if let Some(vr) = valid_round {
+            proposer = self
+                .get_proposer_at(
+                    proposed_block.block_number(),
+                    vr,
+                    prev_header.seed().entropy(),
+                    Some(&txn),
+                )
+                .expect("Couldn't find slot owner!")
+                .validator
+                .signing_key;
+        }
+
+        // Fetch predecessor block. Fail if it doesn't exist.
+        let predecessor = self
+            .get_chain_info(&proposed_block.header.parent_hash, false, Some(&txn))
+            .map_err(PushError::BlockchainError)?;
+
+        // Close the transaction as there is no longer a need for it.
+        txn.close();
+
+        // Wrap the macro block to use block agnostic verifications.
+        let mut block = Block::Macro(proposed_block);
+
+        // Make sure the header verifies
+        if let Err(error) = block.header().verify(false) {
+            debug!(%error, %block, "Tendermint - await_proposal: Invalid block header");
+            return Err(PushError::InvalidBlock(error));
+        }
+
+        // Make sure the block is the actual successor to its predecessor.
+        if let Err(error) = block.verify_immediate_successor(&predecessor.head) {
+            debug!(%error, %block, "Tendermint - await_proposal: Invalid block header for blockchain head");
+            return Err(PushError::InvalidBlock(error));
+        }
+
+        // Make sure that the (macro) block is the macro successor to the current macro head of the blockchain.
+        if let Err(error) = block.verify_macro_successor(&self.macro_head()) {
+            debug!(%error, %block, "Tendermint - await_proposal: Invalid block header for blockchain macro head");
+            return Err(PushError::InvalidBlock(error));
+        }
+
+        // Make sure the proposer is correct using the predecessor to determine slot ownership.
+        if let Err(error) = block.verify_proposer(&proposer, predecessor.head.seed()) {
+            debug!(%error, %block, "Tendermint - await_proposal: Invalid block header, VRF seed verification failed");
+            return Err(PushError::InvalidBlock(error));
+        }
+
+        // Check if the predecessor is on the current main chain.
+        if self.head_hash() == predecessor.head.hash() {
+            let mut txn = self.write_transaction();
+            return self.verify_proposal_state(&mut block, &mut txn);
+        }
+        self.verify_inferior_chain_macro_block_proposal(&mut block, predecessor)
+    }
+
+    /// Given a transaction containing relevant change to the state this function will
+    /// take the state and compare it pre and post commit to the block.
+    fn verify_proposal_state(
+        &self,
+        block: &mut Block,
+        txn: &mut WriteTransactionProxy,
+    ) -> Result<MacroBody, PushError> {
+        // First compute the macro body if it was not given as part of the proposed block.
+        let body = {
+            let macro_block = block.unwrap_macro_ref_mut();
+
+            macro_block
+                .body
+                .get_or_insert(BlockProducer::next_macro_body(
+                    self,
+                    &macro_block.header,
+                    Some(txn),
+                ))
+                .clone()
+        };
+
+        // Get the blockchain state.
+        let state = self.state();
+
+        // Verify macro block state before committing accounts.
+        if let Err(error) = self.verify_block_state_pre_commit(state, block, txn) {
+            debug!(%error, %block, "Tendermint - await_proposal: Invalid macro block state");
+            return Err(error);
+        }
+
+        // Update our blockchain state using the received proposal. If we can't update the state, we
+        // return a proposal timeout.
+        if let Err(error) = self.commit_accounts(
+            state,
+            block,
+            None,
+            &mut txn.into(),
+            &mut BlockLogger::empty(),
+        ) {
+            debug!(%error, %block, "Tendermint - await_proposal: Failed to commit accounts");
+            return Err(error);
+        }
+
+        // Check the validity of the block against our state. If it is invalid, we return a proposal
+        // timeout. This also returns the block body that matches the block header
+        // (assuming that the block is valid).
+        if let Err(error) = self.verify_block_state_post_commit(state, block, txn) {
+            log::debug!(%error, %block, "Tendermint - await_proposal: Invalid block state");
+            return Err(error);
+        }
+
+        Ok(body)
+    }
+
+    /// Verifies a proposal given as `block`. The block may contain a precalculated body. If it does not exists,
+    /// it will be created during verification.
+    ///
+    /// For inferior chain proposal verification the state must be reverted to the inferior chain head prior
+    /// to calling Blockchain::verify_proposal_state.
+    ///
+    /// It returns the body to the proposal if verification succeeds, or the error if it does not.
+    fn verify_inferior_chain_macro_block_proposal(
+        &self,
+        block: &mut Block,
+        prev_info: ChainInfo,
+    ) -> Result<MacroBody, PushError> {
+        // Check to see if the trie is incomplete. Proposal verification only happens when actively validating and thus the
+        // trie should not be incomplete initially. It might be incomplete while rebranching blocks and those need to
+        // be taken into account.
+        let prev_missing_range = self.get_missing_accounts_range(None);
+        if prev_missing_range.is_some() {
+            warn!(
+                %block,
+                ?prev_missing_range,
+                "Verifying proposal while current missing accounts is not none",
+            );
+        }
+
+        // Create a ChainInfo for the proposed block.
+        let chain_info = ChainInfo::from_block(block.clone(), &prev_info, prev_missing_range);
+
+        let read_txn = self.read_transaction();
+        // First the common ancestor of the two chains needs to be found.
+        let (mut ancestor, mut fork_chain) =
+            self.find_common_ancestor(block.hash(), chain_info, None, &read_txn)?;
+
+        read_txn.close();
+
+        // fork_chain includes the macro block itself, which must be removed.
+        let _removed_proposed_block = fork_chain.remove(0);
+
+        debug!(
+            %block,
+            common_ancestor = %ancestor.1.head,
+            no_blocks_up = fork_chain.len(),
+            "Found common ancestor",
+        );
+
+        let mut write_txn = self.write_transaction();
+        if let Err(remove_chain) =
+            Blockchain::rebranch_to(self, &mut fork_chain, &mut ancestor, &mut write_txn)
+        {
+            // Failed to apply blocks. All blocks within revert chain must be removed.
+            // To do that the txn must be aborted first, as the txn will be comitted and
+            // prior changes are unwanted.
+            write_txn.abort();
+
+            // Delete invalid fork blocks from store.
+            // Create a new write transaction which will be committed.
+            let mut write_txn = self.write_transaction();
+            for block in remove_chain {
+                self.chain_store.remove_chain_info(
+                    &mut write_txn,
+                    &block.0,
+                    block.1.head.block_number(),
+                );
+            }
+            write_txn.commit();
+
+            return Err(PushError::InvalidFork);
+        }
+        // The state is now prepared contained within `write_txn` to just invoke verify_proposal_state.
+        self.verify_proposal_state(block, &mut write_txn)
     }
 }
