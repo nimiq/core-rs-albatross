@@ -155,6 +155,25 @@ impl Default for EdDSASignatureProof {
     }
 }
 
+bitflags! {
+    #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+    /// Some authenticators may behave non-standard for signing with Webauthn:
+    ///
+    /// - they might not include the mandatory `crossOrigin` field in clientDataJSON
+    /// - they might escape the `origin`'s forward slashes with backslashes, although not necessary for UTF-8 nor JSON encoding
+    ///
+    /// To allow the WebauthnSignatureProof to construct a correct `clientDataJSON` for verification,
+    /// the proof needs to know these non-standard behaviors.
+    ///
+    /// See this tracking issue for Android Chrome: https://bugs.chromium.org/p/chromium/issues/detail?id=1233616
+    pub struct WebauthnClientDataFlags: u8 {
+        const NO_CROSSORIGIN_FIELD  = 1 << 0;
+        const ESCAPED_ORIGIN_SLASHES = 1 << 1;
+
+        // const HAS_EXTRA_FIELDS = 1 << 7; // TODO Replace client_data_extra_fields length null byte when no extra fields are present
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WebauthnSignatureProof {
     pub public_key: WebauthnPublicKey,
@@ -162,6 +181,7 @@ pub struct WebauthnSignatureProof {
     pub signature: Signature,
     pub host: String,
     pub authenticator_data_suffix: Vec<u8>,
+    pub client_data_flags: WebauthnClientDataFlags,
     pub client_data_extra_fields: String,
 }
 
@@ -171,6 +191,7 @@ impl WebauthnSignatureProof {
         signature: Signature,
         host: String,
         authenticator_data_suffix: Vec<u8>,
+        client_data_flags: WebauthnClientDataFlags,
         client_data_extra_fields: String,
     ) -> Self {
         WebauthnSignatureProof {
@@ -179,6 +200,7 @@ impl WebauthnSignatureProof {
             signature,
             host,
             authenticator_data_suffix,
+            client_data_flags,
             client_data_extra_fields,
         }
     }
@@ -199,24 +221,39 @@ impl WebauthnSignatureProof {
         let challenge = Blake2bHasher::default().digest(message);
 
         // 2. We need to calculate the RP ID (Relaying Party ID) from the hostname (without port)
+        // First we construct the origin from the host, as we need it for the clientDataJSON later
         let origin_protocol = if self.host.starts_with("localhost") {
             "http"
         } else {
             "https"
         };
-        let origin = format!("{}://{}", origin_protocol, self.host);
+
+        let protocol_separator = if self
+            .client_data_flags
+            .contains(WebauthnClientDataFlags::ESCAPED_ORIGIN_SLASHES)
+        {
+            r":\/\/"
+        } else {
+            "://"
+        };
+
+        let origin = format!("{}{}{}", origin_protocol, protocol_separator, self.host);
+
         let url = Url::parse(&origin);
         if url.is_err() {
             debug!("Failed to parse origin: {}", origin);
             return false;
         }
         let url = url.unwrap();
+
         let hostname = url.host_str();
         if hostname.is_none() {
             debug!("Failed to extract hostname: {:?}", url);
             return false;
         }
         let hostname = hostname.unwrap();
+
+        // The RP ID is the SHA256 hash of the hostname
         let rp_id = Sha256Hasher::default().digest(hostname.as_bytes());
 
         // 3. Build the authenticatorData from the RP ID and the suffix
@@ -230,7 +267,18 @@ impl WebauthnSignatureProof {
             "origin": origin,
             "crossOrigin": false, // Signing inside iframes is not supported
         })
-        .to_string();
+        .to_string()
+        // If the `origin` has escaped slashes, the json! macro re-escapes those escape-backslashes,
+        // We remove the double escape here so the `origin` matches the expected value
+        .replace(r"\\", r"\");
+
+        if self
+            .client_data_flags
+            .contains(WebauthnClientDataFlags::NO_CROSSORIGIN_FIELD)
+        {
+            client_data_json = client_data_json.replace(r#","crossOrigin":false"#, "");
+        }
+
         // Append extra clientData fields before the final closing bracket
         if !self.client_data_extra_fields.is_empty() {
             client_data_json = format!(
@@ -239,6 +287,8 @@ impl WebauthnSignatureProof {
                 self.client_data_extra_fields
             );
         }
+
+        // Hash the clientDataJSON
         let client_data_hash = Sha256Hasher::default().digest(client_data_json.as_bytes());
 
         // 5. Concat authenticatorData and clientDataHash to build the data signed by Webauthn
