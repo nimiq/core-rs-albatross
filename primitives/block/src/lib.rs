@@ -3,7 +3,7 @@ extern crate log;
 
 pub use block::*;
 pub use block_proof::*;
-pub use fork_proof::*;
+pub use equivocation_proof::*;
 pub use macro_block::*;
 pub use micro_block::*;
 pub use multisig::*;
@@ -15,7 +15,7 @@ use thiserror::Error;
 
 mod block;
 mod block_proof;
-mod fork_proof;
+mod equivocation_proof;
 mod macro_block;
 mod micro_block;
 mod multisig;

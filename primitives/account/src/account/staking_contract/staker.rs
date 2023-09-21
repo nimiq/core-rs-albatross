@@ -1,9 +1,12 @@
+#[cfg(feature = "interaction-traits")]
 use std::cmp::Ordering;
 
 use nimiq_keys::Address;
 #[cfg(feature = "interaction-traits")]
 use nimiq_primitives::account::AccountError;
-use nimiq_primitives::{coin::Coin, policy::Policy};
+use nimiq_primitives::coin::Coin;
+#[cfg(feature = "interaction-traits")]
+use nimiq_primitives::policy::Policy;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "interaction-traits")]
@@ -14,9 +17,8 @@ use crate::{
         },
         StakerReceipt, StakingContract, Tombstone,
     },
-    Log, TransactionLog,
+    Log, RemoveStakeReceipt, SetInactiveStakeReceipt, TransactionLog,
 };
-use crate::{RemoveStakeReceipt, SetInactiveStakeReceipt};
 
 /// Struct representing a staker in the staking contract.
 /// The staker's balance is divided into active and inactive stake.
@@ -48,11 +50,17 @@ pub struct Staker {
     pub address: Address,
     /// The staker's active balance.
     pub balance: Coin,
-    /// The staker's inactive balance.
+    /// The staker's inactive balance. Only released inactive balance can be withdrawn from the staking contract.
+    /// Stake can only be re-delegated if the whole balance of the staker is inactive and released
+    /// (or if there was no prior delegation). For inactive balance to be released, the maximum of
+    /// the inactive and the validator's jailed periods must have passed.
     pub inactive_balance: Coin,
-    /// The inactive balance release block height. The effective release block height
-    /// is also affected by the delegation jail release.
-    pub inactive_release: Option<u32>,
+    /// The block number at which the inactive balance was last inactivated for withdrawal or re-delegation.
+    /// If the stake is currently delegated to a jailed validator, the maximum of its jail release
+    /// and the inactive release is taken. Re-delegation requires the whole balance of the staker to be inactive.
+    /// The stake can only effectively become inactive on the next election block. Thus, this may contain a
+    /// future block height.
+    pub inactive_from: Option<u32>,
     /// The address of the validator for which the staker is delegating its stake for. If it is not
     /// delegating to any validator, this will be set to None.
     pub delegation: Option<Address>,
@@ -67,6 +75,8 @@ impl StakingContract {
         staker_address: &Address,
         value: Coin,
         delegation: Option<Address>,
+        inactive_balance: Coin,
+        inactive_from: Option<u32>,
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // See if the staker already exists.
@@ -85,8 +95,8 @@ impl StakingContract {
         let staker = Staker {
             address: staker_address.clone(),
             balance: value,
-            inactive_balance: Coin::ZERO,
-            inactive_release: None,
+            inactive_balance,
+            inactive_from,
             delegation,
         };
 
@@ -249,9 +259,9 @@ impl StakingContract {
                 return Err(AccountError::InvalidForRecipient);
             }
 
-            // Fail if the release block height has not passed yet.
-            if let Some(inactive_release) = staker.inactive_release {
-                if block_number < inactive_release {
+            // Fail if the inactive release block height has not passed yet.
+            if let Some(inactive_from) = staker.inactive_from {
+                if block_number < Policy::block_after_reporting_window(inactive_from) {
                     debug!(
                         ?staker_address,
                         "Tried to update staker with inactive balance not being released yet"
@@ -262,14 +272,12 @@ impl StakingContract {
 
             // Fail if validator is currently jailed.
             if let Some(validator) = store.get_validator(validator_address) {
-                if let Some(jail_release) = validator.jail_release {
-                    if block_number < jail_release {
-                        debug!(
-                            ?staker_address,
-                            "Tried to update staker that currently delegates to a jailed validator"
-                        );
-                        return Err(AccountError::InvalidForRecipient);
-                    }
+                if validator.is_jailed(block_number) {
+                    debug!(
+                        ?staker_address,
+                        "Tried to update staker that currently delegates to a jailed validator"
+                    );
+                    return Err(AccountError::InvalidForRecipient);
                 }
             }
         }
@@ -280,7 +288,7 @@ impl StakingContract {
         let receipt = StakerReceipt {
             delegation: staker.delegation.clone(),
             active_balance: staker.balance,
-            inactive_release: staker.inactive_release,
+            inactive_from: staker.inactive_from,
         };
 
         // Store old information for the log
@@ -301,7 +309,7 @@ impl StakingContract {
             // Update the staker's balance.
             staker.balance += staker.inactive_balance;
             staker.inactive_balance = Coin::ZERO;
-            staker.inactive_release = None;
+            staker.inactive_from = None;
         }
 
         // If we are now delegating to a validator we add ourselves to it.
@@ -318,7 +326,7 @@ impl StakingContract {
             old_validator_address,
             new_validator_address: staker.delegation.clone(),
             active_balance: staker.balance,
-            inactive_release: staker.inactive_release,
+            inactive_from: staker.inactive_from,
         });
 
         // Update the staker entry.
@@ -353,7 +361,7 @@ impl StakingContract {
             old_validator_address: receipt.delegation.clone(),
             new_validator_address: staker.delegation.clone(),
             active_balance: staker.balance,
-            inactive_release: staker.inactive_release,
+            inactive_from: staker.inactive_from,
         });
 
         // Restore the previous delegation.
@@ -368,7 +376,7 @@ impl StakingContract {
         // Restore the previous balances
         staker.balance = receipt.active_balance;
         staker.inactive_balance = total_balance - staker.balance;
-        staker.inactive_release = receipt.inactive_release;
+        staker.inactive_from = receipt.inactive_from;
 
         // Update the staker entry.
         store.put_staker(staker_address, staker);
@@ -405,7 +413,7 @@ impl StakingContract {
         // All checks passed, not allowed to fail from here on!
 
         // Store old values for receipt.
-        let old_inactive_release = staker.inactive_release;
+        let old_inactive_from = staker.inactive_from;
         let old_active_balance = staker.balance;
         let new_active_balance = total_balance - new_inactive_balance;
 
@@ -423,27 +431,25 @@ impl StakingContract {
         // Update the staker's balance.
         staker.balance = new_active_balance;
         staker.inactive_balance = new_inactive_balance;
-        staker.inactive_release = if new_inactive_balance.is_zero() {
+        staker.inactive_from = if new_inactive_balance.is_zero() {
             None
         } else {
-            // We release after the end of the reporting window.
-            Some(Policy::block_after_reporting_window(
-                Policy::election_block_after(block_number),
-            ))
+            // The inactivation only takes effect after the next election block.
+            Some(Policy::election_block_after(block_number))
         };
 
         tx_logger.push_log(Log::SetInactiveStake {
             staker_address: staker_address.clone(),
             validator_address: staker.delegation.clone(),
             value: new_inactive_balance,
-            inactive_release: staker.inactive_release,
+            inactive_from: staker.inactive_from,
         });
 
         // Update the staker entry.
         store.put_staker(staker_address, staker);
 
         Ok(SetInactiveStakeReceipt {
-            old_inactive_release,
+            old_inactive_from,
             old_active_balance,
         })
     }
@@ -463,11 +469,11 @@ impl StakingContract {
         let total_balance = staker.balance + staker.inactive_balance;
 
         // Keep the old values.
-        let old_inactive_release = staker.inactive_release;
+        let old_inactive_from = staker.inactive_from;
         let old_balance = staker.balance;
 
-        // Restore the previous inactive release and balances.
-        staker.inactive_release = receipt.old_inactive_release;
+        // Restore the previous inactive since and balances.
+        staker.inactive_from = receipt.old_inactive_from;
         staker.balance = receipt.old_active_balance;
         staker.inactive_balance = total_balance - staker.balance;
 
@@ -482,7 +488,7 @@ impl StakingContract {
             staker_address: staker_address.clone(),
             validator_address: staker.delegation.clone(),
             value,
-            inactive_release: old_inactive_release,
+            inactive_from: old_inactive_from,
         });
 
         // Update the staker entry.
@@ -499,9 +505,9 @@ impl StakingContract {
     ) -> Result<(), AccountError> {
         // We only need to wait for the release time if stake is delegated.
         if let Some(validator_address) = &staker.delegation {
-            // Fail if the release block height has not passed yet.
-            if let Some(inactive_release) = staker.inactive_release {
-                if block_number < inactive_release {
+            // Fail if the inactive release block height has not passed yet.
+            if let Some(inactive_from) = staker.inactive_from {
+                if block_number < Policy::block_after_reporting_window(inactive_from) {
                     debug!(
                         ?staker.address,
                         "Tried to remove stake while the inactive balance has not been released yet"
@@ -512,14 +518,12 @@ impl StakingContract {
 
             // Fail if validator is currently jailed.
             if let Some(validator) = store.get_validator(validator_address) {
-                if let Some(jail_release) = validator.jail_release {
-                    if block_number < jail_release {
-                        debug!(
-                            ?staker.address,
-                            "Tried to remove stake that is currently delegated to a jailed validator"
-                        );
-                        return Err(AccountError::InvalidForSender);
-                    }
+                if validator.is_jailed(block_number) {
+                    debug!(
+                        ?staker.address,
+                        "Tried to remove stake that is currently delegated to a jailed validator"
+                    );
+                    return Err(AccountError::InvalidForSender);
                 }
             }
         }
@@ -548,13 +552,13 @@ impl StakingContract {
         // All checks passed, not allowed to fail from here on!
 
         // Keep the old values.
-        let old_inactive_release = staker.inactive_release;
+        let old_inactive_from = staker.inactive_from;
         let old_delegation = staker.delegation.clone();
 
         // Update the staker's balance.
         staker.inactive_balance = new_balance;
         if staker.inactive_balance.is_zero() {
-            staker.inactive_release = None;
+            staker.inactive_from = None;
         }
 
         // Update our balance.
@@ -582,7 +586,7 @@ impl StakingContract {
 
         Ok(RemoveStakeReceipt {
             delegation: old_delegation,
-            inactive_release: old_inactive_release,
+            inactive_from: old_inactive_from,
         })
     }
 
@@ -605,15 +609,15 @@ impl StakingContract {
                 address: staker_address.clone(),
                 balance: Coin::ZERO,
                 inactive_balance: Coin::ZERO,
-                inactive_release: None,
+                inactive_from: None,
                 delegation: receipt.delegation,
             }
         });
 
         // Update the staker's balance.
         staker.inactive_balance += value;
-        // Update the staker's inactive release.
-        staker.inactive_release = receipt.inactive_release;
+        // Update the staker's `inactive_from` block height.
+        staker.inactive_from = receipt.inactive_from;
 
         // Update our balance.
         self.balance += value;

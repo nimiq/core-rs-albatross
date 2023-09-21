@@ -186,7 +186,6 @@ impl ExecutedTransaction {
 }
 
 #[derive(Clone, Eq, Debug)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub struct Transaction {
     pub sender: Address,

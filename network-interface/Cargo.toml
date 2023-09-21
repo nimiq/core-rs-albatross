@@ -20,11 +20,11 @@ maintenance = { status = "experimental" }
 async-trait = "0.1"
 bitflags = "1.2"
 futures = { package = "futures-util", version = "0.3" }
-libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", default-features = false }
 log = { package = "tracing", version = "0.1", features = ["log"] }
+multiaddr = "0.16"
 serde = "1.0"
 thiserror = "1.0"
-tokio = { version = "1.29", features = ["rt"] }
+tokio = { version = "1.32", features = ["rt"] }
 tokio-stream = { version = "0.1", features = ["default", "sync"] }
 
 nimiq-serde = { workspace = true }

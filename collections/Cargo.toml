@@ -19,10 +19,11 @@ maintenance = { status = "experimental" }
 [dependencies]
 serde = "1.0"
 
+nimiq-serde = { workspace = true }
+
 [dev-dependencies]
 hex = "0.4"
 rand = "0.8"
 serde_json = "1.0"
 
-nimiq-serde = { workspace = true }
 nimiq-test-log = { workspace = true }

@@ -5,8 +5,8 @@ use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, ChainOrdering, ForkEvent, PushError, PushResult,
 };
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::Address;
 use nimiq_primitives::policy::Policy;
-use nimiq_vrf::VrfSeed;
 use parking_lot::RwLockUpgradableReadGuard;
 
 use crate::blockchain::LightBlockchain;
@@ -118,7 +118,14 @@ impl LightBlockchain {
 
         // Detect forks in non-skip micro blocks.
         if block.is_micro() && !block.is_skip() {
-            this.detect_forks(block.unwrap_micro_ref(), prev_info.head.seed());
+            let (validator, _) = this
+                .get_proposer_at(
+                    block.block_number(),
+                    block.block_number(),
+                    prev_info.head.seed().entropy(),
+                )
+                .expect("Couldn't find slot owner");
+            this.detect_forks(block.unwrap_micro_ref(), &validator.address);
         }
 
         // Create the chain info for the new block.
@@ -394,7 +401,7 @@ impl LightBlockchain {
         Ok(PushResult::Extended)
     }
 
-    fn detect_forks(&self, block: &MicroBlock, prev_vrf_seed: &VrfSeed) {
+    fn detect_forks(&self, block: &MicroBlock, validator_address: &Address) {
         assert!(!block.is_skip_block());
 
         // Check if there are two blocks in the same slot and with the same height. Since we already
@@ -424,13 +431,13 @@ impl LightBlockchain {
                     .expect("Missing justification")
                     .unwrap_micro();
 
-                let proof = ForkProof {
-                    header1: block.header.clone(),
-                    header2: micro_block.header,
+                let proof = ForkProof::new(
+                    validator_address.clone(),
+                    block.header.clone(),
                     justification1,
+                    micro_block.header,
                     justification2,
-                    prev_vrf_seed: prev_vrf_seed.clone(),
-                };
+                );
 
                 // We shouldn't log errors if there are no listeners.
                 _ = self.fork_notifier.send(ForkEvent::Detected(proof));

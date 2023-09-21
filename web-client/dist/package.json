@@ -4,25 +4,37 @@
     "The Nimiq Core Development Team <info@nimiq.com>"
   ],
   "description": "Nimiq's Rust-to-WASM web client",
-  "version": "2.0.0-alpha.13",
+  "version": "2.0.0-alpha.15",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/nimiq/core-rs-albatross"
   },
-  "files": [
-    "bundler",
-    "types",
-    "web",
-    "client-proxy.js",
-    "transfer-handlers.js"
-  ],
-  "module": "bundler/index.js",
+  "main": "./node/index.js",
+  "module": "./bundler/index.js",
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "node": {
+        "import": "./node/index.mjs",
+        "require": "./node/index.js"
+      },
+      "browser": "./bundler/index.js",
+      "types": "./types/index.d.ts"
+    },
+    "./web": {
+      "browser": "./web/index.js",
+      "types": "./types/index.d.ts"
+    }
+  },
   "homepage": "https://nimiq.com",
-  "types": "types/index.d.ts",
   "sideEffects": [
     "./bundler/main-wasm/index.js",
     "./bundler/worker-wasm/index.js",
+    "./node/main-wasm/index.js",
+    "./node/worker-wasm/index.js",
+    "./node/main-wasm/index.mjs",
+    "./node/worker-wasm/index.mjs",
     "./web/main-wasm/index.js",
     "./web/worker-wasm/index.js"
   ],
@@ -33,6 +45,7 @@
     "proof-of-stake"
   ],
   "dependencies": {
-    "comlink": "^4.4.1"
+    "comlink": "^4.4.1",
+    "websocket": "^1.0.34"
   }
 }

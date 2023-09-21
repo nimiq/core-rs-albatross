@@ -7,9 +7,8 @@ use std::{
 };
 
 use futures::{future::BoxFuture, ready, FutureExt, Stream};
-use nimiq_block::{Block, ForkProof, MicroBlock, SkipBlockInfo};
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::Blockchain;
+use nimiq_block::{Block, EquivocationProof, MicroBlock, SkipBlockInfo};
+use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_mempool::mempool::Mempool;
 use nimiq_utils::time::systemtime_to_timestamp;
@@ -34,7 +33,7 @@ struct NextProduceMicroBlockEvent<TValidatorNetwork> {
     network: Arc<TValidatorNetwork>,
     block_producer: BlockProducer,
     validator_slot_band: u16,
-    fork_proofs: Vec<ForkProof>,
+    equivocation_proofs: Vec<EquivocationProof>,
     prev_seed: VrfSeed,
     block_number: u32,
     producer_timeout: Duration,
@@ -51,7 +50,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         network: Arc<TValidatorNetwork>,
         block_producer: BlockProducer,
         validator_slot_band: u16,
-        fork_proofs: Vec<ForkProof>,
+        equivocation_proofs: Vec<EquivocationProof>,
         prev_seed: VrfSeed,
         block_number: u32,
         producer_timeout: Duration,
@@ -63,7 +62,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             network,
             block_producer,
             validator_slot_band,
-            fork_proofs,
+            equivocation_proofs,
             prev_seed,
             block_number,
             producer_timeout,
@@ -282,7 +281,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         );
 
         // First we try to fill the block with control transactions
-        let mut block_available_bytes = MicroBlock::get_available_bytes(self.fork_proofs.len());
+        let mut block_available_bytes =
+            MicroBlock::get_available_bytes(self.equivocation_proofs.len());
 
         let (mut transactions, txn_size) = self
             .mempool
@@ -299,7 +299,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         self.block_producer.next_micro_block(
             blockchain,
             timestamp,
-            self.fork_proofs.clone(),
+            self.equivocation_proofs.clone(),
             transactions,
             vec![], // TODO: Allow validators to set extra data field.
             None,
@@ -337,7 +337,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
         network: Arc<TValidatorNetwork>,
         block_producer: BlockProducer,
         validator_slot_band: u16,
-        fork_proofs: Vec<ForkProof>,
+        equivocation_proofs: Vec<EquivocationProof>,
         prev_seed: VrfSeed,
         block_number: u32,
         producer_timeout: Duration,
@@ -349,7 +349,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
             network,
             block_producer,
             validator_slot_band,
-            fork_proofs,
+            equivocation_proofs,
             prev_seed,
             block_number,
             producer_timeout,

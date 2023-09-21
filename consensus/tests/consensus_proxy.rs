@@ -1,7 +1,6 @@
 use std::{str::FromStr, sync::Arc};
 
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::{sync::syncer_proxy::SyncerProxy, Consensus};
@@ -13,7 +12,7 @@ use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{
-        fill_micro_blocks_with_txns, produce_macro_blocks, signing_key, voting_key, UNIT_KEY,
+        fill_micro_blocks_with_txns, produce_macro_blocks, signing_key, voting_key, REWARD_KEY,
     },
     node::TESTING_BLS_CACHE_MAX_CAPACITY,
 };
@@ -96,7 +95,7 @@ async fn test_request_transactions_by_address() {
     let consensus_proxy = consensus2.proxy();
     net1.dial_mock(&net2);
 
-    let key_pair = KeyPair::from(PrivateKey::from_str(UNIT_KEY).unwrap());
+    let key_pair = KeyPair::from(PrivateKey::from_str(REWARD_KEY).unwrap());
 
     let res = consensus_proxy
         .request_transactions_by_address(Address::from(&key_pair.public), 0, vec![], 1, None)

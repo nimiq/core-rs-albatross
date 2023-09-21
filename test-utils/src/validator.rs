@@ -92,6 +92,9 @@ where
             signing_keys[i].public,
             voting_keys[i].public_key,
             Address::default(),
+            None,
+            None,
+            false,
         );
     }
     let genesis = genesis_builder.generate(env).unwrap();

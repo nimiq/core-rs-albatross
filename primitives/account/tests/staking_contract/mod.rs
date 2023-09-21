@@ -183,6 +183,9 @@ fn make_sample_contract(
             validator_address.clone(),
             None,
             Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
+            None,
+            None,
+            false,
             &mut TransactionLog::empty(),
         )
         .unwrap();
@@ -194,6 +197,8 @@ fn make_sample_contract(
                 &staker_address,
                 Coin::from_u64_unchecked(staker_active_balance),
                 Some(validator_address.clone()),
+                Coin::ZERO,
+                None,
                 &mut TransactionLog::empty(),
             )
             .unwrap();
@@ -213,6 +218,7 @@ struct ValidatorSetup {
     env: DatabaseProxy,
     accounts: Accounts,
     staking_contract: StakingContract,
+    effective_state_block_state: BlockState,
     before_state_release_block_state: BlockState,
     state_release_block_state: BlockState,
     validator_address: Address,
@@ -221,6 +227,7 @@ struct ValidatorSetup {
 
 impl ValidatorSetup {
     fn setup(
+        state_block_height: BlockState,
         before_state_release_block_state: BlockState,
         state_release_block_state: BlockState,
         staker_active_balance: Option<u64>,
@@ -240,6 +247,7 @@ impl ValidatorSetup {
             env,
             accounts,
             staking_contract,
+            effective_state_block_state: state_block_height,
             before_state_release_block_state,
             state_release_block_state,
             validator_address,
@@ -249,6 +257,7 @@ impl ValidatorSetup {
 
     fn new(staker_active_balance: Option<u64>) -> ValidatorSetup {
         Self::setup(
+            BlockState::default(),
             BlockState::default(),
             BlockState::default(),
             staker_active_balance,
@@ -283,14 +292,21 @@ impl ValidatorSetup {
             )
             .expect("Failed to commit transaction");
 
-        let after_cooldown =
-            Policy::block_after_reporting_window(Policy::election_block_after(block_state.number));
+        let effective_state_block_state =
+            BlockState::new(Policy::election_block_after(block_state.number), 2);
+        let after_cooldown = Policy::block_after_reporting_window(Policy::election_block_after(
+            effective_state_block_state.number,
+        ));
         let after_cooldown = BlockState::new(after_cooldown, 1000);
         let before_cooldown = BlockState::new(after_cooldown.number - 1, 9000);
 
         db_txn_og.commit();
 
-        validator_setup.set_block_state(before_cooldown, after_cooldown);
+        validator_setup.set_block_state(
+            effective_state_block_state,
+            before_cooldown,
+            after_cooldown,
+        );
         validator_setup
     }
 
@@ -318,21 +334,13 @@ impl ValidatorSetup {
 
         db_txn_og.commit();
 
-        validator_setup.set_block_state(BlockState::default(), BlockState::default());
+        validator_setup.set_block_state(block_state, BlockState::default(), BlockState::default());
         validator_setup
     }
 
     fn setup_jailed_validator(staker_active_balance: Option<u64>) -> ValidatorSetup {
         let jailing_inherent_block_state = BlockState::new(2, 2);
-        let jail_release_block_state = BlockState::new(
-            Policy::block_after_jail(jailing_inherent_block_state.number),
-            2,
-        );
-        let before_release_block_state = BlockState::new(jail_release_block_state.number - 1, 2);
 
-        // -----------------------------------
-        // Test setup:
-        // -----------------------------------
         let mut validator_setup = ValidatorSetup::new(staker_active_balance);
         let data_store = validator_setup
             .accounts
@@ -340,7 +348,7 @@ impl ValidatorSetup {
         let mut db_txn_og = validator_setup.env.write_transaction();
         let mut db_txn = (&mut db_txn_og).into();
 
-        // 2. Jail validator
+        // Jail validator
         let mut data_store_write = data_store.write(&mut db_txn);
         let mut staking_contract_store = StakingContractStoreWrite::new(&mut data_store_write);
         let _result = validator_setup
@@ -349,22 +357,34 @@ impl ValidatorSetup {
                 &mut staking_contract_store,
                 &validator_setup.validator_address,
                 jailing_inherent_block_state.number,
-                jail_release_block_state.number,
                 &mut TransactionLog::empty(),
             )
             .unwrap();
 
         db_txn_og.commit();
-        validator_setup.set_block_state(before_release_block_state, jail_release_block_state);
 
+        let effective_state_block_state = BlockState::new(jailing_inherent_block_state.number, 2);
+        let jail_release_block_state = BlockState::new(
+            Policy::block_after_jail(effective_state_block_state.number),
+            2,
+        );
+        let before_release_block_state = BlockState::new(jail_release_block_state.number - 1, 2);
+
+        validator_setup.set_block_state(
+            effective_state_block_state,
+            before_release_block_state,
+            jail_release_block_state,
+        );
         validator_setup
     }
 
     fn set_block_state(
         &mut self,
+        state_block_height: BlockState,
         before_state_release_block_state: BlockState,
         state_release_block_state: BlockState,
     ) {
+        self.effective_state_block_state = state_block_height;
         self.before_state_release_block_state = before_state_release_block_state;
         self.state_release_block_state = state_release_block_state;
     }
@@ -374,6 +394,7 @@ struct StakerSetup {
     env: DatabaseProxy,
     accounts: Accounts,
     staking_contract: StakingContract,
+    effective_inactivation_block_state: BlockState,
     before_release_block_state: BlockState,
     inactive_release_block_state: BlockState,
     validator_address: Address,
@@ -424,8 +445,11 @@ impl StakerSetup {
         let inactive_stake = Coin::from_u64_unchecked(inactive_stake);
         let staker_address = validator_setup.staker_address.unwrap();
         let deactivation_block = 2;
+
+        let effective_inactivation_block_state =
+            BlockState::new(Policy::election_block_after(deactivation_block), 2);
         let inactive_release_block_state = BlockState::new(
-            Policy::block_after_reporting_window(Policy::election_block_after(deactivation_block)),
+            Policy::block_after_reporting_window(effective_inactivation_block_state.number),
             2,
         );
         let before_release_block_state =
@@ -449,6 +473,7 @@ impl StakerSetup {
             env: validator_setup.env,
             accounts: validator_setup.accounts,
             staking_contract: validator_setup.staking_contract,
+            effective_inactivation_block_state,
             before_release_block_state,
             inactive_release_block_state,
             validator_address: validator_setup.validator_address,

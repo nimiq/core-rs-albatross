@@ -1,6 +1,7 @@
 use nimiq_block::{Block, BlockError, BlockHeader};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
 use nimiq_database::TransactionProxy as DBTransaction;
+use nimiq_primitives::policy::Policy;
 
 use crate::{blockchain_state::BlockchainState, Blockchain};
 
@@ -95,6 +96,9 @@ impl Blockchain {
 
             // Verify that the transactions in the block are valid.
             self.verify_transactions(block)?;
+
+            // Verify that the equivocation proofs are valid.
+            self.verify_equivocation_proofs(block, txn)?;
         }
 
         Ok(())
@@ -116,7 +120,6 @@ impl Blockchain {
     /// an account has enough funds).
     /// It receives a block as input but that block is only required to have a header (the body and
     /// justification are optional, we don't need them).
-    /// Macro block specific checks are done in `verify_macro_block_state`
     pub fn verify_block_state_post_commit(
         &self,
         state: &BlockchainState,
@@ -194,6 +197,36 @@ impl Blockchain {
             }
         }
 
+        Ok(())
+    }
+
+    /// Verify that all the given equivocation proofs of a block are actually valid offenses.
+    pub fn verify_equivocation_proofs(
+        &self,
+        block: &Block,
+        txn: &DBTransaction,
+    ) -> Result<(), PushError> {
+        // We don't need to perform any checks if the given block is not a
+        // micro block as only micro blocks contain equivocation proofs.
+        let micro_block = match block {
+            Block::Macro(_) => return Ok(()),
+            Block::Micro(micro_block) => micro_block,
+        };
+
+        let body = micro_block
+            .body
+            .as_ref()
+            .expect("Block body must be present");
+
+        for equivocation_proof in &body.equivocation_proofs {
+            let validators = self
+                .get_validators_for_epoch(
+                    Policy::epoch_at(equivocation_proof.block_number()),
+                    Some(txn),
+                )
+                .expect("Couldn't calculate validators");
+            equivocation_proof.verify(&validators)?;
+        }
         Ok(())
     }
 

@@ -3,8 +3,7 @@ use std::{sync::Arc, task::Poll};
 use futures::{join, poll, Future, Stream, StreamExt};
 use log::info;
 use nimiq_block::Block;
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
@@ -388,13 +387,10 @@ async fn can_sync_state() {
     // Will apply the buffered block.
     assert!(
         matches!(
-            join!(mock_node.next(), live_sync.next()),
-            (
-                Some(RequestPartialDiff::TYPE_ID),
-                Some(LiveSyncEvent::PushEvent(
-                    LiveSyncPushEvent::AcceptedBufferedBlock(..)
-                )),
-            )
+            live_sync.next().await,
+            Some(LiveSyncEvent::PushEvent(
+                LiveSyncPushEvent::AcceptedBufferedBlock(..)
+            ))
         ),
         "Should apply buffered block"
     );

@@ -21,13 +21,17 @@ pub enum NetworkId {
     TestAlbatross = 5,
     DevAlbatross = 6,
     UnitAlbatross = 7,
+    MainAlbatross = 24,
 }
 
 impl NetworkId {
     pub fn is_albatross(self) -> bool {
         matches!(
             self,
-            NetworkId::TestAlbatross | NetworkId::DevAlbatross | NetworkId::UnitAlbatross
+            NetworkId::TestAlbatross
+                | NetworkId::DevAlbatross
+                | NetworkId::UnitAlbatross
+                | NetworkId::MainAlbatross
         )
     }
 }
@@ -55,6 +59,7 @@ impl FromStr for NetworkId {
             "unitalbatross" => Ok(NetworkId::UnitAlbatross),
             "testalbatross" => Ok(NetworkId::TestAlbatross),
             "devalbatross" => Ok(NetworkId::DevAlbatross),
+            "mainalbatross" => Ok(NetworkId::MainAlbatross),
             _ => Err(NetworkIdParseError(String::from(s))),
         }
     }
@@ -71,6 +76,7 @@ impl Display for NetworkId {
             NetworkId::TestAlbatross => "TestAlbatross",
             NetworkId::DevAlbatross => "DevAlbatross",
             NetworkId::UnitAlbatross => "UnitAlbatross",
+            NetworkId::MainAlbatross => "MainAlbatross",
         })
     }
 }

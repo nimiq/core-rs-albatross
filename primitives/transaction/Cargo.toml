@@ -20,7 +20,7 @@ num-traits = "0.2"
 serde = "1.0"
 strum_macros = "0.25"
 thiserror = "1.0"
-tsify = { version = "0.4", optional = true }
+tsify = { git = "https://github.com/sisou/tsify", branch = "sisou/comments", default-features = false, features = ["js"], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 
 nimiq-bls = { workspace = true, features = ["serde-derive"] }

@@ -111,6 +111,22 @@ fn network(network_id: NetworkId) -> Option<&'static NetworkInfo> {
             &INFO
         }
         NetworkId::TestAlbatross => {
+            #[cfg(feature = "genesis-override")]
+            {
+                use std::sync::OnceLock;
+                static OVERRIDE: OnceLock<Option<NetworkInfo>> = OnceLock::new();
+                if let Some(info) = OVERRIDE.get_or_init(|| {
+                    let override_path = env::var_os("NIMIQ_OVERRIDE_TESTNET_CONFIG");
+                    override_path.map(|p| NetworkInfo {
+                        network_id: NetworkId::TestAlbatross,
+                        name: "test-albatross",
+                        genesis: read_genesis_config(Path::new(&p))
+                            .expect("failure reading provided NIMIQ_OVERRIDE_TESTNET_CONFIG"),
+                    })
+                }) {
+                    return Some(info);
+                }
+            }
             static INFO: NetworkInfo = NetworkInfo {
                 network_id: NetworkId::TestAlbatross,
                 name: "test-albatross",
@@ -128,6 +144,33 @@ fn network(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                 genesis: include!(concat!(
                     env!("OUT_DIR"),
                     "/genesis/unit-albatross/genesis.rs"
+                )),
+            };
+            &INFO
+        }
+        NetworkId::Main => {
+            #[cfg(feature = "genesis-override")]
+            {
+                use std::sync::OnceLock;
+                static OVERRIDE: OnceLock<Option<NetworkInfo>> = OnceLock::new();
+                if let Some(info) = OVERRIDE.get_or_init(|| {
+                    let override_path = env::var_os("NIMIQ_OVERRIDE_MAINET_CONFIG");
+                    override_path.map(|p| NetworkInfo {
+                        network_id: NetworkId::MainAlbatross,
+                        name: "main-albatross",
+                        genesis: read_genesis_config(Path::new(&p))
+                            .expect("failure reading provided NIMIQ_OVERRIDE_MAINET_CONFIG"),
+                    })
+                }) {
+                    return Some(info);
+                }
+            }
+            static INFO: NetworkInfo = NetworkInfo {
+                network_id: NetworkId::UnitAlbatross,
+                name: "main-albatross",
+                genesis: include!(concat!(
+                    env!("OUT_DIR"),
+                    "/genesis/main-albatross/genesis.rs"
                 )),
             };
             &INFO

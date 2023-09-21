@@ -3,7 +3,7 @@ use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 /// A cursor is used for navigating the entries within a table.
 /// The read-only version cannot modify entries.
 ///
-/// Closely follows `libmdbx`'s (cursor API)[https://docs.rs/libmdbx/0.3.3/libmdbx/struct.Cursor.html].
+/// Closely follows `libmdbx`'s [cursor API](https://docs.rs/libmdbx/0.3.3/libmdbx/struct.Cursor.html).
 pub trait ReadCursor<'txn>: Clone {
     type IntoIter<K, V>: Iterator<Item = (K, V)>
     where
@@ -94,7 +94,7 @@ pub trait ReadCursor<'txn>: Clone {
 /// A cursor is used for navigating the entries within a table.
 /// The read-write version can also delete entries.
 ///
-/// Closely follows `libmdbx`'s (cursor API)[https://docs.rs/libmdbx/0.3.3/libmdbx/struct.Cursor.html].
+/// Closely follows `libmdbx`'s [cursor API](https://docs.rs/libmdbx/0.3.3/libmdbx/struct.Cursor.html).
 pub trait WriteCursor<'txn>: ReadCursor<'txn> {
     fn remove(&mut self);
 }

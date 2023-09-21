@@ -25,7 +25,7 @@ use crate::sync::{peer_list::PeerList, sync_queue::SyncQueue};
 /// The public interface allows to request chunks, which are not immediately returned.
 /// The chunks instead are returned by polling the component.
 pub struct ChunkRequestComponent<N: Network> {
-    sync_queue: SyncQueue<N, RequestChunk, (ResponseChunk, RequestChunk, N::PeerId)>,
+    sync_queue: SyncQueue<N, RequestChunk, (ResponseChunk, RequestChunk, N::PeerId), ()>,
     // These peers will be shared across the block request component and this component.
     peers: Arc<RwLock<PeerList<N>>>,
 }

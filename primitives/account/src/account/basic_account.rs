@@ -17,7 +17,6 @@ use crate::{
 };
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Default, Serialize, Deserialize)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasicAccount {
     pub balance: Coin,
 }

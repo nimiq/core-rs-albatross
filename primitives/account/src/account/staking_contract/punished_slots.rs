@@ -66,7 +66,7 @@ impl PunishedSlots {
             let entry = self
                 .current_batch_punished_slots
                 .entry(jailed_validator.validator_address.clone())
-                .or_insert_with(BTreeSet::new);
+                .or_default();
 
             for slot in slots {
                 entry.insert(slot);
@@ -166,7 +166,7 @@ impl PunishedSlots {
             newly_punished_current_batch = self
                 .current_batch_punished_slots
                 .entry(penalized_slot.validator_address.clone())
-                .or_insert_with(BTreeSet::new)
+                .or_default()
                 .insert(penalized_slot.slot);
         }
 

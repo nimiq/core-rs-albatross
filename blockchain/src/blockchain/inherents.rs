@@ -1,5 +1,5 @@
 use nimiq_account::StakingContract;
-use nimiq_block::{ForkProof, MacroBlock, MacroHeader, SkipBlockInfo};
+use nimiq_block::{EquivocationProof, MacroBlock, MacroHeader, SkipBlockInfo};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_database as db;
 use nimiq_keys::Address;
@@ -31,20 +31,27 @@ impl Blockchain {
 
         inherents
     }
-    /// Given fork proofs and (or) a skip block, it returns the respective punishment inherents. It expects
-    /// verified fork proofs and (or) skip block.
+    /// Given equivocation proofs and (or) a skip block, it returns the respective punishment inherents. It expects
+    /// verified equivocation proofs and (or) skip block.
     pub fn create_punishment_inherents(
         &self,
         block_number: u32,
-        fork_proofs: &[ForkProof],
+        equivocation_proofs: &[EquivocationProof],
         skip_block_info: Option<SkipBlockInfo>,
         txn_option: Option<&db::TransactionProxy>,
     ) -> Vec<Inherent> {
         let mut inherents = vec![];
 
-        for fork_proof in fork_proofs {
-            trace!("Creating inherent from fork proof: {:?}", fork_proof);
-            inherents.push(self.inherent_from_fork_proof(block_number, fork_proof, txn_option));
+        for equivocation_proof in equivocation_proofs {
+            trace!(
+                ?equivocation_proof,
+                "Creating inherent from equivocation proof",
+            );
+            inherents.push(self.inherent_from_equivocation_proof(
+                block_number,
+                equivocation_proof,
+                txn_option,
+            ));
         }
 
         if let Some(skip_block_info) = skip_block_info {
@@ -55,41 +62,41 @@ impl Blockchain {
         inherents
     }
 
-    /// It creates a jail inherent from a fork proof. It expects a *verified* fork proof!
-    pub fn inherent_from_fork_proof(
+    /// It creates a jail inherent from an equivocation proof. It expects a *verified* equivocation proof!
+    pub fn inherent_from_equivocation_proof(
         &self,
-        reporting_block: u32, // PITODO: we can get it from the blockchain, should be head block number + 1
-        fork_proof: &ForkProof,
+        block_number: u32,
+        equivocation_proof: &EquivocationProof,
         txn_option: Option<&db::TransactionProxy>,
     ) -> Inherent {
-        // Get the slot owner and slot number for this block number.
-        let proposer_slot = self
-            .get_proposer_at(
-                fork_proof.header1.block_number,
-                fork_proof.header1.block_number,
-                fork_proof.prev_vrf_seed.entropy(),
-                txn_option,
-            )
-            .expect("Couldn't calculate slot owner!");
-
         // If the reporting block is in a new epoch, we check if the proposer is still a validator in this epoch
         // and retrieve its new slots.
-        let new_epoch_slot_range = if Policy::epoch_at(reporting_block)
-            > Policy::epoch_at(fork_proof.header1.block_number)
+        let new_epoch_slot_range = if Policy::epoch_at(block_number)
+            > Policy::epoch_at(equivocation_proof.block_number())
         {
             self.current_validators()
                 .expect("We need to have validators")
-                .get_validator_by_address(&proposer_slot.validator.address)
+                .get_validator_by_address(equivocation_proof.validator_address())
                 .map(|validator| validator.slots.clone())
         } else {
             None
         };
 
-        // Create the JailedValidator struct.
+        let validators = self
+            .get_validators_for_epoch(
+                Policy::epoch_at(equivocation_proof.block_number()),
+                txn_option,
+            )
+            .expect("Couldn't calculate validators");
+        // `equivocation_proof.validator_address()` is checked in `EquivocationProof::verify`.
+        let validator = validators
+            .get_validator_by_address(equivocation_proof.validator_address())
+            .expect("Validator must have been present");
+
         let jailed_validator = JailedValidator {
-            slots: proposer_slot.validator.slots,
-            validator_address: proposer_slot.validator.address,
-            offense_event_block: fork_proof.header1.block_number,
+            slots: validator.slots.clone(),
+            validator_address: equivocation_proof.validator_address().clone(),
+            offense_event_block: equivocation_proof.block_number(),
         };
 
         // Create the corresponding jail inherent.
@@ -272,7 +279,7 @@ impl Blockchain {
                     .get_validator(&data_store.read(&txn), &validator_slot.address)
                     .expect("Couldn't find validator in the accounts trie when paying rewards!");
 
-                let tx: RewardTransaction = RewardTransaction {
+                let tx = RewardTransaction {
                     recipient: validator.reward_address.clone(),
                     value: reward,
                 };

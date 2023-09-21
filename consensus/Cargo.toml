@@ -23,11 +23,11 @@ futures-executor = { version = "0.3" }
 instant = { version = "0.1", features = [ "wasm-bindgen" ] }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
-pin-project = "1.0"
+pin-project = "1.1"
 rand = "0.8"
 serde = "1.0"
 thiserror = "1.0"
-tokio = { version = "1.29", features = ["rt", "sync", "time"] }
+tokio = { version = "1.32", features = ["rt", "sync", "time"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 
 nimiq-account = { workspace = true, default-features = false }
@@ -40,6 +40,7 @@ nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true }
 nimiq-light-blockchain = { workspace = true }
 nimiq-macros = { workspace = true }
+nimiq-mmr = { workspace = true }
 nimiq-network-interface = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["policy"] }
 nimiq-serde = { workspace = true }
@@ -54,7 +55,6 @@ nimiq-zkp-component = { workspace = true }
 [dev-dependencies]
 hex = "0.4"
 
-nimiq-block-production = { workspace = true, features = ["test-utils"] }
 nimiq-bls = { workspace = true }
 nimiq-database = { workspace = true }
 nimiq-genesis = { workspace = true }

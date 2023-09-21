@@ -4,8 +4,7 @@ use nimiq_block::{
     Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
     SkipBlockProof, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
 };
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::Blockchain;
+use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_collections::BitSet;
@@ -25,7 +24,8 @@ use crate::{blockchain_with_rng::*, test_rng::test_rng};
 /// Secret keys of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
 pub const SIGNING_KEY: &str = "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";
 pub const VOTING_KEY: &str = "99237809f3b37bd0878854d2b5b66e4cc00ba1a1d64377c374f2b6d1bf3dec7835bfae3e7ab89b6d331b3ef7d1e9a06a7f6967bf00edf9e0bcfe34b58bd1260e96406e09156e4c190ff8f69a9ce1183b4289383e6d798fd5104a3800fabd00";
-pub const UNIT_KEY: &str = "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
+pub const REWARD_KEY: &str = "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
+pub const VALIDATOR_KEY: &str = "6927eb8de74e8ea06a8afae5a66db176a7031f742b656651ac53bddb8a4ad3f3";
 
 pub fn generate_transactions(
     key_pair: &KeyPair,
@@ -122,7 +122,7 @@ pub fn fill_micro_blocks_with_txns(
     rng_seed: u64,
 ) {
     let init_height = blockchain.read().block_number();
-    let key_pair = KeyPair::from(PrivateKey::from_str(UNIT_KEY).unwrap());
+    let key_pair = KeyPair::from(PrivateKey::from_str(REWARD_KEY).unwrap());
     assert!(Policy::is_macro_block_at(init_height));
 
     let macro_block_number = init_height + Policy::blocks_per_batch();
@@ -242,6 +242,16 @@ pub fn sign_skip_block_info(
     SkipBlockProof {
         sig: MultiSignature::new(signature, signers),
     }
+}
+
+pub fn validator_key() -> SchnorrKeyPair {
+    SchnorrKeyPair::from(
+        SchnorrPrivateKey::deserialize_from_vec(&hex::decode(VALIDATOR_KEY).unwrap()).unwrap(),
+    )
+}
+
+pub fn validator_address() -> Address {
+    Address::from(&validator_key())
 }
 
 pub fn voting_key() -> BlsKeyPair {

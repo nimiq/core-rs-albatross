@@ -17,7 +17,8 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-clap = { version = "4.3", features = ["derive"] }
+clap = { version = "4.4", features = ["derive"] }
+convert_case = "0.6"
 hex = "0.4"
 humantime = "2.1"
 indicatif = "0.17"
@@ -55,7 +56,7 @@ serde = "1.0"
 serde_derive = "1.0"
 thiserror = "1.0"
 time = "0.3"
-tokio = { version = "1.29", features = [
+tokio = { version = "1.32", features = [
     "macros",
     "rt-multi-thread",
     "tracing",
@@ -63,3 +64,11 @@ tokio = { version = "1.29", features = [
 toml = "0.7"
 tracing-subscriber = { version = "0.3", features = ["registry"] }
 url = "2.4"
+
+[dev-dependencies]
+serde_json = "1.0"
+
+nimiq-test-log = { workspace = true }
+
+[features]
+pow-migration-tests = []

@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use nimiq_block::Block;
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::Blockchain;
+use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_primitives::policy::Policy;
 use parking_lot::RwLock;

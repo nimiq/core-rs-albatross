@@ -27,6 +27,9 @@ pub enum Error {
     /// IO error
     #[error("I/O error: {0}")]
     IO(#[from] std::io::Error),
+    /// Invalid Network ID
+    #[error("Invalid network ID {0}")]
+    InvalidNetworkId(nimiq_primitives::networks::NetworkId),
 }
 
 /// PoW registration window
@@ -34,8 +37,11 @@ pub enum Error {
 /// The registration window is a set of blocks in the PoW chain that marks
 /// the start and end of different windows as follows:
 ///
+/// ```text
 ///     1                  2                  3                  4         5
 /// --- | ---------------- | ---------------- | ---------------- | ------- |
+///
+/// ```
 ///
 /// 1. Validator registration window start block.
 /// 2. Validator registration window end block. This block is also the pre-stake

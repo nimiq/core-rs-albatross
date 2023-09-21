@@ -751,8 +751,13 @@ impl Client {
             }
         });
 
-        add_event_listener("message", handler.as_ref().unchecked_ref())
-            .expect("Unable to set event listener for 'message' event");
+        let _ = add_event_listener("message", handler.as_ref().unchecked_ref()).map_err(|err| {
+            // TODO: When on NodeJS, call `addListener` instead
+            log::warn!(
+                "Unable to set event listener for 'message' event: {:?}",
+                err
+            );
+        });
 
         // Closures can't be dropped since they will be needed outside the context
         // of this function

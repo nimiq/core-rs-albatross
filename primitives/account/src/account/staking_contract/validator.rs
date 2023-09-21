@@ -6,7 +6,6 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::{account::AccountError, policy::Policy};
 use serde::{Deserialize, Serialize};
 
-use crate::JailValidatorReceipt;
 #[cfg(feature = "interaction-traits")]
 use crate::{
     account::staking_contract::{
@@ -16,7 +15,7 @@ use crate::{
         },
         StakingContract,
     },
-    Log, RetireValidatorReceipt, TransactionLog,
+    JailValidatorReceipt, Log, RetireValidatorReceipt, TransactionLog,
 };
 
 /// Struct representing a validator in the staking contract.
@@ -74,25 +73,29 @@ pub struct Validator {
     pub deposit: Coin,
     /// The number of stakers that are delegating to this validator.
     pub num_stakers: u64,
-    /// An option indicating if the validator is inactive. If it is inactive, then it contains the
-    /// block height at which it became inactive.
-    pub inactive_since: Option<u32>,
-    /// An option indicating if the validator is jailed and when it can be reactivated.
-    /// If it is jailed, then it contains the block height at which it can be reactivated.
-    pub jail_release: Option<u32>,
+    /// An option indicating if the validator is marked as inactive. If it is, then it contains the
+    /// block height at which it becomes inactive.
+    /// A validator can only effectively become inactive on the next election block. Thus, this may
+    /// contain a future block height.
+    pub inactive_from: Option<u32>,
+    /// An option indicating if the validator is jailed. If it is, then it contains the
+    /// block height at which it became jailed.
+    /// Opposed to `inactive_from`, jailing can and should take effect immediately to prevent
+    /// the validator and its stakers from modifying their funds and or delegation.
+    pub jailed_from: Option<u32>,
     /// A flag indicating if the validator is retired.
     pub retired: bool,
 }
-
+#[cfg(feature = "interaction-traits")]
 impl Validator {
     pub fn is_active(&self) -> bool {
-        self.inactive_since.is_none()
+        self.inactive_from.is_none()
     }
 
     /// Checks if a validator is currently jailed.
     pub fn is_jailed(&self, block_number: u32) -> bool {
-        if let Some(jail_release) = self.jail_release {
-            return block_number < jail_release;
+        if let Some(jailed_from) = self.jailed_from {
+            return block_number < Policy::block_after_jail(jailed_from);
         }
         false
     }
@@ -118,6 +121,9 @@ impl StakingContract {
         reward_address: Address,
         signal_data: Option<Blake2bHash>,
         deposit: Coin,
+        inactive_from: Option<u32>,
+        jailed_from: Option<u32>,
+        retired: bool,
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Fail if the validator already exists.
@@ -144,16 +150,18 @@ impl StakingContract {
             total_stake: deposit,
             deposit,
             num_stakers: 0,
-            inactive_since: None,
-            jail_release: None,
-            retired: false,
+            inactive_from,
+            jailed_from,
+            retired,
         };
 
         // Update our balance.
         self.balance += deposit;
 
-        self.active_validators
-            .insert(validator_address.clone(), validator.total_stake);
+        if !retired && inactive_from.is_none() {
+            self.active_validators
+                .insert(validator_address.clone(), validator.total_stake);
+        }
 
         tx_logger.push_log(Log::CreateValidator {
             validator_address: validator_address.clone(),
@@ -305,7 +313,9 @@ impl StakingContract {
         // All checks passed, not allowed to fail from here on!
 
         // Mark validator as inactive.
-        validator.inactive_since = Some(block_number);
+        // A validator can only effectively become inactive on the next election block.
+        let next_election_block = Policy::election_block_after(block_number);
+        validator.inactive_from = Some(next_election_block);
 
         // Remove validator from active_validators.
         // We expect the validator to be present since we checked that it is not inactive above.
@@ -318,6 +328,7 @@ impl StakingContract {
 
         tx_logger.push_log(Log::DeactivateValidator {
             validator_address: validator_address.clone(),
+            inactive_from: next_election_block,
         });
 
         Ok(())
@@ -334,7 +345,10 @@ impl StakingContract {
         let mut validator = store.expect_validator(validator_address)?;
 
         // Mark validator as active.
-        validator.inactive_since = None;
+        let inactive_from = validator
+            .inactive_from
+            .expect("must have inactivation block number");
+        validator.inactive_from = None;
 
         // Re-add validator to active_validators.
         self.active_validators
@@ -345,30 +359,33 @@ impl StakingContract {
 
         tx_logger.push_log(Log::DeactivateValidator {
             validator_address: validator_address.clone(),
+            inactive_from,
         });
 
         Ok(())
     }
 
-    /// Deactivates a validator. It is necessary to retire a validator before dropping it.
+    /// Jails a validator. This also deactivates the validator if it is not inactive yet.
     pub fn jail_validator(
         &mut self,
         store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         block_number: u32,
-        jail_release: u32,
         tx_logger: &mut TransactionLog,
     ) -> Result<JailValidatorReceipt, AccountError> {
         // Get the validator.
         let mut validator = store.expect_validator(validator_address)?;
 
         // All checks passed, not allowed to fail from here on!
-        let old_jail_release = validator.jail_release;
+        let old_jailed_from = validator.jailed_from;
         let newly_deactivated = validator.is_active();
 
+        let next_election_block = Policy::election_block_after(block_number);
+
         // Mark validator as inactive.
+        // A validator can only effectively become inactive on the next election block.
         if newly_deactivated {
-            validator.inactive_since = Some(block_number);
+            validator.inactive_from = Some(next_election_block);
 
             // Remove validator from active_validators.
             // We expect the validator to be present since we checked that it is not inactive above.
@@ -377,25 +394,26 @@ impl StakingContract {
                 .expect("inconsistent contract state");
         }
 
-        // Jail validator.
-        validator.jail_release = Some(jail_release);
+        // Jail validator immediately.
+        validator.jailed_from = Some(block_number);
 
         // Update validator entry.
         store.put_validator(validator_address, validator);
 
         tx_logger.push_log(Log::JailValidator {
             validator_address: validator_address.clone(),
-            jail_release,
+            jailed_from: block_number,
         });
         if newly_deactivated {
             tx_logger.push_log(Log::DeactivateValidator {
                 validator_address: validator_address.clone(),
+                inactive_from: next_election_block,
             });
         }
 
         Ok(JailValidatorReceipt {
             newly_deactivated,
-            old_jail_release,
+            old_jailed_from,
         })
     }
 
@@ -410,9 +428,11 @@ impl StakingContract {
         // Get the validator.
         let mut validator = store.expect_validator(validator_address)?;
 
+        let inactive_from = validator.inactive_from;
+
         // Mark validator as active.
         if receipt.newly_deactivated {
-            validator.inactive_since = None;
+            validator.inactive_from = None;
 
             // Re-add validator to active_validators.
             self.active_validators
@@ -420,18 +440,19 @@ impl StakingContract {
         }
 
         // Reset jail release.
-        let jail_release = validator.jail_release.expect("must have jail release");
-        validator.jail_release = receipt.old_jail_release;
+        let jailed_from = validator.jailed_from.expect("must have jail block number");
+        validator.jailed_from = receipt.old_jailed_from;
 
         // Update validator entry.
         store.put_validator(validator_address, validator);
 
         tx_logger.push_log(Log::DeactivateValidator {
             validator_address: validator_address.clone(),
+            inactive_from: inactive_from.expect("must have inactivation block number"),
         });
         tx_logger.push_log(Log::JailValidator {
             validator_address: validator_address.clone(),
-            jail_release,
+            jailed_from,
         });
 
         Ok(())
@@ -451,22 +472,22 @@ impl StakingContract {
 
         // Check that the validator is inactive.
         if validator.is_active() {
-            debug!("Validator {} is already active", validator_address);
+            debug!(?validator_address, "Validator is already active");
             return Err(AccountError::InvalidForRecipient);
         }
 
         // Check that the validator is not retired.
         if validator.retired {
-            debug!("Validator {} is retired", validator_address);
+            debug!(?validator_address, "Validator is retired");
             return Err(AccountError::InvalidForRecipient);
         }
 
         // Check that the validator is not jailed.
         if validator.is_jailed(block_number) {
             debug!(
-                "Validator {} is jailed until {}",
-                validator_address,
-                validator.jail_release.unwrap()
+                ?validator_address,
+                jailed_from = validator.jailed_from.unwrap(),
+                "Validator is jailed"
             );
             return Err(AccountError::InvalidForRecipient);
         }
@@ -480,8 +501,8 @@ impl StakingContract {
         // All checks passed, not allowed to fail from here on!
 
         // Mark validator as active.
-        let was_inactive_since = validator
-            .inactive_since
+        let was_inactive_from = validator
+            .inactive_from
             .take()
             .expect("validator is inactive");
 
@@ -496,7 +517,7 @@ impl StakingContract {
             validator_address: validator_address.clone(),
         });
 
-        Ok(ReactivateValidatorReceipt { was_inactive_since })
+        Ok(ReactivateValidatorReceipt { was_inactive_from })
     }
 
     /// Reverts reactivating a validator.
@@ -511,7 +532,7 @@ impl StakingContract {
         let mut validator = store.expect_validator(validator_address)?;
 
         // Restore validator inactive state.
-        validator.inactive_since = Some(receipt.was_inactive_since);
+        validator.inactive_from = Some(receipt.was_inactive_from);
 
         // Remove validator from active_validators again.
         self.active_validators
@@ -542,7 +563,7 @@ impl StakingContract {
 
         // Check that the validator is not already retired.
         if validator.retired {
-            debug!("Validator {} is already retired", validator_address);
+            debug!(?validator_address, "Validator is already retired");
             return Err(AccountError::InvalidForRecipient);
         }
 
@@ -554,10 +575,12 @@ impl StakingContract {
             validator_address: validator_address.clone(),
         });
 
-        // Deactivate the validator if it is still active.
+        // Mark validator as inactive if it is still active.
         let was_active = validator.is_active();
         if was_active {
-            validator.inactive_since = Some(block_number);
+            // A validator can only effectively become inactive on the next election block.
+            let next_election_block = Policy::election_block_after(block_number);
+            validator.inactive_from = Some(next_election_block);
 
             // Remove validator from active_validators.
             // We expect the validator to be present since we checked that it is not inactive above.
@@ -567,6 +590,7 @@ impl StakingContract {
 
             tx_logger.push_log(Log::DeactivateValidator {
                 validator_address: validator_address.clone(),
+                inactive_from: next_election_block,
             });
         }
 
@@ -593,7 +617,10 @@ impl StakingContract {
         // Reactivate validator if it was active before.
         if receipt.was_active {
             // Mark validator as active.
-            validator.inactive_since = None;
+            let inactive_from = validator
+                .inactive_from
+                .expect("must have inactivation block number");
+            validator.inactive_from = None;
 
             // Re-add validator to active_validators.
             self.active_validators
@@ -601,6 +628,7 @@ impl StakingContract {
 
             tx_logger.push_log(Log::DeactivateValidator {
                 validator_address: validator_address.clone(),
+                inactive_from,
             });
         }
 
@@ -622,16 +650,16 @@ impl StakingContract {
     ) -> Result<(), AccountError> {
         // Check that the validator is retired.
         if !validator.retired {
-            debug!("Tried to delete active validator {}", validator.address);
+            debug!(?validator.address, "Tried to delete active validator");
             return Err(AccountError::InvalidForSender);
         }
 
         // Check that the validator is not currently jailed.
         if validator.is_jailed(block_number) {
             debug!(
-                "Validator {} is jailed until {}",
-                validator.address,
-                validator.jail_release.unwrap()
+                ?validator.address,
+                jailed_from = validator.jailed_from.unwrap(),
+                "Validator is jailed"
             );
             return Err(AccountError::InvalidForSender);
         }
@@ -640,15 +668,15 @@ impl StakingContract {
         // We must wait until all potential offenses of this validator could have been reported.
         // This includes the time it takes for the deactivation to take effect (end of the epoch)
         // and the reporting window from there.
-        let inactive_since = validator
-            .inactive_since
+        let inactive_from = validator
+            .inactive_from
             .expect("Validator is retired so it must be inactive");
-        let wait_until =
-            Policy::last_block_of_reporting_window(Policy::election_block_after(inactive_since));
+        let wait_until = Policy::last_block_of_reporting_window(inactive_from);
         if block_number <= wait_until {
             debug!(
+                ?validator.address,
                 current_block = block_number,
-                wait_until, "Tried to delete validator {} too soon", validator.address
+                wait_until, "Tried to delete validator too soon"
             );
             return Err(AccountError::InvalidForSender);
         }
@@ -714,8 +742,8 @@ impl StakingContract {
             voting_key: validator.voting_key,
             reward_address: validator.reward_address,
             signal_data: validator.signal_data,
-            inactive_since: validator.inactive_since.unwrap(), // we checked above that this is Some
-            jail_release: validator.jail_release,
+            inactive_from: validator.inactive_from.unwrap(), // we checked above that this is Some
+            jailed_from: validator.jailed_from,
         })
     }
 
@@ -741,8 +769,8 @@ impl StakingContract {
             total_stake: transaction_total_value,
             deposit: transaction_total_value,
             num_stakers: 0,
-            inactive_since: Some(receipt.inactive_since),
-            jail_release: receipt.jail_release,
+            inactive_from: Some(receipt.inactive_from),
+            jailed_from: receipt.jailed_from,
             retired: true,
         };
 

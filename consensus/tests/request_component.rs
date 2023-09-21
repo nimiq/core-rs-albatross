@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use nimiq_block_production::BlockProducer;
+use nimiq_blockchain::BlockProducer;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::KeyPair as BLSKeyPair;
 use nimiq_database::volatile::VolatileDatabase;
@@ -32,6 +32,9 @@ async fn test_request_component() {
             sgn_key.public,
             vtn_key.public_key,
             Address::default(),
+            None,
+            None,
+            false,
         )
         .generate(env)
         .unwrap();

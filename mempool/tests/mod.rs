@@ -1,8 +1,7 @@
-use std::sync::Arc;
+use std::{env, str::FromStr, sync::Arc};
 
 use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::volatile::VolatileDatabase;
@@ -30,8 +29,6 @@ use parking_lot::RwLock;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-const NUM_TXNS_START_STOP: usize = 100;
-
 pub const ACCOUNT_SECRET_KEY: &str =
     "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
 
@@ -40,6 +37,12 @@ pub const VALIDATOR_SECRET_KEY: &str =
 
 const STAKER_ADDRESS: &str = "NQ20TSB0DFSMUH9C15GQGAGJTTE4D3MA859E";
 const VALIDATOR_ADDRESS: &str = "NQ20 TSB0 DFSM UH9C 15GQ GAGJ TTE4 D3MA 859E";
+
+fn tps_setting(default: usize) -> usize {
+    env::var("MIN_TPS")
+        .map(|min| usize::from_str(&min).expect("Min tps must be a number."))
+        .unwrap_or(default)
+}
 
 fn ed25519_key_pair(secret_key: &str) -> SchnorrKeyPair {
     let priv_key: SchnorrPrivateKey =
@@ -136,6 +139,8 @@ async fn multiple_start_stop_send(
     blockchain: Arc<RwLock<Blockchain>>,
     transactions: Vec<Transaction>,
 ) {
+    let min_tps = tps_setting(100);
+
     // Create a MPSC channel to directly send transactions to the mempool
     let (txn_stream_tx, txn_stream_rx) = mpsc::channel(64);
 
@@ -176,7 +181,7 @@ async fn multiple_start_stop_send(
     let (obtained_txns, _) = mempool.get_transactions_for_block(usize::MAX);
 
     // We should obtain the same amount of transactions
-    assert_eq!(obtained_txns.len(), NUM_TXNS_START_STOP);
+    assert_eq!(obtained_txns.len(), min_tps);
 
     // Now send more transactions via the transaction stream.
     let txns = transactions.clone();
@@ -242,7 +247,7 @@ async fn multiple_start_stop_send(
     let (obtained_txns, _) = mempool.get_transactions_for_block(usize::MAX);
 
     // We should obtain same number of txns
-    assert_eq!(obtained_txns.len(), NUM_TXNS_START_STOP);
+    assert_eq!(obtained_txns.len(), min_tps);
 }
 
 fn create_dummy_micro_block(transactions: Option<Vec<Transaction>>) -> Block {
@@ -266,7 +271,7 @@ fn create_dummy_micro_block(transactions: Option<Vec<Transaction>>) -> Block {
     }
 
     let micro_body = MicroBody {
-        fork_proofs: vec![],
+        equivocation_proofs: vec![],
         transactions: executed_txns,
     };
 
@@ -316,6 +321,9 @@ async fn push_same_tx_twice() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
@@ -434,6 +442,9 @@ async fn push_tx_with_wrong_signature() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
@@ -505,6 +516,9 @@ async fn mempool_get_txn_max_size() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
@@ -586,6 +600,9 @@ async fn mempool_get_txn_ordered() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
@@ -668,6 +685,9 @@ async fn push_tx_with_insufficient_balance() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
@@ -740,6 +760,9 @@ async fn multiple_transactions_multiple_senders() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
@@ -784,6 +807,7 @@ async fn multiple_transactions_multiple_senders() {
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
 async fn mempool_tps() {
+    let min_tps = tps_setting(100);
     let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
     let env = VolatileDatabase::new(20).unwrap();
@@ -821,6 +845,9 @@ async fn mempool_tps() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     // Generate the genesis and blockchain
@@ -853,7 +880,7 @@ async fn mempool_tps() {
 
     // Expect at least 100 of the transactions in the mempool
     assert!(
-        txns.len() > 100,
+        txns.len() > min_tps,
         "Min TPS of 100 wasn't achieved: TPS obtained {}",
         txns.len()
     );
@@ -879,7 +906,7 @@ async fn multiple_start_stop() {
     log::debug!("Generating transactions and accounts");
 
     let balance = 100;
-    let num_txns = NUM_TXNS_START_STOP as u64;
+    let num_txns = tps_setting(100) as u64;
     let mut mempool_transactions = vec![];
     let sender_balances = vec![balance + num_txns * num_txns; num_txns as usize];
     let recipient_balances = vec![0; num_txns as usize];
@@ -909,6 +936,9 @@ async fn multiple_start_stop() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     // Generate the genesis and blockchain
@@ -1055,6 +1085,9 @@ async fn mempool_update() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     // Generate the genesis and blockchain
@@ -1182,6 +1215,9 @@ async fn mempool_update_aged_transaction() {
         signing_key().public,
         voting_key().public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     // Generate the genesis and blockchain
@@ -1329,6 +1365,9 @@ async fn mempool_update_not_enough_balance() {
         signing_key().public,
         voting_key().public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     // Generate the genesis and blockchain
@@ -1485,6 +1524,9 @@ async fn mempool_update_pruned_account() {
         signing_key().public,
         voting_key().public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     // Generate the genesis and blockchain
@@ -1692,6 +1734,9 @@ async fn mempool_regular_and_control_tx() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
@@ -1829,6 +1874,9 @@ async fn applies_total_tx_size_limits() {
         SchnorrPublicKey::from([0u8; 32]),
         BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();

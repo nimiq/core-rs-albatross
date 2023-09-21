@@ -1,6 +1,6 @@
-//! Defines the types used by the JSON RPC API[1]
+//! Defines the types used by the [JSON RPC API]
 //!
-//! [1] https://github.com/nimiq/core-js/wiki/JSON-RPC-API#common-data-types
+//! [JSON RPC API]: https://github.com/nimiq/core-js/wiki/JSON-RPC-API#common-data-types
 use std::{
     fmt::{self, Display, Formatter},
     str::FromStr,
@@ -146,7 +146,7 @@ pub enum BlockAdditionalFields {
         producer: Slot,
 
         #[serde(skip_serializing_if = "Option::is_none")]
-        fork_proofs: Option<Vec<ForkProof>>,
+        equivocation_proofs: Option<Vec<EquivocationProof>>,
 
         #[serde(skip_serializing_if = "Option::is_none")]
         justification: Option<MicroJustification>,
@@ -229,11 +229,11 @@ impl Block {
             }
 
             nimiq_block::Block::Micro(micro_block) => {
-                let (fork_proofs, transactions) = match micro_block.body {
+                let (equivocation_proofs, transactions) = match micro_block.body {
                     None => (None, None),
                     Some(ref body) => (
                         Some(
-                            body.fork_proofs
+                            body.equivocation_proofs
                                 .clone()
                                 .into_iter()
                                 .map(Into::into)
@@ -280,7 +280,7 @@ impl Block {
                     transactions,
                     additional_fields: BlockAdditionalFields::Micro {
                         producer: Slot::from(blockchain, block_number, block_number)?,
-                        fork_proofs,
+                        equivocation_proofs,
                         justification: micro_block.justification.map(Into::into),
                     },
                 })
@@ -378,6 +378,35 @@ pub struct PenalizedSlots {
     pub disabled: BitSet,
 }
 
+/// An equivocation proof proves that a validator misbehaved.
+///
+/// This can come in several forms, but e.g. producing two blocks in a single slot or voting twice
+/// in the same round.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum EquivocationProof {
+    Fork(ForkProof),
+    DoubleProposal(DoubleProposalProof),
+    DoubleVote(DoubleVoteProof),
+}
+
+impl From<nimiq_block::EquivocationProof> for EquivocationProof {
+    fn from(proof: nimiq_block::EquivocationProof) -> Self {
+        match proof {
+            nimiq_block::EquivocationProof::Fork(proof) => EquivocationProof::Fork(proof.into()),
+            nimiq_block::EquivocationProof::DoubleProposal(proof) => {
+                EquivocationProof::DoubleProposal(proof.into())
+            }
+            nimiq_block::EquivocationProof::DoubleVote(proof) => {
+                EquivocationProof::DoubleVote(proof.into())
+            }
+        }
+    }
+}
+
+/// Struct representing a fork proof. A fork proof proves that a given validator created or
+/// continued a fork. For this it is enough to provide two different headers, with the same block
+/// number, signed by the same validator.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ForkProof {
@@ -387,11 +416,46 @@ pub struct ForkProof {
 
 impl From<nimiq_block::ForkProof> for ForkProof {
     fn from(fork_proof: nimiq_block::ForkProof) -> Self {
-        let hashes = [fork_proof.header1.hash(), fork_proof.header2.hash()];
-
         Self {
-            block_number: fork_proof.header1.block_number,
-            hashes,
+            block_number: fork_proof.block_number(),
+            hashes: [fork_proof.header1_hash(), fork_proof.header2_hash()],
+        }
+    }
+}
+
+/// Struct representing a double proposal proof. A double proposal proof proves that a given
+/// validator created two macro block proposals at the same height, in the same round.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DoubleProposalProof {
+    pub block_number: u32,
+    pub hashes: [Blake2bHash; 2],
+}
+
+impl From<nimiq_block::DoubleProposalProof> for DoubleProposalProof {
+    fn from(double_proposal_proof: nimiq_block::DoubleProposalProof) -> Self {
+        Self {
+            block_number: double_proposal_proof.block_number(),
+            hashes: [
+                double_proposal_proof.header1_hash(),
+                double_proposal_proof.header2_hash(),
+            ],
+        }
+    }
+}
+
+/// Struct representing a double vote proof. A double vote proof proves that a given
+/// validator voted twice at same height, in the same round.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DoubleVoteProof {
+    pub block_number: u32,
+}
+
+impl From<nimiq_block::DoubleVoteProof> for DoubleVoteProof {
+    fn from(double_vote_proof: nimiq_block::DoubleVoteProof) -> Self {
+        Self {
+            block_number: double_vote_proof.block_number(),
         }
     }
 }
@@ -701,7 +765,7 @@ pub struct Staker {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delegation: Option<Address>,
     pub inactive_balance: Coin,
-    pub inactive_release: Option<u32>,
+    pub inactive_from: Option<u32>,
 }
 
 impl Staker {
@@ -711,7 +775,7 @@ impl Staker {
             balance: staker.balance,
             delegation: staker.delegation.clone(),
             inactive_balance: staker.inactive_balance,
-            inactive_release: staker.inactive_release,
+            inactive_from: staker.inactive_from,
         }
     }
 }
@@ -731,7 +795,7 @@ pub struct Validator {
     pub inactivity_flag: Option<u32>,
     pub retired: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub jail_release: Option<u32>,
+    pub jailed_from: Option<u32>,
 }
 
 impl Validator {
@@ -744,9 +808,9 @@ impl Validator {
             signal_data: validator.signal_data.clone(),
             balance: validator.total_stake,
             num_stakers: validator.num_stakers,
-            inactivity_flag: validator.inactive_since,
+            inactivity_flag: validator.inactive_from,
             retired: validator.retired,
-            jail_release: validator.jail_release,
+            jailed_from: validator.jailed_from,
         }
     }
 }

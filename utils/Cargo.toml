@@ -20,18 +20,18 @@ maintenance = { status = "experimental" }
 clear_on_drop = { version = "0.2", optional = true }
 futures = { package = "futures-util", version = "0.3" }
 hex = { version = "0.4", optional = true }
-libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", default-features = false, optional = true }
+libp2p-core = { git = "https://github.com/jsdanielh/rust-libp2p.git", optional = true }
 log = { package = "tracing", version = "0.1", optional = true, features = ["log"] }
 parking_lot = "0.12"
 rand = { version = "0.8", optional = true }
 rand_core = { version = "0.6", optional = true }
-serde = { version = "1.0", optional = true }
+serde = "1.0"
 thiserror = { version = "1.0", optional = true }
 
 nimiq-collections = { workspace = true, optional = true }
 nimiq-database-value = { workspace = true }
 nimiq-hash = { workspace = true, optional = true }
-nimiq-serde = { workspace = true, optional = true }
+nimiq-serde = { workspace = true }
 
 [dev-dependencies]
 nimiq-keys = { workspace = true }
@@ -42,17 +42,16 @@ nimiq-test-utils = { workspace = true }
 [features]
 crc = []
 key-rng = ["rand", "rand_core"]
-key-store = ["log", "thiserror", "serde-derive"]
+key-store = ["log", "thiserror"]
+libp2p = ["libp2p-core"]
 math = []
 merkle = [
     "math",
     "nimiq-collections",
     "nimiq-hash",
-    "serde-derive"
 ]
-otp = ["clear_on_drop", "nimiq-hash", "nimiq-serde", "rand", "serde-derive"]
-serde-derive = ["nimiq-serde", "serde"]
-tagged-signing = ["hex", "nimiq-serde", "serde-derive"]
+otp = ["clear_on_drop", "nimiq-hash", "rand"]
+tagged-signing = ["hex"]
 time = []
 
 # Compiles this package with all features.

@@ -11,12 +11,18 @@ static TOKIO_RT_METRICS_NAME: &[&str] = &[
     "total_park_count",
     "max_park_count",
     "min_park_count",
+    "mean_poll_duration",
+    "mean_poll_duration_worker_min",
+    "mean_poll_duration_worker_max",
     "total_noop_count",
     "max_noop_count",
     "min_noop_count",
     "total_steal_count",
     "max_steal_count",
     "min_steal_count",
+    "total_steal_operations",
+    "max_steal_operations",
+    "min_steal_operations",
     "remote_schedules",
     "total_local_sched_count",
     "max_local_sched_count",
@@ -35,37 +41,47 @@ static TOKIO_RT_METRICS_NAME: &[&str] = &[
     "max_local_queue_depth",
     "min_local_queue_depth",
     "elapsed",
+    "budget_forced_yield_count",
+    "io_driver_ready_count",
 ];
 
 static TOKIO_RT_METRICS_DESC: &[&str] = &[
-    "Tokio workers count",
-    "Tokio total park count",
-    "Tokio maximum park count",
-    "Tokio minimum park count",
-    "Tokio noop count",
-    "Tokio maximum noop count",
-    "Tokio minimum noop count",
-    "Tokio total steal count",
-    "Tokio maximum steal count",
-    "Tokio minimum steal count",
-    "Tokio number of remote schedules",
-    "Tokio total local schedules count",
-    "Tokio maximum local schedules count",
-    "Tokio minimum local schedules count",
-    "Tokio total overflow count",
-    "Tokio maximum overflow count",
-    "Tokio minimum overflow count",
-    "Tokio total polls count",
-    "Tokio maximum polls count",
-    "Tokio minimum polls count",
-    "Tokio total busy duration",
-    "Tokio maximum busy duration",
-    "Tokio minimum busy duration",
-    "Tokio injection queue depth",
-    "Tokio total local queue depth",
-    "Tokio maximum local queue depth",
-    "Tokio minimum local queue depth",
-    "Tokio elapsed time",
+    "Tokio number of worker threads used by the runtime",
+    "Tokio number of times worker threads parked",
+    "Tokio maximum number of times any worker thread parked",
+    "Tokio minimum number of times any worker thread parked",
+    "Tokio average duration of a single invocation of poll on a task",
+    "Tokio average duration of a single invocation of poll on a task on the worker with the lowest value",
+    "Tokio average duration of a single invocation of poll on a task on the worker with the highest value",
+    "Tokio number of times worker threads unparked but performed no work before parking again",
+    "Tokio maximum number of times any worker thread unparked but performed no work before parking again",
+    "Tokio minimum number of times any worker thread unparked but performed no work before parking again",
+    "Tokio number of tasks worker threads stole from another worker thread",
+    "Tokio maximum number of tasks any worker thread stole from another worker thread",
+    "Tokio minimum number of tasks any worker thread stole from another worker thread",
+    "Tokio number of times worker threads stole tasks from another worker thread",
+    "Tokio maximum number of times any worker thread stole tasks from another worker thread",
+    "Tokio minimum number of times any worker thread stole tasks from another worker thread",
+    "Tokio number of tasks scheduled from outside of the runtime",
+    "Tokio number of tasks scheduled from worker threads",
+    "Tokio maximum number of tasks scheduled from any one worker thread",
+    "Tokio minimum number of tasks scheduled from any one worker thread",
+    "Tokio number of times worker threads saturated their local queues",
+    "Tokio maximum number of times any one worker saturated its local queue",
+    "Tokio minimum number of times any one worker saturated its local queue",
+    "Tokio number of tasks that have been polled across all worker threads",
+    "Tokio maximum number of tasks that have been polled in any worker thread",
+    "Tokio minimum number of tasks that have been polled in any worker thread",
+    "Tokio amount of time worker threads were busy",
+    "Tokio maximum amount of time a worker thread was busy",
+    "Tokio minimum amount of time a worker thread was busy",
+    "Tokio number of tasks currently scheduled in the runtime's injection queue",
+    "Tokio total number of tasks currently scheduled in workers' local queues",
+    "Tokio maximum number of tasks currently scheduled any worker's local queue",
+    "Tokio minimum number of tasks currently scheduled any worker's local queue",
+    "Tokio total amount of time elapsed since observing runtime metrics",
+    "Tokio number of times that tasks have been forced to yield back to the scheduler after exhausting their task budgets",
+    "Tokio number of ready events processed by the runtime's I/O driver",
 ];
 
 pub struct TokioRuntimeMetrics {
@@ -122,56 +138,76 @@ impl TokioRuntimeMetrics {
         self.update_metric_value(TOKIO_RT_METRICS_NAME[1], interval.total_park_count);
         self.update_metric_value(TOKIO_RT_METRICS_NAME[2], interval.max_park_count);
         self.update_metric_value(TOKIO_RT_METRICS_NAME[3], interval.min_park_count);
-        self.update_metric_value(TOKIO_RT_METRICS_NAME[4], interval.total_noop_count);
-        self.update_metric_value(TOKIO_RT_METRICS_NAME[5], interval.max_noop_count);
-        self.update_metric_value(TOKIO_RT_METRICS_NAME[6], interval.min_noop_count);
-        self.update_metric_value(TOKIO_RT_METRICS_NAME[7], interval.total_steal_count);
-        self.update_metric_value(TOKIO_RT_METRICS_NAME[8], interval.max_steal_count);
-        self.update_metric_value(TOKIO_RT_METRICS_NAME[9], interval.min_steal_count);
-        self.update_metric_value(TOKIO_RT_METRICS_NAME[10], interval.num_remote_schedules);
         self.update_metric_value(
-            TOKIO_RT_METRICS_NAME[11],
+            TOKIO_RT_METRICS_NAME[4],
+            interval.mean_poll_duration.as_micros() as u64,
+        );
+        self.update_metric_value(
+            TOKIO_RT_METRICS_NAME[5],
+            interval.mean_poll_duration_worker_min.as_micros() as u64,
+        );
+        self.update_metric_value(
+            TOKIO_RT_METRICS_NAME[6],
+            interval.mean_poll_duration_worker_max.as_micros() as u64,
+        );
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[7], interval.total_noop_count);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[8], interval.max_noop_count);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[9], interval.min_noop_count);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[10], interval.total_steal_count);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[11], interval.max_steal_count);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[12], interval.min_steal_count);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[13], interval.total_steal_operations);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[14], interval.max_steal_operations);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[15], interval.min_steal_operations);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[16], interval.num_remote_schedules);
+        self.update_metric_value(
+            TOKIO_RT_METRICS_NAME[17],
             interval.total_local_schedule_count,
         );
-        self.update_metric_value(TOKIO_RT_METRICS_NAME[12], interval.max_local_schedule_count);
-        self.update_metric_value(TOKIO_RT_METRICS_NAME[13], interval.min_local_schedule_count);
-        self.update_metric_value(TOKIO_RT_METRICS_NAME[14], interval.total_overflow_count);
-        self.update_metric_value(TOKIO_RT_METRICS_NAME[15], interval.max_overflow_count);
-        self.update_metric_value(TOKIO_RT_METRICS_NAME[16], interval.min_overflow_count);
-        self.update_metric_value(TOKIO_RT_METRICS_NAME[17], interval.total_polls_count);
-        self.update_metric_value(TOKIO_RT_METRICS_NAME[18], interval.max_polls_count);
-        self.update_metric_value(TOKIO_RT_METRICS_NAME[19], interval.min_polls_count);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[18], interval.max_local_schedule_count);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[19], interval.min_local_schedule_count);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[20], interval.total_overflow_count);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[21], interval.max_overflow_count);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[22], interval.min_overflow_count);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[23], interval.total_polls_count);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[24], interval.max_polls_count);
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[25], interval.min_polls_count);
         self.update_metric_value(
-            TOKIO_RT_METRICS_NAME[20],
+            TOKIO_RT_METRICS_NAME[26],
             interval.total_busy_duration.as_millis() as u64,
         );
         self.update_metric_value(
-            TOKIO_RT_METRICS_NAME[21],
+            TOKIO_RT_METRICS_NAME[27],
             interval.max_busy_duration.as_millis() as u64,
         );
         self.update_metric_value(
-            TOKIO_RT_METRICS_NAME[22],
+            TOKIO_RT_METRICS_NAME[28],
             interval.min_busy_duration.as_millis() as u64,
         );
         self.update_metric_value(
-            TOKIO_RT_METRICS_NAME[23],
+            TOKIO_RT_METRICS_NAME[29],
             interval.injection_queue_depth as u64,
         );
         self.update_metric_value(
-            TOKIO_RT_METRICS_NAME[24],
+            TOKIO_RT_METRICS_NAME[30],
             interval.total_local_queue_depth as u64,
         );
         self.update_metric_value(
-            TOKIO_RT_METRICS_NAME[25],
+            TOKIO_RT_METRICS_NAME[31],
             interval.max_local_queue_depth as u64,
         );
         self.update_metric_value(
-            TOKIO_RT_METRICS_NAME[26],
+            TOKIO_RT_METRICS_NAME[32],
             interval.min_local_queue_depth as u64,
         );
         self.update_metric_value(
-            TOKIO_RT_METRICS_NAME[27],
+            TOKIO_RT_METRICS_NAME[33],
             interval.elapsed.as_micros() as u64,
         );
+        self.update_metric_value(
+            TOKIO_RT_METRICS_NAME[34],
+            interval.budget_forced_yield_count,
+        );
+        self.update_metric_value(TOKIO_RT_METRICS_NAME[35], interval.io_driver_ready_count);
     }
 }

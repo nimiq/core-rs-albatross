@@ -50,7 +50,6 @@ macro_rules! gen_account_type_match {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum Account {
     Basic(BasicAccount),

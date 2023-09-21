@@ -405,10 +405,10 @@ mod tests {
         next_batch_initial_punished_set.insert(5);
         next_batch_initial_punished_set.insert(67);
 
-        let transactions = vec![RewardTransaction::new(
-            validator_address,
-            Coin::from_u64_unchecked(12),
-        )];
+        let transactions = vec![RewardTransaction {
+            recipient: validator_address,
+            value: Coin::from_u64_unchecked(12),
+        }];
 
         let body = MacroBody {
             validators,

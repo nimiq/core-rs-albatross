@@ -1,9 +1,8 @@
+use argon2::Config;
 pub use argon2::Error as Argon2Error;
-use argon2::{Config, ThreadMode};
 
 // Taken from https://github.com/nimiq/core-js/blob/c98d56b2dd967d9a9c9a97fe4c54bfaac743aa0c/src/main/generic/utils/crypto/CryptoWorkerImpl.js#L146
 const MEMORY_COST: u32 = 512;
-const PARALELLISM: u32 = 1;
 
 pub fn compute_argon2_kdf(
     password: &[u8],
@@ -15,7 +14,6 @@ pub fn compute_argon2_kdf(
         time_cost: iterations,
         hash_length: derived_key_length as u32,
         mem_cost: MEMORY_COST,
-        thread_mode: ThreadMode::from_threads(PARALELLISM),
         variant: argon2::Variant::Argon2d,
         ..Default::default()
     };

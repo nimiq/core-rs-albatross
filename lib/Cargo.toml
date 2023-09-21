@@ -17,7 +17,7 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-clap = { version = "4.3", features = ["derive"] }
+clap = { version = "4.4", features = ["derive"] }
 console-subscriber = { version = "0.1", features = ["parking_lot"], optional = true }
 derive_builder = "0.12"
 directories = "5.0"
@@ -35,12 +35,12 @@ signal-hook = { version = "0.3", optional = true }
 strum_macros = "0.25"
 thiserror = "1.0"
 time = { version = "0.3", optional = true }
-tokio = { version = "1.29", features = ["rt"], optional = true }
+tokio = { version = "1.32", features = ["rt"], optional = true }
 toml = "0.7"
-tracing-loki = { version = "0.2.1", optional = true }
+tracing-loki = { version = "0.2.4", optional = true }
 tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "std"] }
 tracing-web = { version = "0.1", optional = true}
-url = { version = "2.3", features = ["serde"] }
+url = { version = "2.4", features = ["serde"] }
 
 nimiq-block = { workspace = true }
 nimiq-blockchain = { workspace = true, optional = true }

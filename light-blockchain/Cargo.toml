@@ -15,7 +15,7 @@ futures = { package = "futures-util", version = "0.3" }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 thiserror = "1.0"
-tokio = { version = "1.29", features = ["sync"] }
+tokio = { version = "1.32", features = ["sync"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 
 nimiq-block = { workspace = true }
@@ -23,6 +23,7 @@ nimiq-blockchain-interface = { workspace = true }
 nimiq-collections = { workspace = true }
 nimiq-genesis = { workspace = true, default-features = false }
 nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["policy"] }
 nimiq-utils = { workspace = true, features = ["time"] }
 nimiq-vrf = { workspace = true }
@@ -31,7 +32,6 @@ nimiq-zkp = { workspace = true }
 [dev-dependencies]
 rand = "^0.8"
 
-nimiq-block-production = { workspace = true, features = ["test-utils"] }
 nimiq-blockchain = { workspace = true }
 nimiq-test-utils = { workspace = true }
 nimiq-test-log = { workspace = true }

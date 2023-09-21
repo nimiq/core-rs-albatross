@@ -1,23 +1,22 @@
 use nimiq_account::BlockState;
 use nimiq_block::{
-    Block, ForkProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader,
-    MicroJustification, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof,
-    TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
+    Block, EquivocationProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody,
+    MicroHeader, MicroJustification, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
+    SkipBlockProof, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
 };
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
-use nimiq_bls::AggregateSignature;
+use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair};
 use nimiq_collections::BitSet;
 use nimiq_database::traits::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
+use nimiq_keys::KeyPair as SchnorrKeyPair;
 use nimiq_primitives::policy::Policy;
 use nimiq_tendermint::ProposalMessage;
 use nimiq_transaction::{
     extended_transaction::ExtendedTransaction, inherent::Inherent, Transaction,
 };
 use nimiq_vrf::VrfSeed;
-
-use crate::{BlsKeyPair, SchnorrKeyPair};
 
 #[derive(Clone)]
 pub struct BlockConfig {
@@ -37,7 +36,7 @@ pub struct BlockConfig {
 
     // Micro only
     pub test_micro: bool,
-    pub fork_proofs: Vec<ForkProof>,
+    pub equivocation_proofs: Vec<EquivocationProof>,
     pub transactions: Vec<Transaction>,
     pub extra_data: Vec<u8>,
 
@@ -66,7 +65,7 @@ impl Default for BlockConfig {
             history_root: None,
             skip_block_proof: None,
             test_micro: true,
-            fork_proofs: vec![],
+            equivocation_proofs: vec![],
             transactions: vec![],
             extra_data: vec![],
             test_macro: true,
@@ -102,8 +101,12 @@ pub fn next_micro_block(
     let mut transactions = config.transactions.clone();
     transactions.sort_unstable();
 
-    let inherents =
-        blockchain.create_punishment_inherents(block_number, &config.fork_proofs, None, None);
+    let inherents = blockchain.create_punishment_inherents(
+        block_number,
+        &config.equivocation_proofs,
+        None,
+        None,
+    );
 
     let block_state = BlockState::new(block_number, timestamp);
 
@@ -134,7 +137,7 @@ pub fn next_micro_block(
     txn.abort();
 
     let body = MicroBody {
-        fork_proofs: config.fork_proofs.clone(),
+        equivocation_proofs: config.equivocation_proofs.clone(),
         transactions: executed_txns,
     };
 
@@ -227,7 +230,7 @@ pub fn next_skip_block(
     txn.abort();
 
     let body = MicroBody {
-        fork_proofs: vec![],
+        equivocation_proofs: vec![],
         transactions: vec![],
     };
 

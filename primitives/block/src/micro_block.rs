@@ -9,7 +9,9 @@ use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{ExecutedTransaction, Transaction};
 use nimiq_vrf::VrfSeed;
 
-use crate::{fork_proof::ForkProof, skip_block::SkipBlockProof, BlockError, SkipBlockInfo};
+use crate::{
+    equivocation_proof::EquivocationProof, skip_block::SkipBlockProof, BlockError, SkipBlockInfo,
+};
 
 /// The struct representing a Micro block.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -48,9 +50,9 @@ impl MicroBlock {
     }
 
     /// Returns the available size, in bytes, in a micro block body for transactions.
-    pub fn get_available_bytes(num_fork_proofs: usize) -> usize {
+    pub fn get_available_bytes(num_equivocation_proofs: usize) -> usize {
         Policy::MAX_SIZE_MICRO_BODY
-            - (/*fork_proofs vector length*/2 + num_fork_proofs * ForkProof::SIZE
+            - (/*equivocation_proofs vector length*/2 + num_equivocation_proofs * EquivocationProof::MAX_SIZE
             + /*transactions vector length*/ 2)
     }
 
@@ -185,11 +187,18 @@ pub struct MicroHeader {
 impl MicroHeader {
     /// Returns the size, in bytes, of a Micro block header. This represents the maximum possible
     /// size since we assume that the extra_data field is completely filled.
-    pub const MAX_SIZE: usize =
-        /*version*/
-        2 + /*block_number*/ 4 + /*timestamp*/ 8 + /*parent_hash*/ 32
-            + /*seed*/ VrfSeed::SIZE + /*extra_data*/ 32 + /*state_root*/ 32
-            + /*body_root*/ 32 + /*history_root*/ 32;
+    #[allow(clippy::identity_op)]
+    pub const MAX_SIZE: usize = 0
+        + /*version*/ nimiq_serde::U16_MAX_SIZE
+        + /*block_number*/ nimiq_serde::U32_MAX_SIZE
+        + /*timestamp*/ nimiq_serde::U64_MAX_SIZE
+        + /*parent_hash*/ Blake2bHash::SIZE
+        + /*seed*/ VrfSeed::SIZE
+        + /*extra_data*/ nimiq_serde::vec_max_size(nimiq_serde::U8_SIZE, 32)
+        + /*state_root*/ Blake2bHash::SIZE
+        + /*body_root*/ Blake2sHash::SIZE
+        + /*diff_root*/ Blake2bHash::SIZE
+        + /*history_root*/ Blake2bHash::SIZE;
 }
 
 impl fmt::Display for MicroHeader {
@@ -206,8 +215,8 @@ impl fmt::Display for MicroHeader {
 /// The struct representing the body of a Micro block.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
 pub struct MicroBody {
-    /// A vector containing the fork proofs for this block. It might be empty.
-    pub fork_proofs: Vec<ForkProof>,
+    /// A vector containing the equivocation proofs for this block. It might be empty.
+    pub equivocation_proofs: Vec<EquivocationProof>,
     /// A vector containing the transactions for this block. It might be empty.
     pub transactions: Vec<ExecutedTransaction>,
 }
@@ -235,19 +244,19 @@ impl MicroBody {
         }
 
         // Check that the body is empty for skip blocks.
-        if is_skip && (!self.fork_proofs.is_empty() || !self.transactions.is_empty()) {
+        if is_skip && (!self.equivocation_proofs.is_empty() || !self.transactions.is_empty()) {
             debug!(
                 num_transactions = self.transactions.len(),
-                num_fork_proofs = self.fork_proofs.len(),
+                num_equivocation_proofs = self.equivocation_proofs.len(),
                 reason = "Skip block has a non empty body",
                 "Invalid block"
             );
             return Err(BlockError::InvalidSkipBlockBody);
         }
 
-        // Ensure that fork proofs are ordered, unique and within their reporting window.
-        let mut previous_proof: Option<&ForkProof> = None;
-        for proof in &self.fork_proofs {
+        // Ensure that equivocation proofs are ordered, unique and within their reporting window.
+        let mut previous_proof: Option<&EquivocationProof> = None;
+        for proof in &self.equivocation_proofs {
             // Check reporting window.
             if !proof.is_valid_at(block_number) {
                 return Err(BlockError::InvalidForkProof);
@@ -255,7 +264,7 @@ impl MicroBody {
 
             // Check proof ordering and uniqueness.
             if let Some(previous) = previous_proof {
-                match previous.cmp(proof) {
+                match previous.sort_key().cmp(&proof.sort_key()) {
                     Ordering::Equal => {
                         return Err(BlockError::DuplicateForkProof);
                     }

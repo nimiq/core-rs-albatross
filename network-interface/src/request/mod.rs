@@ -214,13 +214,11 @@ pub fn request_handler<
     async move {
         stream
             .for_each_concurrent(MAX_CONCURRENT_HANDLERS, |(msg, request_id, peer_id)| {
-                let request_id = request_id;
                 let network = Arc::clone(&network);
                 let req_environment = req_environment.clone();
                 async move {
                     let req_environment = req_environment.clone();
                     let network = Arc::clone(&network);
-                    let request_id = request_id;
 
                     tokio::spawn(async move {
                         log::trace!("[{:?}] {:?} {:#?}", request_id, peer_id, msg);

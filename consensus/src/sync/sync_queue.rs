@@ -1,7 +1,7 @@
 use std::{
     cmp,
     cmp::Ordering,
-    collections::{binary_heap::PeekMut, BinaryHeap, VecDeque},
+    collections::{BinaryHeap, VecDeque},
     fmt::Debug,
     future::Future,
     pin::Pin,
@@ -49,47 +49,48 @@ impl<TId: Clone, TOutput: Future> Future for OrderWrapper<TId, TOutput> {
     }
 }
 
-struct QueuedOutput<TOutput> {
-    data: TOutput,
-    index: usize,
-}
-
-impl<TOutput> PartialEq for QueuedOutput<TOutput> {
+impl<TId, TOutput> PartialEq for OrderWrapper<TId, TOutput> {
     fn eq(&self, other: &Self) -> bool {
         self.index == other.index
     }
 }
-impl<TOutput> Eq for QueuedOutput<TOutput> {}
-impl<TOutput> PartialOrd for QueuedOutput<TOutput> {
+impl<TId, TOutput> Eq for OrderWrapper<TId, TOutput> {}
+impl<TId, TOutput> PartialOrd for OrderWrapper<TId, TOutput> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
-impl<TOutput> Ord for QueuedOutput<TOutput> {
+impl<TId, TOutput> Ord for OrderWrapper<TId, TOutput> {
     fn cmp(&self, other: &Self) -> Ordering {
         // BinaryHeap is a max heap, so compare backwards here.
         other.index.cmp(&self.index)
     }
 }
 
+type RequestFn<TId, TNetwork, TOutput> =
+    fn(TId, Arc<TNetwork>, <TNetwork as Network>::PeerId) -> BoxFuture<'static, Option<TOutput>>;
+type VerifyFn<TId, TOutput, TVerifyState> = fn(&TId, &TOutput, &mut TVerifyState) -> bool;
+
 /// The SyncQueue will request a list of ids from a set of peers
 /// and implements an ordered stream over the resulting objects.
 /// The stream returns an error if an id could not be resolved.
-pub struct SyncQueue<TNetwork: Network, TId, TOutput: 'static> {
+pub struct SyncQueue<TNetwork: Network, TId, TOutput: 'static, TVerifyState: 'static> {
     pub(crate) peers: Arc<RwLock<PeerList<TNetwork>>>,
     network: Arc<TNetwork>,
     desired_pending_size: usize,
     ids_to_request: VecDeque<TId>,
     pending_futures: FuturesUnordered<OrderWrapper<TId, BoxFuture<'static, Option<TOutput>>>>,
-    queued_outputs: BinaryHeap<QueuedOutput<TOutput>>,
+    queued_outputs: BinaryHeap<OrderWrapper<TId, Option<TOutput>>>,
     next_incoming_index: usize,
     next_outgoing_index: usize,
     current_peer_index: PeerListIndex,
-    request_fn: fn(TId, Arc<TNetwork>, TNetwork::PeerId) -> BoxFuture<'static, Option<TOutput>>,
+    request_fn: RequestFn<TId, TNetwork, TOutput>,
+    verify_fn: VerifyFn<TId, TOutput, TVerifyState>,
+    verify_state: TVerifyState,
     waker: Option<Waker>,
 }
 
-impl<TNetwork, TId, TOutput> SyncQueue<TNetwork, TId, TOutput>
+impl<TNetwork, TId, TOutput> SyncQueue<TNetwork, TId, TOutput, ()>
 where
     TId: Clone + Debug,
     TOutput: Send + Unpin + 'static,
@@ -100,7 +101,34 @@ where
         ids: Vec<TId>,
         peers: Arc<RwLock<PeerList<TNetwork>>>,
         desired_pending_size: usize,
-        request_fn: fn(TId, Arc<TNetwork>, TNetwork::PeerId) -> BoxFuture<'static, Option<TOutput>>,
+        request_fn: RequestFn<TId, TNetwork, TOutput>,
+    ) -> Self {
+        Self::with_verification(
+            network,
+            ids,
+            peers,
+            desired_pending_size,
+            request_fn,
+            |_, _, _| true,
+            (),
+        )
+    }
+}
+
+impl<TNetwork, TId, TOutput, TVerifyState> SyncQueue<TNetwork, TId, TOutput, TVerifyState>
+where
+    TId: Clone + Debug,
+    TOutput: Send + Unpin + 'static,
+    TNetwork: Network,
+{
+    pub fn with_verification(
+        network: Arc<TNetwork>,
+        ids: Vec<TId>,
+        peers: Arc<RwLock<PeerList<TNetwork>>>,
+        desired_pending_size: usize,
+        request_fn: RequestFn<TId, TNetwork, TOutput>,
+        verify_fn: VerifyFn<TId, TOutput, TVerifyState>,
+        initial_verify_state: TVerifyState,
     ) -> Self {
         log::trace!(
             "Creating SyncQueue for {} with {} ids and {} peers",
@@ -120,6 +148,8 @@ where
             next_outgoing_index: 0,
             current_peer_index: PeerListIndex::default(),
             request_fn,
+            verify_fn,
+            verify_state: initial_verify_state,
             waker: None,
         }
     }
@@ -193,6 +223,40 @@ where
         }
     }
 
+    fn retry_request(&mut self, mut request: OrderWrapper<TId, Option<TOutput>>) -> bool {
+        // If we tried all peers for this hash, return an error.
+        // TODO max number of tries
+        if request.num_tries >= self.peers.read().len() {
+            return false;
+        }
+
+        // Re-request from different peer. Return an error if there are no more peers.
+        let peer = match self.peers.read().increment_and_get(&mut request.peer) {
+            Some(peer) => peer,
+            None => return false,
+        };
+
+        log::debug!(
+            peer_id = %peer,
+            current_peer_index = %self.current_peer_index,
+            "Re-requesting {:?} @ {}",
+            request.id,
+            request.index,
+        );
+
+        let wrapper = OrderWrapper {
+            data: (self.request_fn)(request.id.clone(), Arc::clone(&self.network), peer),
+            id: request.id,
+            index: request.index,
+            peer: request.peer,
+            num_tries: request.num_tries + 1,
+        };
+
+        self.pending_futures.push(wrapper);
+
+        true
+    }
+
     pub fn add_peer(&mut self, peer_id: TNetwork::PeerId) -> bool {
         self.peers.write().add_peer(peer_id)
     }
@@ -230,13 +294,19 @@ where
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    pub fn set_verify_state(&mut self, verify_state: TVerifyState) {
+        self.verify_state = verify_state;
+    }
 }
 
-impl<TNetwork, TId, TOutput> Stream for SyncQueue<TNetwork, TId, TOutput>
+impl<TNetwork, TId, TOutput, TVerifyState> Stream
+    for SyncQueue<TNetwork, TId, TOutput, TVerifyState>
 where
     TNetwork: Network,
     TId: Clone + Unpin + Debug,
     TOutput: Send + Unpin,
+    TVerifyState: Unpin + 'static,
 {
     type Item = Result<TOutput, TId>;
 
@@ -247,64 +317,45 @@ where
         self.try_push_futures();
 
         // Check to see if we've already received the next value.
-        let this = &mut *self;
-        if let Some(next_output) = this.queued_outputs.peek_mut() {
-            if next_output.index == this.next_outgoing_index {
-                this.next_outgoing_index += 1;
-                return Poll::Ready(Some(Ok(PeekMut::pop(next_output).data)));
+        if let Some(next_output) = self.queued_outputs.peek() {
+            if next_output.index == self.next_outgoing_index {
+                let mut request = self.queued_outputs.pop().unwrap();
+                let output = request.data.take().unwrap();
+                if (self.verify_fn)(&request.id, &output, &mut self.verify_state) {
+                    self.next_outgoing_index += 1;
+                    return Poll::Ready(Some(Ok(output)));
+                } else {
+                    debug!(peer_id = %request.peer, id = ?request.id, "Verification failed");
+                    let id = request.id.clone();
+                    if !self.retry_request(request) {
+                        return Poll::Ready(Some(Err(id)));
+                    }
+                }
             }
         }
 
         loop {
             match ready!(self.pending_futures.poll_next_unpin(cx)) {
-                Some(mut result) => {
-                    match result.data {
-                        Some(output) => {
-                            if result.index == self.next_outgoing_index {
+                Some(result) => {
+                    if result.data.is_some() {
+                        if result.index == self.next_outgoing_index {
+                            let output = result.data.as_ref().unwrap();
+                            if (self.verify_fn)(&result.id, output, &mut self.verify_state) {
                                 self.next_outgoing_index += 1;
-                                return Poll::Ready(Some(Ok(output)));
+                                return Poll::Ready(Some(Ok(result.data.unwrap())));
                             } else {
-                                self.queued_outputs.push(QueuedOutput {
-                                    data: output,
-                                    index: result.index,
-                                });
+                                debug!(peer_id = %result.peer, id = ?result.id, "Verification failed");
                             }
+                        } else {
+                            self.queued_outputs.push(result);
+                            continue;
                         }
-                        None => {
-                            // If we tried all peers for this hash, return an error.
-                            // TODO max number of tries
-                            if result.num_tries >= self.peers.read().len() {
-                                return Poll::Ready(Some(Err(result.id)));
-                            }
+                    }
 
-                            // Re-request from different peer. Return an error if there are no more peers.
-                            let peer = match self.peers.read().increment_and_get(&mut result.peer) {
-                                Some(peer) => peer,
-                                None => return Poll::Ready(Some(Err(result.id))),
-                            };
-
-                            log::debug!(
-                                peer_id = %peer,
-                                current_peer_index = %self.current_peer_index,
-                                "Re-requesting {:?} @ {}",
-                                result.id,
-                                result.index,
-                            );
-
-                            let wrapper = OrderWrapper {
-                                data: (self.request_fn)(
-                                    result.id.clone(),
-                                    Arc::clone(&self.network),
-                                    peer,
-                                ),
-                                id: result.id,
-                                index: result.index,
-                                peer: result.peer,
-                                num_tries: result.num_tries + 1,
-                            };
-
-                            self.pending_futures.push(wrapper);
-                        }
+                    // The request or verification failed.
+                    let id = result.id.clone();
+                    if !self.retry_request(result) {
+                        return Poll::Ready(Some(Err(id)));
                     }
                 }
                 None => {
@@ -342,7 +393,7 @@ mod tests {
         let mut hub = MockHub::new();
         let network = Arc::new(hub.new_network());
 
-        let mut queue: SyncQueue<_, _, i32> = SyncQueue::new(
+        let mut queue: SyncQueue<_, _, i32, _> = SyncQueue::new(
             network,
             vec![1, 2, 3, 4],
             Default::default(),

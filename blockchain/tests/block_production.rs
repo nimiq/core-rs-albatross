@@ -1,8 +1,7 @@
 use std::{convert::TryInto, sync::Arc};
 
 use nimiq_block::{Block, ForkProof, MicroJustification};
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::{mdbx::MdbxDatabase, traits::WriteTransaction, volatile::VolatileDatabase};
@@ -19,7 +18,7 @@ use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
     blockchain::{
         fill_micro_blocks, fill_micro_blocks_with_txns, produce_macro_blocks, sign_macro_block,
-        signing_key, voting_key,
+        signing_key, validator_address, voting_key,
     },
     test_rng::test_rng,
 };
@@ -55,9 +54,6 @@ fn it_can_produce_micro_blocks() {
 
     let bc = blockchain.upgradable_read();
 
-    // Store seed before pushing a block as it is needed for the fork proof.
-    let prev_vrf_seed = bc.head().seed().clone();
-
     // #1.0: Empty standard micro block
     let block = producer.next_micro_block(
         &bc,
@@ -91,13 +87,13 @@ fn it_can_produce_micro_blocks() {
         header2.timestamp += 1;
         let hash2 = header2.hash::<Blake2bHash>();
         let justification2 = signing_key().sign(hash2.as_slice());
-        ForkProof {
+        ForkProof::new(
+            validator_address(),
             header1,
-            header2,
             justification1,
+            header2,
             justification2,
-            prev_vrf_seed,
-        }
+        )
     };
 
     let bc = blockchain.upgradable_read();
@@ -105,7 +101,7 @@ fn it_can_produce_micro_blocks() {
     let block = producer.next_micro_block(
         &bc,
         bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![fork_proof],
+        vec![fork_proof.into()],
         vec![],
         vec![0x41],
         None,
@@ -1268,8 +1264,10 @@ fn it_can_revert_failed_delete_validator() {
 
         // Now the validator should be inactive because of the failing txn.
         assert_eq!(
-            validator.inactive_since,
-            Some(1 + Policy::genesis_block_number())
+            validator.inactive_from,
+            Some(Policy::election_block_after(
+                1 + Policy::genesis_block_number()
+            ))
         );
     }
 

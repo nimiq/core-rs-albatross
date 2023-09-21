@@ -13,8 +13,7 @@ use std::{
 use futures::stream::{BoxStream, Stream, StreamExt};
 use linked_hash_map::LinkedHashMap;
 use nimiq_block::{Block, BlockHeaderTopic, BlockTopic, BlockType};
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::Blockchain;
+use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, ForkEvent, PushResult};
 use nimiq_bls::{lazy::LazyPublicKey, KeyPair as BlsKeyPair};
 use nimiq_consensus::{Consensus, ConsensusEvent, ConsensusProxy};
@@ -44,7 +43,7 @@ use crate::{
         proposal::{Header, RequestProposal},
         state::MacroState,
     },
-    jail::ForkProofPool,
+    jail::EquivocationProofPool,
     micro::{ProduceMicroBlock, ProduceMicroBlockEvent},
     r#macro::{MappedReturn, ProduceMacroBlock, ProposalTopic},
 };
@@ -62,7 +61,7 @@ struct ActiveEpochState {
 }
 
 struct BlockchainState {
-    fork_proofs: ForkProofPool,
+    equivocation_proofs: EquivocationProofPool,
     can_enforce_validity_window: bool,
 }
 
@@ -145,7 +144,7 @@ where
     const MACRO_STATE_KEY: &'static str = "validatorState";
     const PRODUCER_TIMEOUT: Duration = Duration::from_millis(Policy::BLOCK_PRODUCER_TIMEOUT);
     const BLOCK_SEPARATION_TIME: Duration = Duration::from_millis(Policy::BLOCK_SEPARATION_TIME);
-    const FORK_PROOFS_MAX_SIZE: usize = 1_000; // bytes
+    const EQUIVOCATION_PROOFS_MAX_SIZE: usize = 1_000; // bytes
 
     pub fn new(
         env: DatabaseProxy,
@@ -168,7 +167,7 @@ where
         drop(blockchain_rg);
 
         let blockchain_state = BlockchainState {
-            fork_proofs: ForkProofPool::new(),
+            equivocation_proofs: EquivocationProofPool::new(),
             can_enforce_validity_window,
         };
 
@@ -388,10 +387,10 @@ where
                 ));
             }
             BlockType::Micro => {
-                let fork_proofs = self
+                let equivocation_proofs = self
                     .blockchain_state
-                    .fork_proofs
-                    .get_fork_proofs_for_block(Self::FORK_PROOFS_MAX_SIZE);
+                    .equivocation_proofs
+                    .get_equivocation_proofs_for_block(Self::EQUIVOCATION_PROOFS_MAX_SIZE);
                 let prev_seed = head.seed().clone();
 
                 drop(blockchain);
@@ -402,7 +401,7 @@ where
                     Arc::clone(&self.network),
                     block_producer,
                     self.validator_slot_band(),
-                    fork_proofs,
+                    equivocation_proofs,
                     prev_seed,
                     next_block_number,
                     Self::PRODUCER_TIMEOUT,
@@ -497,7 +496,9 @@ where
             .expect("Head block not found");
 
         // Update mempool and blockchain state
-        self.blockchain_state.fork_proofs.apply_block(&block);
+        self.blockchain_state
+            .equivocation_proofs
+            .apply_block(&block);
         // Mempool updates are only done once we can be active.
         if self.can_be_active() {
             self.mempool
@@ -512,10 +513,12 @@ where
     ) {
         // Update mempool and blockchain state
         for (_hash, block) in old_chain.iter() {
-            self.blockchain_state.fork_proofs.revert_block(block);
+            self.blockchain_state
+                .equivocation_proofs
+                .revert_block(block);
         }
         for (_hash, block) in new_chain.iter() {
-            self.blockchain_state.fork_proofs.apply_block(block);
+            self.blockchain_state.equivocation_proofs.apply_block(block);
         }
         // Mempool updates are only done once we can be active.
         if self.can_be_active() {
@@ -525,7 +528,10 @@ where
 
     fn on_fork_event(&mut self, event: ForkEvent) {
         match event {
-            ForkEvent::Detected(fork_proof) => self.blockchain_state.fork_proofs.insert(fork_proof),
+            ForkEvent::Detected(fork_proof) => self
+                .blockchain_state
+                .equivocation_proofs
+                .insert(fork_proof.into()),
         };
     }
 
@@ -699,8 +705,8 @@ where
             .get_validator(&data_store.read(&txn), &validator_address)
             .map_or(
                 ValidatorStakingState::NoStake,
-                |validator| match validator.inactive_since {
-                    Some(_) => ValidatorStakingState::Inactive(validator.jail_release),
+                |validator| match validator.inactive_from {
+                    Some(_) => ValidatorStakingState::Inactive(validator.jailed_from),
                     None => ValidatorStakingState::Active,
                 },
             )
@@ -860,10 +866,12 @@ where
                         info!("Automatically reactivated.");
                     }
                 }
-                ValidatorStakingState::Inactive(jail_release) => {
+                ValidatorStakingState::Inactive(jailed_from) => {
                     if self.validator_state.is_none()
-                        && jail_release
-                            .map(|jail_release| blockchain.block_number() >= jail_release)
+                        && jailed_from
+                            .map(|jailed_from| {
+                                blockchain.block_number() >= Policy::block_after_jail(jailed_from)
+                            })
                             .unwrap_or(true)
                         && self.automatic_reactivate.load(Ordering::Acquire)
                     {

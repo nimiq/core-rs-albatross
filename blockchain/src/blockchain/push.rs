@@ -11,6 +11,7 @@ use nimiq_database::{
     TransactionProxy, WriteTransactionProxy,
 };
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::Address;
 use nimiq_primitives::{
     policy::Policy,
     trie::{
@@ -19,7 +20,6 @@ use nimiq_primitives::{
     },
 };
 use nimiq_trie::WriteTransactionProxy as TrieWriteTransactionProxy;
-use nimiq_vrf::VrfSeed;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 use tokio::sync::broadcast::Sender as BroadcastSender;
 
@@ -95,7 +95,16 @@ impl Blockchain {
 
         // Detect forks in non-skip micro blocks.
         if block.is_micro() && !block.is_skip() {
-            this.detect_forks(&read_txn, block.unwrap_micro_ref(), prev_info.head.seed());
+            let validator = this
+                .get_proposer_at(
+                    block.block_number(),
+                    block.block_number(),
+                    prev_info.head.seed().entropy(),
+                    Some(&read_txn),
+                )
+                .expect("Couldn't find slot owner")
+                .validator;
+            this.detect_forks(&read_txn, block.unwrap_micro_ref(), &validator.address);
         }
 
         // Calculate chain ordering.
@@ -733,7 +742,12 @@ impl Blockchain {
         Ok(total_tx_size)
     }
 
-    fn detect_forks(&self, txn: &TransactionProxy, block: &MicroBlock, prev_vrf_seed: &VrfSeed) {
+    fn detect_forks(
+        &self,
+        txn: &TransactionProxy,
+        block: &MicroBlock,
+        validator_address: &Address,
+    ) {
         assert!(!block.is_skip_block());
 
         // Check if there are two blocks in the same slot and with the same height. Since we already
@@ -769,13 +783,13 @@ impl Blockchain {
                     .expect("Missing justification")
                     .unwrap_micro();
 
-                let proof = ForkProof {
-                    header1: block.header.clone(),
-                    header2: micro_block.header,
+                let proof = ForkProof::new(
+                    validator_address.clone(),
+                    block.header.clone(),
                     justification1,
+                    micro_block.header,
                     justification2,
-                    prev_vrf_seed: prev_vrf_seed.clone(),
-                };
+                );
 
                 // We shouldn't log errors if there are no listeners.
                 _ = self.fork_notifier.send(ForkEvent::Detected(proof));

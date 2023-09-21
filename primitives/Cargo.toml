@@ -21,6 +21,7 @@ ark-ec = "0.4"
 ark-mnt6-753 = "0.4"
 ark-serialize = "0.4"
 byteorder = "1.2"
+cfg_eval = "0.1"
 hex = { version = "0.4", optional = true }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 num-traits = { version = "0.2", optional = true }
@@ -31,7 +32,7 @@ serde = { version = "1.0", optional = true }
 serde_repr = { version = "0.1", optional = true }
 strum_macros = "0.25"
 thiserror = { version = "1.0", optional = true }
-tsify = { version = "0.4", optional = true }
+tsify = { git = "https://github.com/sisou/tsify", branch = "sisou/comments", default-features = false, features = ["js"], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 
 nimiq-bls = { workspace = true, features = ["lazy", "serde-derive"], optional = true }

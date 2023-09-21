@@ -1,20 +1,28 @@
 use std::path::Path;
 
-use nimiq_block::{Block, BlockError};
-use nimiq_block_production::test_custom_block::{
-    next_macro_block, next_micro_block, next_skip_block, BlockConfig,
+use nimiq_block::{
+    Block, BlockError, DoubleProposalProof, DoubleVoteProof, EquivocationProofError, ForkProof,
+    TendermintIdentifier, TendermintStep,
 };
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{
-    AbstractBlockchain, PushError, PushError::InvalidBlock, PushResult,
+    AbstractBlockchain, PushError,
+    PushError::{InvalidBlock, InvalidEquivocationProof},
+    PushResult,
 };
-use nimiq_hash::{Blake2bHash, Blake2sHash};
+use nimiq_bls::AggregateSignature;
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
+use nimiq_keys::KeyPair;
 use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
+    blockchain::validator_address,
+    test_custom_block::{next_macro_block, next_micro_block, next_skip_block, BlockConfig},
+    test_rng::test_rng,
     zkp_test_data::{get_base_seed, simulate_merger_wrapper, ZKP_TEST_KEYS_PATH},
 };
+use nimiq_utils::key_rng::SecureGenerate;
 use nimiq_vrf::VrfSeed;
 use nimiq_zkp::ZKP_VERIFYING_KEY;
 
@@ -23,8 +31,8 @@ pub fn expect_push_micro_block(config: BlockConfig, expected_res: Result<PushRes
         push_micro_after_macro(&config, &expected_res);
         push_micro_after_micro(&config, &expected_res);
         push_simple_skip_block(&config, &expected_res);
-        push_rebranch(config.clone(), &expected_res);
-        push_rebranch_across_epochs(config.clone());
+        push_rebranch(&config, &expected_res);
+        push_rebranch_across_epochs(&config);
         push_fork(&config, &expected_res);
         push_rebranch_fork(&config, &expected_res);
     }
@@ -78,7 +86,7 @@ fn push_simple_skip_block(config: &BlockConfig, expected_res: &Result<PushResult
     assert_eq!(&temp_producer1.push(Block::Micro(block)), expected_res);
 }
 
-fn push_rebranch(config: BlockConfig, expected_res: &Result<PushResult, PushError>) {
+fn push_rebranch(config: &BlockConfig, expected_res: &Result<PushResult, PushError>) {
     // (Numbers denote accumulated skip blocks)
     // [0] - [0]
     //    \- [1]
@@ -92,7 +100,7 @@ fn push_rebranch(config: BlockConfig, expected_res: &Result<PushResult, PushErro
 
     let block_2a = {
         let blockchain = &temp_producer2.blockchain.read();
-        next_skip_block(&temp_producer2.producer.voting_key, blockchain, &config)
+        next_skip_block(&temp_producer2.producer.voting_key, blockchain, config)
     };
 
     assert_eq!(temp_producer2.push(block_1a), Ok(PushResult::Extended));
@@ -103,6 +111,7 @@ fn push_rebranch(config: BlockConfig, expected_res: &Result<PushResult, PushErro
         Err(PushError::InvalidBlock(BlockError::InvalidSeed)) => {
             &Err(PushError::InvalidBlock(BlockError::InvalidSkipBlockProof))
         }
+        Err(PushError::InvalidEquivocationProof(_)) => &Ok(PushResult::Rebranched),
         _ => expected_res,
     };
 
@@ -162,7 +171,7 @@ fn push_rebranch_fork(config: &BlockConfig, expected_res: &Result<PushResult, Pu
 }
 
 /// Check that it doesn't rebranch across epochs. This push should always result in OK::Ignored.
-fn push_rebranch_across_epochs(config: BlockConfig) {
+fn push_rebranch_across_epochs(config: &BlockConfig) {
     // Build forks using two producers.
     let temp_producer1 = TemporaryBlockProducer::new();
     let temp_producer2 = TemporaryBlockProducer::new();
@@ -182,7 +191,7 @@ fn push_rebranch_across_epochs(config: BlockConfig) {
 
     let fork = {
         let blockchain = &temp_producer2.blockchain.read();
-        next_micro_block(&temp_producer2.producer.signing_key, blockchain, &config)
+        next_micro_block(&temp_producer2.producer.signing_key, blockchain, config)
     };
 
     // Pushing a block from a previous batch/epoch is atm cought before checking if it's a fork or known block
@@ -242,10 +251,10 @@ fn it_works_with_valid_blocks() {
     push_micro_after_micro(&config, &Ok(PushResult::Extended));
 
     // Check the normal behaviour for a rebranch
-    push_rebranch(BlockConfig::default(), &Ok(PushResult::Rebranched));
+    push_rebranch(&config, &Ok(PushResult::Rebranched));
 
     // Check that it doesn't rebranch across epochs
-    push_rebranch_across_epochs(config.clone());
+    push_rebranch_across_epochs(&config);
 
     // Check that it accepts forks as fork
     push_fork(&config, &Ok(PushResult::Forked));
@@ -354,9 +363,9 @@ fn it_validates_state_root() {
     // This does not fail since now the state root is properly calculated from strach
     push_micro_after_micro(&config, &Ok(PushResult::Extended));
 
-    push_rebranch(config.clone(), &Err(PushError::InvalidFork));
+    push_rebranch(&config, &Err(PushError::InvalidFork));
 
-    push_rebranch_across_epochs(config);
+    push_rebranch_across_epochs(&config);
 }
 
 #[test]
@@ -370,9 +379,9 @@ fn it_validates_history_root() {
         &Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot)),
     );
 
-    push_rebranch(config.clone(), &Err(PushError::InvalidFork));
+    push_rebranch(&config, &Err(PushError::InvalidFork));
 
-    push_rebranch_across_epochs(config);
+    push_rebranch_across_epochs(&config);
 }
 
 #[test]
@@ -412,6 +421,129 @@ fn it_validates_interlink() {
         },
         Err(InvalidBlock(BlockError::InvalidInterlink)),
     );
+}
+
+#[test]
+fn it_validates_fork_proofs() {
+    let mut rng = test_rng(true);
+
+    let signing_key = KeyPair::generate(&mut rng);
+
+    let header1 = TemporaryBlockProducer::new()
+        .next_block(vec![], false)
+        .unwrap_micro()
+        .header;
+    let mut header2 = header1.clone();
+    header2.timestamp += 1;
+    let header1_hash: Blake2bHash = header1.hash();
+    let header2_hash: Blake2bHash = header2.hash();
+    let justification1 = signing_key.sign(header1_hash.as_bytes());
+    let justification2 = signing_key.sign(header2_hash.as_bytes());
+
+    expect_push_micro_block(
+        BlockConfig {
+            equivocation_proofs: vec![ForkProof::new(
+                validator_address(),
+                header1,
+                justification1,
+                header2,
+                justification2,
+            )
+            .into()],
+            test_macro: false,
+            test_election: false,
+            ..Default::default()
+        },
+        Err(InvalidEquivocationProof(
+            EquivocationProofError::InvalidJustification,
+        )),
+    )
+}
+
+#[test]
+fn it_validates_double_proposal_proofs() {
+    let mut rng = test_rng(true);
+
+    let signing_key = KeyPair::generate(&mut rng);
+
+    let temp_producer = TemporaryBlockProducer::new();
+    for _ in 0..Policy::blocks_per_batch() - 1 {
+        temp_producer.next_block(vec![], false);
+    }
+    let header1 = temp_producer
+        .next_block(vec![], false)
+        .unwrap_macro()
+        .header;
+    let mut header2 = header1.clone();
+    header2.timestamp += 1;
+    let header1_hash: Blake2bHash = header1.hash();
+    let header2_hash: Blake2bHash = header2.hash();
+    let justification1 = signing_key.sign(header1_hash.as_bytes());
+    let justification2 = signing_key.sign(header2_hash.as_bytes());
+
+    expect_push_micro_block(
+        BlockConfig {
+            equivocation_proofs: vec![DoubleProposalProof::new(
+                validator_address(),
+                header1,
+                justification1,
+                header2,
+                justification2,
+            )
+            .into()],
+            test_macro: false,
+            test_election: false,
+            ..Default::default()
+        },
+        Err(InvalidEquivocationProof(
+            EquivocationProofError::InvalidJustification,
+        )),
+    )
+}
+
+#[test]
+fn it_validates_double_vote_proofs() {
+    let temp_producer = TemporaryBlockProducer::new();
+    for _ in 0..Policy::blocks_per_batch() - 1 {
+        temp_producer.next_block(vec![], false);
+    }
+    let macro_header = temp_producer
+        .next_block(vec![], false)
+        .unwrap_macro()
+        .header;
+
+    let validators = temp_producer
+        .blockchain
+        .read()
+        .get_validators_for_epoch(Policy::epoch_at(macro_header.block_number), None)
+        .unwrap();
+    let validator = validators.validators[0].clone();
+
+    expect_push_micro_block(
+        BlockConfig {
+            equivocation_proofs: vec![DoubleVoteProof::new(
+                TendermintIdentifier {
+                    block_number: macro_header.block_number,
+                    round_number: 0,
+                    step: TendermintStep::PreVote,
+                },
+                validator.address,
+                None,
+                AggregateSignature::new(),
+                validator.slots.clone().map(|i| i.into()).collect(),
+                Some(Blake2sHash::default()),
+                AggregateSignature::new(),
+                validator.slots.clone().map(|i| i.into()).collect(),
+            )
+            .into()],
+            test_macro: false,
+            test_election: false,
+            ..Default::default()
+        },
+        Err(InvalidEquivocationProof(
+            EquivocationProofError::InvalidJustification,
+        )),
+    )
 }
 
 #[test]

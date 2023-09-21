@@ -220,7 +220,7 @@ impl<E: Pairing> ToxicWaste<E> {
         })
     }
 
-    /// Implements the simulator as given in the Groth16 paper (https://eprint.iacr.org/2016/260.pdf)
+    /// Implements the simulator as given in the [Groth16 paper](https://eprint.iacr.org/2016/260.pdf)
     /// from the toxic waste.
     pub fn simulate_proof(&self, input: &[E::ScalarField], rng: &mut impl Rng) -> Proof<E> {
         let a = E::ScalarField::rand(rng);

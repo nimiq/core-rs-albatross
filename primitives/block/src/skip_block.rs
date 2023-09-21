@@ -43,7 +43,6 @@ impl Message for SkipBlockInfo {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct SkipBlockProof {
     // The aggregated signature of the validator's signatures for the skip block.
     pub sig: MultiSignature,

@@ -13,7 +13,7 @@ pub struct PeerList<N: Network> {
 
 /// Stores an index into a [`PeerList`].
 ///
-/// [`PeerLists`] can change at any time, this index can be used with
+/// [`PeerList`]s can change at any time, this index can be used with
 /// [`PeerList::increment_and_get`] to get varying peers.
 #[derive(Clone)]
 pub struct PeerListIndex {

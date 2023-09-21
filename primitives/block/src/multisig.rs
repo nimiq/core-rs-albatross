@@ -9,7 +9,6 @@ TODO: Move this out of primitives and into validator/aggregation once the messag
 */
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct MultiSignature {
     pub signature: AggregateSignature,
     pub signers: BitSet,

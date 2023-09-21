@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 async-trait = "0.1"
 base64 = "0.21"
 bitflags = "1.2"
-bytes = "1.4"
+bytes = "1.5"
 futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
 instant = { version = "0.1", features = [ "wasm-bindgen" ] }
@@ -28,14 +28,14 @@ ip_network = "0.4"
 libp2p-websys-transport = { git = "https://github.com/jsdanielh/libp2p-websys-transport.git", optional = true }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
-pin-project = "1.0"
+pin-project = "1.1"
 pin-project-lite = "0.2.10"
-prometheus-client = { version = "0.19.0", optional = true}
+prometheus-client = { version = "0.21.2", optional = true}
 rand = "0.8"
 serde = "1.0"
 serde-big-array = "0.5"
 thiserror = "1.0"
-tokio = { version = "1.29", features = ["macros", "rt", "tracing"] }
+tokio = { version = "1.32", features = ["macros", "rt", "tracing"] }
 tokio-stream = "0.1"
 wasm-timer = "0.2"
 
@@ -47,7 +47,6 @@ nimiq-hash = { workspace = true }
 nimiq-serde = { workspace = true }
 nimiq-utils = { workspace = true, features = [
     "tagged-signing",
-    "serde-derive",
     "libp2p",
     "time",
 ] }
@@ -82,7 +81,7 @@ libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", default-feature
 
 [dev-dependencies]
 # In dev/testing we require more tokio features
-tokio = { version = "1.29", features = ["macros", "rt", "rt-multi-thread", "test-util", "tracing"] }
+tokio = { version = "1.32", features = ["macros", "rt", "rt-multi-thread", "test-util", "tracing"] }
 
 nimiq-test-log = { workspace = true }
 

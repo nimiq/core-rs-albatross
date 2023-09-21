@@ -82,13 +82,20 @@ pub enum Log {
         fee: Coin,
     },
 
+    /// The validator with the given address has been marked for deactivation.
+    /// It will be inactive from the given block number.
     #[serde(rename_all = "camelCase")]
-    DeactivateValidator { validator_address: Address },
+    DeactivateValidator {
+        validator_address: Address,
+        inactive_from: u32,
+    },
 
+    /// The validator with the given address has been jailed.
+    /// It is jailed from the given block number.
     #[serde(rename_all = "camelCase")]
     JailValidator {
         validator_address: Address,
-        jail_release: u32,
+        jailed_from: u32,
     },
 
     #[serde(rename_all = "camelCase")]
@@ -117,7 +124,7 @@ pub enum Log {
         old_validator_address: Option<Address>,
         new_validator_address: Option<Address>,
         active_balance: Coin,
-        inactive_release: Option<u32>,
+        inactive_from: Option<u32>,
     },
 
     #[serde(rename_all = "camelCase")]
@@ -134,7 +141,7 @@ pub enum Log {
         staker_address: Address,
         validator_address: Option<Address>,
         value: Coin,
-        inactive_release: Option<u32>,
+        inactive_from: Option<u32>,
     },
 
     #[serde(rename_all = "camelCase")]

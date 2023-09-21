@@ -9,8 +9,7 @@ use nimiq_account::BlockLogger;
 use nimiq_block::{
     Block, MacroBlock, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
 };
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::Blockchain;
+use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_collections::BitSet;
 use nimiq_handel::{aggregation::Aggregation, identity::IdentityRegistry};

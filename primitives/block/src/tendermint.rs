@@ -14,7 +14,6 @@ use crate::{
 
 /// The proof for a block produced by Tendermint.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct TendermintProof {
     // The round when the block was completed. This is necessary to verify the signature.
     pub round: u32,
@@ -86,6 +85,11 @@ pub enum TendermintStep {
     Propose = PREFIX_TENDERMINT_PROPOSAL,
 }
 
+impl TendermintStep {
+    /// Size in bytes for a `TendermintStep` in binary serialization.
+    pub const SIZE: usize = 1;
+}
+
 /// Unique identifier for a single instance of TendermintAggregation
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct TendermintIdentifier {
@@ -95,6 +99,11 @@ pub struct TendermintIdentifier {
     pub round_number: u32,
     /// the Step for which contributions are accepted
     pub step: TendermintStep,
+}
+
+impl TendermintIdentifier {
+    /// Maximum size in bytes for a `TendermintIdentifier` in binary serialization.
+    pub const MAX_SIZE: usize = 2 * nimiq_serde::U32_MAX_SIZE + TendermintStep::SIZE;
 }
 
 // Multiple things this needs to take care of when it comes to what needs signing here:

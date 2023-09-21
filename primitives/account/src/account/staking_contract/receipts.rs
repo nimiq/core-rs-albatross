@@ -34,8 +34,8 @@ pub struct JailReceipt {
     pub old_previous_batch_punished_slots: BitSet,
     /// the current batch punished slots of the affected validator before this jail is applied
     pub old_current_batch_punished_slots: Option<BTreeSet<u16>>,
-    /// the jail release before this jail is applied
-    pub old_jail_release: Option<u32>,
+    /// the jailed block height before this jail is applied
+    pub old_jailed_from: Option<u32>,
 }
 convert_receipt!(JailReceipt);
 
@@ -60,8 +60,8 @@ convert_receipt!(UpdateValidatorReceipt);
 pub struct JailValidatorReceipt {
     /// true if corresponding validator was deactivated by this jail
     pub newly_deactivated: bool,
-    /// the jail release before this jail is applied
-    pub old_jail_release: Option<u32>,
+    /// the jail block height before this jail is applied
+    pub old_jailed_from: Option<u32>,
 }
 convert_receipt!(JailValidatorReceipt);
 
@@ -69,7 +69,7 @@ impl From<&JailReceipt> for JailValidatorReceipt {
     fn from(value: &JailReceipt) -> Self {
         Self {
             newly_deactivated: value.newly_deactivated,
-            old_jail_release: value.old_jail_release,
+            old_jailed_from: value.old_jailed_from,
         }
     }
 }
@@ -78,8 +78,8 @@ impl From<&JailReceipt> for JailValidatorReceipt {
 /// these transactions.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ReactivateValidatorReceipt {
-    /// the value of `inactive_since` before this transaction is applied
-    pub was_inactive_since: u32,
+    /// the value of `inactive_from` before this transaction is applied
+    pub was_inactive_from: u32,
 }
 convert_receipt!(ReactivateValidatorReceipt);
 
@@ -104,10 +104,10 @@ pub struct DeleteValidatorReceipt {
     pub reward_address: Address,
     /// the signal data before this transaction is applied
     pub signal_data: Option<Blake2bHash>,
-    /// the value of `inactive_since` before this transaction is applied
-    pub inactive_since: u32,
+    /// the value of `inactive_from` before this transaction is applied
+    pub inactive_from: u32,
     /// the jail release before this transaction is applied
-    pub jail_release: Option<u32>,
+    pub jailed_from: Option<u32>,
 }
 convert_receipt!(DeleteValidatorReceipt);
 
@@ -119,8 +119,8 @@ pub struct StakerReceipt {
     pub delegation: Option<Address>,
     /// the active balance before this transaction is applied
     pub active_balance: Coin,
-    /// the inactive release before this transaction is applied
-    pub inactive_release: Option<u32>,
+    /// the inactivation block height before this transaction is applied
+    pub inactive_from: Option<u32>,
 }
 convert_receipt!(StakerReceipt);
 
@@ -128,8 +128,8 @@ convert_receipt!(StakerReceipt);
 /// these transactions.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct SetInactiveStakeReceipt {
-    /// the inactive release before this transaction is applied
-    pub old_inactive_release: Option<u32>,
+    /// the inactivation block height before this transaction is applied
+    pub old_inactive_from: Option<u32>,
     /// the active balance before this transaction is applied
     pub old_active_balance: Coin,
 }
@@ -141,7 +141,7 @@ convert_receipt!(SetInactiveStakeReceipt);
 pub struct RemoveStakeReceipt {
     /// the delegation before this transaction is applied
     pub delegation: Option<Address>,
-    /// the inactive release before this transaction is applied
-    pub inactive_release: Option<u32>,
+    /// the inactivation block height before this transaction is applied
+    pub inactive_from: Option<u32>,
 }
 convert_receipt!(RemoveStakeReceipt);

@@ -96,10 +96,10 @@ impl Transaction {
             nimiq_transaction::Transaction::new_extended(
                 sender.native_ref().clone(),
                 AccountType::try_from(sender_type.unwrap_or(0))?,
-                sender_data.unwrap_or(Vec::new()),
+                sender_data.unwrap_or_default(),
                 recipient.native_ref().clone(),
                 AccountType::try_from(recipient_type.unwrap_or(0))?,
-                recipient_data.unwrap_or(Vec::new()),
+                recipient_data.unwrap_or_default(),
                 Coin::try_from(value)?,
                 Coin::try_from(fee)?,
                 validity_start_height,
@@ -186,9 +186,10 @@ impl Transaction {
                 // It is possible to add an additional argument `secondary_key_pair: Option<&KeyPair>` with
                 // https://docs.rs/wasm-bindgen-derive/latest/wasm_bindgen_derive/#optional-arguments.
                 // TODO: Support signing for differing staker and validator signing & cold keys.
-                let secondary_key_pair: Option<&KeyPair> = None;
+                // let secondary_key_pair: Option<&KeyPair> = None;
+                // builder.sign_with_key_pair(secondary_key_pair.unwrap_or(key_pair).native_ref());
 
-                builder.sign_with_key_pair(secondary_key_pair.unwrap_or(key_pair).native_ref());
+                builder.sign_with_key_pair(key_pair.native_ref());
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair.native_ref());
                 builder.generate().unwrap()

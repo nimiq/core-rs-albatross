@@ -11,6 +11,10 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
+#[cfg_attr(
+    feature = "serde-derive",
+    derive(nimiq_serde::Serialize, nimiq_serde::Deserialize)
+)]
 pub enum SizeProof<H: Merge, T: Hash<H>> {
     EmptyTree,
     SingleElement(u64, T),

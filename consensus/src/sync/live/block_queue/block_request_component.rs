@@ -38,8 +38,12 @@ pub enum BlockRequestComponentEvent {
 /// The public interface allows to request blocks, which are not immediately returned.
 /// The blocks instead are returned by polling the component.
 pub struct BlockRequestComponent<N: Network> {
-    sync_queue:
-        SyncQueue<N, (u32, Blake2bHash, Vec<Blake2bHash>, bool), (u32, Blake2bHash, Vec<Block>)>, // requesting missing blocks from peers
+    sync_queue: SyncQueue<
+        N,
+        (u32, Blake2bHash, Vec<Blake2bHash>, bool),
+        (u32, Blake2bHash, Vec<Block>),
+        (),
+    >, // requesting missing blocks from peers
     peers: Arc<RwLock<PeerList<N>>>,
     network_event_rx: SubscribeEvents<N::PeerId>,
     include_micro_bodies: bool,

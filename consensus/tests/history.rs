@@ -6,8 +6,7 @@ use std::{
 
 use futures::{poll, Stream, StreamExt};
 use nimiq_block::Block;
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;

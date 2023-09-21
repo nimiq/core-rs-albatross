@@ -53,11 +53,12 @@ impl MacroBlock {
             .interlink
             .clone()
             .expect("Election blocks have interlinks");
-        let number_hashes_to_update = if self.block_number() == 0 {
+        let number_hashes_to_update = if self.block_number() == Policy::genesis_block_number() {
             // 0.trailing_zeros() would be 32, thus we need an exception for it
             0
         } else {
-            (self.block_number() / Policy::blocks_per_epoch()).trailing_zeros() as usize
+            ((self.block_number() - Policy::genesis_block_number()) / Policy::blocks_per_epoch())
+                .trailing_zeros() as usize
         };
         if number_hashes_to_update > interlink.len() {
             interlink.push(self.hash());
@@ -192,6 +193,26 @@ pub struct MacroHeader {
     pub diff_root: Blake2bHash,
     /// A merkle root over all of the transactions that happened in the current epoch.
     pub history_root: Blake2bHash,
+}
+
+impl MacroHeader {
+    /// Returns the size, in bytes, of a Macro block header. This represents the maximum possible
+    /// size since we assume that the extra_data field is completely filled.
+    #[allow(clippy::identity_op)]
+    pub const MAX_SIZE: usize = 0
+        + /*version*/ nimiq_serde::U16_MAX_SIZE
+        + /*block_number*/ nimiq_serde::U32_MAX_SIZE
+        + /*round*/ nimiq_serde::U32_MAX_SIZE
+        + /*timestamp*/ nimiq_serde::U64_MAX_SIZE
+        + /*parent_hash*/ Blake2bHash::SIZE
+        + /*parent_election_hash*/ Blake2bHash::SIZE
+        + /*interlink*/ nimiq_serde::option_max_size(nimiq_serde::vec_max_size(Blake2bHash::SIZE, 32))
+        + /*seed*/ VrfSeed::SIZE
+        + /*extra_data*/ nimiq_serde::vec_max_size(nimiq_serde::U8_SIZE, 32)
+        + /*state_root*/ Blake2bHash::SIZE
+        + /*body_root*/ Blake2sHash::SIZE
+        + /*diff_root*/ Blake2bHash::SIZE
+        + /*history_root*/ Blake2bHash::SIZE;
 }
 
 impl Message for MacroHeader {

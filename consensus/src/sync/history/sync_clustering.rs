@@ -482,6 +482,9 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
             best_cluster.remove_front(1);
         }
 
+        // Reset the cluster's verification state to the current blockchain state.
+        best_cluster.reset_verify_state();
+
         debug!(
             last_finalized_epoch,
             current_block,

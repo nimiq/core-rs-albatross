@@ -447,6 +447,9 @@ fn accounts_performance() {
         PublicKey::from([0u8; 32]),
         BLSKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
@@ -566,6 +569,9 @@ fn accounts_performance_history_sync_batches_single_sender() {
         PublicKey::from([0u8; 32]),
         BLSKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();
@@ -691,6 +697,9 @@ fn accounts_performance_history_sync_batches_many_to_many() {
         PublicKey::from([0u8; 32]),
         BLSKeyPair::generate(&mut rng).public_key,
         Address::default(),
+        None,
+        None,
+        false,
     );
 
     let genesis_info = genesis_builder.generate(env.clone()).unwrap();

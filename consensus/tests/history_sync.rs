@@ -3,15 +3,17 @@ mod sync_utils;
 use std::{sync::Arc, time::Duration};
 
 use futures::StreamExt;
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{Blockchain, BlockchainConfig};
+use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::{
     consensus::Consensus,
     sync::{
-        history::{cluster::SyncCluster, HistoryMacroSync},
+        history::{
+            cluster::{HistoryChunkRequest, SyncCluster},
+            HistoryMacroSync,
+        },
         syncer_proxy::SyncerProxy,
     },
 };
@@ -299,26 +301,30 @@ async fn sync_ingredients() {
     let epoch = SyncCluster::request_epoch(Arc::clone(&net2), peer_id, epochs[0].clone())
         .await
         .expect("Should yield epoch");
-    let block1 = epoch.election_macro_block.expect("Should have block");
+    let block1 = epoch
+        .election_macro_block
+        .as_ref()
+        .expect("Should have block");
 
-    assert_eq!(epoch.total_history_len, 3);
+    assert_eq!(epoch.total_history_len(), 3);
     assert_eq!(
         block1.hash(),
         consensus1.blockchain.read().election_head_hash()
     );
 
     // Request history chunk of epoch 1.
-    let chunk =
-        SyncCluster::request_history_chunk(Arc::clone(&net2), peer_id, 1, block1.block_number(), 0)
-            .await
-            .expect("Should yield history chunk")
-            .chunk
-            .expect("Should yield history chunk");
+    let chunk = SyncCluster::request_history_chunk(
+        Arc::clone(&net2),
+        peer_id,
+        HistoryChunkRequest::from_block(block1, 0),
+    )
+    .await
+    .expect("Should yield history chunk");
 
     assert_eq!(chunk.history.len(), 3);
     assert_eq!(
         chunk.verify(
-            consensus1
+            &consensus1
                 .blockchain
                 .read()
                 .election_head()
@@ -355,27 +361,27 @@ async fn sync_ingredients() {
         .last()
         .expect("Should have a batch set")
         .macro_block
-        .clone()
-        .expect("Should have block");
+        .clone();
 
-    assert_eq!(epoch.total_history_len, 1);
+    assert_eq!(epoch.total_history_len(), 1);
     assert_eq!(
         block2.hash(),
         consensus1.blockchain.read().macro_head_hash()
     );
 
     // Request HistoryChunk for epoch 2 containing the checkpoint
-    let chunk =
-        SyncCluster::request_history_chunk(Arc::clone(&net2), peer_id, 2, block2.block_number(), 0)
-            .await
-            .expect("Should yield history chunk")
-            .chunk
-            .expect("Should yield history chunk");
+    let chunk = SyncCluster::request_history_chunk(
+        Arc::clone(&net2),
+        peer_id,
+        HistoryChunkRequest::from_block(&block2, 0),
+    )
+    .await
+    .expect("Should yield history chunk");
 
     assert_eq!(chunk.history.len(), 1);
     assert_eq!(
         chunk.verify(
-            consensus1
+            &consensus1
                 .blockchain
                 .read()
                 .macro_head()

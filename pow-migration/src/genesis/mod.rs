@@ -1,11 +1,12 @@
 pub mod types;
 
-use std::{fs, str::FromStr, time::Instant};
+use std::{fs, path::PathBuf, str::FromStr, time::Instant};
 
 use nimiq_database::DatabaseProxy;
 use nimiq_genesis_builder::config::GenesisConfig;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{KeyPair, SecureGenerate};
+use nimiq_primitives::networks::NetworkId;
 use nimiq_rpc::Client;
 use nimiq_vrf::VrfSeed;
 use rand::{rngs::StdRng, SeedableRng};
@@ -24,9 +25,19 @@ const POW_BLOCK_TIME_MS: u64 = 60 * 1000; // 1 min
 pub async fn get_pos_genesis(
     client: &Client,
     pow_reg_window: &PoWRegistrationWindow,
+    network_id: NetworkId,
     env: DatabaseProxy,
     pos_registered_agents: Option<PoSRegisteredAgents>,
 ) -> Result<GenesisConfig, Error> {
+    let seed_message = match network_id {
+        NetworkId::TestAlbatross => Some("Albatross TestNet".to_string()),
+        NetworkId::MainAlbatross => Some("Albatross MainNet".to_string()),
+        _ => {
+            log::error!(%network_id, "Unsupported network ID as a target for the migration process");
+            return Err(Error::InvalidNetworkId(network_id));
+        }
+    };
+
     // Get block according to arguments and check if it exists
     let final_block = client
         .get_block_by_hash(&pow_reg_window.final_block, false)
@@ -70,7 +81,7 @@ pub async fn get_pos_genesis(
     // The parent hash of the PoS genesis is the hash of cutting block
     let parent_hash = Blake2bHash::from_str(&final_block.hash)?;
 
-    // Build up the VRF seed using a random seed that comes from the final block hash
+    // Build up the VRF seed using a random seed generator seeded with the final block hash
     let mut parent_hash_bytes = [0u8; 32];
     parent_hash_bytes.copy_from_slice(parent_hash.as_slice());
     let mut rng = StdRng::from_seed(parent_hash_bytes);
@@ -100,7 +111,7 @@ pub async fn get_pos_genesis(
         };
 
     Ok(GenesisConfig {
-        seed_message: Some("Albatross TestNet".to_string()),
+        seed_message,
         vrf_seed: Some(vrf_seed),
         parent_election_hash: Some(parent_election_hash),
         parent_hash: Some(parent_hash),
@@ -119,6 +130,6 @@ pub async fn get_pos_genesis(
 }
 
 /// Write the genesis config file to a TOML file
-pub fn write_pos_genesis(file_path: &str, genesis_config: GenesisConfig) -> Result<(), Error> {
+pub fn write_pos_genesis(file_path: &PathBuf, genesis_config: GenesisConfig) -> Result<(), Error> {
     Ok(fs::write(file_path, toml::to_string(&genesis_config)?)?)
 }
