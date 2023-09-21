@@ -293,6 +293,11 @@ impl TransactionBuilder {
         Ok(Transaction::from_native(tx))
     }
 
+    /// Updates parameters of a validator in the staking contract.
+    ///
+    /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
+    ///
+    /// Throws when the fee does not fit within a u64 or the `networkId` is unknown.
     #[wasm_bindgen(js_name = newUpdateValidator)]
     pub fn new_update_validator(
         sender: &Address,
@@ -330,6 +335,11 @@ impl TransactionBuilder {
         Ok(Transaction::from_native(tx))
     }
 
+    /// Deactivates a validator in the staking contract.
+    ///
+    /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
+    ///
+    /// Throws when the fee does not fit within a u64 or the `networkId` is unknown.
     #[wasm_bindgen(js_name = newDeactivateValidator)]
     pub fn new_deactivate_validator(
         sender: &Address,
@@ -360,6 +370,11 @@ impl TransactionBuilder {
 
     // pub fn new_unpark_validator()
 
+    /// Deleted a validator the staking contract. The deposit is returned to the Sender
+    ///
+    /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
+    ///
+    /// Throws when the fee does not fit within a u64 or the `networkId` is unknown.
     #[wasm_bindgen(js_name = newDeleteValidator)]
     pub fn new_delete_validator(
         sender: &Address,
@@ -388,6 +403,11 @@ impl TransactionBuilder {
         Ok(Transaction::from_native(tx))
     }
 
+    /// Retires a validator in the staking contract.
+    ///
+    /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
+    ///
+    /// Throws when the fee does not fit within a u64 or the `networkId` is unknown.
     #[wasm_bindgen(js_name = newRetireValidator)]
     pub fn new_retire_validator(
         sender: &Address,
