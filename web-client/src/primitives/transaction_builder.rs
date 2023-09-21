@@ -273,7 +273,7 @@ impl TransactionBuilder {
     ) -> Result<Transaction, JsError> {
         let mut recipient = Recipient::new_staking_builder();
         recipient.create_validator(
-            signing_key.native_ref().clone(),
+            *signing_key.native_ref(),
             &voting_key_pair.native_ref().clone(),
             reward_address.native_ref().clone(),
             None,
