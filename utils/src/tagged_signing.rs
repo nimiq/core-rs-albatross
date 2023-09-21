@@ -158,7 +158,7 @@ mod tests {
         type PublicKey = TestPublicKey;
 
         fn sign(&self, message: &[u8]) -> Vec<u8> {
-            self.0.sign(message).as_bytes().to_vec()
+            self.0.sign(message).to_bytes().to_vec()
         }
     }
 

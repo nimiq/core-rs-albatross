@@ -149,7 +149,7 @@ mod serde_derive {
             if serializer.is_human_readable() {
                 serializer.serialize_str(&self.to_hex())
             } else {
-                Serialize::serialize(&self.as_bytes(), serializer)
+                Serialize::serialize(self.as_bytes(), serializer)
             }
         }
     }

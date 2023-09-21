@@ -11,11 +11,6 @@ impl Signature {
     pub const SIZE: usize = 64;
 
     #[inline]
-    pub fn as_bytes(&self) -> [u8; Signature::SIZE] {
-        self.0.into()
-    }
-
-    #[inline]
     pub fn to_bytes(&self) -> [u8; Self::SIZE] {
         self.0.into()
     }
@@ -27,7 +22,7 @@ impl Signature {
 
     #[inline]
     pub fn to_hex(&self) -> String {
-        hex::encode(self.as_bytes())
+        hex::encode(self.to_bytes())
     }
 }
 

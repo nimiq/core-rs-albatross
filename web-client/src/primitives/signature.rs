@@ -25,7 +25,7 @@ impl Signature {
     /// Serializes the signature to a byte array.
     #[wasm_bindgen(js_name = toBytes)]
     pub fn serialize(&self) -> Vec<u8> {
-        self.inner.as_bytes().to_vec()
+        self.inner.to_bytes().to_vec()
     }
 
     /// Parses a signature from its hex representation.

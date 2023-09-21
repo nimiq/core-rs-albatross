@@ -64,7 +64,7 @@ impl ClientConfiguration {
     /// Sets the network ID the client should use. Input is case-insensitive.
     ///
     /// Possible values are `'TestAlbatross' | 'DevAlbatross'`.
-    /// Default is `'DevAlbatross'`.
+    /// Default is `'TestAlbatross'`.
     pub fn network(&mut self, network: String) -> Result<(), JsError> {
         self.network_id = NetworkId::from_str(&network)?;
         Ok(())
