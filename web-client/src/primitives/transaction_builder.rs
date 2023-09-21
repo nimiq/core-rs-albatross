@@ -293,11 +293,123 @@ impl TransactionBuilder {
         Ok(Transaction::from_native(tx))
     }
 
-    // pub fn new_update_validator()
+    #[wasm_bindgen(js_name = newUpdateValidator)]
+    pub fn new_update_validator(
+        sender: &Address,
+        reward_address: &Address, //Should also be optional Option<>
+        signing_key: Option<PublicKey>,
+        voting_key_pair: Option<BLSKeyPair>,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let mut recipient = Recipient::new_staking_builder();
+        let native_signing_key: Option<nimiq_keys::PublicKey> =
+            signing_key.map_or(None, |r| Some(r.native_ref().clone()));
+        let native_voting_key_pair: Option<nimiq_bls::KeyPair> =
+            voting_key_pair.map_or(None, |r| Some(r.native_ref().clone()));
 
-    // pub fn new_deactivate_validator()
+        recipient.update_validator(
+            native_signing_key,
+            native_voting_key_pair.as_ref(),
+            Some(reward_address.native_ref().clone()),
+            None,
+        );
+
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(Coin::ZERO)
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from_native(tx))
+    }
+
+    #[wasm_bindgen(js_name = newDeactivateValidator)]
+    pub fn new_deactivate_validator(
+        sender: &Address,
+        validator: &Address,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let mut recipient = Recipient::new_staking_builder();
+
+        recipient.deactivate_validator(validator.native_ref().clone());
+
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(Coin::ZERO)
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from_native(tx))
+    }
 
     // pub fn new_reactivate_validator()
 
-    // pub fn new_delete_validator()
+    // pub fn new_unpark_validator()
+
+    #[wasm_bindgen(js_name = newDeleteValidator)]
+    pub fn new_delete_validator(
+        sender: &Address,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let recipient = Recipient::new_basic(sender.native_ref().clone());
+
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(
+                Sender::new_staking_builder()
+                    .delete_validator()
+                    .generate()
+                    .unwrap(),
+            )
+            .with_recipient(recipient)
+            .with_value(Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT))
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from_native(tx))
+    }
+
+    #[wasm_bindgen(js_name = newRetireValidator)]
+    pub fn new_retire_validator(
+        sender: &Address,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let mut recipient = Recipient::new_staking_builder();
+
+        recipient.retire_validator();
+
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(Coin::ZERO)
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from_native(tx))
+    }
 }
