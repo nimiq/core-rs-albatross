@@ -1,3 +1,6 @@
+use std::str::FromStr;
+
+use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_transaction_builder::{Recipient, Sender};
 use wasm_bindgen::prelude::*;
@@ -267,16 +270,19 @@ impl TransactionBuilder {
         reward_address: &Address,
         signing_key: PublicKey,
         voting_key_pair: BLSKeyPair,
+        signal_data: Option<String>,
         fee: Option<u64>,
         validity_start_height: u32,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
+        let native_signal_data: Option<Blake2bHash> =
+            signal_data.map(|r| Blake2bHash::from_str(&r).unwrap());
         let mut recipient = Recipient::new_staking_builder();
         recipient.create_validator(
             *signing_key.native_ref(),
             &voting_key_pair.native_ref().clone(),
             reward_address.native_ref().clone(),
-            None,
+            native_signal_data,
         );
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
@@ -293,11 +299,146 @@ impl TransactionBuilder {
         Ok(Transaction::from_native(tx))
     }
 
-    // pub fn new_update_validator()
+    /// Updates parameters of a validator in the staking contract.
+    ///
+    /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
+    ///
+    /// Throws when the fee does not fit within a u64 or the `networkId` is unknown.
+    #[wasm_bindgen(js_name = newUpdateValidator)]
+    pub fn new_update_validator(
+        sender: &Address,
+        reward_address: Option<Address>,
+        signing_key: Option<PublicKey>,
+        voting_key_pair: Option<BLSKeyPair>,
+        signal_data: Option<String>,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let native_signal_data: Option<Option<Blake2bHash>> =
+            signal_data.map(|r| Some(Blake2bHash::from_str(&r).unwrap()));
+        let mut recipient = Recipient::new_staking_builder();
+        let native_signing_key: Option<nimiq_keys::PublicKey> =
+            signing_key.map(|r| *r.native_ref());
+        let native_voting_key_pair: Option<nimiq_bls::KeyPair> =
+            voting_key_pair.map(|r| r.native_ref().clone());
+        let native_reward_address: Option<nimiq_keys::Address> =
+            reward_address.map(|r| r.native_ref().clone());
 
-    // pub fn new_deactivate_validator()
+        recipient.update_validator(
+            native_signing_key,
+            native_voting_key_pair.as_ref(),
+            native_reward_address,
+            native_signal_data,
+        );
+
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(Coin::ZERO)
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from_native(tx))
+    }
+
+    /// Deactivates a validator in the staking contract.
+    ///
+    /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
+    ///
+    /// Throws when the fee does not fit within a u64 or the `networkId` is unknown.
+    #[wasm_bindgen(js_name = newDeactivateValidator)]
+    pub fn new_deactivate_validator(
+        sender: &Address,
+        validator: &Address,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.deactivate_validator(validator.native_ref().clone());
+
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(Coin::ZERO)
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from_native(tx))
+    }
 
     // pub fn new_reactivate_validator()
 
-    // pub fn new_delete_validator()
+    // pub fn new_unpark_validator()
+
+    /// Deleted a validator the staking contract. The deposit is returned to the Sender
+    ///
+    /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
+    ///
+    /// Throws when the fee does not fit within a u64 or the `networkId` is unknown.
+    #[wasm_bindgen(js_name = newDeleteValidator)]
+    pub fn new_delete_validator(
+        sender: &Address,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let recipient = Recipient::new_basic(sender.native_ref().clone());
+
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(
+                Sender::new_staking_builder()
+                    .delete_validator()
+                    .generate()
+                    .unwrap(),
+            )
+            .with_recipient(recipient)
+            .with_value(Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT))
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from_native(tx))
+    }
+
+    /// Retires a validator in the staking contract.
+    ///
+    /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
+    ///
+    /// Throws when the fee does not fit within a u64 or the `networkId` is unknown.
+    #[wasm_bindgen(js_name = newRetireValidator)]
+    pub fn new_retire_validator(
+        sender: &Address,
+        fee: Option<u64>,
+        validity_start_height: u32,
+        network_id: u8,
+    ) -> Result<Transaction, JsError> {
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.retire_validator();
+
+        let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
+        builder
+            .with_sender(Sender::new_basic(sender.native_ref().clone()))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(Coin::ZERO)
+            .with_fee(Coin::try_from(fee.unwrap_or(0))?)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(to_network_id(network_id)?);
+
+        let proof_builder = builder.generate()?;
+        let tx = proof_builder.preliminary_transaction().to_owned();
+        Ok(Transaction::from_native(tx))
+    }
 }
