@@ -143,6 +143,12 @@ pub struct TaintedConfig {
     #[builder(default = "false")]
     // Produce tainted head request responses
     pub tainted_request_head: bool,
+    #[builder(default = "false")]
+    // Produce tainted chunk request responses
+    pub tainted_request_chunk: bool,
+    #[builder(default = "false")]
+    // Produce tainted partial diff responses
+    pub tainted_partial_diff: bool,
 }
 
 impl Default for TaintedConfig {
@@ -159,6 +165,8 @@ impl Default for TaintedConfig {
             tainted_request_block: false,
             tainted_request_missing_blocks: false,
             tainted_request_head: false,
+            tainted_request_chunk: false,
+            tainted_partial_diff: false,
         }
     }
 }
@@ -845,6 +853,8 @@ impl ClientConfigBuilder {
             tainted_request_block: config_file.tainted.tainted_request_block,
             tainted_request_missing_blocks: config_file.tainted.tainted_request_missing_blocks,
             tainted_request_head: config_file.tainted.tainted_request_head,
+            tainted_request_chunk: config_file.tainted.tainted_request_chunk,
+            tainted_partial_diff: config_file.tainted.tainted_partial_diff,
         };
 
         self.tainted(tainted);

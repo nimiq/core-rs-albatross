@@ -533,6 +533,9 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestChunk {
     fn handle(&self, _peer_id: N::PeerId, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseChunk {
         let blockchain_rg = blockchain.read();
 
+        let mut rng = thread_rng();
+        let tainted_config = blockchain_rg.get_tainted_config();
+
         // Check if our state is complete.
         let txn = blockchain_rg.read_transaction();
         if !blockchain_rg.state.accounts.is_complete(Some(&txn)) {
@@ -544,11 +547,23 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestChunk {
             cmp::min(self.limit, Policy::state_chunks_max_size()) as usize,
             Some(&txn),
         );
-        ResponseChunk::Chunk(Chunk {
-            block_number: blockchain_rg.block_number(),
-            block_hash: blockchain_rg.head_hash(),
-            chunk,
-        })
+
+        if tainted_config.tainted_request_chunk && rng.gen_bool(1.0 / 2.0) {
+            warn!(" Returning a tainted chunk... bua ha ha ha");
+            let head = blockchain_rg.block_number();
+            let block_number = rng.gen_range(Policy::genesis_block_number()..head);
+            ResponseChunk::Chunk(Chunk {
+                block_number,
+                block_hash: blockchain_rg.head_hash(),
+                chunk,
+            })
+        } else {
+            ResponseChunk::Chunk(Chunk {
+                block_number: blockchain_rg.block_number(),
+                block_hash: blockchain_rg.head_hash(),
+                chunk,
+            })
+        }
     }
 }
 
@@ -558,10 +573,22 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestTrieDiff {
         // TODO return the requested range only
         let blockchain = context.read();
         let txn = blockchain.read_transaction();
-        match blockchain
-            .chain_store
-            .get_accounts_diff(&self.block_hash, Some(&txn))
-        {
+
+        let mut rng = thread_rng();
+        let tainted_config = blockchain.get_tainted_config();
+
+        let hash = if tainted_config.tainted_request_partial_diff && rng.gen_bool(1.0 / 2.0) {
+            let head = blockchain.block_number();
+            let block_number = rng.gen_range(Policy::genesis_block_number()..head);
+
+            let block = blockchain.get_block_at(block_number, false, None).unwrap();
+
+            block.hash()
+        } else {
+            self.block_hash.clone()
+        };
+
+        match blockchain.chain_store.get_accounts_diff(&hash, Some(&txn)) {
             Ok(diff) => ResponseTrieDiff::PartialDiff(diff),
             Err(BlockchainError::BlockNotFound) => ResponseTrieDiff::UnknownBlockHash,
             Err(BlockchainError::AccountsDiffNotFound) => ResponseTrieDiff::IncompleteState,
