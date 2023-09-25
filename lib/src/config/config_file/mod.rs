@@ -208,6 +208,9 @@ pub struct TaintedSettings {
     #[serde(default)]
     // Produce tainted missing blocks responses
     pub tainted_request_missing_blocks: bool,
+    #[serde(default)]
+    // Produce tainted request head responses
+    pub tainted_request_head: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]

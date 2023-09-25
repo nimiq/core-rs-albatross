@@ -436,9 +436,9 @@ impl RequestMissingBlocks {
         if tainted_config.tainted_request_history_chunk && rng.gen_bool(1.0 / 2.0) {
             let head = blockchain.block_number();
             let mut block_numbers = vec![];
-            block_numbers.push(rng.gen_range(0..head));
-            block_numbers.push(rng.gen_range(0..head));
-            block_numbers.push(rng.gen_range(0..head));
+            block_numbers.push(rng.gen_range(Policy::genesis_block_number()..head));
+            block_numbers.push(rng.gen_range(Policy::genesis_block_number()..head));
+            block_numbers.push(rng.gen_range(Policy::genesis_block_number()..head));
 
             let mut blocks = vec![];
 
@@ -449,9 +449,7 @@ impl RequestMissingBlocks {
             }
             warn!(" Returning some random blocks for the missing block request.. bua ha ha ha");
 
-            return ResponseBlocks {
-                blocks: Some(blocks),
-            };
+            return Ok(ResponseBlocks { blocks });
         }
 
         // Check that we know the target hash and that it is located on our main chain.
@@ -546,8 +544,25 @@ impl RequestMissingBlocks {
 impl<N: Network> Handle<N, BlockchainProxy> for RequestHead {
     fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> ResponseHead {
         let blockchain = blockchain.read();
+
+        let mut rng = thread_rng();
+        let tainted_config = blockchain.get_tainted_config();
+
+        let mut head_hash = blockchain.head_hash();
+
+        if tainted_config.tainted_request_head && rng.gen_bool(1.0 / 2.0) {
+            warn!(" Returning a different head for request head .. bua ha ha ha");
+            let head = blockchain.block_number();
+
+            let bn = rng.gen_range(Policy::genesis_block_number()..head);
+
+            let block = blockchain.get_block_at(bn, false).unwrap();
+
+            head_hash = block.hash();
+        }
+
         ResponseHead {
-            micro: blockchain.head_hash(),
+            micro: head_hash,
             r#macro: blockchain.macro_head_hash(),
             election: blockchain.election_head_hash(),
         }
