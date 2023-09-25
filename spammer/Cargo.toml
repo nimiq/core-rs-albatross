@@ -25,7 +25,7 @@ rand = "0.8.5"
 serde = "1.0"
 tokio = { version = "1.32", features = ["rt-multi-thread", "time", "tracing"] }
 tokio-metrics = { version = "0.3" }
-toml = "0.7"
+toml = "0.8"
 
 nimiq-block = { workspace = true }
 nimiq-blockchain = { workspace = true }

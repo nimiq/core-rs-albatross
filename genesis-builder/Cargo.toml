@@ -16,7 +16,7 @@ log = { package = "tracing", version = "0.1" }
 serde = "1.0"
 thiserror = "1.0"
 time = { version = "0.3", features = ["formatting", "parsing", "serde"] }
-toml = "0.7"
+toml = "0.8"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 nimiq-account = { workspace = true, features = ["accounts", "interaction-traits"] }
