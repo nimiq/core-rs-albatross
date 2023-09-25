@@ -194,6 +194,12 @@ pub struct TaintedSettings {
     #[serde(default)]
     // Produce tainted request head responses
     pub tainted_request_head: bool,
+    #[serde(default)]
+    // Produce tainted request chunk responses
+    pub tainted_request_chunk: bool,
+    #[serde(default)]
+    // Produce tainted partial diff responses
+    pub tainted_partial_diff: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]
