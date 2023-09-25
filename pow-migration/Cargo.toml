@@ -61,7 +61,7 @@ tokio = { version = "1.32", features = [
     "rt-multi-thread",
     "tracing",
 ] }
-toml = "0.7"
+toml = "0.8"
 tracing-subscriber = { version = "0.3", features = ["registry"] }
 url = "2.4"
 
