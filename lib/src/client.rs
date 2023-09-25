@@ -340,6 +340,7 @@ impl ClientInner {
             tainted_request_history_chunk: config.tainted.tainted_request_history_chunk,
             tainted_request_block: config.tainted.tainted_request_block,
             tainted_request_missing_blocks: config.tainted.tainted_request_missing_blocks,
+            tainted_request_head: config.tainted.tainted_request_head,
         };
 
         #[cfg(feature = "full-consensus")]

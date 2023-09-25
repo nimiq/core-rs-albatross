@@ -33,6 +33,8 @@ pub struct TaintedBlockchainConfig {
     pub tainted_request_block: bool,
     // Tainted request block
     pub tainted_request_missing_blocks: bool,
+    // Tainted request head
+    pub tainted_request_head: bool,
 }
 
 impl Default for TaintedBlockchainConfig {
@@ -48,6 +50,7 @@ impl Default for TaintedBlockchainConfig {
             tainted_request_history_chunk: false,
             tainted_request_block: false,
             tainted_request_missing_blocks: false,
+            tainted_request_head: false,
         }
     }
 }

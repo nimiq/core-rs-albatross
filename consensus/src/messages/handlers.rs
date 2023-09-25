@@ -324,9 +324,9 @@ impl<N: Network> Handle<N, ResponseBlocks, BlockchainProxy> for RequestMissingBl
         if tainted_config.tainted_request_history_chunk && rng.gen_bool(1.0 / 2.0) {
             let head = blockchain.block_number();
             let mut block_numbers = vec![];
-            block_numbers.push(rng.gen_range(0..head));
-            block_numbers.push(rng.gen_range(0..head));
-            block_numbers.push(rng.gen_range(0..head));
+            block_numbers.push(rng.gen_range(Policy::genesis_block_number()..head));
+            block_numbers.push(rng.gen_range(Policy::genesis_block_number()..head));
+            block_numbers.push(rng.gen_range(Policy::genesis_block_number()..head));
 
             let mut blocks = vec![];
 
@@ -437,7 +437,25 @@ impl<N: Network> Handle<N, ResponseBlocks, BlockchainProxy> for RequestMissingBl
 
 impl<N: Network> Handle<N, Blake2bHash, BlockchainProxy> for RequestHead {
     fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> Blake2bHash {
-        blockchain.read().head_hash()
+        let blockchain = blockchain.read();
+
+        let mut rng = thread_rng();
+        let tainted_config = blockchain.get_tainted_config();
+
+        let head = blockchain.head_hash();
+
+        if tainted_config.tainted_request_history_chunk && rng.gen_bool(1.0 / 2.0) {
+            warn!(" Returning a different head for request head .. bua ha ha ha");
+            let head = blockchain.block_number();
+
+            let bn = rng.gen_range(Policy::genesis_block_number()..head);
+
+            let block = blockchain.get_block_at(bn, false).unwrap();
+
+            block.hash()
+        } else {
+            head
+        }
     }
 }
 
