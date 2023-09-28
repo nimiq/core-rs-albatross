@@ -133,6 +133,9 @@ pub struct TaintedConfig {
     #[builder(default = "false")]
     // Produce tainted partial diff responses
     pub tainted_partial_diff: bool,
+    #[builder(default = "false")]
+    // Tainted mempool
+    pub tainted_mempool: bool,
 }
 
 impl Default for TaintedConfig {
@@ -151,6 +154,7 @@ impl Default for TaintedConfig {
             tainted_request_head: false,
             tainted_request_chunk: false,
             tainted_partial_diff: false,
+            tainted_mempool: false,
         }
     }
 }
@@ -857,6 +861,7 @@ impl ClientConfigBuilder {
             tainted_request_head: config_file.tainted.tainted_request_head,
             tainted_request_chunk: config_file.tainted.tainted_request_chunk,
             tainted_partial_diff: config_file.tainted.tainted_partial_diff,
+            tainted_mempool: config_file.tainted.tainted_mempool,
         };
 
         self.tainted(tainted);

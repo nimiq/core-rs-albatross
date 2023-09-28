@@ -23,6 +23,7 @@ linked-hash-map = "0.5.6"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 prometheus-client = { version = "0.21.2", optional = true}
+rand = "0.8"
 serde = "1.0"
 thiserror = "1.0"
 tokio = { version = "1.32", features = ["rt", "rt-multi-thread", "sync", "tracing"] }

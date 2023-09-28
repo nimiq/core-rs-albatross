@@ -200,6 +200,9 @@ pub struct TaintedSettings {
     #[serde(default)]
     // Produce tainted partial diff responses
     pub tainted_partial_diff: bool,
+    #[serde(default)]
+    // Tainted mempool
+    pub tainted_mempool: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]

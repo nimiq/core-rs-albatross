@@ -343,6 +343,7 @@ impl ClientInner {
             tainted_request_head: config.tainted.tainted_request_head,
             tainted_request_chunk: config.tainted.tainted_request_chunk,
             tainted_request_partial_diff: config.tainted.tainted_partial_diff,
+            tainted_mempool: config.tainted.tainted_mempool,
         };
 
         #[cfg(feature = "full-consensus")]

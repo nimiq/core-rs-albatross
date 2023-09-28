@@ -3,9 +3,11 @@ use std::sync::Arc;
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_hash::Hash;
-use nimiq_primitives::{networks::NetworkId, transaction::TransactionError};
+use nimiq_keys::{Address, KeyPair, SecureGenerate};
+use nimiq_primitives::{networks::NetworkId, policy::Policy, transaction::TransactionError};
 use nimiq_transaction::Transaction;
 use parking_lot::RwLock;
+use rand::{thread_rng, Rng};
 use thiserror::Error;
 
 use crate::{filter::MempoolFilter, mempool_state::MempoolState, mempool_transactions::TxPriority};
@@ -39,6 +41,36 @@ pub(crate) async fn verify_tx(
     filter: Arc<RwLock<MempoolFilter>>,
     priority: TxPriority,
 ) -> Result<(), VerifyErr> {
+    let tainted_mempool = blockchain.read().config.tainted_blockchain.tainted_mempool;
+
+    // A tainted mempool doesn't care about any transaction verification...
+    if tainted_mempool {
+        let mut mempool_state = mempool_state.write();
+        let mut tx = transaction.clone();
+
+        // We might also change some transaction parameters....
+
+        let mut rng = thread_rng();
+        if rng.gen_bool(1.0 / 3.0) {
+            warn!(" Changing txn vaidity start height.... bua ha ha ha");
+            tx.validity_start_height =
+                tx.validity_start_height - (2 * Policy::transaction_validity_window());
+        }
+
+        if rng.gen_bool(1.0 / 3.0) {
+            let new_kp = KeyPair::generate(&mut rng);
+
+            let recipient = Address::from(&new_kp);
+
+            warn!(" Changing txn recipient to {} bua ha ha ha", recipient);
+            tx.recipient = recipient;
+        }
+
+        mempool_state.put(&blockchain.read(), transaction, priority)?;
+
+        return Ok(());
+    }
+
     // 1. Verify transaction signature (and other stuff)
     // FIXME Do we really gain anything by spawning here?
     let mut tx = transaction.clone();
