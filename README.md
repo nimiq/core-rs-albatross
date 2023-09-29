@@ -122,23 +122,32 @@ curl -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "address=NQ
 
 Check [this guide](docs/becoming_validator.md) for steps on becoming a validator.
 
-## Docker (outgoing connections only)
+## Docker
 
 Use `docker pull ghcr.io/nimiq/core-rs-albatross:latest` to pull the latest docker image.
-Then run it:
+Then mount a volume to configure the client:
 
 ```
 mkdir data
-docker run -v $(pwd)/data:/home/nimiq/.nimiq -p 8648 -p 9200:9200 --name nimiq-rpc --rm ghcr.io/nimiq/core-rs-albatross:latest
+cp ./lib/src/config/config_file/client.example.toml data/client.toml
+```
+
+Note that you can modify the client configuration and this is a must if you are running a validator.
+For more documentation on the configuration file, check the [configuration](#configuration) section of this guide.
+
+Once the data directory is created and ready, you can run the client with:
+
+```
+docker run -v $(pwd)/data:/home/nimiq/.nimiq -p 8443:8443 -p 8648:8648 -p 9100:9100 --name nimiq-rpc --rm ghcr.io/nimiq/core-rs-albatross:latest
 ```
 
 Overview of exposed ports:
 | Port | Description |
 |------|--------------|
-| 8648 | RPC Port |
-| 9200 | Metrics port |
+| 8443 | Incoming connections port |
+| 8648 | RPC port |
+| 9100 | Metrics port |
 
-As you can see, the default port (8443) for accepting connections from other nodes is not exposed, so this is an outgoing connections only container. It is intended for RPC use and metrics gathering.
 
 ## Contributing
 

@@ -24,11 +24,14 @@ COPY ./target/release/nimiq-bls /usr/local/bin/nimiq-bls
 COPY ./target/release/nimiq-address /usr/local/bin/nimiq-address
 COPY ./target/release/nimiq-rpc /usr/local/bin/nimiq-rpc
 
+# Expose the incoming connections port
+EXPOSE 8443
+
 # Expose RPC port
 EXPOSE 8648
 
 # Expose metrics port
-EXPOSE 9200
+EXPOSE 9100
 
 # Run CMD so we can use other bin
 CMD [ "/usr/bin/tini", "--", "nimiq-client" ]
