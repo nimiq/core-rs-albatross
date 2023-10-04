@@ -146,14 +146,14 @@ impl Transaction {
     #[cfg(feature = "primitives")]
     pub fn sign(&mut self, key_pair: &KeyPair) -> Result<(), JsError> {
         let proof_builder = TransactionProofBuilder::new(self.native_ref().clone());
-        let signed_transaction = match proof_builder {
+        let proof = match proof_builder {
             TransactionProofBuilder::Basic(mut builder) => {
                 builder.sign_with_key_pair(key_pair.native_ref());
-                builder.generate().unwrap()
+                builder.generate().unwrap().proof
             }
             TransactionProofBuilder::Vesting(mut builder) => {
                 builder.sign_with_key_pair(key_pair.native_ref());
-                builder.generate().unwrap()
+                builder.generate().unwrap().proof
             }
             TransactionProofBuilder::Htlc(mut _builder) => {
                 // TODO: Create a separate HTLC signing method that takes the type of proof as an argument
@@ -180,7 +180,7 @@ impl Transaction {
             }
             TransactionProofBuilder::OutStaking(mut builder) => {
                 builder.sign_with_key_pair(key_pair.native_ref());
-                builder.generate().unwrap()
+                builder.generate().unwrap().proof
             }
             TransactionProofBuilder::InStaking(mut builder) => {
                 // It is possible to add an additional argument `secondary_key_pair: Option<&KeyPair>` with
@@ -192,11 +192,14 @@ impl Transaction {
                 builder.sign_with_key_pair(key_pair.native_ref());
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair.native_ref());
-                builder.generate().unwrap()
+                let tx = builder.generate().unwrap();
+                // Set the recipient data to the data with the added signature
+                self.set_recipient_data(tx.recipient_data);
+                tx.proof
             }
         };
 
-        self.set_proof(signed_transaction.proof);
+        self.set_proof(proof);
 
         Ok(())
     }
@@ -318,7 +321,13 @@ impl Transaction {
         self.inner.recipient_data.clone()
     }
 
-    /// The transaction's data as a byte array.
+    /// Set the transaction's data
+    #[wasm_bindgen(setter)]
+    pub fn set_recipient_data(&mut self, data: Vec<u8>) {
+        self.inner.recipient_data = data;
+    }
+
+    /// The transaction's sender data as a byte array.
     #[wasm_bindgen(getter)]
     pub fn sender_data(&self) -> Vec<u8> {
         self.inner.sender_data.clone()
