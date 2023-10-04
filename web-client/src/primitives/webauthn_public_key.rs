@@ -11,6 +11,11 @@ pub struct WebauthnPublicKey {
     inner: nimiq_keys::WebauthnPublicKey,
 }
 
+impl WebauthnPublicKey {
+    const SPKI_SIZE: usize = 91;
+    const RAW_SIZE: usize = 65;
+}
+
 #[wasm_bindgen]
 impl WebauthnPublicKey {
     /// Verifies that a signature is valid for this public key and the provided data.
@@ -20,10 +25,37 @@ impl WebauthnPublicKey {
 
     /// Deserializes a public key from a byte array.
     ///
-    /// Throws when the byte array contains less than 32 bytes.
+    /// Throws when the byte array contains less than 33 bytes.
     pub fn unserialize(bytes: &[u8]) -> Result<WebauthnPublicKey, JsError> {
+        if bytes.len() != nimiq_keys::WebauthnPublicKey::SIZE {
+            return Err(JsError::new("Public key primitive: Invalid length"));
+        }
         let key = nimiq_keys::WebauthnPublicKey::deserialize_from_vec(bytes)?;
         Ok(WebauthnPublicKey::from_native(key))
+    }
+
+    /// Deserializes a public key from its SPKI representation.
+    #[wasm_bindgen(js_name = fromSpki)]
+    pub fn from_spki(spki_bytes: &[u8]) -> Result<WebauthnPublicKey, JsError> {
+        if spki_bytes.len() != Self::SPKI_SIZE {
+            return Err(JsError::new("Public key primitive: Invalid SPKI length"));
+        }
+        // The raw key is the last 65 bytes of the SPKI format
+        let raw_key = &spki_bytes[spki_bytes.len() - Self::RAW_SIZE..];
+        Self::from_raw(raw_key)
+    }
+
+    /// Deserializes a public key from its raw representation.
+    #[wasm_bindgen(js_name = fromRaw)]
+    pub fn from_raw(raw_bytes: &[u8]) -> Result<WebauthnPublicKey, JsError> {
+        if raw_bytes.len() != Self::RAW_SIZE {
+            return Err(JsError::new("Public key primitive: Invalid raw length"));
+        }
+        // Take the first byte (parity) and the X coordinate of the key (32 bytes)
+        let mut compressed = raw_bytes[0..33].to_vec();
+        // Adjust the parity byte according to the Y coordinate
+        compressed[0] = 0x02 | (raw_bytes[raw_bytes.len() - 1] & 0x01);
+        Self::unserialize(&compressed)
     }
 
     /// Creates a new public key from a byte array.
@@ -49,8 +81,11 @@ impl WebauthnPublicKey {
     /// ```
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: &[u8]) -> Result<WebauthnPublicKey, JsError> {
-        if bytes.len() != nimiq_keys::WebauthnPublicKey::SIZE {
-            return Err(JsError::new("Public key primitive: Invalid length"));
+        if bytes.len() == Self::SPKI_SIZE {
+            return Self::from_spki(bytes);
+        }
+        if bytes.len() == Self::RAW_SIZE {
+            return Self::from_raw(bytes);
         }
         Self::unserialize(bytes)
     }
@@ -62,7 +97,7 @@ impl WebauthnPublicKey {
 
     /// Parses a public key from its hex representation.
     ///
-    /// Throws when the string is not valid hex format or when it represents less than 32 bytes.
+    /// Throws when the string is not valid hex format or when it represents less than 33 bytes.
     #[wasm_bindgen(js_name = fromHex)]
     pub fn from_hex(hex: &str) -> Result<WebauthnPublicKey, JsError> {
         let key = nimiq_keys::WebauthnPublicKey::from_str(hex)?;
