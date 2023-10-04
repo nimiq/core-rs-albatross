@@ -268,8 +268,8 @@ impl TransactionBuilder {
     pub fn new_create_validator(
         sender: &Address,
         reward_address: &Address,
-        signing_key: PublicKey,
-        voting_key_pair: BLSKeyPair,
+        signing_key: &PublicKey,
+        voting_key_pair: &BLSKeyPair,
         signal_data: Option<String>,
         fee: Option<u64>,
         validity_start_height: u32,
@@ -280,7 +280,7 @@ impl TransactionBuilder {
         let mut recipient = Recipient::new_staking_builder();
         recipient.create_validator(
             *signing_key.native_ref(),
-            &voting_key_pair.native_ref().clone(),
+            voting_key_pair.native_ref(),
             reward_address.native_ref().clone(),
             native_signal_data,
         );
@@ -377,8 +377,6 @@ impl TransactionBuilder {
     }
 
     // pub fn new_reactivate_validator()
-
-    // pub fn new_unpark_validator()
 
     /// Deleted a validator the staking contract. The deposit is returned to the Sender
     ///
