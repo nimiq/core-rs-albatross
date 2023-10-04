@@ -5,7 +5,7 @@ import os
 import uuid
 from datetime import datetime
 from pathlib import Path
-from topology_settings import LokiSettings, TopologySettings
+from topology_settings import LokiSettings, TopologySettings, Environment
 from control_settings import ControlSettings, RestartSettings
 from topology import Topology
 
@@ -82,6 +82,10 @@ def parse_args():
                         "configuration files. This won't run a devnet and will"
                         " dismiss any configuration option except for the "
                         "topology")
+    parser.add_argument("--env", type=Environment.from_string,
+                        choices=list(Environment), default=Environment.LOCAL,
+                        help="Environment in which the devnet will be run: "
+                        "local, docker-compose or k8s")
     return parser.parse_args()
 
 
@@ -113,8 +117,11 @@ def main():
     Path(conf_dir).mkdir(parents=False, exist_ok=False)
 
     # Create the state dir
-    state_dir = f"{nimiq_dir}/temp-state/{ts}"
-    Path(state_dir).mkdir(parents=True, exist_ok=False)
+    if args.env != Environment.LOCAL:
+        state_dir = f"/home/nimiq"
+    else:
+        state_dir = f"{nimiq_dir}/temp-state/{ts}"
+        Path(state_dir).mkdir(parents=True, exist_ok=False)
 
     # Create the loki settings
     loki_settings = None
@@ -136,13 +143,17 @@ def main():
 
     topology_settings = TopologySettings(
         nimiq_dir, logs_dir, conf_dir, state_dir, args.release,
-        loki_settings=loki_settings)
+        args.env, loki_settings=loki_settings)
 
     # Now create topology object and run it
     topology = Topology(topology_settings)
     topology.load(args.topology)
-    if not args.dry:
+    # For now we do not support control of docker-compose and k8s environments
+    if not args.dry and not args.env != Environment.LOCAL:
         topology.run(control_settings)
+    else:
+        logging.warning("Only generating configuration files. Topology control"
+                        " for this environment is currently not supported")
 
 
 if __name__ == "__main__":

@@ -4,10 +4,10 @@ listen_addresses = [
     "/ip4/127.0.0.1/tcp/{{ port }}/ws",
 ]
 
-{% if seed_ports is defined %}
+{% if seed_addresses is defined %}
 seed_nodes = [
-    {% for seed_port in seed_ports %}
-        {{ '{' }} address = "/ip4/127.0.0.1/tcp/{{ seed_port }}/ws" {{ '}' }}
+    {% for seed_address in seed_addresses %}
+        {{ '{' }} address = "{{ seed_address }}" {{ '}' }}
     {% endfor %}
 ]
 {% endif %}

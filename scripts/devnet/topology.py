@@ -84,6 +84,7 @@ class Topology:
                       'seed': {'listen': 9100, 'metrics': 9500},
                       'spammer': {'listen': 9900, 'metrics': 9950},
                       'node': {'listen': 9300, 'metrics': 9700}}
+        containerized = self.topology_settings.is_env_containerized()
         if not all(key in ['validator', 'seed', 'spammer', 'node']
                    for key in topology):
             raise Exception("Invalid TOML configuration file")
@@ -103,11 +104,18 @@ class Topology:
                         f"{node['restartable']}")
                 name = f"{key}{count+1}"
                 if 'enable_metrics' in node:
-                    metrics = {'port': port_bases[node]['metrics'] + count}
+                    if containerized:
+                        metrics_port = 9100
+                    else:
+                        metrics_port = port_bases[node]['metrics'] + count
+                    metrics = {'port': metrics_port}
                 else:
                     metrics = None
                 # Create objects depending on type:
-                port = port_bases[key]['listen'] + count
+                if containerized:
+                    port = 8443
+                else:
+                    port = port_bases[key]['listen'] + count
                 if key == 'validator':
                     topology_node = Validator(
                         name, port, self.topology_settings, node['sync_mode'],
@@ -156,12 +164,17 @@ class Topology:
              regular_nodes) = self.__parse_toml_topology(description)
             self.__generate_genesis(validators, spammers)
             non_seed_nodes = validators + spammers + regular_nodes
-            seed_ports = []
+            seed_addresses = []
             for seed in seeds:
-                seed_ports.append(seed.get_listen_port())
+                if self.topology_settings.is_env_containerized():
+                    seed_addresses.append(f"/dns4/{seed.get_name()}/tcp/"
+                                          f"{seed.get_listen_port()}/ws")
+                else:
+                    seed_addresses.append("/ip4/127.0.0.1/tcp/"
+                                          f"{seed.get_listen_port()}/ws")
                 seed.generate_config_files(self.jinja_env)
             for node in non_seed_nodes:
-                node.generate_config_files(self.jinja_env, seed_ports)
+                node.generate_config_files(self.jinja_env, seed_addresses)
 
     def __run_monitor_for(self, mon_time: int, exp_down_nodes: list = []):
         """

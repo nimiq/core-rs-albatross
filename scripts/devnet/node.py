@@ -56,10 +56,13 @@ class Node:
         self.metrics = metrics
         self.topology_settings = topology_settings
         self.nimiq_exec_extra_args = nimiq_exec_extra_args
-        self.conf_dir = topology_settings.get_conf_dir() + "/" + self.name
+        self.conf_dir = topology_settings.get_node_conf_dir(self.name)
         Path(self.conf_dir).mkdir(parents=False, exist_ok=False)
-        self.state_dir = topology_settings.get_state_dir() + "/" + self.name
-        Path(self.state_dir).mkdir(parents=False, exist_ok=False)
+        self.state_dir = topology_settings.get_node_state_dir(self.name)
+        # Only create a directory for the node state if the node won't be
+        # containerized.
+        if not topology_settings.is_env_containerized():
+            Path(self.state_dir).mkdir(parents=False, exist_ok=False)
         self.sync_mode = sync_mode
         self.process = None
 
@@ -115,7 +118,8 @@ class Node:
         :return: The log file of the node.
         :rtype: str
         """
-        return self.topology_settings.get_logs_dir() + "/" + self.name + ".log"
+        topology_logs_dir = self.topology_settings.get_logs_dir()
+        return f"{topology_logs_dir}/{self.name}.log"
 
     def get_conf_toml(self):
         """
@@ -124,7 +128,7 @@ class Node:
         :return: The TOML configuration file of the node.
         :rtype: str
         """
-        return self.conf_dir + "/" + self.name + ".toml"
+        return f"{self.conf_dir}/{self.name}.toml"
 
     def get_conf_yaml(self):
         """
@@ -133,7 +137,7 @@ class Node:
         :return: The YAML configuration file of the node.
         :rtype: str
         """
-        return self.conf_dir + "/" + self.name + ".yml"
+        return f"{self.conf_dir}/{self.name}.yml"
 
     def get_state_dir(self):
         """
@@ -151,7 +155,7 @@ class Node:
         :return: The DB path of the current node.
         :rtype: str
         """
-        return self.get_state_dir() + "/" + "devalbatross-history-consensus"
+        return f"{self.get_state_dir()}/devalbatross-history-consensus"
 
     def build(self):
         """
@@ -353,14 +357,16 @@ class RegularNode(Node):
                                           topology_settings, sync_mode,
                                           metrics)
 
-    def generate_config_files(self, jinja_env: Environment, seed_ports: list):
+    def generate_config_files(self, jinja_env: Environment,
+                              seed_addresses: list):
         """
         Generates configuration file
 
         :param jinja_env: Jinja2 environment for template rendering
         :type jinja_env: Environment
-        :param seed_ports: List of seed ports for the configuration file
-        :type seed_ports: List of ints
+        :param seed_addresses: List of seed addresses in multiaddress format
+            for the configuration file
+        :type seed_addresses: List of strings
         """
         # Read and render the TOML template
         template = jinja_env.get_template("node_conf.toml.j2")
@@ -373,13 +379,13 @@ class RegularNode(Node):
             content = template.render(
                 min_peers=3, port=self.get_listen_port(),
                 state_path=self.get_state_dir(),
-                sync_mode=self.get_sync_mode(), seed_ports=seed_ports,
+                sync_mode=self.get_sync_mode(), seed_addresses=seed_addresses,
                 metrics=metrics, loki=loki_settings)
         else:
             content = template.render(
                 min_peers=3, port=self.get_listen_port(),
                 state_path=self.get_state_dir(),
-                sync_mode=self.get_sync_mode(), seed_ports=seed_ports,
+                sync_mode=self.get_sync_mode(), seed_addresses=seed_addresses,
                 loki=loki_settings)
         filename = self.get_conf_toml()
         with open(filename, mode="w", encoding="utf-8") as message:
