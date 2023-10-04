@@ -275,8 +275,7 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
-        let native_signal_data: Option<Blake2bHash> =
-            signal_data.map(|r| Blake2bHash::from_str(&r).unwrap());
+        let native_signal_data = signal_data.map(|r| Blake2bHash::from_str(&r).unwrap());
         let mut recipient = Recipient::new_staking_builder();
         recipient.create_validator(
             *signing_key.native_ref(),
@@ -315,15 +314,11 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
-        let native_signal_data: Option<Option<Blake2bHash>> =
-            signal_data.map(|r| Some(Blake2bHash::from_str(&r).unwrap()));
+        let native_signal_data = signal_data.map(|r| Some(Blake2bHash::from_str(&r).unwrap()));
         let mut recipient = Recipient::new_staking_builder();
-        let native_signing_key: Option<nimiq_keys::PublicKey> =
-            signing_key.map(|r| *r.native_ref());
-        let native_voting_key_pair: Option<nimiq_bls::KeyPair> =
-            voting_key_pair.map(|r| r.native_ref().clone());
-        let native_reward_address: Option<nimiq_keys::Address> =
-            reward_address.map(|r| r.native_ref().clone());
+        let native_signing_key = signing_key.map(|r| *r.native_ref());
+        let native_voting_key_pair = voting_key_pair.map(|r| r.native_ref().clone());
+        let native_reward_address = reward_address.map(|r| r.native_ref().clone());
 
         recipient.update_validator(
             native_signing_key,
