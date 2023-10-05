@@ -66,7 +66,7 @@ pub(crate) async fn verify_tx(
             tx.recipient = recipient;
         }
 
-        mempool_state.put(&blockchain.read(), transaction, priority)?;
+        mempool_state.put(&blockchain.read(), &tx, priority)?;
 
         return Ok(());
     }
