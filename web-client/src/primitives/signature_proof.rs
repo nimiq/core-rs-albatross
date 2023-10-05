@@ -1,4 +1,3 @@
-use nimiq_hash::Hasher;
 use nimiq_serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -37,87 +36,14 @@ impl SignatureProof {
         authenticator_data: &[u8],
         client_data_json: &[u8],
     ) -> Result<SignatureProof, JsError> {
-        // Extract host, client_data_flags and client_data_extra_fields from client_data_json
-
-        // Setup inner fields
-        let mut client_data_flags = nimiq_transaction::WebauthnClientDataFlags::default();
-        let mut client_data_extra_fields = "".to_string();
-
-        // Convert client_data_json bytes to string for search & split operations
-        // FIXME: Handle invalid UTF-8
-        let client_data_json_str = std::str::from_utf8(client_data_json).unwrap();
-
-        // Extract origin from client_data_json
-        let origin_search_term = r#","origin":""#;
-        // Find the start of the origin value
-        // FIXME: Handle missing origin
-        let origin_start =
-            client_data_json_str.find(origin_search_term).unwrap() + origin_search_term.len();
-        // Find the closing quotation mark of the origin value
-        // FIXME: Handle missing closing quotation mark
-        let origin_length = client_data_json_str[origin_start..].find('"').unwrap();
-        // The origin is the string between the two indices
-        let origin = &client_data_json_str[origin_start..origin_start + origin_length];
-
-        // Compute and compare RP ID with authenticatorData
-        let url = url::Url::parse(origin)?;
-        let hostname = url.host_str().unwrap(); // FIXME: Handle missing hostname
-        let rp_id = nimiq_hash::Sha256Hasher::default().digest(hostname.as_bytes());
-        if rp_id.0 != authenticator_data[0..32] {
-            return Err(JsError::new(
-                "Computed RP ID does not match authenticator data",
-            ));
-        }
-
-        // Compute host field, which includes the port if non-standard
-        let port_suffix = if let Some(port) = url.port() {
-            format!(":{}", port)
-        } else {
-            "".to_string()
-        };
-        let host = format!("{}{}", hostname, port_suffix);
-
-        // Check if client_data_json contains any extra fields
-        // Search for the crossOrigin field first
-        let parts = client_data_json_str
-            .split(r#""crossOrigin":false"#)
-            .collect::<Vec<_>>();
-        let suffix = if parts.len() == 2 {
-            parts[1]
-        } else {
-            // Client data does not include the crossOrigin field
-            client_data_flags
-                .insert(nimiq_transaction::WebauthnClientDataFlags::NO_CROSSORIGIN_FIELD);
-
-            // We need to check for extra fields after the origin field instead
-            let parts = client_data_json_str
-                .split(&format!(r#""origin":"{}""#, origin))
-                .collect::<Vec<_>>();
-            assert_eq!(parts.len(), 2);
-            parts[1]
-        };
-
-        // Check if the suffix contains extra fields
-        if suffix.len() > 1 {
-            // Cut off first comma and last curly brace
-            client_data_extra_fields = suffix[1..suffix.len() - 1].to_string();
-        }
-
-        if origin.contains(r":\/\/") {
-            client_data_flags
-                .insert(nimiq_transaction::WebauthnClientDataFlags::ESCAPED_ORIGIN_SLASHES);
-        }
-
         Ok(SignatureProof::from_native(
             nimiq_transaction::SignatureProof::ECDSA(
-                nimiq_transaction::WebauthnSignatureProof::from(
+                nimiq_transaction::WebauthnSignatureProof::try_from(
                     *public_key.native_ref(),
                     signature.native_ref().clone(),
-                    host,
-                    authenticator_data[32..].to_vec(),
-                    client_data_flags,
-                    client_data_extra_fields,
-                ),
+                    authenticator_data,
+                    client_data_json,
+                )?,
             ),
         ))
     }
