@@ -27,7 +27,6 @@ log = { package = "tracing", version = "0.1", features = ["log"] }
 serde = "1.0"
 serde-wasm-bindgen = "0.6"
 tsify = { git = "https://github.com/sisou/tsify", branch = "sisou/comments", default-features = false, features = ["js"] }
-url = "2.4"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 wasm-bindgen-derive = { version = "0.2", optional = true }

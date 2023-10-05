@@ -1,4 +1,4 @@
-use std::cmp::Ord;
+use std::{cmp::Ord, error::Error, fmt};
 
 use base64::Engine;
 use bitflags::bitflags;
@@ -80,23 +80,90 @@ pub struct WebauthnSignatureProof {
 }
 
 impl WebauthnSignatureProof {
-    pub fn from(
+    pub fn try_from(
         public_key: WebauthnPublicKey,
         signature: Signature,
-        host: String,
-        authenticator_data_suffix: Vec<u8>,
-        client_data_flags: WebauthnClientDataFlags,
-        client_data_extra_fields: String,
-    ) -> Self {
-        WebauthnSignatureProof {
+        authenticator_data: &[u8],
+        client_data_json: &[u8],
+    ) -> Result<Self, SerializationError> {
+        // Extract host, client_data_flags and client_data_extra_fields from client_data_json
+
+        // Setup inner fields
+        let mut client_data_flags = WebauthnClientDataFlags::default();
+        let mut client_data_extra_fields = "".to_string();
+
+        // Convert client_data_json bytes to string for search & split operations
+        // FIXME: Handle invalid UTF-8
+        let client_data_json_str = std::str::from_utf8(client_data_json).unwrap();
+
+        // Extract origin from client_data_json
+        let origin_search_term = r#","origin":""#;
+        // Find the start of the origin value
+        // FIXME: Handle missing origin
+        let origin_start =
+            client_data_json_str.find(origin_search_term).unwrap() + origin_search_term.len();
+        // Find the closing quotation mark of the origin value
+        // FIXME: Handle missing closing quotation mark
+        let origin_length = client_data_json_str[origin_start..].find('"').unwrap();
+        // The origin is the string between the two indices
+        let origin = &client_data_json_str[origin_start..origin_start + origin_length];
+
+        // Compute and compare RP ID with authenticatorData
+        let url = url::Url::parse(origin)?;
+        let hostname = url.host_str().unwrap(); // FIXME: Handle missing hostname
+        let rp_id = nimiq_hash::Sha256Hasher::default().digest(hostname.as_bytes());
+        if rp_id.0 != authenticator_data[0..32] {
+            return Err(SerializationError::new(
+                "Computed RP ID does not match authenticator data",
+            ));
+        }
+
+        // Compute host field, which includes the port if non-standard
+        let port_suffix = if let Some(port) = url.port() {
+            format!(":{}", port)
+        } else {
+            "".to_string()
+        };
+        let host = format!("{}{}", hostname, port_suffix);
+
+        // Check if client_data_json contains any extra fields
+        // Search for the crossOrigin field first
+        let parts = client_data_json_str
+            .split(r#""crossOrigin":false"#)
+            .collect::<Vec<_>>();
+        let suffix = if parts.len() == 2 {
+            parts[1]
+        } else {
+            // Client data does not include the crossOrigin field
+            client_data_flags.insert(WebauthnClientDataFlags::NO_CROSSORIGIN_FIELD);
+
+            // We need to check for extra fields after the origin field instead
+            let parts = client_data_json_str
+                .split(&format!(r#""origin":"{}""#, origin))
+                .collect::<Vec<_>>();
+            assert_eq!(parts.len(), 2);
+            parts[1]
+        };
+
+        // Check if the suffix contains extra fields
+        if suffix.len() > 1 {
+            // Cut off first comma and last curly brace
+            client_data_extra_fields = suffix[1..suffix.len() - 1].to_string();
+        }
+
+        if origin.contains(r":\/\/") {
+            client_data_flags.insert(WebauthnClientDataFlags::ESCAPED_ORIGIN_SLASHES);
+        }
+
+        Ok(WebauthnSignatureProof {
             public_key,
             merkle_path: Blake2bMerklePath::empty(),
             signature,
             host,
-            authenticator_data_suffix,
+            authenticator_data_suffix: authenticator_data[32..].to_vec(),
             client_data_flags,
             client_data_extra_fields,
-        }
+        })
     }
 
     pub fn compute_signer(&self) -> Address {
@@ -229,5 +296,36 @@ impl SignatureProof {
 impl Default for SignatureProof {
     fn default() -> Self {
         SignatureProof::EdDSA(Default::default())
+    }
+}
+
+#[derive(Debug)]
+pub struct SerializationError {
+    msg: String,
+}
+
+impl SerializationError {
+    fn new(msg: &str) -> SerializationError {
+        SerializationError {
+            msg: msg.to_string(),
+        }
+    }
+}
+
+impl fmt::Display for SerializationError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.msg)
+    }
+}
+
+impl Error for SerializationError {
+    fn description(&self) -> &str {
+        &self.msg
+    }
+}
+
+impl From<url::ParseError> for SerializationError {
+    fn from(err: url::ParseError) -> Self {
+        SerializationError::new(&format!("Failed to parse URL: {}", err))
     }
 }

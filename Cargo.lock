@@ -5008,7 +5008,6 @@ dependencies = [
  "serde-wasm-bindgen 0.6.1",
  "tracing",
  "tsify",
- "url",
  "wasm-bindgen",
  "wasm-bindgen-derive",
  "wasm-bindgen-futures",
