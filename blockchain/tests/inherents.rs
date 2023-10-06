@@ -151,11 +151,17 @@ fn it_can_create_batch_finalization_inherents() {
 
     for inherent in &inherents {
         match inherent {
-            Inherent::Reward { target, value } => {
+            Inherent::Reward {
+                validator_address: actual_validator_address,
+                target,
+                value,
+            } => {
                 if *target == Address::burn_address() {
+                    assert_eq!(*actual_validator_address, Address::burn_address());
                     assert_eq!(*value, Coin::from_u64_unchecked(one_slot_reward));
                     got_penalize = true;
                 } else {
+                    assert_eq!(*actual_validator_address, *validator_address);
                     assert_eq!(
                         *value,
                         Coin::from_u64_unchecked(875 - one_slot_reward as u64)

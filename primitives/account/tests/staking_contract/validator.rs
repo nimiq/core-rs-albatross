@@ -1073,6 +1073,7 @@ fn reward_inherents_not_allowed() {
         make_sample_contract(data_store.write(&mut db_txn), None);
 
     let inherent = Inherent::Reward {
+        validator_address: Address::burn_address(),
         target: validator_address,
         value: Coin::ZERO,
     };

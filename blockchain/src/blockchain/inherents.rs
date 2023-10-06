@@ -280,6 +280,7 @@ impl Blockchain {
                     .expect("Couldn't find validator in the accounts trie when paying rewards!");
 
                 let tx = RewardTransaction {
+                    validator_address: validator.address.clone(),
                     recipient: validator.reward_address.clone(),
                     value: reward,
                 };
@@ -322,6 +323,7 @@ impl Blockchain {
         // Create the inherent for the burned reward.
         if burned_reward > Coin::ZERO {
             let tx = RewardTransaction {
+                validator_address: Address::burn_address(),
                 recipient: Address::burn_address(),
                 value: burned_reward,
             };

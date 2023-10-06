@@ -2,12 +2,16 @@ use std::{error, fmt, io};
 
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::Address;
 use nimiq_mmr::hash::Hash as MMRHash;
 use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
 
-use crate::{inherent::Inherent, ExecutedTransaction, Transaction as BlockchainTransaction};
+use crate::{
+    inherent::Inherent, EquivocationLocator, ExecutedTransaction,
+    Transaction as BlockchainTransaction,
+};
 
 /// A single struct that stores information that represents any possible transaction (basic
 /// transaction or inherent) on the blockchain.
@@ -65,13 +69,21 @@ impl HistoricTransaction {
 
         for inherent in inherents {
             match inherent {
-                Inherent::Penalize { .. } | Inherent::Reward { .. } | Inherent::Jail { .. } => {
+                Inherent::Reward {
+                    validator_address,
+                    target,
+                    value,
+                } => {
                     hist_txs.push(HistoricTransaction {
                         network_id,
                         block_number,
                         block_time,
-                        data: HistoricTransactionData::Inherent(inherent),
-                    })
+                        data: HistoricTransactionData::Reward(RewardEvent {
+                            validator_address,
+                            reward_address: target,
+                            value,
+                        }),
+                    });
                 }
                 // These special types of inherents do not generate extended transactions
                 Inherent::FinalizeBatch | Inherent::FinalizeEpoch => {}
@@ -81,39 +93,30 @@ impl HistoricTransaction {
         hist_txs
     }
 
-    /// Convert a set of historic transactions into a vector of inherents and a vector of basic
-    /// transactions.
-    pub fn to(hist_txs: Vec<HistoricTransaction>) -> (Vec<ExecutedTransaction>, Vec<Inherent>) {
-        let mut transactions = vec![];
-        let mut inherents = vec![];
-
-        for hist_tx in hist_txs {
-            match hist_tx.data {
-                HistoricTransactionData::Basic(tx) => transactions.push(tx),
-                HistoricTransactionData::Inherent(tx) => inherents.push(tx),
-            }
-        }
-
-        (transactions, inherents)
-    }
-
     /// Checks if the historic transaction is an inherent.
-    pub fn is_inherent(&self) -> bool {
-        match self.data {
-            HistoricTransactionData::Basic(_) => false,
-            HistoricTransactionData::Inherent(_) => true,
-        }
+    pub fn is_not_basic(&self) -> bool {
+        !matches!(self.data, HistoricTransactionData::Basic(_))
     }
 
     /// Unwraps the historic transaction and returns a reference to the underlying executed transaction.
     pub fn unwrap_basic(&self) -> &ExecutedTransaction {
-        if let HistoricTransactionData::Basic(ref tx) = self.data {
+        if let HistoricTransactionData::Basic(tx) = &self.data {
             tx
         } else {
             unreachable!()
         }
     }
 
+    /// Unwraps the historic transaction and returns a reference to the underlying reward event.
+    pub fn unwrap_reward(&self) -> &RewardEvent {
+        if let HistoricTransactionData::Reward(ev) = &self.data {
+            ev
+        } else {
+            unreachable!()
+        }
+    }
+
+    /*
     /// Unwraps the historic transaction and returns a reference to the underlying inherent.
     pub fn unwrap_inherent(&self) -> &Inherent {
         if let HistoricTransactionData::Inherent(ref tx) = self.data {
@@ -122,6 +125,7 @@ impl HistoricTransaction {
             unreachable!()
         }
     }
+    */
 
     /// Returns the hash of the underlying transaction/inherent. For reward inherents we return the
     /// hash of the corresponding reward transaction. This results into an unique hash for the
@@ -130,10 +134,8 @@ impl HistoricTransaction {
     pub fn tx_hash(&self) -> Blake2bHash {
         match &self.data {
             HistoricTransactionData::Basic(tx) => tx.hash(),
-            HistoricTransactionData::Inherent(v) => match v {
-                Inherent::Reward { .. } => self.clone().into_transaction().unwrap().hash(),
-                _ => v.hash(),
-            },
+            // TODO: check for freedom of hash prefixes
+            _ => self.data.hash(),
         }
     }
 
@@ -142,20 +144,18 @@ impl HistoricTransaction {
     pub fn into_transaction(self) -> Result<ExecutedTransaction, IntoTransactionError> {
         match self.data {
             HistoricTransactionData::Basic(tx) => Ok(tx),
-            HistoricTransactionData::Inherent(inherent) => {
-                if let Inherent::Reward { target, value } = inherent {
-                    let txn = BlockchainTransaction::new_basic(
-                        Policy::COINBASE_ADDRESS,
-                        target,
-                        value,
-                        Coin::ZERO,
-                        self.block_number,
-                        self.network_id,
-                    );
-                    Ok(ExecutedTransaction::Ok(txn))
-                } else {
-                    Err(IntoTransactionError::NoBasicTransactionMapping)
-                }
+            HistoricTransactionData::Reward(ev) => {
+                Ok(ExecutedTransaction::Ok(BlockchainTransaction::new_basic(
+                    Policy::COINBASE_ADDRESS,
+                    ev.reward_address,
+                    ev.value,
+                    Coin::ZERO,
+                    self.block_number,
+                    self.network_id,
+                )))
+            }
+            HistoricTransactionData::Equivocation(_) => {
+                Err(IntoTransactionError::NoBasicTransactionMapping)
             }
         }
     }
@@ -195,7 +195,7 @@ impl FromDatabaseValue for HistoricTransaction {
 /// transaction.
 // TODO: The transactions include a lot of unnecessary information (ex: the signature). Don't
 //       include all of it here.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializeContent)]
 pub enum HistoricTransactionData {
     /// A basic transaction. It simply contains the transaction as contained in the block.
     Basic(ExecutedTransaction),
@@ -203,15 +203,14 @@ pub enum HistoricTransactionData {
     Equivocation(EquivocationEvent),
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct EquivocationEvent {
-    locator: EquivocationLocator,
+    pub locator: EquivocationLocator,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RewardEvent {
-    validator_address: Address,
-    reward_address: Address,
-}
-
-enum Event {
-    Equivocation(EquivocationLocator),
+    pub validator_address: Address,
+    pub reward_address: Address,
+    pub value: Coin,
 }

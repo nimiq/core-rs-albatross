@@ -406,6 +406,7 @@ mod tests {
         next_batch_initial_punished_set.insert(67);
 
         let transactions = vec![RewardTransaction {
+            validator_address: Address::burn_address(),
             recipient: validator_address,
             value: Coin::from_u64_unchecked(12),
         }];

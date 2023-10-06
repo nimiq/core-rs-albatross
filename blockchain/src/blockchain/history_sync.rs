@@ -172,8 +172,15 @@ impl Blockchain {
                 HistoricTransactionData::Basic(tx) => {
                     block_transactions.last_mut().unwrap().push(tx.clone())
                 }
-                HistoricTransactionData::Inherent(tx) => {
-                    block_inherents.last_mut().unwrap().push(tx.clone())
+                HistoricTransactionData::Reward(ev) => {
+                    block_inherents.last_mut().unwrap().push(Inherent::Reward {
+                        validator_address: ev.validator_address.clone(),
+                        target: ev.reward_address.clone(),
+                        value: ev.value,
+                    })
+                }
+                HistoricTransactionData::Equivocation(_) => {
+                    return Err(PushError::InvalidHistoricTransaction)
                 }
             }
         }

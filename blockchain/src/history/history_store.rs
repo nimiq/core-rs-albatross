@@ -25,7 +25,6 @@ use nimiq_serde::Serialize;
 use nimiq_transaction::{
     historic_transaction::{HistoricTransaction, HistoricTransactionData},
     history_proof::HistoryTreeProof,
-    inherent::Inherent,
 };
 
 use crate::history::{mmr_store::MMRStore, ordered_hash::OrderedHash, HistoryTreeChunk};
@@ -258,11 +257,10 @@ impl HistoryStore {
                     affected_addresses.insert(tx.sender.clone());
                     affected_addresses.insert(tx.recipient.clone());
                 }
-                HistoricTransactionData::Inherent(tx) => {
-                    if let Inherent::Reward { target, .. } = tx {
-                        affected_addresses.insert(target.clone());
-                    }
+                HistoricTransactionData::Reward(ev) => {
+                    affected_addresses.insert(ev.reward_address.clone());
                 }
+                HistoricTransactionData::Equivocation(_) => {}
             }
         }
 
@@ -960,22 +958,22 @@ impl HistoryStore {
                     },
                 );
             }
-            HistoricTransactionData::Inherent(tx) => {
+            HistoricTransactionData::Reward(ev) => {
                 // We only add reward inherents to the address database.
-                if let Inherent::Reward { target, .. } = tx {
-                    let index_tx_recipient =
-                        self.get_last_tx_index_for_address(target, Some(txn)) + 1;
+                let index_tx_recipient =
+                    self.get_last_tx_index_for_address(&ev.reward_address, Some(txn)) + 1;
 
-                    txn.put(
-                        &self.address_table,
-                        target,
-                        &OrderedHash {
-                            index: index_tx_recipient,
-                            hash: tx_hash,
-                        },
-                    );
-                }
+                txn.put(
+                    &self.address_table,
+                    &ev.reward_address,
+                    &OrderedHash {
+                        index: index_tx_recipient,
+                        hash: tx_hash,
+                    },
+                );
             }
+            // Do not index equivocation events.
+            HistoricTransactionData::Equivocation(_) => {}
         }
         hist_tx.serialized_size()
     }
@@ -1121,7 +1119,8 @@ mod tests {
     use nimiq_primitives::{coin::Coin, networks::NetworkId};
     use nimiq_test_log::test;
     use nimiq_transaction::{
-        inherent::Inherent, ExecutedTransaction, Transaction as BlockchainTransaction,
+        historic_transaction::RewardEvent, ExecutedTransaction,
+        Transaction as BlockchainTransaction,
     };
 
     use super::*;
@@ -1234,10 +1233,9 @@ mod tests {
         );
 
         assert_eq!(
-            reward_inherent_value(
-                history_store.get_hist_tx_by_hash(&hist_txs[2].tx_hash(), Some(&txn))[0]
-                    .unwrap_inherent()
-            ),
+            history_store.get_hist_tx_by_hash(&hist_txs[2].tx_hash(), Some(&txn))[0]
+                .unwrap_reward()
+                .value,
             Coin::from_u64_unchecked(2),
         );
 
@@ -1269,64 +1267,64 @@ mod tests {
         // order they were inserted.
         let query_0 = history_store.get_block_transactions(genesis_block_number, Some(&txn));
 
-        assert!(!query_0[0].is_inherent());
+        assert!(!query_0[0].is_not_basic());
         assert_eq!(query_0[0].block_number, genesis_block_number);
         assert_eq!(
             query_0[0].unwrap_basic().get_raw_transaction().value,
-            Coin::from_u64_unchecked(0)
+            Coin::from_u64_unchecked(0),
         );
 
-        assert!(!query_0[1].is_inherent());
+        assert!(!query_0[1].is_not_basic());
         assert_eq!(query_0[1].block_number, genesis_block_number);
         assert_eq!(
             query_0[1].unwrap_basic().get_raw_transaction().value,
-            Coin::from_u64_unchecked(1)
+            Coin::from_u64_unchecked(1),
         );
 
-        assert!(query_0[2].is_inherent());
+        assert!(query_0[2].is_not_basic());
         assert_eq!(query_0[2].block_number, genesis_block_number);
         assert_eq!(
-            reward_inherent_value(query_0[2].unwrap_inherent()),
-            Coin::from_u64_unchecked(2)
+            query_0[2].unwrap_reward().value,
+            Coin::from_u64_unchecked(2),
         );
 
         let query_1 = history_store.get_block_transactions(1 + genesis_block_number, Some(&txn));
 
-        assert!(!query_1[0].is_inherent());
+        assert!(!query_1[0].is_not_basic());
         assert_eq!(query_1[0].block_number, 1 + genesis_block_number);
         assert_eq!(
             query_1[0].unwrap_basic().get_raw_transaction().value,
-            Coin::from_u64_unchecked(3)
+            Coin::from_u64_unchecked(3),
         );
 
-        assert!(query_1[1].is_inherent());
+        assert!(query_1[1].is_not_basic());
         assert_eq!(query_1[1].block_number, 1 + genesis_block_number);
         assert_eq!(
-            reward_inherent_value(query_1[1].unwrap_inherent()),
-            Coin::from_u64_unchecked(4)
+            query_1[1].unwrap_reward().value,
+            Coin::from_u64_unchecked(4),
         );
 
         let query_2 = history_store.get_block_transactions(2 + genesis_block_number, Some(&txn));
 
-        assert!(!query_2[0].is_inherent());
+        assert!(!query_2[0].is_not_basic());
         assert_eq!(query_2[0].block_number, 2 + genesis_block_number);
         assert_eq!(
             query_2[0].unwrap_basic().get_raw_transaction().value,
-            Coin::from_u64_unchecked(5)
+            Coin::from_u64_unchecked(5),
         );
 
-        assert!(!query_2[1].is_inherent());
+        assert!(!query_2[1].is_not_basic());
         assert_eq!(query_2[1].block_number, 2 + genesis_block_number);
         assert_eq!(
             query_2[1].unwrap_basic().get_raw_transaction().value,
-            Coin::from_u64_unchecked(6)
+            Coin::from_u64_unchecked(6),
         );
 
-        assert!(query_2[2].is_inherent());
+        assert!(query_2[2].is_not_basic());
         assert_eq!(query_2[2].block_number, 2 + genesis_block_number);
         assert_eq!(
-            reward_inherent_value(query_2[2].unwrap_inherent()),
-            Coin::from_u64_unchecked(7)
+            query_2[2].unwrap_reward().value,
+            Coin::from_u64_unchecked(7),
         );
 
         // Remove historic transactions from History Store.
@@ -1337,27 +1335,27 @@ mod tests {
         // order they were inserted.
         let query_0 = history_store.get_block_transactions(genesis_block_number, Some(&txn));
 
-        assert!(!query_0[0].is_inherent());
+        assert!(!query_0[0].is_not_basic());
         assert_eq!(query_0[0].block_number, genesis_block_number);
         assert_eq!(
             query_0[0].unwrap_basic().get_raw_transaction().value,
-            Coin::from_u64_unchecked(0)
+            Coin::from_u64_unchecked(0),
         );
 
         let query_1 = history_store.get_block_transactions(1 + genesis_block_number, Some(&txn));
 
-        assert!(!query_1[0].is_inherent());
+        assert!(!query_1[0].is_not_basic());
         assert_eq!(query_1[0].block_number, 1 + genesis_block_number);
         assert_eq!(
             query_1[0].unwrap_basic().get_raw_transaction().value,
-            Coin::from_u64_unchecked(3)
+            Coin::from_u64_unchecked(3),
         );
 
-        assert!(query_1[1].is_inherent());
+        assert!(query_1[1].is_not_basic());
         assert_eq!(query_1[1].block_number, 1 + genesis_block_number);
         assert_eq!(
-            reward_inherent_value(query_1[1].unwrap_inherent()),
-            Coin::from_u64_unchecked(4)
+            query_1[1].unwrap_reward().value,
+            Coin::from_u64_unchecked(4),
         );
 
         let query_2 = history_store.get_block_transactions(2 + genesis_block_number, Some(&txn));
@@ -1383,63 +1381,54 @@ mod tests {
         // Verify method works.
         let query = history_store.get_epoch_transactions(0, Some(&txn));
 
-        assert!(!query[0].is_inherent());
+        assert!(!query[0].is_not_basic());
         assert_eq!(query[0].block_number, genesis_block_number);
         assert_eq!(
             query[0].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(0)
         );
 
-        assert!(!query[1].is_inherent());
+        assert!(!query[1].is_not_basic());
         assert_eq!(query[1].block_number, genesis_block_number);
         assert_eq!(
             query[1].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(1)
         );
 
-        assert!(query[2].is_inherent());
+        assert!(query[2].is_not_basic());
         assert_eq!(query[2].block_number, genesis_block_number);
-        assert_eq!(
-            reward_inherent_value(query[2].unwrap_inherent()),
-            Coin::from_u64_unchecked(2)
-        );
+        assert_eq!(query[2].unwrap_reward().value, Coin::from_u64_unchecked(2));
 
         let query = history_store.get_epoch_transactions(1, Some(&txn));
 
-        assert!(!query[0].is_inherent());
+        assert!(!query[0].is_not_basic());
         assert_eq!(query[0].block_number, 1 + genesis_block_number);
         assert_eq!(
             query[0].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(3)
         );
 
-        assert!(query[1].is_inherent());
+        assert!(query[1].is_not_basic());
         assert_eq!(query[1].block_number, 1 + genesis_block_number);
-        assert_eq!(
-            reward_inherent_value(query[1].unwrap_inherent()),
-            Coin::from_u64_unchecked(4)
-        );
+        assert_eq!(query[1].unwrap_reward().value, Coin::from_u64_unchecked(4));
 
-        assert!(!query[2].is_inherent());
+        assert!(!query[2].is_not_basic());
         assert_eq!(query[2].block_number, 2 + genesis_block_number);
         assert_eq!(
             query[2].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(5)
         );
 
-        assert!(!query[3].is_inherent());
+        assert!(!query[3].is_not_basic());
         assert_eq!(query[3].block_number, 2 + genesis_block_number);
         assert_eq!(
             query[3].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(6)
         );
 
-        assert!(query[4].is_inherent());
+        assert!(query[4].is_not_basic());
         assert_eq!(query[4].block_number, 2 + genesis_block_number);
-        assert_eq!(
-            reward_inherent_value(query[4].unwrap_inherent()),
-            Coin::from_u64_unchecked(7)
-        );
+        assert_eq!(query[4].unwrap_reward().value, Coin::from_u64_unchecked(7));
 
         // Remove historic transactions to History Store.
         history_store.remove_partial_history(&mut txn, 1, 3);
@@ -1447,42 +1436,36 @@ mod tests {
         // Verify method works.
         let query = history_store.get_epoch_transactions(0, Some(&txn));
 
-        assert!(!query[0].is_inherent());
+        assert!(!query[0].is_not_basic());
         assert_eq!(query[0].block_number, genesis_block_number);
         assert_eq!(
             query[0].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(0)
         );
 
-        assert!(!query[1].is_inherent());
+        assert!(!query[1].is_not_basic());
         assert_eq!(query[1].block_number, genesis_block_number);
         assert_eq!(
             query[1].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(1)
         );
 
-        assert!(query[2].is_inherent());
+        assert!(query[2].is_not_basic());
         assert_eq!(query[2].block_number, genesis_block_number);
-        assert_eq!(
-            reward_inherent_value(query[2].unwrap_inherent()),
-            Coin::from_u64_unchecked(2)
-        );
+        assert_eq!(query[2].unwrap_reward().value, Coin::from_u64_unchecked(2));
 
         let query = history_store.get_epoch_transactions(1, Some(&txn));
 
-        assert!(!query[0].is_inherent());
+        assert!(!query[0].is_not_basic());
         assert_eq!(query[0].block_number, 1 + genesis_block_number);
         assert_eq!(
             query[0].unwrap_basic().get_raw_transaction().value,
             Coin::from_u64_unchecked(3)
         );
 
-        assert!(query[1].is_inherent());
+        assert!(query[1].is_not_basic());
         assert_eq!(query[1].block_number, 1 + genesis_block_number);
-        assert_eq!(
-            reward_inherent_value(query[1].unwrap_inherent()),
-            Coin::from_u64_unchecked(4)
-        );
+        assert_eq!(query[1].unwrap_reward().value, Coin::from_u64_unchecked(4));
     }
 
     #[test]
@@ -1705,15 +1688,16 @@ mod tests {
     }
 
     fn create_inherent(block: u32, value: u64) -> HistoricTransaction {
+        let reward_address =
+            Address::from_user_friendly_address("NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T")
+                .unwrap();
         HistoricTransaction {
             network_id: NetworkId::UnitAlbatross,
             block_number: block,
             block_time: 0,
-            data: HistoricTransactionData::Inherent(Inherent::Reward {
-                target: Address::from_user_friendly_address(
-                    "NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T",
-                )
-                .unwrap(),
+            data: HistoricTransactionData::Reward(RewardEvent {
+                validator_address: Address::burn_address(),
+                reward_address,
                 value: Coin::from_u64_unchecked(value),
             }),
         }
@@ -1752,12 +1736,5 @@ mod tests {
         let ext_7 = create_inherent(genesis_block_number + 2, 7);
 
         vec![ext_0, ext_1, ext_2, ext_3, ext_4, ext_5, ext_6, ext_7]
-    }
-
-    fn reward_inherent_value(inherent: &Inherent) -> Coin {
-        match inherent {
-            Inherent::Reward { value, .. } => *value,
-            _ => unreachable!(),
-        }
     }
 }

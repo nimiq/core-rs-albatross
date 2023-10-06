@@ -271,9 +271,10 @@ impl BlockchainInterface for BlockchainDispatcher {
             let mut inherents = vec![];
 
             for hist_tx in historic_tx_vec {
-                if hist_tx.is_inherent() {
+                if hist_tx.is_not_basic() {
                     inherents.push(Inherent::from(
-                        hist_tx.unwrap_inherent().clone(),
+                        todo!(),
+                        //hist_tx.unwrap_inherent().clone(),
                         block_number,
                         timestamp,
                     ));
@@ -354,7 +355,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                 let micro_hist_tx_vec = blockchain.history_store.get_block_transactions(i, None);
 
                 for hist_tx in micro_hist_tx_vec {
-                    if hist_tx.is_inherent() {
+                    if hist_tx.is_not_basic() {
                         inherent_tx_vec.push(hist_tx);
                     }
                 }
@@ -373,7 +374,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                 .into_iter()
                 .map(|hist_tx| {
                     Inherent::from(
-                        hist_tx.unwrap_inherent().clone(),
+                        todo!(), //hist_tx.unwrap_inherent().clone(),
                         hist_tx.block_number,
                         hist_tx.block_time,
                     )

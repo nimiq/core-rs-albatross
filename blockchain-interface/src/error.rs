@@ -94,6 +94,8 @@ pub enum PushError {
     BlockchainError(#[from] BlockchainError),
     #[error("Push with incomplete accounts and without trie diff")]
     MissingAccountsTrieDiff,
+    #[error("Invalid macro block historic transaction")]
+    InvalidHistoricTransaction,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]

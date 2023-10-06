@@ -16,7 +16,11 @@ use crate::reward::RewardTransaction;
 #[repr(u8)]
 pub enum Inherent {
     /// A reward is given for elected slots that did not get punished.
-    Reward { target: Address, value: Coin },
+    Reward {
+        validator_address: Address,
+        target: Address,
+        value: Coin,
+    },
     /// Penalties are the consequence of delaying blocks. They only affect the reward of a single slot.
     /// The validator gets deactivated as a consequence.
     Penalize { slot: PenalizedSlot },
@@ -49,6 +53,7 @@ impl Inherent {
 impl From<&RewardTransaction> for Inherent {
     fn from(tx: &RewardTransaction) -> Self {
         Self::Reward {
+            validator_address: tx.validator_address.clone(),
             target: tx.recipient.clone(),
             value: tx.value,
         }

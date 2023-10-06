@@ -157,7 +157,11 @@ impl AccountInherentInteraction for BasicAccount {
         inherent_logger: &mut InherentLogger,
     ) -> Result<Option<AccountReceipt>, AccountError> {
         match inherent {
-            Inherent::Reward { value, target } => {
+            Inherent::Reward {
+                value,
+                validator_address: _,
+                target,
+            } => {
                 self.balance += *value;
 
                 inherent_logger.push_log(Log::PayoutReward {
@@ -180,7 +184,11 @@ impl AccountInherentInteraction for BasicAccount {
         inherent_logger: &mut InherentLogger,
     ) -> Result<(), AccountError> {
         match inherent {
-            Inherent::Reward { value, target } => {
+            Inherent::Reward {
+                value,
+                validator_address: _,
+                target,
+            } => {
                 self.balance -= *value;
 
                 inherent_logger.push_log(Log::PayoutReward {

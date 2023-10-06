@@ -577,6 +577,7 @@ pub enum Inherent {
     Reward {
         block_number: u32,
         block_time: u64,
+        validator_address: Address,
         target: Address,
         value: Coin,
         hash: Blake2bHash,
@@ -608,9 +609,14 @@ impl Inherent {
     pub fn from(inherent: BaseInherent, block_number: u32, block_time: u64) -> Self {
         let hash = inherent.hash();
         match inherent {
-            BaseInherent::Reward { target, value } => Inherent::Reward {
+            BaseInherent::Reward {
+                validator_address,
+                target,
+                value,
+            } => Inherent::Reward {
                 block_number,
                 block_time,
+                validator_address,
                 target,
                 value,
                 hash,

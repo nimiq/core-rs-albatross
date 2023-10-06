@@ -10,6 +10,9 @@ use nimiq_primitives::{
     TendermintIdentifier, TendermintStep, TendermintVote,
 };
 use nimiq_serde::{Deserialize, Serialize};
+use nimiq_transaction::{
+    DoubleProposalLocator, DoubleVoteLocator, EquivocationLocator, ForkLocator,
+};
 use thiserror::Error;
 
 use crate::{MacroHeader, MicroHeader};
