@@ -218,9 +218,13 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
                 verify_state.predecessor = Block::Macro(macro_block.clone());
 
                 if macro_block.is_election_block() {
-                    verify_state.validators = macro_block
-                        .get_validators()
-                        .expect("Election block must have validators");
+                    match macro_block.get_validators() {
+                        Some(validators) => verify_state.validators = validators,
+                        None => {
+                            warn!("Received election block without validators");
+                            return false;
+                        }
+                    }
                 }
 
                 true
