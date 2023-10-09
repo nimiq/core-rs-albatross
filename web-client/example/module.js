@@ -166,4 +166,23 @@ init().then(async () => {
 
         return client.sendTransaction(transaction);
     }
+
+    window.testWebauthnSignatureProof = () => {
+        const pubkeyBytes = new Uint8Array(33);
+        pubkeyBytes[0] = 2; // Set a valid y-parity byte
+
+        const pubkey = new Nimiq.WebauthnPublicKey(pubkeyBytes);
+
+        let signature_proof = Nimiq.SignatureProof.webauthnSingleSig(
+            pubkey,
+            Nimiq.Signature.fromBytes(new Uint8Array(64)),
+            "localhost:3000",
+            new Uint8Array(37),
+        );
+
+        console.log(signature_proof.isSignedBy(pubkey.toAddress()));
+        console.log(signature_proof.publicKey);
+        console.log(signature_proof.signature);
+        console.log(signature_proof.serialize());
+    }
 });
