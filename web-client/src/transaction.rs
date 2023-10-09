@@ -316,19 +316,19 @@ impl Transaction {
     }
 
     /// The transaction's data as a byte array.
-    #[wasm_bindgen(getter)]
+    #[wasm_bindgen(getter, js_name = data)]
     pub fn recipient_data(&self) -> Vec<u8> {
         self.inner.recipient_data.clone()
     }
 
     /// Set the transaction's data
-    #[wasm_bindgen(setter)]
+    #[wasm_bindgen(setter, js_name = data)]
     pub fn set_recipient_data(&mut self, data: Vec<u8>) {
         self.inner.recipient_data = data;
     }
 
     /// The transaction's sender data as a byte array.
-    #[wasm_bindgen(getter)]
+    #[wasm_bindgen(getter, js_name = senderData)]
     pub fn sender_data(&self) -> Vec<u8> {
         self.inner.sender_data.clone()
     }
@@ -346,7 +346,7 @@ impl Transaction {
     }
 
     /// The transaction's byte size.
-    #[wasm_bindgen(getter)]
+    #[wasm_bindgen(getter, js_name = serializedSize)]
     pub fn serialized_size(&self) -> usize {
         self.inner.serialized_size()
     }
