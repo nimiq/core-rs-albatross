@@ -533,7 +533,7 @@ impl Blockchain {
                 Err(e) => {
                     warn!(
                         block = %target_block,
-                        reason = "failed to apply for block while rebranching",
+                        reason = "failed to apply fork block while rebranching",
                         fork_block = %fork_block.1.head,
                         error = &e as &dyn Error,
                         "Rejecting block",
@@ -546,7 +546,7 @@ impl Blockchain {
                         this.chain_store.remove_chain_info(
                             &mut write_txn,
                             &block.0,
-                            fork_block.1.head.block_number(),
+                            block.1.head.block_number(),
                         )
                     }
                     write_txn.commit();
