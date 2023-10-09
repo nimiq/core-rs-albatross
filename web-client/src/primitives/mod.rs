@@ -8,3 +8,4 @@ pub mod public_key;
 pub mod signature;
 pub mod signature_proof;
 pub mod transaction_builder;
+pub mod webauthn_public_key;
