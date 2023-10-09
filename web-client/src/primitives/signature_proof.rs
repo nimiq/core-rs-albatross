@@ -1,3 +1,4 @@
+use js_sys::Array;
 use nimiq_serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -27,7 +28,37 @@ impl SignatureProof {
         ))
     }
 
-    /// Creates a ES256/Webauthn signature proof for a single-sig signature.
+    /// Creates a Ed25519/Schnorr signature proof for a multi-sig signature.
+    /// The public keys can also include ES256 keys.
+    #[wasm_bindgen(js_name = multiSig)]
+    pub fn multi_sig(
+        signer_key: &PublicKey,
+        public_keys: &PublicKeyUnionArray,
+        signature: &Signature,
+    ) -> Result<SignatureProof, JsError> {
+        let mut public_keys: Vec<_> = SignatureProof::unpack_public_keys(public_keys)?
+            .into_iter()
+            .map(|k| match k {
+                nimiq_keys::PublicKey::Ed25519(ref public_key) => public_key.serialize_to_vec(),
+                nimiq_keys::PublicKey::ES256(ref public_key) => public_key.serialize_to_vec(),
+            })
+            .collect();
+        public_keys.sort_unstable();
+
+        let merkle_path = nimiq_utils::merkle::Blake2bMerklePath::new::<
+            nimiq_hash::Blake2bHasher,
+            Vec<u8>,
+        >(&public_keys, &signer_key.native_ref().serialize_to_vec());
+
+        Ok(SignatureProof::from(nimiq_transaction::SignatureProof {
+            public_key: nimiq_keys::PublicKey::Ed25519(*signer_key.native_ref()),
+            merkle_path,
+            signature: nimiq_keys::Signature::Ed25519(signature.native_ref().clone()),
+            webauthn_fields: None,
+        }))
+    }
+
+    /// Creates a Webauthn signature proof for a single-sig signature.
     #[wasm_bindgen(js_name = webauthnSingleSig)]
     pub fn webauthn_single_sig(
         public_key: &PublicKeyUnion,
@@ -35,27 +66,50 @@ impl SignatureProof {
         authenticator_data: &[u8],
         client_data_json: &[u8],
     ) -> Result<SignatureProof, JsError> {
-        let js_value: &JsValue = public_key.unchecked_ref();
-        let public_key = if let Ok(key) = PublicKey::try_from(js_value) {
-            nimiq_keys::PublicKey::Ed25519(*key.native_ref())
-        } else if let Ok(key) = ES256PublicKey::try_from(js_value) {
-            nimiq_keys::PublicKey::ES256(*key.native_ref())
-        } else {
-            return Err(JsError::new("Invalid public key"));
-        };
-
-        let js_value: &JsValue = signature.unchecked_ref();
-        let signature = if let Ok(sig) = Signature::try_from(js_value) {
-            nimiq_keys::Signature::Ed25519(sig.native_ref().clone())
-        } else if let Ok(sig) = ES256Signature::try_from(js_value) {
-            nimiq_keys::Signature::ES256(sig.native_ref().clone())
-        } else {
-            return Err(JsError::new("Invalid signature"));
-        };
+        let public_key = SignatureProof::unpack_public_key(public_key)?;
+        let signature = SignatureProof::unpack_signature(signature)?;
 
         Ok(SignatureProof::from(
             nimiq_transaction::SignatureProof::try_from_webauthn(
                 public_key,
+                None,
+                signature,
+                authenticator_data,
+                client_data_json,
+            )?,
+        ))
+    }
+
+    /// Creates a Webauthn signature proof for a multi-sig signature.
+    #[wasm_bindgen(js_name = webauthnMultiSig)]
+    pub fn webauthn_multi_sig(
+        signer_key: &PublicKeyUnion,
+        public_keys: &PublicKeyUnionArray,
+        signature: &SignatureUnion,
+        authenticator_data: &[u8],
+        client_data_json: &[u8],
+    ) -> Result<SignatureProof, JsError> {
+        let signer_key = SignatureProof::unpack_public_key(signer_key)?;
+        let signature = SignatureProof::unpack_signature(signature)?;
+
+        let mut public_keys: Vec<_> = SignatureProof::unpack_public_keys(public_keys)?
+            .into_iter()
+            .map(|k| match k {
+                nimiq_keys::PublicKey::Ed25519(ref public_key) => public_key.serialize_to_vec(),
+                nimiq_keys::PublicKey::ES256(ref public_key) => public_key.serialize_to_vec(),
+            })
+            .collect();
+        public_keys.sort_unstable();
+
+        let merkle_path = nimiq_utils::merkle::Blake2bMerklePath::new::<
+            nimiq_hash::Blake2bHasher,
+            Vec<u8>,
+        >(&public_keys, &signer_key.serialize_to_vec());
+
+        Ok(SignatureProof::from(
+            nimiq_transaction::SignatureProof::try_from_webauthn(
+                signer_key,
+                Some(merkle_path),
                 signature,
                 authenticator_data,
                 client_data_json,
@@ -122,12 +176,64 @@ impl SignatureProof {
     pub fn native_ref(&self) -> &nimiq_transaction::SignatureProof {
         &self.inner
     }
+
+    fn unpack_public_keys(
+        public_keys: &PublicKeyUnionArray,
+    ) -> Result<Vec<nimiq_keys::PublicKey>, JsError> {
+        // Unpack the array of public keys
+        let js_value: &JsValue = public_keys.unchecked_ref();
+        let array: &Array = js_value
+            .dyn_ref()
+            .ok_or_else(|| JsError::new("`public_keys` must be an array"))?;
+
+        if array.length() == 0 {
+            return Err(JsError::new("No public keys provided"));
+        }
+
+        let mut public_keys = Vec::<_>::with_capacity(array.length().try_into()?);
+        for item in array.iter() {
+            let public_key = SignatureProof::unpack_public_key(item.unchecked_ref())
+                .map_err(|_| JsError::new("Invalid public key in array"))?;
+            public_keys.push(public_key);
+        }
+
+        Ok(public_keys)
+    }
+
+    fn unpack_public_key(public_key: &PublicKeyUnion) -> Result<nimiq_keys::PublicKey, JsError> {
+        let js_value: &JsValue = public_key.unchecked_ref();
+        let public_key = if let Ok(key) = PublicKey::try_from(js_value) {
+            nimiq_keys::PublicKey::Ed25519(*key.native_ref())
+        } else if let Ok(key) = ES256PublicKey::try_from(js_value) {
+            nimiq_keys::PublicKey::ES256(*key.native_ref())
+        } else {
+            return Err(JsError::new("Invalid public key"));
+        };
+
+        Ok(public_key)
+    }
+
+    fn unpack_signature(signature: &SignatureUnion) -> Result<nimiq_keys::Signature, JsError> {
+        let js_value: &JsValue = signature.unchecked_ref();
+        let signature = if let Ok(sig) = Signature::try_from(js_value) {
+            nimiq_keys::Signature::Ed25519(sig.native_ref().clone())
+        } else if let Ok(sig) = ES256Signature::try_from(js_value) {
+            nimiq_keys::Signature::ES256(sig.native_ref().clone())
+        } else {
+            return Err(JsError::new("Invalid signature"));
+        };
+
+        Ok(signature)
+    }
 }
 
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(typescript_type = "PublicKey | ES256PublicKey")]
     pub type PublicKeyUnion;
+
+    #[wasm_bindgen(typescript_type = "(PublicKey | ES256PublicKey)[]")]
+    pub type PublicKeyUnionArray;
 
     #[wasm_bindgen(typescript_type = "Signature | ES256Signature")]
     pub type SignatureUnion;

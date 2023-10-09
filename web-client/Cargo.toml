@@ -49,6 +49,7 @@ nimiq-primitives = { workspace = true, features = ["coin", "networks", "ts-types
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true, features = ["ts-types"] }
 nimiq-transaction-builder = { workspace = true }
+nimiq-utils = { workspace = true, features = ["merkle"] }
 
 [dependencies.nimiq]
 package = "nimiq-lib"

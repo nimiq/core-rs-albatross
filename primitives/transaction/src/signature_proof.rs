@@ -41,6 +41,7 @@ impl SignatureProof {
 
     pub fn try_from_webauthn(
         public_key: PublicKey,
+        merkle_path: Option<Blake2bMerklePath>,
         signature: Signature,
         authenticator_data: &[u8],
         client_data_json: &[u8],
@@ -116,7 +117,7 @@ impl SignatureProof {
 
         Ok(SignatureProof {
             public_key,
-            merkle_path: Blake2bMerklePath::empty(),
+            merkle_path: merkle_path.unwrap_or_default(),
             signature,
             webauthn_fields: Some(WebauthnExtraFields {
                 host,
