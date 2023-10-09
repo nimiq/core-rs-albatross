@@ -319,10 +319,11 @@ pub async fn migrate(
     loop {
         // If we have enough confirmations, we can start the 2.0 client
         if pow_client.block_number().await.unwrap() >= candidate + block_windows.block_confirmations
-            && genesis_config.is_some()
         {
             log::info!("We are ready to start the Nimiq PoS Client..");
-            return Ok(genesis_config.unwrap());
+            if let Some(genesis_config) = genesis_config {
+                return Ok(genesis_config);
+            }
         } else {
             // Start the PoS genesis generation process
 
