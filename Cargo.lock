@@ -275,7 +275,7 @@ dependencies = [
  "ark-std",
  "derivative",
  "hashbrown 0.13.2",
- "itertools",
+ "itertools 0.10.5",
  "num-traits",
  "rayon",
  "zeroize",
@@ -292,7 +292,7 @@ dependencies = [
  "ark-std",
  "derivative",
  "digest 0.10.7",
- "itertools",
+ "itertools 0.10.5",
  "num-bigint 0.4.3",
  "num-traits",
  "paste",
@@ -2686,6 +2686,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4870,7 +4879,9 @@ dependencies = [
 name = "nimiq-wallet"
 version = "0.1.0"
 dependencies = [
+ "curve25519-dalek 4.0.0",
  "hex",
+ "itertools 0.11.0",
  "nimiq-database",
  "nimiq-database-value",
  "nimiq-hash",
@@ -4881,6 +4892,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-utils",
  "serde",
+ "thiserror",
 ]
 
 [[package]]
@@ -5747,7 +5759,7 @@ checksum = "2c828f93f5ca4826f97fedcbd3f9a536c16b12cff3dbbb4a007f932bbad95b12"
 dependencies = [
  "bytes",
  "heck",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "log",
  "multimap",
@@ -5780,7 +5792,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ea9b0f8cbe5e15a8a042d030bd96668db28ecb567ec37d691971ff5731d2b1b"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 1.0.109",

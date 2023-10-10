@@ -15,7 +15,10 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 maintenance = { status = "experimental" }
 
 [dependencies]
+curve25519-dalek = { version = "4", features = ["digest"] }
+itertools = "0.11"
 serde = "1.0"
+thiserror = "1.0"
 
 nimiq-database = { workspace = true }
 nimiq-database-value = { workspace = true }
@@ -24,7 +27,7 @@ nimiq-keys = { workspace = true }
 nimiq-primitives = { workspace = true }
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
-nimiq-utils = { workspace = true, features = ["otp"]}
+nimiq-utils = { workspace = true, features = ["otp"] }
 
 [dev-dependencies]
 hex = "0.4"
