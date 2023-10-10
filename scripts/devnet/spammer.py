@@ -50,13 +50,16 @@ class Spammer(Node):
         """
         return self.tpb
 
-    def generate_config_files(self, jinja_env: Environment,
+    def generate_config_files(self, jinja_env: Environment, listen_ip: str,
                               seed_addresses: list):
         """
         Generates configuration file
 
         :param jinja_env: Jinja2 environment for template rendering
         :type jinja_env: Environment
+        :param listen_ip: Ip for the node where incoming connections are going
+            to be listened.
+        :type listen_ip: str
         :param seed_addresses: List of seed addresses in multiaddress format
             for the configuration file
         :type seed_addresses: List of strings
@@ -71,13 +74,13 @@ class Spammer(Node):
         if metrics is not None:
             content = template.render(
                 min_peers=3, port=self.get_listen_port(),
-                state_path=self.get_state_dir(),
+                state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), seed_addresses=seed_addresses,
                 metrics=metrics, spammer=True, loki=loki_settings)
         else:
             content = template.render(
                 min_peers=3, port=self.get_listen_port(),
-                state_path=self.get_state_dir(),
+                state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), seed_addresses=seed_addresses,
                 spammer=True, loki=loki_settings)
         filename = self.get_conf_toml()

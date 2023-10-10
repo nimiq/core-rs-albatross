@@ -121,6 +121,15 @@ class Node:
         topology_logs_dir = self.topology_settings.get_logs_dir()
         return f"{topology_logs_dir}/{self.name}.log"
 
+    def get_conf_dir(self):
+        """
+        Gets the configuration directory of the current node
+
+        :return: The configuration directory of the node.
+        :rtype: str
+        """
+        return self.conf_dir
+
     def get_conf_toml(self):
         """
         Gets the TOML configuration file of the current node
@@ -128,7 +137,7 @@ class Node:
         :return: The TOML configuration file of the node.
         :rtype: str
         """
-        return f"{self.conf_dir}/{self.name}.toml"
+        return f"{self.conf_dir}/client.toml"
 
     def get_conf_yaml(self):
         """
@@ -358,12 +367,15 @@ class RegularNode(Node):
                                           metrics)
 
     def generate_config_files(self, jinja_env: Environment,
-                              seed_addresses: list):
+                              listen_ip: str, seed_addresses: list):
         """
         Generates configuration file
 
         :param jinja_env: Jinja2 environment for template rendering
         :type jinja_env: Environment
+        :param listen_ip: Ip for the node where incoming connections are going
+            to be listened.
+        :type listen_ip: str
         :param seed_addresses: List of seed addresses in multiaddress format
             for the configuration file
         :type seed_addresses: List of strings
@@ -378,13 +390,13 @@ class RegularNode(Node):
         if metrics is not None:
             content = template.render(
                 min_peers=3, port=self.get_listen_port(),
-                state_path=self.get_state_dir(),
+                state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), seed_addresses=seed_addresses,
                 metrics=metrics, loki=loki_settings)
         else:
             content = template.render(
                 min_peers=3, port=self.get_listen_port(),
-                state_path=self.get_state_dir(),
+                state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), seed_addresses=seed_addresses,
                 loki=loki_settings)
         filename = self.get_conf_toml()
@@ -415,12 +427,15 @@ class Seed(Node):
                                    name, "nimiq-client", listen_port,
                                    topology_settings, sync_mode, metrics)
 
-    def generate_config_files(self, jinja_env: Environment):
+    def generate_config_files(self, jinja_env: Environment, listen_ip: str):
         """
         Generates configuration file
 
         :param jinja_env: Jinja2 environment for template rendering
         :type jinja_env: Environment
+        :param listen_ip: Ip for the node where incoming connections are going
+            to be listened.
+        :type listen_ip: str
         """
         # Read and render the TOML template
         template = jinja_env.get_template("node_conf.toml.j2")
@@ -432,13 +447,13 @@ class Seed(Node):
         if metrics is not None:
             content = template.render(
                 min_peers=3, port=self.get_listen_port(),
-                state_path=self.get_state_dir(),
+                state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), metrics=metrics,
                 loki=loki_settings)
         else:
             content = template.render(
                 min_peers=3, port=self.get_listen_port(),
-                state_path=self.get_state_dir(),
+                state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), loki=loki_settings)
         filename = self.get_conf_toml()
         with open(filename, mode="w", encoding="utf-8") as message:

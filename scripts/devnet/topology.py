@@ -5,7 +5,7 @@ import sys
 import time
 import tomli
 from jinja2 import Environment, FileSystemLoader
-from topology_settings import TopologySettings
+from topology_settings import TopologySettings, Environment as TopologyEnv
 from control_settings import ControlSettings
 from validator import Validator
 from node import Seed, RegularNode
@@ -35,6 +35,8 @@ class Topology:
             trim_blocks=True, lstrip_blocks=True)
         state_dir = topology_settings.get_state_dir()
         self.result_file = f"{state_dir}/RESULT.TXT"
+        conf_dir = topology_settings.get_conf_dir()
+        self.genesis_filename = f"{conf_dir}/dev-albatross.toml"
 
     def __generate_genesis(self, validators: list, spammers: list):
         """
@@ -63,11 +65,9 @@ class Topology:
         template = self.jinja_env.get_template("dev-albatross-genesis.toml.j2")
         content = template.render(
             validators=validators_data, spammers=spammers_data)
-        conf_dir = self.topology_settings.get_conf_dir()
-        filename = f"{conf_dir}/dev-albatross.toml"
-        with open(filename, mode="w", encoding="utf-8") as message:
-            message.write(content)
-            logging.info(f"Generated genesis file in {filename}")
+        with open(self.genesis_filename, mode="w", encoding="utf-8") as file:
+            file.write(content)
+            logging.info(f"Generated genesis file in {self.genesis_filename}")
 
     def __parse_toml_topology(self, topology: dict):
         """
@@ -151,6 +151,45 @@ class Topology:
 
         return (validators, seeds, spammers, regular_nodes)
 
+    def __generate_docker_compose_yml(self, validators, seeds, spammers,
+                                      regular_nodes):
+        """
+        Generates a docker-compose yml file according to a topology
+        """
+        seeds_list = list(map(lambda seed:
+                              {'name': seed.get_name(),
+                               'conf_path': seed.get_conf_dir()},
+                              seeds))
+        spammers_list = list(map(lambda spammer:
+                                 {'name': spammer.get_name(),
+                                  'conf_path': spammer.get_conf_dir()},
+                                 spammers))
+        regular_nodes_list = list(map(lambda node:
+                                      {'name': node.get_name(),
+                                       'conf_path': node.get_conf_dir()},
+                                      regular_nodes))
+        validators_list = list(map(lambda validator:
+                                   {'name': validator.get_name(),
+                                    'conf_path': validator.get_conf_dir()},
+                                   validators))
+
+        # Now read and render the template
+        template = self.jinja_env.get_template("docker-compose.yml.j2")
+        internal_genesis_path = "/home/nimiq/dev-albatross.toml"
+        content = template.render(validators=validators_list,
+                                  spammers=spammers_list,
+                                  seeds=seeds_list,
+                                  regular_nodes=regular_nodes_list,
+                                  internal_genesis_file=internal_genesis_path,
+                                  external_genesis_file=self.genesis_filename
+                                  )
+        conf = self.topology_settings.get_conf_dir()
+        docker_compose_filename = f"{conf}/docker-compose.yml"
+        with open(docker_compose_filename, mode="w", encoding="utf-8") as file:
+            file.write(content)
+            logging.info("Generated docker_compose file in "
+                         f"{docker_compose_filename}")
+
     def load(self, topology_def: str):
         """
         Loads and builds a topology based on a TOML description
@@ -165,16 +204,27 @@ class Topology:
             self.__generate_genesis(validators, spammers)
             non_seed_nodes = validators + spammers + regular_nodes
             seed_addresses = []
+            if self.topology_settings.is_env_containerized():
+                listen_ip = "0.0.0.0"
+            else:
+                listen_ip = "127.0.0.1"
             for seed in seeds:
+                env = self.topology_settings.get_env()
                 if self.topology_settings.is_env_containerized():
                     seed_addresses.append(f"/dns4/{seed.get_name()}/tcp/"
                                           f"{seed.get_listen_port()}/ws")
                 else:
                     seed_addresses.append("/ip4/127.0.0.1/tcp/"
                                           f"{seed.get_listen_port()}/ws")
-                seed.generate_config_files(self.jinja_env)
+                seed.generate_config_files(self.jinja_env, listen_ip)
             for node in non_seed_nodes:
-                node.generate_config_files(self.jinja_env, seed_addresses)
+                node.generate_config_files(self.jinja_env, listen_ip,
+                                           seed_addresses)
+
+            env = self.topology_settings.get_env()
+            if env == TopologyEnv.DOCKER_COMPOSE:
+                self.__generate_docker_compose_yml(validators, seeds, spammers,
+                                                   regular_nodes)
 
     def __run_monitor_for(self, mon_time: int, exp_down_nodes: list = []):
         """

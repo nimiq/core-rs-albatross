@@ -1,8 +1,8 @@
-version: "3.5"
+version: "3.8"
 
 networks:
   devnet:
-    name: ${NETWORK_NAME:?err}
+    name: nimiq.local
     driver: bridge
     ipam:
       driver: default
@@ -10,93 +10,79 @@ networks:
         - subnet: 7.0.0.0/24
 
 services:
-  seed0:
-    image: core:latest
+{% for seed in seeds %}
+  {{ seed['name'] }}:
+    image: ghcr.io/nimiq/core-rs-albatross:latest
     environment:
-      - LISTEN_ADDRESSES=/ip4/7.0.0.99/tcp/8443/ws
-      - NIMIQ_HOST=seed0.${NETWORK_NAME:?err}
-      - NIMIQ_NETWORK=dev-albatross
-      - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
-      - NIMIQ_INSTANT_INBOUND=true
-      - RPC_ENABLED=true
-      - RUST_BACKTRACE="1"
-      - NIMIQ_LOG_LEVEL=debug
-      - NIMIQ_LOG_TIMESTAMPS=true
+      - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
+    ports:
+      - 8443
     networks:
       devnet:
-        ipv4_address: 7.0.0.99
+        ipv4_address: 7.0.0.{{ loop.index + 99 }}
     volumes:
-      - "seed0:/home/nimiq/.nimiq:rw"
+      - {{ seed['conf_path'] }}:/home/nimiq/.nimiq:rw
+      - {{ external_genesis_file }}:{{ internal_genesis_file }}:ro
 
-{% for validator in validators %}
-  validator{{ validator['idx'] + 1 }}:
-    image: core:latest
-    depends_on:
-      - seed0
-    environment:
-      - LISTEN_ADDRESSES=/ip4/{ip}/tcp/8443/ws
-      - NIMIQ_HOST=seed{{ validator['idx'] + 1 }}.${{NETWORK_NAME:?err}}
-      - NIMIQ_NETWORK=dev-albatross
-      - NIMIQ_SEED_NODES=/ip4/7.0.0.99/tcp/8443/ws
-      - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
-      - NIMIQ_INSTANT_INBOUND=true
-      - NIMIQ_VALIDATOR=validator
-      - VALIDATOR_ADDRESS={{ validator['validator_address'] }}
-      - SIGNING_KEY={{ validator['signing_key'] }}
-      - VOTING_KEY={{ validator['voting_key'] }}
-      - FEE_KEY={{ validator['fee_key'] }}
-      - RPC_ENABLED=true
-      - RUST_BACKTRACE="1"
-      - NIMIQ_LOG_LEVEL=debug
-      - NIMIQ_LOG_TIMESTAMPS=true
-    networks:
-      devnet:
-        ipv4_address: 7.0.0.{{ validator['idx'] + 2}}
-    volumes:
-      - "validator{{ validator['idx'] + 1 }}:/home/nimiq/.nimiq:rw"
 {% endfor %}
+{% for validator in validators %}
+  {{ validator['name'] }}:
+    image: ghcr.io/nimiq/core-rs-albatross:latest
+    depends_on:
+      - seed1
+    environment:
+      - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
+    ports:
+      - 8443
+    networks:
+      devnet:
+        ipv4_address: 7.0.0.{{ loop.index + 1}}
+    volumes:
+      - {{ validator['conf_path'] }}:/home/nimiq/.nimiq:rw
+      - {{ external_genesis_file }}:{{ internal_genesis_file }}:ro
 
+{% endfor %}
+{% for regular_node in regular_nodes %}
+  {{ regular_node['name'] }}:
+    image: ghcr.io/nimiq/core-rs-albatross:latest
+    environment:
+      - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
+    ports:
+      - 8443
+    networks:
+      devnet:
+        ipv4_address: 7.0.0.{{ loop.index + 99 }}
+    volumes:
+      - {{ regular_node['conf_path'] }}:/home/nimiq/.nimiq:rw
+      - {{ external_genesis_file }}:{{ internal_genesis_file }}:ro
+
+{% endfor %}
 {% for spammer in spammers %}
-  spammer{{ spammer['idx'] + 1 }}:
+  {{ spammer['name'] }}:
     image: spammer:latest
     depends_on:
-      - seed0
+      - seed1
     environment:
-      - LISTEN_ADDRESSES=/ip4/7.0.0.98/tcp/8443/ws
-      - NIMIQ_HOST=spammer.${NETWORK_NAME:?err}
-      - NIMIQ_NETWORK=dev-albatross
-      - NIMIQ_SEED_NODES=/ip4/7.0.0.99/tcp/8443/ws
-      - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
-      - NIMIQ_INSTANT_INBOUND=true
-      - NIMIQ_VALIDATOR=validator
-      - VALIDATOR_ADDRESS=NQ0700000000000000000000000000000000
-      - RPC_ENABLED=true
-      - RUST_BACKTRACE="1"
-      - NIMIQ_LOG_LEVEL=info
-      - NIMIQ_LOG_TIMESTAMPS=true
+      - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
+    ports:
+      - 8443
     networks:
       devnet:
-        ipv4_address: 7.0.0.{{ spammer['idx'] + 98 }}
+        ipv4_address: 7.0.0.{{ loop.index + 199 }}
     volumes:
-      - "spammer{{ spammer['idx'] + 1 }}:/home/nimiq/.nimiq:rw"\n""")
+      - {{ spammer['conf_path'] }}:/home/nimiq/.nimiq:rw
+      - {{ external_genesis_file }}:{{ internal_genesis_file }}:ro
+
 {% endfor %}
- 
- {% if albagen is defined %}
+{% if albagen is defined %}
   albagen:
     image: albagen:latest
     networks:
       devnet:
-        ipv4_address: 7.0.0.97
+        ipv4_address: 7.0.0.197
     volumes:
       - "albagen"
-{% endif %}
 
 volumes:
   albagen
-{% for spammer in spammers %}
-  spammer{{ spammer['idx'] + 1 }}:
-{% endfor %}    
-  seed0:
-{% for validator in validators %}
-  validator{{ validator['idx'] + 1 }}
-{% endfor %}
+{% endif %}
