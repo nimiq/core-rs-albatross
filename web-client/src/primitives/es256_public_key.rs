@@ -3,7 +3,7 @@ use std::str::FromStr;
 use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-use crate::{address::Address, primitives::signature::Signature};
+use crate::{address::Address, primitives::es256_signature::ES256Signature};
 
 /// The non-secret (public) part of an ES256 asymmetric key pair that is typically used to digitally verify or encrypt data.
 #[wasm_bindgen]
@@ -19,7 +19,7 @@ impl ES256PublicKey {
 #[wasm_bindgen]
 impl ES256PublicKey {
     /// Verifies that a signature is valid for this public key and the provided data.
-    pub fn verify(&self, signature: &Signature, data: &[u8]) -> bool {
+    pub fn verify(&self, signature: &ES256Signature, data: &[u8]) -> bool {
         self.inner.verify(signature.native_ref(), data)
     }
 

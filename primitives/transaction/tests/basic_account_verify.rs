@@ -1,4 +1,4 @@
-use nimiq_keys::{Address, ES256PublicKey, Signature};
+use nimiq_keys::{Address, ES256PublicKey, ES256Signature};
 use nimiq_primitives::{account::AccountType, networks::NetworkId, transaction::TransactionError};
 use nimiq_transaction::{
     account::AccountTransactionVerification, Transaction, WebauthnClientDataFlags,
@@ -58,7 +58,7 @@ fn it_can_verify_webauthn_signature_proofs() {
         ])
         .unwrap(),
         merkle_path: Blake2bMerklePath::default(),
-        signature: Signature::from_bytes(&[
+        signature: ES256Signature::from_bytes(&[
             7, 185, 23, 233, 88, 246, 250, 252, 173, 116, 122, 201, 94, 32, 221, 241, 172, 99, 252,
             93, 153, 191, 69, 22, 233, 2, 233, 69, 145, 100, 16, 132, 1, 94, 247, 237, 70, 3, 74,
             241, 133, 18, 116, 58, 13, 203, 199, 167, 134, 170, 226, 113, 16, 184, 203, 209, 204,
@@ -88,7 +88,7 @@ fn it_can_verify_android_chrome_webauthn_signature_proofs() {
         ])
         .unwrap(),
         merkle_path: Blake2bMerklePath::default(),
-        signature: Signature::from_bytes(&[
+        signature: ES256Signature::from_bytes(&[
             164, 254, 110, 78, 41, 144, 51, 93, 46, 76, 238, 175, 99, 238, 20, 158, 45, 194, 224,
             112, 59, 194, 111, 99, 35, 244, 190, 187, 69, 76, 123, 80, 95, 95, 175, 79, 197, 164,
             126, 168, 155, 237, 249, 211, 119, 134, 206, 126, 83, 85, 177, 121, 189, 241, 62, 151,

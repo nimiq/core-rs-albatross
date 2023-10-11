@@ -4,7 +4,7 @@ use hex::FromHex;
 
 use crate::{
     errors::{KeysError, ParseError},
-    Signature,
+    ES256Signature,
 };
 
 #[derive(Clone, Copy)]
@@ -14,10 +14,9 @@ pub struct ES256PublicKey(pub p256::EncodedPoint);
 impl ES256PublicKey {
     pub const SIZE: usize = 33;
 
-    pub fn verify(&self, signature: &Signature, data: &[u8]) -> bool {
-        let signature = p256::ecdsa::Signature::from_slice(&signature.to_bytes()).unwrap();
+    pub fn verify(&self, signature: &ES256Signature, data: &[u8]) -> bool {
         if let Ok(vk) = p256::ecdsa::VerifyingKey::from_encoded_point(&self.0) {
-            p256::ecdsa::signature::Verifier::verify(&vk, data, &signature).is_ok()
+            p256::ecdsa::signature::Verifier::verify(&vk, data, &signature.0).is_ok()
         } else {
             false
         }
