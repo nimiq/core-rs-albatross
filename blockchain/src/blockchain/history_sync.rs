@@ -457,6 +457,26 @@ impl Blockchain {
                 &current_info.head,
             );
 
+            let history_hash = self
+                .history_store
+                .get_history_tree_root(prev_info.head.epoch_number(), Some(&write_txn))
+                .ok_or_else(|| {
+                    error!(
+                        %prev_info.head,
+                        epoch_number = prev_info.head.epoch_number(),
+                        reason = "failed to fetch history tree root for epoch from store",
+                        "Rejecting block"
+                    );
+                    PushError::InvalidBlock(BlockError::InvalidHistoryRoot)
+                })?;
+            assert_eq!(
+                history_hash,
+                *prev_info.head.history_root(),
+                "Inconsistent state after reverting block {} - {:?}",
+                &current_info.head,
+                &current_info.head
+            );
+
             // Move on to the next block.
             current_info = prev_info;
         }
