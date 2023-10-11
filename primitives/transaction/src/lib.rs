@@ -12,7 +12,7 @@ use std::{
 use bitflags::bitflags;
 use historic_transaction::RawTransactionHash;
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
-use nimiq_keys::{Address, EdDSAPublicKey, PublicKey, Signature};
+use nimiq_keys::{Address, EdDSAPublicKey, Signature};
 use nimiq_network_interface::network::Topic;
 use nimiq_primitives::{
     account::AccountType, coin::Coin, networks::NetworkId, policy::Policy,
@@ -656,7 +656,7 @@ mod serde_derive {
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(6, &self))?;
             Ok(Transaction {
-                sender: Address::from(&PublicKey::EdDSA(public_key)),
+                sender: Address::from(&public_key),
                 sender_type: AccountType::Basic,
                 sender_data: vec![],
                 recipient,

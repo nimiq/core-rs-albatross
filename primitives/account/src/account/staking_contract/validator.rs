@@ -1,6 +1,6 @@
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::{Address, EdDSAPublicKey as SchnorrPublicKey, PublicKey};
+use nimiq_keys::{Address, EdDSAPublicKey as SchnorrPublicKey};
 use nimiq_primitives::coin::Coin;
 #[cfg(feature = "interaction-traits")]
 use nimiq_primitives::{account::AccountError, policy::Policy};
@@ -361,7 +361,7 @@ impl StakingContract {
         }
 
         // Check that the signer is correct.
-        if *signer != Address::from(&PublicKey::EdDSA(validator.signing_key)) {
+        if *signer != Address::from(&validator.signing_key) {
             debug!("The transaction signer doesn't match the signing key of the validator.");
             return Err(AccountError::InvalidSignature);
         }
@@ -549,7 +549,7 @@ impl StakingContract {
         }
 
         // Check that the signer is correct.
-        if *signer != Address::from(&PublicKey::EdDSA(validator.signing_key)) {
+        if *signer != Address::from(&validator.signing_key) {
             debug!("The transaction signer doesn't match the signing key of the validator.");
             return Err(AccountError::InvalidSignature);
         }
