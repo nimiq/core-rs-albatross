@@ -1,7 +1,4 @@
-use std::fmt;
-
 pub use nimiq_utils::key_rng::{SecureGenerate, SecureRng};
-use serde::{Deserialize, Serialize};
 
 pub use self::{
     address::*, errors::*, es256_public_key::*, es256_signature::*, key_pair::*, private_key::*,
@@ -62,50 +59,3 @@ mod key_pair;
 mod private_key;
 mod public_key;
 mod signature;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Deserialize, Serialize)]
-#[cfg_attr(feature = "serde-derive", derive(nimiq_hash_derive::SerializeContent))]
-pub enum PublicKey {
-    EdDSA(EdDSAPublicKey),
-    ECDSA(ES256PublicKey),
-}
-
-impl PublicKey {
-    pub fn as_bytes(&self) -> &[u8] {
-        match self {
-            PublicKey::EdDSA(key) => key.as_bytes(),
-            PublicKey::ECDSA(key) => key.as_bytes(),
-        }
-    }
-
-    pub fn to_hex(&self) -> String {
-        match self {
-            PublicKey::EdDSA(key) => key.to_hex(),
-            PublicKey::ECDSA(key) => key.to_hex(),
-        }
-    }
-}
-
-impl Default for PublicKey {
-    fn default() -> Self {
-        PublicKey::EdDSA(EdDSAPublicKey::default())
-    }
-}
-
-impl fmt::Display for PublicKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        f.write_str(&self.to_hex())
-    }
-}
-
-impl From<EdDSAPublicKey> for PublicKey {
-    fn from(key: EdDSAPublicKey) -> Self {
-        PublicKey::EdDSA(key)
-    }
-}
-
-impl From<ES256PublicKey> for PublicKey {
-    fn from(key: ES256PublicKey) -> Self {
-        PublicKey::ECDSA(key)
-    }
-}
