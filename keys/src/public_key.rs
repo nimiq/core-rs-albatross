@@ -1,5 +1,4 @@
 use std::{
-    cmp::Ordering,
     convert::{TryFrom, TryInto},
     fmt,
     str::FromStr,
@@ -12,7 +11,7 @@ use crate::{
     PrivateKey, Signature,
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde-derive", derive(nimiq_hash_derive::SerializeContent))]
 pub struct EdDSAPublicKey(pub ed25519_zebra::VerificationKeyBytes);
 
@@ -80,26 +79,6 @@ impl Default for EdDSAPublicKey {
     fn default() -> Self {
         let default_array: [u8; Self::SIZE] = Default::default();
         Self::from(default_array)
-    }
-}
-
-impl PartialEq for EdDSAPublicKey {
-    fn eq(&self, other: &Self) -> bool {
-        self.as_bytes() == other.as_bytes()
-    }
-}
-
-impl Eq for EdDSAPublicKey {}
-
-impl Ord for EdDSAPublicKey {
-    fn cmp(&self, other: &EdDSAPublicKey) -> Ordering {
-        self.0.as_ref().cmp(other.0.as_ref())
-    }
-}
-
-impl PartialOrd for EdDSAPublicKey {
-    fn partial_cmp(&self, other: &EdDSAPublicKey) -> Option<Ordering> {
-        Some(self.cmp(other))
     }
 }
 

@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, convert::TryInto, fmt, str::FromStr};
+use std::{convert::TryInto, fmt, str::FromStr};
 
 use hex::FromHex;
 
@@ -7,7 +7,7 @@ use crate::{
     ES256Signature,
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde-derive", derive(nimiq_hash_derive::SerializeContent))]
 pub struct ES256PublicKey(pub p256::EncodedPoint);
 
@@ -68,33 +68,6 @@ impl FromStr for ES256PublicKey {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         ES256PublicKey::from_hex(s)
-    }
-}
-
-impl Default for ES256PublicKey {
-    fn default() -> Self {
-        let default_array = [0; Self::SIZE];
-        Self::from(default_array)
-    }
-}
-
-impl PartialEq for ES256PublicKey {
-    fn eq(&self, other: &Self) -> bool {
-        self.as_bytes() == other.as_bytes()
-    }
-}
-
-impl Eq for ES256PublicKey {}
-
-impl Ord for ES256PublicKey {
-    fn cmp(&self, other: &ES256PublicKey) -> Ordering {
-        self.0.cmp(&other.0)
-    }
-}
-
-impl PartialOrd for ES256PublicKey {
-    fn partial_cmp(&self, other: &ES256PublicKey) -> Option<Ordering> {
-        Some(self.cmp(other))
     }
 }
 
