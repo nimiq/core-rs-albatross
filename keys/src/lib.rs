@@ -4,8 +4,8 @@ pub use nimiq_utils::key_rng::{SecureGenerate, SecureRng};
 use serde::{Deserialize, Serialize};
 
 pub use self::{
-    address::*, errors::*, es256_public_key::*, key_pair::*, private_key::*, public_key::*,
-    signature::*,
+    address::*, errors::*, es256_public_key::*, es256_signature::*, key_pair::*, private_key::*,
+    public_key::*, signature::*,
 };
 
 #[macro_export]
@@ -57,6 +57,7 @@ pub mod multisig;
 mod address;
 mod errors;
 mod es256_public_key;
+mod es256_signature;
 mod key_pair;
 mod private_key;
 mod public_key;
@@ -75,13 +76,6 @@ impl PublicKey {
         match self {
             PublicKey::EdDSA(key) => key.as_bytes(),
             PublicKey::ECDSA(key) => key.as_bytes(),
-        }
-    }
-
-    pub fn verify(&self, signature: &Signature, data: &[u8]) -> bool {
-        match self {
-            PublicKey::EdDSA(key) => key.verify(signature, data),
-            PublicKey::ECDSA(key) => key.verify(signature, data),
         }
     }
 

@@ -3,7 +3,10 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     address::Address,
-    primitives::{es256_public_key::ES256PublicKey, public_key::PublicKey, signature::Signature},
+    primitives::{
+        es256_public_key::ES256PublicKey, es256_signature::ES256Signature, public_key::PublicKey,
+        signature::Signature,
+    },
 };
 
 /// A signature proof represents a signature together with its public key and the public key's merkle path.
@@ -30,7 +33,7 @@ impl SignatureProof {
     #[wasm_bindgen(js_name = webauthnSingleSig)]
     pub fn webauthn_single_sig(
         public_key: &ES256PublicKey,
-        signature: &Signature,
+        signature: &ES256Signature,
         authenticator_data: &[u8],
         client_data_json: &[u8],
     ) -> Result<SignatureProof, JsError> {
@@ -59,13 +62,15 @@ impl SignatureProof {
 
     /// The embedded signature.
     #[wasm_bindgen(getter)]
-    pub fn signature(&self) -> Signature {
+    pub fn signature(&self) -> SignatureUnion {
         match self.inner {
             nimiq_transaction::SignatureProof::EdDSA(ref signature_proof) => {
-                Signature::from_native(signature_proof.signature.clone())
+                let signature = Signature::from_native(signature_proof.signature.clone());
+                JsValue::unchecked_into(signature.into())
             }
             nimiq_transaction::SignatureProof::ECDSA(ref signature_proof) => {
-                Signature::from_native(signature_proof.signature.clone())
+                let signature = ES256Signature::from_native(signature_proof.signature.clone());
+                JsValue::unchecked_into(signature.into())
             }
         }
     }
@@ -121,6 +126,9 @@ impl SignatureProof {
 extern "C" {
     #[wasm_bindgen(typescript_type = "PublicKey | ES256PublicKey")]
     pub type PublicKeyUnion;
+
+    #[wasm_bindgen(typescript_type = "Signature | ES256Signature")]
+    pub type SignatureUnion;
 }
 
 #[cfg(test)]
@@ -129,7 +137,8 @@ mod tests {
     use wasm_bindgen_test::*;
 
     use crate::primitives::{
-        es256_public_key::ES256PublicKey, signature::Signature, signature_proof::SignatureProof,
+        es256_public_key::ES256PublicKey, es256_signature::ES256Signature,
+        signature_proof::SignatureProof,
     };
 
     /// Tests a signature generated with Desktop Chrome, which follows the Webauthn standard.
@@ -141,7 +150,7 @@ mod tests {
         ])
         .map_err(JsValue::from)
         .unwrap();
-        let signature = Signature::from_asn1(&[
+        let signature = ES256Signature::from_asn1(&[
             48, 69, 2, 33, 0, 201, 203, 227, 93, 193, 31, 158, 177, 202, 78, 166, 237, 11, 99, 247,
             73, 47, 96, 40, 118, 68, 173, 222, 27, 31, 131, 60, 181, 219, 147, 176, 63, 2, 32, 102,
             75, 139, 198, 83, 231, 220, 191, 196, 173, 208, 211, 140, 101, 175, 98, 79, 23, 135,
@@ -185,7 +194,7 @@ mod tests {
         ])
         .map_err(JsValue::from)
         .unwrap();
-        let signature = Signature::from_asn1(&[
+        let signature = ES256Signature::from_asn1(&[
             48, 68, 2, 32, 113, 93, 20, 133, 221, 14, 184, 248, 122, 252, 45, 231, 122, 117, 249,
             13, 81, 25, 193, 158, 66, 9, 4, 25, 189, 42, 84, 211, 52, 255, 185, 16, 2, 32, 75, 245,
             24, 65, 236, 120, 114, 212, 34, 104, 105, 109, 80, 116, 252, 38, 53, 172, 76, 237, 183,

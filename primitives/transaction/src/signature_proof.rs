@@ -3,7 +3,7 @@ use std::{cmp::Ord, error::Error, fmt};
 use base64::Engine;
 use bitflags::bitflags;
 use nimiq_hash::{Blake2bHasher, Hasher, Sha256Hasher};
-use nimiq_keys::{Address, ES256PublicKey, EdDSAPublicKey, Signature};
+use nimiq_keys::{Address, ES256PublicKey, ES256Signature, EdDSAPublicKey, Signature};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_utils::merkle::Blake2bMerklePath;
 use serde_json::json;
@@ -72,7 +72,7 @@ bitflags! {
 pub struct WebauthnSignatureProof {
     pub public_key: ES256PublicKey,
     pub merkle_path: Blake2bMerklePath,
-    pub signature: Signature,
+    pub signature: ES256Signature,
     pub host: String,
     pub authenticator_data_suffix: Vec<u8>,
     pub client_data_flags: WebauthnClientDataFlags,
@@ -82,7 +82,7 @@ pub struct WebauthnSignatureProof {
 impl WebauthnSignatureProof {
     pub fn try_from(
         public_key: ES256PublicKey,
-        signature: Signature,
+        signature: ES256Signature,
         authenticator_data: &[u8],
         client_data_json: &[u8],
     ) -> Result<Self, SerializationError> {
