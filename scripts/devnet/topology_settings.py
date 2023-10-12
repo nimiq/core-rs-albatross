@@ -150,10 +150,21 @@ class TopologySettings:
         In non containerized topologies, this directory will include other
         directories with each node state related files.
 
-        :return: The path of the directory of the node state related files
+        :return: The path of the directory of all node's state related files
         :rtype: str
         """
         return self.state_dir
+
+    def get_k8s_dir(self):
+        """
+        Gets the directory containing all node's k8s manifest files
+
+        :return: The path of the directory of all node's k8s manifest files
+        :rtype: str
+        """
+        if self.env != Environment.K8S:
+            raise Exception("Requested k8s settings for a non k8s environment")
+        return f"{self.conf_dir}/k8s"
 
     def get_node_conf_dir(self, node_name: str):
         """
@@ -181,6 +192,17 @@ class TopologySettings:
             return self.state_dir
         else:
             return f"{self.state_dir}/{node_name}"
+
+    def get_node_k8s_dir(self, node_name: str):
+        """
+        Gets the directory containing the node k8s manifest files
+
+        :param name: Name of the node.
+        :type name: str
+        :return: The path of the directory of the node state related files
+        :rtype: str
+        """
+        return f"{self.get_k8s_dir()}/{node_name}.yml"
 
     def get_release(self):
         """

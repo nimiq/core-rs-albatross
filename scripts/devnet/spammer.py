@@ -64,6 +64,59 @@ class Spammer(Node):
             for the configuration file
         :type seed_addresses: List of strings
         """
+        filename = self.get_conf_toml()
+        content = self.get_config_files_content(jinja_env, listen_ip,
+                                                seed_addresses)
+        with open(filename, mode="w", encoding="utf-8") as message:
+            message.write(content)
+
+    def generate_k8s_file(self, jinja_env: Environment, listen_ip: str,
+                          seed_addresses: list):
+        """
+        Generates the k8s manifest file
+
+        :param jinja_env: Jinja2 environment for template rendering
+        :type jinja_env: Environment
+        :param listen_ip: Ip for the node where incoming connections are going
+            to be listened.
+        :type listen_ip: str
+        :param seed_addresses: List of seed addresses in multiaddress format
+            for the configuration file
+        :type seed_addresses: List of strings
+        """
+        int_genesis_dir = "/home/nimiq/genesis"
+        genesis_filename = "dev-albatross.toml"
+        int_genesis_file = f"{int_genesis_dir}/{genesis_filename}"
+        filename = self.topology_settings.get_node_k8s_dir(self.name)
+        config_content = self.get_config_files_content(jinja_env, listen_ip,
+                                                       seed_addresses)
+        # Now read and render the template
+        template = jinja_env.get_template("k8s_node_deployment.yml.j2")
+        content = template.render(name=self.get_name(),
+                                  node_type='spammer',
+                                  internal_genesis_file=int_genesis_file,
+                                  internal_genesis_dir=int_genesis_dir,
+                                  genesis_filename=genesis_filename,
+                                  config_content=config_content)
+        with open(filename, mode="w", encoding="utf-8") as file:
+            file.write(content)
+
+    def get_config_files_content(self, jinja_env: Environment, listen_ip: str,
+                                 seed_addresses: list):
+        """
+        Gets the configuration file content
+
+        :param jinja_env: Jinja2 environment for template rendering
+        :type jinja_env: Environment
+        :param listen_ip: Ip for the node where incoming connections are going
+            to be listened.
+        :type listen_ip: str
+        :param seed_addresses: List of seed addresses in multiaddress format
+            for the configuration file
+        :type seed_addresses: List of strings
+        :return: The configuration file content
+        :rtype: str
+        """
         # Read and render the TOML template
         template = jinja_env.get_template("node_conf.toml.j2")
         metrics = self.get_metrics()
@@ -83,6 +136,4 @@ class Spammer(Node):
                 state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), seed_addresses=seed_addresses,
                 spammer=True, loki=loki_settings)
-        filename = self.get_conf_toml()
-        with open(filename, mode="w", encoding="utf-8") as message:
-            message.write(content)
+        return content

@@ -1,0 +1,67 @@
+{% if node_type == 'seed' %}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ name }}
+  labels:
+    app: {{ name }}-nimiq-client
+spec:
+  ports:
+  - port: 8443
+    protocol: TCP
+  selector:
+    app: {{ name }}-nimiq-client
+---
+{% endif %}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ name }}-deployment
+  labels:
+    app: {{ name }}-nimiq-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ name }}-nimiq-client
+  template:
+    metadata:
+      labels:
+        app: {{ name }}-nimiq-client
+        node_type: {{ node_type }}
+    spec:
+      containers:
+      - name: {{ name }}
+        image: ghcr.io/nimiq/core-rs-albatross:latest
+        ports:
+        - containerPort: 8443
+        env:
+        - name: NIMIQ_OVERRIDE_DEVNET_CONFIG
+          value: {{ internal_genesis_file }}
+        resources:
+          requests:
+            memory: "300Mi"
+          limits:
+            memory: "400Mi"
+        volumeMounts:
+        - name: genesis-file
+          mountPath: "{{ internal_genesis_dir }}"
+          readOnly: true
+        - name: conf-file
+          mountPath: "/home/nimiq/.nimiq"
+          readOnly: true
+      volumes:
+      - name: genesis-file
+        configMap:
+          name: genesis-file
+      - name: conf-file
+        configMap:
+          name: {{ name }}-conf-file
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ name }}-conf-file
+data:
+  client.toml: |
+    {{ config_content | indent( width=4) }}

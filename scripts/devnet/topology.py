@@ -10,6 +10,7 @@ from control_settings import ControlSettings
 from validator import Validator
 from node import Seed, RegularNode
 from spammer import Spammer
+from pathlib import Path
 
 
 class Topology:
@@ -42,6 +43,18 @@ class Topology:
         """
         Generates the genesis TOML file
         """
+        content = self.__get_genesis_content(validators, spammers)
+        with open(self.genesis_filename, mode="w", encoding="utf-8") as file:
+            file.write(content)
+            logging.info(f"Generated genesis file in {self.genesis_filename}")
+
+    def __get_genesis_content(self, validators: list, spammers: list):
+        """
+        Gets the genesis TOML file content
+
+        :return: The genesis file content
+        :rtype: str
+        """
         # First we need to transform a little the data (from list of objects
         # to list of dicts)
         validators_data = []
@@ -65,9 +78,7 @@ class Topology:
         template = self.jinja_env.get_template("dev-albatross-genesis.toml.j2")
         content = template.render(
             validators=validators_data, spammers=spammers_data)
-        with open(self.genesis_filename, mode="w", encoding="utf-8") as file:
-            file.write(content)
-            logging.info(f"Generated genesis file in {self.genesis_filename}")
+        return content
 
     def __parse_toml_topology(self, topology: dict):
         """
@@ -190,6 +201,37 @@ class Topology:
             logging.info("Generated docker_compose file in "
                          f"{docker_compose_filename}")
 
+    def __generate_docker_k8s_dir(self, validators, seeds, spammers,
+                                  regular_nodes):
+        """
+        Generates a directory containing k8s yml manifest files according to a
+        topology
+        """
+        # Create directory where to store the yml manifests
+        k8s_dir = self.topology_settings.get_k8s_dir()
+        Path(k8s_dir).mkdir(parents=False, exist_ok=False)
+        # Now read and render the template
+        template = self.jinja_env.get_template("k8s_genesis_deployment.yml.j2")
+        genesis_filename = "dev-albatross.toml"
+        genesis_content = self.__get_genesis_content(validators, spammers)
+        content = template.render(genesis_filename=genesis_filename,
+                                  genesis_content=genesis_content)
+        k8s_genesis_filename = f"{k8s_dir}/genesis.yml"
+        with open(k8s_genesis_filename, mode="w", encoding="utf-8") as file:
+            file.write(content)
+        # Now we need to generate the node deployments
+        non_seed_nodes = validators + spammers + regular_nodes
+        seed_addresses = []
+        listen_ip = "0.0.0.0"
+        for seed in seeds:
+            seed_addresses.append(f"/dns4/{seed.get_name()}/tcp/"
+                                  f"{seed.get_listen_port()}/ws")
+            seed.generate_k8s_file(self.jinja_env, listen_ip)
+        for node in non_seed_nodes:
+            node.generate_k8s_file(self.jinja_env, listen_ip, seed_addresses)
+
+        logging.info(f"Generated k8s directory in {k8s_dir}")
+
     def load(self, topology_def: str):
         """
         Loads and builds a topology based on a TOML description
@@ -225,6 +267,9 @@ class Topology:
             if env == TopologyEnv.DOCKER_COMPOSE:
                 self.__generate_docker_compose_yml(validators, seeds, spammers,
                                                    regular_nodes)
+            elif env == TopologyEnv.K8S:
+                self.__generate_docker_k8s_dir(validators, seeds, spammers,
+                                               regular_nodes)
 
     def __run_monitor_for(self, mon_time: int, exp_down_nodes: list = []):
         """
