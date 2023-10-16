@@ -1,7 +1,7 @@
 use std::{cmp, error::Error, ops::Deref};
 
 use nimiq_account::{BlockLog, BlockLogger};
-use nimiq_block::{Block, ForkProof, MicroBlock};
+use nimiq_block::{Block, ForkProof, MicroBlock, BlockError};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, ChainOrdering, ChunksPushError,
     ChunksPushResult, ForkEvent, PushError, PushResult,
@@ -508,6 +508,26 @@ impl Blockchain {
                     block,
                 );
             }
+
+            let history_hash = this
+                .history_store
+                .get_history_tree_root(prev_info.head.epoch_number(), Some(&write_txn))
+                .ok_or_else(|| {
+                    error!(
+                        %prev_info.head,
+                        epoch_number = prev_info.head.epoch_number(),
+                        reason = "failed to fetch history tree root for epoch from store",
+                        "Rejecting block"
+                    );
+                    PushError::InvalidBlock(BlockError::InvalidHistoryRoot)
+                })?;
+            assert_eq!(
+                history_hash,
+                *prev_info.head.history_root(),
+                "Inconsistent state after reverting block {} - {:?}",
+                &current.1.head,
+                &current.1.head
+            );
 
             revert_chain.push(current);
 
