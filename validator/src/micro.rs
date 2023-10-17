@@ -9,8 +9,7 @@ use std::{
 
 use futures::{future::BoxFuture, ready, FutureExt, Stream};
 use nimiq_block::{Block, BlockTopic, EquivocationProof, MicroBlock, SkipBlockInfo};
-use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::Blockchain;
+use nimiq_blockchain::{Blockchain,BlockProducer};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_hash::Blake2bHash;
 use nimiq_mempool::mempool::Mempool;
