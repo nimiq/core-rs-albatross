@@ -445,14 +445,19 @@ impl<N: Network> Handle<N, Blake2bHash, BlockchainProxy> for RequestHead {
         let head = blockchain.head_hash();
 
         if tainted_config.tainted_request_head && rng.gen_bool(1.0 / 2.0) {
-            warn!(" Returning a different head for request head .. bua ha ha ha");
             let head = blockchain.block_number();
 
-            let bn = rng.gen_range(Policy::genesis_block_number()..head);
+            if head > Policy::genesis_block_number() {
+                warn!(" Returning a different head for request head .. bua ha ha ha");
 
-            let block = blockchain.get_block_at(bn, false).unwrap();
+                let bn = rng.gen_range(Policy::genesis_block_number()..head);
 
-            block.hash()
+                let block = blockchain.get_block_at(bn, false).unwrap();
+
+                block.hash()
+            } else {
+                blockchain.head_hash()
+            }
         } else {
             head
         }
