@@ -64,7 +64,7 @@ impl ExtendedTransaction {
 
         for inherent in inherents {
             match inherent {
-                Inherent::Penalize { .. } | Inherent::Reward { .. } => {
+                Inherent::Penalize { .. } | Inherent::Reward { .. } | Inherent::Jail { .. } => {
                     ext_txs.push(ExtendedTransaction {
                         network_id,
                         block_number,
@@ -72,7 +72,8 @@ impl ExtendedTransaction {
                         data: ExtTxData::Inherent(inherent),
                     })
                 }
-                _ => {}
+                // These special types of inherents do not generate extended transactions
+                Inherent::FinalizeBatch | Inherent::FinalizeEpoch => {}
             }
         }
 
