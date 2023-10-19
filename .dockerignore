@@ -1,7 +1,7 @@
 *
-!/target/debug/nimiq-client
+!/client.toml
 !/target/release/nimiq-client
-!/target/debug/nimiq-spammer
-!/target/release/nimiq-spammer
-!/scripts/docker_*.sh
+!/target/release/nimiq-bls
+!/target/release/nimiq-address
+!/target/release/nimiq-rpc
 !/genesis/src/genesis/*
