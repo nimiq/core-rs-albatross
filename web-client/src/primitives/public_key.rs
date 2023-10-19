@@ -14,6 +14,11 @@ pub struct PublicKey {
     inner: nimiq_keys::Ed25519PublicKey,
 }
 
+impl PublicKey {
+    const SPKI_SIZE: usize = 44;
+    const RAW_SIZE: usize = 32;
+}
+
 #[wasm_bindgen]
 impl PublicKey {
     /// Derives a public key from an existing private key.
@@ -34,13 +39,36 @@ impl PublicKey {
         Ok(PublicKey::from_native(key))
     }
 
+    /// Deserializes a public key from its SPKI representation.
+    #[wasm_bindgen(js_name = fromSpki)]
+    pub fn from_spki(spki_bytes: &[u8]) -> Result<PublicKey, JsError> {
+        if spki_bytes.len() != Self::SPKI_SIZE {
+            return Err(JsError::new("Public key primitive: Invalid SPKI length"));
+        }
+        // The raw key is the last 32 bytes of the SPKI format
+        let raw_key = &spki_bytes[spki_bytes.len() - Self::RAW_SIZE..];
+        Self::from_raw(raw_key)
+    }
+
+    /// Deserializes a public key from its raw representation.
+    #[wasm_bindgen(js_name = fromRaw)]
+    pub fn from_raw(raw_bytes: &[u8]) -> Result<PublicKey, JsError> {
+        if raw_bytes.len() != Self::RAW_SIZE {
+            return Err(JsError::new("Public key primitive: Invalid raw length"));
+        }
+        Self::unserialize(raw_bytes)
+    }
+
     /// Creates a new public key from a byte array.
     ///
     /// Throws when the byte array is not exactly 32 bytes long.
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: &[u8]) -> Result<PublicKey, JsError> {
-        if bytes.len() != nimiq_keys::Ed25519PublicKey::SIZE {
-            return Err(JsError::new("Public key primitive: Invalid length"));
+        if bytes.len() == Self::SPKI_SIZE {
+            return Self::from_spki(bytes);
+        }
+        if bytes.len() == Self::RAW_SIZE {
+            return Self::from_raw(bytes);
         }
         Self::unserialize(bytes)
     }
