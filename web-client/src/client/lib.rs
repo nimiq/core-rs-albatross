@@ -32,10 +32,7 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::policy::Policy;
 use tsify::Tsify;
-use wasm_bindgen::{
-    prelude::{wasm_bindgen, Closure, JsError, JsValue},
-    JsCast,
-};
+use wasm_bindgen::{prelude::*, JsCast};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::MessageEvent;
 
