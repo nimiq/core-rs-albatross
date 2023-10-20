@@ -3,7 +3,7 @@ use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_derive::TryFromJsValue;
 
-/// A signature represents a cryptocraphic proof that a private key signed some data.
+/// An Ed25519 Signature represents a cryptocraphic proof that a private key signed some data.
 /// It can be verified with the private key's public key.
 #[derive(TryFromJsValue)]
 #[wasm_bindgen]
@@ -14,7 +14,7 @@ pub struct Signature {
 
 #[wasm_bindgen]
 impl Signature {
-    /// Deserializes a signature from a byte array.
+    /// Deserializes an Ed25519 signature from a byte array.
     ///
     /// Throws when the byte array contains less than 64 bytes.
     #[wasm_bindgen(js_name = fromBytes)]
@@ -31,7 +31,13 @@ impl Signature {
         self.inner.to_bytes().to_vec()
     }
 
-    /// Parses a signature from its hex representation.
+    /// Parses an Ed25519 signature from its ASN.1 representation.
+    #[wasm_bindgen(js_name = fromAsn1)]
+    pub fn from_asn1(bytes: &[u8]) -> Result<Signature, JsError> {
+        Signature::deserialize(Signature::asn1_to_raw(bytes)?.as_slice())
+    }
+
+    /// Parses an Ed25519 signature from its hex representation.
     ///
     /// Throws when the string is not valid hex format or when it represents less than 64 bytes.
     #[wasm_bindgen(js_name = fromHex)]
@@ -56,5 +62,29 @@ impl Signature {
 
     pub fn native_ref(&self) -> &nimiq_keys::Ed25519Signature {
         &self.inner
+    }
+
+    pub fn asn1_to_raw(bytes: &[u8]) -> Result<Vec<u8>, JsError> {
+        if bytes.len() < 70 || bytes.len() > 72 {
+            return Err(JsError::new(
+                format!(
+                    "Invalid ASN.1 bytes length: Expected between 70 and 72, got {}",
+                    bytes.len()
+                )
+                .as_str(),
+            ));
+        }
+
+        // Convert signature serialization from ASN.1 sequence to "raw" format
+        let r_start = if bytes[4] == 0 { 5 } else { 4 };
+        let r_end = r_start + 32;
+        let s_start = if bytes[r_end + 2] == 0 {
+            r_end + 3
+        } else {
+            r_end + 2
+        };
+        let r = &bytes[r_start..r_end];
+        let s = &bytes[s_start..];
+        Ok([r, s].concat())
     }
 }
