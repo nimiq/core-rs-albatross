@@ -1,10 +1,13 @@
 use std::str::FromStr;
 
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_derive::TryFromJsValue;
 
 /// A signature represents a cryptocraphic proof that a private key signed some data.
 /// It can be verified with the private key's public key.
+#[derive(TryFromJsValue)]
 #[wasm_bindgen]
+#[derive(Clone)]
 pub struct Signature {
     inner: nimiq_keys::Ed25519Signature,
 }

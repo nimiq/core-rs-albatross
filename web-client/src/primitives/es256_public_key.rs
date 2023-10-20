@@ -2,11 +2,14 @@ use std::str::FromStr;
 
 use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_derive::TryFromJsValue;
 
 use crate::{address::Address, primitives::es256_signature::ES256Signature};
 
 /// The non-secret (public) part of an ES256 asymmetric key pair that is typically used to digitally verify or encrypt data.
+#[derive(TryFromJsValue)]
 #[wasm_bindgen]
+#[derive(Clone)]
 pub struct ES256PublicKey {
     inner: nimiq_keys::ES256PublicKey,
 }

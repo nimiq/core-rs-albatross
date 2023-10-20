@@ -30,15 +30,37 @@ impl SignatureProof {
     /// Creates a ES256/Webauthn signature proof for a single-sig signature.
     #[wasm_bindgen(js_name = webauthnSingleSig)]
     pub fn webauthn_single_sig(
-        public_key: &ES256PublicKey,
-        signature: &ES256Signature,
+        public_key: &PublicKeyUnion,
+        signature: &SignatureUnion,
         authenticator_data: &[u8],
         client_data_json: &[u8],
     ) -> Result<SignatureProof, JsError> {
+        let js_value: &JsValue = public_key.unchecked_ref();
+        let public_key = PublicKey::try_from(js_value).map_or_else(
+            |_| {
+                ES256PublicKey::try_from(js_value).map_or_else(
+                    |_| Err(JsError::new("Invalid public key")),
+                    |key| Ok(nimiq_keys::PublicKey::ES256(*key.native_ref())),
+                )
+            },
+            |key| Ok(nimiq_keys::PublicKey::Ed25519(*key.native_ref())),
+        )?;
+
+        let js_value: &JsValue = signature.unchecked_ref();
+        let signature = Signature::try_from(js_value).map_or_else(
+            |_| {
+                ES256Signature::try_from(js_value).map_or_else(
+                    |_| Err(JsError::new("Invalid signature")),
+                    |sig| Ok(nimiq_keys::Signature::ES256(sig.native_ref().clone())),
+                )
+            },
+            |sig| Ok(nimiq_keys::Signature::Ed25519(sig.native_ref().clone())),
+        )?;
+
         Ok(SignatureProof::from_native(
             nimiq_transaction::SignatureProof::try_from_webauthn(
-                nimiq_keys::PublicKey::ES256(*public_key.native_ref()),
-                nimiq_keys::Signature::ES256(signature.native_ref().clone()),
+                public_key,
+                signature,
                 authenticator_data,
                 client_data_json,
             )?,
@@ -155,8 +177,8 @@ mod tests {
             125,
         ];
         let proof = SignatureProof::webauthn_single_sig(
-            &public_key,
-            &signature,
+            &JsValue::from(public_key).into(),
+            &JsValue::from(signature).into(),
             authenticator_data,
             client_data_json,
         );
@@ -200,8 +222,8 @@ mod tests {
             109, 46, 97, 110, 100, 114, 111, 105, 100, 46, 99, 104, 114, 111, 109, 101, 34, 125,
         ];
         let proof = SignatureProof::webauthn_single_sig(
-            &public_key,
-            &signature,
+            &JsValue::from(public_key).into(),
+            &JsValue::from(signature).into(),
             authenticator_data,
             client_data_json,
         );
