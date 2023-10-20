@@ -4,8 +4,8 @@ use wasm_bindgen::prelude::*;
 use crate::{
     address::Address,
     primitives::{
-        es256_public_key::ES256PublicKey, es256_signature::ES256Signature, public_key::PublicKey,
-        signature::Signature,
+        es256_public_key::ES256PublicKey, es256_signature::ES256Signature, merkle_path::MerklePath,
+        public_key::PublicKey, signature::Signature,
     },
 };
 
@@ -106,6 +106,18 @@ impl SignatureProof {
                 JsValue::unchecked_into(key.into())
             }
         }
+    }
+
+    /// The merkle path from the proof's public key to the public key of the signer.
+    #[wasm_bindgen(getter, js_name = merklePath)]
+    pub fn merkle_path(&self) -> MerklePath {
+        MerklePath::from_native(self.inner.merkle_path.clone())
+    }
+
+    /// Set the proof's merkle path.
+    #[wasm_bindgen(setter, js_name = merklePath)]
+    pub fn set_merkle_path(&mut self, merkle_path: MerklePath) {
+        self.inner.merkle_path = merkle_path.native_ref().clone();
     }
 
     /// Serializes the proof to a byte array, e.g. for assigning it to a `transaction.proof` field.
