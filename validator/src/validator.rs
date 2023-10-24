@@ -790,8 +790,7 @@ where
         while let Poll::Ready(Some(event)) = self.consensus_event_rx.poll_next_unpin(cx) {
             match event {
                 Ok(ConsensusEvent::Established) => {
-                    self.init();
-                    self.init_mempool();
+                    self.update_can_enforce_validity_window();
                 }
                 Ok(ConsensusEvent::Lost) => {
                     self.pause_validator();
