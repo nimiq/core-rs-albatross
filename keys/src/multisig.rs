@@ -140,7 +140,7 @@ impl SecureGenerate for CommitmentPair {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
-pub struct PartialSignature(Scalar);
+pub struct PartialSignature(pub Scalar);
 implement_simple_add_sum_traits!(PartialSignature, Scalar::ZERO);
 
 impl PartialSignature {
