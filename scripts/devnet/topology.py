@@ -114,14 +114,21 @@ class Topology:
                         "Unexpected restartable value for a node: "
                         f"{node['restartable']}")
                 name = f"{key}{count+1}"
+                metrics = None
                 if 'enable_metrics' in node:
-                    if containerized:
-                        metrics_port = 9100
-                    else:
-                        metrics_port = port_bases[node]['metrics'] + count
-                    metrics = {'port': metrics_port}
-                else:
-                    metrics = None
+                    if not isinstance(node['enable_metrics'], bool):
+                        raise Exception(
+                            "Unexpected enable_metrics value for a node: "
+                            f"{node['enable_metrics']}")
+                    if node['enable_metrics']:
+                        if containerized:
+                            metrics_port = 9100
+                            metrics_ip = "0.0.0.0"
+                        else:
+                            metrics_port = port_bases[node]['metrics'] + count
+                            metrics_ip = "127.0.0.1"
+                        metrics = {'ip': metrics_ip, 'port': metrics_port}
+
                 # Create objects depending on type:
                 if containerized:
                     port = 8443

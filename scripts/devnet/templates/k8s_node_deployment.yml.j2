@@ -29,12 +29,16 @@ spec:
       labels:
         app: {{ name }}-nimiq-client
         node_type: {{ node_type }}
+        node_name: {{ name }}
     spec:
       containers:
       - name: {{ name }}
         image: ghcr.io/nimiq/core-rs-albatross:latest
         ports:
         - containerPort: 8443
+        {% if enable_metrics %}
+        - containerPort: 9100
+        {% endif %}
         env:
         - name: NIMIQ_OVERRIDE_DEVNET_CONFIG
           value: {{ internal_genesis_file }}

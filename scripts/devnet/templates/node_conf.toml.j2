@@ -48,7 +48,7 @@ lock_api = "trace"
 
 {% if metrics is defined %}
 [metrics-server]
-bind="127.0.0.1"
+bind="{{ metrics['ip'] }}"
 port = {{ metrics['port'] }}
 
 {% endif %}

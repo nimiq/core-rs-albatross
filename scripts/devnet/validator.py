@@ -115,6 +115,7 @@ class Validator(Node):
         genesis_filename = "dev-albatross.toml"
         int_genesis_file = f"{int_genesis_dir}/{genesis_filename}"
         filename = self.topology_settings.get_node_k8s_dir(self.name)
+        enable_metrics = self.get_metrics() is not None
         config_content = self.get_config_files_content(jinja_env, listen_ip,
                                                        seed_addresses)
         # Now read and render the template
@@ -124,7 +125,8 @@ class Validator(Node):
                                   internal_genesis_file=int_genesis_file,
                                   internal_genesis_dir=int_genesis_dir,
                                   genesis_filename=genesis_filename,
-                                  config_content=config_content['config'])
+                                  config_content=config_content['config'],
+                                  enable_metrics=enable_metrics)
         with open(filename, mode="w", encoding="utf-8") as file:
             file.write(content)
 
