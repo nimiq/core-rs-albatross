@@ -1395,9 +1395,9 @@ dependencies = [
 
 [[package]]
 name = "curve25519-dalek"
-version = "4.0.0"
+version = "4.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f711ade317dd348950a9910f81c5947e3d8907ebd2b83f76203ff1807e6a2bc2"
+checksum = "e89b8c6a2e4b1f45971ad09761aafb85514a84744b67a95e32c3cc1352d1f65c"
 dependencies = [
  "cfg-if",
  "cpufeatures",
@@ -1810,7 +1810,7 @@ version = "4.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d9ce6874da5d4415896cd45ffbc4d1cfc0c4f9c079427bd870742c30f2f65a9"
 dependencies = [
- "curve25519-dalek 4.0.0",
+ "curve25519-dalek 4.1.1",
  "ed25519 2.2.2",
  "hashbrown 0.14.0",
  "hex",
@@ -1929,9 +1929,9 @@ dependencies = [
 
 [[package]]
 name = "fiat-crypto"
-version = "0.1.19"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93ace6ec7cc19c8ed33a32eaa9ea692d7faea05006b5356b9e2b668ec4bc3955"
+checksum = "a481586acf778f1b1455424c343f71124b048ffa5f4fc3f8f6ae9dc432dcb3c7"
 
 [[package]]
 name = "fixedbitset"
@@ -4080,7 +4080,7 @@ dependencies = [
 name = "nimiq-keys"
 version = "0.1.0"
 dependencies = [
- "curve25519-dalek 4.0.0",
+ "curve25519-dalek 4.1.1",
  "data-encoding",
  "ed25519-zebra",
  "hex",
@@ -4860,7 +4860,7 @@ name = "nimiq-vrf"
 version = "0.1.0"
 dependencies = [
  "byteorder",
- "curve25519-dalek 4.0.0",
+ "curve25519-dalek 4.1.1",
  "hex",
  "nimiq-hash",
  "nimiq-keys",
@@ -4879,7 +4879,7 @@ dependencies = [
 name = "nimiq-wallet"
 version = "0.1.0"
 dependencies = [
- "curve25519-dalek 4.0.0",
+ "curve25519-dalek 4.1.1",
  "hex",
  "itertools 0.11.0",
  "nimiq-database",
@@ -6692,7 +6692,7 @@ dependencies = [
  "aes-gcm 0.9.4",
  "blake2",
  "chacha20poly1305",
- "curve25519-dalek 4.0.0",
+ "curve25519-dalek 4.1.1",
  "rand_core 0.6.4",
  "ring",
  "rustc_version",
