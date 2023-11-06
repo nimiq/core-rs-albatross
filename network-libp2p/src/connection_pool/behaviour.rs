@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    net::IpAddr,
     sync::Arc,
     task::{Context, Poll, Waker},
     time::Duration,
@@ -28,9 +29,9 @@ use crate::discovery::peer_contacts::PeerContactBook;
 
 #[derive(Clone, Debug)]
 struct ConnectionPoolLimits {
-    ip_count: HashMap<IpNetwork, usize>,
-    ipv4_count: usize,
-    ipv6_count: usize,
+    ip_count: HashMap<IpAddr, usize>,
+    ip_subnet_count: HashMap<IpNetwork, usize>,
+    peer_count: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -44,6 +45,15 @@ struct ConnectionPoolConfig {
     dialing_count_max: usize,
     retry_down_after: Duration,
     housekeeping_interval: Duration,
+}
+
+/// Connection Peer information
+#[derive(Clone, Debug)]
+struct IpInfo {
+    /// Connection IP subnet (according to a subnet mask)
+    subnet_ip: Option<IpNetwork>,
+    /// Connection IP address
+    ip: IpAddr,
 }
 
 impl Default for ConnectionPoolConfig {
@@ -276,8 +286,8 @@ impl ConnectionPoolBehaviour {
     ) -> Self {
         let limits = ConnectionPoolLimits {
             ip_count: HashMap::new(),
-            ipv4_count: 0,
-            ipv6_count: 0,
+            ip_subnet_count: HashMap::new(),
+            peer_count: 0,
         };
         let config = ConnectionPoolConfig::default();
         let housekeeping_timer = wasm_timer::Interval::new(config.housekeeping_interval);
@@ -301,6 +311,21 @@ impl ConnectionPoolBehaviour {
     fn wake(&mut self) {
         if let Some(waker) = self.waker.take() {
             waker.wake();
+        }
+    }
+
+    fn get_ip_info_from_multiaddr(&self, address: &Multiaddr) -> Option<IpInfo> {
+        // Get IP from multiaddress if it exists.
+        match address.iter().next() {
+            Some(Protocol::Ip4(ip)) => Some(IpInfo {
+                subnet_ip: IpNetwork::new_truncate(ip, self.config.ipv4_subnet_mask).ok(),
+                ip: IpAddr::V4(ip),
+            }),
+            Some(Protocol::Ip6(ip)) => Some(IpInfo {
+                subnet_ip: IpNetwork::new_truncate(ip, self.config.ipv6_subnet_mask).ok(),
+                ip: IpAddr::V6(ip),
+            }),
+            _ => None,
         }
     }
 
@@ -586,69 +611,61 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         }
 
         // Get IP from multiaddress if it exists.
-        let ip = match address.iter().next() {
-            Some(Protocol::Ip4(ip)) => {
-                IpNetwork::new_truncate(ip, self.config.ipv4_subnet_mask).ok()
-            }
-            Some(Protocol::Ip6(ip)) => {
-                IpNetwork::new_truncate(ip, self.config.ipv6_subnet_mask).ok()
-            }
-            _ => None,
-        };
+        let ip_info = self.get_ip_info_from_multiaddr(address);
 
-        // If we have an IP, check connection limits per IP/subnet.
-        if let Some(ip) = ip {
+        // If we have an IP, check connection limits per IP.
+        if let Some(ip_info) = ip_info.clone() {
             if self.config.peer_count_per_ip_max
                 < self
                     .limits
                     .ip_count
-                    .get(&ip)
+                    .get(&ip_info.ip)
                     .unwrap_or(&0)
                     .saturating_add(1)
             {
-                debug!(%ip, "Max peer connections per IP limit reached");
+                // Subnet mask
+                debug!(ip=%ip_info.ip, limit=self.config.peer_count_per_ip_max, "Max peer connections per IP limit reached");
                 close_reason = Some(ConnectionPoolHandlerError::MaxPeerPerIPConnectionsReached);
             }
 
-            if ip.is_ipv4()
-                && (self.config.peer_count_per_subnet_max
-                    < self.limits.ipv4_count.saturating_add(1))
-            {
-                debug!("Max peer connections per IPv4 subnet limit reached");
-                close_reason = Some(ConnectionPoolHandlerError::MaxIpv4SubnetConnectionsReached);
+            // If we have the subnet IP, check connection limits per subnet
+            if let Some(subnet_ip) = ip_info.subnet_ip {
+                if self.config.peer_count_per_subnet_max
+                    < self
+                        .limits
+                        .ip_subnet_count
+                        .get(&subnet_ip)
+                        .unwrap_or(&0)
+                        .saturating_add(1)
+                {
+                    // Subnet mask
+                    debug!(%subnet_ip, limit=self.config.peer_count_per_subnet_max, "Max peer connections per IP subnet limit reached");
+                    close_reason = Some(ConnectionPoolHandlerError::MaxSubnetConnectionsReached);
+                }
             }
+        }
 
-            if ip.is_ipv6()
-                && (self.config.peer_count_per_subnet_max
-                    < self.limits.ipv6_count.saturating_add(1))
-            {
-                debug!("Max peer connections per IPv6 subnet limit reached");
-                close_reason = Some(ConnectionPoolHandlerError::MaxIpv6SubnetConnectionsReached);
-            }
+        // Check for the maximum peer count limit
+        if self.config.peer_count_max < self.limits.peer_count.saturating_add(1) {
+            debug!(
+                connections = self.limits.peer_count,
+                "Max peer connections limit reached"
+            );
+            close_reason = Some(ConnectionPoolHandlerError::MaxPeerConnectionsReached);
+        }
 
-            if self.config.peer_count_max
-                < self
-                    .limits
-                    .ipv4_count
-                    .saturating_add(self.limits.ipv6_count)
-                    .saturating_add(1)
-            {
-                debug!("Max peer connections limit reached");
-                close_reason = Some(ConnectionPoolHandlerError::MaxPeerConnectionsReached);
-            }
-
+        if let Some(ip_info) = ip_info {
             if close_reason.is_none() {
                 // Increment peer counts per IP if we are not going to close the connection
-                let value = self.limits.ip_count.entry(ip).or_insert(0);
+                if let Some(subnet_ip) = ip_info.subnet_ip {
+                    let value = self.limits.ip_subnet_count.entry(subnet_ip).or_insert(0);
+                    *value = value.saturating_add(1);
+                }
+
+                let value = self.limits.ip_count.entry(ip_info.ip).or_insert(0);
                 *value = value.saturating_add(1);
-                match ip {
-                    IpNetwork::V4(..) => {
-                        self.limits.ipv4_count = self.limits.ipv4_count.saturating_add(1)
-                    }
-                    IpNetwork::V6(..) => {
-                        self.limits.ipv6_count = self.limits.ipv6_count.saturating_add(1)
-                    }
-                };
+
+                self.limits.peer_count = self.limits.peer_count.saturating_add(1);
             }
         }
 
@@ -692,33 +709,27 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
 
         let address = endpoint.get_remote_address();
 
-        let ip = match address.iter().next() {
-            Some(Protocol::Ip4(ip)) => {
-                Some(IpNetwork::new_truncate(ip, self.config.ipv4_subnet_mask).unwrap())
-            }
-            Some(Protocol::Ip6(ip)) => {
-                Some(IpNetwork::new_truncate(ip, self.config.ipv6_subnet_mask).unwrap())
-            }
-            _ => None,
-        };
+        // Get IP from multiaddress if it exists.
+        let ip_info = self.get_ip_info_from_multiaddr(address);
 
         // Decrement IP counters if needed
-        if let Some(ip) = ip {
-            let value = self.limits.ip_count.entry(ip).or_insert(1);
+        if let Some(ip_info) = ip_info {
+            let value = self.limits.ip_count.entry(ip_info.ip).or_insert(1);
             *value = value.saturating_sub(1);
-            if *self.limits.ip_count.get(&ip).unwrap() == 0 {
-                self.limits.ip_count.remove(&ip);
+            if *self.limits.ip_count.get(&ip_info.ip).unwrap() == 0 {
+                self.limits.ip_count.remove(&ip_info.ip);
             }
 
-            match ip {
-                IpNetwork::V4(..) => {
-                    self.limits.ipv4_count = self.limits.ipv4_count.saturating_sub(1)
+            if let Some(subnet_ip) = ip_info.subnet_ip {
+                let value = self.limits.ip_subnet_count.entry(subnet_ip).or_insert(1);
+                *value = value.saturating_sub(1);
+                if *self.limits.ip_subnet_count.get(&subnet_ip).unwrap() == 0 {
+                    self.limits.ip_subnet_count.remove(&subnet_ip);
                 }
-                IpNetwork::V6(..) => {
-                    self.limits.ipv6_count = self.limits.ipv6_count.saturating_sub(1)
-                }
-            };
+            }
         }
+
+        self.limits.peer_count = self.limits.peer_count.saturating_sub(1);
 
         self.addresses.mark_closed(address.clone());
         self.peer_ids.mark_closed(*peer_id);

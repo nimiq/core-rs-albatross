@@ -32,13 +32,9 @@ pub enum ConnectionPoolHandlerError {
     #[error("Peer is banned")]
     BannedPeer,
 
-    /// Maximum connections per IPv4 subnet has been reached
-    #[error("Maximum connections per IPV4 subnet has been reached")]
-    MaxIpv4SubnetConnectionsReached,
-
-    /// Maximum connections per IPv6 subnet has been reached
-    #[error("Maximum connections per IPv6 subnet has been reached")]
-    MaxIpv6SubnetConnectionsReached,
+    /// Maximum connections per subnet has been reached
+    #[error("Maximum connections per subnet has been reached")]
+    MaxSubnetConnectionsReached,
 
     /// Maximum peer connections has been reached
     #[error("Maximum peer connections has been reached")]
