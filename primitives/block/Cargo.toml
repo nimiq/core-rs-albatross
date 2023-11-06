@@ -17,7 +17,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 ark-ec = "0.4"
 bitflags = "1.0"
-byteorder = "1.4"
+byteorder = "1.5"
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 serde = "1.0"
