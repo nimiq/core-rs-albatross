@@ -16,7 +16,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 async-trait = "0.1"
-byteorder = "1.2"
+byteorder = "1.5"
 futures = { package = "futures-util", version = "0.3" }
 linked-hash-map = "0.5.6"
 log = { package = "tracing", version = "0.1", features = ["log"] }

@@ -18,7 +18,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 blake2-rfc = "0.2"
-byteorder = "1.2"
+byteorder = "1.5"
 hex = "0.4"
 rust-argon2 = "2.0"
 serde = "1.0"
