@@ -1,15 +1,18 @@
 use std::sync::Arc;
 
+use byteorder::WriteBytesExt;
 use nimiq_block::{MacroBody, MacroHeader};
-use nimiq_hash::{Blake2sHash, Hash};
+use nimiq_hash::{Blake2sHash, Blake2sHasher, Hash, Hasher, SerializeContent};
 use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_network_interface::{
     network::Network,
     request::{Handle, RequestCommon, RequestMarker},
 };
+use nimiq_primitives::TendermintStep;
+use nimiq_serde::Serialize;
 use nimiq_tendermint::{Inherent, Proposal, ProposalMessage, SignedProposalMessage};
 use parking_lot::RwLock;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::aggregation::tendermint::state::MacroState;
 
@@ -51,6 +54,7 @@ pub struct SignedProposal {
 }
 
 impl SignedProposal {
+    const PROPOSAL_PREFIX: u8 = TendermintStep::Propose as u8;
     /// Transforms this SignedProposal into a SignedProposalMessage, which tendermint can understand.
     /// Optionally includes the GossipSubId if applicable, or None if the SignedProposal was not received
     /// via GossipSub, i.e. produced by this node itself.
@@ -66,6 +70,27 @@ impl SignedProposal {
                 valid_round: self.valid_round,
             },
         }
+    }
+
+    /// Hash proposal message components into a Blake2sHash while also including a Proposal Prefix.
+    /// This hash is not suited for the Aggregated signatures used for macro blocks, as it does not include
+    /// the public key tree root. It is suited to authenticate the creator of the proposal when signed.
+    pub fn hash(proposal: &MacroHeader, round: u32, valid_round: Option<u32>) -> Blake2sHash {
+        let mut h = Blake2sHasher::new();
+
+        h.write_u8(Self::PROPOSAL_PREFIX)
+            .expect("Must be able to write Prefix to hasher");
+        proposal
+            .serialize_content::<_, Blake2sHash>(&mut h)
+            .expect("Must be able to serialize content of the proposal to hasher");
+        round
+            .serialize_to_writer(&mut h)
+            .expect("Must be able to serialize content of the round to hasher ");
+        valid_round
+            .serialize_to_writer(&mut h)
+            .expect("Must be able to serialize content of the valid_round to hasher ");
+
+        h.finish()
     }
 }
 

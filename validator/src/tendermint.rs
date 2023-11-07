@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use byteorder::WriteBytesExt;
 use futures::{
     future::{self, BoxFuture, FutureExt},
     stream::{BoxStream, StreamExt},
@@ -34,7 +33,7 @@ use crate::{
         registry::ValidatorRegistry,
         tendermint::{
             contribution::{AggregateMessage, TendermintContribution},
-            proposal::{Body, Header, RequestProposal},
+            proposal::{Body, Header, RequestProposal, SignedProposal},
             protocol::TendermintAggregationProtocol,
             update_message::TendermintUpdate,
         },
@@ -134,8 +133,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintProtocol<TValidato
 where
     <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
 {
-    const PROPOSAL_PREFIX: u8 = TendermintStep::Propose as u8;
-
     pub fn new(
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TValidatorNetwork>,
@@ -153,37 +150,6 @@ where
             current_validators,
             network,
         }
-    }
-
-    /// Hashes the proposal, while taking care to not include the PubsubId
-    ///
-    /// This hash is NOT suited to be signed for BLS Aggregated signatures for the macro blocks, as those need to include the pk_tree_root.
-    /// See MacroBlock::zkp_hash for more details.
-    fn hash_proposal(proposal_msg: &ProposalMessage<<Self as Protocol>::Proposal>) -> Vec<u8> {
-        let mut h = Blake2sHasher::new();
-
-        h.write_u8(Self::PROPOSAL_PREFIX)
-            .expect("Must be able to write Prefix to hasher");
-        proposal_msg
-            .proposal
-            .0
-            .serialize_content::<_, Blake2sHash>(&mut h)
-            .expect("Must be able to serialize content of the proposal to hasher");
-        proposal_msg
-            .round
-            .serialize_to_writer(&mut h)
-            .expect("Must be able to serialize content of the round to hasher ");
-        proposal_msg
-            .valid_round
-            .serialize_to_writer(&mut h)
-            .expect("Must be able to serialize content of the valid_round to hasher ");
-
-        let mut v = vec![];
-        h.finish()
-            .serialize_to_writer(&mut v)
-            .expect("Must be able to serialize the hash.");
-
-        v
     }
 }
 
@@ -329,12 +295,15 @@ where
                         .validator
                         .signing_key;
 
-                    let msg = signed_proposal.into_tendermint_signed_message(None);
+                    let data = SignedProposal::hash(
+                        &signed_proposal.proposal,
+                        signed_proposal.round,
+                        signed_proposal.valid_round,
+                    )
+                    .serialize_to_vec();
 
-                    let data = Self::hash_proposal(&msg.message);
-
-                    if proposer.verify(&msg.signature.0, data.as_slice()) {
-                        return Some(msg);
+                    if proposer.verify(&signed_proposal.signature, &data) {
+                        return Some(signed_proposal.into_tendermint_signed_message(None));
                     }
                 }
                 None
@@ -366,7 +335,12 @@ where
                 proposed_block,
                 proposal.message.round,
                 proposal.message.valid_round,
-                Self::hash_proposal(&proposal.message),
+                SignedProposal::hash(
+                    &proposal.message.proposal.0,
+                    proposal.message.round,
+                    proposal.message.valid_round,
+                )
+                .serialize_to_vec(),
                 &proposal.signature.0,
                 signature_only,
             )
@@ -389,9 +363,14 @@ where
         &self,
         proposal_message: &ProposalMessage<Self::Proposal>,
     ) -> Self::ProposalSignature {
-        let data = Self::hash_proposal(proposal_message);
+        let data = SignedProposal::hash(
+            &proposal_message.proposal.0,
+            proposal_message.round,
+            proposal_message.valid_round,
+        )
+        .serialize_to_vec();
         (
-            self.block_producer.signing_key.sign(data.as_slice()),
+            self.block_producer.signing_key.sign(&data),
             self.validator_slot_band,
         )
     }
