@@ -21,7 +21,7 @@ pub struct MicroBlock {
     /// The justification, contains all the information needed to verify that the header was signed
     /// by the correct producer.
     pub justification: Option<MicroJustification>,
-    /// The body of the block.
+    /// The body of the micro-block.
     pub body: Option<MicroBody>,
 }
 
@@ -31,12 +31,12 @@ impl MicroBlock {
         self.header.hash()
     }
 
-    /// Returns the block number of this macro block.
+    /// Returns the block number of this micro block.
     pub fn block_number(&self) -> u32 {
         self.header.block_number
     }
 
-    /// Returns the epoch number of this macro block.
+    /// Returns the epoch number of this micro block.
     pub fn epoch_number(&self) -> u32 {
         Policy::epoch_at(self.header.block_number)
     }
@@ -222,6 +222,7 @@ pub struct MicroBody {
 }
 
 impl MicroBody {
+    /// Obtains the raw transactions contained in this micro block
     pub fn get_raw_transactions(&self) -> Vec<Transaction> {
         // Extract the transactions from the block
         self.transactions
@@ -230,6 +231,7 @@ impl MicroBody {
             .collect()
     }
 
+    /// Verifies the micro block: size, proofs, transactions, etc.
     pub(crate) fn verify(&self, is_skip: bool, block_number: u32) -> Result<(), BlockError> {
         // Check that the maximum body size is not exceeded.
         let body_size = self.serialized_size();
