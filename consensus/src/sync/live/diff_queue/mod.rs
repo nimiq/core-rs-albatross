@@ -32,29 +32,29 @@ use crate::sync::{
 pub mod diff_request_component;
 
 /// The max number of partial trie diffs requests per peer.
-pub const MAX_REQUEST_RESPONSE_PARTIAL_DIFFS: u32 = 100;
+pub const MAX_REQUEST_RESPONSE_TRIE_DIFFS: u32 = 100;
 
 /// The request of a trie diff.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RequestPartialDiff {
+pub struct RequestTrieDiff {
     pub block_hash: Blake2bHash,
 }
 
 /// The response for trie diff requests.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(u8)]
-pub enum ResponsePartialDiff {
+pub enum ResponseTrieDiff {
     PartialDiff(TrieDiff),
     UnknownBlockHash,
     IncompleteState,
 }
 
-impl RequestCommon for RequestPartialDiff {
+impl RequestCommon for RequestTrieDiff {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 218;
-    type Response = ResponsePartialDiff;
+    type Response = ResponseTrieDiff;
 
-    const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_PARTIAL_DIFFS;
+    const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_TRIE_DIFFS;
 }
 
 pub enum QueuedDiff<N: Network> {

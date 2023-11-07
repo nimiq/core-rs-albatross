@@ -10,7 +10,7 @@ use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::{
     messages::*,
-    sync::live::{diff_queue::RequestPartialDiff, state_queue::RequestChunk},
+    sync::live::{diff_queue::RequestTrieDiff, state_queue::RequestChunk},
 };
 use nimiq_database::volatile::VolatileDatabase;
 use nimiq_network_interface::{
@@ -141,7 +141,7 @@ pub struct MockNode<N: NetworkInterface + TestNetwork> {
     pub network: Arc<N>,
     pub blockchain: Arc<RwLock<Blockchain>>,
     pub request_missing_block_handler: MockHandler<N, RequestMissingBlocks, BlockchainProxy>,
-    pub request_partial_diff_handler: MockHandler<N, RequestPartialDiff, Arc<RwLock<Blockchain>>>,
+    pub request_partial_diff_handler: MockHandler<N, RequestTrieDiff, Arc<RwLock<Blockchain>>>,
     pub request_chunk_handler: MockHandler<N, RequestChunk, Arc<RwLock<Blockchain>>>,
 }
 
@@ -175,7 +175,7 @@ impl<N: NetworkInterface + TestNetwork> MockNode<N> {
         blockchain: Arc<RwLock<Blockchain>>,
     ) -> Self {
         let missing_block_subscription = network.receive_requests::<RequestMissingBlocks>();
-        let partial_diff_subscription = network.receive_requests::<RequestPartialDiff>();
+        let partial_diff_subscription = network.receive_requests::<RequestTrieDiff>();
         let chunk_subscription = network.receive_requests::<RequestChunk>();
 
         let request_missing_block_handler = MockHandler::new(

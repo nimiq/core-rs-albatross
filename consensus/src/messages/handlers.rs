@@ -17,7 +17,7 @@ use parking_lot::RwLock;
 use crate::messages::*;
 #[cfg(feature = "full")]
 use crate::sync::live::{
-    diff_queue::{RequestPartialDiff, ResponsePartialDiff},
+    diff_queue::{RequestTrieDiff, ResponseTrieDiff},
     state_queue::{Chunk, RequestChunk, ResponseChunk},
 };
 
@@ -315,12 +315,8 @@ impl<N: Network> Handle<N, ResponseChunk, Arc<RwLock<Blockchain>>> for RequestCh
 }
 
 #[cfg(feature = "full")]
-impl<N: Network> Handle<N, ResponsePartialDiff, Arc<RwLock<Blockchain>>> for RequestPartialDiff {
-    fn handle(
-        &self,
-        _peer_id: N::PeerId,
-        context: &Arc<RwLock<Blockchain>>,
-    ) -> ResponsePartialDiff {
+impl<N: Network> Handle<N, ResponseTrieDiff, Arc<RwLock<Blockchain>>> for RequestTrieDiff {
+    fn handle(&self, _peer_id: N::PeerId, context: &Arc<RwLock<Blockchain>>) -> ResponseTrieDiff {
         // TODO return the requested range only
         let blockchain = context.read();
         let txn = blockchain.read_transaction();
@@ -328,12 +324,12 @@ impl<N: Network> Handle<N, ResponsePartialDiff, Arc<RwLock<Blockchain>>> for Req
             .chain_store
             .get_accounts_diff(&self.block_hash, Some(&txn))
         {
-            Ok(diff) => ResponsePartialDiff::PartialDiff(diff),
-            Err(BlockchainError::BlockNotFound) => ResponsePartialDiff::UnknownBlockHash,
-            Err(BlockchainError::AccountsDiffNotFound) => ResponsePartialDiff::IncompleteState,
+            Ok(diff) => ResponseTrieDiff::PartialDiff(diff),
+            Err(BlockchainError::BlockNotFound) => ResponseTrieDiff::UnknownBlockHash,
+            Err(BlockchainError::AccountsDiffNotFound) => ResponseTrieDiff::IncompleteState,
             Err(e) => {
                 error!("unexpected error while querying accounts diff: {}", e);
-                ResponsePartialDiff::IncompleteState
+                ResponseTrieDiff::IncompleteState
             }
         }
     }

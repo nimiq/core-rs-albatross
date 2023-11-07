@@ -12,7 +12,7 @@ use nimiq_consensus::{
     sync::{
         live::{
             block_queue::BlockQueue,
-            diff_queue::{DiffQueue, RequestPartialDiff, ResponsePartialDiff},
+            diff_queue::{DiffQueue, RequestTrieDiff, ResponseTrieDiff},
             queue::QueueConfig,
             state_queue::{Chunk, ChunkRequestState, RequestChunk, ResponseChunk, StateQueue},
             StateLiveSync,
@@ -170,7 +170,7 @@ where
         matches!(
             join!(mock_node.next(), live_sync.next()),
             (
-                Some(RequestPartialDiff::TYPE_ID),
+                Some(RequestTrieDiff::TYPE_ID),
                 Some(LiveSyncEvent::PushEvent(
                     LiveSyncPushEvent::AcceptedAnnouncedBlock(_)
                 )),
@@ -222,10 +222,7 @@ where
             matches!(
                 join!(mock_node_request, live_sync.next()),
                 (
-                    (
-                        Some(RequestChunk::TYPE_ID),
-                        Some(RequestPartialDiff::TYPE_ID)
-                    ),
+                    (Some(RequestChunk::TYPE_ID), Some(RequestTrieDiff::TYPE_ID)),
                     Some(LiveSyncEvent::PushEvent(
                         LiveSyncPushEvent::AcceptedAnnouncedBlock(_)
                     )),
@@ -318,7 +315,7 @@ async fn can_sync_state() {
         matches!(
             join!(mock_node.next(), live_sync.next()),
             (
-                Some(RequestPartialDiff::TYPE_ID),
+                Some(RequestTrieDiff::TYPE_ID),
                 Some(LiveSyncEvent::PushEvent(
                     LiveSyncPushEvent::AcceptedAnnouncedBlock(_)
                 )),
@@ -466,7 +463,7 @@ async fn revert_chunks_for_state_live_sync() {
         matches!(
             join!(mock_node.next(), live_sync.next()),
             (
-                Some(RequestPartialDiff::TYPE_ID),
+                Some(RequestTrieDiff::TYPE_ID),
                 Some(LiveSyncEvent::PushEvent(
                     LiveSyncPushEvent::AcceptedAnnouncedBlock(_)
                 )),
@@ -542,7 +539,7 @@ async fn revert_chunks_for_state_live_sync() {
         matches!(
             join!(mock_node.next(), live_sync.next()),
             (
-                Some(RequestPartialDiff::TYPE_ID),
+                Some(RequestTrieDiff::TYPE_ID),
                 Some(LiveSyncEvent::PushEvent(
                     LiveSyncPushEvent::AcceptedBufferedBlock(..)
                 )),
@@ -674,7 +671,7 @@ async fn can_reset_chain_of_chunks() {
 
             mock_node
                 .request_partial_diff_handler
-                .set(|_, _, _| ResponsePartialDiff::PartialDiff(TrieDiff::default()));
+                .set(|_, _, _| ResponseTrieDiff::PartialDiff(TrieDiff::default()));
         },
         |mock_id, block_tx, blockchain| async move {
             let mut block = blockchain.read().head();
@@ -751,7 +748,7 @@ async fn can_remove_chunks_related_to_invalid_blocks() {
 
     mock_node
         .request_partial_diff_handler
-        .set(|_, _, _| ResponsePartialDiff::PartialDiff(TrieDiff::default()));
+        .set(|_, _, _| ResponseTrieDiff::PartialDiff(TrieDiff::default()));
 
     let mock_node_fut = async move {
         let res1 = mock_node.next().await;
@@ -765,7 +762,7 @@ async fn can_remove_chunks_related_to_invalid_blocks() {
             *blockchain_wg = new_blockchain;
         }
 
-        assert_eq!(mock_node.next().await, Some(RequestPartialDiff::TYPE_ID));
+        assert_eq!(mock_node.next().await, Some(RequestTrieDiff::TYPE_ID));
         assert_eq!(mock_node.next().await, Some(RequestChunk::TYPE_ID));
         assert_eq!(mock_node.next().await, Some(RequestChunk::TYPE_ID));
         (res1, res2)
@@ -831,7 +828,7 @@ async fn clears_buffer_after_macro_block() {
         matches!(
             join!(mock_node.next(), live_sync.next()),
             (
-                Some(RequestPartialDiff::TYPE_ID),
+                Some(RequestTrieDiff::TYPE_ID),
                 Some(LiveSyncEvent::PushEvent(
                     LiveSyncPushEvent::AcceptedAnnouncedBlock(_)
                 )),
@@ -908,7 +905,7 @@ async fn clears_buffer_after_macro_block() {
         matches!(
             join!(mock_node.next(), live_sync.next()),
             (
-                Some(RequestPartialDiff::TYPE_ID),
+                Some(RequestTrieDiff::TYPE_ID),
                 Some(LiveSyncEvent::PushEvent(
                     LiveSyncPushEvent::AcceptedBufferedBlock(..)
                 )),

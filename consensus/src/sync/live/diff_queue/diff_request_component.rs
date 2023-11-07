@@ -6,7 +6,7 @@ use nimiq_primitives::{trie::trie_diff::TrieDiff, TreeProof};
 use parking_lot::RwLock;
 use tokio::{sync::Semaphore, time};
 
-use super::{RequestPartialDiff, ResponsePartialDiff};
+use super::{RequestTrieDiff, ResponseTrieDiff};
 use crate::sync::{
     live::block_queue::BlockAndId,
     peer_list::{PeerList, PeerListIndex},
@@ -80,7 +80,7 @@ impl<N: Network> DiffRequestComponent<N> {
 
                     let result = network
                         .request(
-                            RequestPartialDiff {
+                            RequestTrieDiff {
                                 block_hash: block_hash.clone(),
                             },
                             peer_id,
@@ -91,17 +91,17 @@ impl<N: Network> DiffRequestComponent<N> {
                     let max_tries = peers.read().len();
 
                     match result {
-                        Ok(ResponsePartialDiff::PartialDiff(diff)) => {
+                        Ok(ResponseTrieDiff::PartialDiff(diff)) => {
                             if TreeProof::new(diff.0.iter()).root_hash() == block_diff_root {
                                 return Ok(diff);
                             }
                             warn!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: invalid diff");
                         }
                         // TODO: remove peer, retry elsewhere
-                        Ok(ResponsePartialDiff::IncompleteState) => {
+                        Ok(ResponseTrieDiff::IncompleteState) => {
                             debug!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: incomplete state")
                         }
-                        Ok(ResponsePartialDiff::UnknownBlockHash) => {
+                        Ok(ResponseTrieDiff::UnknownBlockHash) => {
                             debug!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: unknown block hash")
                         }
                         Err(error) => {

@@ -36,7 +36,7 @@ use crate::{
         RequestBatchSet, RequestBlocksProof, RequestHistoryChunk,
         RequestTransactionReceiptsByAddress, RequestTransactionsProof, RequestTrieProof,
     },
-    sync::live::{diff_queue::RequestPartialDiff, state_queue::RequestChunk},
+    sync::live::{diff_queue::RequestTrieDiff, state_queue::RequestChunk},
 };
 
 pub mod consensus_proxy;
@@ -201,7 +201,7 @@ impl<N: Network> Consensus<N> {
                 let stream = network.receive_requests::<RequestHistoryChunk>();
                 executor.exec(Box::pin(request_handler(network, stream, blockchain)));
 
-                let stream = network.receive_requests::<RequestPartialDiff>();
+                let stream = network.receive_requests::<RequestTrieDiff>();
                 executor.exec(Box::pin(request_handler(network, stream, blockchain)));
 
                 let stream = network.receive_requests::<RequestChunk>();
