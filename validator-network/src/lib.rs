@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::stream::BoxStream;
 use nimiq_bls::{lazy::LazyPublicKey, CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
-    network::{MsgAcceptance, Network, PubsubId, SubscribeEvents, Topic},
+    network::{CloseReason, MsgAcceptance, Network, PubsubId, SubscribeEvents, Topic},
     request::{Message, Request, RequestCommon},
 };
 
@@ -68,6 +68,13 @@ pub trait ValidatorNetwork: Send + Sync {
         public_key: &CompressedPublicKey,
         secret_key: &SecretKey,
     ) -> Result<(), Self::Error>;
+
+    /// Closes the connection to the peer with `peer_id` with the given `close_reason`.
+    async fn disconnect_peer(
+        &self,
+        peer_id: <Self::NetworkType as Network>::PeerId,
+        close_reason: CloseReason,
+    );
 
     /// Signals that a Gossipsup'd message with `id` was verified successfully and can be relayed.
     fn validate_message<TTopic>(&self, id: Self::PubsubId, acceptance: MsgAcceptance)

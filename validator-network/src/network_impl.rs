@@ -5,7 +5,7 @@ use futures::{stream::BoxStream, StreamExt, TryFutureExt};
 use log::warn;
 use nimiq_bls::{lazy::LazyPublicKey, CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
-    network::{MsgAcceptance, Network, SubscribeEvents, Topic},
+    network::{CloseReason, MsgAcceptance, Network, SubscribeEvents, Topic},
     request::{Message, Request, RequestCommon},
 };
 use nimiq_serde::{Deserialize, Serialize};
@@ -289,6 +289,10 @@ where
             .await?;
 
         Ok(())
+    }
+
+    async fn disconnect_peer(&self, peer_id: N::PeerId, close_reason: CloseReason) {
+        self.network.disconnect_peer(peer_id, close_reason).await
     }
 
     fn validate_message<TTopic>(&self, id: Self::PubsubId, acceptance: MsgAcceptance)
