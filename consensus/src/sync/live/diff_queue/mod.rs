@@ -1,7 +1,6 @@
 use std::{
     collections::HashSet,
     future::Future,
-    ops::RangeTo,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -18,7 +17,7 @@ use nimiq_network_interface::{
     network::Network,
     request::{RequestCommon, RequestMarker},
 };
-use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_diff::TrieDiff};
+use nimiq_primitives::trie::trie_diff::TrieDiff;
 use nimiq_serde::{Deserialize, Serialize};
 use parking_lot::RwLock;
 
@@ -39,7 +38,6 @@ pub const MAX_REQUEST_RESPONSE_PARTIAL_DIFFS: u32 = 100;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestPartialDiff {
     pub block_hash: Blake2bHash,
-    pub range: RangeTo<KeyNibbles>,
 }
 
 /// The response for trie diff requests.
@@ -237,7 +235,7 @@ impl<N: Network> Stream for DiffQueue<N> {
                         }));
                     }
 
-                    let get_diff = self.diff_request_component.request_diff(..KeyNibbles::ROOT);
+                    let get_diff = self.diff_request_component.request_diff();
                     self.diffs
                         .push_back(Box::pin(augment_block(block, get_diff)));
                 }

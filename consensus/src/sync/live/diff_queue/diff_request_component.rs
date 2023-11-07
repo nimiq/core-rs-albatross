@@ -1,8 +1,8 @@
-use std::{ops, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use futures::future::BoxFuture;
 use nimiq_network_interface::network::{Network, PubsubId};
-use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_diff::TrieDiff, TreeProof};
+use nimiq_primitives::{trie::trie_diff::TrieDiff, TreeProof};
 use parking_lot::RwLock;
 use tokio::{sync::Semaphore, time};
 
@@ -33,7 +33,6 @@ impl<N: Network> DiffRequestComponent<N> {
 
     pub fn request_diff(
         &mut self,
-        range: ops::RangeTo<KeyNibbles>,
     ) -> impl FnMut(&BlockAndId<N>) -> BoxFuture<'static, Result<TrieDiff, ()>> {
         let mut starting_peer_index = self.current_peer_index.clone();
         self.current_peer_index.increment();
@@ -57,7 +56,6 @@ impl<N: Network> DiffRequestComponent<N> {
 
             let network = Arc::clone(&network);
             let concurrent_requests = Arc::clone(&concurrent_requests);
-            let range = range.clone();
             let block_desc = format!("{}", block);
             let block_hash = block.hash();
             let block_diff_root = block.diff_root().clone();
@@ -84,7 +82,6 @@ impl<N: Network> DiffRequestComponent<N> {
                         .request(
                             RequestPartialDiff {
                                 block_hash: block_hash.clone(),
-                                range: range.clone(),
                             },
                             peer_id,
                         )
