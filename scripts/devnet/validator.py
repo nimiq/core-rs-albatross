@@ -20,11 +20,14 @@ class Validator(Node):
     :type sync_mode: str
     :param metrics: Optional metrics settings
     :type metrics: Optional[dict]
+    :param container_image: Optional container image
+    :type container_image: Optional[str]
     """
 
     def __init__(self, name: str, listen_port: int,
                  topology_settings: TopologySettings, sync_mode: str = "full",
-                 metrics: Optional[dict] = None):
+                 metrics: Optional[dict] = None,
+                 container_image: Optional[str] = None):
         if sync_mode == "light":
             raise Exception("Validator can't use light sync_mode")
         self.voting_keypair = create_bls_keypair(topology_settings)
@@ -33,7 +36,8 @@ class Validator(Node):
         self.reward_address = create_schnorr_keypair(topology_settings)
         super(Validator, self).__init__(NodeType.VALIDATOR,
                                         name, "nimiq-client", listen_port,
-                                        topology_settings, sync_mode, metrics)
+                                        topology_settings, sync_mode, metrics,
+                                        container_image)
 
     def get_voting_keypair(self):
         """
@@ -126,7 +130,8 @@ class Validator(Node):
                                   internal_genesis_dir=int_genesis_dir,
                                   genesis_filename=genesis_filename,
                                   config_content=config_content['config'],
-                                  enable_metrics=enable_metrics)
+                                  enable_metrics=enable_metrics,
+                                  container_image=self.container_image)
         with open(filename, mode="w", encoding="utf-8") as file:
             file.write(content)
 

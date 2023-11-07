@@ -33,7 +33,7 @@ spec:
     spec:
       containers:
       - name: {{ name }}
-        image: ghcr.io/nimiq/core-rs-albatross:latest
+        image: {{ container_image }}
         ports:
         - containerPort: 8443
         {% if enable_metrics %}
@@ -66,6 +66,8 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ name }}-conf-file
+  labels:
+    node_type: {{ node_type }}
 data:
   client.toml: |
     {{ config_content | indent( width=4) }}

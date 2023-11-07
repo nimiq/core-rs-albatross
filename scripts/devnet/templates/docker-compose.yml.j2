@@ -12,7 +12,7 @@ networks:
 services:
 {% for seed in seeds %}
   {{ seed['name'] }}:
-    image: ghcr.io/nimiq/core-rs-albatross:latest
+    image: {{ seed['container_image'] }}
     environment:
       - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
     ports:
@@ -27,7 +27,7 @@ services:
 {% endfor %}
 {% for validator in validators %}
   {{ validator['name'] }}:
-    image: ghcr.io/nimiq/core-rs-albatross:latest
+    image: {{ validator['container_image'] }}
     depends_on:
       - seed1
     environment:
@@ -44,7 +44,7 @@ services:
 {% endfor %}
 {% for regular_node in regular_nodes %}
   {{ regular_node['name'] }}:
-    image: ghcr.io/nimiq/core-rs-albatross:latest
+    image: {{ regular_node['container_image'] }}
     environment:
       - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
     ports:
@@ -59,7 +59,7 @@ services:
 {% endfor %}
 {% for spammer in spammers %}
   {{ spammer['name'] }}:
-    image: spammer:latest
+    image: {{ spammer['container_image'] }}
     depends_on:
       - seed1
     environment:

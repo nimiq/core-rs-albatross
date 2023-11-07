@@ -7,6 +7,7 @@ from enum import Enum
 from typing import Optional
 from jinja2 import Environment
 from pathlib import Path
+from typing import List
 
 from topology_settings import TopologySettings
 
@@ -43,22 +44,34 @@ class Node:
     :type sync_mode: str
     :param metrics: Optional metrics settings
     :type metrics: Optional[dict]
+    :param container_image: Optional container image
+    :type container_image: Optional[str]
+    :param nimiq_exec_extra_args: Optional list of arguments for the nimiq
+        client
+    :type nimiq_exec_extra_args: List[str]
     """
 
     def __init__(self, type: NodeType, name: str, nimiq_exec: str,
                  listen_port: int, topology_settings: TopologySettings,
                  sync_mode: str = "full", metrics: Optional[dict] = None,
-                 nimiq_exec_extra_args: list = []):
+                 container_image: Optional[str] = None,
+                 nimiq_exec_extra_args: List[str] = []):
         self.type = type
         self.name = name
         self.nimiq_exec = nimiq_exec
         self.listen_port = listen_port
         self.metrics = metrics
+        self.container_image = container_image
         self.topology_settings = topology_settings
         self.nimiq_exec_extra_args = nimiq_exec_extra_args
         self.conf_dir = topology_settings.get_node_conf_dir(self.name)
         Path(self.conf_dir).mkdir(parents=False, exist_ok=False)
         self.state_dir = topology_settings.get_node_state_dir(self.name)
+        # Set the container image
+        if container_image is None:
+            self.container_image = 'ghcr.io/nimiq/core-rs-albatross:latest'
+        else:
+            self.container_image = container_image
         # Only create a directory for the node state if the node won't be
         # containerized.
         if not topology_settings.is_env_containerized():
@@ -165,6 +178,15 @@ class Node:
         :rtype: str
         """
         return f"{self.get_state_dir()}/devalbatross-history-consensus"
+
+    def get_container_image(self):
+        """
+        Gets the container image of the current node
+
+        :return: The container image of the current node.
+        :rtype: str
+        """
+        return self.container_image
 
     def build(self):
         """
@@ -356,15 +378,18 @@ class RegularNode(Node):
     :type sync_mode: str
     :param metrics: Optional metrics settings
     :type metrics: Optional[dict]
+    :param container_image: Optional container image
+    :type container_image: Optional[str]
     """
 
     def __init__(self, name: str, listen_port: int,
                  topology_settings: TopologySettings, sync_mode: str = "full",
-                 metrics: Optional[dict] = None):
+                 metrics: Optional[dict] = None,
+                 container_image: Optional[str] = None):
         super(RegularNode, self).__init__(NodeType.REGULAR_NODE,
                                           name, "nimiq-client", listen_port,
                                           topology_settings, sync_mode,
-                                          metrics)
+                                          metrics, container_image)
 
     def generate_config_files(self, jinja_env: Environment,
                               listen_ip: str, seed_addresses: list):
@@ -415,7 +440,8 @@ class RegularNode(Node):
                                   internal_genesis_dir=int_genesis_dir,
                                   genesis_filename=genesis_filename,
                                   config_content=config_content,
-                                  enable_metrics=enable_metrics)
+                                  enable_metrics=enable_metrics,
+                                  container_image=self.container_image)
         with open(filename, mode="w", encoding="utf-8") as file:
             file.write(content)
 
@@ -471,14 +497,18 @@ class Seed(Node):
     :type sync_mode: str
     :param metrics: Optional metrics settings
     :type metrics: Optional[dict]
+    :param container_image: Optional container image
+    :type container_image: Optional[str]
     """
 
     def __init__(self, name: str, listen_port: int,
                  topology_settings: TopologySettings, sync_mode: str = "full",
-                 metrics: Optional[dict] = None):
+                 metrics: Optional[dict] = None,
+                 container_image: Optional[str] = None):
         super(Seed, self).__init__(NodeType.SEED,
                                    name, "nimiq-client", listen_port,
-                                   topology_settings, sync_mode, metrics)
+                                   topology_settings, sync_mode, metrics,
+                                   container_image)
 
     def generate_config_files(self, jinja_env: Environment, listen_ip: str):
         """
@@ -519,7 +549,8 @@ class Seed(Node):
                                   internal_genesis_dir=int_genesis_dir,
                                   genesis_filename=genesis_filename,
                                   config_content=config_content,
-                                  enable_metrics=enable_metrics)
+                                  enable_metrics=enable_metrics,
+                                  container_image=self.container_image)
         with open(filename, mode="w", encoding="utf-8") as file:
             file.write(content)
 

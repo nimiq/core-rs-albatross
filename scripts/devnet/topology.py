@@ -115,6 +115,7 @@ class Topology:
                         f"{node['restartable']}")
                 name = f"{key}{count+1}"
                 metrics = None
+                container_image = None
                 if 'enable_metrics' in node:
                     if not isinstance(node['enable_metrics'], bool):
                         raise Exception(
@@ -129,6 +130,14 @@ class Topology:
                             metrics_ip = "127.0.0.1"
                         metrics = {'ip': metrics_ip, 'port': metrics_port}
 
+                if 'container_image' in node:
+                    if not containerized:
+                        logging.warning("Ignoring 'container_image' for "
+                                        f"{name} since environment is not "
+                                        "setting up containers")
+                    else:
+                        container_image = node['container_image']
+
                 # Create objects depending on type:
                 if containerized:
                     port = 8443
@@ -137,18 +146,18 @@ class Topology:
                 if key == 'validator':
                     topology_node = Validator(
                         name, port, self.topology_settings, node['sync_mode'],
-                        metrics=metrics)
+                        metrics=metrics, container_image=container_image)
                     validators.append(topology_node)
                 elif key == 'seed':
                     topology_node = Seed(
                         name, port, self.topology_settings, node['sync_mode'],
-                        metrics=metrics)
+                        metrics=metrics, container_image=container_image)
                     seeds.append(topology_node)
                     self.seed_nodes.append(topology_node)
                 elif key == 'node':
                     topology_node = RegularNode(
                         name, port, self.topology_settings, node['sync_mode'],
-                        metrics=metrics)
+                        metrics=metrics, container_image=container_image)
                     regular_nodes.append(topology_node)
                 elif key == 'spammer':
                     if 'tpb' not in node:
@@ -159,7 +168,8 @@ class Topology:
                             f"{node['tpb']}")
                     topology_node = Spammer(
                         name, port, self.topology_settings, node['tpb'],
-                        node['sync_mode'], metrics=metrics)
+                        node['sync_mode'], metrics=metrics,
+                        container_image=container_image)
                     spammers.append(topology_node)
                 # Now add them to the nodes attributes
                 if node['restartable']:
@@ -174,22 +184,30 @@ class Topology:
         """
         Generates a docker-compose yml file according to a topology
         """
-        seeds_list = list(map(lambda seed:
-                              {'name': seed.get_name(),
-                               'conf_path': seed.get_conf_dir()},
-                              seeds))
-        spammers_list = list(map(lambda spammer:
-                                 {'name': spammer.get_name(),
-                                  'conf_path': spammer.get_conf_dir()},
-                                 spammers))
-        regular_nodes_list = list(map(lambda node:
-                                      {'name': node.get_name(),
-                                       'conf_path': node.get_conf_dir()},
-                                      regular_nodes))
-        validators_list = list(map(lambda validator:
-                                   {'name': validator.get_name(),
-                                    'conf_path': validator.get_conf_dir()},
-                                   validators))
+        seeds_list = list(
+            map(lambda seed:
+                {'name': seed.get_name(),
+                 'conf_path': seed.get_conf_dir(),
+                 'container_image': seed.get_container_image()},
+                seeds))
+        spammers_list = list(
+            map(lambda spammer:
+                {'name': spammer.get_name(),
+                 'conf_path': spammer.get_conf_dir(),
+                 'container_image': spammer.get_container_image()},
+                spammers))
+        regular_nodes_list = list(
+            map(lambda node:
+                {'name': node.get_name(),
+                 'conf_path': node.get_conf_dir(),
+                 'container_image': node.get_container_image()},
+                regular_nodes))
+        validators_list = list(
+            map(lambda validator:
+                {'name': validator.get_name(),
+                 'conf_path': validator.get_conf_dir(),
+                 'container_image': validator.get_container_image()},
+                validators))
 
         # Now read and render the template
         template = self.jinja_env.get_template("docker-compose.yml.j2")

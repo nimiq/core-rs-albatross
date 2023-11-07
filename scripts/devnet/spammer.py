@@ -21,15 +21,19 @@ class Spammer(Node):
     :type sync_mode: str
     :param metrics: Optional metrics settings
     :type metrics: Optional[dict]
+    :param container_image: Optional container image
+    :type container_image: Optional[str]
     """
 
     def __init__(self, name: str, listen_port: int,
                  topology_settings: TopologySettings, tpb: int,
-                 sync_mode: str = 'history', metrics: Optional[dict] = None):
+                 sync_mode: str = 'history', metrics: Optional[dict] = None,
+                 container_image: Optional[str] = None):
         self.address = "NQ40 GCAA U3UX 8BKD GUN0 PG3T 17HA 4X5H TXVE"
         super(Spammer, self).__init__(NodeType.SPAMMER,
                                       name, "nimiq-spammer", listen_port,
                                       topology_settings, sync_mode, metrics,
+                                      container_image,
                                       nimiq_exec_extra_args=['-t', str(tpb)])
 
     def get_address(self):
@@ -99,7 +103,8 @@ class Spammer(Node):
                                   internal_genesis_dir=int_genesis_dir,
                                   genesis_filename=genesis_filename,
                                   config_content=config_content,
-                                  enable_metrics=enable_metrics)
+                                  enable_metrics=enable_metrics,
+                                  container_image=self.container_image)
         with open(filename, mode="w", encoding="utf-8") as file:
             file.write(content)
 
