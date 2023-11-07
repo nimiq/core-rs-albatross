@@ -18,7 +18,11 @@ use nimiq_keys::{Address, PublicKey};
 use nimiq_primitives::{coin::Coin, policy::Policy, slots_allocation::Validators};
 use nimiq_serde::Serialize as NimiqSerialize;
 use nimiq_transaction::{
-    account::htlc_contract::AnyHash, inherent::Inherent as BaseInherent, reward::RewardTransaction,
+    account::htlc_contract::AnyHash,
+    historic_transaction::{
+        HistoricTransaction, HistoricTransactionData, JailEvent, PenalizeEvent, RewardEvent,
+    },
+    reward::RewardTransaction,
 };
 use nimiq_vrf::VrfSeed;
 use serde::{Deserialize, Serialize};
@@ -585,7 +589,6 @@ pub enum Inherent {
     Penalize {
         block_number: u32,
         block_time: u64,
-        slot: u16,
         validator_address: Address,
         offense_event_block: u32,
     },
@@ -595,57 +598,45 @@ pub enum Inherent {
         validator_address: Address,
         offense_event_block: u32,
     },
-    FinalizeBatch {
-        block_number: u32,
-        block_time: u64,
-    },
-    FinalizeEpoch {
-        block_number: u32,
-        block_time: u64,
-    },
 }
 
 impl Inherent {
-    pub fn from(inherent: BaseInherent, block_number: u32, block_time: u64) -> Self {
-        let hash = inherent.hash();
-        match inherent {
-            BaseInherent::Reward {
+    pub fn try_from(hist_tx: HistoricTransaction) -> Option<Self> {
+        let hash = hist_tx.data.hash();
+        Some(match hist_tx.data {
+            HistoricTransactionData::Basic(_) => return None,
+            HistoricTransactionData::Equivocation(_) => return None,
+            HistoricTransactionData::Reward(RewardEvent {
                 validator_address,
-                target,
+                reward_address,
                 value,
-            } => Inherent::Reward {
-                block_number,
-                block_time,
+            }) => Inherent::Reward {
+                block_number: hist_tx.block_number,
+                block_time: hist_tx.block_time,
                 validator_address,
-                target,
+                target: reward_address,
                 value,
                 hash,
             },
-            BaseInherent::Penalize { slot } => Inherent::Penalize {
-                block_number,
-                block_time,
-                slot: slot.slot,
-                validator_address: slot.validator_address,
-                offense_event_block: slot.offense_event_block,
+            HistoricTransactionData::Penalize(PenalizeEvent {
+                validator_address,
+                offense_event_block,
+            }) => Inherent::Penalize {
+                block_number: hist_tx.block_number,
+                block_time: hist_tx.block_time,
+                validator_address,
+                offense_event_block,
             },
-            BaseInherent::Jail {
-                jailed_validator, ..
-            } => Inherent::Jail {
-                block_number,
-                block_time,
-                validator_address: jailed_validator.validator_address,
-                offense_event_block: jailed_validator.offense_event_block,
+            HistoricTransactionData::Jail(JailEvent {
+                validator_address,
+                offense_event_block,
+            }) => Inherent::Jail {
+                block_number: hist_tx.block_number,
+                block_time: hist_tx.block_time,
+                validator_address,
+                offense_event_block,
             },
-
-            BaseInherent::FinalizeBatch => Inherent::FinalizeBatch {
-                block_number,
-                block_time,
-            },
-            BaseInherent::FinalizeEpoch => Inherent::FinalizeEpoch {
-                block_number,
-                block_time,
-            },
-        }
+        })
     }
 }
 

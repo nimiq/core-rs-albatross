@@ -219,6 +219,14 @@ impl Blockchain {
             .expect("Block body must be present");
 
         for equivocation_proof in &body.equivocation_proofs {
+            if self
+                .history_store
+                .has_equivocation_proof(equivocation_proof.locator(), Some(txn))
+            {
+                return Err(PushError::EquivocationAlreadyIncluded(
+                    equivocation_proof.locator(),
+                ));
+            }
             let validators = self
                 .get_validators_for_epoch(
                     Policy::epoch_at(equivocation_proof.block_number()),

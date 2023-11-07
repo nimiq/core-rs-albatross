@@ -85,12 +85,46 @@ impl HistoricTransaction {
                         }),
                     });
                 }
-                // These special types of inherents do not generate extended transactions
-                Inherent::FinalizeBatch | Inherent::FinalizeEpoch => {}
+                Inherent::Penalize { slot } => hist_txs.push(HistoricTransaction {
+                    network_id,
+                    block_number,
+                    block_time,
+                    data: HistoricTransactionData::Penalize(PenalizeEvent {
+                        validator_address: slot.validator_address,
+                        offense_event_block: slot.offense_event_block,
+                    }),
+                }),
+                Inherent::Jail {
+                    jailed_validator, ..
+                } => hist_txs.push(HistoricTransaction {
+                    network_id,
+                    block_number,
+                    block_time,
+                    data: HistoricTransactionData::Jail(JailEvent {
+                        validator_address: jailed_validator.validator_address,
+                        offense_event_block: jailed_validator.offense_event_block,
+                    }),
+                }),
+                Inherent::FinalizeBatch => {}
+                Inherent::FinalizeEpoch => {}
             }
         }
 
         hist_txs
+    }
+
+    pub fn count(num_transactions: usize, inherents: &[Inherent]) -> usize {
+        num_transactions
+            + inherents
+                .iter()
+                .filter_map(|inherent| match inherent {
+                    Inherent::Reward { .. } => Some(()),
+                    Inherent::Penalize { .. } => Some(()),
+                    Inherent::Jail { .. } => Some(()),
+                    Inherent::FinalizeBatch => None,
+                    Inherent::FinalizeEpoch => None,
+                })
+                .count()
     }
 
     /// Checks if the historic transaction is an inherent.
@@ -115,17 +149,6 @@ impl HistoricTransaction {
             unreachable!()
         }
     }
-
-    /*
-    /// Unwraps the historic transaction and returns a reference to the underlying inherent.
-    pub fn unwrap_inherent(&self) -> &Inherent {
-        if let HistoricTransactionData::Inherent(ref tx) = self.data {
-            tx
-        } else {
-            unreachable!()
-        }
-    }
-    */
 
     /// Returns the hash of the underlying transaction/inherent. For reward inherents we return the
     /// hash of the corresponding reward transaction. This results into an unique hash for the
@@ -154,7 +177,9 @@ impl HistoricTransaction {
                     self.network_id,
                 )))
             }
-            HistoricTransactionData::Equivocation(_) => {
+            HistoricTransactionData::Penalize(_)
+            | HistoricTransactionData::Jail(_)
+            | HistoricTransactionData::Equivocation(_) => {
                 Err(IntoTransactionError::NoBasicTransactionMapping)
             }
         }
@@ -200,6 +225,8 @@ pub enum HistoricTransactionData {
     /// A basic transaction. It simply contains the transaction as contained in the block.
     Basic(ExecutedTransaction),
     Reward(RewardEvent),
+    Penalize(PenalizeEvent),
+    Jail(JailEvent),
     Equivocation(EquivocationEvent),
 }
 
@@ -213,4 +240,16 @@ pub struct RewardEvent {
     pub validator_address: Address,
     pub reward_address: Address,
     pub value: Coin,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PenalizeEvent {
+    pub validator_address: Address,
+    pub offense_event_block: u32,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct JailEvent {
+    pub validator_address: Address,
+    pub offense_event_block: u32,
 }

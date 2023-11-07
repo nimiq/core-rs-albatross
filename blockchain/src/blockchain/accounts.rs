@@ -225,7 +225,7 @@ impl Blockchain {
 
         // Remove the transactions from the History tree. For this you only need to calculate the
         // number of transactions that you want to remove.
-        let num_txs = body.transactions.len() + inherents.len();
+        let num_txs = HistoricTransaction::count(body.transactions.len(), &inherents);
         let (_, total_size) = self
             .history_store
             .remove_partial_history(txn.raw(), block.epoch_number(), num_txs)

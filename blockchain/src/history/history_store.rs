@@ -7,7 +7,7 @@ use nimiq_database::{
     traits::{Database, ReadCursor, ReadTransaction, WriteCursor, WriteTransaction},
     DatabaseProxy, TableFlags, TableProxy, TransactionProxy, WriteTransactionProxy,
 };
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_mmr::{
     error::Error as MMRError,
@@ -23,8 +23,9 @@ use nimiq_mmr::{
 use nimiq_primitives::policy::Policy;
 use nimiq_serde::Serialize;
 use nimiq_transaction::{
-    historic_transaction::{HistoricTransaction, HistoricTransactionData},
+    historic_transaction::{EquivocationEvent, HistoricTransaction, HistoricTransactionData},
     history_proof::HistoryTreeProof,
+    EquivocationLocator,
 };
 
 use crate::history::{mmr_store::MMRStore, ordered_hash::OrderedHash, HistoryTreeChunk};
@@ -260,7 +261,9 @@ impl HistoryStore {
                 HistoricTransactionData::Reward(ev) => {
                     affected_addresses.insert(ev.reward_address.clone());
                 }
-                HistoricTransactionData::Equivocation(_) => {}
+                HistoricTransactionData::Equivocation(_)
+                | HistoricTransactionData::Penalize(_)
+                | HistoricTransactionData::Jail(_) => {}
             }
         }
 
@@ -886,6 +889,15 @@ impl HistoryStore {
         cursor.last::<u32, u32>().map(|(key, _)| key)
     }
 
+    pub fn has_equivocation_proof(
+        &self,
+        locator: EquivocationLocator,
+        txn_option: Option<&TransactionProxy>,
+    ) -> bool {
+        let hash = HistoricTransactionData::Equivocation(EquivocationEvent { locator }).hash();
+        !self.get_hist_tx_by_hash(&hash, txn_option).is_empty()
+    }
+
     /// Gets an historic transaction by its hash. Note that this hash is the leaf hash (see MMRHash)
     /// of the transaction, not a simple Blake2b hash of the transaction.
     fn get_historic_tx(
@@ -974,6 +986,8 @@ impl HistoryStore {
             }
             // Do not index equivocation events.
             HistoricTransactionData::Equivocation(_) => {}
+            // Do not index punishment events.
+            HistoricTransactionData::Penalize(_) | HistoricTransactionData::Jail(_) => {}
         }
         hist_tx.serialized_size()
     }

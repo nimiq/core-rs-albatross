@@ -1,6 +1,7 @@
 use nimiq_block::{Block, BlockError, EquivocationProofError, ForkProof};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{account::AccountError, networks::NetworkId};
+use nimiq_transaction::EquivocationLocator;
 use thiserror::Error;
 
 /// An enum used when a fork is detected.
@@ -96,6 +97,8 @@ pub enum PushError {
     MissingAccountsTrieDiff,
     #[error("Invalid macro block historic transaction")]
     InvalidHistoricTransaction,
+    #[error("Proof for equivocation already included")]
+    EquivocationAlreadyIncluded(EquivocationLocator),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]

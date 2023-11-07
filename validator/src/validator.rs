@@ -12,7 +12,7 @@ use std::{
 
 use futures::stream::{BoxStream, Stream, StreamExt};
 use linked_hash_map::LinkedHashMap;
-use nimiq_block::{Block, BlockHeaderTopic, BlockTopic, BlockType};
+use nimiq_block::{Block, BlockHeaderTopic, BlockTopic, BlockType, EquivocationProof};
 use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, ForkEvent, PushResult};
 use nimiq_bls::{lazy::LazyPublicKey, KeyPair as BlsKeyPair};
@@ -525,13 +525,23 @@ where
         }
     }
 
+    fn on_equivocation_proof(&mut self, proof: EquivocationProof) {
+        // Keep the lock until the proof is added to the the proof pool.
+        let blockchain = self.blockchain.read();
+        if blockchain
+            .history_store
+            .has_equivocation_proof(proof.locator(), None)
+        {
+            return;
+        }
+        self.blockchain_state.equivocation_proofs.insert(proof);
+        drop(blockchain);
+    }
+
     fn on_fork_event(&mut self, event: ForkEvent) {
         match event {
-            ForkEvent::Detected(fork_proof) => self
-                .blockchain_state
-                .equivocation_proofs
-                .insert(fork_proof.into()),
-        };
+            ForkEvent::Detected(fork_proof) => self.on_equivocation_proof(fork_proof.into()),
+        }
     }
 
     fn poll_macro(&mut self, cx: &mut Context<'_>) {

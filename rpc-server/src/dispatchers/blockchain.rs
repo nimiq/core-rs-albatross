@@ -263,21 +263,12 @@ impl BlockchainInterface for BlockchainDispatcher {
                 .history_store
                 .get_block_transactions(block_number, None);
 
-            // Get the timestamp of the block from one of the historic transactions. This complicated
-            // setup is because we might not have any transactions.
-            let timestamp = historic_tx_vec.first().map(|x| x.block_time).unwrap_or(0);
-
             // Get only the inherents. This includes reward inherents.
             let mut inherents = vec![];
 
             for hist_tx in historic_tx_vec {
-                if hist_tx.is_not_basic() {
-                    inherents.push(Inherent::from(
-                        todo!(),
-                        //hist_tx.unwrap_inherent().clone(),
-                        block_number,
-                        timestamp,
-                    ));
+                if let Some(inherent) = Inherent::try_from(hist_tx) {
+                    inherents.push(inherent);
                 }
             }
 
@@ -355,32 +346,22 @@ impl BlockchainInterface for BlockchainDispatcher {
                 let micro_hist_tx_vec = blockchain.history_store.get_block_transactions(i, None);
 
                 for hist_tx in micro_hist_tx_vec {
-                    if hist_tx.is_not_basic() {
-                        inherent_tx_vec.push(hist_tx);
+                    if let Some(inherent) = Inherent::try_from(hist_tx) {
+                        inherent_tx_vec.push(inherent);
                     }
                 }
             }
 
             // Append inherents of the macro block (we do this after the micro blocks so the inherents are in order)
-            inherent_tx_vec.append(
-                &mut blockchain
+            inherent_tx_vec.extend(
+                blockchain
                     .history_store
                     .get_block_transactions(macro_block_number, None)
                     .into_iter()
-                    .collect(),
+                    .filter_map(Inherent::try_from),
             );
 
-            Ok(inherent_tx_vec
-                .into_iter()
-                .map(|hist_tx| {
-                    Inherent::from(
-                        todo!(), //hist_tx.unwrap_inherent().clone(),
-                        hist_tx.block_number,
-                        hist_tx.block_time,
-                    )
-                })
-                .collect::<Vec<_>>()
-                .into())
+            Ok(inherent_tx_vec.into())
         } else {
             Err(Error::NotSupportedForLightBlockchain)
         }
