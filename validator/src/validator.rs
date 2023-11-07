@@ -163,12 +163,11 @@ where
         let blockchain_rg = blockchain.read();
         let blockchain_event_rx = blockchain_rg.notifier_as_stream();
         let fork_event_rx = BroadcastStream::new(blockchain_rg.fork_notifier.subscribe());
-        let can_enforce_validity_window = blockchain_rg.can_enforce_validity_window();
         drop(blockchain_rg);
 
         let blockchain_state = BlockchainState {
             equivocation_proofs: EquivocationProofPool::new(),
-            can_enforce_validity_window,
+            can_enforce_validity_window: false,
         };
 
         let database = env.open_table(Self::MACRO_STATE_DB_NAME.to_string());
