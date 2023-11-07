@@ -459,6 +459,60 @@ impl HistoryStore {
         hist_txs
     }
 
+    /// Gets the historic transaction associated to a leaf index, block_number
+    pub fn get_historic_tx_by_leaf_index(
+        &self,
+        leaf_index: u32,
+        block_number: u32,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Option<HistoricTransaction> {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        // Get the history tree.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_table,
+            txn,
+            Policy::epoch_at(block_number),
+        ));
+        let leaf_hash = tree.get_leaf(leaf_index as usize).unwrap();
+
+        self.get_historic_tx(&leaf_hash, Some(txn))
+    }
+
+    /// Gets the historic transaction associated to a (leaf index, epoch)
+    pub fn get_historic_tx_by_leaf_index_and_epoch(
+        &self,
+        leaf_index: u32,
+        epoch: u32,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Option<HistoricTransaction> {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        // Get the history tree.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_table,
+            txn,
+            epoch,
+        ));
+        let leaf_hash = tree.get_leaf(leaf_index as usize).unwrap();
+
+        self.get_historic_tx(&leaf_hash, Some(txn))
+    }
+
     /// Gets all historic transactions for a given epoch.
     pub fn get_epoch_transactions(
         &self,
@@ -1026,7 +1080,7 @@ impl HistoryStore {
     }
 
     /// Returns the range of leaf indexes corresponding to the given block number.
-    fn get_indexes_for_block(
+    pub fn get_indexes_for_block(
         &self,
         block_number: u32,
         txn_option: Option<&TransactionProxy>,

@@ -22,6 +22,14 @@ pub trait MacroSync<TPeerId>: Stream<Item = MacroSyncReturn<TPeerId>> + Unpin + 
     fn add_peer(&self, peer_id: TPeerId);
 }
 
+/// Trait that defines how a node synchronizes the transactions from the current validity window
+pub trait ValidityWindowSync<TPeerId>:
+    Stream<Item = ValidityWindowSyncReturn<TPeerId>> + Unpin + Send
+{
+    /// Adds a peer to synchronize the validity window transactions
+    fn add_peer(&mut self, peer_id: TPeerId);
+}
+
 /// Trait that defines how a node synchronizes receiving the blocks the peers are currently
 /// processing.
 /// The expected functionality is that there could be different methods of syncing but they
@@ -55,6 +63,15 @@ pub enum MacroSyncReturn<T> {
     /// Macro Sync returned a good type
     Good(T),
     /// Macro Sync returned an outdated type
+    Outdated(T),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+/// Return type for a `ValidityWindowSync`
+pub enum ValidityWindowSyncReturn<T> {
+    /// Validity Window Sync returned a good type
+    Good(T),
+    /// Validity Window Sync returned an outdated type
     Outdated(T),
 }
 
@@ -103,9 +120,17 @@ pub enum LiveSyncPeerEvent<TPeerId> {
 /// synchronization such as: history sync, full sync and light sync.
 /// The Syncer handles the interactions between these trait objects, the blockchain and
 /// the network.
-pub struct Syncer<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> {
+pub struct Syncer<
+    N: Network,
+    M: MacroSync<N::PeerId>,
+    V: ValidityWindowSync<N::PeerId>,
+    L: LiveSync<N>,
+> {
     /// Synchronizes the blockchain to the blocks being processed/announced by the peers
     pub live_sync: L,
+
+    /// Synchornizes the history store to the current validity window
+    pub validity_window_sync: V,
 
     /// Synchronizes the blockchain to the latest macro blocks of the peers
     pub macro_sync: M,
@@ -121,13 +146,16 @@ pub struct Syncer<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> {
     outdated_timeouts: HashMap<N::PeerId, Instant>,
 }
 
-impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
+impl<N: Network, M: MacroSync<N::PeerId>, V: ValidityWindowSync<N::PeerId>, L: LiveSync<N>>
+    Syncer<N, M, V, L>
+{
     const CHECK_OUTDATED_TIMEOUT: Duration = Duration::from_secs(20);
 
-    pub fn new(live_sync: L, macro_sync: M) -> Syncer<N, M, L> {
+    pub fn new(live_sync: L, macro_sync: M, validity_window_sync: V) -> Syncer<N, M, V, L> {
         Syncer {
             live_sync,
             macro_sync,
+            validity_window_sync,
             accepted_announcements: 0,
             outdated_peers: Default::default(),
             outdated_timeouts: Default::default(),
@@ -141,6 +169,11 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
     fn move_peer_into_macro_sync(&mut self, peer_id: N::PeerId) {
         debug!(%peer_id, "Adding peer to macro sync");
         self.macro_sync.add_peer(peer_id);
+    }
+
+    pub fn move_peer_into_validity_window_sync(&mut self, peer_id: N::PeerId) {
+        debug!(%peer_id, "Adding peer to validity window sync");
+        self.validity_window_sync.add_peer(peer_id);
     }
 
     pub fn move_peer_into_live_sync(&mut self, peer_id: N::PeerId) {
@@ -165,7 +198,9 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
     }
 }
 
-impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M, L> {
+impl<N: Network, M: MacroSync<N::PeerId>, V: ValidityWindowSync<N::PeerId>, L: LiveSync<N>> Stream
+    for Syncer<N, M, V, L>
+{
     type Item = LiveSyncPushEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
@@ -174,10 +209,27 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
             match result {
                 Some(MacroSyncReturn::Good(peer_id)) => {
                     debug!(%peer_id, "Macro sync returned good peer");
-                    self.move_peer_into_live_sync(peer_id);
+                    self.move_peer_into_validity_window_sync(peer_id);
                 }
                 Some(MacroSyncReturn::Outdated(peer_id)) => {
                     debug!(%peer_id,"Macro sync returned outdated peer. Waiting.");
+                    self.outdated_timeouts.insert(peer_id, Instant::now());
+                    self.outdated_peers.insert(peer_id);
+                }
+                None => {}
+            }
+        }
+
+        self.check_peers_up_to_date();
+
+        while let Poll::Ready(result) = self.validity_window_sync.poll_next_unpin(cx) {
+            match result {
+                Some(ValidityWindowSyncReturn::Good(peer_id)) => {
+                    debug!(%peer_id, "Validity Window sync returned good peer");
+                    self.move_peer_into_live_sync(peer_id);
+                }
+                Some(ValidityWindowSyncReturn::Outdated(peer_id)) => {
+                    debug!(%peer_id,"Validity Window sync returned outdated peer. Waiting.");
                     self.outdated_timeouts.insert(peer_id, Instant::now());
                     self.outdated_peers.insert(peer_id);
                 }
@@ -211,7 +263,9 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
     }
 }
 
-impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
+impl<N: Network, M: MacroSync<N::PeerId>, V: ValidityWindowSync<N::PeerId>, L: LiveSync<N>>
+    Syncer<N, M, V, L>
+{
     /// Adds all outdated peers that were checked more than TIMEOUT ago to macro sync
     fn check_peers_up_to_date(&mut self) {
         let mut peers_todo = Vec::new();

@@ -49,6 +49,10 @@ pub const MAX_REQUEST_TRANSACTIONS_BY_ADDRESS: u32 = 1000;
 pub const MAX_REQUEST_TRIE_PROOF: u32 = 1000;
 /// The max number of Block proof requests per peer.
 pub const MAX_REQUEST_BLOCKS_PROOF: u32 = 1000;
+/// The max number of ValidityWindow requests per peer.
+pub const MAX_REQUEST_VALIDITY_WINDOW_START: u32 = 1000;
+/// The max number of Validity Window chunk requests per peer.
+pub const MAX_REQUEST_VALIDITY_WINDOW_CHUNK: u32 = 1000;
 /// The max number of Subscribe to address requests per peer.
 pub const MAX_REQUEST_SUBSCRIBE_BY_ADDRESS: u32 = 10;
 /// The max number of Address notifications per peer.
@@ -499,4 +503,30 @@ impl Topic for AddressSubscriptionTopic {
     const BUFFER_SIZE: usize = 1024;
     const NAME: &'static str = "AddressNotification";
     const VALIDATE: bool = false;
+}
+
+/// This request is used to initialize the Validity Window sync process
+/// First we send our current macro head information
+/// The server will provide to us the validity window start proof
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestValidityWindowStart {
+    pub macro_head_number: u32,
+    pub macro_head_hash: Blake2bHash,
+}
+
+impl RequestCommon for RequestValidityWindowStart {
+    type Kind = RequestMarker;
+    const TYPE_ID: u16 = 219;
+    type Response = ValidityWindowStartResponse;
+    const MAX_REQUESTS: u32 = MAX_REQUEST_VALIDITY_WINDOW_START;
+}
+
+/// This is the responde to the Validity Window start request
+/// Is used to prove the start of the validity window
+/// By providing the first transaction from the validity window
+/// And the transaction before it.
+#[derive(Serialize, Deserialize)]
+pub struct ValidityWindowStartResponse {
+    /// The proof for the validity start
+    pub proof: Option<HistoryTreeProof>,
 }

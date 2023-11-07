@@ -16,6 +16,9 @@ use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 use parking_lot::Mutex;
 use pin_project::pin_project;
 
+use super::validity_window_syncer::NullValidityWindowSyncer;
+#[cfg(feature = "full")]
+use super::validity_window_syncer::ValidityWindowSyncer;
 #[cfg(feature = "full")]
 use crate::sync::{
     history::HistoryMacroSync,
@@ -44,12 +47,12 @@ macro_rules! gen_syncer_match {
 pub enum SyncerProxy<N: Network> {
     #[cfg(feature = "full")]
     /// History Syncer, uses history macro sync for macro sync and block live sync.
-    History(Syncer<N, HistoryMacroSync<N>, BlockLiveSync<N>>),
+    History(Syncer<N, HistoryMacroSync<N>, NullValidityWindowSyncer<N>, BlockLiveSync<N>>),
     #[cfg(feature = "full")]
     /// Full Syncer, uses light macro sync for macro sync and state live sync.
-    Full(Syncer<N, LightMacroSync<N>, StateLiveSync<N>>),
+    Full(Syncer<N, LightMacroSync<N>, ValidityWindowSyncer<N>, StateLiveSync<N>>),
     /// Light Syncer, uses light macro sync for macro sync and block live sync.
-    Light(Syncer<N, LightMacroSync<N>, BlockLiveSync<N>>),
+    Light(Syncer<N, LightMacroSync<N>, NullValidityWindowSyncer<N>, BlockLiveSync<N>>),
 }
 
 impl<N: Network> SyncerProxy<N> {
@@ -75,6 +78,8 @@ impl<N: Network> SyncerProxy<N> {
                 )
                 .await;
 
+                let null_sync = NullValidityWindowSyncer::new();
+
                 let live_sync = BlockLiveSync::with_queue(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
@@ -85,7 +90,7 @@ impl<N: Network> SyncerProxy<N> {
                 let macro_sync =
                     HistoryMacroSync::new(Arc::clone(blockchain), network, network_event_rx);
 
-                Self::History(Syncer::new(live_sync, macro_sync))
+                Self::History(Syncer::new(live_sync, macro_sync, null_sync))
             }
             BlockchainProxy::Light(_) => unreachable!(),
         }
@@ -127,6 +132,14 @@ impl<N: Network> SyncerProxy<N> {
             queue_config,
         );
 
+        let validity_window_sync = ValidityWindowSyncer::new(
+            Arc::clone(&blockchain),
+            Arc::clone(&network),
+            Box::new(|fut| {
+                tokio::spawn(fut);
+            }),
+        );
+
         let live_sync = StateLiveSync::with_queue(
             blockchain_proxy.clone(),
             Arc::clone(&network),
@@ -147,7 +160,7 @@ impl<N: Network> SyncerProxy<N> {
             }),
         );
 
-        Self::Full(Syncer::new(live_sync, macro_sync))
+        Self::Full(Syncer::new(live_sync, macro_sync, validity_window_sync))
     }
 
     /// Creates a new instance of a `SyncerProxy` for the `Light` variant
@@ -171,6 +184,8 @@ impl<N: Network> SyncerProxy<N> {
         )
         .await;
 
+        let null_sync = NullValidityWindowSyncer::new();
+
         let live_sync = BlockLiveSync::with_queue(
             blockchain_proxy.clone(),
             Arc::clone(&network),
@@ -187,7 +202,7 @@ impl<N: Network> SyncerProxy<N> {
             executor,
         );
 
-        Self::Light(Syncer::new(live_sync, macro_sync))
+        Self::Light(Syncer::new(live_sync, macro_sync, null_sync))
     }
 
     /// Pushes a block for the live sync method

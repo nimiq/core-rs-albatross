@@ -650,3 +650,185 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBlocksProof {
         })
     }
 }
+
+#[cfg(feature = "full")]
+impl<N: Network> Handle<N, ValidityWindowStartResponse, Arc<RwLock<Blockchain>>>
+    for RequestValidityWindowStart
+{
+    fn handle(
+        &self,
+        _peer_id: N::PeerId,
+        blockchain: &Arc<RwLock<Blockchain>>,
+    ) -> ValidityWindowStartResponse {
+        log::debug!("Processing a new validity window start request");
+        let req_head_number = self.macro_head_number;
+        let req_head_hash = &self.macro_head_hash;
+
+        let blockchain = blockchain.read();
+        let read_txn = blockchain.read_transaction();
+
+        // This is just an extra check to verify the hash of the client macro head
+        let macro_block = blockchain.get_block_at(req_head_number, false, Some(&read_txn));
+
+        match macro_block {
+            Ok(block) => {
+                // First the requested block should correspond to a macro block
+                if block.is_micro() || *req_head_hash != block.hash() {
+                    log::info!("The requested block number does not correspond to what we expect");
+                    ValidityWindowStartResponse { proof: None }
+                } else {
+                    // First we determine which is the validity window start block number
+                    let validity_window_bn = req_head_number
+                        .saturating_sub(Policy::transaction_validity_window_blocks());
+
+                    if validity_window_bn <= Policy::genesis_block_number() {
+                        // No proof needed for the genesis block
+                        log::info!("Returning a null proof, because the validity start is the genesis block");
+                        return ValidityWindowStartResponse { proof: None };
+                    }
+
+                    // This must correspond to a macro block:
+                    if !Policy::is_macro_block_at(validity_window_bn) {
+                        return ValidityWindowStartResponse { proof: None };
+                    }
+
+                    let validity_window_start_indexes = blockchain
+                        .history_store
+                        .get_indexes_for_block(validity_window_bn, Some(&read_txn));
+
+                    let start_index = validity_window_start_indexes.0;
+
+                    // This is a special case where there is no txn in the validity start
+                    // This could only happen if the validity window starts is the first macro block
+                    if start_index == 0 {
+                        let mut next_start_index = 0;
+
+                        //We need to find the closest transactions to the validity window start
+                        //(Note that we will at least find one transaction, the one in the next macro block)
+                        for block_number in validity_window_bn + 1..req_head_number + 1 {
+                            let indexes = blockchain
+                                .history_store
+                                .get_indexes_for_block(block_number, Some(&read_txn));
+
+                            if indexes.0 != 0 {
+                                next_start_index = indexes.0;
+                                break;
+                            }
+                        }
+
+                        // This is a special case where the first transaction is located after the validity start
+                        if next_start_index == 1 {
+                            let transaction = blockchain
+                                .history_store
+                                .get_historic_tx_by_leaf_index_and_epoch(
+                                    next_start_index,
+                                    Policy::epoch_at(validity_window_bn),
+                                    Some(&read_txn),
+                                )
+                                .unwrap();
+
+                            let transaction_hash = transaction.tx_hash();
+
+                            let hashes = vec![&transaction_hash];
+
+                            // Create the proof
+                            let proof = blockchain
+                                .history_store
+                                .prove(
+                                    Policy::epoch_at(validity_window_bn),
+                                    hashes,
+                                    None,
+                                    Some(&read_txn),
+                                )
+                                .unwrap();
+
+                            return ValidityWindowStartResponse { proof: Some(proof) };
+                        }
+
+                        let prev_transaction = blockchain
+                            .history_store
+                            .get_historic_tx_by_leaf_index_and_epoch(
+                                next_start_index - 1,
+                                Policy::epoch_at(validity_window_bn),
+                                Some(&read_txn),
+                            )
+                            .unwrap();
+
+                        let next_transaction = blockchain
+                            .history_store
+                            .get_historic_tx_by_leaf_index_and_epoch(
+                                next_start_index,
+                                Policy::epoch_at(validity_window_bn),
+                                Some(&read_txn),
+                            )
+                            .unwrap();
+
+                        let prev_transaction_hash = prev_transaction.tx_hash();
+                        let next_transaction_hash = next_transaction.tx_hash();
+
+                        let hashes = vec![&prev_transaction_hash, &next_transaction_hash];
+
+                        // Create the proof
+                        let proof = blockchain
+                            .history_store
+                            .prove(
+                                Policy::epoch_at(validity_window_bn),
+                                hashes,
+                                None,
+                                Some(&read_txn),
+                            )
+                            .unwrap();
+
+                        return ValidityWindowStartResponse { proof: Some(proof) };
+                    }
+
+                    let prev_transaction = blockchain
+                        .history_store
+                        .get_historic_tx_by_leaf_index_and_epoch(
+                            start_index - 1,
+                            Policy::epoch_at(validity_window_bn),
+                            Some(&read_txn),
+                        )
+                        .unwrap();
+
+                    let start_transaction = blockchain
+                        .history_store
+                        .get_historic_tx_by_leaf_index_and_epoch(
+                            start_index,
+                            Policy::epoch_at(validity_window_bn),
+                            Some(&read_txn),
+                        )
+                        .unwrap();
+
+                    // Compute the txn hashes
+                    let prev_transaction_hash = prev_transaction.tx_hash();
+                    let start_transaction_hash = start_transaction.tx_hash();
+
+                    let hashes = vec![&prev_transaction_hash, &start_transaction_hash];
+
+                    // Create the proof
+                    let proof = blockchain
+                        .history_store
+                        .prove(
+                            Policy::epoch_at(validity_window_bn),
+                            hashes,
+                            None,
+                            Some(&read_txn),
+                        )
+                        .unwrap();
+
+                    log::debug!("Returning a new validity window start response");
+
+                    ValidityWindowStartResponse { proof: Some(proof) }
+                }
+            }
+            Err(err) => {
+                log::error!(
+                    error = ?err,
+                    "Could not obtain the requested block from our chain"
+                );
+                ValidityWindowStartResponse { proof: None }
+            }
+        }
+    }
+}

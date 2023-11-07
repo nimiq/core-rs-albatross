@@ -92,6 +92,25 @@ impl Blockchain {
         Blockchain::extend_history_sync(this, block, history, prev_macro_info)
     }
 
+    /// Extends the current chain with transactions from the validity sync process
+    pub fn extend_validity_sync(
+        this: RwLockUpgradableReadGuard<Blockchain>,
+        epoch: u32,
+        history: &[HistoricTransaction],
+    ) {
+        let mut txn = this.write_transaction();
+
+        // Store the new historic transactions into the History tree.
+        this.history_store.add_to_history(&mut txn, epoch, history);
+
+        txn.commit();
+
+        debug!(
+            num_transactions = history.len(),
+            "Pushed txns to the history store during validity sync"
+        );
+    }
+
     /// Extends the current chain with a macro block (election or checkpoint) during history sync.
     fn extend_history_sync(
         this: RwLockUpgradableReadGuard<Blockchain>,

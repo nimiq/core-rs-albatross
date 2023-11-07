@@ -8,7 +8,10 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::{
     consensus::Consensus,
-    sync::{syncer::MacroSyncReturn, syncer_proxy::SyncerProxy},
+    sync::{
+        syncer::{MacroSyncReturn, ValidityWindowSyncReturn},
+        syncer_proxy::SyncerProxy,
+    },
 };
 use nimiq_database::volatile::VolatileDatabase;
 use nimiq_genesis::NetworkId;
@@ -192,27 +195,56 @@ pub async fn sync_two_peers(
         SyncerProxy::History(ref mut syncer) => {
             let macro_sync_result = syncer.macro_sync.next().await;
             // Now we move the syncing peer to the live sync.
-            syncer.move_peer_into_live_sync(net1.get_local_peer_id());
+            syncer.move_peer_into_validity_window_sync(net1.get_local_peer_id());
             macro_sync_result
         }
         SyncerProxy::Light(ref mut syncer) => {
             let macro_sync_result = syncer.macro_sync.next().await;
             // Now we move the syncing peer to the live sync.
-            syncer.move_peer_into_live_sync(net1.get_local_peer_id());
+            syncer.move_peer_into_validity_window_sync(net1.get_local_peer_id());
             macro_sync_result
         }
         SyncerProxy::Full(ref mut syncer) => {
             let macro_sync_result = syncer.macro_sync.next().await;
             // Now we move the syncing peer to the live sync.
-            syncer.move_peer_into_live_sync(net1.get_local_peer_id());
+            syncer.move_peer_into_validity_window_sync(net1.get_local_peer_id());
             macro_sync_result
         }
     };
+
     log::debug!("Macro sync result {:?}", macro_sync_result);
     assert_eq!(
         macro_sync_result,
         Some(MacroSyncReturn::Good(net1.get_local_peer_id()))
     );
+
+    let validity_sync_result = match syncer2 {
+        SyncerProxy::History(ref mut syncer) => {
+            let validity_sync_result = syncer.validity_window_sync.next().await;
+            // Now we move the syncing peer to the live sync.
+            syncer.move_peer_into_live_sync(net1.get_local_peer_id());
+            validity_sync_result
+        }
+        SyncerProxy::Light(ref mut syncer) => {
+            let validity_sync_result = syncer.validity_window_sync.next().await;
+            // Now we move the syncing peer to the live sync.
+            syncer.move_peer_into_live_sync(net1.get_local_peer_id());
+            validity_sync_result
+        }
+        SyncerProxy::Full(ref mut syncer) => {
+            let validity_sync_result = syncer.validity_window_sync.next().await;
+            // Now we move the syncing peer to the live sync.
+            syncer.move_peer_into_live_sync(net1.get_local_peer_id());
+            validity_sync_result
+        }
+    };
+    log::debug!("validity sync result {:?}", validity_sync_result);
+    assert_eq!(
+        validity_sync_result,
+        Some(ValidityWindowSyncReturn::Good(net1.get_local_peer_id()))
+    );
+
+    // TODO check the size of the history store after the validity window sync and verify it has everything we need
 
     let consensus2 = Consensus::new(
         blockchain2_proxy.clone(),
