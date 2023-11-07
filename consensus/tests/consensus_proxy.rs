@@ -16,9 +16,7 @@ use nimiq_test_utils::{
     },
     node::TESTING_BLS_CACHE_MAX_CAPACITY,
 };
-use nimiq_transaction::{
-    historic_transaction::HistoricTransactionData, ExecutedTransaction, TransactionFormat,
-};
+use nimiq_transaction::{historic_transaction::HistoricTransactionData, ExecutedTransaction};
 use nimiq_utils::time::OffsetTime;
 use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
@@ -108,12 +106,10 @@ async fn test_request_transactions_by_address() {
     assert_eq!(
         txs.iter()
             .filter(|tx| {
-                if let HistoricTransactionData::Basic(ExecutedTransaction::Ok(transaction)) =
-                    &tx.data
-                {
-                    return transaction.format() == TransactionFormat::Basic;
-                }
-                false
+                matches!(
+                    tx.data,
+                    HistoricTransactionData::Basic(ExecutedTransaction::Ok(_)),
+                )
             })
             .count() as u32,
         // There should be one basic transaction in each micro block of the first batch
