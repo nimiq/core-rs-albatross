@@ -141,7 +141,7 @@ impl StakingContract {
 
         let mut rng = seed.rng(VrfUseCase::ValidatorSlotSelection);
 
-        let lookup = AliasMethod::new(validator_stakes);
+        let lookup = AliasMethod::new(&validator_stakes);
 
         let mut slots_builder = ValidatorsBuilder::default();
 

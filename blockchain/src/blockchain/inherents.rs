@@ -243,7 +243,7 @@ impl Blockchain {
             let last_slot_number = first_slot_number + validator_slot.num_slots();
 
             // Compute the number of punishments for this validator slot band.
-            let mut num_eligible_slots = validator_slot.num_slots();
+            let mut num_eligible_slots = validator_slot.num_slots() as u64;
             let mut num_penalized_slots = 0;
 
             while let Some(next_penalized_slot) = penalized_set_iter.peek() {
@@ -262,11 +262,11 @@ impl Blockchain {
             // Compute reward from slot reward and number of eligible slots. Also update the burned
             // reward from the number of penalized slots.
             let reward = slot_reward
-                .checked_mul(num_eligible_slots as u64)
+                .checked_mul(num_eligible_slots)
                 .expect("Overflow in reward");
 
             burned_reward += slot_reward
-                .checked_mul(num_penalized_slots as u64)
+                .checked_mul(num_penalized_slots)
                 .expect("Overflow in reward");
 
             // Do not create reward transactions for zero rewards
@@ -313,7 +313,7 @@ impl Blockchain {
 
         // Get RNG from last block's seed and build lookup table based on number of eligible slots.
         let mut rng = macro_header.seed.rng(VrfUseCase::RewardDistribution);
-        let lookup = AliasMethod::new(num_eligible_slots_for_accepted_tx);
+        let lookup = AliasMethod::new(&num_eligible_slots_for_accepted_tx);
 
         // Randomly give remainder to one accepting slot. We don't bother to distribute it over all
         // accepting slots because the remainder is always at most SLOTS - 1 Lunas.

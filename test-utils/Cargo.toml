@@ -19,7 +19,6 @@ async-trait = "0.1"
 futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
-num-traits = "0.2"
 parking_lot = "0.12"
 paste = "1.0"
 rand = "0.8"

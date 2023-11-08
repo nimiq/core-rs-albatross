@@ -1,31 +1,13 @@
 #![allow(non_snake_case)]
 
-use std::{
-    cmp::{Ord, Ordering, PartialOrd},
-    fmt::Debug,
-    ops::{Add, Mul, Sub},
-};
-
-use num_traits::{sign::Unsigned, FromPrimitive, ToPrimitive};
+use std::cmp::{Ord, Ordering};
 
 use crate::rng::Rng;
 
-pub struct AliasMethod<P>
-where
-    P: Copy
-        + Debug
-        + Unsigned
-        + Add<P>
-        + Sub<P>
-        + Mul<P>
-        + FromPrimitive
-        + ToPrimitive
-        + PartialOrd<P>
-        + Ord,
-{
+pub struct AliasMethod {
     /// The total probability - since we work with integers, this is not 1.0, but corresponds to
     /// a the probability 1.0
-    T: P,
+    T: u64,
 
     /// Number of entries
     n: usize,
@@ -34,43 +16,30 @@ where
     K: Vec<usize>,
 
     /// Probabilities table
-    U: Vec<P>,
+    U: Vec<u64>,
 }
 
-impl<P> AliasMethod<P>
-where
-    P: Copy
-        + Debug
-        + Unsigned
-        + Add<P>
-        + Sub<P>
-        + Mul<P>
-        + FromPrimitive
-        + ToPrimitive
-        + PartialOrd<P>
-        + Ord,
-{
-    pub fn new<V: AsRef<[P]>>(p: V) -> Self {
+impl AliasMethod {
+    pub fn new(p: &[u64]) -> Self {
         // The algorithm was roughly taken from
         //
-        // * https://en.wikipedia.org/wiki/Alias_method#Table_generation
-        // * https://github.com/asmith26/Vose-Alias-Method/blob/master/vose_sampler/vose_sampler.py
+        // * https://en.wikipedia.org/w/index.php?title=Alias_method&oldid=918053766#Table_generation
+        // * https://github.com/asmith26/Vose-Alias-Method/blob/96bffc45b275f2e867f0eb30af7e8ffaaac44596/vose_sampler/vose_sampler.py
         //
         // p - probabilities p_i. We will use this for U as well
         // T - total probability
         // n - number of probabilities
 
-        let p = p.as_ref();
         let n = p.len();
 
         // Construct scaled probabilities and total probability.
-        let mut T = P::zero();
+        let mut T = 0;
 
-        let mut U: Vec<P> = p
+        let mut U: Vec<u64> = p
             .iter()
             .map(|p| {
-                T = T + *p;
-                p.mul(P::from_usize(n).expect("Can't convert n to P for normalization"))
+                T += *p;
+                p * n as u64
             })
             .collect();
 
@@ -124,7 +93,7 @@ where
         self.n == 0
     }
 
-    pub fn total(&self) -> P {
+    pub fn total(&self) -> u64 {
         self.T
     }
 
@@ -142,7 +111,7 @@ where
     pub fn sample<R: Rng>(&self, rng: &mut R) -> usize {
         let x = rng.next_u64_max(self.n as u64) as usize;
 
-        let y = P::from_u64(rng.next_u64_max(self.T.to_u64().unwrap())).unwrap();
+        let y = rng.next_u64_max(self.T);
 
         if y < self.U[x] {
             x

@@ -42,5 +42,3 @@ nimiq-vrf = { workspace = true, features = ["serde-derive"] }
 [dev-dependencies]
 nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }
-num-traits = "0.2"
-

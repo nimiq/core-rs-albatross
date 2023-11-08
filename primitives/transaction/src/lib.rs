@@ -18,7 +18,6 @@ use nimiq_primitives::{
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_utils::merkle::{Blake2bMerklePath, Blake2bMerkleProof};
-use num_traits::SaturatingAdd;
 use thiserror::Error;
 
 use crate::account::AccountTransactionVerification;
@@ -460,7 +459,7 @@ impl Transaction {
 
     pub fn total_value(&self) -> Coin {
         // Avoid wrapping in case this is called before verify().
-        self.value.saturating_add(&self.fee)
+        self.value.saturating_add(self.fee)
     }
 
     pub fn sender(&self) -> &Address {

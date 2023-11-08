@@ -24,7 +24,6 @@ byteorder = "1.5"
 cfg_eval = "0.1"
 hex = { version = "0.4", optional = true }
 log = { package = "tracing", version = "0.1", features = ["log"] }
-num-traits = { version = "0.2", optional = true }
 once_cell = "1.18"
 parking_lot = { version = "0.12.1", optional = true }
 regex = { version = "1.10", optional = true }
@@ -48,10 +47,10 @@ nimiq-test-log = { workspace = true }
 [features]
 account = ["coin", "hex", "serde-derive", "thiserror", "transaction", "trie"]
 all = ["account", "coin", "networks", "policy", "slots", "key-nibbles"]
-coin = ["hex", "nimiq-serde", "num-traits", "regex", "thiserror"]
+coin = ["hex", "nimiq-serde", "regex", "thiserror"]
 key-nibbles = ["hex", "nimiq-keys", "nimiq-database-value", "nimiq-serde"]
 networks = ["thiserror"]
-policy = ["nimiq-keys", "num-traits", "parking_lot"]
+policy = ["nimiq-keys", "parking_lot"]
 serde-derive = ["nimiq-serde", "serde", "serde_repr"]
 slots = ["nimiq-bls", "nimiq-keys", "nimiq-utils", "policy"]
 tendermint = ["nimiq-bls", "serde-derive"]

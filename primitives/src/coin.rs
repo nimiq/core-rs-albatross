@@ -7,7 +7,6 @@ use std::{
     sync::OnceLock,
 };
 
-use num_traits::{identities::Zero, SaturatingAdd, SaturatingSub};
 use regex::Regex;
 use thiserror::Error;
 
@@ -30,8 +29,6 @@ impl Coin {
         Coin(val)
     }
 
-    // NOTE: We implement a trait that does this, but we don't always want to have to import
-    // a whole crate to check if a coin value is zero.
     #[inline]
     pub fn is_zero(&self) -> bool {
         self.0 == 0
@@ -63,6 +60,14 @@ impl Coin {
     pub fn safe_sub_assign(&mut self, rhs: Coin) -> Result<(), CoinUnderflowError> {
         *self = self.safe_sub(rhs)?;
         Ok(())
+    }
+
+    pub fn saturating_add(self, rhs: Coin) -> Coin {
+        Coin(self.0.saturating_add(rhs.0))
+    }
+
+    pub fn saturating_sub(self, rhs: Coin) -> Coin {
+        Coin(self.0.saturating_sub(rhs.0))
     }
 }
 
@@ -113,12 +118,6 @@ impl AddAssign<Coin> for Coin {
     }
 }
 
-impl SaturatingAdd for Coin {
-    fn saturating_add(&self, rhs: &Self) -> Self {
-        Coin(self.0.saturating_add(rhs.0))
-    }
-}
-
 impl Sub<Coin> for Coin {
     type Output = Coin;
 
@@ -137,12 +136,6 @@ impl SubAssign<Coin> for Coin {
     }
 }
 
-impl SaturatingSub for Coin {
-    fn saturating_sub(&self, rhs: &Self) -> Self {
-        Coin(self.0.saturating_sub(rhs.0))
-    }
-}
-
 impl Div<u64> for Coin {
     type Output = Coin;
 
@@ -158,16 +151,6 @@ impl Rem<u64> for Coin {
     #[inline]
     fn rem(self, rhs: u64) -> Self {
         Coin(self.0 % rhs)
-    }
-}
-
-impl Zero for Coin {
-    fn zero() -> Self {
-        Self::ZERO
-    }
-
-    fn is_zero(&self) -> bool {
-        self.0 == 0
     }
 }
 
