@@ -52,8 +52,6 @@ nimiq-zkp-primitives = { workspace = true }
 nimiq-keys = { workspace = true }
 
 [dev-dependencies]
-ark-test-curves = { version = "0.4", features = ["bls12_381_curve"] }
-
 nimiq-collections = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["policy", "slots"] }
 nimiq-tendermint = { workspace = true }

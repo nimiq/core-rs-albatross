@@ -457,17 +457,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ark-test-curves"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04fe14f78bde3f1587dec9f1610fa85824219c1cbc879c4ff46b1a5b90eb582b"
-dependencies = [
- "ark-ec",
- "ark-ff",
- "ark-std",
-]
-
-[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3904,7 +3893,6 @@ version = "0.1.0"
 name = "nimiq-genesis"
 version = "0.1.0"
 dependencies = [
- "bitflags 1.3.2",
  "hex",
  "nimiq-block",
  "nimiq-bls",
@@ -4299,7 +4287,6 @@ dependencies = [
  "futures-util",
  "multiaddr",
  "nimiq-serde",
- "nimiq-test-log",
  "serde",
  "thiserror",
  "tokio",
@@ -4313,7 +4300,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "base64 0.21.5",
- "bitflags 1.3.2",
  "bytes",
  "futures-util",
  "hex",
@@ -4582,7 +4568,6 @@ dependencies = [
 name = "nimiq-subscription"
 version = "0.1.0"
 dependencies = [
- "bitflags 1.3.2",
  "hex",
  "nimiq-bls",
  "nimiq-hash",
@@ -4987,7 +4972,6 @@ dependencies = [
  "ark-relations",
  "ark-serialize",
  "ark-std",
- "ark-test-curves",
  "clap",
  "hex",
  "nimiq-block",
@@ -5073,7 +5057,6 @@ dependencies = [
  "ark-serialize",
  "ark-std",
  "hex",
- "nimiq-block",
  "nimiq-bls",
  "nimiq-collections",
  "nimiq-hash",
@@ -5081,8 +5064,6 @@ dependencies = [
  "nimiq-pedersen-generators",
  "nimiq-primitives",
  "nimiq-serde",
- "nimiq-test-log",
- "nimiq-test-utils",
  "nimiq-utils",
  "num-traits",
  "rand 0.8.5",

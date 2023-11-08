@@ -36,12 +36,9 @@ nimiq-primitives = { workspace = true, features = ["policy"] }
 nimiq-serde = { workspace = true }
 
 [dev-dependencies]
-nimiq-block = { workspace = true }
 nimiq-collections = { workspace = true }
 nimiq-keys = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["slots"] }
-nimiq-test-log = { workspace = true }
-nimiq-test-utils = { workspace = true }
 nimiq-utils = { workspace = true }
 
 [features]
