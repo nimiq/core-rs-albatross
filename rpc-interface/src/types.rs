@@ -576,8 +576,9 @@ impl Transaction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum Inherent {
+    #[serde(rename_all = "camelCase")]
     Reward {
         block_number: u32,
         block_time: u64,
@@ -586,12 +587,14 @@ pub enum Inherent {
         value: Coin,
         hash: Blake2bHash,
     },
+    #[serde(rename_all = "camelCase")]
     Penalize {
         block_number: u32,
         block_time: u64,
         validator_address: Address,
         offense_event_block: u32,
     },
+    #[serde(rename_all = "camelCase")]
     Jail {
         block_number: u32,
         block_time: u64,
