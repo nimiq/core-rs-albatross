@@ -4,9 +4,15 @@ use std::cmp::{Ord, Ordering};
 
 use crate::rng::Rng;
 
-pub struct AliasMethod {
-    /// The total probability - since we work with integers, this is not 1.0, but corresponds to
-    /// a the probability 1.0
+/// A discrete distribution for a number of events.
+///
+/// We use the alias method to sample from the distribution. It is an efficient
+/// algorithm to sample from a discrete probability distribution.
+///
+/// See <https://en.wikipedia.org/wiki/Alias_method>.
+pub struct DiscreteDistribution {
+    /// The total probability - since we work with integers, this is not 1.0,
+    /// but corresponds to a probability of 1.0.
     T: u64,
 
     /// Number of entries
@@ -19,7 +25,16 @@ pub struct AliasMethod {
     U: Vec<u64>,
 }
 
-impl AliasMethod {
+impl DiscreteDistribution {
+    /// Create a distribution from non-normalized probabilities.
+    ///
+    /// Each element of the `p` array corresponds to the (non-normalized)
+    /// probability of its event being chosen.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the passed `p` is empty (no events) or no event has non-zero
+    /// probability.
     pub fn new(p: &[u64]) -> Self {
         // The algorithm was roughly taken from
         //
@@ -42,6 +57,8 @@ impl AliasMethod {
                 p * n as u64
             })
             .collect();
+
+        assert!(T != 0, "Must have positive total probability");
 
         // Construct overfull and underfull stack. These contain only indices into U.
         let mut U_underfull = Vec::with_capacity(n);
@@ -74,7 +91,7 @@ impl AliasMethod {
         }
 
         // Both must be empty now.
-        debug_assert!(U_underfull.is_empty() && U_overfull.is_empty());
+        assert!(U_underfull.is_empty() && U_overfull.is_empty());
 
         // Entries that are "underfull" need an entry in the alias table.
         debug_assert!((0..n).all(|i| {
@@ -85,34 +102,14 @@ impl AliasMethod {
         Self { T, n, K, U }
     }
 
-    pub fn len(&self) -> usize {
-        self.n
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.n == 0
-    }
-
-    pub fn total(&self) -> u64 {
-        self.T
-    }
-
     /// Sample from the discrete random distribution
-    ///
-    /// # Arguments
-    ///
-    /// * `x`: Must be uniformly random between 0 and `n`
-    /// * `y`: Must be uniformly random between 0 and `T`
     ///
     /// # Return value
     ///
-    /// Returns the index corresponding to the probability in the input `p`.
-    ///
+    /// Returns the index corresponding to the event probability in the input `p`.
     pub fn sample<R: Rng>(&self, rng: &mut R) -> usize {
-        let x = rng.next_u64_max(self.n as u64) as usize;
-
-        let y = rng.next_u64_max(self.T);
-
+        let x = rng.next_u64_below(self.n as u64) as usize;
+        let y = rng.next_u64_below(self.T);
         if y < self.U[x] {
             x
         } else {

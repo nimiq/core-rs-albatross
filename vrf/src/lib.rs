@@ -1,7 +1,7 @@
-pub use alias::AliasMethod;
+pub use discrete::DiscreteDistribution;
 pub use rng::Rng;
 pub use vrf::{VrfEntropy, VrfRng, VrfSeed, VrfUseCase};
 
-pub mod alias;
+pub mod discrete;
 pub mod rng;
 pub mod vrf;

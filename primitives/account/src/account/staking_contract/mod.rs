@@ -6,7 +6,7 @@ use nimiq_primitives::{
     policy::Policy,
     slots_allocation::{Validators, ValidatorsBuilder},
 };
-use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
+use nimiq_vrf::{DiscreteDistribution, VrfSeed, VrfUseCase};
 pub use receipts::*;
 use serde::{Deserialize, Serialize};
 pub use staker::Staker;
@@ -141,7 +141,7 @@ impl StakingContract {
 
         let mut rng = seed.rng(VrfUseCase::ValidatorSlotSelection);
 
-        let lookup = AliasMethod::new(&validator_stakes);
+        let lookup = DiscreteDistribution::new(&validator_stakes);
 
         let mut slots_builder = ValidatorsBuilder::default();
 

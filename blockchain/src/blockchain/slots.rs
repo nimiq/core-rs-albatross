@@ -115,7 +115,7 @@ impl Blockchain {
 
         // Shuffle the slots vector using the Fisher–Yates shuffle.
         for i in (1..slots.len()).rev() {
-            let r = rng.next_u64_max((i + 1) as u64) as usize;
+            let r = rng.next_u64_below((i + 1) as u64) as usize;
             slots.swap(r, i);
         }
 
