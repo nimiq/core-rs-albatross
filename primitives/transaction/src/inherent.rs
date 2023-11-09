@@ -17,8 +17,11 @@ use crate::reward::RewardTransaction;
 pub enum Inherent {
     /// A reward is given for elected slots that did not get punished.
     Reward {
+        /// The validator address of the rewarded validator.
         validator_address: Address,
+        /// The address the reward goes to.
         target: Address,
+        /// The reward amount.
         value: Coin,
     },
     /// Penalties are the consequence of delaying blocks. They only affect the reward of a single slot.

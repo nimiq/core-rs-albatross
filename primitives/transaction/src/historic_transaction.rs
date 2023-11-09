@@ -27,6 +27,7 @@ pub struct HistoricTransaction {
     pub data: HistoricTransactionData,
 }
 
+/// Why a historic transaction cannot be represented as a basic transaction.
 #[derive(Clone, Debug)]
 pub enum IntoTransactionError {
     NoBasicTransactionMapping,
@@ -226,32 +227,48 @@ impl FromDatabaseValue for HistoricTransaction {
 pub enum HistoricTransactionData {
     /// A basic transaction. It simply contains the transaction as contained in the block.
     Basic(ExecutedTransaction),
+    /// A reward for an active validator.
     Reward(RewardEvent),
+    /// A penalty for an inactive or non-responsive validator.
     Penalize(PenalizeEvent),
+    /// A larger penalty for a misbehaving validator.
     Jail(JailEvent),
+    /// A record that an equivocation proof was presented.
     Equivocation(EquivocationEvent),
 }
 
+/// An equivocation proof was presented. Only the location of it is stored.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct EquivocationEvent {
+    /// The locator of the equivocation that happened.
     pub locator: EquivocationLocator,
 }
 
+/// A reward was paid out to an active validator.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RewardEvent {
+    /// The validator address of the rewarded validator.
     pub validator_address: Address,
+    /// The address the reward was paid out to.
     pub reward_address: Address,
+    /// The reward amount.
     pub value: Coin,
 }
 
+/// An inactive or non-responsive validator was punished.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PenalizeEvent {
+    /// The validator address of the offending validator.
     pub validator_address: Address,
+    /// The block height at which the offense occured.
     pub offense_event_block: u32,
 }
 
+/// A misbehaving validator was punished.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct JailEvent {
+    /// The validator address of the offending validator.
     pub validator_address: Address,
+    /// The block height at which the offense occured.
     pub offense_event_block: u32,
 }

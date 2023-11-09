@@ -56,6 +56,9 @@ impl EquivocationProof {
     );
 
     /// Locator of this proof.
+    ///
+    /// It is used to check that only one proof of an equivocation can be
+    /// included for a given equivocation locator.
     pub fn locator(&self) -> EquivocationLocator {
         use self::EquivocationProof::*;
         match self {
@@ -203,6 +206,9 @@ impl ForkProof {
     }
 
     /// Locator of this proof.
+    ///
+    /// It is used to check that only one fork proof can be included for a
+    /// given block height.
     pub fn locator(&self) -> ForkLocator {
         ForkLocator {
             validator_address: self.validator_address().clone(),
@@ -335,6 +341,9 @@ impl DoubleProposalProof {
     }
 
     /// Locator of this proof.
+    ///
+    /// It is used to check that only one double proposal proof can be included
+    /// for a given block height and round.
     pub fn locator(&self) -> DoubleProposalLocator {
         DoubleProposalLocator {
             validator_address: self.validator_address().clone(),
@@ -465,6 +474,9 @@ impl DoubleVoteProof {
     }
 
     /// Locator of this proof.
+    ///
+    /// It is used to check that only one double vote proof can be included for
+    /// a given block height and round.
     pub fn locator(&self) -> DoubleVoteLocator {
         DoubleVoteLocator {
             validator_address: self.validator_address().clone(),

@@ -889,6 +889,8 @@ impl HistoryStore {
         cursor.last::<u32, u32>().map(|(key, _)| key)
     }
 
+    /// Check whether an equivocation proof at a given equivocation locator has
+    /// already been included.
     pub fn has_equivocation_proof(
         &self,
         locator: EquivocationLocator,
@@ -984,9 +986,11 @@ impl HistoryStore {
                     },
                 );
             }
-            // Do not index equivocation events.
+            // Do not index equivocation events, since I do not see a use case
+            // for this at the time.
             HistoricTransactionData::Equivocation(_) => {}
-            // Do not index punishment events.
+            // Do not index punishment events, since I do not see a use case
+            // for this at the time.
             HistoricTransactionData::Penalize(_) | HistoricTransactionData::Jail(_) => {}
         }
         hist_tx.serialized_size()
