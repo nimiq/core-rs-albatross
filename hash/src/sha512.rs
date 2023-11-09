@@ -5,7 +5,6 @@ use super::*;
 // Since there are no trait implementations for [u8; 64], we have to implement everything on our own.
 pub(super) const SHA512_LENGTH: usize = 64;
 
-#[repr(C)]
 pub struct Sha512Hash([u8; SHA512_LENGTH]);
 
 add_serialization_fns_typed_arr!(Sha512Hash, SHA512_LENGTH);

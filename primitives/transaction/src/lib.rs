@@ -191,7 +191,6 @@ impl ExecutedTransaction {
 }
 
 #[derive(Clone, Eq, Debug)]
-#[repr(C)]
 pub struct Transaction {
     pub sender: Address,
     pub sender_type: AccountType,

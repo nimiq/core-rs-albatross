@@ -3,7 +3,6 @@ use nimiq_primitives::coin::Coin;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
-#[repr(C)]
 pub struct RewardTransaction {
     /// The validator address of the rewarded validator.
     pub validator_address: Address,

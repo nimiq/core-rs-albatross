@@ -13,7 +13,6 @@ pub extern crate nimiq_serde;
 #[macro_export]
 macro_rules! create_typed_array {
     ($name: ident, $t: ty, $len: expr) => {
-        #[repr(C)]
         #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
         pub struct $name(pub [$t; $len]);
 
