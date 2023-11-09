@@ -84,7 +84,7 @@ pub trait Network: Send + Sync + Unpin + 'static {
     /// Gets the set of connected peers
     fn get_peers(&self) -> Vec<Self::PeerId>;
 
-    /// Returns wether the current peer has a connection to another peer
+    /// Returns whether the current peer has a connection to another peer
     fn has_peer(&self, peer_id: Self::PeerId) -> bool;
 
     /// Gets a peer information.

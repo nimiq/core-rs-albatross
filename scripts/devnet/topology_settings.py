@@ -224,7 +224,7 @@ class TopologySettings:
 
     def is_env_containerized(self):
         """
-        Returns wether the environment is containerized (docker-compose or
+        Returns whether the environment is containerized (docker-compose or
         k8s)
 
         :returns: A flag telling if the environment corresponds to a

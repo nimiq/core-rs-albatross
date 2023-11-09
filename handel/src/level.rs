@@ -60,7 +60,7 @@ impl Level {
         self.peer_ids.len()
     }
 
-    /// Returns wether this level is empty
+    /// Returns whether this level is empty
     pub fn is_empty(&self) -> bool {
         self.peer_ids.len() == 0
     }

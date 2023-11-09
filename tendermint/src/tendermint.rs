@@ -443,7 +443,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
 
     /// Poll all ongoing aggregations updating the best_votes in the state.
     ///
-    /// `should_export_state` will be set to true in case a value in the state improves. It is maintained to indicate wether
+    /// `should_export_state` will be set to true in case a value in the state improves. It is maintained to indicate whether
     /// a state export should happen or not.
     ///
     /// Returns

@@ -232,7 +232,7 @@ type PoolNetworkBehaviourAction =
 
 /// Connection pool behaviour
 ///
-/// This behaviour maintains state on wether the current peer can connect to
+/// This behaviour maintains state on whether the current peer can connect to
 /// another peer. For this it maintains state about other peers such as if
 /// the peer is connected, is being dialed, is down or has failed.
 /// Also watches if we have received more connections than the allowed
@@ -261,7 +261,7 @@ pub struct ConnectionPoolBehaviour {
     /// Queue of actions this behaviour will emit for handler execution.
     actions: VecDeque<PoolNetworkBehaviourAction>,
 
-    /// Tells wether the connection pool behaviour is active or not
+    /// Tells whether the connection pool behaviour is active or not
     active: bool,
 
     /// Counters per connection limits

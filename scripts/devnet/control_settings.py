@@ -69,7 +69,7 @@ class RestartSettings:
 
     def get_erase_db(self):
         """
-        Gets the flag that indicates wether to erase all of the node state as
+        Gets the flag that indicates whether to erase all of the node state as
         part of restarting it.
 
         :return: The erase DB flag.
@@ -79,7 +79,7 @@ class RestartSettings:
 
     def get_erase_state(self):
         """
-        Gets the flag that indicates wether to erase only the database state of
+        Gets the flag that indicates whether to erase only the database state of
         the node as part of restarting it.
 
         :return: The erase state flag.

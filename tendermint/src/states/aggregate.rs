@@ -36,7 +36,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
         // Copy the total such that it can be modified.
         let mut remaining_contributor_count = total_contributors;
 
-        // Keep track of wether the aggregate can improve to a positive result or not. If it cannot then no timeout would be necessary.
+        // Keep track of whether the aggregate can improve to a positive result or not. If it cannot then no timeout would be necessary.
         // The aggregate can improve if` for any single proposal` there are enough votes such that the remaining, uncast votes would
         // elevate it over the 2f+1 threshold if cast for that proposal.
         // More generally speaking, if there have not been more than f votes for anything else, a proposal can still reach 2f+1

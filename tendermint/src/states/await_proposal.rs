@@ -96,7 +96,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
         self.state.current_step = Step::Prevote;
     }
 
-    /// Evaluates a given `proposal_hash`, to check wether or not it is voted for.
+    /// Evaluates a given `proposal_hash`, to check whether or not it is voted for.
     ///
     /// This cannot fail and will always progress the step to Prevote.
     fn received_proposal_without_vr(&mut self, proposal_hash: TProtocol::ProposalHash) {
