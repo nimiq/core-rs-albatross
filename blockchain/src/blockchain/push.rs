@@ -408,191 +408,44 @@ impl Blockchain {
         let target_block = chain_info.head.header();
         debug!(block = %target_block, "Rebranching");
 
-        // Find the common ancestor between our current main chain and the fork chain.
-        // Walk up the fork chain until we find a block that is part of the main chain.
-        // Store the chain along the way.
         let read_txn = this.read_transaction();
+        // Find the common ancestor between our current main chain and the fork chain.
+        let (mut ancestor, mut fork_chain) =
+            this.find_common_ancestor(block_hash, chain_info, diff, &read_txn)?;
 
-        let mut fork_chain: Vec<(Blake2bHash, ChainInfo, Option<TrieDiff>)> = vec![];
-        let mut current: (Blake2bHash, ChainInfo, Option<TrieDiff>) =
-            (block_hash, chain_info, diff);
-
-        while !current.1.on_main_chain {
-            let prev_hash = current.1.head.parent_hash().clone();
-
-            let prev_info = this
-                .chain_store
-                .get_chain_info(&prev_hash, true, Some(&read_txn))
-                .expect("Corrupted store: Failed to find fork predecessor while rebranching");
-
-            let prev_diff = this
-                .chain_store
-                .get_accounts_diff(&prev_hash, Some(&read_txn))
-                .ok();
-
-            fork_chain.push(current);
-
-            current = (prev_hash, prev_info, prev_diff);
-        }
         read_txn.close();
 
         debug!(
             block = %target_block,
-            common_ancestor = %current.1.head,
+            common_ancestor = %ancestor.1.head,
             no_blocks_up = fork_chain.len(),
             "Found common ancestor",
         );
 
-        // Revert AccountsTree & TransactionCache to the common ancestor state.
-        let mut revert_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
-        let mut ancestor = current;
-
-        // Check if ancestor is in current batch.
-        if ancestor.1.head.block_number() < this.state.macro_info.head.block_number() {
-            warn!(
-                block = %target_block,
-                reason = "ancestor block already finalized",
-                ancestor_block = %ancestor.1.head,
-                "Rejecting block",
-            );
-            return Err(PushError::InvalidFork);
-        }
-
         let mut write_txn = this.write_transaction();
-
-        let mut current = (this.state.head_hash.clone(), this.state.main_chain.clone());
-
-        let mut block_logs = vec![];
-
-        while current.0 != ancestor.0 {
-            let block = current.1.head.clone();
-            if block.is_macro() {
-                panic!("Trying to rebranch across macro block {block}");
-            }
-
-            let prev_hash = block.parent_hash().clone();
-
-            let prev_info = this
-                .chain_store
-                .get_chain_info(&prev_hash, true, Some(&write_txn))
-                .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
-
-            if let Some(ref prev_missing_range) = current.1.prev_missing_range {
-                let result = this.state.accounts.revert_chunk(
-                    &mut (&mut write_txn).into(),
-                    prev_missing_range.start.clone(),
-                );
-
-                if let Err(e) = result {
-                    // Check if the revert chunk failed.
-                    return Err(PushError::AccountsError(e));
-                }
-            }
-
-            let mut block_logger = BlockLogger::new_reverted(block.hash(), block.block_number());
-            let total_tx_size = this.revert_accounts(
-                &this.state.accounts,
-                &mut (&mut write_txn).into(),
-                &block,
-                &mut block_logger,
-            )?;
-            block_logs.push(block_logger.build(total_tx_size));
-
-            // Verify accounts hash if the tree is complete or changes only happened in the complete part.
-            if let Some(accounts_hash) = this.state.accounts.get_root_hash(Some(&write_txn)) {
-                assert_eq!(
-                    prev_info.head.state_root(),
-                    &accounts_hash,
-                    "Inconsistent state after reverting block {} - {:?}",
-                    block,
-                    block,
-                );
-            }
-
-            revert_chain.push(current);
-
-            current = (prev_hash, prev_info);
-        }
-
-        // Push each fork block.
-
-        let mut fork_iter = fork_chain.iter().rev();
-
-        while let Some(fork_block) = fork_iter.next() {
-            let mut block_logger = BlockLogger::new_applied(
-                fork_block.0.clone(),
-                fork_block.1.head.block_number(),
-                fork_block.1.head.timestamp(),
-            );
-
-            match this.check_and_commit(
-                &this.state,
-                &fork_block.1.head,
-                fork_block.2.clone(),
-                &mut write_txn,
-                &mut block_logger,
-            ) {
-                Ok(total_tx_size) => block_logs.push(block_logger.build(total_tx_size)),
-                Err(e) => {
-                    warn!(
-                        block = %target_block,
-                        reason = "failed to apply fork block while rebranching",
-                        fork_block = %fork_block.1.head,
-                        error = &e as &dyn Error,
-                        "Rejecting block",
-                    );
+        let (revert_chain, block_logs) =
+            match this.rebranch_to(&mut fork_chain, &mut ancestor, &mut write_txn) {
+                Ok(r) => r,
+                Err(remove_chain) => {
+                    // Failed to apply blocks. All blocks within remove chain must be removed.
+                    // To do that the txn must be aborted first, as the changes need to be undone first.
                     write_txn.abort();
 
                     // Delete invalid fork blocks from store.
+                    // Create a new write transaction which will be committed.
                     let mut write_txn = this.write_transaction();
-                    for block in vec![fork_block].into_iter().chain(fork_iter) {
+                    for block in remove_chain {
                         this.chain_store.remove_chain_info(
                             &mut write_txn,
                             &block.0,
                             block.1.head.block_number(),
-                        )
+                        );
                     }
                     write_txn.commit();
 
                     return Err(PushError::InvalidFork);
                 }
-            }
-        }
-
-        // Unset onMainChain flag / mainChainSuccessor on the current main chain up to (excluding) the common ancestor.
-        for reverted_block in revert_chain.iter_mut() {
-            reverted_block.1.on_main_chain = false;
-            reverted_block.1.main_chain_successor = None;
-
-            this.chain_store.put_chain_info(
-                &mut write_txn,
-                &reverted_block.0,
-                &reverted_block.1,
-                false,
-            );
-        }
-
-        // Update the mainChainSuccessor of the common ancestor block.
-        ancestor.1.main_chain_successor = Some(fork_chain.last().unwrap().0.clone());
-        this.chain_store
-            .put_chain_info(&mut write_txn, &ancestor.0, &ancestor.1, false);
-
-        // Set onMainChain flag / mainChainSuccessor on the fork.
-        for i in (0..fork_chain.len()).rev() {
-            let main_chain_successor = if i > 0 {
-                Some(fork_chain[i - 1].0.clone())
-            } else {
-                None
             };
-
-            let fork_block = &mut fork_chain[i];
-            fork_block.1.on_main_chain = true;
-            fork_block.1.main_chain_successor = main_chain_successor;
-
-            // Include the body of the new block (at position 0).
-            this.chain_store
-                .put_chain_info(&mut write_txn, &fork_block.0, &fork_block.1, i == 0);
-        }
 
         // Commit transaction & update head.
         let new_head_hash = &fork_chain[0].0;
@@ -680,7 +533,7 @@ impl Blockchain {
         Ok((PushResult::Rebranched, chunk_result))
     }
 
-    fn check_and_commit(
+    pub(super) fn check_and_commit(
         &self,
         state: &BlockchainState,
         block: &Block,
