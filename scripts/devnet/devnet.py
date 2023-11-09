@@ -43,6 +43,9 @@ def check_positive(value):
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('-n', '--namespace', type=str, default="default",
+                        help="Namespace to be generated and assigned to all "
+                        "the generated resources. k8s environment only.")
     parser.add_argument('-t', '--topology', type=str, required=True,
                         help="Input TOML topology file")
     parser.add_argument('-o', "--output", metavar='DIR', type=str,
@@ -143,7 +146,7 @@ def main():
 
     topology_settings = TopologySettings(
         nimiq_dir, logs_dir, conf_dir, state_dir, args.release,
-        args.env, loki_settings=loki_settings)
+        args.namespace, args.env, loki_settings=loki_settings)
 
     # Now create topology object and run it
     topology = Topology(topology_settings)

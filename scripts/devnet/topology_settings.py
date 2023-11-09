@@ -98,20 +98,24 @@ class TopologySettings:
     :type state_dir: str
     :param release: Flag to indicate whether to run in release mode or not.
     :type release: bool
+    :param namespace: k8s namespace for the generated resources.
+    :type namespace: str
     :param env: Type of environment this topology will be run in.
     :type env: Environment
     :param loki_settings: Optional Loki settings.
     :type loki_settings: Optional[LokiSettings]
     """
 
-    def __init__(self, nimiq_dir: str, logs_dir: str, conf_dir: str,
-                 state_dir: str, release: bool, env: Environment,
-                 loki_settings: Optional[LokiSettings] = None):
+    def __init__(
+            self, nimiq_dir: str, logs_dir: str, conf_dir: str, state_dir: str,
+            release: bool, namespace: str, env: Environment,
+            loki_settings: Optional[LokiSettings] = None):
         self.nimiq_dir = nimiq_dir
         self.logs_dir = logs_dir
         self.conf_dir = conf_dir
         self.state_dir = state_dir
         self.release = release
+        self.namespace = namespace
         self.loki_settings = loki_settings
         self.env = env
 
@@ -212,6 +216,15 @@ class TopologySettings:
         :rtype: bool
         """
         return self.release
+
+    def get_namespace(self):
+        """
+        Gets k8s namespace
+
+        :return: The k8s namespace
+        :rtype: str
+        """
+        return self.namespace
 
     def get_env(self):
         """

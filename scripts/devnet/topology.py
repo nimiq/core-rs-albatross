@@ -235,12 +235,28 @@ class Topology:
         # Create directory where to store the yml manifests
         k8s_dir = self.topology_settings.get_k8s_dir()
         Path(k8s_dir).mkdir(parents=False, exist_ok=False)
+        # Now render the namespace template if needed
+        if self.topology_settings.get_namespace() != "default":
+            template = self.jinja_env.get_template(
+                "k8s_namespace_deployment.yml.j2"
+            )
+            content = template.render(
+                name=self.topology_settings.get_namespace()
+            )
+            k8s_namespace_filename = f"{k8s_dir}/namespace.yml"
+            with open(
+                k8s_namespace_filename, mode="w", encoding="utf-8"
+            ) as file:
+                file.write(content)
         # Now read and render the template
         template = self.jinja_env.get_template("k8s_genesis_deployment.yml.j2")
         genesis_filename = "dev-albatross.toml"
         genesis_content = self.__get_genesis_content(validators, spammers)
-        content = template.render(genesis_filename=genesis_filename,
-                                  genesis_content=genesis_content)
+        content = template.render(
+            genesis_filename=genesis_filename,
+            genesis_content=genesis_content,
+            namespace=self.topology_settings.get_namespace()
+        )
         k8s_genesis_filename = f"{k8s_dir}/genesis.yml"
         with open(k8s_genesis_filename, mode="w", encoding="utf-8") as file:
             file.write(content)

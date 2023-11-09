@@ -92,6 +92,7 @@ class Spammer(Node):
         genesis_filename = "dev-albatross.toml"
         int_genesis_file = f"{int_genesis_dir}/{genesis_filename}"
         filename = self.topology_settings.get_node_k8s_dir(self.name)
+        namespace = self.topology_settings.get_namespace()
         enable_metrics = self.get_metrics() is not None
         config_content = self.get_config_files_content(jinja_env, listen_ip,
                                                        seed_addresses)
@@ -99,6 +100,7 @@ class Spammer(Node):
         template = jinja_env.get_template("k8s_node_deployment.yml.j2")
         content = template.render(name=self.get_name(),
                                   node_type='spammer',
+                                  namespace=namespace,
                                   internal_genesis_file=int_genesis_file,
                                   internal_genesis_dir=int_genesis_dir,
                                   genesis_filename=genesis_filename,
