@@ -519,8 +519,11 @@ impl Blockchain {
         let mut fork_iter = fork_chain.iter().rev();
 
         while let Some(fork_block) = fork_iter.next() {
-            let mut block_logger =
-                BlockLogger::new_reverted(fork_block.0.clone(), fork_block.1.head.block_number());
+            let mut block_logger = BlockLogger::new_applied(
+                fork_block.0.clone(),
+                fork_block.1.head.block_number(),
+                fork_block.1.head.timestamp(),
+            );
 
             match this.check_and_commit(
                 &this.state,
