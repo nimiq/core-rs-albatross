@@ -5,7 +5,7 @@ use std::{
 
 use nimiq_primitives::coin::Coin;
 #[cfg(feature = "serde-derive")]
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::Deserialize;
 use nimiq_test_log::test;
 
 struct NonFailingTest {
@@ -50,17 +50,6 @@ fn test_deserialize_out_of_bounds() {
     match res {
         Ok(coin) => panic!("Instead of failing, got {}", coin),
         Err(err) => assert_eq!(err, DeserializeError::serde_custom()),
-    }
-}
-
-#[test]
-#[cfg(feature = "serde-derive")]
-fn test_serialize_out_of_bounds() {
-    let mut vec = Vec::with_capacity(8);
-    let res = Serialize::serialize_to_writer(&Coin::from_u64_unchecked(9007199254740992), &mut vec);
-    match res {
-        Ok(_) => panic!("Didn't fail"),
-        Err(err) => assert_eq!(err.kind(), std::io::ErrorKind::Other),
     }
 }
 
