@@ -99,33 +99,21 @@ impl MdbxDatabase {
     ) -> Result<Self, Error> {
         fs::create_dir_all(path).map_err(Error::CreateDirectory)?;
 
-        let mut db = libmdbx::Database::new();
-
-        // Configure the database flags
-        let geo = libmdbx::Geometry::<std::ops::Range<usize>> {
-            size: Some(0..size),
-            ..Default::default()
-        };
-
-        db.set_geometry(geo);
-
-        let db_flags = libmdbx::DatabaseFlags {
-            no_rdahead: true,
-            mode: libmdbx::Mode::ReadWrite {
-                sync_mode: libmdbx::SyncMode::Durable,
+        let db = libmdbx::Database::open_with_options(
+            path,
+            libmdbx::DatabaseOptions {
+                max_tables: Some(max_tables.into()),
+                max_readers,
+                no_rdahead: true,
+                mode: libmdbx::Mode::ReadWrite(libmdbx::ReadWriteOptions {
+                    sync_mode: libmdbx::SyncMode::Durable, // default anyway
+                    min_size: Some(0),
+                    max_size: Some(size.try_into().unwrap()),
+                    ..Default::default()
+                }),
+                ..Default::default()
             },
-            ..Default::default()
-        };
-
-        db.set_flags(db_flags);
-
-        // This is only required if multiple tables will be used in the database.
-        db.set_max_tables(max_tables as usize);
-        if let Some(max_readers) = max_readers {
-            db.set_max_readers(max_readers);
-        }
-
-        let db = db.open(path)?;
+        )?;
 
         let info = db.info()?;
         let cur_mapsize = info.map_size();

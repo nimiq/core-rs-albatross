@@ -18,7 +18,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 bitflags = "1.0"
-libmdbx = "0.3.5"
+libmdbx = "0.4.1"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 tempfile = "3"
 thiserror = "1.0"
