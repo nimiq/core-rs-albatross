@@ -12,7 +12,7 @@ pub use error::*;
 pub use proxy::*;
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
     pub struct TableFlags: u32 {
         /// Duplicate keys may be used in the database.
         const DUPLICATE_KEYS        = 0b0000_0001;

@@ -17,7 +17,7 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-bitflags = "1.0"
+bitflags = "2.0"
 libmdbx = "0.4.1"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 tempfile = "3"

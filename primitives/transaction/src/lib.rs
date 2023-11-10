@@ -84,7 +84,7 @@ pub enum TransactionFormat {
 }
 
 bitflags! {
-    #[derive(Default, Serialize, Deserialize)]
+    #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
     #[serde(try_from = "u8", into = "u8")]
     pub struct TransactionFlags: u8 {
         const CONTRACT_CREATION = 0b1;

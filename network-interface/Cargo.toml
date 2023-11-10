@@ -18,7 +18,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 async-trait = "0.1"
-bitflags = "1.2"
+bitflags = { version = "2.0", features = ["serde"] }
 futures = { package = "futures-util", version = "0.3" }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 multiaddr = "0.16"
