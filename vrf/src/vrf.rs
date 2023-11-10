@@ -15,7 +15,7 @@ use log::debug;
 use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
 use nimiq_keys::{KeyPair, PublicKey};
 #[cfg(feature = "serde-derive")]
-use nimiq_macros::add_serialization_fns_typed_arr;
+use nimiq_macros::add_serde_serialization_fns_typed_arr;
 use nimiq_macros::create_typed_array;
 use rand::{CryptoRng, RngCore};
 use sha2::{Digest, Sha256, Sha512};
@@ -43,7 +43,7 @@ pub enum VrfUseCase {
 
 create_typed_array!(VrfEntropy, u8, 32);
 #[cfg(feature = "serde-derive")]
-add_serialization_fns_typed_arr!(VrfEntropy, VrfEntropy::SIZE);
+add_serde_serialization_fns_typed_arr!(VrfEntropy, VrfEntropy::SIZE);
 
 impl VrfEntropy {
     pub fn rng(self, use_case: VrfUseCase) -> VrfRng {

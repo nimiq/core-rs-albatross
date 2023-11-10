@@ -46,6 +46,8 @@ nimiq-utils = { workspace = true, features = ["math"], optional = true }
 
 [dev-dependencies]
 nimiq-test-log = { workspace = true }
+criterion = "0.5"
+postcard = "1.0"
 
 [features]
 account = ["coin", "hex", "serde-derive", "thiserror", "transaction", "trie"]
@@ -63,3 +65,12 @@ trie = ["key-nibbles", "serde-derive", "thiserror"]
 ts-types = ["serde", "tsify", "wasm-bindgen"]
 # parallel = ["rayon", "ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "ark-groth16/parallel"]
 # zkp-prover = ["ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]
+
+[[bench]]
+name = "trie_node_serialize_criterion"
+harness = false
+
+[[bench]]
+name = "trie_node_serialize_libtest"
+harness = true
+

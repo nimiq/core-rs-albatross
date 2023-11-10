@@ -112,7 +112,7 @@ impl TrieProofNode {
 
 impl SerializeContent for TrieProofNode {
     fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
-        self.key.serialize(writer).unwrap();
+        Serialize::serialize(&self.key, writer).unwrap();
         match &self.value {
             ProofValue::None => {
                 writer.write_u8(0).unwrap();
