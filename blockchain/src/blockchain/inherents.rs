@@ -141,11 +141,6 @@ impl Blockchain {
     /// Creates the inherents to finalize a batch. The inherents are for reward distribution and
     /// updating the StakingContract.
     pub fn finalize_previous_batch(&self, macro_block: &MacroBlock) -> Vec<Inherent> {
-        // Special case for first batch: Batch 0 is finalized by definition.
-        if Policy::batch_at(macro_block.block_number()) - 1 == 0 {
-            return vec![];
-        }
-
         // To get the inherents we either fetch the reward transactions from the macro body;
         // or we create the transactions when there is no macro body.
         let mut inherents: Vec<Inherent> = if let Some(body) = macro_block.body.as_ref() {
