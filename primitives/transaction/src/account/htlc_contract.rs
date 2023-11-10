@@ -6,7 +6,9 @@ use nimiq_hash::{
     Blake2bHash, Blake2bHasher, Hasher, Sha256Hash, Sha256Hasher,
 };
 use nimiq_keys::Address;
-use nimiq_macros::{add_hex_io_fns_typed_arr, add_serialization_fns_typed_arr, create_typed_array};
+use nimiq_macros::{
+    add_hex_io_fns_typed_arr, add_serde_serialization_fns_typed_arr, create_typed_array,
+};
 use nimiq_primitives::account::AccountType;
 use nimiq_serde::{Deserialize, Serialize};
 
@@ -188,11 +190,11 @@ impl FromStr for PreImage {
 
 create_typed_array!(AnyHash32, u8, 32);
 add_hex_io_fns_typed_arr!(AnyHash32, AnyHash32::SIZE);
-add_serialization_fns_typed_arr!(AnyHash32, AnyHash32::SIZE);
+add_serde_serialization_fns_typed_arr!(AnyHash32, AnyHash32::SIZE);
 
 create_typed_array!(AnyHash64, u8, 64);
 add_hex_io_fns_typed_arr!(AnyHash64, AnyHash64::SIZE);
-add_serialization_fns_typed_arr!(AnyHash64, AnyHash64::SIZE);
+add_serde_serialization_fns_typed_arr!(AnyHash64, AnyHash64::SIZE);
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct CreationTransactionData {

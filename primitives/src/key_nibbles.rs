@@ -3,7 +3,7 @@ use std::{
     fmt, io, ops, str, usize,
 };
 
-use byteorder::WriteBytesExt;
+use byteorder::{ReadBytesExt, WriteBytesExt};
 use log::error;
 use nimiq_hash::{HashOutput, SerializeContent};
 use nimiq_keys::Address;
@@ -42,8 +42,12 @@ impl KeyNibbles {
         self.length as usize
     }
 
+    fn bytes_len_from_len(length: usize) -> usize {
+        (length + 1) / 2
+    }
+
     fn bytes_len(&self) -> usize {
-        (self.len() + 1) / 2
+        Self::bytes_len_from_len(self.len())
     }
 
     pub fn is_empty(&self) -> bool {
@@ -225,6 +229,26 @@ impl KeyNibbles {
     }
 }
 
+impl KeyNibbles {
+    pub fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<()> {
+        writer.write_u8(self.length)?;
+        writer.write_all(&self.bytes[0..self.bytes_len()])?;
+        Ok(())
+    }
+
+    pub fn serialized_size(&self) -> usize {
+        1 + self.bytes_len()
+    }
+
+    pub fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+        let length = reader.read_u8()?;
+        let mut bytes = [0; Self::MAX_BYTES];
+        let bytes_len = Self::bytes_len_from_len(length as usize);
+        reader.read_exact(&mut bytes[0..bytes_len])?;
+        Ok(KeyNibbles { bytes, length })
+    }
+}
+
 impl Default for KeyNibbles {
     fn default() -> KeyNibbles {
         KeyNibbles::ROOT
@@ -358,7 +382,6 @@ mod serde_derive {
     use std::{borrow::Cow, fmt, io};
 
     use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
-    use nimiq_serde::Deserialize as NimiqDeserialize;
     use serde::{
         de::{Deserialize, Deserializer, Error, SeqAccess, Unexpected, Visitor},
         ser::{Serialize, SerializeStruct, Serializer},
@@ -432,7 +455,9 @@ mod serde_derive {
     impl AsDatabaseBytes for KeyNibbles {
         fn as_database_bytes(&self) -> Cow<[u8]> {
             // TODO: Improve KeyNibbles, so that no serialization is needed.
-            nimiq_serde::Serialize::serialize_to_vec(self).into()
+            let mut buf = Vec::with_capacity(self.serialized_size());
+            self.serialize(&mut buf).unwrap();
+            buf.into()
         }
     }
 
@@ -441,8 +466,7 @@ mod serde_derive {
         where
             Self: Sized,
         {
-            KeyNibbles::deserialize_from_vec(bytes)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+            KeyNibbles::deserialize(&mut &bytes[..])
         }
     }
 }

@@ -1,10 +1,10 @@
 use std::{io, mem, ops::RangeFrom, slice};
 
-use byteorder::WriteBytesExt;
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use log::error;
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash, HashOutput, Hasher};
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::Serialize;
 
 use crate::{key_nibbles::KeyNibbles, trie::error::MerkleRadixTrieError};
 
@@ -29,6 +29,54 @@ pub struct RootData {
     pub num_branches: u64,
     pub num_hybrids: u64,
     pub num_leaves: u64,
+}
+
+impl RootData {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<()> {
+        if let Some(range) = &self.incomplete {
+            writer.write_u8(1)?;
+            range.start.serialize(writer)?;
+        } else {
+            writer.write_u8(0)?;
+        }
+
+        writer.write_u64::<BigEndian>(self.num_branches)?;
+        writer.write_u64::<BigEndian>(self.num_hybrids)?;
+        writer.write_u64::<BigEndian>(self.num_leaves)?;
+
+        Ok(())
+    }
+
+    fn serialized_size(&self) -> usize {
+        let mut size = 1 // incomplete flag
+            + 8  // num_branches
+            + 8  // num_hybrids
+            + 8; // num_leaves
+        if let Some(range) = &self.incomplete {
+            size += range.start.serialized_size();
+        }
+        size
+    }
+
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+        let incomplete = if reader.read_u8()? != 0 {
+            let start = KeyNibbles::deserialize(reader)?;
+            Some(RangeFrom { start })
+        } else {
+            None
+        };
+
+        let num_branches = reader.read_u64::<BigEndian>()?;
+        let num_hybrids = reader.read_u64::<BigEndian>()?;
+        let num_leaves = reader.read_u64::<BigEndian>()?;
+
+        Ok(Self {
+            incomplete,
+            num_branches,
+            num_hybrids,
+            num_leaves,
+        })
+    }
 }
 
 /// A struct representing the child of a node. It just contains the child's suffix (the part of the
@@ -67,6 +115,24 @@ impl TrieNodeChild {
             return Err(MerkleRadixTrieError::ChildIsStump);
         }
         Ok(parent_key + &self.suffix)
+    }
+}
+
+impl TrieNodeChild {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<()> {
+        self.suffix.serialize(writer)?;
+        self.hash.serialize(writer)?;
+        Ok(())
+    }
+
+    fn serialized_size(&self) -> usize {
+        self.suffix.serialized_size() + self.hash.serialized_size()
+    }
+
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+        let suffix = KeyNibbles::deserialize(reader)?;
+        let hash = Blake2bHash::deserialize(reader)?;
+        Ok(Self { suffix, hash })
     }
 }
 
@@ -258,7 +324,7 @@ impl TrieNode {
     pub fn hash<H: HashOutput>(&self) -> Option<H> {
         self.can_hash().then(|| {
             let mut hasher = H::Builder::default();
-            self.key.serialize(&mut hasher).unwrap();
+            Serialize::serialize(&self.key, &mut hasher).unwrap();
             match (self.has_children(), &self.value) {
                 (_, None) => {
                     hasher.write_u8(0).unwrap();
@@ -284,13 +350,99 @@ impl TrieNode {
     }
 }
 
+impl TrieNode {
+    pub fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<()> {
+        let has_root_data = self.root_data.is_some();
+        let has_value = self.value.is_some();
+        let flags = (has_root_data as u8) | ((has_value as u8) << 1);
+        let num_children: u8 = self
+            .children
+            .iter()
+            .fold(0, |acc, child| acc + u8::from(!child.is_none()));
+
+        writer.write_u8(flags)?;
+
+        if let Some(root_data) = &self.root_data {
+            root_data.serialize(writer)?;
+        }
+
+        if let Some(value) = &self.value {
+            writer.write_u32::<BigEndian>(value.len() as u32)?;
+            writer.write_all(value)?;
+        }
+
+        writer.write_u8(num_children)?;
+
+        for child in self.children.iter().flatten() {
+            child.serialize(writer)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn serialized_size(&self) -> usize {
+        let mut size = 1; // flags
+
+        if let Some(root_data) = &self.root_data {
+            size += root_data.serialized_size()
+        };
+
+        if let Some(value) = &self.value {
+            size += 4 + value.len()
+        };
+
+        size += 1; // num children
+        for child in self.children.iter().flatten() {
+            size += child.serialized_size();
+        }
+
+        size
+    }
+
+    pub fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+        let flags = reader.read_u8()?;
+        let has_root_data = flags & 0x1 != 0;
+        let has_value = flags & 0x2 != 0;
+
+        let root_data = if has_root_data {
+            Some(RootData::deserialize(reader)?)
+        } else {
+            None
+        };
+
+        let value = if has_value {
+            let len = reader.read_u32::<BigEndian>()?;
+            let mut buf = vec![0; len as usize];
+            reader.read_exact(&mut buf)?;
+            Some(buf)
+        } else {
+            None
+        };
+
+        let mut children = NO_CHILDREN;
+        let num_children = reader.read_u8()?;
+        for _ in 0..num_children {
+            let child = TrieNodeChild::deserialize(reader)?;
+            let index = child.suffix.get(0).unwrap();
+            children[index] = Some(child);
+        }
+
+        Ok(Self {
+            key: KeyNibbles::BADBADBAD,
+            root_data,
+            value,
+            children,
+        })
+    }
+}
+
 impl IntoDatabaseValue for TrieNode {
     fn database_byte_size(&self) -> usize {
         self.serialized_size()
     }
 
     fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize(&self, &mut bytes).unwrap();
+        self.serialize(&mut bytes).unwrap()
     }
 }
 
@@ -299,8 +451,7 @@ impl FromDatabaseValue for TrieNode {
     where
         Self: Sized,
     {
-        Deserialize::deserialize_from_vec(bytes)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+        TrieNode::deserialize(&mut &bytes[..])
     }
 }
 
@@ -390,7 +541,6 @@ impl<'a> IntoIterator for &'a mut TrieNode {
 
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
-
     use std::fmt;
 
     use serde::{
