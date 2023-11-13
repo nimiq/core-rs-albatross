@@ -17,12 +17,15 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 workspace = true
 
 [dependencies]
+base64 = "0.21"
 bitflags = { version = "2.4", features = ["serde"] }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 serde = "1.0"
+serde_json = { version = "1.0", features = ["preserve_order"] }
 strum_macros = "0.26"
 thiserror = "1.0"
 tsify = { git = "https://github.com/sisou/tsify", branch = "sisou/comments", default-features = false, features = ["js"], optional = true }
+url = "2.4"
 wasm-bindgen = { version = "0.2", optional = true }
 
 nimiq-bls = { workspace = true, features = ["serde-derive"] }
