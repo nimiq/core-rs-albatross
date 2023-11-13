@@ -10,7 +10,7 @@ use crate::{
 /// It is used as the proof for transactions.
 #[wasm_bindgen]
 pub struct SignatureProof {
-    inner: nimiq_transaction::SignatureProof,
+    inner: nimiq_transaction::EdDSASignatureProof,
 }
 
 #[wasm_bindgen]
@@ -18,7 +18,7 @@ impl SignatureProof {
     /// Creates a signature proof for a single-sig signature.
     #[wasm_bindgen(js_name = singleSig)]
     pub fn single_sig(public_key: &PublicKey, signature: &Signature) -> SignatureProof {
-        SignatureProof::from_native(nimiq_transaction::SignatureProof::from(
+        SignatureProof::from_native(nimiq_transaction::EdDSASignatureProof::from(
             *public_key.native_ref(),
             signature.native_ref().clone(),
         ))
@@ -54,13 +54,13 @@ impl SignatureProof {
 }
 
 impl SignatureProof {
-    pub fn from_native(signature_proof: nimiq_transaction::SignatureProof) -> SignatureProof {
+    pub fn from_native(signature_proof: nimiq_transaction::EdDSASignatureProof) -> SignatureProof {
         SignatureProof {
             inner: signature_proof,
         }
     }
 
-    pub fn native_ref(&self) -> &nimiq_transaction::SignatureProof {
+    pub fn native_ref(&self) -> &nimiq_transaction::EdDSASignatureProof {
         &self.inner
     }
 }

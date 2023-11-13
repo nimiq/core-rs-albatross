@@ -8,8 +8,8 @@ use nimiq_database::volatile::VolatileDatabase;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::{
-    Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey,
-    PublicKey as SchnorrPublicKey, SecureGenerate,
+    Address, EdDSAPublicKey as SchnorrPublicKey, KeyPair as SchnorrKeyPair,
+    PrivateKey as SchnorrPrivateKey, SecureGenerate,
 };
 use nimiq_mempool::{config::MempoolConfig, mempool::Mempool, mempool_transactions::TxPriority};
 use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};

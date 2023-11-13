@@ -1,7 +1,7 @@
 use anyhow::Error;
 use async_trait::async_trait;
 use clap::Parser;
-use nimiq_keys::{Address, PublicKey, Signature};
+use nimiq_keys::{Address, EdDSAPublicKey, Signature};
 use nimiq_rpc_interface::{blockchain::BlockchainInterface, wallet::WalletInterface};
 
 use crate::Client;
@@ -81,7 +81,7 @@ pub enum AccountCommand {
         message: String,
 
         /// The public key returned upon signing the message.
-        public_key: PublicKey,
+        public_key: EdDSAPublicKey,
 
         /// The signature returned upon signing the message. The r and s bytes should be all concatenated
         /// into one continuous input.

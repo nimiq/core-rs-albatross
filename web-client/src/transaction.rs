@@ -627,9 +627,15 @@ impl Transaction {
                                 hash_root: hash_root.to_hex(),
                                 pre_image: pre_image.to_hex(),
                                 signer: signature_proof.compute_signer().to_user_friendly_address(),
-                                signature: signature_proof.signature.to_hex(),
-                                public_key: signature_proof.public_key.to_hex(),
-                                path_length: signature_proof.merkle_path.len() as u8,
+                                signature: match signature_proof {
+                                    SignatureProof::EdDSA(ref proof) => proof.signature.to_hex(),
+                                    SignatureProof::ECDSA(ref proof) => proof.signature.to_hex(),
+                                },
+                                public_key: match signature_proof {
+                                    SignatureProof::EdDSA(ref proof) => proof.public_key.to_hex(),
+                                    SignatureProof::ECDSA(ref proof) => proof.public_key.to_hex(),
+                                },
+                                path_length: signature_proof.merkle_path().len() as u8,
                             })
                         }
                         OutgoingHTLCTransactionProof::TimeoutResolve {
@@ -639,9 +645,15 @@ impl Transaction {
                             creator: signature_proof_sender
                                 .compute_signer()
                                 .to_user_friendly_address(),
-                            creator_signature: signature_proof_sender.signature.to_hex(),
-                            creator_public_key: signature_proof_sender.public_key.to_hex(),
-                            creator_path_length: signature_proof_sender.merkle_path.len() as u8,
+                            creator_signature: match signature_proof_sender {
+                                SignatureProof::EdDSA(ref proof) => proof.signature.to_hex(),
+                                SignatureProof::ECDSA(ref proof) => proof.signature.to_hex(),
+                            },
+                            creator_public_key: match signature_proof_sender {
+                                SignatureProof::EdDSA(ref proof) => proof.public_key.to_hex(),
+                                SignatureProof::ECDSA(ref proof) => proof.public_key.to_hex(),
+                            },
+                            creator_path_length: signature_proof_sender.merkle_path().len() as u8,
                         }),
                         OutgoingHTLCTransactionProof::EarlyResolve {
                             signature_proof_recipient,
@@ -651,25 +663,43 @@ impl Transaction {
                             signer: signature_proof_recipient
                                 .compute_signer()
                                 .to_user_friendly_address(),
-                            signature: signature_proof_recipient.signature.to_hex(),
-                            public_key: signature_proof_recipient.public_key.to_hex(),
-                            path_length: signature_proof_recipient.merkle_path.len() as u8,
+                            signature: match signature_proof_recipient {
+                                SignatureProof::EdDSA(ref proof) => proof.signature.to_hex(),
+                                SignatureProof::ECDSA(ref proof) => proof.signature.to_hex(),
+                            },
+                            public_key: match signature_proof_recipient {
+                                SignatureProof::EdDSA(ref proof) => proof.public_key.to_hex(),
+                                SignatureProof::ECDSA(ref proof) => proof.public_key.to_hex(),
+                            },
+                            path_length: signature_proof_recipient.merkle_path().len() as u8,
                             creator: signature_proof_sender
                                 .compute_signer()
                                 .to_user_friendly_address(),
-                            creator_signature: signature_proof_sender.signature.to_hex(),
-                            creator_public_key: signature_proof_sender.public_key.to_hex(),
-                            creator_path_length: signature_proof_sender.merkle_path.len() as u8,
+                            creator_signature: match signature_proof_sender {
+                                SignatureProof::EdDSA(ref proof) => proof.signature.to_hex(),
+                                SignatureProof::ECDSA(ref proof) => proof.signature.to_hex(),
+                            },
+                            creator_public_key: match signature_proof_sender {
+                                SignatureProof::EdDSA(ref proof) => proof.public_key.to_hex(),
+                                SignatureProof::ECDSA(ref proof) => proof.public_key.to_hex(),
+                            },
+                            creator_path_length: signature_proof_sender.merkle_path().len() as u8,
                         }),
                     }
                 } else {
                     let proof = SignatureProof::deserialize_from_vec(&self.inner.proof).unwrap();
                     PlainTransactionProof::Standard(PlainStandardProof {
                         raw: hex::encode(self.proof()),
-                        signature: proof.signature.to_hex(),
-                        public_key: proof.public_key.to_hex(),
+                        signature: match proof {
+                            SignatureProof::EdDSA(ref proof) => proof.signature.to_hex(),
+                            SignatureProof::ECDSA(ref proof) => proof.signature.to_hex(),
+                        },
+                        public_key: match proof {
+                            SignatureProof::EdDSA(ref proof) => proof.public_key.to_hex(),
+                            SignatureProof::ECDSA(ref proof) => proof.public_key.to_hex(),
+                        },
                         signer: proof.compute_signer().to_user_friendly_address(),
-                        path_length: proof.merkle_path.len() as u8,
+                        path_length: proof.merkle_path().len() as u8,
                     })
                 }
             },

@@ -4,7 +4,7 @@ use ark_ec::Group;
 use nimiq_bls::{G2Projective, PublicKey as BlsPublicKey};
 use nimiq_collections::bitset::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput, Hasher, SerializeContent};
-use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_keys::{Address, EdDSAPublicKey as SchnorrPublicKey};
 use nimiq_primitives::{
     networks::NetworkId,
     policy::Policy,

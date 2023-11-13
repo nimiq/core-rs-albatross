@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use nimiq_database::traits::WriteTransaction;
-use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, Signature};
+use nimiq_keys::{Address, EdDSAPublicKey, KeyPair, PrivateKey, Signature};
 use nimiq_rpc_interface::{
     types::RPCResult,
     wallet::{ReturnAccount, ReturnSignature, WalletInterface},
@@ -172,7 +172,7 @@ impl WalletInterface for WalletDispatcher {
     async fn verify_signature(
         &mut self,
         message: String,
-        public_key: PublicKey,
+        public_key: EdDSAPublicKey,
         signature: Signature,
         is_hex: bool,
     ) -> RPCResult<bool, (), Self::Error> {

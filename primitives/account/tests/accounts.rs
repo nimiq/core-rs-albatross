@@ -12,7 +12,7 @@ use nimiq_database::{
     volatile::VolatileDatabase,
 };
 use nimiq_genesis_builder::GenesisBuilder;
-use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, SecureGenerate};
+use nimiq_keys::{Address, EdDSAPublicKey, KeyPair, PrivateKey, SecureGenerate};
 use nimiq_primitives::{
     account::{AccountType, FailReason},
     coin::Coin,
@@ -28,7 +28,7 @@ use nimiq_test_utils::{
     test_transaction::{generate_accounts, generate_transactions, TestTransaction},
     transactions::{IncomingType, OutgoingType, TransactionsGenerator, ValidatorState},
 };
-use nimiq_transaction::{inherent::Inherent, SignatureProof, Transaction};
+use nimiq_transaction::{inherent::Inherent, EdDSASignatureProof, SignatureProof, Transaction};
 use rand::Rng;
 use tempfile::tempdir;
 
@@ -450,7 +450,7 @@ fn accounts_performance() {
     // Add validator to genesis
     genesis_builder.with_genesis_validator(
         Address::from(&KeyPair::generate(&mut rng)),
-        PublicKey::from([0u8; 32]),
+        EdDSAPublicKey::from([0u8; 32]),
         BLSKeyPair::generate(&mut rng).public_key,
         Address::default(),
         None,
@@ -573,7 +573,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
     // Add validator to genesis
     genesis_builder.with_genesis_validator(
         Address::from(&KeyPair::generate(&mut rng)),
-        PublicKey::from([0u8; 32]),
+        EdDSAPublicKey::from([0u8; 32]),
         BLSKeyPair::generate(&mut rng).public_key,
         Address::default(),
         None,
@@ -702,7 +702,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
     // Add validator to genesis
     genesis_builder.with_genesis_validator(
         Address::from(&KeyPair::generate(&mut rng)),
-        PublicKey::from([0u8; 32]),
+        EdDSAPublicKey::from([0u8; 32]),
         BLSKeyPair::generate(&mut rng).public_key,
         Address::default(),
         None,
@@ -809,7 +809,8 @@ fn it_commits_valid_and_failing_txns() {
     tx.sender_type = AccountType::Vesting;
 
     let signature = key_pair.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::from(key_pair.public, signature);
+    let signature_proof =
+        SignatureProof::EdDSA(EdDSASignatureProof::from(key_pair.public, signature));
     tx.proof = signature_proof.serialize_to_vec();
 
     let block_state = BlockState::new(1, 200);
@@ -850,10 +851,10 @@ fn it_commits_valid_and_failing_txns() {
         1,
         NetworkId::Dummy,
     );
-    tx.sender_type = AccountType::Basic;
+    // tx.sender_type = AccountType::Basic;
 
     let signature = key_pair.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::from(key_pair.public, signature);
+    let signature_proof = EdDSASignatureProof::from(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     let mut block_logger = BlockLogger::empty();

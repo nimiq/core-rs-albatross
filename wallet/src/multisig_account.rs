@@ -10,11 +10,11 @@ use nimiq_keys::{
         public_key::DelinearizedPublicKey,
         CommitmentsData, MUSIG2_PARAMETER_V,
     },
-    Address, KeyPair, PublicKey, SecureGenerate,
+    Address, EdDSAPublicKey, KeyPair, SecureGenerate,
 };
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_serde::Serialize;
-use nimiq_transaction::{SignatureProof, Transaction};
+use nimiq_transaction::{EdDSASignatureProof, Transaction};
 use nimiq_utils::merkle::Blake2bMerklePath;
 use thiserror::Error;
 
@@ -28,7 +28,7 @@ pub struct MultiSigAccount {
     /// Minimum number of required signatures.
     pub min_signatures: NonZeroU8,
     /// A list of all aggregated public keys.
-    pub public_keys: Vec<PublicKey>,
+    pub public_keys: Vec<EdDSAPublicKey>,
 }
 
 impl MultiSigAccount {
@@ -42,7 +42,7 @@ impl MultiSigAccount {
     pub fn from_public_keys(
         key_pair: &KeyPair,
         min_signatures: NonZeroU8,
-        public_keys: &[PublicKey],
+        public_keys: &[EdDSAPublicKey],
     ) -> Result<Self, MultiSigAccountError> {
         if public_keys.is_empty() {
             return Err(MultiSigAccountError::PublicKeysNotEmpty);
@@ -66,7 +66,11 @@ impl MultiSigAccount {
     /// * `key_pair` - Keypair owning this account.
     /// * `min_signatures` - Number of signatures required.
     /// * `public_keys` - A list of all aggregated public keys.
-    pub fn new(key_pair: &KeyPair, min_signatures: NonZeroU8, public_keys: &[PublicKey]) -> Self {
+    pub fn new(
+        key_pair: &KeyPair,
+        min_signatures: NonZeroU8,
+        public_keys: &[EdDSAPublicKey],
+    ) -> Self {
         Self {
             address: compute_address(public_keys),
             key_pair: key_pair.clone(),
@@ -105,7 +109,7 @@ impl MultiSigAccount {
     }
 
     /// Utility method that delinearizes and aggregates the provided slice of public keys.
-    pub fn aggregate_public_keys(public_keys: &[PublicKey]) -> PublicKey {
+    pub fn aggregate_public_keys(public_keys: &[EdDSAPublicKey]) -> EdDSAPublicKey {
         DelinearizedPublicKey::sum_delinearized(public_keys)
     }
 
@@ -122,10 +126,10 @@ impl MultiSigAccount {
     /// Creates a signature proof.
     pub fn create_proof(
         &self,
-        aggregated_public_key: &PublicKey,
+        aggregated_public_key: &EdDSAPublicKey,
         aggregated_commitment: &Commitment,
         partial_signatures: &[PartialSignature],
-    ) -> Result<SignatureProof, MultiSigAccountError> {
+    ) -> Result<EdDSASignatureProof, MultiSigAccountError> {
         if partial_signatures.len() != self.min_signatures.get() as usize {
             return Err(MultiSigAccountError::InvalidSignaturesLength);
         }
@@ -133,7 +137,7 @@ impl MultiSigAccount {
         let aggregated_signature: PartialSignature = partial_signatures.iter().sum();
         let signature = aggregated_signature.to_signature(aggregated_commitment);
 
-        Ok(SignatureProof {
+        Ok(EdDSASignatureProof {
             merkle_path: Blake2bMerklePath::new::<Blake2bHasher, _>(
                 &self.public_keys,
                 aggregated_public_key,
@@ -147,7 +151,7 @@ impl MultiSigAccount {
     pub fn sign_transaction(
         &self,
         transaction: &Transaction,
-        aggregated_public_key: &PublicKey,
+        aggregated_public_key: &EdDSAPublicKey,
         aggregated_commitment: &Commitment,
         partial_signatures: &[PartialSignature],
     ) -> Result<Transaction, MultiSigAccountError> {

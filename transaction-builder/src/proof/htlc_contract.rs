@@ -3,7 +3,7 @@ use nimiq_keys::KeyPair;
 use nimiq_serde::Serialize;
 use nimiq_transaction::{
     account::htlc_contract::{AnyHash, OutgoingHTLCTransactionProof, PreImage},
-    SignatureProof, Transaction,
+    EdDSASignatureProof, SignatureProof, Transaction,
 };
 
 /// The `HtlcProofBuilder` can be used to build proofs for transactions
@@ -66,7 +66,7 @@ impl HtlcProofBuilder {
     /// ```
     pub fn signature_with_key_pair(&self, key_pair: &KeyPair) -> SignatureProof {
         let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
-        SignatureProof::from(key_pair.public, signature)
+        SignatureProof::EdDSA(EdDSASignatureProof::from(key_pair.public, signature))
     }
 
     /// This method creates a proof for the `TimeoutResolve` case, i.e.,
