@@ -1,5 +1,5 @@
 use nimiq_key_derivation::*;
-use nimiq_keys::{PrivateKey, PublicKey};
+use nimiq_keys::{EdDSAPublicKey, PrivateKey, PublicKey};
 use nimiq_test_log::test;
 
 struct TestVector {
@@ -23,9 +23,9 @@ impl TestVector {
     }
 
     fn get_public_key(&self) -> PublicKey {
-        let mut public_key: [u8; PublicKey::SIZE] = Default::default();
+        let mut public_key: [u8; EdDSAPublicKey::SIZE] = Default::default();
         public_key.copy_from_slice(hex::decode(self.public).unwrap().as_slice());
-        PublicKey::from(public_key)
+        PublicKey::EdDSA(EdDSAPublicKey::from(public_key))
     }
 }
 

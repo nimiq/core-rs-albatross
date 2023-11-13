@@ -3,7 +3,7 @@ use std::{cmp::Ordering, collections::HashSet, fmt, fmt::Debug, io};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_hash_derive::SerializeContent;
-use nimiq_keys::{PublicKey, Signature};
+use nimiq_keys::{EdDSAPublicKey, Signature};
 use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{ExecutedTransaction, Transaction};
@@ -56,7 +56,7 @@ impl MicroBlock {
             + /*transactions vector length*/ 2)
     }
 
-    pub(crate) fn verify_proposer(&self, signing_key: &PublicKey) -> Result<(), BlockError> {
+    pub(crate) fn verify_proposer(&self, signing_key: &EdDSAPublicKey) -> Result<(), BlockError> {
         let justification = self
             .justification
             .as_ref()

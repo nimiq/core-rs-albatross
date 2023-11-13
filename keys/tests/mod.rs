@@ -1,5 +1,5 @@
 use nimiq_keys::{
-    Address, AddressParseError, KeyPair, PrivateKey, PublicKey, SecureGenerate, Signature,
+    Address, AddressParseError, EdDSAPublicKey, KeyPair, PrivateKey, SecureGenerate, Signature,
     WebauthnPublicKey,
 };
 use nimiq_test_log::test;
@@ -100,9 +100,9 @@ fn verify_rfc8032_test_vectors() {
         private_key_bytes.clone_from_slice(&::hex::decode(test_case.private).unwrap()[0..]);
         let private_key = PrivateKey::from(&private_key_bytes);
 
-        let mut public_key_bytes: [u8; PublicKey::SIZE] = [0; PublicKey::SIZE];
+        let mut public_key_bytes: [u8; EdDSAPublicKey::SIZE] = [0; EdDSAPublicKey::SIZE];
         public_key_bytes.clone_from_slice(&::hex::decode(test_case.public).unwrap()[0..]);
-        let public_key = PublicKey::from(&public_key_bytes);
+        let public_key = EdDSAPublicKey::from(&public_key_bytes);
 
         let mut sig_key_bytes: [u8; Signature::SIZE] = [0; Signature::SIZE];
         sig_key_bytes.clone_from_slice(&::hex::decode(test_case.sig).unwrap()[0..]);
@@ -110,7 +110,7 @@ fn verify_rfc8032_test_vectors() {
 
         let data = &::hex::decode(test_case.msg).unwrap()[0..];
 
-        let derived_public_key = PublicKey::from(&private_key);
+        let derived_public_key = EdDSAPublicKey::from(&private_key);
 
         assert!(derived_public_key == public_key);
 

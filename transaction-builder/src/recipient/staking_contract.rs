@@ -1,6 +1,6 @@
 use nimiq_bls::{CompressedSignature, KeyPair as BlsKeyPair};
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_keys::{Address, EdDSAPublicKey as SchnorrPublicKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::account::staking_contract::IncomingStakingTransactionData;
 

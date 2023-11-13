@@ -2,10 +2,10 @@ use std::io;
 
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Hash, HashOutput, Sha256Hash};
-use nimiq_keys::{Address, KeyPair, PublicKey, SecureGenerate, Signature};
+use nimiq_keys::{Address, EdDSAPublicKey, KeyPair, SecureGenerate, Signature};
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_transaction::{SignatureProof, Transaction};
+use nimiq_transaction::{EdDSASignatureProof, Transaction};
 use nimiq_utils::otp::Verify;
 
 pub const NIMIQ_SIGN_MESSAGE_PREFIX: &[u8] = b"\x16Nimiq Signed Message:\n";
@@ -20,7 +20,7 @@ pub struct WalletAccount {
 impl Verify for WalletAccount {
     fn verify(&self) -> bool {
         // Check that the public key corresponds to the private key.
-        PublicKey::from(&self.key_pair.private) == self.key_pair.public
+        EdDSAPublicKey::from(&self.key_pair.private) == self.key_pair.public
     }
 }
 
@@ -54,11 +54,11 @@ impl WalletAccount {
         transaction.proof = proof.serialize_to_vec();
     }
 
-    pub fn create_signature_proof(&self, transaction: &Transaction) -> SignatureProof {
+    pub fn create_signature_proof(&self, transaction: &Transaction) -> EdDSASignatureProof {
         let signature = self
             .key_pair
             .sign(transaction.serialize_content().as_slice());
-        SignatureProof::from(self.key_pair.public, signature)
+        EdDSASignatureProof::from(self.key_pair.public, signature)
     }
 
     fn prepare_message_for_signature(message: &[u8]) -> Sha256Hash {
@@ -82,12 +82,16 @@ impl WalletAccount {
         buffer.hash::<Sha256Hash>()
     }
 
-    pub fn sign_message(&self, message: &[u8]) -> (PublicKey, Signature) {
+    pub fn sign_message(&self, message: &[u8]) -> (EdDSAPublicKey, Signature) {
         let hash = Self::prepare_message_for_signature(message);
         (self.key_pair.public, self.key_pair.sign(hash.as_bytes()))
     }
 
-    pub fn verify_message(public_key: &PublicKey, message: &[u8], signature: &Signature) -> bool {
+    pub fn verify_message(
+        public_key: &EdDSAPublicKey,
+        message: &[u8],
+        signature: &Signature,
+    ) -> bool {
         let hash = Self::prepare_message_for_signature(message);
         public_key.verify(signature, hash.as_bytes())
     }

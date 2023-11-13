@@ -9,7 +9,7 @@ use nimiq_transaction::{
     account::htlc_contract::{
         AnyHash, AnyHash32, CreationTransactionData, OutgoingHTLCTransactionProof, PreImage,
     },
-    SignatureProof, Transaction,
+    EdDSASignatureProof, SignatureProof, Transaction,
 };
 use nimiq_transaction_builder::{Recipient, Sender, TransactionBuilder};
 
@@ -105,9 +105,14 @@ fn prepare_outgoing_transaction() -> (
 
     let sender_signature = sender_key_pair.sign(&tx.serialize_content()[..]);
     let recipient_signature = recipient_key_pair.sign(&tx.serialize_content()[..]);
-    let sender_signature_proof = SignatureProof::from(sender_key_pair.public, sender_signature);
-    let recipient_signature_proof =
-        SignatureProof::from(recipient_key_pair.public, recipient_signature);
+    let sender_signature_proof = SignatureProof::EdDSA(EdDSASignatureProof::from(
+        sender_key_pair.public,
+        sender_signature,
+    ));
+    let recipient_signature_proof = SignatureProof::EdDSA(EdDSASignatureProof::from(
+        recipient_key_pair.public,
+        recipient_signature,
+    ));
 
     (
         tx,

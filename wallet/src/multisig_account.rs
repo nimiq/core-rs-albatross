@@ -5,11 +5,11 @@ use itertools::Itertools;
 use nimiq_hash::Blake2bHasher;
 use nimiq_keys::{
     multisig::{hash_public_keys, Commitment, CommitmentPair, PartialSignature, RandomSecret},
-    Address, KeyPair, PublicKey, SecureGenerate, SecureRng, Signature,
+    Address, EdDSAPublicKey, KeyPair, SecureGenerate, SecureRng, Signature,
 };
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_serde::Serialize;
-use nimiq_transaction::{SignatureProof, Transaction};
+use nimiq_transaction::{EdDSASignatureProof, Transaction};
 use nimiq_utils::merkle::{compute_root_from_content_slice, MerklePath};
 use thiserror::Error;
 
@@ -23,7 +23,7 @@ pub struct MultiSigAccount {
     /// Minimum number of required signatures.
     pub min_signatures: NonZeroU8,
     /// A list of all aggregated public keys.
-    pub public_keys: Vec<PublicKey>,
+    pub public_keys: Vec<EdDSAPublicKey>,
 }
 
 impl MultiSigAccount {
@@ -37,7 +37,7 @@ impl MultiSigAccount {
     pub fn from_public_keys(
         key_pair: &KeyPair,
         min_signatures: NonZeroU8,
-        public_keys: &[PublicKey],
+        public_keys: &[EdDSAPublicKey],
     ) -> Result<Self, MultiSigAccountError> {
         if public_keys.is_empty() {
             return Err(MultiSigAccountError::PublicKeysNotEmpty);
@@ -48,7 +48,7 @@ impl MultiSigAccount {
         let mut sorted_public_keys = public_keys.to_vec();
         sorted_public_keys.sort();
 
-        let multi_sig_keys: Vec<PublicKey> = sorted_public_keys
+        let multi_sig_keys: Vec<EdDSAPublicKey> = sorted_public_keys
             .into_iter()
             .combinations(min_signatures.get() as usize)
             .map(|pk| MultiSigAccount::aggregate_public_keys(&pk))
@@ -65,11 +65,16 @@ impl MultiSigAccount {
     /// * `key_pair` - Keypair owning this account.
     /// * `min_signatures` - Number of signatures required.
     /// * `public_keys` - A list of all aggregated public keys.
-    pub fn new(key_pair: &KeyPair, min_signatures: NonZeroU8, public_keys: &[PublicKey]) -> Self {
+    pub fn new(
+        key_pair: &KeyPair,
+        min_signatures: NonZeroU8,
+        public_keys: &[EdDSAPublicKey],
+    ) -> Self {
         Self {
-            address: Address::from(compute_root_from_content_slice::<Blake2bHasher, PublicKey>(
-                public_keys,
-            )),
+            address: Address::from(compute_root_from_content_slice::<
+                Blake2bHasher,
+                EdDSAPublicKey,
+            >(public_keys)),
             key_pair: key_pair.clone(),
             min_signatures,
             public_keys: public_keys.to_vec(),
@@ -102,7 +107,7 @@ impl MultiSigAccount {
     }
 
     /// Utility method that delinearizes and aggregates the provided slice of public keys.
-    pub fn aggregate_public_keys(public_keys: &[PublicKey]) -> PublicKey {
+    pub fn aggregate_public_keys(public_keys: &[EdDSAPublicKey]) -> EdDSAPublicKey {
         let mut sorted_public_keys = public_keys.to_vec();
         sorted_public_keys.sort();
 
@@ -112,16 +117,16 @@ impl MultiSigAccount {
             .map(|public_key| public_key.delinearize(&public_keys_hash))
             .sum();
 
-        let mut public_key_bytes: [u8; PublicKey::SIZE] = [0u8; PublicKey::SIZE];
+        let mut public_key_bytes: [u8; EdDSAPublicKey::SIZE] = [0u8; EdDSAPublicKey::SIZE];
         public_key_bytes.copy_from_slice(delinearized_pk_sum.compress().as_bytes());
-        PublicKey::from(public_key_bytes)
+        EdDSAPublicKey::from(public_key_bytes)
     }
 
     /// Creates a partial signature of the provided transaction.
     pub fn partially_sign_transaction(
         &self,
         transaction: &Transaction,
-        public_keys: &[PublicKey],
+        public_keys: &[EdDSAPublicKey],
         commitments: &[Commitment],
         secret: &RandomSecret,
     ) -> PartialSignature {
@@ -141,10 +146,10 @@ impl MultiSigAccount {
     /// Creates a signature proof.
     pub fn create_proof(
         &self,
-        aggregated_public_key: &PublicKey,
+        aggregated_public_key: &EdDSAPublicKey,
         aggregated_commitment: &Commitment,
         signatures: &[PartialSignature],
-    ) -> Result<SignatureProof, MultiSigAccountError> {
+    ) -> Result<EdDSASignatureProof, MultiSigAccountError> {
         if signatures.len() != self.min_signatures.get() as usize {
             return Err(MultiSigAccountError::InvalidSignaturesLength);
         }
@@ -159,8 +164,8 @@ impl MultiSigAccount {
         combined.extend_from_slice(aggregated_signature.as_bytes());
         let signature = Signature::from_bytes(&combined)?;
 
-        Ok(SignatureProof {
-            merkle_path: MerklePath::new::<Blake2bHasher, PublicKey>(
+        Ok(EdDSASignatureProof {
+            merkle_path: MerklePath::new::<Blake2bHasher, EdDSAPublicKey>(
                 &self.public_keys,
                 aggregated_public_key,
             ),
@@ -173,7 +178,7 @@ impl MultiSigAccount {
     pub fn sign_transaction(
         &self,
         transaction: &Transaction,
-        aggregated_public_key: &PublicKey,
+        aggregated_public_key: &EdDSAPublicKey,
         aggregated_commitment: &Commitment,
         partial_signatures: &[PartialSignature],
     ) -> Result<Transaction, MultiSigAccountError> {

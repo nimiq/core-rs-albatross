@@ -11,7 +11,7 @@ use std::{
 use base64::Engine;
 use bitflags::bitflags;
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Hash, Hasher, SerializeContent, Sha256Hasher};
-use nimiq_keys::{Address, PublicKey, Signature, WebauthnPublicKey};
+use nimiq_keys::{Address, EdDSAPublicKey, PublicKey, Signature, WebauthnPublicKey};
 use nimiq_network_interface::network::Topic;
 use nimiq_primitives::{
     account::AccountType, coin::Coin, networks::NetworkId, policy::Policy,
@@ -114,15 +114,15 @@ impl From<TransactionFlags> for u8 {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SignatureProof {
-    pub public_key: PublicKey,
+pub struct EdDSASignatureProof {
+    pub public_key: EdDSAPublicKey,
     pub merkle_path: Blake2bMerklePath,
     pub signature: Signature,
 }
 
-impl SignatureProof {
-    pub fn from(public_key: PublicKey, signature: Signature) -> Self {
-        SignatureProof {
+impl EdDSASignatureProof {
+    pub fn from(public_key: EdDSAPublicKey, signature: Signature) -> Self {
+        EdDSASignatureProof {
             public_key,
             merkle_path: Blake2bMerklePath::empty(),
             signature,
@@ -143,9 +143,9 @@ impl SignatureProof {
     }
 }
 
-impl Default for SignatureProof {
+impl Default for EdDSASignatureProof {
     fn default() -> Self {
-        SignatureProof {
+        EdDSASignatureProof {
             public_key: Default::default(),
             merkle_path: Default::default(),
             signature: Signature::from_bytes(&[0u8; Signature::SIZE]).unwrap(),
@@ -244,6 +244,45 @@ impl WebauthnSignatureProof {
 
         self.public_key
             .verify(&self.signature, signed_data.as_slice())
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum SignatureProof {
+    EdDSA(EdDSASignatureProof),
+    ECDSA(WebauthnSignatureProof),
+}
+
+impl SignatureProof {
+    pub fn merkle_path(&self) -> &Blake2bMerklePath {
+        match self {
+            SignatureProof::EdDSA(proof) => &proof.merkle_path,
+            SignatureProof::ECDSA(proof) => &proof.merkle_path,
+        }
+    }
+
+    pub fn verify(&self, message: &[u8]) -> bool {
+        match self {
+            SignatureProof::EdDSA(proof) => proof.verify(message),
+            SignatureProof::ECDSA(proof) => proof.verify(message),
+        }
+    }
+
+    pub fn compute_signer(&self) -> Address {
+        match self {
+            SignatureProof::EdDSA(proof) => proof.compute_signer(),
+            SignatureProof::ECDSA(proof) => proof.compute_signer(),
+        }
+    }
+
+    pub fn is_signed_by(&self, address: &Address) -> bool {
+        self.compute_signer() == *address
+    }
+}
+
+impl Default for SignatureProof {
+    fn default() -> Self {
+        SignatureProof::EdDSA(Default::default())
     }
 }
 
@@ -425,7 +464,7 @@ impl Transaction {
             && self.recipient_data.is_empty()
             && self.flags.is_empty()
         {
-            if let Ok(signature_proof) = SignatureProof::deserialize_from_vec(&self.proof) {
+            if let Ok(signature_proof) = EdDSASignatureProof::deserialize_from_vec(&self.proof) {
                 if self.sender == Address::from(&signature_proof.public_key)
                     && signature_proof.merkle_path.is_empty()
                 {
@@ -672,7 +711,7 @@ mod serde_derive {
                         VARIANTS[0],
                         BASIC_FIELDS.len(),
                     )?;
-                    let signature_proof: SignatureProof =
+                    let signature_proof: EdDSASignatureProof =
                         Deserialize::deserialize_from_vec(&self.proof)
                             .map_err(|_| S::Error::custom("Could not serialize signature proof"))?;
                     sv.serialize_field(BASIC_FIELDS[0], &signature_proof.public_key)?;
@@ -752,7 +791,7 @@ mod serde_derive {
         where
             A: SeqAccess<'de>,
         {
-            let public_key: PublicKey = seq
+            let public_key: EdDSAPublicKey = seq
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
             let recipient: Address = seq
@@ -774,7 +813,7 @@ mod serde_derive {
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(6, &self))?;
             Ok(Transaction {
-                sender: Address::from(&public_key),
+                sender: Address::from(&PublicKey::EdDSA(public_key)),
                 sender_type: AccountType::Basic,
                 sender_data: vec![],
                 recipient,
@@ -785,7 +824,7 @@ mod serde_derive {
                 validity_start_height: u32::from_be_bytes(validity_start_height),
                 network_id,
                 flags: TransactionFlags::empty(),
-                proof: SignatureProof::from(public_key, signature).serialize_to_vec(),
+                proof: EdDSASignatureProof::from(public_key, signature).serialize_to_vec(),
                 valid: false,
             })
         }

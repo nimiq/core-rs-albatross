@@ -1,4 +1,4 @@
-use nimiq_keys::Address;
+use nimiq_keys::{Address, PublicKey};
 use nimiq_primitives::{
     account::{AccountError, AccountType},
     coin::Coin,
@@ -709,7 +709,7 @@ impl AccountInherentInteraction for StakingContract {
                     self.deactivate_validator(
                         &mut store,
                         &slot.validator_address,
-                        &Address::from(&validator.signing_key),
+                        &Address::from(&PublicKey::EdDSA(validator.signing_key)),
                         block_state.number,
                         &mut tx_logger,
                     )?;

@@ -18,7 +18,7 @@ use nimiq_database::{
     DatabaseProxy,
 };
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
-use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_keys::{Address, EdDSAPublicKey as SchnorrPublicKey};
 use nimiq_primitives::{
     account::AccountError, coin::Coin, key_nibbles::KeyNibbles, policy::Policy, trie::TrieItem,
     TreeProof,

@@ -6,7 +6,7 @@ use nimiq_hash::{hash_typed_array, Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_macros::create_typed_array;
 use thiserror::Error;
 
-use crate::{key_pair::KeyPair, PublicKey, WebauthnPublicKey};
+use crate::{key_pair::KeyPair, EdDSAPublicKey, PublicKey, WebauthnPublicKey};
 
 create_typed_array!(Address, u8, 20);
 hash_typed_array!(Address);
@@ -159,6 +159,13 @@ impl From<Blake2bHash> for Address {
     }
 }
 
+impl<'a> From<&'a EdDSAPublicKey> for Address {
+    fn from(public_key: &'a EdDSAPublicKey) -> Self {
+        let hash = Blake2bHasher::default().digest(public_key.as_bytes());
+        Address::from(hash)
+    }
+}
+
 impl<'a> From<&'a WebauthnPublicKey> for Address {
     fn from(public_key: &'a WebauthnPublicKey) -> Self {
         let hash = Blake2bHasher::default().digest(public_key.as_bytes());
@@ -168,14 +175,17 @@ impl<'a> From<&'a WebauthnPublicKey> for Address {
 
 impl<'a> From<&'a PublicKey> for Address {
     fn from(public_key: &'a PublicKey) -> Self {
-        let hash = Blake2bHasher::default().digest(public_key.as_bytes());
-        Address::from(hash)
+        match public_key {
+            PublicKey::EdDSA(public_key) => Address::from(public_key),
+            PublicKey::ECDSA(public_key) => Address::from(public_key),
+        }
     }
 }
 
 impl<'a> From<&'a KeyPair> for Address {
     fn from(key_pair: &'a KeyPair) -> Self {
-        Address::from(&key_pair.public)
+        let public_key: &PublicKey = &key_pair.public.into();
+        Address::from(public_key)
     }
 }
 

@@ -45,7 +45,8 @@ fn make_unstake_transaction(value: u64) -> Transaction {
     let key_pair = KeyPair::from(private_key);
     let signature = key_pair.sign(&tx.serialize_content());
 
-    tx.proof = SignatureProof::from(key_pair.public, signature).serialize_to_vec();
+    tx.proof = SignatureProof::EdDSA(EdDSASignatureProof::from(key_pair.public, signature))
+        .serialize_to_vec();
 
     tx
 }

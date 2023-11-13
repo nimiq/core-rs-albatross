@@ -12,12 +12,12 @@ use nimiq_database::{
     volatile::VolatileDatabase,
     DatabaseProxy,
 };
-use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
+use nimiq_keys::{Address, EdDSAPublicKey, KeyPair, PrivateKey};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
     account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionData},
-    SignatureProof, Transaction,
+    EdDSASignatureProof, SignatureProof, Transaction,
 };
 
 mod punished_slots;
@@ -68,8 +68,8 @@ fn ed25519_key_pair(sk: &str) -> KeyPair {
     KeyPair::from(PrivateKey::deserialize_from_vec(&hex::decode(sk).unwrap()).unwrap())
 }
 
-fn ed25519_public_key(pk: &str) -> PublicKey {
-    PublicKey::deserialize_from_vec(&hex::decode(pk).unwrap()).unwrap()
+fn ed25519_public_key(pk: &str) -> EdDSAPublicKey {
+    EdDSAPublicKey::deserialize_from_vec(&hex::decode(pk).unwrap()).unwrap()
 }
 
 fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -> Transaction {
@@ -108,10 +108,10 @@ fn make_signed_incoming_transaction(
 ) -> Transaction {
     let mut tx = make_incoming_transaction(data, value);
 
-    let in_proof = SignatureProof::from(
+    let in_proof = SignatureProof::EdDSA(EdDSASignatureProof::from(
         in_key_pair.public,
         in_key_pair.sign(&tx.serialize_content()),
-    );
+    ));
 
     tx.recipient_data =
         IncomingStakingTransactionData::set_signature_on_data(&tx.recipient_data, in_proof)
@@ -122,10 +122,10 @@ fn make_signed_incoming_transaction(
 
     let out_key_pair = KeyPair::from(out_private_key);
 
-    let out_proof = SignatureProof::from(
+    let out_proof = SignatureProof::EdDSA(EdDSASignatureProof::from(
         out_key_pair.public,
         out_key_pair.sign(&tx.serialize_content()),
-    )
+    ))
     .serialize_to_vec();
 
     tx.proof = out_proof;
@@ -152,7 +152,8 @@ fn make_delete_validator_transaction() -> Transaction {
 
     let key_pair = KeyPair::from(private_key);
     let signature = key_pair.sign(&tx.serialize_content());
-    tx.proof = SignatureProof::from(key_pair.public, signature).serialize_to_vec();
+    tx.proof = SignatureProof::EdDSA(EdDSASignatureProof::from(key_pair.public, signature))
+        .serialize_to_vec();
 
     tx
 }
@@ -165,7 +166,7 @@ fn make_sample_contract(
     let staker_address = staker_address();
 
     let signing_key =
-        PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
+        EdDSAPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
 
     let voting_key =
         BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_VOTING_KEY).unwrap()).unwrap();

@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use byteorder::{BigEndian, WriteBytesExt};
 use nimiq_hash::{hmac::*, sha512::Sha512Hash};
-use nimiq_keys::{Address, PrivateKey, PublicKey};
+use nimiq_keys::{Address, EdDSAPublicKey, PrivateKey, PublicKey};
 use nimiq_serde::Serialize;
 use regex::Regex;
 
@@ -81,12 +81,12 @@ impl ExtendedPrivateKey {
 
     /// Returns the public key for this private key.
     pub fn to_public_key(&self) -> PublicKey {
-        PublicKey::from(&self.key)
+        PublicKey::EdDSA(EdDSAPublicKey::from(&self.key))
     }
 
     /// Returns the public address for this private key.
     pub fn to_address(&self) -> Address {
-        let pub_key = PublicKey::from(&self.key);
+        let pub_key = self.to_public_key();
         Address::from(&pub_key)
     }
 }

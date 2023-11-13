@@ -134,7 +134,7 @@ pub trait TaggedPublicKey {
 
 #[cfg(test)]
 mod tests {
-    use nimiq_keys::{KeyPair, PublicKey, SecureGenerate, Signature};
+    use nimiq_keys::{EdDSAPublicKey, KeyPair, SecureGenerate, Signature};
     use nimiq_serde::{Deserialize, Serialize};
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng::test_rng;
@@ -142,7 +142,7 @@ mod tests {
     use super::{TaggedKeypair, TaggedPublicKey, TaggedSignable, TaggedSignature};
 
     struct TestKeypair(KeyPair);
-    struct TestPublicKey(PublicKey);
+    struct TestPublicKey(EdDSAPublicKey);
 
     impl TestKeypair {
         pub fn generate() -> Self {
