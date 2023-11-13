@@ -12,7 +12,7 @@ use std::{
 use bitflags::bitflags;
 use historic_transaction::RawTransactionHash;
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
-use nimiq_keys::{Address, PublicKey, SignatureEnum};
+use nimiq_keys::{Address, PublicKey};
 use nimiq_network_interface::network::Topic;
 use nimiq_primitives::{
     account::AccountType, coin::Coin, networks::NetworkId, policy::Policy,
@@ -504,7 +504,9 @@ impl Ord for Transaction {
 mod serde_derive {
     use std::fmt;
 
-    use nimiq_keys::{ES256PublicKey, ES256Signature, EdDSAPublicKey, Signature};
+    use nimiq_keys::{
+        ES256PublicKey, ES256Signature, Ed25519PublicKey, Ed25519Signature, Signature,
+    };
     use serde::{
         de::{EnumAccess, Error, SeqAccess, VariantAccess, Visitor},
         ser::{Error as SerError, SerializeStructVariant},
@@ -579,10 +581,10 @@ mod serde_derive {
                     sv.serialize_field(BASIC_FIELDS[5], &self.validity_start_height.to_be_bytes())?;
                     sv.serialize_field(BASIC_FIELDS[6], &self.network_id)?;
                     match signature_proof.signature {
-                        SignatureEnum::Ed25519(ref signature) => {
+                        Signature::Ed25519(ref signature) => {
                             sv.serialize_field(BASIC_FIELDS[7], signature)?;
                         }
-                        SignatureEnum::ES256(ref signature) => {
+                        Signature::ES256(ref signature) => {
                             sv.serialize_field(BASIC_FIELDS[7], signature)?;
                         }
                     }
@@ -669,7 +671,7 @@ mod serde_derive {
             let (algorithm, flags) =
                 SignatureProof::parse_type_and_flags_byte(proof_type_and_flags);
             let public_key: PublicKey = if algorithm == 0 {
-                let public_key: EdDSAPublicKey = seq
+                let public_key: Ed25519PublicKey = seq
                     .next_element()?
                     .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
                 PublicKey::Ed25519(public_key)
@@ -699,16 +701,16 @@ mod serde_derive {
             let network_id: NetworkId = seq
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(6, &self))?;
-            let signature: SignatureEnum = if algorithm == 0 {
-                let signature: Signature = seq
+            let signature: Signature = if algorithm == 0 {
+                let signature: Ed25519Signature = seq
                     .next_element()?
                     .ok_or_else(|| serde::de::Error::invalid_length(7, &self))?;
-                SignatureEnum::Ed25519(signature)
+                Signature::Ed25519(signature)
             } else if algorithm == 1 {
                 let signature: ES256Signature = seq
                     .next_element()?
                     .ok_or_else(|| serde::de::Error::invalid_length(7, &self))?;
-                SignatureEnum::ES256(signature)
+                Signature::ES256(signature)
             } else {
                 return Err(serde::de::Error::custom(format!(
                     "Unknown algorithm: {}",

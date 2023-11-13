@@ -8,7 +8,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::{lazy::LazyPublicKey, AggregateSignature, KeyPair};
 use nimiq_collections::bitset::BitSet;
 use nimiq_database::volatile::VolatileDatabase;
-use nimiq_keys::{Address, EdDSAPublicKey};
+use nimiq_keys::{Address, Ed25519PublicKey};
 use nimiq_primitives::{
     networks::NetworkId,
     policy::Policy,
@@ -56,7 +56,7 @@ fn test_skip_block_single_signature() {
     let validators = Validators::new(vec![Validator::new(
         Address::default(),
         LazyPublicKey::from(key_pair.public_key),
-        EdDSAPublicKey::from([0u8; 32]),
+        Ed25519PublicKey::from([0u8; 32]),
         0..Policy::SLOTS,
     )]);
 

@@ -4,7 +4,7 @@ use nimiq_bls::{
     CompressedPublicKey as BlsPublicKey, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey,
 };
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::{Address, EdDSAPublicKey, KeyPair, PrivateKey};
+use nimiq_keys::{Address, Ed25519PublicKey, KeyPair, PrivateKey};
 use nimiq_primitives::{
     account::AccountType, coin::Coin, networks::NetworkId, policy::Policy,
     transaction::TransactionError,
@@ -67,7 +67,8 @@ fn create_validator() {
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
 
     let signing_key =
-        EdDSAPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
+        Ed25519PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap())
+            .unwrap();
 
     let voting_key =
         BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_VOTING_KEY).unwrap()).unwrap();
@@ -176,7 +177,8 @@ fn update_validator() {
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
 
     let signing_key =
-        EdDSAPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
+        Ed25519PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap())
+            .unwrap();
 
     let voting_key =
         BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_VOTING_KEY).unwrap()).unwrap();
@@ -707,7 +709,7 @@ fn make_signed_incoming_tx(
     data: IncomingStakingTransactionData,
     value: u64,
     in_key_pair: &KeyPair,
-    wrong_pk: Option<EdDSAPublicKey>,
+    wrong_pk: Option<Ed25519PublicKey>,
 ) -> Transaction {
     let mut tx = make_incoming_tx(data, value);
 

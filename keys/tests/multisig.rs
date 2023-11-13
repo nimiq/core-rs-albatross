@@ -5,7 +5,7 @@ use nimiq_keys::{
         partial_signature::PartialSignature,
         CommitmentsBuilder,
     },
-    EdDSAPublicKey, KeyPair, PrivateKey,
+    Ed25519PublicKey, KeyPair, PrivateKey,
 };
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng::test_rng;
@@ -94,7 +94,7 @@ fn it_can_construct_public_keys() {
         let test = TestVector::from_str(vector);
 
         for i in 0..test.priv_keys.len() {
-            let _public_key: EdDSAPublicKey = EdDSAPublicKey::from(&test.priv_keys[i]);
+            let _public_key: Ed25519PublicKey = Ed25519PublicKey::from(&test.priv_keys[i]);
         }
     }
 }
@@ -150,7 +150,7 @@ fn it_can_create_signatures() {
         }
 
         let mut agg_commitment = Commitment::default();
-        let mut agg_pk = EdDSAPublicKey::default();
+        let mut agg_pk = Ed25519PublicKey::default();
         for i in 0..test.priv_keys.len() {
             let key_pair = KeyPair::from(test.priv_keys[i].clone());
             let mut builder =

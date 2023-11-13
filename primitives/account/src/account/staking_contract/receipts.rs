@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_collections::BitSet;
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::{Address, EdDSAPublicKey as SchnorrPublicKey};
+use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{account::AccountError, coin::Coin};
 use nimiq_serde::{Deserialize, Serialize};
 

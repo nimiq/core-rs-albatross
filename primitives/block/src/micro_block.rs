@@ -3,7 +3,7 @@ use std::{cmp::Ordering, collections::HashSet, fmt, fmt::Debug, io};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_hash_derive::SerializeContent;
-use nimiq_keys::{EdDSAPublicKey, Signature};
+use nimiq_keys::{Ed25519PublicKey, Ed25519Signature};
 use nimiq_primitives::{networks::NetworkId, policy::Policy, slots_allocation::Validators};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{ExecutedTransaction, Transaction};
@@ -61,7 +61,7 @@ impl MicroBlock {
             + /*transactions vector length*/ 2)
     }
 
-    pub(crate) fn verify_proposer(&self, signing_key: &EdDSAPublicKey) -> Result<(), BlockError> {
+    pub(crate) fn verify_proposer(&self, signing_key: &Ed25519PublicKey) -> Result<(), BlockError> {
         let justification = self
             .justification
             .as_ref()
@@ -147,14 +147,14 @@ impl fmt::Display for MicroBlock {
 #[repr(u8)]
 pub enum MicroJustification {
     /// Regular micro block justification which is the signature of the block producer
-    Micro(Signature),
+    Micro(Ed25519Signature),
     /// Skip block justification which is the aggregated signature of the validator's
     /// signatures for a skip block.
     Skip(SkipBlockProof),
 }
 
 impl MicroJustification {
-    pub fn unwrap_micro(self) -> Signature {
+    pub fn unwrap_micro(self) -> Ed25519Signature {
         match self {
             MicroJustification::Micro(signature) => signature,
             MicroJustification::Skip(_) => unreachable!(),

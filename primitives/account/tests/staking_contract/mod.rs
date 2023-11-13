@@ -12,7 +12,7 @@ use nimiq_database::{
     volatile::VolatileDatabase,
     DatabaseProxy,
 };
-use nimiq_keys::{Address, EdDSAPublicKey, KeyPair, PrivateKey};
+use nimiq_keys::{Address, Ed25519PublicKey, KeyPair, PrivateKey};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
@@ -68,8 +68,8 @@ fn ed25519_key_pair(sk: &str) -> KeyPair {
     KeyPair::from(PrivateKey::deserialize_from_vec(&hex::decode(sk).unwrap()).unwrap())
 }
 
-fn ed25519_public_key(pk: &str) -> EdDSAPublicKey {
-    EdDSAPublicKey::deserialize_from_vec(&hex::decode(pk).unwrap()).unwrap()
+fn ed25519_public_key(pk: &str) -> Ed25519PublicKey {
+    Ed25519PublicKey::deserialize_from_vec(&hex::decode(pk).unwrap()).unwrap()
 }
 
 fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -> Transaction {
@@ -165,7 +165,8 @@ fn make_sample_contract(
     let staker_address = staker_address();
 
     let signing_key =
-        EdDSAPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
+        Ed25519PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap())
+            .unwrap();
 
     let voting_key =
         BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_VOTING_KEY).unwrap()).unwrap();

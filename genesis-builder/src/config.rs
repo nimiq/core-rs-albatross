@@ -1,6 +1,6 @@
 use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::{Address, EdDSAPublicKey as SchnorrPublicKey};
+use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::account::htlc_contract::AnyHash;

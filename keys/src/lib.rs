@@ -8,13 +8,13 @@ pub use self::{
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PublicKey {
-    Ed25519(public_key::EdDSAPublicKey),
+    Ed25519(public_key::Ed25519PublicKey),
     ES256(es256_public_key::ES256PublicKey),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub enum SignatureEnum {
-    Ed25519(signature::Signature),
+pub enum Signature {
+    Ed25519(signature::Ed25519Signature),
     ES256(es256_signature::ES256Signature),
 }
 

@@ -16,7 +16,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_consensus::consensus::{
     consensus_proxy::ConsensusProxy, ResolveBlockError as ConsensusResolveBlockError,
 };
-use nimiq_keys::Signature as SchnorrSignature;
+use nimiq_keys::Ed25519Signature as SchnorrSignature;
 use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{CloseReason, MsgAcceptance, Network, PubsubId as _, Topic};
 use nimiq_serde::Serialize;

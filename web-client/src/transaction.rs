@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::{PublicKey, SignatureEnum};
+use nimiq_keys::{PublicKey, Signature};
 #[cfg(feature = "client")]
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
@@ -629,8 +629,8 @@ impl Transaction {
                                 pre_image: pre_image.to_hex(),
                                 signer: signature_proof.compute_signer().to_user_friendly_address(),
                                 signature: match signature_proof.signature {
-                                    SignatureEnum::Ed25519(ref signature) => signature.to_hex(),
-                                    SignatureEnum::ES256(ref signature) => signature.to_hex(),
+                                    Signature::Ed25519(ref signature) => signature.to_hex(),
+                                    Signature::ES256(ref signature) => signature.to_hex(),
                                 },
                                 public_key: match signature_proof.public_key {
                                     PublicKey::Ed25519(ref public_key) => public_key.to_hex(),
@@ -647,8 +647,8 @@ impl Transaction {
                                 .compute_signer()
                                 .to_user_friendly_address(),
                             creator_signature: match signature_proof_sender.signature {
-                                SignatureEnum::Ed25519(ref signature) => signature.to_hex(),
-                                SignatureEnum::ES256(ref signature) => signature.to_hex(),
+                                Signature::Ed25519(ref signature) => signature.to_hex(),
+                                Signature::ES256(ref signature) => signature.to_hex(),
                             },
                             creator_public_key: match signature_proof_sender.public_key {
                                 PublicKey::Ed25519(ref public_key) => public_key.to_hex(),
@@ -665,8 +665,8 @@ impl Transaction {
                                 .compute_signer()
                                 .to_user_friendly_address(),
                             signature: match signature_proof_recipient.signature {
-                                SignatureEnum::Ed25519(ref signature) => signature.to_hex(),
-                                SignatureEnum::ES256(ref signature) => signature.to_hex(),
+                                Signature::Ed25519(ref signature) => signature.to_hex(),
+                                Signature::ES256(ref signature) => signature.to_hex(),
                             },
                             public_key: match signature_proof_recipient.public_key {
                                 PublicKey::Ed25519(ref public_key) => public_key.to_hex(),
@@ -677,8 +677,8 @@ impl Transaction {
                                 .compute_signer()
                                 .to_user_friendly_address(),
                             creator_signature: match signature_proof_sender.signature {
-                                SignatureEnum::Ed25519(ref signature) => signature.to_hex(),
-                                SignatureEnum::ES256(ref signature) => signature.to_hex(),
+                                Signature::Ed25519(ref signature) => signature.to_hex(),
+                                Signature::ES256(ref signature) => signature.to_hex(),
                             },
                             creator_public_key: match signature_proof_sender.public_key {
                                 PublicKey::Ed25519(ref public_key) => public_key.to_hex(),
@@ -692,8 +692,8 @@ impl Transaction {
                     PlainTransactionProof::Standard(PlainStandardProof {
                         raw: hex::encode(self.proof()),
                         signature: match proof.signature {
-                            SignatureEnum::Ed25519(ref signature) => signature.to_hex(),
-                            SignatureEnum::ES256(ref signature) => signature.to_hex(),
+                            Signature::Ed25519(ref signature) => signature.to_hex(),
+                            Signature::ES256(ref signature) => signature.to_hex(),
                         },
                         public_key: match proof.public_key {
                             PublicKey::Ed25519(ref public_key) => public_key.to_hex(),

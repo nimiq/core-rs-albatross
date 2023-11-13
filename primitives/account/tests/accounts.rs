@@ -12,7 +12,7 @@ use nimiq_database::{
     volatile::VolatileDatabase,
 };
 use nimiq_genesis_builder::GenesisBuilder;
-use nimiq_keys::{Address, EdDSAPublicKey, KeyPair, PrivateKey, SecureGenerate};
+use nimiq_keys::{Address, Ed25519PublicKey, KeyPair, PrivateKey, SecureGenerate};
 use nimiq_primitives::{
     account::{AccountType, FailReason},
     coin::Coin,
@@ -450,7 +450,7 @@ fn accounts_performance() {
     // Add validator to genesis
     genesis_builder.with_genesis_validator(
         Address::from(&KeyPair::generate(&mut rng)),
-        EdDSAPublicKey::from([0u8; 32]),
+        Ed25519PublicKey::from([0u8; 32]),
         BLSKeyPair::generate(&mut rng).public_key,
         Address::default(),
         None,
@@ -573,7 +573,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
     // Add validator to genesis
     genesis_builder.with_genesis_validator(
         Address::from(&KeyPair::generate(&mut rng)),
-        EdDSAPublicKey::from([0u8; 32]),
+        Ed25519PublicKey::from([0u8; 32]),
         BLSKeyPair::generate(&mut rng).public_key,
         Address::default(),
         None,
@@ -702,7 +702,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
     // Add validator to genesis
     genesis_builder.with_genesis_validator(
         Address::from(&KeyPair::generate(&mut rng)),
-        EdDSAPublicKey::from([0u8; 32]),
+        Ed25519PublicKey::from([0u8; 32]),
         BLSKeyPair::generate(&mut rng).public_key,
         Address::default(),
         None,

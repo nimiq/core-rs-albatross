@@ -11,14 +11,14 @@ use crate::{
 /// The non-secret (public) part of an asymmetric key pair that is typically used to digitally verify or encrypt data.
 #[wasm_bindgen]
 pub struct PublicKey {
-    inner: nimiq_keys::EdDSAPublicKey,
+    inner: nimiq_keys::Ed25519PublicKey,
 }
 
 #[wasm_bindgen]
 impl PublicKey {
     /// Derives a public key from an existing private key.
     pub fn derive(private_key: &PrivateKey) -> PublicKey {
-        PublicKey::from_native(nimiq_keys::EdDSAPublicKey::from(private_key.native_ref()))
+        PublicKey::from_native(nimiq_keys::Ed25519PublicKey::from(private_key.native_ref()))
     }
 
     /// Verifies that a signature is valid for this public key and the provided data.
@@ -30,7 +30,7 @@ impl PublicKey {
     ///
     /// Throws when the byte array contains less than 32 bytes.
     pub fn unserialize(bytes: &[u8]) -> Result<PublicKey, JsError> {
-        let key = nimiq_keys::EdDSAPublicKey::deserialize_from_vec(bytes)?;
+        let key = nimiq_keys::Ed25519PublicKey::deserialize_from_vec(bytes)?;
         Ok(PublicKey::from_native(key))
     }
 
@@ -39,7 +39,7 @@ impl PublicKey {
     /// Throws when the byte array is not exactly 32 bytes long.
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: &[u8]) -> Result<PublicKey, JsError> {
-        if bytes.len() != nimiq_keys::EdDSAPublicKey::SIZE {
+        if bytes.len() != nimiq_keys::Ed25519PublicKey::SIZE {
             return Err(JsError::new("Public key primitive: Invalid length"));
         }
         Self::unserialize(bytes)
@@ -55,7 +55,7 @@ impl PublicKey {
     /// Throws when the string is not valid hex format or when it represents less than 32 bytes.
     #[wasm_bindgen(js_name = fromHex)]
     pub fn from_hex(hex: &str) -> Result<PublicKey, JsError> {
-        let key = nimiq_keys::EdDSAPublicKey::from_str(hex)?;
+        let key = nimiq_keys::Ed25519PublicKey::from_str(hex)?;
         Ok(PublicKey::from_native(key))
     }
 
@@ -73,11 +73,11 @@ impl PublicKey {
 }
 
 impl PublicKey {
-    pub fn from_native(public_key: nimiq_keys::EdDSAPublicKey) -> PublicKey {
+    pub fn from_native(public_key: nimiq_keys::Ed25519PublicKey) -> PublicKey {
         PublicKey { inner: public_key }
     }
 
-    pub fn native_ref(&self) -> &nimiq_keys::EdDSAPublicKey {
+    pub fn native_ref(&self) -> &nimiq_keys::Ed25519PublicKey {
         &self.inner
     }
 }

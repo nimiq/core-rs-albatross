@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, fmt::Debug, io};
 use nimiq_block::{MacroBody, MacroHeader};
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::Blake2sHash;
-use nimiq_keys::Signature as SchnorrSignature;
+use nimiq_keys::Ed25519Signature as SchnorrSignature;
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_tendermint::{State as TendermintState, Step};
 use nimiq_validator_network::{PubsubId, ValidatorNetwork};

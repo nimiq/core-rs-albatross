@@ -17,7 +17,7 @@ use self::{
     partial_signature::PartialSignature,
     public_key::DelinearizedPublicKey,
 };
-use crate::{EdDSAPublicKey, KeyPair};
+use crate::{Ed25519PublicKey, KeyPair};
 
 pub mod address;
 pub mod commitment;
@@ -61,11 +61,11 @@ pub struct CommitmentsData {
     /// This is only needed for verification.
     pub commitments: [Commitment; MUSIG2_PARAMETER_V],
     /// The aggregate public key corresponding to the list of public keys.
-    pub aggregate_public_key: EdDSAPublicKey,
+    pub aggregate_public_key: Ed25519PublicKey,
     /// The aggregate commitment over all signers.
     pub aggregate_commitment: Commitment,
     /// All public keys (including our own, need to be sorted).
-    pub all_public_keys: Vec<EdDSAPublicKey>,
+    pub all_public_keys: Vec<Ed25519PublicKey>,
     /// b = H(aggregate_public_key || (R_1, ..., R_v) || m)
     #[cfg_attr(feature = "serde-derive", serde(serialize_with = "serialize_scalar"))]
     #[cfg_attr(
@@ -80,7 +80,7 @@ pub struct CommitmentsBuilder {
     /// This is only needed for signing, not for calculating aggregate keys/commitments.
     nonces: Option<[Nonce; MUSIG2_PARAMETER_V]>,
     /// All public keys (including our own, not sorted yet).
-    all_public_keys: Vec<EdDSAPublicKey>,
+    all_public_keys: Vec<Ed25519PublicKey>,
     /// Commitments from all signers (including ours).
     all_commitments: Vec<[Commitment; MUSIG2_PARAMETER_V]>,
 }
@@ -88,7 +88,7 @@ pub struct CommitmentsBuilder {
 impl CommitmentsBuilder {
     /// Creates new commitment pairs from an Rng.
     pub fn new<R: Rng + RngCore + CryptoRng>(
-        own_public_key: EdDSAPublicKey,
+        own_public_key: Ed25519PublicKey,
         rng: &mut R,
     ) -> CommitmentsBuilder {
         let mut own_commitments = Vec::with_capacity(MUSIG2_PARAMETER_V);
@@ -100,7 +100,7 @@ impl CommitmentsBuilder {
 
     /// Sets own commitments.
     pub fn with_private_commitments(
-        own_public_key: EdDSAPublicKey,
+        own_public_key: Ed25519PublicKey,
         own_commitments: [CommitmentPair; MUSIG2_PARAMETER_V],
     ) -> CommitmentsBuilder {
         let mut nonces = Vec::with_capacity(MUSIG2_PARAMETER_V);
@@ -118,7 +118,7 @@ impl CommitmentsBuilder {
 
     /// Sets own commitments.
     pub fn with_public_commitments(
-        own_public_key: EdDSAPublicKey,
+        own_public_key: Ed25519PublicKey,
         own_commitments: [Commitment; MUSIG2_PARAMETER_V],
     ) -> CommitmentsBuilder {
         CommitmentsBuilder {
@@ -136,7 +136,7 @@ impl CommitmentsBuilder {
     /// Adds another co-signer to the signing process.
     pub fn with_signer(
         mut self,
-        signer_public_key: EdDSAPublicKey,
+        signer_public_key: Ed25519PublicKey,
         signer_commitments: [Commitment; MUSIG2_PARAMETER_V],
     ) -> Self {
         self.push_signer(signer_public_key, signer_commitments);
@@ -146,7 +146,7 @@ impl CommitmentsBuilder {
     /// Adds another co-signer to the signing process.
     pub fn push_signer(
         &mut self,
-        signer_public_key: EdDSAPublicKey,
+        signer_public_key: Ed25519PublicKey,
         signer_commitments: [Commitment; MUSIG2_PARAMETER_V],
     ) {
         self.all_public_keys.push(signer_public_key);
@@ -266,10 +266,10 @@ impl KeyPair {
     }
 }
 
-impl EdDSAPublicKey {
+impl Ed25519PublicKey {
     fn to_edwards_point(self) -> Option<EdwardsPoint> {
-        let mut bits: [u8; EdDSAPublicKey::SIZE] = [0u8; EdDSAPublicKey::SIZE];
-        bits.copy_from_slice(&self.as_bytes()[..EdDSAPublicKey::SIZE]);
+        let mut bits: [u8; Ed25519PublicKey::SIZE] = [0u8; Ed25519PublicKey::SIZE];
+        bits.copy_from_slice(&self.as_bytes()[..Ed25519PublicKey::SIZE]);
 
         let compressed = CompressedEdwardsY(bits);
         compressed.decompress()
@@ -331,7 +331,7 @@ impl EdDSAPublicKey {
 }
 
 /// Compute hash over public keys public_keys_hash = C = H(P_1 || ... || P_n).
-pub fn hash_public_keys(public_keys: &[EdDSAPublicKey]) -> [u8; 64] {
+pub fn hash_public_keys(public_keys: &[Ed25519PublicKey]) -> [u8; 64] {
     let mut h: sha2::Sha512 = sha2::Sha512::default();
     let mut public_keys_hash: [u8; 64] = [0u8; 64];
     for public_key in public_keys {

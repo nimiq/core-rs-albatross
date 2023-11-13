@@ -14,7 +14,7 @@ use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_bls::CompressedPublicKey;
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
-use nimiq_keys::{Address, EdDSAPublicKey};
+use nimiq_keys::{Address, Ed25519PublicKey};
 use nimiq_primitives::{
     coin::Coin, networks::NetworkId, policy::Policy, slots_allocation::Validators,
 };
@@ -819,7 +819,7 @@ impl Staker {
 #[serde(rename_all = "camelCase")]
 pub struct Validator {
     pub address: Address,
-    pub signing_key: EdDSAPublicKey,
+    pub signing_key: Ed25519PublicKey,
     pub voting_key: CompressedPublicKey,
     pub reward_address: Address,
     #[serde(skip_serializing_if = "Option::is_none")]

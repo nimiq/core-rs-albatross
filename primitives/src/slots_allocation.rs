@@ -20,7 +20,7 @@ use ark_ec::CurveGroup;
 use ark_serialize::CanonicalSerialize;
 use nimiq_bls::{lazy::LazyPublicKey as LazyBlsPublicKey, G2Projective, PublicKey as BlsPublicKey};
 use nimiq_hash::{Hash, HashOutput};
-use nimiq_keys::{Address, EdDSAPublicKey as SchnorrPublicKey};
+use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
 
 use crate::{merkle_tree::merkle_tree_construct, policy::Policy};
 

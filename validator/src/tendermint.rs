@@ -13,7 +13,7 @@ use nimiq_handel::{
     verifier::VerificationResult,
 };
 use nimiq_hash::{Blake2sHash, Hash};
-use nimiq_keys::Signature as SchnorrSignature;
+use nimiq_keys::Ed25519Signature as SchnorrSignature;
 use nimiq_primitives::{
     networks::NetworkId, policy::Policy, slots_allocation::Validators, TendermintIdentifier,
     TendermintStep, TendermintVote,

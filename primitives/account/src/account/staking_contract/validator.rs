@@ -1,6 +1,6 @@
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::{Address, EdDSAPublicKey as SchnorrPublicKey};
+use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
 use nimiq_primitives::coin::Coin;
 #[cfg(feature = "interaction-traits")]
 use nimiq_primitives::{account::AccountError, policy::Policy};

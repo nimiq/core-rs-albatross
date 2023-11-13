@@ -5,7 +5,7 @@ use nimiq_bls::cache::PublicKeyCache;
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_hash_derive::SerializeContent;
-use nimiq_keys::EdDSAPublicKey;
+use nimiq_keys::Ed25519PublicKey;
 use nimiq_network_interface::network::Topic;
 use nimiq_primitives::{
     coin::Coin, networks::NetworkId, policy::Policy, slots_allocation::Validators,
@@ -551,7 +551,7 @@ impl Block {
     /// Verifies that the block is valid for the given proposer and VRF seed.
     pub fn verify_proposer(
         &self,
-        signing_key: &EdDSAPublicKey,
+        signing_key: &Ed25519PublicKey,
         prev_seed: &VrfSeed,
     ) -> Result<(), BlockError> {
         // Verify VRF seed.

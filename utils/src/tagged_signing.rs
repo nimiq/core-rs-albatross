@@ -205,7 +205,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use nimiq_keys::{EdDSAPublicKey, KeyPair, SecureGenerate, Signature};
+    use nimiq_keys::{Ed25519PublicKey, Ed25519Signature, KeyPair, SecureGenerate};
     use nimiq_serde::{Deserialize, Serialize};
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng::test_rng;
@@ -213,7 +213,7 @@ mod tests {
     use super::{TaggedKeyPair, TaggedPublicKey, TaggedSignable, TaggedSignature};
 
     struct TestKeypair(KeyPair);
-    struct TestPublicKey(EdDSAPublicKey);
+    struct TestPublicKey(Ed25519PublicKey);
 
     impl TestKeypair {
         pub fn generate() -> Self {
@@ -235,7 +235,8 @@ mod tests {
 
     impl TaggedPublicKey for TestPublicKey {
         fn verify(&self, msg: &[u8], sig: &[u8]) -> bool {
-            self.0.verify(&Signature::from_bytes(sig).unwrap(), msg)
+            self.0
+                .verify(&Ed25519Signature::from_bytes(sig).unwrap(), msg)
         }
     }
 

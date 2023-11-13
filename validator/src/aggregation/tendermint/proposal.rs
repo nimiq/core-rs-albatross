@@ -5,7 +5,7 @@ use nimiq_block::{MacroBody, MacroHeader, MicroBlock};
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_hash::{Blake2sHash, Blake2sHasher, Hash, Hasher, SerializeContent};
-use nimiq_keys::Signature as SchnorrSignature;
+use nimiq_keys::Ed25519Signature as SchnorrSignature;
 use nimiq_network_interface::{
     network::Network,
     request::{Handle, RequestCommon, RequestMarker},
