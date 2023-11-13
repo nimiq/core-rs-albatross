@@ -1,0 +1,26 @@
+[network]
+peer_key_file = "/home/nimiq/peer_key.dat"
+listen_addresses = [
+    "/ip4/0.0.0.0/tcp/8443/ws",
+]
+advertised_addresses = [
+    "/dns4/seed1/tcp/8443/ws", # Docker-internal
+    "/dns4/seed1.nimiq.local/tcp/8401/ws" # Docker-external
+]
+
+[consensus]
+network = "dev-albatross"
+sync_mode = "history"
+min_peers = 3
+
+[database]
+path = "/home/nimiq"
+
+[log]
+level = "info"
+timestamps = true
+
+# [log.tags]
+# libp2p_swarm = "debug"
+# lock_api = "trace"
+

@@ -1,0 +1,85 @@
+version: "3.8"
+
+networks:
+  devnet:
+    name: nimiq.local
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 7.0.0.0/24
+
+services:
+  seed1:
+    image: core:latest
+    environment:
+      - NIMIQ_OVERRIDE_DEVNET_CONFIG=/home/nimiq/dev-albatross.toml
+    ports:
+      - "8401:8443"
+    networks:
+      devnet:
+        ipv4_address: 7.0.0.100
+    volumes:
+      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/seed1:/home/nimiq/.nimiq:rw
+      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/dev-albatross.toml:/home/nimiq/dev-albatross.toml:ro
+
+  validator1:
+    image: core:latest
+    depends_on:
+      - seed1
+    environment:
+      - NIMIQ_OVERRIDE_DEVNET_CONFIG=/home/nimiq/dev-albatross.toml
+    ports:
+      - "8501:8443"
+    networks:
+      devnet:
+        ipv4_address: 7.0.0.2
+    volumes:
+      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/validator1:/home/nimiq/.nimiq:rw
+      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/dev-albatross.toml:/home/nimiq/dev-albatross.toml:ro
+
+  validator2:
+    image: core:latest
+    depends_on:
+      - seed1
+    environment:
+      - NIMIQ_OVERRIDE_DEVNET_CONFIG=/home/nimiq/dev-albatross.toml
+    ports:
+      - "8502:8443"
+    networks:
+      devnet:
+        ipv4_address: 7.0.0.3
+    volumes:
+      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/validator2:/home/nimiq/.nimiq:rw
+      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/dev-albatross.toml:/home/nimiq/dev-albatross.toml:ro
+
+  validator3:
+    image: core:latest
+    depends_on:
+      - seed1
+    environment:
+      - NIMIQ_OVERRIDE_DEVNET_CONFIG=/home/nimiq/dev-albatross.toml
+    ports:
+      - "8503:8443"
+    networks:
+      devnet:
+        ipv4_address: 7.0.0.4
+    volumes:
+      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/validator3:/home/nimiq/.nimiq:rw
+      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/dev-albatross.toml:/home/nimiq/dev-albatross.toml:ro
+
+  validator4:
+    image: core:latest
+    depends_on:
+      - seed1
+    environment:
+      - NIMIQ_OVERRIDE_DEVNET_CONFIG=/home/nimiq/dev-albatross.toml
+    ports:
+      - "8504:8443"
+    networks:
+      devnet:
+        ipv4_address: 7.0.0.5
+    volumes:
+      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/validator4:/home/nimiq/.nimiq:rw
+      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/dev-albatross.toml:/home/nimiq/dev-albatross.toml:ro
+

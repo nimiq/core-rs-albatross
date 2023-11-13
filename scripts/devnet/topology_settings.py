@@ -100,18 +100,22 @@ class TopologySettings:
     :type release: bool
     :param env: Type of environment this topology will be run in.
     :type env: Environment
+    :param network_name: Name of the Docker network.
+    :type network_name: str
     :param loki_settings: Optional Loki settings.
     :type loki_settings: Optional[LokiSettings]
     """
 
     def __init__(self, nimiq_dir: str, logs_dir: str, conf_dir: str,
                  state_dir: str, release: bool, env: Environment,
+                 network_name: str,
                  loki_settings: Optional[LokiSettings] = None):
         self.nimiq_dir = nimiq_dir
         self.logs_dir = logs_dir
         self.conf_dir = conf_dir
         self.state_dir = state_dir
         self.release = release
+        self.network_name = network_name
         self.loki_settings = loki_settings
         self.env = env
 
@@ -241,3 +245,12 @@ class TopologySettings:
         :rtype: Optional[LokiSettings]
         """
         return self.loki_settings
+
+    def get_network_name(self):
+        """
+        Gets the name of the Docker network
+
+        :return: The name of the Docker network
+        :rtype: str
+        """
+        return self.network_name

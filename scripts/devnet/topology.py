@@ -217,7 +217,8 @@ class Topology:
                                   seeds=seeds_list,
                                   regular_nodes=regular_nodes_list,
                                   internal_genesis_file=internal_genesis_path,
-                                  external_genesis_file=self.genesis_filename
+                                  external_genesis_file=self.genesis_filename,
+                                  network_name=self.topology_settings.get_network_name(),
                                   )
         conf = self.topology_settings.get_conf_dir()
         docker_compose_filename = f"{conf}/docker-compose.yml"

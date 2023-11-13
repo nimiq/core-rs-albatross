@@ -681,7 +681,7 @@ where
             Block::Macro(_) => {}
         }
         if let Err(e) = network.publish::<BlockHeaderTopic>(block.clone()).await {
-            warn!(
+            debug!(
                 %block,
                 error = &e as &dyn Error,
                 "Failed to publish block header"

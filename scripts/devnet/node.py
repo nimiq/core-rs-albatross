@@ -69,7 +69,7 @@ class Node:
         self.state_dir = topology_settings.get_node_state_dir(self.name)
         # Set the container image
         if container_image is None:
-            self.container_image = 'ghcr.io/nimiq/core-rs-albatross:latest'
+            self.container_image = 'core:latest'
         else:
             self.container_image = container_image
         # Only create a directory for the node state if the node won't be
@@ -464,6 +464,7 @@ class RegularNode(Node):
         # Read and render the TOML template
         template = jinja_env.get_template("node_conf.toml.j2")
         metrics = self.get_metrics()
+        network_name = self.topology_settings.get_network_name()
         loki_settings = self.topology_settings.get_loki_settings()
         if loki_settings is not None:
             loki_settings = loki_settings.format_for_config_file()
@@ -471,12 +472,14 @@ class RegularNode(Node):
         if metrics is not None:
             content = template.render(
                 min_peers=3, port=self.get_listen_port(),
+                name=self.name, network_name=network_name, advertised_port=int(self.name[-1]) + 8600,
                 state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), seed_addresses=seed_addresses,
                 metrics=metrics, loki=loki_settings)
         else:
             content = template.render(
                 min_peers=3, port=self.get_listen_port(),
+                name=self.name, network_name=network_name, advertised_port=int(self.name[-1]) + 8600,
                 state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), seed_addresses=seed_addresses,
                 loki=loki_settings)
@@ -569,6 +572,7 @@ class Seed(Node):
         # Read and render the TOML template
         template = jinja_env.get_template("node_conf.toml.j2")
         metrics = self.get_metrics()
+        network_name = self.topology_settings.get_network_name()
         loki_settings = self.topology_settings.get_loki_settings()
         if loki_settings is not None:
             loki_settings = loki_settings.format_for_config_file()
@@ -576,12 +580,14 @@ class Seed(Node):
         if metrics is not None:
             content = template.render(
                 min_peers=3, port=self.get_listen_port(),
+                name=self.name, network_name=network_name, advertised_port=int(self.name[-1]) + 8400,
                 state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), metrics=metrics,
                 loki=loki_settings)
         else:
             content = template.render(
                 min_peers=3, port=self.get_listen_port(),
+                name=self.name, network_name=network_name, advertised_port=int(self.name[-1]) + 8400,
                 state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), loki=loki_settings)
         return content

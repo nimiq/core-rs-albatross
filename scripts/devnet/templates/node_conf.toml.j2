@@ -3,6 +3,10 @@ peer_key_file = "{{ state_path }}/peer_key.dat"
 listen_addresses = [
     "/ip4/{{ listen_ip }}/tcp/{{ port }}/ws",
 ]
+advertised_addresses = [
+    "/dns4/{{ name }}/tcp/{{ port }}/ws", # Docker-internal
+    "/dns4/{{ name }}.{{ network_name }}/tcp/{{ advertised_port }}/ws" # Docker-external
+]
 
 {% if seed_addresses is defined %}
 seed_nodes = [
@@ -21,7 +25,7 @@ min_peers = {{ min_peers }}
 path = "{{ state_path }}"
 
 [log]
-level = "trace"
+level = "info"
 timestamps = true
 
 {% if loki is not none %}
@@ -42,9 +46,9 @@ url = "{{ loki['url'] }}"
     {% endif %}
 
 {% endif %}
-[log.tags]
-libp2p_swarm = "debug"
-lock_api = "trace"
+# [log.tags]
+# libp2p_swarm = "debug"
+# lock_api = "trace"
 
 {% if metrics is defined %}
 [metrics-server]

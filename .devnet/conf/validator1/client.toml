@@ -1,0 +1,38 @@
+[network]
+peer_key_file = "/home/nimiq/peer_key.dat"
+listen_addresses = [
+    "/ip4/0.0.0.0/tcp/8443/ws",
+]
+advertised_addresses = [
+    "/dns4/validator1/tcp/8443/ws", # Docker-internal
+    "/dns4/validator1.nimiq.local/tcp/8501/ws" # Docker-external
+]
+
+seed_nodes = [
+        { address = "/dns4/seed1/tcp/8443/ws" }
+]
+
+[consensus]
+network = "dev-albatross"
+sync_mode = "history"
+min_peers = 3
+
+[database]
+path = "/home/nimiq"
+
+[log]
+level = "info"
+timestamps = true
+
+# [log.tags]
+# libp2p_swarm = "debug"
+# lock_api = "trace"
+
+[validator]
+validator_address = "NQ05 F07R E0AC 4TPX 33U6 8NEY CSAA MPM2 KSQK"
+signing_key_file = "/home/nimiq/signing_key.dat"
+signing_key = "2a492a3e3fe387907508d6744e929eeba325dc5ed5aacb1711941bd5e43a0986"
+voting_key_file = "/home/nimiq/voting_key.dat"
+voting_key = "cc492e72b3b4c460b9e0f567e5a03954e0eda893bc54701c8e8b8e43a9b577d7a6dbe4311841ea945fb1d5540b13a4708de2f998edd07326328199ccb71c49de237fbf4d508b05c28da0853b1347e899bc76e92c34c61b20f4e705d8113c01"
+fee_key_file = "/home/nimiq/fee_key.dat"
+fee_key = "8929b697b55a33b1b23c95a36ba8885fdea0c10e78cd74cdc2ea8c5d33d793aa"

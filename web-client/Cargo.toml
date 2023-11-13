@@ -18,6 +18,9 @@ maintenance = { status = "experimental" }
 [lib]
 crate-type = ["cdylib"]
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
 [dependencies]
 futures = "0.3"
 futures-util = "0.3"

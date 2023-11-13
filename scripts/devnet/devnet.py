@@ -49,6 +49,9 @@ def parse_args():
                         help="Output directory", default="/tmp/nimiq-devnet")
     parser.add_argument('-R', '--release', action='store_true', help="Compiles"
                         " and runs the code in release mode")
+    parser.add_argument('-n', '--networkname', help="The name of the Docker"
+                        " network to use, by default nimiq.local",
+                        default='nimiq.local')
     parser.add_argument('-m', "--metrics", action="store_true",
                         help="Adds configuration to enable metrics")
     parser.add_argument("--run-environment", default=None,
@@ -108,8 +111,11 @@ def main():
     nimiq_dir = subprocess.check_output(
         ['git', 'rev-parse', '--show-toplevel'], text=True).rstrip()
 
+    logs_dir = f"{nimiq_dir}/.devnet"
+    # Delete the logs dir if it exists
+    import shutil
+    shutil.rmtree(logs_dir, ignore_errors=True)
     # Create the logs dir
-    logs_dir = f"{nimiq_dir}/temp-logs/{ts}"
     Path(logs_dir).mkdir(parents=True, exist_ok=False)
 
     # Create the conf dir
@@ -143,7 +149,7 @@ def main():
 
     topology_settings = TopologySettings(
         nimiq_dir, logs_dir, conf_dir, state_dir, args.release,
-        args.env, loki_settings=loki_settings)
+        args.env, network_name=args.networkname, loki_settings=loki_settings)
 
     # Now create topology object and run it
     topology = Topology(topology_settings)

@@ -2,7 +2,7 @@ version: "3.8"
 
 networks:
   devnet:
-    name: nimiq.local
+    name: {{ network_name }}
     driver: bridge
     ipam:
       driver: default
@@ -16,7 +16,7 @@ services:
     environment:
       - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
     ports:
-      - 8443
+      - "{{ loop.index + 8400 }}:8443"
     networks:
       devnet:
         ipv4_address: 7.0.0.{{ loop.index + 99 }}
@@ -33,7 +33,7 @@ services:
     environment:
       - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
     ports:
-      - 8443
+      - "{{ loop.index + 8500 }}:8443"
     networks:
       devnet:
         ipv4_address: 7.0.0.{{ loop.index + 1}}
@@ -48,7 +48,7 @@ services:
     environment:
       - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
     ports:
-      - 8443
+      - "{{ loop.index + 8600 }}:8443"
     networks:
       devnet:
         ipv4_address: 7.0.0.{{ loop.index + 99 }}
@@ -65,7 +65,7 @@ services:
     environment:
       - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
     ports:
-      - 8443
+      - "{{ loop.index + 8700 }}:8443"
     networks:
       devnet:
         ipv4_address: 7.0.0.{{ loop.index + 199 }}

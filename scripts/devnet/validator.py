@@ -162,6 +162,7 @@ class Validator(Node):
         data['fee_key'] = self.get_reward_address_keypair()[
             'private_key']
         metrics = self.get_metrics()
+        network_name = self.topology_settings.get_network_name()
         loki_settings = self.topology_settings.get_loki_settings()
         if loki_settings is not None:
             loki_settings = loki_settings.format_for_config_file()
@@ -169,6 +170,7 @@ class Validator(Node):
         if metrics is not None:
             config_content = template.render(
                 min_peers=3, port=self.get_listen_port(),
+                name=self.name, network_name=network_name, advertised_port=int(self.name[-1]) + 8500,
                 state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), validator=data,
                 seed_addresses=seed_addresses, metrics=metrics,
@@ -176,6 +178,7 @@ class Validator(Node):
         else:
             config_content = template.render(
                 min_peers=3, port=self.get_listen_port(),
+                name=self.name, network_name=network_name, advertised_port=int(self.name[-1]) + 8500,
                 state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), validator=data,
                 seed_addresses=seed_addresses, loki=loki_settings)
