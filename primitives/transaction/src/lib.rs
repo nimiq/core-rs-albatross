@@ -504,6 +504,7 @@ impl Ord for Transaction {
 mod serde_derive {
     use std::fmt;
 
+    use nimiq_keys::{ES256PublicKey, ES256Signature, EdDSAPublicKey, Signature};
     use serde::{
         de::{EnumAccess, Error, SeqAccess, VariantAccess, Visitor},
         ser::{Error as SerError, SerializeStructVariant},
@@ -514,6 +515,7 @@ mod serde_derive {
     const ENUM_NAME: &str = "Transaction";
     const VARIANTS: &[&str] = &["Basic", "Extended"];
     const BASIC_FIELDS: &[&str] = &[
+        "proof_type_and_flags",
         "public_key",
         "recipient",
         "value",
@@ -521,6 +523,7 @@ mod serde_derive {
         "validity_start_height",
         "network_id",
         "signature",
+        "webauthn_fields",
     ];
     const EXTENDED_FIELDS: &[&str] = &[
         "sender",
@@ -557,13 +560,38 @@ mod serde_derive {
                     let signature_proof: SignatureProof =
                         Deserialize::deserialize_from_vec(&self.proof)
                             .map_err(|_| S::Error::custom("Could not serialize signature proof"))?;
-                    sv.serialize_field(BASIC_FIELDS[0], &signature_proof.public_key)?;
-                    sv.serialize_field(BASIC_FIELDS[1], &self.recipient)?;
-                    sv.serialize_field(BASIC_FIELDS[2], &self.value)?;
-                    sv.serialize_field(BASIC_FIELDS[3], &self.fee)?;
-                    sv.serialize_field(BASIC_FIELDS[4], &self.validity_start_height.to_be_bytes())?;
-                    sv.serialize_field(BASIC_FIELDS[5], &self.network_id)?;
-                    sv.serialize_field(BASIC_FIELDS[6], &signature_proof.signature)?;
+                    // Serialize public_key and signature algorithm and if webauthn_fields exist in one u8
+                    sv.serialize_field(
+                        BASIC_FIELDS[0],
+                        &signature_proof.make_type_and_flags_byte(),
+                    )?;
+                    match signature_proof.public_key {
+                        PublicKey::Ed25519(ref public_key) => {
+                            sv.serialize_field(BASIC_FIELDS[1], public_key)?;
+                        }
+                        PublicKey::ES256(ref public_key) => {
+                            sv.serialize_field(BASIC_FIELDS[1], public_key)?;
+                        }
+                    }
+                    sv.serialize_field(BASIC_FIELDS[2], &self.recipient)?;
+                    sv.serialize_field(BASIC_FIELDS[3], &self.value)?;
+                    sv.serialize_field(BASIC_FIELDS[4], &self.fee)?;
+                    sv.serialize_field(BASIC_FIELDS[5], &self.validity_start_height.to_be_bytes())?;
+                    sv.serialize_field(BASIC_FIELDS[6], &self.network_id)?;
+                    match signature_proof.signature {
+                        SignatureEnum::Ed25519(ref signature) => {
+                            sv.serialize_field(BASIC_FIELDS[7], signature)?;
+                        }
+                        SignatureEnum::ES256(ref signature) => {
+                            sv.serialize_field(BASIC_FIELDS[7], signature)?;
+                        }
+                    }
+                    if signature_proof.webauthn_fields.is_some() {
+                        sv.serialize_field(
+                            BASIC_FIELDS[8],
+                            signature_proof.webauthn_fields.as_ref().unwrap(),
+                        )?;
+                    }
                     sv.end()
                 }
                 TransactionFormat::Extended => {
@@ -634,27 +662,67 @@ mod serde_derive {
         where
             A: SeqAccess<'de>,
         {
-            let public_key: PublicKey = seq
+            // Read type field to determine public_key and signature algorithm and if webauthn_fields exists
+            let proof_type_and_flags: u8 = seq
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+            let (algorithm, flags) =
+                SignatureProof::parse_type_and_flags_byte(proof_type_and_flags);
+            let public_key: PublicKey = if algorithm == 0 {
+                let public_key: EdDSAPublicKey = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                PublicKey::Ed25519(public_key)
+            } else if algorithm == 1 {
+                let public_key: ES256PublicKey = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                PublicKey::ES256(public_key)
+            } else {
+                return Err(serde::de::Error::custom(format!(
+                    "Unknown algorithm: {}",
+                    algorithm
+                )));
+            };
             let recipient: Address = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
             let value: Coin = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
             let fee: Coin = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(4, &self))?;
             let validity_start_height: [u8; 4] = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(4, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(5, &self))?;
             let network_id: NetworkId = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(5, &self))?;
-            let signature: SignatureEnum = seq
-                .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(6, &self))?;
+            let signature: SignatureEnum = if algorithm == 0 {
+                let signature: Signature = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(7, &self))?;
+                SignatureEnum::Ed25519(signature)
+            } else if algorithm == 1 {
+                let signature: ES256Signature = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(7, &self))?;
+                SignatureEnum::ES256(signature)
+            } else {
+                return Err(serde::de::Error::custom(format!(
+                    "Unknown algorithm: {}",
+                    algorithm
+                )));
+            };
+            let webauthn_fields = if flags.contains(SignatureProofFlags::WEBAUTHN_FIELDS) {
+                Some(
+                    seq.next_element::<WebauthnExtraFields>()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(8, &self))?,
+                )
+            } else {
+                None
+            };
             Ok(Transaction {
                 sender: Address::from(&public_key),
                 sender_type: AccountType::Basic,
@@ -667,7 +735,8 @@ mod serde_derive {
                 validity_start_height: u32::from_be_bytes(validity_start_height),
                 network_id,
                 flags: TransactionFlags::empty(),
-                proof: SignatureProof::from(public_key, signature).serialize_to_vec(),
+                proof: SignatureProof::from(public_key, signature, webauthn_fields)
+                    .serialize_to_vec(),
                 valid: false,
             })
         }
