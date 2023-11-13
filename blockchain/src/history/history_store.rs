@@ -782,6 +782,9 @@ impl HistoryStore {
     /// Returns the `chunk_index`th chunk of size `chunk_size` for a given epoch.
     /// The return value consists of a vector of all the historic transactions in that chunk
     /// and a proof for these in the MMR.
+    /// The `verifier_block_number` is the block the chunk proof should be verified against.
+    /// That means that no leaf beyond this block is returned and that the proof should be
+    /// verified with the history root from this block.
     pub fn prove_chunk(
         &self,
         epoch_number: u32,
@@ -810,8 +813,9 @@ impl HistoryStore {
         let leaf_count = self.length_at(verifier_block_number, Some(txn)) as usize;
         let number_of_nodes = leaf_number_to_index(leaf_count);
 
-        // Calculate chunk boundaries
+        // Calculate chunk boundaries.
         let start = cmp::min(chunk_size * chunk_index, leaf_count);
+        // Do not go beyond the verifier's block.
         let end = cmp::min(start + chunk_size, leaf_count);
 
         // TODO: Setting `assume_previous` to false allows the proofs to be verified independently.
