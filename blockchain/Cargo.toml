@@ -21,7 +21,7 @@ futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
-prometheus-client = { version = "0.21.2", optional = true }
+prometheus-client = { version = "0.22.0", optional = true }
 rand = "0.8"
 serde = "1.0"
 thiserror = "1.0"
