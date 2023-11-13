@@ -212,7 +212,7 @@ impl Blockchain {
     ) -> bool {
         let max_block_number = self
             .block_number()
-            .saturating_sub(Policy::transaction_validity_window());
+            .saturating_sub(Policy::transaction_validity_window_blocks());
         self.tx_in_validity_window(tx_hash, max_block_number, txn_opt)
     }
 
@@ -264,7 +264,7 @@ impl Blockchain {
             // and not occur in the history store at all. Using the election block of the epoch will guarantee
             // to return the length at the most recent existing block in this epoch.
             let first_validity_window_block =
-                self.block_number() + 1 - Policy::transaction_validity_window();
+                self.block_number() + 1 - Policy::transaction_validity_window_blocks();
             let election_block = Policy::election_block_after(first_validity_window_block - 1);
 
             // Check whether we do have a history tree for the epoch of the first validity window block.

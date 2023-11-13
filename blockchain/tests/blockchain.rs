@@ -24,7 +24,7 @@ async fn can_enforce_validity_window() {
     );
 
     // Produce validity window - 1 blocks
-    for _ in 0..Policy::transaction_validity_window() - 1 {
+    for _ in 0..Policy::transaction_validity_window_blocks() - 1 {
         let _block = producer1.next_block(vec![], false);
     }
     assert!(
@@ -72,7 +72,7 @@ async fn can_enforce_validity_window() {
     );
 
     // Produce validity window - 1 blocks
-    for _ in 0..Policy::transaction_validity_window() - 1 {
+    for _ in 0..Policy::transaction_validity_window_blocks() - 1 {
         let block = producer1.next_block(vec![], false);
         assert!(Blockchain::push_with_chunks(
             producer2.blockchain.upgradable_read(),

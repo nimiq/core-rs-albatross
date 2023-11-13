@@ -30,8 +30,7 @@ pub struct Policy {
     /// Maximum size of accounts trie chunks.
     #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
     pub state_chunks_max_size: u32,
-    /// Number of blocks a transaction is valid with Albatross consensus.
-    /// This should be a multiple of `blocks_per_batch`.
+    /// Number of batches a transaction is valid with Albatross consensus.
     #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
     pub transaction_validity_window: u32,
     /// Genesis block number
@@ -141,14 +140,23 @@ impl Policy {
 
 #[cfg_attr(feature = "ts-types", wasm_bindgen)]
 impl Policy {
-    /// Number of blocks a transaction is valid with Albatross consensus.
-    /// This should be a multiple of `blocks_per_batch`.
+    /// Number of batches a transaction is valid with Albatross consensus.
     #[inline]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = TRANSACTION_VALIDITY_WINDOW))]
     pub fn transaction_validity_window() -> u32 {
         GLOBAL_POLICY
             .get_or_init(Self::default)
             .transaction_validity_window
+    }
+
+    /// Number of blocks a transaction is valid with Albatross consensus.
+    #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = TRANSACTION_VALIDITY_WINDOW_BLOCKS))]
+    pub fn transaction_validity_window_blocks() -> u32 {
+        GLOBAL_POLICY
+            .get_or_init(Self::default)
+            .transaction_validity_window
+            * GLOBAL_POLICY.get_or_init(Self::default).blocks_per_batch
     }
 
     /// How many batches constitute an epoch
@@ -664,7 +672,7 @@ impl Default for Policy {
             tendermint_timeout_init: 1000,
             tendermint_timeout_delta: 1000,
             state_chunks_max_size: 200, // #Nodes/accounts 200, TODO: Simulate with different sizes
-            transaction_validity_window: 7200,
+            transaction_validity_window: 120,
             genesis_block_number: 0,
         }
     }
@@ -676,7 +684,7 @@ pub const TEST_POLICY: Policy = Policy {
     tendermint_timeout_init: 1000,
     tendermint_timeout_delta: 1000,
     state_chunks_max_size: 2,
-    transaction_validity_window: 64,
+    transaction_validity_window: 2,
     genesis_block_number: 0,
 };
 
