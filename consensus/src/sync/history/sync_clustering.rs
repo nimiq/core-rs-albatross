@@ -57,7 +57,7 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
         .await;
 
         match result {
-            Ok(macro_chain) => {
+            Ok(mut macro_chain) => {
                 if macro_chain.epochs.is_none() {
                     return Some(EpochIds {
                         locator_found: false,
@@ -70,19 +70,28 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
 
                 let epoch_ids = macro_chain.epochs.unwrap();
 
+                // Clear checkpoint if epochs were returned. This avoids processing checkpoints that
+                // become outdated while the epochs preceding it are being downloaded and applied.
+                if !epoch_ids.is_empty() {
+                    macro_chain.checkpoint = None;
+                }
+
                 // Sanity-check checkpoint block number:
                 //  * is in checkpoint epoch
                 //  * is a non-election macro block
                 if let Some(checkpoint) = &macro_chain.checkpoint {
-                    let checkpoint_epoch = epoch_number + epoch_ids.len() as u32 + 1;
-                    if Policy::epoch_at(checkpoint.block_number) != checkpoint_epoch
+                    let given_checkpoint_epoch = Policy::epoch_at(checkpoint.block_number);
+                    let expected_checkpoint_epoch = epoch_number + epoch_ids.len() as u32 + 1;
+                    if given_checkpoint_epoch != expected_checkpoint_epoch
                         || !Policy::is_macro_block_at(checkpoint.block_number)
                         || Policy::is_election_block_at(checkpoint.block_number)
                     {
                         // Peer provided an invalid checkpoint block number, close connection.
                         log::error!(
-                            "Request macro chain failed: invalid checkpoint block number {}, checkpoint_epoch={}",
-                            checkpoint.block_number, checkpoint_epoch
+                            given_checkpoint_epoch,
+                            expected_checkpoint_epoch,
+                            peer = %peer_id,
+                            "Request macro chain failed: invalid checkpoint",
                         );
                         network
                             .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
