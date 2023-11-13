@@ -25,7 +25,7 @@ futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
 parking_lot = "0.12"
 serde = "1.0"
-serde_with = "3.3"
+serde_with = "3.4"
 thiserror = "1.0"
 
 nimiq-account = { workspace = true }
