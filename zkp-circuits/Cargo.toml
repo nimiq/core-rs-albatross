@@ -26,7 +26,7 @@ hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 rand = { version = "0.8", features = ["small_rng"] }
 rand_chacha = "0.3.1"
-rayon = { version = "^1.7", optional = true }
+rayon = { version = "^1.8", optional = true }
 serde = "1.0"
 
 ark-crypto-primitives = { version = "0.4", features = ["crh", "prf", "r1cs"] }

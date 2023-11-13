@@ -24,7 +24,7 @@ ark-std = "0.4"
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 rand = { version = "0.8", features = ["small_rng"] }
-rayon = { version = "^1.7", optional = true }
+rayon = { version = "^1.8", optional = true }
 serde = { version = "1.0" }
 thiserror = "1.0"
 
