@@ -276,7 +276,7 @@ async fn sync_ingredients() {
     tokio::time::sleep(Duration::from_secs(1)).await; // FIXME, Prof. Berrang told me to do this
 
     // Test ingredients:
-    // Request macro chain, first request must return all epochs, but no checkpoint
+    // Request macro chain, first request must return all epochs and one checkpoint.
     let peer_id = net2.get_peers()[0];
 
     let macro_chain = HistoryMacroSync::request_macro_chain(
@@ -290,8 +290,8 @@ async fn sync_ingredients() {
 
     let epochs = macro_chain.epochs.expect("Should contain epochs");
     assert!(
-        macro_chain.checkpoint.is_none(),
-        "MacroChain must contain either epochs, or a checkpoint or neither"
+        macro_chain.checkpoint.is_some(),
+        "Should contain checkpoint"
     );
     let blockchain = consensus1.blockchain.read();
     assert_eq!(epochs.len(), 1);
@@ -347,7 +347,7 @@ async fn sync_ingredients() {
     let checkpoint = macro_chain.checkpoint.expect("Should contain checkpoint");
     assert!(
         macro_chain.epochs.is_none() || macro_chain.epochs.unwrap().is_empty(),
-        "MacroChain must contain either epochs, or a checkpoint or neither"
+        "Should not contain epochs"
     );
     let blockchain = consensus1.blockchain.read();
     assert_eq!(checkpoint.hash, blockchain.macro_head_hash());

@@ -61,14 +61,17 @@ impl<N: Network> Handle<N, MacroChain, BlockchainProxy> for RequestMacroChain {
         let epochs: Vec<_> = election_blocks.iter().map(|block| block.hash()).collect();
 
         // Add latest checkpoint block if all of the following conditions are met:
-        // * the requester has caught up, i.e. it already knows the last epoch (epochs.is_empty())
         // * the latest macro block is a checkpoint block.
         // * the latest macro block is not the locator given by the requester.
+        // * the requester has caught up, i.e. it already knows the most recent epoch (epochs.is_empty())
+        //   or we are returning the most recent epoch as part of this response.
         let checkpoint_block = blockchain.macro_head();
         let checkpoint_hash = blockchain.macro_head_hash();
-        let checkpoint = if epochs.is_empty()
-            && !checkpoint_block.is_election_block()
+        let caught_up = epochs.is_empty()
+            || *epochs.last().unwrap() == checkpoint_block.header.parent_election_hash;
+        let checkpoint = if !checkpoint_block.is_election_block()
             && checkpoint_hash != start_block_hash
+            && caught_up
         {
             Some(Checkpoint {
                 block_number: checkpoint_block.block_number(),
