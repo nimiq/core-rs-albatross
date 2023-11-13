@@ -1,4 +1,4 @@
-use nimiq_keys::{Address, Signature, WebauthnPublicKey};
+use nimiq_keys::{Address, ES256PublicKey, Signature};
 use nimiq_primitives::{account::AccountType, networks::NetworkId, transaction::TransactionError};
 use nimiq_transaction::{
     account::AccountTransactionVerification, Transaction, WebauthnClientDataFlags,
@@ -52,7 +52,7 @@ fn it_does_not_allow_signalling() {
 #[test]
 fn it_can_verify_webauthn_signature_proofs() {
     let signature_proof = WebauthnSignatureProof {
-        public_key: WebauthnPublicKey::from_bytes(&[
+        public_key: ES256PublicKey::from_bytes(&[
             2, 145, 87, 130, 102, 84, 114, 146, 139, 254, 114, 194, 134, 155, 187, 214, 188, 12,
             35, 147, 121, 213, 161, 80, 234, 94, 43, 25, 178, 5, 213, 54, 89,
         ])
@@ -82,7 +82,7 @@ fn it_can_verify_webauthn_signature_proofs() {
 #[test]
 fn it_can_verify_android_chrome_webauthn_signature_proofs() {
     let signature_proof = WebauthnSignatureProof {
-        public_key: WebauthnPublicKey::from_bytes(&[
+        public_key: ES256PublicKey::from_bytes(&[
             3, 39, 225, 247, 153, 91, 222, 93, 248, 162, 43, 217, 194, 120, 51, 181, 50, 215, 156,
             35, 80, 230, 31, 201, 168, 86, 33, 209, 67, 142, 171, 235, 124,
         ])

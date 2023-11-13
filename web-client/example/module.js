@@ -171,7 +171,7 @@ init().then(async () => {
         const pubkeyBytes = new Uint8Array(33);
         pubkeyBytes[0] = 2; // Set a valid y-parity byte
 
-        const pubkey = new Nimiq.WebauthnPublicKey(pubkeyBytes);
+        const pubkey = new Nimiq.ES256PublicKey(pubkeyBytes);
 
         let signature_proof = Nimiq.SignatureProof.webauthnSingleSig(
             pubkey,

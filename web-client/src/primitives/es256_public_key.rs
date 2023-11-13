@@ -7,17 +7,17 @@ use crate::{address::Address, primitives::signature::Signature};
 
 /// The non-secret (public) part of an ES256 asymmetric key pair that is typically used to digitally verify or encrypt data.
 #[wasm_bindgen]
-pub struct WebauthnPublicKey {
-    inner: nimiq_keys::WebauthnPublicKey,
+pub struct ES256PublicKey {
+    inner: nimiq_keys::ES256PublicKey,
 }
 
-impl WebauthnPublicKey {
+impl ES256PublicKey {
     const SPKI_SIZE: usize = 91;
     const RAW_SIZE: usize = 65;
 }
 
 #[wasm_bindgen]
-impl WebauthnPublicKey {
+impl ES256PublicKey {
     /// Verifies that a signature is valid for this public key and the provided data.
     pub fn verify(&self, signature: &Signature, data: &[u8]) -> bool {
         self.inner.verify(signature.native_ref(), data)
@@ -26,17 +26,17 @@ impl WebauthnPublicKey {
     /// Deserializes a public key from a byte array.
     ///
     /// Throws when the byte array contains less than 33 bytes.
-    pub fn unserialize(bytes: &[u8]) -> Result<WebauthnPublicKey, JsError> {
-        if bytes.len() != nimiq_keys::WebauthnPublicKey::SIZE {
+    pub fn unserialize(bytes: &[u8]) -> Result<ES256PublicKey, JsError> {
+        if bytes.len() != nimiq_keys::ES256PublicKey::SIZE {
             return Err(JsError::new("Public key primitive: Invalid length"));
         }
-        let key = nimiq_keys::WebauthnPublicKey::deserialize_from_vec(bytes)?;
-        Ok(WebauthnPublicKey::from_native(key))
+        let key = nimiq_keys::ES256PublicKey::deserialize_from_vec(bytes)?;
+        Ok(ES256PublicKey::from_native(key))
     }
 
     /// Deserializes a public key from its SPKI representation.
     #[wasm_bindgen(js_name = fromSpki)]
-    pub fn from_spki(spki_bytes: &[u8]) -> Result<WebauthnPublicKey, JsError> {
+    pub fn from_spki(spki_bytes: &[u8]) -> Result<ES256PublicKey, JsError> {
         if spki_bytes.len() != Self::SPKI_SIZE {
             return Err(JsError::new("Public key primitive: Invalid SPKI length"));
         }
@@ -47,7 +47,7 @@ impl WebauthnPublicKey {
 
     /// Deserializes a public key from its raw representation.
     #[wasm_bindgen(js_name = fromRaw)]
-    pub fn from_raw(raw_bytes: &[u8]) -> Result<WebauthnPublicKey, JsError> {
+    pub fn from_raw(raw_bytes: &[u8]) -> Result<ES256PublicKey, JsError> {
         if raw_bytes.len() != Self::RAW_SIZE {
             return Err(JsError::new("Public key primitive: Invalid raw length"));
         }
@@ -76,11 +76,11 @@ impl WebauthnPublicKey {
     ///     },
     /// });
     ///
-    /// // Then create an instance of WebauthnPublicKey from the credential response:
-    /// const publicKey = new Nimiq.WebauthnPublicKey(new Uint8Array(cred.response.getPublicKey()));
+    /// // Then create an instance of ES256PublicKey from the credential response:
+    /// const publicKey = new Nimiq.ES256PublicKey(new Uint8Array(cred.response.getPublicKey()));
     /// ```
     #[wasm_bindgen(constructor)]
-    pub fn new(bytes: &[u8]) -> Result<WebauthnPublicKey, JsError> {
+    pub fn new(bytes: &[u8]) -> Result<ES256PublicKey, JsError> {
         if bytes.len() == Self::SPKI_SIZE {
             return Self::from_spki(bytes);
         }
@@ -99,9 +99,9 @@ impl WebauthnPublicKey {
     ///
     /// Throws when the string is not valid hex format or when it represents less than 33 bytes.
     #[wasm_bindgen(js_name = fromHex)]
-    pub fn from_hex(hex: &str) -> Result<WebauthnPublicKey, JsError> {
-        let key = nimiq_keys::WebauthnPublicKey::from_str(hex)?;
-        Ok(WebauthnPublicKey::from_native(key))
+    pub fn from_hex(hex: &str) -> Result<ES256PublicKey, JsError> {
+        let key = nimiq_keys::ES256PublicKey::from_str(hex)?;
+        Ok(ES256PublicKey::from_native(key))
     }
 
     /// Formats the public key into a hex string.
@@ -117,12 +117,12 @@ impl WebauthnPublicKey {
     }
 }
 
-impl WebauthnPublicKey {
-    pub fn from_native(public_key: nimiq_keys::WebauthnPublicKey) -> WebauthnPublicKey {
-        WebauthnPublicKey { inner: public_key }
+impl ES256PublicKey {
+    pub fn from_native(public_key: nimiq_keys::ES256PublicKey) -> ES256PublicKey {
+        ES256PublicKey { inner: public_key }
     }
 
-    pub fn native_ref(&self) -> &nimiq_keys::WebauthnPublicKey {
+    pub fn native_ref(&self) -> &nimiq_keys::ES256PublicKey {
         &self.inner
     }
 }

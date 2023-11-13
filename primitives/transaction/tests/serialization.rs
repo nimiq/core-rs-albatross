@@ -1,6 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-use nimiq_keys::{Address, Signature, WebauthnPublicKey};
+use nimiq_keys::{Address, ES256PublicKey, Signature};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_test_log::test;
@@ -87,7 +87,7 @@ fn it_can_serialize_basic_transaction() {
 #[test]
 fn it_can_serialize_and_deserialize_signature_proofs() {
     let webauthn_sp = WebauthnSignatureProof {
-        public_key: WebauthnPublicKey::from_bytes(&[
+        public_key: ES256PublicKey::from_bytes(&[
             2, 145, 87, 130, 102, 84, 114, 146, 139, 254, 114, 194, 134, 155, 187, 214, 188, 12,
             35, 147, 121, 213, 161, 80, 234, 94, 43, 25, 178, 5, 213, 54, 89,
         ])
