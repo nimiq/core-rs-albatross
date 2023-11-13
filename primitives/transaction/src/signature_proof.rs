@@ -9,7 +9,7 @@ use nimiq_utils::merkle::Blake2bMerklePath;
 use serde_json::json;
 use url::Url;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct SignatureProof {
     pub public_key: PublicKey,
     pub merkle_path: Blake2bMerklePath,
@@ -18,12 +18,16 @@ pub struct SignatureProof {
 }
 
 impl SignatureProof {
-    pub fn from(public_key: PublicKey, signature: SignatureEnum) -> Self {
+    pub fn from(
+        public_key: PublicKey,
+        signature: SignatureEnum,
+        webauthn_fields: Option<WebauthnExtraFields>,
+    ) -> Self {
         SignatureProof {
             public_key,
             merkle_path: Blake2bMerklePath::empty(),
             signature,
-            webauthn_fields: None,
+            webauthn_fields,
         }
     }
 
@@ -248,6 +252,32 @@ impl SignatureProof {
             },
         }
     }
+
+    pub fn make_type_and_flags_byte(&self) -> u8 {
+        // Use the lower 4 bits for the algorithm variant
+        let mut type_flags: u8 = match self.public_key {
+            PublicKey::Ed25519(_) => 0,
+            PublicKey::ES256(_) => 1,
+        };
+
+        // Use the upper 4 bits as flags
+        let mut flags = SignatureProofFlags::default();
+        if self.webauthn_fields.is_some() {
+            flags.insert(SignatureProofFlags::WEBAUTHN_FIELDS);
+        }
+        type_flags |= flags.bits() << 4;
+
+        type_flags
+    }
+
+    pub fn parse_type_and_flags_byte(byte: u8) -> (u8, SignatureProofFlags) {
+        // The algorithm is encoded in the lower 4 bits
+        let algorithm = byte & 0b0000_1111;
+        // The flags are encoded in the upper 4 bits
+        let flags = SignatureProofFlags::from_bits_truncate(byte >> 4);
+
+        (algorithm, flags)
+    }
 }
 
 impl Default for SignatureProof {
@@ -259,6 +289,15 @@ impl Default for SignatureProof {
             signature: SignatureEnum::Ed25519(Default::default()),
             webauthn_fields: None,
         }
+    }
+}
+
+bitflags! {
+    #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+    /// Store flags for serialized signature proofs. Can only use 4 bits,
+    /// because the flags are stored in the upper 4 bits of the `type` field.
+    pub struct SignatureProofFlags: u8 {
+        const WEBAUTHN_FIELDS = 1 << 0;
     }
 }
 
@@ -287,6 +326,158 @@ pub struct WebauthnExtraFields {
     pub authenticator_data_suffix: Vec<u8>,
     pub client_data_flags: WebauthnClientDataFlags,
     pub client_data_extra_fields: String,
+}
+
+mod serde_derive {
+    use std::fmt;
+
+    use nimiq_keys::{
+        ES256PublicKey, ES256Signature, EdDSAPublicKey, PublicKey, Signature, SignatureEnum,
+    };
+    use serde::ser::SerializeStruct;
+
+    use super::*;
+
+    const STRUCT_NAME: &str = "SignatureProof";
+
+    const FIELDS: &[&str] = &[
+        "type_and_flags",
+        "public_key",
+        "merkle_path",
+        "signature",
+        "webauthn_fields",
+    ];
+
+    impl serde::Serialize for SignatureProof {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            let mut length = 4; // type field (algorithm & flags), public key, merkle path, signature
+            if self.webauthn_fields.is_some() {
+                length += 1; // Webauthn fields
+            }
+
+            let mut state = serializer.serialize_struct(STRUCT_NAME, length)?;
+
+            state.serialize_field(FIELDS[0], &self.make_type_and_flags_byte())?;
+
+            // Serialize public key without enum variant, as that is already encoded in the `type`/`algorithm` field
+            match self.public_key {
+                PublicKey::Ed25519(ref public_key) => {
+                    state.serialize_field(FIELDS[1], public_key)?;
+                }
+                PublicKey::ES256(ref public_key) => {
+                    state.serialize_field(FIELDS[1], public_key)?;
+                }
+            }
+
+            // Serialize merkle path as is
+            state.serialize_field(FIELDS[2], &self.merkle_path)?;
+
+            // Serialize signature without enum variant, as that is already encoded in the `type`/`algorithm` field
+            match self.signature {
+                SignatureEnum::Ed25519(ref signature) => {
+                    state.serialize_field(FIELDS[3], signature)?;
+                }
+                SignatureEnum::ES256(ref signature) => {
+                    state.serialize_field(FIELDS[3], signature)?;
+                }
+            }
+
+            // When present, serialize webauthn fields flattened into the root struct. The option variant is
+            // encoded in the `type` field.
+            if self.webauthn_fields.is_some() {
+                state.serialize_field(FIELDS[4], self.webauthn_fields.as_ref().unwrap())?;
+            }
+
+            state.end()
+        }
+    }
+
+    struct SignatureProofVisitor;
+
+    impl<'de> serde::Deserialize<'de> for SignatureProof {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            deserializer.deserialize_struct(STRUCT_NAME, FIELDS, SignatureProofVisitor)
+        }
+    }
+
+    impl<'de> serde::de::Visitor<'de> for SignatureProofVisitor {
+        type Value = SignatureProof;
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+            write!(f, "a SignatureProof")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<SignatureProof, A::Error>
+        where
+            A: serde::de::SeqAccess<'de>,
+        {
+            let type_field: u8 = seq
+                .next_element()?
+                .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+
+            let (algorithm, flags) = SignatureProof::parse_type_and_flags_byte(type_field);
+
+            let public_key: PublicKey = if algorithm == 0 {
+                let public_key: EdDSAPublicKey = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                PublicKey::Ed25519(public_key)
+            } else if algorithm == 1 {
+                let public_key: ES256PublicKey = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                PublicKey::ES256(public_key)
+            } else {
+                return Err(serde::de::Error::custom(format!(
+                    "Unknown algorithm: {}",
+                    algorithm
+                )));
+            };
+
+            let merkle_path: Blake2bMerklePath = seq
+                .next_element()?
+                .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
+
+            let signature: SignatureEnum = if algorithm == 0 {
+                let signature: Signature = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
+                SignatureEnum::Ed25519(signature)
+            } else if algorithm == 1 {
+                let signature: ES256Signature = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
+                SignatureEnum::ES256(signature)
+            } else {
+                return Err(serde::de::Error::custom(format!(
+                    "Unknown algorithm: {}",
+                    algorithm
+                )));
+            };
+
+            let webauthn_fields = if flags.contains(SignatureProofFlags::WEBAUTHN_FIELDS) {
+                Some(
+                    seq.next_element::<WebauthnExtraFields>()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(4, &self))?,
+                )
+            } else {
+                None
+            };
+
+            Ok(SignatureProof {
+                public_key,
+                merkle_path,
+                signature,
+                webauthn_fields,
+            })
+        }
+    }
 }
 
 #[derive(Debug)]
