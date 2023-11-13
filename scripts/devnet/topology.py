@@ -187,25 +187,25 @@ class Topology:
         seeds_list = list(
             map(lambda seed:
                 {'name': seed.get_name(),
-                 'conf_path': seed.get_conf_dir(),
+                 'conf_path': f"/etc/docker-compose/albatross/{seed.get_name()}",
                  'container_image': seed.get_container_image()},
                 seeds))
         spammers_list = list(
             map(lambda spammer:
                 {'name': spammer.get_name(),
-                 'conf_path': spammer.get_conf_dir(),
+                 'conf_path': f"/etc/docker-compose/albatross/{spammer.get_name()}",
                  'container_image': spammer.get_container_image()},
                 spammers))
         regular_nodes_list = list(
             map(lambda node:
                 {'name': node.get_name(),
-                 'conf_path': node.get_conf_dir(),
+                 'conf_path': f"/etc/docker-compose/albatross/{node.get_name()}",
                  'container_image': node.get_container_image()},
                 regular_nodes))
         validators_list = list(
             map(lambda validator:
                 {'name': validator.get_name(),
-                 'conf_path': validator.get_conf_dir(),
+                 'conf_path': f"/etc/docker-compose/albatross/{validator.get_name()}",
                  'container_image': validator.get_container_image()},
                 validators))
 
@@ -217,7 +217,7 @@ class Topology:
                                   seeds=seeds_list,
                                   regular_nodes=regular_nodes_list,
                                   internal_genesis_file=internal_genesis_path,
-                                  external_genesis_file=self.genesis_filename,
+                                  external_genesis_file="/etc/docker-compose/albatross/dev-albatross.toml",
                                   network_name=self.topology_settings.get_network_name(),
                                   )
         conf = self.topology_settings.get_conf_dir()

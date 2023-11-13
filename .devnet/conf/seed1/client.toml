@@ -5,7 +5,7 @@ listen_addresses = [
 ]
 advertised_addresses = [
     "/dns4/seed1/tcp/8443/ws", # Docker-internal
-    "/dns4/seed1.nimiq.local/tcp/8401/ws" # Docker-external
+    "/dns4/seed1.webauthn.pos.nimiqwatch.com/tcp/443/wss" # Docker-external
 ]
 
 [consensus]

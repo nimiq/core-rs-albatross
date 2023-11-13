@@ -5,7 +5,7 @@ listen_addresses = [
 ]
 advertised_addresses = [
     "/dns4/validator4/tcp/8443/ws", # Docker-internal
-    "/dns4/validator4.nimiq.local/tcp/8504/ws" # Docker-external
+    "/dns4/validator4.webauthn.pos.nimiqwatch.com/tcp/443/wss" # Docker-external
 ]
 
 seed_nodes = [
@@ -29,10 +29,10 @@ timestamps = true
 # lock_api = "trace"
 
 [validator]
-validator_address = "NQ96 N32J S25S J290 78LH 27YT 1MKR RK6B EHE9"
+validator_address = "NQ45 PGXX L59V BVV5 13GU 68U7 3LF2 2DXV Q8SA"
 signing_key_file = "/home/nimiq/signing_key.dat"
-signing_key = "f7abf613ac4d5bfae516c40404d037926918f39909ae97e3d8eff9d9e17c2760"
+signing_key = "dbb8e98be9ddbe443b6cd1e84fde98f434bc274c7d403a3268293d3556c06176"
 voting_key_file = "/home/nimiq/voting_key.dat"
-voting_key = "bd969a2f4d6a3467224ff9f3b667b3a6171a62b86a21e6253465341c7cb77d2c54c903d5c8574159c48205611f4c514996fca47e246d00de48f05a1fc18352fd0682b8f458fa9742cdb813e7d435f9abeb5369633eebd8e9046e11d23a5700"
+voting_key = "810511e718ae5d27dc54ea8acf1e0b100b204e02946d302e5e61e0ab208f44ebff53917a5206b7aee2b46861a3ed7dc4a659b56ce1ad063e27c1178e8b284ea08604f777b19a9269e1fcedd8755c438b548019d6b8c46551cc2e65e0fb4a00"
 fee_key_file = "/home/nimiq/fee_key.dat"
-fee_key = "83a77ef92c1c6573c75c69382cb177f5d8111c39ed581a733b61f65cbee9b89a"
+fee_key = "ad71443c4c274e8d36d699ce30d4a316144ac5d8f258028b11192bd2da2698ce"

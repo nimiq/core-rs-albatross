@@ -6,7 +6,7 @@ set -e
 sudo service docker start
 
 # Build config and docker-compose files
-python scripts/devnet/devnet.py -t .github/devnet_topologies/four_validators.toml --env=docker_compose --networkname=nimiq.local
+python scripts/devnet/devnet.py -t .github/devnet_topologies/four_validators.toml --env=docker_compose --networkname=webauthn.pos.nimiqwatch.com
 
 # Build release binary and Docker image with it
 cargo build --release --bin nimiq-client

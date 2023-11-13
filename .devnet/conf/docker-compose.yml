@@ -2,7 +2,7 @@ version: "3.8"
 
 networks:
   devnet:
-    name: nimiq.local
+    name: webauthn.pos.nimiqwatch.com
     driver: bridge
     ipam:
       driver: default
@@ -20,8 +20,8 @@ services:
       devnet:
         ipv4_address: 7.0.0.100
     volumes:
-      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/seed1:/home/nimiq/.nimiq:rw
-      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/dev-albatross.toml:/home/nimiq/dev-albatross.toml:ro
+      - /etc/docker-compose/albatross/seed1:/home/nimiq/.nimiq:rw
+      - /etc/docker-compose/albatross/dev-albatross.toml:/home/nimiq/dev-albatross.toml:ro
 
   validator1:
     image: core:latest
@@ -35,8 +35,8 @@ services:
       devnet:
         ipv4_address: 7.0.0.2
     volumes:
-      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/validator1:/home/nimiq/.nimiq:rw
-      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/dev-albatross.toml:/home/nimiq/dev-albatross.toml:ro
+      - /etc/docker-compose/albatross/validator1:/home/nimiq/.nimiq:rw
+      - /etc/docker-compose/albatross/dev-albatross.toml:/home/nimiq/dev-albatross.toml:ro
 
   validator2:
     image: core:latest
@@ -50,8 +50,8 @@ services:
       devnet:
         ipv4_address: 7.0.0.3
     volumes:
-      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/validator2:/home/nimiq/.nimiq:rw
-      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/dev-albatross.toml:/home/nimiq/dev-albatross.toml:ro
+      - /etc/docker-compose/albatross/validator2:/home/nimiq/.nimiq:rw
+      - /etc/docker-compose/albatross/dev-albatross.toml:/home/nimiq/dev-albatross.toml:ro
 
   validator3:
     image: core:latest
@@ -65,8 +65,8 @@ services:
       devnet:
         ipv4_address: 7.0.0.4
     volumes:
-      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/validator3:/home/nimiq/.nimiq:rw
-      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/dev-albatross.toml:/home/nimiq/dev-albatross.toml:ro
+      - /etc/docker-compose/albatross/validator3:/home/nimiq/.nimiq:rw
+      - /etc/docker-compose/albatross/dev-albatross.toml:/home/nimiq/dev-albatross.toml:ro
 
   validator4:
     image: core:latest
@@ -80,6 +80,5 @@ services:
       devnet:
         ipv4_address: 7.0.0.5
     volumes:
-      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/validator4:/home/nimiq/.nimiq:rw
-      - /home/soeren/nimiq/core-rs-albatross/.devnet/conf/dev-albatross.toml:/home/nimiq/dev-albatross.toml:ro
-
+      - /etc/docker-compose/albatross/validator4:/home/nimiq/.nimiq:rw
+      - /etc/docker-compose/albatross/dev-albatross.toml:/home/nimiq/dev-albatross.toml:ro

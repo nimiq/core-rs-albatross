@@ -5,7 +5,7 @@ listen_addresses = [
 ]
 advertised_addresses = [
     "/dns4/{{ name }}/tcp/{{ port }}/ws", # Docker-internal
-    "/dns4/{{ name }}.{{ network_name }}/tcp/{{ advertised_port }}/ws" # Docker-external
+    "/dns4/{{ name }}.{{ network_name }}/tcp/{{ advertised_port }}/wss" # Docker-external
 ]
 
 {% if seed_addresses is defined %}

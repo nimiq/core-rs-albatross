@@ -170,7 +170,7 @@ class Validator(Node):
         if metrics is not None:
             config_content = template.render(
                 min_peers=3, port=self.get_listen_port(),
-                name=self.name, network_name=network_name, advertised_port=int(self.name[-1]) + 8500,
+                name=self.name, network_name=network_name, advertised_port=443,
                 state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), validator=data,
                 seed_addresses=seed_addresses, metrics=metrics,
@@ -178,7 +178,7 @@ class Validator(Node):
         else:
             config_content = template.render(
                 min_peers=3, port=self.get_listen_port(),
-                name=self.name, network_name=network_name, advertised_port=int(self.name[-1]) + 8500,
+                name=self.name, network_name=network_name, advertised_port=443,
                 state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), validator=data,
                 seed_addresses=seed_addresses, loki=loki_settings)

@@ -135,14 +135,14 @@ class Spammer(Node):
         if metrics is not None:
             content = template.render(
                 min_peers=3, port=self.get_listen_port(),
-                name=self.name, network_name=network_name, advertised_port=int(self.name[-1]) + 8700,
+                name=self.name, network_name=network_name, advertised_port=443,
                 state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), seed_addresses=seed_addresses,
                 metrics=metrics, spammer=True, loki=loki_settings)
         else:
             content = template.render(
                 min_peers=3, port=self.get_listen_port(),
-                name=self.name, network_name=network_name, advertised_port=int(self.name[-1]) + 8700,
+                name=self.name, network_name=network_name, advertised_port=443,
                 state_path=self.get_state_dir(), listen_ip=listen_ip,
                 sync_mode=self.get_sync_mode(), seed_addresses=seed_addresses,
                 spammer=True, loki=loki_settings)
