@@ -15,7 +15,7 @@ use nimiq_primitives::{
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::{accounts_revert::TestCommitRevert, test_rng::test_rng};
-use nimiq_transaction::{EdDSASignatureProof, SignatureProof, Transaction};
+use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_utils::key_rng::SecureGenerate;
 
 const CONTRACT: &str = "00002fbf9bd9c800fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a220000000000000001000000000003f480000002632e314a0000002fbf9bd9c800";
@@ -60,7 +60,7 @@ fn make_signed_transaction(key_1: KeyPair, key_2: KeyPair, value: u64) -> Transa
     );
     tx.sender_type = AccountType::Vesting;
     let signature = key_1.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::EdDSA(EdDSASignatureProof::from(key_1.public, signature));
+    let signature_proof = SignatureProof::from_ed25519(key_1.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     tx
@@ -305,7 +305,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     tx.sender_type = AccountType::Vesting;
 
     let signature = key_1.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::EdDSA(EdDSASignatureProof::from(key_1.public, signature));
+    let signature_proof = SignatureProof::from_ed25519(key_1.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     let mut tx_logger = TransactionLog::empty();
@@ -368,8 +368,7 @@ fn it_refuses_invalid_transactions() {
 
     // Invalid signature
     let signature = key_1_alt.sign(&tx.serialize_content()[..]);
-    let signature_proof =
-        SignatureProof::EdDSA(EdDSASignatureProof::from(key_1_alt.public, signature));
+    let signature_proof = SignatureProof::from_ed25519(key_1_alt.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     let block_state = BlockState::new(1, 200);
@@ -388,7 +387,7 @@ fn it_refuses_invalid_transactions() {
 
     // Funds still vested
     let signature = key_1.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::EdDSA(EdDSASignatureProof::from(key_1.public, signature));
+    let signature_proof = SignatureProof::from_ed25519(key_1.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     let block_state = BlockState::new(100000, 100);

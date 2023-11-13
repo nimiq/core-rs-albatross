@@ -1,6 +1,6 @@
 use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedPublicKey};
 
-use crate::{KeyPair, EdDSAPublicKey, Signature};
+use crate::{EdDSAPublicKey, KeyPair, Signature};
 
 impl TaggedKeyPair for KeyPair {
     type PublicKey = EdDSAPublicKey;

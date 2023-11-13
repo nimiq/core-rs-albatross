@@ -8,7 +8,7 @@ use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_transaction::{
     account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionData},
-    EdDSASignatureProof, SignatureProof, Transaction,
+    SignatureProof, Transaction,
 };
 use nimiq_transaction_builder::{TransactionBuilder, TransactionBuilderError};
 
@@ -304,18 +304,13 @@ fn make_signed_incoming_transaction(
     let mut tx = make_incoming_transaction(data, value);
     tx.recipient_data = IncomingStakingTransactionData::set_signature_on_data(
         &tx.recipient_data,
-        SignatureProof::EdDSA(EdDSASignatureProof::from(
-            key_pair.public,
-            key_pair.sign(&tx.serialize_content()),
-        )),
+        SignatureProof::from_ed25519(key_pair.public, key_pair.sign(&tx.serialize_content())),
     )
     .unwrap();
 
-    tx.proof = SignatureProof::EdDSA(EdDSASignatureProof::from(
-        key_pair.public,
-        key_pair.sign(&tx.serialize_content()),
-    ))
-    .serialize_to_vec();
+    tx.proof =
+        SignatureProof::from_ed25519(key_pair.public, key_pair.sign(&tx.serialize_content()))
+            .serialize_to_vec();
     tx
 }
 

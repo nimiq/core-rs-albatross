@@ -10,7 +10,7 @@ use nimiq_transaction::{
         },
         AccountTransactionVerification,
     },
-    EdDSASignatureProof, SignatureProof, Transaction, TransactionFlags,
+    SignatureProof, Transaction, TransactionFlags,
 };
 
 fn prepare_outgoing_transaction() -> (Transaction, AnyHash, SignatureProof, SignatureProof) {
@@ -41,14 +41,10 @@ fn prepare_outgoing_transaction() -> (Transaction, AnyHash, SignatureProof, Sign
 
     let sender_signature = sender_key_pair.sign(&tx.serialize_content()[..]);
     let recipient_signature = recipient_key_pair.sign(&tx.serialize_content()[..]);
-    let sender_signature_proof = SignatureProof::EdDSA(EdDSASignatureProof::from(
-        sender_key_pair.public,
-        sender_signature,
-    ));
-    let recipient_signature_proof = SignatureProof::EdDSA(EdDSASignatureProof::from(
-        recipient_key_pair.public,
-        recipient_signature,
-    ));
+    let sender_signature_proof =
+        SignatureProof::from_ed25519(sender_key_pair.public, sender_signature);
+    let recipient_signature_proof =
+        SignatureProof::from_ed25519(recipient_key_pair.public, recipient_signature);
 
     (
         tx,

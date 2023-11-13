@@ -2,7 +2,7 @@ use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, SecureGenerate};
 use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::Serialize;
-use nimiq_transaction::{EdDSASignatureProof, Transaction};
+use nimiq_transaction::{SignatureProof, Transaction};
 use rand::{CryptoRng, Rng};
 
 #[derive(Clone)]
@@ -64,7 +64,7 @@ pub fn generate_transactions(
         );
 
         if signature {
-            let signature_proof = EdDSASignatureProof::from(
+            let signature_proof = SignatureProof::from_ed25519(
                 mempool_transaction.sender.keypair.public,
                 mempool_transaction
                     .sender

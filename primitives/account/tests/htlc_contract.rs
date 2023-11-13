@@ -21,7 +21,7 @@ use nimiq_transaction::{
     account::htlc_contract::{
         AnyHash, AnyHash32, CreationTransactionData, OutgoingHTLCTransactionProof, PreImage,
     },
-    EdDSASignatureProof, SignatureProof, Transaction,
+    SignatureProof, Transaction,
 };
 
 const HTLC: &str = "00000000000000001b215589344cf570d36bec770825eae30b73213924786862babbdb05e7c4430612135eb2a836812303daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f0100000000000296350000000000000001";
@@ -79,14 +79,10 @@ fn prepare_outgoing_transaction() -> (
 
     let sender_signature = sender_key_pair.sign(&tx.serialize_content()[..]);
     let recipient_signature = recipient_key_pair.sign(&tx.serialize_content()[..]);
-    let sender_signature_proof = SignatureProof::EdDSA(EdDSASignatureProof::from(
-        sender_key_pair.public,
-        sender_signature,
-    ));
-    let recipient_signature_proof = SignatureProof::EdDSA(EdDSASignatureProof::from(
-        recipient_key_pair.public,
-        recipient_signature,
-    ));
+    let sender_signature_proof =
+        SignatureProof::from_ed25519(sender_key_pair.public, sender_signature);
+    let recipient_signature_proof =
+        SignatureProof::from_ed25519(recipient_key_pair.public, recipient_signature);
 
     (
         htlc,

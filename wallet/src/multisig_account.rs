@@ -10,11 +10,11 @@ use nimiq_keys::{
         public_key::DelinearizedPublicKey,
         CommitmentsData, MUSIG2_PARAMETER_V,
     },
-    Address, EdDSAPublicKey, KeyPair, SecureGenerate,
+    Address, EdDSAPublicKey, KeyPair, PublicKey, SecureGenerate, SignatureEnum,
 };
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_serde::Serialize;
-use nimiq_transaction::{EdDSASignatureProof, Transaction};
+use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_utils::merkle::Blake2bMerklePath;
 use thiserror::Error;
 
@@ -129,7 +129,7 @@ impl MultiSigAccount {
         aggregated_public_key: &EdDSAPublicKey,
         aggregated_commitment: &Commitment,
         partial_signatures: &[PartialSignature],
-    ) -> Result<EdDSASignatureProof, MultiSigAccountError> {
+    ) -> Result<SignatureProof, MultiSigAccountError> {
         if partial_signatures.len() != self.min_signatures.get() as usize {
             return Err(MultiSigAccountError::InvalidSignaturesLength);
         }
@@ -137,13 +137,14 @@ impl MultiSigAccount {
         let aggregated_signature: PartialSignature = partial_signatures.iter().sum();
         let signature = aggregated_signature.to_signature(aggregated_commitment);
 
-        Ok(EdDSASignatureProof {
+        Ok(SignatureProof {
             merkle_path: Blake2bMerklePath::new::<Blake2bHasher, _>(
                 &self.public_keys,
                 aggregated_public_key,
             ),
-            public_key: *aggregated_public_key,
-            signature,
+            public_key: PublicKey::Ed25519(*aggregated_public_key),
+            signature: SignatureEnum::Ed25519(signature),
+            webauthn_fields: None,
         })
     }
 
