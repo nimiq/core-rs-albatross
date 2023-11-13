@@ -1,10 +1,10 @@
 use std::io;
 
 use nimiq_hash::{HashOutput, SerializeContent};
-use nimiq_keys::{Address, KeyPair};
+use nimiq_keys::KeyPair;
 use nimiq_primitives::account::AccountType;
 use nimiq_serde::Serialize;
-use nimiq_transaction::{EdDSASignatureProof, SignatureProof, Transaction};
+use nimiq_transaction::{SignatureProof, Transaction};
 
 use crate::proof::{
     htlc_contract::HtlcProofBuilder,
@@ -354,10 +354,7 @@ impl BasicProofBuilder {
     /// using a key pair `key_pair`.
     pub fn sign_with_key_pair(&mut self, key_pair: &KeyPair) -> &mut Self {
         let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
-        self.signature = Some(SignatureProof::EdDSA(EdDSASignatureProof::from(
-            key_pair.public,
-            signature,
-        )));
+        self.signature = Some(SignatureProof::from_ed25519(key_pair.public, signature));
         self
     }
 
@@ -365,30 +362,7 @@ impl BasicProofBuilder {
     /// Otherwise, it returns `None`.
     pub fn generate(self) -> Option<Transaction> {
         let mut tx = self.transaction;
-
-        let is_basic = tx.sender_type == AccountType::Basic
-            && tx.recipient_type == AccountType::Basic
-            && tx.recipient_data.is_empty()
-            && tx.flags.is_empty();
-
-        let is_basic_signature = match self.signature {
-            Some(SignatureProof::EdDSA(ref signature_proof)) => {
-                Address::from(&signature_proof.public_key) == tx.sender
-                    && signature_proof.merkle_path.is_empty()
-            }
-            _ => false,
-        };
-
-        if is_basic && is_basic_signature {
-            if let SignatureProof::EdDSA(signature) = self.signature? {
-                tx.proof = signature.serialize_to_vec();
-            } else {
-                unreachable!();
-            }
-        } else {
-            tx.proof = self.signature?.serialize_to_vec();
-        }
-
+        tx.proof = self.signature?.serialize_to_vec();
         Some(tx)
     }
 }

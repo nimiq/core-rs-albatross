@@ -5,7 +5,7 @@ use nimiq_hash::{Hash, HashOutput, Sha256Hash};
 use nimiq_keys::{Address, EdDSAPublicKey, KeyPair, SecureGenerate, Signature};
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_transaction::{EdDSASignatureProof, Transaction};
+use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_utils::otp::Verify;
 
 pub const NIMIQ_SIGN_MESSAGE_PREFIX: &[u8] = b"\x16Nimiq Signed Message:\n";
@@ -54,11 +54,11 @@ impl WalletAccount {
         transaction.proof = proof.serialize_to_vec();
     }
 
-    pub fn create_signature_proof(&self, transaction: &Transaction) -> EdDSASignatureProof {
+    pub fn create_signature_proof(&self, transaction: &Transaction) -> SignatureProof {
         let signature = self
             .key_pair
             .sign(transaction.serialize_content().as_slice());
-        EdDSASignatureProof::from(self.key_pair.public, signature)
+        SignatureProof::from_ed25519(self.key_pair.public, signature)
     }
 
     fn prepare_message_for_signature(message: &[u8]) -> Sha256Hash {

@@ -5,7 +5,7 @@ use nimiq_primitives::{
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_transaction::{
     account::{vesting_contract::CreationTransactionData, AccountTransactionVerification},
-    EdDSASignatureProof, SignatureProof, Transaction, TransactionFlags,
+    SignatureProof, Transaction, TransactionFlags,
 };
 
 const OWNER_KEY: &str = "9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0";
@@ -130,8 +130,7 @@ fn it_can_verify_outgoing_transactions() {
     );
 
     let signature = key_pair.sign(&tx.serialize_content()[..]);
-    let signature_proof =
-        SignatureProof::EdDSA(EdDSASignatureProof::from(key_pair.public, signature));
+    let signature_proof = SignatureProof::from_ed25519(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));

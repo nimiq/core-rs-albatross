@@ -17,7 +17,7 @@ use nimiq_transaction::{
         staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionData},
         AccountTransactionVerification,
     },
-    EdDSASignatureProof, SignatureProof, Transaction,
+    SignatureProof, Transaction,
 };
 use nimiq_utils::key_rng::SecureGenerate;
 
@@ -711,13 +711,13 @@ fn make_signed_incoming_tx(
 ) -> Transaction {
     let mut tx = make_incoming_tx(data, value);
 
-    let in_proof = SignatureProof::EdDSA(EdDSASignatureProof::from(
+    let in_proof = SignatureProof::from_ed25519(
         match wrong_pk {
             None => in_key_pair.public,
             Some(pk) => pk,
         },
         in_key_pair.sign(&tx.serialize_content()),
-    ));
+    );
 
     tx.recipient_data =
         IncomingStakingTransactionData::set_signature_on_data(&tx.recipient_data, in_proof)
@@ -728,10 +728,10 @@ fn make_signed_incoming_tx(
 
     let out_key_pair = KeyPair::from(out_private_key);
 
-    let out_proof = SignatureProof::EdDSA(EdDSASignatureProof::from(
+    let out_proof = SignatureProof::from_ed25519(
         out_key_pair.public,
         out_key_pair.sign(&tx.serialize_content()),
-    ))
+    )
     .serialize_to_vec();
 
     tx.proof = out_proof;
@@ -763,13 +763,13 @@ fn make_delete_validator_tx(value: u64, wrong_sig: bool) -> Transaction {
     )
     .public;
 
-    let sig = SignatureProof::EdDSA(EdDSASignatureProof::from(
+    let sig = SignatureProof::from_ed25519(
         match wrong_sig {
             false => key_pair.public,
             true => wrong_pk,
         },
         key_pair.sign(&tx.serialize_content()),
-    ));
+    );
 
     tx.proof = sig.serialize_to_vec();
 
@@ -800,13 +800,13 @@ fn make_unstake_tx(wrong_sig: bool) -> Transaction {
     )
     .public;
 
-    let sig = SignatureProof::EdDSA(EdDSASignatureProof::from(
+    let sig = SignatureProof::from_ed25519(
         match wrong_sig {
             false => key_pair.public,
             true => wrong_pk,
         },
         key_pair.sign(&tx.serialize_content()),
-    ));
+    );
 
     tx.proof = sig.serialize_to_vec();
 

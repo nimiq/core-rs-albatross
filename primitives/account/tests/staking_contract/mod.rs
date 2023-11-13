@@ -17,7 +17,7 @@ use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, po
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
     account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionData},
-    EdDSASignatureProof, SignatureProof, Transaction,
+    SignatureProof, Transaction,
 };
 
 mod punished_slots;
@@ -108,10 +108,10 @@ fn make_signed_incoming_transaction(
 ) -> Transaction {
     let mut tx = make_incoming_transaction(data, value);
 
-    let in_proof = SignatureProof::EdDSA(EdDSASignatureProof::from(
+    let in_proof = SignatureProof::from_ed25519(
         in_key_pair.public,
         in_key_pair.sign(&tx.serialize_content()),
-    ));
+    );
 
     tx.recipient_data =
         IncomingStakingTransactionData::set_signature_on_data(&tx.recipient_data, in_proof)
@@ -122,10 +122,10 @@ fn make_signed_incoming_transaction(
 
     let out_key_pair = KeyPair::from(out_private_key);
 
-    let out_proof = SignatureProof::EdDSA(EdDSASignatureProof::from(
+    let out_proof = SignatureProof::from_ed25519(
         out_key_pair.public,
         out_key_pair.sign(&tx.serialize_content()),
-    ))
+    )
     .serialize_to_vec();
 
     tx.proof = out_proof;
@@ -152,8 +152,7 @@ fn make_delete_validator_transaction() -> Transaction {
 
     let key_pair = KeyPair::from(private_key);
     let signature = key_pair.sign(&tx.serialize_content());
-    tx.proof = SignatureProof::EdDSA(EdDSASignatureProof::from(key_pair.public, signature))
-        .serialize_to_vec();
+    tx.proof = SignatureProof::from_ed25519(key_pair.public, signature).serialize_to_vec();
 
     tx
 }

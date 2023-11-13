@@ -28,7 +28,7 @@ use nimiq_test_utils::{
     test_transaction::{generate_accounts, generate_transactions, TestTransaction},
     transactions::{IncomingType, OutgoingType, TransactionsGenerator, ValidatorState},
 };
-use nimiq_transaction::{inherent::Inherent, EdDSASignatureProof, SignatureProof, Transaction};
+use nimiq_transaction::{inherent::Inherent, SignatureProof, Transaction};
 use rand::Rng;
 use tempfile::tempdir;
 
@@ -806,8 +806,7 @@ fn it_commits_valid_and_failing_txns() {
     tx.sender_type = AccountType::Vesting;
 
     let signature = key_pair.sign(&tx.serialize_content()[..]);
-    let signature_proof =
-        SignatureProof::EdDSA(EdDSASignatureProof::from(key_pair.public, signature));
+    let signature_proof = SignatureProof::from_ed25519(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     let block_state = BlockState::new(1, 200);
@@ -851,7 +850,7 @@ fn it_commits_valid_and_failing_txns() {
     // tx.sender_type = AccountType::Basic;
 
     let signature = key_pair.sign(&tx.serialize_content()[..]);
-    let signature_proof = EdDSASignatureProof::from(key_pair.public, signature);
+    let signature_proof = SignatureProof::from_ed25519(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     let mut block_logger = BlockLogger::empty();

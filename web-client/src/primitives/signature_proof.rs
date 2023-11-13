@@ -21,11 +21,9 @@ impl SignatureProof {
     /// Creates a EdDSA/Schnorr signature proof for a single-sig signature.
     #[wasm_bindgen(js_name = singleSig)]
     pub fn single_sig(public_key: &PublicKey, signature: &Signature) -> SignatureProof {
-        SignatureProof::from_native(nimiq_transaction::SignatureProof::EdDSA(
-            nimiq_transaction::EdDSASignatureProof::from(
-                *public_key.native_ref(),
-                signature.native_ref().clone(),
-            ),
+        SignatureProof::from_native(nimiq_transaction::SignatureProof::from_ed25519(
+            *public_key.native_ref(),
+            signature.native_ref().clone(),
         ))
     }
 
@@ -38,14 +36,12 @@ impl SignatureProof {
         client_data_json: &[u8],
     ) -> Result<SignatureProof, JsError> {
         Ok(SignatureProof::from_native(
-            nimiq_transaction::SignatureProof::ECDSA(
-                nimiq_transaction::WebauthnSignatureProof::try_from(
-                    *public_key.native_ref(),
-                    signature.native_ref().clone(),
-                    authenticator_data,
-                    client_data_json,
-                )?,
-            ),
+            nimiq_transaction::SignatureProof::try_from_webauthn(
+                nimiq_keys::PublicKey::ES256(*public_key.native_ref()),
+                nimiq_keys::SignatureEnum::ES256(signature.native_ref().clone()),
+                authenticator_data,
+                client_data_json,
+            )?,
         ))
     }
 
@@ -63,13 +59,13 @@ impl SignatureProof {
     /// The embedded signature.
     #[wasm_bindgen(getter)]
     pub fn signature(&self) -> SignatureUnion {
-        match self.inner {
-            nimiq_transaction::SignatureProof::EdDSA(ref signature_proof) => {
-                let signature = Signature::from_native(signature_proof.signature.clone());
+        match self.inner.signature {
+            nimiq_keys::SignatureEnum::Ed25519(ref signature) => {
+                let signature = Signature::from_native(signature.clone());
                 JsValue::unchecked_into(signature.into())
             }
-            nimiq_transaction::SignatureProof::ECDSA(ref signature_proof) => {
-                let signature = ES256Signature::from_native(signature_proof.signature.clone());
+            nimiq_keys::SignatureEnum::ES256(ref signature) => {
+                let signature = ES256Signature::from_native(signature.clone());
                 JsValue::unchecked_into(signature.into())
             }
         }
@@ -78,35 +74,21 @@ impl SignatureProof {
     /// The embedded public key.
     #[wasm_bindgen(getter, js_name = publicKey)]
     pub fn public_key(&self) -> PublicKeyUnion {
-        match self.inner {
-            nimiq_transaction::SignatureProof::EdDSA(ref signature_proof) => {
-                let key = PublicKey::from_native(signature_proof.public_key);
+        match self.inner.public_key {
+            nimiq_keys::PublicKey::Ed25519(ref public_key) => {
+                let key = PublicKey::from_native(*public_key);
                 JsValue::unchecked_into(key.into())
             }
-            nimiq_transaction::SignatureProof::ECDSA(ref signature_proof) => {
-                let key = ES256PublicKey::from_native(signature_proof.public_key);
+            nimiq_keys::PublicKey::ES256(ref public_key) => {
+                let key = ES256PublicKey::from_native(*public_key);
                 JsValue::unchecked_into(key.into())
             }
         }
     }
 
-    /// Serializes the proof to a byte array for extended transactions, e.g. for assigning it to a `transaction.proof` field.
-    #[wasm_bindgen(js_name = serializeExtended)]
-    pub fn serialize_extended(&self) -> Vec<u8> {
+    /// Serializes the proof to a byte array, e.g. for assigning it to a `transaction.proof` field.
+    pub fn serialize(&self) -> Vec<u8> {
         self.inner.serialize_to_vec()
-    }
-
-    /// Serializes the proof to a byte array for basic transactions, e.g. for assigning it to a `transaction.proof` field.
-    #[wasm_bindgen(js_name = serializeBasic)]
-    pub fn serialize_basic(&self) -> Result<Vec<u8>, JsError> {
-        match self.inner {
-            nimiq_transaction::SignatureProof::EdDSA(ref signature_proof) => {
-                Ok(signature_proof.serialize_to_vec())
-            }
-            _ => Err(JsError::new(
-                "Unsupported proof type for basic transactions",
-            )),
-        }
     }
 }
 

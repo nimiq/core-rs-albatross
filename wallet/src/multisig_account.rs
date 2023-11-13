@@ -9,7 +9,7 @@ use nimiq_keys::{
 };
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_serde::Serialize;
-use nimiq_transaction::{EdDSASignatureProof, Transaction};
+use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_utils::merkle::{compute_root_from_content_slice, MerklePath};
 use thiserror::Error;
 
@@ -149,7 +149,7 @@ impl MultiSigAccount {
         aggregated_public_key: &EdDSAPublicKey,
         aggregated_commitment: &Commitment,
         signatures: &[PartialSignature],
-    ) -> Result<EdDSASignatureProof, MultiSigAccountError> {
+    ) -> Result<SignatureProof, MultiSigAccountError> {
         if signatures.len() != self.min_signatures.get() as usize {
             return Err(MultiSigAccountError::InvalidSignaturesLength);
         }
@@ -164,14 +164,12 @@ impl MultiSigAccount {
         combined.extend_from_slice(aggregated_signature.as_bytes());
         let signature = Signature::from_bytes(&combined)?;
 
-        Ok(EdDSASignatureProof {
-            merkle_path: MerklePath::new::<Blake2bHasher, EdDSAPublicKey>(
-                &self.public_keys,
-                aggregated_public_key,
-            ),
-            public_key: *aggregated_public_key,
-            signature,
-        })
+        let mut proof = SignatureProof::from_ed25519(*aggregated_public_key, signature);
+        proof.merkle_path = MerklePath::new::<Blake2bHasher, EdDSAPublicKey>(
+            &self.public_keys,
+            aggregated_public_key,
+        );
+        Ok(proof)
     }
 
     /// Signs the transaction.

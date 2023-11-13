@@ -3,8 +3,8 @@ use nimiq_primitives::account::AccountType;
 use nimiq_serde::Deserialize;
 
 use crate::{
-    account::AccountTransactionVerification, EdDSASignatureProof, SignatureProof, Transaction,
-    TransactionError, TransactionFlags, TransactionFormat,
+    account::AccountTransactionVerification, SignatureProof, Transaction, TransactionError,
+    TransactionFlags,
 };
 
 /// The verifier trait for a basic account. This only uses data available in the transaction.
@@ -41,14 +41,8 @@ impl AccountTransactionVerification for BasicAccountVerifier {
         assert_eq!(transaction.sender_type, AccountType::Basic);
 
         // Verify signer & signature.
-        let signature_proof: SignatureProof = match transaction.format() {
-            TransactionFormat::Basic => SignatureProof::EdDSA(
-                EdDSASignatureProof::deserialize_from_vec(&transaction.proof[..])?,
-            ),
-            TransactionFormat::Extended => {
-                Deserialize::deserialize_from_vec(&transaction.proof[..])?
-            }
-        };
+        let signature_proof: SignatureProof =
+            Deserialize::deserialize_from_vec(&transaction.proof[..])?;
 
         if !signature_proof.is_signed_by(&transaction.sender)
             || !signature_proof.verify(transaction.serialize_content().as_slice())
