@@ -1,6 +1,9 @@
 pub use nimiq_utils::key_rng::{SecureGenerate, SecureRng};
 
-pub use self::{address::*, errors::*, key_pair::*, private_key::*, public_key::*, signature::*};
+pub use self::{
+    address::*, errors::*, key_pair::*, private_key::*, public_key::*, signature::*,
+    webauthn_public_key::*,
+};
 
 #[macro_export]
 macro_rules! implement_simple_add_sum_traits {
@@ -54,3 +57,4 @@ mod key_pair;
 mod private_key;
 mod public_key;
 mod signature;
+mod webauthn_public_key;

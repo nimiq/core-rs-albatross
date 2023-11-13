@@ -6,7 +6,7 @@ use nimiq_hash::{hash_typed_array, Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_macros::create_typed_array;
 use thiserror::Error;
 
-use crate::{key_pair::KeyPair, PublicKey};
+use crate::{key_pair::KeyPair, PublicKey, WebauthnPublicKey};
 
 create_typed_array!(Address, u8, 20);
 hash_typed_array!(Address);
@@ -156,6 +156,13 @@ impl From<Blake2bHash> for Address {
     fn from(hash: Blake2bHash) -> Self {
         let hash_arr: [u8; 32] = hash.into();
         Address::from(&hash_arr[0..Address::len()])
+    }
+}
+
+impl<'a> From<&'a WebauthnPublicKey> for Address {
+    fn from(public_key: &'a WebauthnPublicKey) -> Self {
+        let hash = Blake2bHasher::default().digest(public_key.as_bytes());
+        Address::from(hash)
     }
 }
 

@@ -1,5 +1,6 @@
 use nimiq_keys::{
     Address, AddressParseError, KeyPair, PrivateKey, PublicKey, SecureGenerate, Signature,
+    WebauthnPublicKey,
 };
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng::test_rng;
@@ -12,6 +13,36 @@ fn verify_created_signature() {
     let data = b"test";
     let signature = key_pair.sign(data);
     let valid = key_pair.public.verify(&signature, data);
+    assert!(valid);
+}
+
+#[test]
+fn verify_webauthn_signature() {
+    // All test data was generated in a browser with the Ledger FIDO 2FA applet
+
+    // AuthenticatorData || sha256(ClientDataJSON)
+    let data = &[
+        73u8, 150, 13, 229, 136, 14, 140, 104, 116, 52, 23, 15, 100, 118, 96, 91, 143, 228, 174,
+        185, 162, 134, 50, 199, 153, 92, 243, 186, 131, 29, 151, 99, 1, 101, 1, 154, 106, 138, 153,
+        25, 112, 197, 225, 41, 246, 147, 197, 11, 178, 21, 151, 140, 17, 34, 112, 214, 130, 197,
+        132, 20, 200, 181, 91, 26, 68, 253, 7, 239, 94,
+    ];
+
+    let public_key = WebauthnPublicKey::from_bytes(&[
+        2u8, 145, 87, 130, 102, 84, 114, 146, 139, 254, 114, 194, 134, 155, 187, 214, 188, 12, 35,
+        147, 121, 213, 161, 80, 234, 94, 43, 25, 178, 5, 213, 54, 89,
+    ])
+    .unwrap();
+
+    let signature = Signature::from_bytes(&[
+        148u8, 2, 16, 13, 80, 112, 18, 235, 56, 73, 56, 148, 250, 186, 193, 159, 178, 162, 217, 86,
+        49, 227, 83, 240, 200, 118, 235, 0, 115, 23, 160, 77, 109, 60, 152, 94, 181, 70, 225, 67,
+        46, 237, 127, 58, 170, 213, 255, 250, 115, 146, 83, 214, 10, 133, 7, 182, 68, 34, 244, 243,
+        111, 11, 52, 213,
+    ])
+    .unwrap();
+
+    let valid = public_key.verify(&signature, data);
     assert!(valid);
 }
 

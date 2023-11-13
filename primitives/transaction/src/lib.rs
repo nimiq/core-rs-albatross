@@ -8,9 +8,10 @@ use std::{
     sync::Arc,
 };
 
+use base64::Engine;
 use bitflags::bitflags;
-use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
-use nimiq_keys::{Address, PublicKey, Signature};
+use nimiq_hash::{Blake2bHash, Blake2bHasher, Hash, Hasher, SerializeContent, Sha256Hasher};
+use nimiq_keys::{Address, PublicKey, Signature, WebauthnPublicKey};
 use nimiq_network_interface::network::Topic;
 use nimiq_primitives::{
     account::AccountType, coin::Coin, networks::NetworkId, policy::Policy,
@@ -18,7 +19,9 @@ use nimiq_primitives::{
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_utils::merkle::{Blake2bMerklePath, Blake2bMerkleProof};
+use serde_json::json;
 use thiserror::Error;
+use url::Url;
 
 use crate::account::AccountTransactionVerification;
 
@@ -147,6 +150,100 @@ impl Default for SignatureProof {
             merkle_path: Default::default(),
             signature: Signature::from_bytes(&[0u8; Signature::SIZE]).unwrap(),
         }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WebauthnSignatureProof {
+    pub public_key: WebauthnPublicKey,
+    pub merkle_path: Blake2bMerklePath,
+    pub signature: Signature,
+    pub host: String,
+    pub authenticator_data_suffix: Vec<u8>,
+    pub client_data_extra_fields: String,
+}
+
+impl WebauthnSignatureProof {
+    pub fn from(
+        public_key: WebauthnPublicKey,
+        signature: Signature,
+        host: String,
+        authenticator_data_suffix: Vec<u8>,
+        client_data_extra_fields: String,
+    ) -> Self {
+        WebauthnSignatureProof {
+            public_key,
+            merkle_path: Blake2bMerklePath::empty(),
+            signature,
+            host,
+            authenticator_data_suffix,
+            client_data_extra_fields,
+        }
+    }
+
+    pub fn compute_signer(&self) -> Address {
+        let merkle_root = self.merkle_path.compute_root(&self.public_key);
+        Address::from(merkle_root)
+    }
+
+    pub fn is_signed_by(&self, address: &Address) -> bool {
+        self.compute_signer() == *address
+    }
+
+    pub fn verify(&self, message: &[u8]) -> bool {
+        // Message in our case is a transaction's serialized content
+
+        // 1. We need to hash the message to get our challenge data
+        let challenge = Blake2bHasher::default().digest(message);
+
+        // 2. We need to calculate the RP ID (Relaying Party ID) from the hostname (without port)
+        let origin_protocol = if self.host.starts_with("localhost") {
+            "http"
+        } else {
+            "https"
+        };
+        let origin = format!("{}://{}", origin_protocol, self.host);
+        let url = Url::parse(&origin);
+        if url.is_err() {
+            debug!("Failed to parse origin: {}", origin);
+            return false;
+        }
+        let url = url.unwrap();
+        let hostname = url.host_str();
+        if hostname.is_none() {
+            debug!("Failed to extract hostname: {:?}", url);
+            return false;
+        }
+        let hostname = hostname.unwrap();
+        let rp_id = Sha256Hasher::default().digest(hostname.as_bytes());
+
+        // 3. Build the authenticatorData from the RP ID and the suffix
+        let authenticator_data = [rp_id.as_slice(), &self.authenticator_data_suffix].concat();
+
+        // 4. Build the clientDataJSON from challenge and origin
+        let mut client_data_json = json!({
+            // Order of fields is defined by https://w3c.github.io/webauthn/#clientdatajson-serialization
+            "type": "webauthn.get", // Do not support signing at credential registration, only at assertation
+            "challenge": base64::prelude::BASE64_URL_SAFE_NO_PAD.encode(challenge),
+            "origin": origin,
+            "crossOrigin": false, // Signing inside iframes is not supported
+        })
+        .to_string();
+        // Append extra clientData fields before the final closing bracket
+        if !self.client_data_extra_fields.is_empty() {
+            client_data_json = format!(
+                "{},{}}}",
+                &client_data_json[..client_data_json.len() - 1],
+                self.client_data_extra_fields
+            );
+        }
+        let client_data_hash = Sha256Hasher::default().digest(client_data_json.as_bytes());
+
+        // 5. Concat authenticatorData and clientDataHash to build the data signed by Webauthn
+        let signed_data = [authenticator_data.as_slice(), client_data_hash.as_slice()].concat();
+
+        self.public_key
+            .verify(&self.signature, signed_data.as_slice())
     }
 }
 
