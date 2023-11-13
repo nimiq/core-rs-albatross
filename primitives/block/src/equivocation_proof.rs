@@ -3,7 +3,9 @@ use std::{cmp::Ordering, hash::Hasher, io, mem, ops::Range};
 use nimiq_bls::{AggregatePublicKey, AggregateSignature};
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash as _, HashOutput, SerializeContent};
-use nimiq_keys::{Address, EdDSAPublicKey as SchnorrPublicKey, Signature as SchnorrSignature};
+use nimiq_keys::{
+    Address, Ed25519PublicKey as SchnorrPublicKey, Ed25519Signature as SchnorrSignature,
+};
 use nimiq_primitives::{
     policy::Policy,
     slots_allocation::{Validator, Validators},

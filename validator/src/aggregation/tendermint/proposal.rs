@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use nimiq_block::{MacroBody, MacroHeader};
 use nimiq_hash::{Blake2sHash, Hash};
-use nimiq_keys::Signature as SchnorrSignature;
+use nimiq_keys::Ed25519Signature as SchnorrSignature;
 use nimiq_network_interface::{
     network::Network,
     request::{Handle, RequestCommon, RequestMarker},

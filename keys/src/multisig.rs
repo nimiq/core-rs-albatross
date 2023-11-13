@@ -10,7 +10,7 @@ use nimiq_utils::key_rng::{CryptoRng, RngCore, SecureGenerate};
 use rand::Rng;
 use sha2::{self, Digest, Sha512};
 
-use crate::{EdDSAPublicKey, KeyPair, Signature};
+use crate::{Ed25519PublicKey, Ed25519Signature, KeyPair};
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct RandomSecret(pub Scalar);
@@ -146,11 +146,11 @@ implement_simple_add_sum_traits!(PartialSignature, Scalar::ZERO);
 impl PartialSignature {
     pub const SIZE: usize = 32;
 
-    pub fn to_signature(&self, aggregated_commitment: &Commitment) -> Signature {
-        let mut signature: [u8; Signature::SIZE] = [0u8; Signature::SIZE];
+    pub fn to_signature(&self, aggregated_commitment: &Commitment) -> Ed25519Signature {
+        let mut signature: [u8; Ed25519Signature::SIZE] = [0u8; Ed25519Signature::SIZE];
         signature[..Commitment::SIZE].copy_from_slice(&aggregated_commitment.to_bytes());
         signature[Commitment::SIZE..].copy_from_slice(self.as_bytes());
-        Signature::from(&signature)
+        Ed25519Signature::from(&signature)
     }
 
     #[inline]
@@ -174,11 +174,11 @@ impl<'a> From<&'a [u8; PartialSignature::SIZE]> for PartialSignature {
 impl KeyPair {
     pub fn partial_sign(
         &self,
-        public_keys: &[EdDSAPublicKey],
+        public_keys: &[Ed25519PublicKey],
         secret: &RandomSecret,
         commitments: &[Commitment],
         data: &[u8],
-    ) -> (PartialSignature, EdDSAPublicKey, Commitment) {
+    ) -> (PartialSignature, Ed25519PublicKey, Commitment) {
         assert!(
             public_keys.len() == commitments.len(),
             "Number of public keys and commitments must be the same."
@@ -215,11 +215,11 @@ impl KeyPair {
         h.update(data);
         let s = Scalar::from_hash::<sha2::Sha512>(h);
         let partial_signature: Scalar = s * delinearized_private_key + secret.0;
-        let mut public_key_bytes: [u8; EdDSAPublicKey::SIZE] = [0u8; EdDSAPublicKey::SIZE];
+        let mut public_key_bytes: [u8; Ed25519PublicKey::SIZE] = [0u8; Ed25519PublicKey::SIZE];
         public_key_bytes.copy_from_slice(delinearized_pk_sum.compress().as_bytes());
         (
             PartialSignature(partial_signature),
-            EdDSAPublicKey::from(public_key_bytes),
+            Ed25519PublicKey::from(public_key_bytes),
             aggregated_commitment,
         )
     }
@@ -240,10 +240,10 @@ impl KeyPair {
     }
 }
 
-impl EdDSAPublicKey {
+impl Ed25519PublicKey {
     fn to_edwards_point(self) -> Option<EdwardsPoint> {
-        let mut bits: [u8; EdDSAPublicKey::SIZE] = [0u8; EdDSAPublicKey::SIZE];
-        bits.copy_from_slice(&self.as_bytes()[..EdDSAPublicKey::SIZE]);
+        let mut bits: [u8; Ed25519PublicKey::SIZE] = [0u8; Ed25519PublicKey::SIZE];
+        bits.copy_from_slice(&self.as_bytes()[..Ed25519PublicKey::SIZE]);
 
         let compressed = CompressedEdwardsY(bits);
         compressed.decompress()
@@ -264,7 +264,7 @@ impl EdDSAPublicKey {
     }
 }
 
-pub fn hash_public_keys(public_keys: &[EdDSAPublicKey]) -> [u8; 64] {
+pub fn hash_public_keys(public_keys: &[Ed25519PublicKey]) -> [u8; 64] {
     // 1. Compute hash over public keys public_keys_hash = C = H(P_1 || ... || P_n).
     let mut h: sha2::Sha512 = sha2::Sha512::default();
     let mut public_keys_hash: [u8; 64] = [0u8; 64];

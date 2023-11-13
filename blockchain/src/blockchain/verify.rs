@@ -5,7 +5,7 @@ use nimiq_database::{
     traits::{ReadTransaction, WriteTransaction},
     TransactionProxy as DBTransaction, WriteTransactionProxy,
 };
-use nimiq_keys::Signature;
+use nimiq_keys::Ed25519Signature;
 use nimiq_primitives::policy::Policy;
 
 use crate::{blockchain_state::BlockchainState, BlockProducer, Blockchain};
@@ -321,7 +321,7 @@ impl Blockchain {
         round: u32,
         valid_round: Option<u32>,
         signed_data: Vec<u8>,
-        signature: &Signature,
+        signature: &Ed25519Signature,
         signature_only: bool,
     ) -> Result<MacroBody, PushError> {
         // If the accounts tree is not complete nothing can be done

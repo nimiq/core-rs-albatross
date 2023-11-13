@@ -2,7 +2,7 @@ use std::io;
 
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Hash, HashOutput, Sha256Hash};
-use nimiq_keys::{Address, EdDSAPublicKey, KeyPair, SecureGenerate, Signature};
+use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, KeyPair, SecureGenerate};
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{SignatureProof, Transaction};
@@ -20,7 +20,7 @@ pub struct WalletAccount {
 impl Verify for WalletAccount {
     fn verify(&self) -> bool {
         // Check that the public key corresponds to the private key.
-        EdDSAPublicKey::from(&self.key_pair.private) == self.key_pair.public
+        Ed25519PublicKey::from(&self.key_pair.private) == self.key_pair.public
     }
 }
 
@@ -82,15 +82,15 @@ impl WalletAccount {
         buffer.hash::<Sha256Hash>()
     }
 
-    pub fn sign_message(&self, message: &[u8]) -> (EdDSAPublicKey, Signature) {
+    pub fn sign_message(&self, message: &[u8]) -> (Ed25519PublicKey, Ed25519Signature) {
         let hash = Self::prepare_message_for_signature(message);
         (self.key_pair.public, self.key_pair.sign(hash.as_bytes()))
     }
 
     pub fn verify_message(
-        public_key: &EdDSAPublicKey,
+        public_key: &Ed25519PublicKey,
         message: &[u8],
-        signature: &Signature,
+        signature: &Ed25519Signature,
     ) -> bool {
         let hash = Self::prepare_message_for_signature(message);
         public_key.verify(signature, hash.as_bytes())

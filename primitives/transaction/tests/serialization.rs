@@ -1,6 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-use nimiq_keys::{Address, ES256PublicKey, ES256Signature, PublicKey, SignatureEnum};
+use nimiq_keys::{Address, ES256PublicKey, ES256Signature, PublicKey, Signature};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_test_log::test;
@@ -95,7 +95,7 @@ fn it_can_serialize_and_deserialize_signature_proofs() {
             .unwrap(),
         ),
         merkle_path: Blake2bMerklePath::default(),
-        signature: SignatureEnum::ES256(
+        signature: Signature::ES256(
             ES256Signature::from_bytes(&[
                 7, 185, 23, 233, 88, 246, 250, 252, 173, 116, 122, 201, 94, 32, 221, 241, 172, 99,
                 252, 93, 153, 191, 69, 22, 233, 2, 233, 69, 145, 100, 16, 132, 1, 94, 247, 237, 70,

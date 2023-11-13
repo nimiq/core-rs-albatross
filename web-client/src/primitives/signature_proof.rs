@@ -18,7 +18,7 @@ pub struct SignatureProof {
 
 #[wasm_bindgen]
 impl SignatureProof {
-    /// Creates a EdDSA/Schnorr signature proof for a single-sig signature.
+    /// Creates a Ed25519/Schnorr signature proof for a single-sig signature.
     #[wasm_bindgen(js_name = singleSig)]
     pub fn single_sig(public_key: &PublicKey, signature: &Signature) -> SignatureProof {
         SignatureProof::from_native(nimiq_transaction::SignatureProof::from_ed25519(
@@ -27,7 +27,7 @@ impl SignatureProof {
         ))
     }
 
-    /// Creates a ECDSA/Webauthn signature proof for a single-sig signature.
+    /// Creates a ES256/Webauthn signature proof for a single-sig signature.
     #[wasm_bindgen(js_name = webauthnSingleSig)]
     pub fn webauthn_single_sig(
         public_key: &ES256PublicKey,
@@ -38,7 +38,7 @@ impl SignatureProof {
         Ok(SignatureProof::from_native(
             nimiq_transaction::SignatureProof::try_from_webauthn(
                 nimiq_keys::PublicKey::ES256(*public_key.native_ref()),
-                nimiq_keys::SignatureEnum::ES256(signature.native_ref().clone()),
+                nimiq_keys::Signature::ES256(signature.native_ref().clone()),
                 authenticator_data,
                 client_data_json,
             )?,
@@ -60,11 +60,11 @@ impl SignatureProof {
     #[wasm_bindgen(getter)]
     pub fn signature(&self) -> SignatureUnion {
         match self.inner.signature {
-            nimiq_keys::SignatureEnum::Ed25519(ref signature) => {
+            nimiq_keys::Signature::Ed25519(ref signature) => {
                 let signature = Signature::from_native(signature.clone());
                 JsValue::unchecked_into(signature.into())
             }
-            nimiq_keys::SignatureEnum::ES256(ref signature) => {
+            nimiq_keys::Signature::ES256(ref signature) => {
                 let signature = ES256Signature::from_native(signature.clone());
                 JsValue::unchecked_into(signature.into())
             }

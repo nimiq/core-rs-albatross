@@ -1,7 +1,7 @@
 use log::error;
 use nimiq_bls::{CompressedPublicKey as BlsPublicKey, CompressedSignature as BlsSignature};
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::{Address, EdDSAPublicKey as SchnorrPublicKey};
+use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 

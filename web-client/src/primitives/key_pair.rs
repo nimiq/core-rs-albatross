@@ -37,7 +37,7 @@ impl KeyPair {
     #[wasm_bindgen(js_name = fromHex)]
     pub fn from_hex(hex: &str) -> Result<KeyPair, JsError> {
         let private = nimiq_keys::PrivateKey::from_str(&hex[0..64])?;
-        let public = nimiq_keys::EdDSAPublicKey::from_str(&hex[64..])?;
+        let public = nimiq_keys::Ed25519PublicKey::from_str(&hex[64..])?;
         // TODO: Deserialize locked state if bytes remaining
         let key_pair = nimiq_keys::KeyPair { private, public };
         Ok(KeyPair::from_native(key_pair))

@@ -1,6 +1,6 @@
 use nimiq_keys::{
-    Address, AddressParseError, ES256PublicKey, ES256Signature, EdDSAPublicKey, KeyPair,
-    PrivateKey, SecureGenerate, Signature,
+    Address, AddressParseError, ES256PublicKey, ES256Signature, Ed25519PublicKey, Ed25519Signature,
+    KeyPair, PrivateKey, SecureGenerate,
 };
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng::test_rng;
@@ -100,17 +100,17 @@ fn verify_rfc8032_test_vectors() {
         private_key_bytes.clone_from_slice(&::hex::decode(test_case.private).unwrap()[0..]);
         let private_key = PrivateKey::from(&private_key_bytes);
 
-        let mut public_key_bytes: [u8; EdDSAPublicKey::SIZE] = [0; EdDSAPublicKey::SIZE];
+        let mut public_key_bytes: [u8; Ed25519PublicKey::SIZE] = [0; Ed25519PublicKey::SIZE];
         public_key_bytes.clone_from_slice(&::hex::decode(test_case.public).unwrap()[0..]);
-        let public_key = EdDSAPublicKey::from(&public_key_bytes);
+        let public_key = Ed25519PublicKey::from(&public_key_bytes);
 
-        let mut sig_key_bytes: [u8; Signature::SIZE] = [0; Signature::SIZE];
+        let mut sig_key_bytes: [u8; Ed25519Signature::SIZE] = [0; Ed25519Signature::SIZE];
         sig_key_bytes.clone_from_slice(&::hex::decode(test_case.sig).unwrap()[0..]);
-        let signature = Signature::from(&sig_key_bytes);
+        let signature = Ed25519Signature::from(&sig_key_bytes);
 
         let data = &::hex::decode(test_case.msg).unwrap()[0..];
 
-        let derived_public_key = EdDSAPublicKey::from(&private_key);
+        let derived_public_key = Ed25519PublicKey::from(&private_key);
 
         assert!(derived_public_key == public_key);
 

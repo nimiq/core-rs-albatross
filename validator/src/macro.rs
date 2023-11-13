@@ -11,7 +11,7 @@ use futures::{
 };
 use nimiq_block::MacroBlock;
 use nimiq_blockchain::{BlockProducer, Blockchain};
-use nimiq_keys::Signature as SchnorrSignature;
+use nimiq_keys::Ed25519Signature as SchnorrSignature;
 use nimiq_network_interface::network::Topic;
 use nimiq_primitives::slots_allocation::Validators;
 use nimiq_tendermint::{Return as TendermintReturn, SignedProposalMessage, Tendermint};

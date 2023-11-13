@@ -7,7 +7,7 @@ use nimiq_block::{
 use nimiq_bls::{AggregateSignature, G2Projective, PublicKey as BlsPublicKey};
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
-use nimiq_keys::{Address, EdDSAPublicKey as SchnorrPublicKey, KeyPair, Signature};
+use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey, Ed25519Signature, KeyPair};
 use nimiq_primitives::{networks::NetworkId, policy::Policy, slots_allocation::ValidatorsBuilder};
 use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{generate_transactions, validator_address};
@@ -106,7 +106,7 @@ fn test_verify_body_root() {
         history_root: Blake2bHash::default(),
     };
 
-    let micro_justification = MicroJustification::Micro(Signature::default());
+    let micro_justification = MicroJustification::Micro(Ed25519Signature::default());
 
     let micro_body = MicroBody {
         equivocation_proofs: [].to_vec(),
@@ -205,7 +205,7 @@ fn test_verify_micro_block_body_txns() {
         history_root: Blake2bHash::default(),
     };
 
-    let micro_justification = MicroJustification::Micro(Signature::default());
+    let micro_justification = MicroJustification::Micro(Ed25519Signature::default());
 
     let txns: Vec<ExecutedTransaction> =
         generate_transactions(&KeyPair::default(), 1, NetworkId::UnitAlbatross, 5, 0)
@@ -297,9 +297,9 @@ fn test_verify_micro_block_body_fork_proofs() {
     let fork_proof_1 = ForkProof::new(
         validator_address(),
         micro_header_1.clone(),
-        Signature::default(),
+        Ed25519Signature::default(),
         micro_header_2.clone(),
-        Signature::default(),
+        Ed25519Signature::default(),
     );
 
     micro_header_1.block_number += 1;
@@ -308,9 +308,9 @@ fn test_verify_micro_block_body_fork_proofs() {
     let fork_proof_2 = ForkProof::new(
         validator_address(),
         micro_header_1.clone(),
-        Signature::default(),
+        Ed25519Signature::default(),
         micro_header_2.clone(),
-        Signature::default(),
+        Ed25519Signature::default(),
     );
 
     micro_header_1.block_number += 1;
@@ -319,12 +319,12 @@ fn test_verify_micro_block_body_fork_proofs() {
     let fork_proof_3 = ForkProof::new(
         validator_address(),
         micro_header_1.clone(),
-        Signature::default(),
+        Ed25519Signature::default(),
         micro_header_2.clone(),
-        Signature::default(),
+        Ed25519Signature::default(),
     );
 
-    let micro_justification = MicroJustification::Micro(Signature::default());
+    let micro_justification = MicroJustification::Micro(Ed25519Signature::default());
 
     let mut fork_proofs = vec![fork_proof_1, fork_proof_2, fork_proof_3];
     fork_proofs.sort_by_key(|p| EquivocationProof::from(p.clone()).sort_key());
@@ -387,9 +387,9 @@ fn test_verify_micro_block_body_fork_proofs() {
     fork_proofs.push(ForkProof::new(
         validator_address(),
         micro_header_large_block_number_1,
-        Signature::default(),
+        Ed25519Signature::default(),
         micro_header_large_block_number_2,
-        Signature::default(),
+        Ed25519Signature::default(),
     ));
     fork_proofs.sort_by_key(|p| EquivocationProof::from(p.clone()).sort_key());
 

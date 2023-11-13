@@ -3,7 +3,7 @@ use std::{cmp::Ord, error::Error, fmt};
 use base64::Engine;
 use bitflags::bitflags;
 use nimiq_hash::{Blake2bHasher, Hasher, Sha256Hasher};
-use nimiq_keys::{Address, EdDSAPublicKey, PublicKey, Signature, SignatureEnum};
+use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, PublicKey, Signature};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_utils::merkle::Blake2bMerklePath;
 use serde_json::json;
@@ -13,14 +13,14 @@ use url::Url;
 pub struct SignatureProof {
     pub public_key: PublicKey,
     pub merkle_path: Blake2bMerklePath,
-    pub signature: SignatureEnum,
+    pub signature: Signature,
     pub webauthn_fields: Option<WebauthnExtraFields>,
 }
 
 impl SignatureProof {
     pub fn from(
         public_key: PublicKey,
-        signature: SignatureEnum,
+        signature: Signature,
         webauthn_fields: Option<WebauthnExtraFields>,
     ) -> Self {
         SignatureProof {
@@ -31,18 +31,18 @@ impl SignatureProof {
         }
     }
 
-    pub fn from_ed25519(public_key: EdDSAPublicKey, signature: Signature) -> Self {
+    pub fn from_ed25519(public_key: Ed25519PublicKey, signature: Ed25519Signature) -> Self {
         SignatureProof {
             public_key: PublicKey::Ed25519(public_key),
             merkle_path: Blake2bMerklePath::empty(),
-            signature: SignatureEnum::Ed25519(signature),
+            signature: Signature::Ed25519(signature),
             webauthn_fields: None,
         }
     }
 
     pub fn try_from_webauthn(
         public_key: PublicKey,
-        signature: SignatureEnum,
+        signature: Signature,
         authenticator_data: &[u8],
         client_data_json: &[u8],
     ) -> Result<Self, SerializationError> {
@@ -243,11 +243,11 @@ impl SignatureProof {
     fn do_verify(&self, message: &[u8]) -> bool {
         match self.public_key {
             PublicKey::Ed25519(ref public_key) => match self.signature {
-                SignatureEnum::Ed25519(ref signature) => public_key.verify(signature, message),
+                Signature::Ed25519(ref signature) => public_key.verify(signature, message),
                 _ => false,
             },
             PublicKey::ES256(ref public_key) => match self.signature {
-                SignatureEnum::ES256(ref signature) => public_key.verify(signature, message),
+                Signature::ES256(ref signature) => public_key.verify(signature, message),
                 _ => false,
             },
         }
@@ -286,7 +286,7 @@ impl Default for SignatureProof {
         SignatureProof {
             public_key: PublicKey::Ed25519(Default::default()),
             merkle_path: Default::default(),
-            signature: SignatureEnum::Ed25519(Default::default()),
+            signature: Signature::Ed25519(Default::default()),
             webauthn_fields: None,
         }
     }
@@ -332,7 +332,7 @@ mod serde_derive {
     use std::fmt;
 
     use nimiq_keys::{
-        ES256PublicKey, ES256Signature, EdDSAPublicKey, PublicKey, Signature, SignatureEnum,
+        ES256PublicKey, ES256Signature, Ed25519PublicKey, Ed25519Signature, PublicKey, Signature,
     };
     use serde::ser::SerializeStruct;
 
@@ -377,10 +377,10 @@ mod serde_derive {
 
             // Serialize signature without enum variant, as that is already encoded in the `type`/`algorithm` field
             match self.signature {
-                SignatureEnum::Ed25519(ref signature) => {
+                Signature::Ed25519(ref signature) => {
                     state.serialize_field(FIELDS[3], signature)?;
                 }
-                SignatureEnum::ES256(ref signature) => {
+                Signature::ES256(ref signature) => {
                     state.serialize_field(FIELDS[3], signature)?;
                 }
             }
@@ -424,7 +424,7 @@ mod serde_derive {
             let (algorithm, flags) = SignatureProof::parse_type_and_flags_byte(type_field);
 
             let public_key: PublicKey = if algorithm == 0 {
-                let public_key: EdDSAPublicKey = seq
+                let public_key: Ed25519PublicKey = seq
                     .next_element()?
                     .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
                 PublicKey::Ed25519(public_key)
@@ -444,16 +444,16 @@ mod serde_derive {
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
 
-            let signature: SignatureEnum = if algorithm == 0 {
-                let signature: Signature = seq
+            let signature: Signature = if algorithm == 0 {
+                let signature: Ed25519Signature = seq
                     .next_element()?
                     .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
-                SignatureEnum::Ed25519(signature)
+                Signature::Ed25519(signature)
             } else if algorithm == 1 {
                 let signature: ES256Signature = seq
                     .next_element()?
                     .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
-                SignatureEnum::ES256(signature)
+                Signature::ES256(signature)
             } else {
                 return Err(serde::de::Error::custom(format!(
                     "Unknown algorithm: {}",

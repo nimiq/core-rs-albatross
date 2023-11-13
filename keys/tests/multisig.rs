@@ -4,7 +4,7 @@ use curve25519_dalek::{
 };
 use nimiq_keys::{
     multisig::{Commitment, PartialSignature, RandomSecret, *},
-    EdDSAPublicKey, KeyPair, PrivateKey, Signature,
+    Ed25519PublicKey, Ed25519Signature, KeyPair, PrivateKey,
 };
 use nimiq_test_log::test;
 use sha2::Digest;
@@ -27,17 +27,17 @@ struct StrTestVector {
 
 struct TestVector {
     priv_keys: Vec<PrivateKey>,
-    pub_keys: Vec<EdDSAPublicKey>,
+    pub_keys: Vec<Ed25519PublicKey>,
     pub_keys_hash: [u8; 64],
     delinearized_priv_keys: Vec<Scalar>,
     delinearized_pub_keys: Vec<EdwardsPoint>,
     secrets: Vec<RandomSecret>,
     commitments: Vec<Commitment>,
-    agg_pub_key: EdDSAPublicKey,
+    agg_pub_key: Ed25519PublicKey,
     agg_commitment: Commitment,
     partial_signatures: Vec<PartialSignature>,
     agg_signature: PartialSignature,
-    signature: Signature,
+    signature: Ed25519Signature,
     message: Vec<u8>,
 }
 
@@ -68,8 +68,8 @@ impl TestVector {
     fn from_str(v: &StrTestVector) -> TestVector {
         let priv_keys: Vec<PrivateKey> =
             from_hex_vec!(v.priv_keys, PrivateKey::SIZE, PrivateKey::from);
-        let pub_keys: Vec<EdDSAPublicKey> =
-            from_hex_vec!(v.pub_keys, EdDSAPublicKey::SIZE, EdDSAPublicKey::from);
+        let pub_keys: Vec<Ed25519PublicKey> =
+            from_hex_vec!(v.pub_keys, Ed25519PublicKey::SIZE, Ed25519PublicKey::from);
         let pub_keys_hash: [u8; 64] = from_hex!(v.pub_keys_hash, 64);
         let delinearized_priv_keys: Vec<Scalar> = from_hex_vec!(
             v.delinearized_priv_keys,
@@ -77,7 +77,7 @@ impl TestVector {
             Scalar::from_bytes_mod_order
         );
         let delinearized_pub_keys: Vec<EdwardsPoint> =
-            from_hex_vec!(v.delinearized_pub_keys, EdDSAPublicKey::SIZE)
+            from_hex_vec!(v.delinearized_pub_keys, Ed25519PublicKey::SIZE)
                 .map(|arr: [u8; 32]| CompressedEdwardsY(arr).decompress().unwrap())
                 .collect();
         let secrets: Vec<RandomSecret> =
@@ -85,8 +85,11 @@ impl TestVector {
         let commitments: Vec<Commitment> = from_hex_vec!(v.commitments, Commitment::SIZE)
             .map(|arr: [u8; 32]| Commitment::from_bytes(arr).unwrap())
             .collect();
-        let agg_pub_key: EdDSAPublicKey =
-            from_hex!(v.agg_pub_key, EdDSAPublicKey::SIZE, EdDSAPublicKey::from);
+        let agg_pub_key: Ed25519PublicKey = from_hex!(
+            v.agg_pub_key,
+            Ed25519PublicKey::SIZE,
+            Ed25519PublicKey::from
+        );
         let agg_commitment: Commitment =
             Commitment::from_bytes(from_hex!(v.agg_commitment, Commitment::SIZE)).unwrap();
         let partial_signatures: Vec<PartialSignature> = from_hex_vec!(
@@ -99,7 +102,8 @@ impl TestVector {
             PartialSignature::SIZE,
             PartialSignature::from
         );
-        let signature: Signature = from_hex!(v.signature, Signature::SIZE, Signature::from);
+        let signature: Ed25519Signature =
+            from_hex!(v.signature, Ed25519Signature::SIZE, Ed25519Signature::from);
         let message: Vec<u8> = v.message.to_string().into_bytes();
         TestVector {
             priv_keys,
@@ -300,7 +304,7 @@ fn it_can_construct_public_keys() {
         let test = TestVector::from_str(vector);
 
         for i in 0..test.priv_keys.len() {
-            let public_key = EdDSAPublicKey::from(&test.priv_keys[i]);
+            let public_key = Ed25519PublicKey::from(&test.priv_keys[i]);
             assert_eq!(public_key, test.pub_keys[i]);
         }
     }
@@ -366,9 +370,9 @@ fn it_can_aggregate_public_keys() {
         let test = TestVector::from_str(vector);
 
         let delinearized_pk_sum: EdwardsPoint = test.delinearized_pub_keys.iter().sum();
-        let mut public_key_bytes: [u8; EdDSAPublicKey::SIZE] = [0u8; EdDSAPublicKey::SIZE];
+        let mut public_key_bytes: [u8; Ed25519PublicKey::SIZE] = [0u8; Ed25519PublicKey::SIZE];
         public_key_bytes.copy_from_slice(delinearized_pk_sum.compress().as_bytes());
-        let aggregated_public_key = EdDSAPublicKey::from(public_key_bytes);
+        let aggregated_public_key = Ed25519PublicKey::from(public_key_bytes);
         assert_eq!(aggregated_public_key, test.agg_pub_key);
     }
 }
@@ -378,7 +382,7 @@ fn it_can_finalize_signatures() {
     for vector in VECTORS.iter() {
         let test = TestVector::from_str(vector);
 
-        let signature: Signature = test.agg_signature.to_signature(&test.agg_commitment);
+        let signature: Ed25519Signature = test.agg_signature.to_signature(&test.agg_commitment);
         assert_eq!(signature, test.signature);
     }
 }
@@ -399,7 +403,7 @@ fn it_can_create_partial_signatures() {
         let test = TestVector::from_str(vector);
 
         for i in 0..test.priv_keys.len() {
-            let public_keys: Vec<EdDSAPublicKey> = test.pub_keys.to_vec();
+            let public_keys: Vec<Ed25519PublicKey> = test.pub_keys.to_vec();
             let key_pair = KeyPair::from(test.priv_keys[i].clone());
             let (partial_signature, agg_public_key, agg_commitment) = key_pair.partial_sign(
                 &public_keys,
@@ -420,7 +424,7 @@ fn it_sign_and_verify_multisigs() {
         let test = TestVector::from_str(vector);
 
         let mut signatures: Vec<PartialSignature> = Vec::new();
-        let mut aggregated_public_key: Option<EdDSAPublicKey> = None;
+        let mut aggregated_public_key: Option<Ed25519PublicKey> = None;
         let mut aggregated_commitment: Option<Commitment> = None;
 
         for i in 0..test.priv_keys.len() {
@@ -452,7 +456,7 @@ fn it_sign_and_verify_multisigs() {
         }
 
         let partial_signature: PartialSignature = signatures.iter().sum();
-        let final_signature: Signature =
+        let final_signature: Ed25519Signature =
             partial_signature.to_signature(&aggregated_commitment.unwrap());
         assert!(aggregated_public_key
             .unwrap()

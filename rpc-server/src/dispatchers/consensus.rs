@@ -6,7 +6,7 @@ use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_consensus::ConsensusProxy;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::{Address, EdDSAPublicKey, KeyPair, PrivateKey};
+use nimiq_keys::{Address, Ed25519PublicKey, KeyPair, PrivateKey};
 use nimiq_network_libp2p::Network;
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_rpc_interface::{
@@ -807,7 +807,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         let signing_secret_key =
             PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key)?)
                 .map_err(|_| Error::InvalidArgument("Signing Key".to_string()))?;
-        let signing_key = EdDSAPublicKey::from(&signing_secret_key);
+        let signing_key = Ed25519PublicKey::from(&signing_secret_key);
 
         // Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
         // have a double Option. This becomes an issue when creating an update_validator transaction.
@@ -903,7 +903,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             Some(key) => {
                 let secret_key = PrivateKey::deserialize_from_vec(&hex::decode(key)?)
                     .map_err(|_| Error::InvalidArgument("Signing Key".to_string()))?;
-                Some(EdDSAPublicKey::from(&secret_key))
+                Some(Ed25519PublicKey::from(&secret_key))
             }
             _ => None,
         };

@@ -1,7 +1,7 @@
 use std::num::NonZeroU8;
 
 use hex::FromHex;
-use nimiq_keys::{multisig::Commitment, Address, EdDSAPublicKey, KeyPair, PrivateKey};
+use nimiq_keys::{multisig::Commitment, Address, Ed25519PublicKey, KeyPair, PrivateKey};
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_wallet::MultiSigAccount;
 
@@ -33,7 +33,7 @@ pub fn it_can_create_valid_transactions() {
 
     let aggregated_commitment: Commitment = commitments.iter().sum();
 
-    let aggregated_public_key: EdDSAPublicKey =
+    let aggregated_public_key: Ed25519PublicKey =
         MultiSigAccount::aggregate_public_keys(&vec![kp1.public.clone(), kp2.public.clone()]);
 
     let transaction = multi_sig_1.create_transaction(

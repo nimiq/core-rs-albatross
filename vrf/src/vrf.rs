@@ -13,7 +13,7 @@ use curve25519_dalek::{
 };
 use log::debug;
 use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
-use nimiq_keys::{EdDSAPublicKey, KeyPair};
+use nimiq_keys::{Ed25519PublicKey, KeyPair};
 #[cfg(feature = "serde-derive")]
 use nimiq_macros::add_serialization_fns_typed_arr;
 use nimiq_macros::create_typed_array;
@@ -83,7 +83,11 @@ impl VrfSeed {
 
     /// Verifies the current VRF Seed given the previous VRF Seed (which is part of the message)
     /// and the signer's public key.
-    pub fn verify(&self, prev_seed: &VrfSeed, public_key: &EdDSAPublicKey) -> Result<(), VrfError> {
+    pub fn verify(
+        &self,
+        prev_seed: &VrfSeed,
+        public_key: &Ed25519PublicKey,
+    ) -> Result<(), VrfError> {
         // Deserialize signature.
         let V = CompressedEdwardsY::from_slice(&self.signature[..32])
             .unwrap() // Fails if the slice is not length 32.

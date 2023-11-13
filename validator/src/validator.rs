@@ -22,7 +22,7 @@ use nimiq_database::{
     DatabaseProxy, TableProxy,
 };
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, Signature as SchnorrSignature};
+use nimiq_keys::{Address, Ed25519Signature as SchnorrSignature, KeyPair as SchnorrKeyPair};
 use nimiq_macros::store_waker;
 use nimiq_mempool::{config::MempoolConfig, mempool::Mempool};
 use nimiq_network_interface::{

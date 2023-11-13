@@ -8,7 +8,7 @@ use nimiq_database::{mdbx::MdbxDatabase, traits::WriteTransaction, volatile::Vol
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{
-    Address, EdDSAPublicKey as SchnorrPublicKey, KeyPair as SchnorrKeyPair,
+    Address, Ed25519PublicKey as SchnorrPublicKey, KeyPair as SchnorrKeyPair,
     PrivateKey as SchnorrPrivateKey, SecureGenerate,
 };
 use nimiq_primitives::{coin::Coin, policy::Policy};

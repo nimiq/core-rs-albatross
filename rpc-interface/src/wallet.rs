@@ -1,20 +1,20 @@
 use async_trait::async_trait;
-use nimiq_keys::{Address, EdDSAPublicKey, PrivateKey, Signature};
+use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, PrivateKey};
 
 use crate::types::RPCResult;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReturnSignature {
-    pub public_key: EdDSAPublicKey,
-    pub signature: Signature,
+    pub public_key: Ed25519PublicKey,
+    pub signature: Ed25519Signature,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReturnAccount {
     pub address: Address,
-    pub public_key: EdDSAPublicKey,
+    pub public_key: Ed25519PublicKey,
     pub private_key: PrivateKey,
 }
 
@@ -64,8 +64,8 @@ pub trait WalletInterface {
     async fn verify_signature(
         &mut self,
         message: String,
-        public_key: EdDSAPublicKey,
-        signature: Signature,
+        public_key: Ed25519PublicKey,
+        signature: Ed25519Signature,
         is_hex: bool,
     ) -> RPCResult<bool, (), Self::Error>;
 }
