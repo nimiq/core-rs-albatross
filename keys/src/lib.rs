@@ -4,8 +4,8 @@ pub use nimiq_utils::key_rng::{SecureGenerate, SecureRng};
 use serde::{Deserialize, Serialize};
 
 pub use self::{
-    address::*, errors::*, key_pair::*, private_key::*, public_key::*, signature::*,
-    webauthn_public_key::*,
+    address::*, errors::*, es256_public_key::*, key_pair::*, private_key::*, public_key::*,
+    signature::*,
 };
 
 #[macro_export]
@@ -56,17 +56,17 @@ pub mod multisig;
 
 mod address;
 mod errors;
+mod es256_public_key;
 mod key_pair;
 mod private_key;
 mod public_key;
 mod signature;
-mod webauthn_public_key;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Deserialize, Serialize)]
 #[cfg_attr(feature = "serde-derive", derive(nimiq_hash_derive::SerializeContent))]
 pub enum PublicKey {
     EdDSA(EdDSAPublicKey),
-    ECDSA(WebauthnPublicKey),
+    ECDSA(ES256PublicKey),
 }
 
 impl PublicKey {
@@ -110,8 +110,8 @@ impl From<EdDSAPublicKey> for PublicKey {
     }
 }
 
-impl From<WebauthnPublicKey> for PublicKey {
-    fn from(key: WebauthnPublicKey) -> Self {
+impl From<ES256PublicKey> for PublicKey {
+    fn from(key: ES256PublicKey) -> Self {
         PublicKey::ECDSA(key)
     }
 }

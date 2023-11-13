@@ -3,9 +3,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     address::Address,
-    primitives::{
-        public_key::PublicKey, signature::Signature, webauthn_public_key::WebauthnPublicKey,
-    },
+    primitives::{es256_public_key::ES256PublicKey, public_key::PublicKey, signature::Signature},
 };
 
 /// A signature proof represents a signature together with its public key and the public key's merkle path.
@@ -31,7 +29,7 @@ impl SignatureProof {
     /// Creates a ECDSA/Webauthn signature proof for a single-sig signature.
     #[wasm_bindgen(js_name = webauthnSingleSig)]
     pub fn webauthn_single_sig(
-        public_key: &WebauthnPublicKey,
+        public_key: &ES256PublicKey,
         signature: &Signature,
         authenticator_data: &[u8],
         client_data_json: &[u8],
@@ -81,7 +79,7 @@ impl SignatureProof {
                 JsValue::unchecked_into(key.into())
             }
             nimiq_transaction::SignatureProof::ECDSA(ref signature_proof) => {
-                let key = WebauthnPublicKey::from_native(signature_proof.public_key);
+                let key = ES256PublicKey::from_native(signature_proof.public_key);
                 JsValue::unchecked_into(key.into())
             }
         }
@@ -121,7 +119,7 @@ impl SignatureProof {
 
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(typescript_type = "PublicKey | WebauthnPublicKey")]
+    #[wasm_bindgen(typescript_type = "PublicKey | ES256PublicKey")]
     pub type PublicKeyUnion;
 }
 
@@ -131,14 +129,13 @@ mod tests {
     use wasm_bindgen_test::*;
 
     use crate::primitives::{
-        signature::Signature, signature_proof::SignatureProof,
-        webauthn_public_key::WebauthnPublicKey,
+        es256_public_key::ES256PublicKey, signature::Signature, signature_proof::SignatureProof,
     };
 
     /// Tests a signature generated with Desktop Chrome, which follows the Webauthn standard.
     #[wasm_bindgen_test]
     fn it_can_create_a_standard_webauthn_signature_proof() {
-        let public_key = WebauthnPublicKey::new(&[
+        let public_key = ES256PublicKey::new(&[
             2, 175, 112, 174, 46, 130, 50, 235, 92, 162, 248, 164, 196, 122, 113, 217, 205, 110,
             166, 47, 85, 36, 103, 240, 211, 197, 100, 40, 190, 71, 214, 56, 8,
         ])
@@ -182,7 +179,7 @@ mod tests {
     /// and has escaped forward slashes in the origin. It also has extra fields in the client data JSON.
     #[wasm_bindgen_test]
     fn it_can_create_a_nonstandard_webauthn_signature_proof() {
-        let public_key = WebauthnPublicKey::new(&[
+        let public_key = ES256PublicKey::new(&[
             3, 39, 225, 247, 153, 91, 222, 93, 248, 162, 43, 217, 194, 120, 51, 181, 50, 215, 156,
             35, 80, 230, 31, 201, 168, 86, 33, 209, 67, 142, 171, 235, 124,
         ])
