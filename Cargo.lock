@@ -3734,7 +3734,7 @@ dependencies = [
  "nimiq-zkp",
  "nimiq-zkp-primitives",
  "parking_lot 0.12.1",
- "prometheus-client 0.21.2",
+ "prometheus-client 0.22.0",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "serde",
@@ -4226,7 +4226,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot 0.12.1",
- "prometheus-client 0.21.2",
+ "prometheus-client 0.22.0",
  "rand 0.8.5",
  "serde",
  "thiserror",
@@ -4250,7 +4250,7 @@ dependencies = [
  "nimiq-network-interface",
  "nimiq-network-libp2p",
  "parking_lot 0.12.1",
- "prometheus-client 0.21.2",
+ "prometheus-client 0.22.0",
  "tokio",
  "tokio-metrics",
  "tracing",
@@ -4321,7 +4321,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project",
  "pin-project-lite 0.2.13",
- "prometheus-client 0.21.2",
+ "prometheus-client 0.22.0",
  "rand 0.8.5",
  "serde",
  "serde-big-array 0.5.1",
@@ -5689,9 +5689,9 @@ dependencies = [
 
 [[package]]
 name = "prometheus-client"
-version = "0.21.2"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c99afa9a01501019ac3a14d71d9f94050346f55ca471ce90c799a15c58f61e2"
+checksum = "510c4f1c9d81d556458f94c98f857748130ea9737bbd6053da497503b26ea63c"
 dependencies = [
  "dtoa",
  "itoa",
