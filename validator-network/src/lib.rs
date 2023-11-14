@@ -33,11 +33,7 @@ pub trait ValidatorNetwork: Send + Sync {
     /// Sends a message to a validator identified by its ID (position) in the `validator keys`.
     /// It must make a reasonable effort to establish a connection to the peer denoted with `validator_id`
     /// before returning a connection not established error.
-    async fn send_to<M: Message + Clone>(
-        &self,
-        validator_id: usize,
-        msg: M,
-    ) -> Result<(), Self::Error>;
+    async fn send_to<M: Message>(&self, validator_id: usize, msg: M) -> Result<(), Self::Error>;
 
     /// Performs a request to a validator identified by its ID.
     async fn request<TRequest: Request>(

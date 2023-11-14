@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use futures::{stream::BoxStream, StreamExt, TryFutureExt};
 use nimiq_bls::{lazy::LazyPublicKey, CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
-    network::{MsgAcceptance, Network, NetworkEvent, SubscribeEvents, Topic},
+    network::{MsgAcceptance, Network, SubscribeEvents, Topic},
     request::{Message, Request, RequestCommon},
 };
 use nimiq_serde::{Deserialize, Serialize};
@@ -48,32 +48,6 @@ where
                 validator_peer_id_cache: BTreeMap::new(),
             }),
         }
-    }
-
-    async fn dial_peer(&self, peer_id: N::PeerId) -> Result<(), NetworkError<N::Error>> {
-        let mut event_stream = self.network.subscribe_events();
-
-        if self.network.has_peer(peer_id) {
-            return Ok(());
-        }
-
-        self.network.dial_peer(peer_id).await?;
-
-        let future = async move {
-            loop {
-                match event_stream.next().await {
-                    Some(Ok(NetworkEvent::PeerJoined(joined_id, _))) if joined_id == peer_id => {
-                        break Ok(())
-                    }
-                    Some(Err(_)) | None => break Err(NetworkError::Offline), // TODO Error type?
-                    _ => {}
-                }
-            }
-        };
-
-        tokio::time::timeout(Duration::from_secs(5), future)
-            .await
-            .map_err(|_| NetworkError::Unreachable)?
     }
 
     /// Looks up the peer ID for a validator public key in the DHT.
@@ -173,65 +147,15 @@ where
         state.validator_peer_id_cache = keep_cached;
     }
 
-    async fn send_to<M: Message + Clone>(
-        &self,
-        validator_id: usize,
-        msg: M,
-    ) -> Result<(), Self::Error> {
-        // previously, there was an `Option<>` here. why?
-        let peer_id = if let Ok(peer_id) = self.get_validator_peer_id(validator_id).await {
-            // The peer was cached so the send is fast tracked
-            peer_id
+    async fn send_to<M: Message>(&self, validator_id: usize, msg: M) -> Result<(), Self::Error> {
+        if let Ok(peer_id) = self.get_validator_peer_id(validator_id).await {
+            self.network
+                .message(msg, peer_id)
+                .map_err(NetworkError::Request)
+                .await
         } else {
-            let public_key = {
-                // The peer could not be retrieved so we update the cache with a fresh lookup
-                let state = self.state.read();
-
-                // get the public key for the validator_id, return NetworkError::UnknownValidator if it does not exist
-                state
-                    .validator_keys
-                    .get(validator_id)
-                    .ok_or(NetworkError::UnknownValidator(validator_id))?
-                    .clone()
-            };
-
-            // resolve the public key to the peer_id using the DHT record
-            if let Some(peer_id) = Self::resolve_peer_id(&self.network, &public_key).await? {
-                // set the cache with he new peer_id for this public key
-                self.state
-                    .write()
-                    .validator_peer_id_cache
-                    .insert(public_key.compressed().clone(), peer_id);
-
-                // try to get the peer for the peer_id. If it does not exist it should be dialed
-                if !self.network.has_peer(peer_id) {
-                    log::debug!(
-                        "Not connected to validator {} @ {:?}, dialing...",
-                        validator_id,
-                        peer_id
-                    );
-                    self.dial_peer(peer_id).await?;
-                }
-                peer_id
-            } else {
-                log::error!(
-                            "send_to failed; Could not find peer ID for validator in DHT: public_key = {:?}",
-                            public_key
-                        );
-                return Err(NetworkError::UnknownValidator(validator_id));
-            }
-        };
-        // We don't care about the response: spawn the request and intentionally dismiss
-        // the response
-        tokio::spawn({
-            let network = Arc::clone(&self.network);
-            async move {
-                if let Err(error) = network.message(msg.clone(), peer_id).await {
-                    log::error!(%peer_id, %error, "could not send request");
-                }
-            }
-        });
-        Ok(())
+            Err(NetworkError::Unreachable)
+        }
     }
 
     async fn request<TRequest: Request>(
