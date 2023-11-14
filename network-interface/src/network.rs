@@ -32,8 +32,6 @@ pub trait Topic {
     const VALIDATE: bool;
 }
 
-// It seems we can't use type aliases on enums yet:
-// https://rust-lang.github.io/rfcs/2338-type-alias-enum-variants.html
 #[derive(Clone, Debug)]
 pub enum MsgAcceptance {
     Accept,
