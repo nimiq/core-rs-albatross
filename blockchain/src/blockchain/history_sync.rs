@@ -179,11 +179,9 @@ impl Blockchain {
                         value: ev.value,
                     })
                 }
-                HistoricTransactionData::Equivocation(_)
-                | HistoricTransactionData::Penalize(_)
-                | HistoricTransactionData::Jail(_) => {
-                    return Err(PushError::InvalidHistoricTransaction)
-                }
+                HistoricTransactionData::Equivocation(_) => {}
+                HistoricTransactionData::Penalize(_) => {}
+                HistoricTransactionData::Jail(_) => {}
             }
         }
 

@@ -95,8 +95,6 @@ pub enum PushError {
     BlockchainError(#[from] BlockchainError),
     #[error("Push with incomplete accounts and without trie diff")]
     MissingAccountsTrieDiff,
-    #[error("Invalid macro block historic transaction")]
-    InvalidHistoricTransaction,
     #[error("Proof for equivocation already included")]
     EquivocationAlreadyIncluded(EquivocationLocator),
     #[error("Accounts trie is incomplete and thus cannot be verified.")]
