@@ -1,11 +1,10 @@
 use std::{
-    future::Future,
     net::SocketAddr,
-    pin::Pin,
     sync::Arc,
     task::{Context, Poll},
 };
 
+use futures::future::BoxFuture;
 use hyper::{http::StatusCode, service::Service, Body, Method, Request, Response, Server};
 use log::{error, info};
 use parking_lot::RwLock;
@@ -52,7 +51,7 @@ impl MetricService {
 impl Service<Request<Body>> for MetricService {
     type Response = Response<Body>;
     type Error = hyper::Error;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
@@ -86,7 +85,7 @@ impl MakeMetricService {
 impl<T> Service<T> for MakeMetricService {
     type Response = MetricService;
     type Error = hyper::Error;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _: &mut Context) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))

@@ -9,7 +9,7 @@ use std::{
 use async_trait::async_trait;
 use base64::Engine;
 use bytes::Bytes;
-use futures::{ready, stream::BoxStream, Stream, StreamExt};
+use futures::{future::BoxFuture, ready, stream::BoxStream, Stream, StreamExt};
 #[cfg(not(feature = "tokio-time"))]
 use instant::Instant;
 use libp2p::{
@@ -1548,9 +1548,7 @@ impl Network {
         &self,
     ) -> BoxStream<'static, (Req, RequestId, PeerId)> {
         enum ReceiveStream {
-            WaitingForRegister(
-                Pin<Box<dyn Future<Output = mpsc::Receiver<(Bytes, RequestId, PeerId)>> + Send>>,
-            ),
+            WaitingForRegister(BoxFuture<'static, mpsc::Receiver<(Bytes, RequestId, PeerId)>>),
             Registered(mpsc::Receiver<(Bytes, RequestId, PeerId)>),
         }
 
