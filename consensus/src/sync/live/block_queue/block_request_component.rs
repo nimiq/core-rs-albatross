@@ -116,13 +116,17 @@ impl<N: Network> BlockRequestComponent<N> {
         target_block_number: u32,
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
+        pubsub_id: Option<N::PubsubId>,
     ) {
         self.pending_requests.insert(target_block_hash.clone());
         self.sync_queue.add_ids(vec![(
-            target_block_number,
-            target_block_hash,
-            locators,
-            self.include_micro_bodies,
+            (
+                target_block_number,
+                target_block_hash,
+                locators,
+                self.include_micro_bodies,
+            ),
+            pubsub_id,
         )]);
     }
 
@@ -185,7 +189,7 @@ impl<N: Network> Stream for BlockRequestComponent<N> {
                         "Failed to retrieve missing blocks"
                     );
                     // TODO: Do we need to do anything else?
-                    // We might want to return an event and delete the target hash from our buffer
+                    // We might want to delete the target hash from our buffer
                     // since none of our peers is sending us a good response.
                 }
             }

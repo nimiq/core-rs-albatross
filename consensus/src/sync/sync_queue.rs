@@ -13,7 +13,7 @@ use futures::{
     future, future::BoxFuture, ready, stream::FuturesUnordered, FutureExt, Stream, StreamExt,
 };
 use nimiq_macros::store_waker;
-use nimiq_network_interface::network::Network;
+use nimiq_network_interface::network::{Network, PubsubId};
 use parking_lot::RwLock;
 use pin_project::pin_project;
 
@@ -78,7 +78,7 @@ pub struct SyncQueue<TNetwork: Network, TId, TOutput: 'static, TVerifyState: 'st
     pub(crate) peers: Arc<RwLock<PeerList<TNetwork>>>,
     network: Arc<TNetwork>,
     desired_pending_size: usize,
-    ids_to_request: VecDeque<TId>,
+    ids_to_request: VecDeque<(TId, Option<TNetwork::PubsubId>)>,
     pending_futures: FuturesUnordered<OrderWrapper<TId, BoxFuture<'static, Option<TOutput>>>>,
     queued_outputs: BinaryHeap<OrderWrapper<TId, Option<TOutput>>>,
     next_incoming_index: usize,
@@ -98,7 +98,7 @@ where
 {
     pub fn new(
         network: Arc<TNetwork>,
-        ids: Vec<TId>,
+        ids: Vec<(TId, Option<TNetwork::PubsubId>)>,
         peers: Arc<RwLock<PeerList<TNetwork>>>,
         desired_pending_size: usize,
         request_fn: RequestFn<TId, TNetwork, TOutput>,
@@ -123,7 +123,7 @@ where
 {
     pub fn with_verification(
         network: Arc<TNetwork>,
-        ids: Vec<TId>,
+        ids: Vec<(TId, Option<TNetwork::PubsubId>)>,
         peers: Arc<RwLock<PeerList<TNetwork>>>,
         desired_pending_size: usize,
         request_fn: RequestFn<TId, TNetwork, TOutput>,
@@ -166,18 +166,31 @@ where
 
         // Drain ids and produce futures.
         for _ in 0..num_ids_to_request {
-            let id = self.ids_to_request.pop_front().unwrap();
+            let id = self.ids_to_request.pop_front().unwrap().0;
+            let pubsub_id = self.ids_to_request.pop_front().unwrap().1;
 
-            // Get next peer in line. If there are no more peers, simulate a failed request.
-            let wrapper = match self
-                .peers
-                .read()
-                .increment_and_get(&mut self.current_peer_index)
-            {
-                Some(peer_id) => {
+            // If we know the peer that sent us this block, we ask them first.
+            let peer = match pubsub_id {
+                Some(pubsub_id) => {
+                    let peer_id = pubsub_id.propagation_source();
+
+                    self.peers
+                        .read()
+                        .index_of(&peer_id)
+                        .map(|peer_index| (peer_id, peer_index))
+                }
+                None => self
+                    .peers
+                    .read()
+                    .increment_and_get(&mut self.current_peer_index)
+                    .map(|peer_id| (peer_id, self.current_peer_index.clone())),
+            };
+
+            let wrapper = match peer {
+                Some((peer_id, peer_index)) => {
                     log::trace!(
                         %peer_id,
-                        current_peer_index = %self.current_peer_index,
+                        current_peer_index = %peer_index,
                         "Requesting {:?} @ {}",
                         id,
                         self.next_incoming_index,
@@ -187,7 +200,7 @@ where
                         data: (self.request_fn)(id.clone(), Arc::clone(&self.network), peer_id),
                         id,
                         index: self.next_incoming_index,
-                        peer: self.current_peer_index.clone(),
+                        peer: peer_index,
                         num_tries: 1,
                     }
                 }
@@ -265,7 +278,7 @@ where
         self.peers.write().remove_peer(peer_id);
     }
 
-    pub fn add_ids(&mut self, ids: Vec<TId>) {
+    pub fn add_ids(&mut self, ids: Vec<(TId, Option<TNetwork::PubsubId>)>) {
         for id in ids {
             self.ids_to_request.push_back(id);
         }
@@ -395,7 +408,7 @@ mod tests {
 
         let mut queue: SyncQueue<_, _, i32, _> = SyncQueue::new(
             network,
-            vec![1, 2, 3, 4],
+            vec![(1, None), (2, None), (3, None), (4, None)],
             Default::default(),
             1,
             |_, _, _| future::ready(None).boxed(),

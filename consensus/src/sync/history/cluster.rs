@@ -194,10 +194,13 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
                 validators: blockchain.current_validators().unwrap(),
             }
         };
-
+        let epoch_ids_queue = epoch_ids
+            .iter()
+            .map(|epoch_id| (epoch_id.clone(), None))
+            .collect();
         let batch_set_queue = SyncQueue::with_verification(
             Arc::clone(&network),
-            epoch_ids.clone(),
+            epoch_ids_queue,
             peers.clone(),
             Self::NUM_PENDING_BATCH_SETS,
             |id, network, peer_id| {
@@ -234,7 +237,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
 
         let history_queue = SyncQueue::new(
             Arc::clone(&network),
-            Vec::<HistoryChunkRequest>::new(),
+            Vec::<(HistoryChunkRequest, Option<_>)>::new(),
             peers,
             Self::NUM_PENDING_CHUNKS,
             move |request, network, peer_id| {
@@ -397,11 +400,14 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             );
 
             // Queue history chunks for the given batch set for download.
-            let history_chunk_ids: Vec<HistoryChunkRequest> = (start_txn / CHUNK_SIZE
+            let history_chunk_ids: Vec<(HistoryChunkRequest, Option<_>)> = (start_txn / CHUNK_SIZE
                 ..((batch_set.history_len.size() as usize).ceiling_div(CHUNK_SIZE)))
                 .map(|i| {
                     let chunk_index = (previous_history_size / CHUNK_SIZE + i) as u64;
-                    HistoryChunkRequest::from_block(&batch_set.macro_block, chunk_index)
+                    (
+                        HistoryChunkRequest::from_block(&batch_set.macro_block, chunk_index),
+                        None,
+                    )
                 })
                 .collect();
             self.history_queue.add_ids(history_chunk_ids);

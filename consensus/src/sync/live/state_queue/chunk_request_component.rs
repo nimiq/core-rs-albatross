@@ -62,7 +62,7 @@ impl<N: Network> ChunkRequestComponent<N> {
     }
 
     pub fn request_chunk(&mut self, request: RequestChunk) {
-        self.sync_queue.add_ids(vec![request]);
+        self.sync_queue.add_ids(vec![(request, None)]);
     }
 
     async fn request_missing_chunks_from_peer(

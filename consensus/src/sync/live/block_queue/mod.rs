@@ -223,7 +223,7 @@ impl<N: Network> BlockQueue<N> {
         let mut parent_block_number = block_number - 1;
 
         // Insert block into buffer. If we already know the block, we're done.
-        let block_known = self.insert_block_into_buffer(block, pubsub_id);
+        let block_known = self.insert_block_into_buffer(block, pubsub_id.clone());
         log::trace!("Buffering block #{}, known={}", block_number, block_known);
         if block_known {
             return;
@@ -250,7 +250,7 @@ impl<N: Network> BlockQueue<N> {
         }
 
         // We don't know the predecessor of this block, request it.
-        self.request_missing_blocks(parent_block_number, parent_hash, None);
+        self.request_missing_blocks(parent_block_number, parent_hash, None, pubsub_id);
     }
 
     fn insert_block_into_buffer(&mut self, block: Block, pubsub_id: Option<N::PubsubId>) -> bool {
@@ -277,6 +277,7 @@ impl<N: Network> BlockQueue<N> {
         block_number: u32,
         block_hash: Blake2bHash,
         block_locator: Option<Blake2bHash>,
+        pubsub_id: Option<N::PubsubId>,
     ) {
         let (head_hash, head_height, macro_height, blocks) = {
             let blockchain = self.blockchain.read();
@@ -317,9 +318,12 @@ impl<N: Network> BlockQueue<N> {
                 .chain(block_locators)
                 .collect();
 
-            // FIXME Send missing blocks request to the peer that announced the block (first).
-            self.request_component
-                .request_missing_blocks(block_number, block_hash, block_locators);
+            self.request_component.request_missing_blocks(
+                block_number,
+                block_hash,
+                block_locators,
+                pubsub_id,
+            );
         } else {
             log::error!(start_block = %head_hash, count = head_height - macro_height, "Couldn't get blocks")
         }
@@ -388,7 +392,7 @@ impl<N: Network> BlockQueue<N> {
             return None;
         }
         if block_hash != target_hash {
-            self.request_missing_blocks(target_block_number, target_hash, Some(block_hash));
+            self.request_missing_blocks(target_block_number, target_hash, Some(block_hash), None);
         }
 
         // Check whether the blockchain can push the missing blocks. This might not be the case if the reference
