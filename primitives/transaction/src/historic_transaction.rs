@@ -59,17 +59,13 @@ impl HistoricTransaction {
     ) -> Vec<HistoricTransaction> {
         let mut hist_txs = vec![];
 
-        for mut transaction in transactions {
-            match transaction {
-                ExecutedTransaction::Ok(ref mut tx) => tx.proof = Vec::new(),
-                ExecutedTransaction::Err(ref mut tx) => tx.proof = Vec::new(),
-            }
+        for transaction in transactions {
             hist_txs.push(HistoricTransaction {
                 network_id,
                 block_number,
                 block_time,
                 data: HistoricTransactionData::Basic(transaction),
-            });
+            })
         }
 
         for inherent in inherents {
@@ -227,6 +223,8 @@ impl FromDatabaseValue for HistoricTransaction {
 
 /// An enum specifying the type of transaction and containing the necessary data to represent that
 /// transaction.
+// TODO: The transactions include a lot of unnecessary information (ex: the signature). Don't
+//       include all of it here.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializeContent)]
 pub enum HistoricTransactionData {
     /// A basic transaction. It simply contains the transaction as contained in the block.
