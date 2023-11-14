@@ -3,10 +3,8 @@ pub mod network_impl;
 pub mod single_response_requester;
 pub mod validator_record;
 
-use std::{pin::Pin, time::Duration};
-
 use async_trait::async_trait;
-use futures::{stream::BoxStream, Stream};
+use futures::stream::BoxStream;
 use nimiq_bls::{lazy::LazyPublicKey, CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
     network::{MsgAcceptance, Network, PubsubId, SubscribeEvents, Topic},
@@ -15,8 +13,7 @@ use nimiq_network_interface::{
 
 pub use crate::error::NetworkError;
 
-pub type MessageStream<TMessage, TPeerId> =
-    Pin<Box<dyn Stream<Item = (TMessage, TPeerId)> + Send + 'static>>;
+pub type MessageStream<TMessage> = BoxStream<'static, (TMessage, usize)>;
 
 /// Fixed upper bound network.
 /// Peers are denoted by a usize identifier which deterministically identifies them.
@@ -25,6 +22,10 @@ pub trait ValidatorNetwork: Send + Sync {
     type Error: std::error::Error + Send + 'static;
     type NetworkType: Network;
     type PubsubId: PubsubId<<Self::NetworkType as Network>::PeerId> + Send;
+
+    /// Tells the validator network its own validator ID in case it is an active validator, or
+    /// `None`, otherwise.
+    fn set_validator_id(&self, validator_id: Option<usize>);
 
     /// Tells the validator network the validator keys for the current set of active validators.
     /// The keys must be ordered, such that the k-th entry is the validator with ID k.
@@ -46,7 +47,7 @@ pub trait ValidatorNetwork: Send + Sync {
     >;
 
     /// Returns a stream to receive certain types of messages from every peer.
-    fn receive<M>(&self) -> MessageStream<M, <Self::NetworkType as Network>::PeerId>
+    fn receive<M>(&self) -> MessageStream<M>
     where
         M: Message + Clone;
 

@@ -89,11 +89,15 @@ where
     ) -> Self {
         let input = network
             .receive::<TendermintUpdate>()
-            .filter_map(move |item| {
-                future::ready(if item.0 .1 == block_height {
-                    Some(item.0 .0)
-                } else {
+            .filter_map(move |(item, validator_id)| {
+                #[allow(clippy::if_same_then_else)]
+                future::ready(if item.height != block_height {
                     None
+                    // Check that the aggregation messages specify the correct sender.
+                } else if item.message.aggregation.0.origin() != validator_id {
+                    None
+                } else {
+                    Some(item.message)
                 })
             })
             .boxed();

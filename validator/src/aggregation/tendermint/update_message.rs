@@ -6,9 +6,11 @@ use serde::{Deserialize, Serialize};
 
 use super::contribution::AggregateMessage;
 
-/// Self.1 is block height as round and step are already a part of self.0
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct TendermintUpdate(pub TaggedAggregationMessage<AggregateMessage>, pub u32);
+pub(crate) struct TendermintUpdate {
+    pub message: TaggedAggregationMessage<AggregateMessage>,
+    pub height: u32,
+}
 
 impl RequestCommon for TendermintUpdate {
     type Kind = MessageMarker;

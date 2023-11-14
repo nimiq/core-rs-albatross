@@ -320,6 +320,13 @@ where
             );
         }
 
+        // Inform the network about the current validator ID.
+        self.network.set_validator_id(
+            self.epoch_state
+                .as_ref()
+                .map(|s| s.validator_slot_band as usize),
+        );
+
         let voting_keys: Vec<LazyPublicKey> = validators
             .iter()
             .map(|validator| validator.voting_key.clone())

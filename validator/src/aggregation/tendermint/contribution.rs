@@ -9,7 +9,7 @@ use nimiq_handel::{
 };
 use nimiq_hash::Blake2sHash;
 use nimiq_primitives::TendermintVote;
-use nimiq_tendermint::Aggregation;
+use nimiq_tendermint::{Aggregation, AggregationMessage};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -126,5 +126,11 @@ impl Aggregation<Blake2sHash> for AggregateMessage {
     }
     fn proposals(&self) -> Vec<(Blake2sHash, usize)> {
         self.0.aggregate.proposals()
+    }
+}
+
+impl AggregationMessage<Blake2sHash> for AggregateMessage {
+    fn sender(&self) -> u16 {
+        self.0.origin().try_into().expect("validator ID")
     }
 }

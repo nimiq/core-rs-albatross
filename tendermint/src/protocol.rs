@@ -54,6 +54,14 @@ pub trait Aggregation<ProposalHash>:
     fn all_contributors(&self) -> BitSet;
 }
 
+pub trait AggregationMessage<ProposalHash>: Aggregation<ProposalHash> {
+    /// Sender of this particular aggregation.
+    ///
+    /// Since verification of aggregations can take some time, it's important
+    /// to know where it came from, in order to avoid DoS.
+    fn sender(&self) -> u16;
+}
+
 /// A proposal for Tendermint. Signatures for these  proposals are two fold:
 /// * the proposal itself is signed by the Validator proposing it alongside its round and valid_round.
 ///     The signing and verification of it is done in Deps::sign_proposal and Deps::verify_proposal.
@@ -85,7 +93,7 @@ pub trait Protocol: Clone + Send + Sync + Unpin + Sized + 'static {
     type InherentHash: Unpin + Clone + std::fmt::Debug + Ord;
     type ProposalSignature: Clone + Unpin;
     type Inherent: Inherent<Self::InherentHash> + Unpin + Clone + std::fmt::Debug;
-    type AggregationMessage: Aggregation<Self::ProposalHash> + Send + Unpin;
+    type AggregationMessage: AggregationMessage<Self::ProposalHash> + Send + Unpin;
     type Aggregation: Aggregation<Self::ProposalHash> + Unpin;
     type Decision: Unpin;
 
@@ -153,4 +161,11 @@ pub trait Protocol: Clone + Send + Sync + Unpin + Sized + 'static {
         vote: Option<Self::ProposalHash>,
         update_stream: BoxStream<'static, Self::AggregationMessage>,
     ) -> BoxStream<'static, Self::Aggregation>;
+
+    fn verify_aggregation_message(
+        &self,
+        round: u32,
+        step: Step,
+        message: Self::AggregationMessage,
+    ) -> BoxFuture<'static, Result<(), ()>>;
 }

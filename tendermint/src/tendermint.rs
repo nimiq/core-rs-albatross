@@ -23,11 +23,8 @@ use crate::{
     protocol::{Aggregation, Protocol, SignedProposalMessage, TaggedAggregationMessage},
     state::State,
     utils::{Return, Step},
-    Proposal,
+    AggregationMessage, Proposal,
 };
-
-// TODO:
-//  * Signatures for future rounds.
 
 /// Main Tendermint structure.
 ///
@@ -68,11 +65,13 @@ pub struct Tendermint<TProtocol: Protocol> {
     pub(crate) aggregations: SelectAll<BoxStream<'static, ((u32, Step), TProtocol::Aggregation)>>,
 
     /// Keeps track of contributions to future aggregations.
-    ///
-    /// TODO This is not correct behavior yet. The signatures are unauthenticated.
-    /// Instead look into already aggregated contributions of f+1 vote weight or more. Only consider single Signatures,
-    /// as their verification is quite costly. Potentially introduce a threshold of signatures that may compose f+1.
     pub(crate) future_contributions: BTreeMap<u32, BitSet>,
+
+    /// Keeps at most one future aggregation per validator, while it is waiting for verification.
+    future_round_messages: BTreeMap<u16, TaggedAggregationMessage<TProtocol::AggregationMessage>>,
+
+    /// The future round aggregation that is currently being verified.
+    future_round_verification: Option<BoxFuture<'static, Result<(u32, BitSet), ()>>>,
 
     /// In case a timeout is required it will be stored here until elapsed or no longer necessary.
     /// Must be cleared in both cases.
@@ -117,6 +116,8 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             aggregations: SelectAll::default(),
             aggregation_senders: BTreeMap::default(),
             future_contributions: BTreeMap::default(),
+            future_round_messages: BTreeMap::default(),
+            future_round_verification: None,
             timeout: None,
             decision: false,
             state_return_pending: false,
@@ -390,52 +391,104 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
         cx: &mut Context<'_>,
         should_export_state: &mut bool,
     ) -> Option<TaggedAggregationMessage<TProtocol::AggregationMessage>> {
-        // the state changes if there is at least one message to process as they are kept for future reference.
-        while let Poll::Ready(Some(mut message)) = self.level_update_stream.poll_next_unpin(cx) {
-            // signatures!
-            let id = message.tag;
-            if id.0 > self.state.current_round {
-                // future contributions need to be tracked separately, as once a round has f+1 contributions
-                // it can be fast tracked
-                let contributors = self
-                    .future_contributions
-                    .entry(id.0)
-                    .and_modify(|bitset| {
-                        *bitset |= message.aggregation.all_contributors();
-                    })
-                    .or_insert_with(|| message.aggregation.all_contributors());
+        // Has any of the polled futures done something? If so, don't return. If we're out of
+        // futures to poll, return.
+        let mut did_something = true;
+        while did_something {
+            did_something = false;
 
-                // check if the skip ahead condition is fulfilled. If so, the state machine can be set to propose for round id.0
-                if contributors.len() >= TProtocol::F_PLUS_ONE {
-                    // skip to that round
-                    *should_export_state = true;
-                    self.state.current_round = id.0;
-                    self.state.current_step = Step::Propose;
-                    self.future_contributions
-                        .retain(|round, _contributors| round > &self.state.current_round);
+            // First, check if the future round aggregation verification has completed.
+            if let Some(verification) = &mut self.future_round_verification {
+                if let Poll::Ready(verification_result) = verification.poll_unpin(cx) {
+                    did_something = true;
+                    self.future_round_verification = None;
 
-                    // Return to account the state change
-                    return None;
-                }
-            } else if let Some(sender) = self.aggregation_senders.get(&id) {
-                match sender.try_send(message.aggregation) {
-                    Ok(()) => {}
-                    Err(mpsc::error::TrySendError::Closed(_aggregation_message)) => {
-                        panic!("Aggregations must not be dropped.");
-                    }
-                    Err(mpsc::error::TrySendError::Full(aggregation)) => {
-                        message.aggregation = aggregation;
-                        // failed to send the message, which means a chanel must be full.
-                        // return the message, so after polling the aggregations it can be try_send again.
-                        // that time it should succeed as the aggregation poll should have cleared the channels.
-                        return Some(message);
+                    // If the signature was found to be valid, add the contributing validators to
+                    // the set of contributors for that future round.
+                    if let Ok((round, new_contributors)) = verification_result {
+                        if round > self.state.current_round {
+                            // future contributions need to be tracked separately, as once a round has f+1 contributions
+                            // it can be fast tracked
+                            let contributors = self.future_contributions.entry(round).or_default();
+                            *contributors |= new_contributors;
+
+                            // check if the skip ahead condition is fulfilled. If so, the state machine can be set to propose for round id.0
+                            if contributors.len() >= TProtocol::F_PLUS_ONE {
+                                // skip to that round
+                                *should_export_state = true;
+                                self.state.current_round = round;
+                                self.state.current_step = Step::Propose;
+                                self.future_contributions.retain(|&round, _contributors| {
+                                    round > self.state.current_round
+                                });
+                                self.future_round_messages
+                                    .retain(|_, message| message.tag.0 > self.state.current_round);
+
+                                // Return to account the state change
+                                return None;
+                            }
+                        }
                     }
                 }
-            } else {
-                log::debug!(
-                    ?message,
-                    "received level update for non running aggregation",
-                );
+            }
+
+            // If no future round aggregation verification is currently running, start a new one.
+            if self.future_round_verification.is_none() && !self.future_round_messages.is_empty() {
+                // TODO: choose at random
+                let (_, message) = self.future_round_messages.pop_first().unwrap();
+                let (round, step) = message.tag;
+                let contributors = message.aggregation.all_contributors();
+                let verification = self
+                    .protocol
+                    .verify_aggregation_message(round, step, message.aggregation)
+                    .map(move |result| result.map(move |()| (round, contributors)));
+                self.future_round_verification = Some(Box::pin(verification));
+            }
+
+            // Finally, check if we have new messages.
+            //
+            // the state changes if there is at least one message to process as they are kept for future reference.
+            if let Poll::Ready(Some(mut message)) = self.level_update_stream.poll_next_unpin(cx) {
+                did_something = true;
+                let id = message.tag;
+                if id.0 > self.state.current_round {
+                    // Queue the message for future round aggregation verification.
+                    match self
+                        .future_round_messages
+                        .entry(message.aggregation.sender())
+                    {
+                        Entry::Vacant(v) => {
+                            v.insert(message);
+                        }
+                        Entry::Occupied(mut o) => {
+                            // Generally: Newer is better. If the new message comes
+                            // from the same round as a previous one, assume that
+                            // it is better.
+                            if id.0 >= o.get().tag.0 {
+                                o.insert(message);
+                            }
+                        }
+                    }
+                } else if let Some(sender) = self.aggregation_senders.get(&id) {
+                    match sender.try_send(message.aggregation) {
+                        Ok(()) => {}
+                        Err(mpsc::error::TrySendError::Closed(_aggregation_message)) => {
+                            panic!("Aggregations must not be dropped.");
+                        }
+                        Err(mpsc::error::TrySendError::Full(aggregation)) => {
+                            message.aggregation = aggregation;
+                            // failed to send the message, which means a channel must be full.
+                            // return the message, so after polling the aggregations it can be try_send again.
+                            // that time it should succeed as the aggregation poll should have cleared the channels.
+                            return Some(message);
+                        }
+                    }
+                } else {
+                    log::debug!(
+                        ?message,
+                        "received level update for non running aggregation",
+                    );
+                }
             }
         }
         None

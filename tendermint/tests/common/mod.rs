@@ -4,7 +4,7 @@ use std::{
 };
 
 use futures::{
-    future::{self, FutureExt},
+    future::{self, BoxFuture, FutureExt},
     stream::{BoxStream, StreamExt},
 };
 use nimiq_collections::BitSet;
@@ -59,6 +59,14 @@ impl<ProposalHash: Send + Sync + Clone + std::fmt::Debug + Ord + 'static> Aggreg
             .iter()
             .filter_map(|(hash_opt, sig)| hash_opt.as_ref().map(|hash| (hash.clone(), sig.len())))
             .collect()
+    }
+}
+
+impl<ProposalHash: Send + Sync + Clone + std::fmt::Debug + Ord + 'static>
+    AggregationMessage<ProposalHash> for Agg<ProposalHash>
+{
+    fn sender(&self) -> u16 {
+        0
     }
 }
 
@@ -171,6 +179,16 @@ impl Protocol for Validator {
         } else {
             Err(ProposalError::InvalidSignature)
         }
+    }
+
+    fn verify_aggregation_message(
+        &self,
+        round: u32,
+        step: Step,
+        message: Self::AggregationMessage,
+    ) -> BoxFuture<'static, Result<(), ()>> {
+        let _ = (round, step, message);
+        Box::pin(future::ready(Ok(())))
     }
 
     fn request_proposal(

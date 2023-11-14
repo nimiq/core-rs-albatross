@@ -2,14 +2,17 @@ use std::sync::Arc;
 
 use byteorder::WriteBytesExt;
 use futures::{
-    future::{self, FutureExt},
+    future::{self, BoxFuture, FutureExt},
     stream::{BoxStream, StreamExt},
 };
 use nimiq_block::{Block, BlockError, MacroBlock, TendermintProof};
 use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
 use nimiq_collections::BitSet;
-use nimiq_handel::{aggregation::Aggregation, identity::IdentityRegistry};
+use nimiq_handel::{
+    aggregation::Aggregation, identity::IdentityRegistry, protocol::Protocol as _,
+    verifier::VerificationResult,
+};
 use nimiq_hash::{Blake2sHash, Blake2sHasher, Hash, Hasher, SerializeContent};
 use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_primitives::{
@@ -78,7 +81,10 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
             aggregation,
         };
         // and create the update.
-        let update_message = TendermintUpdate(tagged_aggregation_message, self.height);
+        let update_message = TendermintUpdate {
+            message: tagged_aggregation_message,
+            height: self.height,
+        };
 
         // clone network so it can be moved into the future
         let nw = Arc::clone(&self.network);
@@ -396,7 +402,7 @@ where
         step: nimiq_tendermint::Step,
         proposal_hash: Option<Self::ProposalHash>,
         update_stream: BoxStream<'static, Self::AggregationMessage>,
-    ) -> futures::stream::BoxStream<'static, Self::Aggregation> {
+    ) -> BoxStream<'static, Self::Aggregation> {
         // Wrap the network
         let network =
             NetworkWrapper::new(self.block_height, (round, step), Arc::clone(&self.network));
@@ -438,6 +444,44 @@ where
             update_stream.map(|item| item.0).boxed(),
             network,
         )
+        .boxed()
+    }
+
+    fn verify_aggregation_message(
+        &self,
+        round: u32,
+        step: Step,
+        message: Self::AggregationMessage,
+    ) -> BoxFuture<'static, Result<(), ()>> {
+        let step = match step {
+            Step::Precommit => TendermintStep::PreCommit,
+            Step::Prevote => TendermintStep::PreVote,
+            Step::Propose => TendermintStep::Propose,
+        };
+
+        let id = TendermintIdentifier {
+            block_number: self.block_height,
+            round_number: round,
+            step,
+        };
+
+        let protocol = TendermintAggregationProtocol::new(
+            Arc::clone(&self.validator_registry),
+            self.validator_slot_band as usize,
+            1,
+            id,
+        );
+
+        async move {
+            if matches!(
+                protocol.verify(&message.0.aggregate).await,
+                VerificationResult::Ok
+            ) {
+                Ok(())
+            } else {
+                Err(())
+            }
+        }
         .boxed()
     }
 

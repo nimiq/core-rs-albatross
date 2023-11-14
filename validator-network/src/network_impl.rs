@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use async_trait::async_trait;
 use futures::{stream::BoxStream, StreamExt, TryFutureExt};
+use log::warn;
 use nimiq_bls::{lazy::LazyPublicKey, CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
     network::{MsgAcceptance, Network, SubscribeEvents, Topic},
@@ -16,6 +17,8 @@ use crate::validator_record::{SignedValidatorRecord, ValidatorRecord};
 /// Validator Network state
 #[derive(Clone, Debug)]
 pub struct State<TPeerId> {
+    /// Own validator ID if active, `None` otherwise.
+    own_validator_id: Option<usize>,
     /// Set of public keys for each of the validators
     validator_keys: Vec<LazyPublicKey>,
     /// Cache for mapping validator public keys to peer IDs
@@ -32,7 +35,7 @@ where
     /// A reference to the network containing all peers
     network: Arc<N>,
     /// Internal state
-    state: RwLock<State<N::PeerId>>,
+    state: Arc<RwLock<State<N::PeerId>>>,
 }
 
 impl<N> ValidatorNetworkImpl<N>
@@ -43,11 +46,30 @@ where
     pub fn new(network: Arc<N>) -> Self {
         Self {
             network,
-            state: RwLock::new(State {
+            state: Arc::new(RwLock::new(State {
+                own_validator_id: None,
                 validator_keys: vec![],
                 validator_peer_id_cache: BTreeMap::new(),
-            }),
+            })),
         }
+    }
+
+    /// For use in closures, so that no reference to `self` needs to be kept around.
+    fn arc_clone(&self) -> ValidatorNetworkImpl<N> {
+        ValidatorNetworkImpl {
+            network: Arc::clone(&self.network),
+            state: Arc::clone(&self.state),
+        }
+    }
+
+    /// Returns the local validator ID.
+    fn local_validator_id(&self) -> u16 {
+        self.state
+            .read()
+            .own_validator_id
+            .expect("active validator")
+            .try_into()
+            .unwrap()
     }
 
     /// Looks up the peer ID for a validator public key in the DHT.
@@ -108,6 +130,25 @@ where
     }
 }
 
+/// Messages sent over the validator network get augmented with the sending
+/// validator's ID.
+///
+/// This makes it easier for the recipient to check that the sender is indeed a
+/// currently elected validator.
+#[derive(Debug, Deserialize, Serialize)]
+struct ValidatorMessage<M> {
+    validator_id: u16,
+    inner: M,
+}
+
+impl<M: RequestCommon> RequestCommon for ValidatorMessage<M> {
+    type Kind = M::Kind;
+    // Use distinct type IDs for the validator network.
+    const TYPE_ID: u16 = 10_000 + M::TYPE_ID;
+    type Response = M::Response;
+    const MAX_REQUESTS: u32 = M::MAX_REQUESTS;
+}
+
 // Proposal - gossip
 // LevelUpdate - multicast
 // StateEx - request/response
@@ -122,6 +163,10 @@ where
     type Error = NetworkError<N::Error>;
     type NetworkType = N;
     type PubsubId = N::PubsubId;
+
+    fn set_validator_id(&self, validator_id: Option<usize>) {
+        self.state.write().own_validator_id = validator_id;
+    }
 
     /// Tells the validator network the validator keys for the current set of active validators. The keys must be
     /// ordered, such that the k-th entry is the validator with ID k.
@@ -148,6 +193,10 @@ where
     }
 
     async fn send_to<M: Message>(&self, validator_id: usize, msg: M) -> Result<(), Self::Error> {
+        let msg = ValidatorMessage {
+            validator_id: self.local_validator_id(),
+            inner: msg,
+        };
         if let Ok(peer_id) = self.get_validator_peer_id(validator_id).await {
             self.network
                 .message(msg, peer_id)
@@ -166,6 +215,10 @@ where
         <TRequest as RequestCommon>::Response,
         NetworkError<<Self::NetworkType as Network>::Error>,
     > {
+        let request = ValidatorMessage {
+            validator_id: self.local_validator_id(),
+            inner: request,
+        };
         if let Ok(peer_id) = self.get_validator_peer_id(validator_id).await {
             self.network
                 .request(request, peer_id)
@@ -176,11 +229,32 @@ where
         }
     }
 
-    fn receive<M>(&self) -> MessageStream<M, N::PeerId>
+    fn receive<M>(&self) -> MessageStream<M>
     where
         M: Message + Clone,
     {
-        self.network.receive_messages()
+        let self_ = self.arc_clone();
+        Box::pin(
+            self.network
+                .receive_messages::<ValidatorMessage<M>>()
+                .filter_map(move |(message, peer_id)| {
+                    let self_ = self_.arc_clone();
+                    async move {
+                        let validator_peer_id = self_.get_validator_peer_id(message.validator_id as usize).await.ok();
+                        // Check that each message actually comes from the peer that it
+                        // claims it comes from. Reject it otherwise.
+                        if validator_peer_id
+                            .as_ref()
+                            .map(|pid| *pid != peer_id)
+                            .unwrap_or(true)
+                        {
+                            warn!(%peer_id, ?validator_peer_id, claimed_validator_id = message.validator_id, "dropping validator message");
+                            return None;
+                        }
+                        Some((message.inner, message.validator_id as usize))
+                    }
+                }),
+        )
     }
 
     async fn publish<TTopic>(&self, item: TTopic::Item) -> Result<(), Self::Error>
