@@ -368,13 +368,28 @@ impl Blockchain {
             return Ok(proposed_block.body.unwrap());
         }
 
-        // If a valid round is set, the VRF seed will be signed by the proposer of that round.
-        // So get that proposer.
-        if let Some(vr) = valid_round {
+        // The VRF seed will be signed by the proposer of the original round the proposal was proposed in.
+        // The round is specified within the header itself, and it should only ever differ from the `round`
+        // value provided if `valid_round` is Some(vr). Importantly though, that very vr is not necessarily
+        // the same as the round given in the header, as it might not be the first time this proposal is
+        // re-proposed.
+        if proposed_block.header.round != round {
+            // Log a warning if a block is re-proposed but fails to produce the proper vr.
+            if valid_round.is_none() {
+                warn!(
+                    valid_round,
+                    round,
+                    ?proposed_block,
+                    "Re-proposing proposal without specifying a VR"
+                );
+                // Reject the proposal.
+                return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
+            }
+            // Get the original proposer if it differs from the one proposing the proposal in this round.
             proposer = self
                 .get_proposer_at(
                     proposed_block.block_number(),
-                    vr,
+                    proposed_block.header.round,
                     prev_header.seed().entropy(),
                     Some(&txn),
                 )
