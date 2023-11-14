@@ -65,12 +65,6 @@ pub trait ValidatorNetwork: Send + Sync {
     /// Subscribes to network events
     fn subscribe_events(&self) -> SubscribeEvents<<Self::NetworkType as Network>::PeerId>;
 
-    /// Registers a cache for the specified message type.
-    /// Incoming messages of this type should be held in a FIFO queue of total size `buffer_size`,
-    /// each with a lifetime of `lifetime`.
-    /// `lifetime` or `buffer_size` of 0 should disable the cache.
-    fn cache<M: Message>(&self, buffer_size: usize, lifetime: Duration);
-
     /// Sets this node peer ID using its secret key and public key.
     async fn set_public_key(
         &self,
