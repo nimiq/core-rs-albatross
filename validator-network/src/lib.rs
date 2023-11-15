@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use futures::{stream::BoxStream, Stream};
 use nimiq_bls::{lazy::LazyPublicKey, CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
-    network::{MsgAcceptance, Network, PubsubId, Topic},
+    network::{MsgAcceptance, Network, PubsubId, SubscribeEvents, Topic},
     request::{Message, Request, RequestCommon},
 };
 
@@ -61,6 +61,9 @@ pub trait ValidatorNetwork: Send + Sync {
     async fn subscribe<'a, TTopic: Topic + Sync>(
         &self,
     ) -> Result<BoxStream<'a, (TTopic::Item, Self::PubsubId)>, Self::Error>;
+
+    /// Subscribes to network events
+    fn subscribe_events(&self) -> SubscribeEvents<<Self::NetworkType as Network>::PeerId>;
 
     /// Registers a cache for the specified message type.
     /// Incoming messages of this type should be held in a FIFO queue of total size `buffer_size`,

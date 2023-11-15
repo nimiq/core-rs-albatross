@@ -934,8 +934,8 @@ impl Client {
                     Some(Ok(NetworkEvent::PeerLeft(peer_id))) => {
                         Some((peer_id.to_string(), "left", None))
                     }
-                    Some(Err(_error)) => {
-                        None // Ignore stream errors
+                    Some(_) => {
+                        None // Ignore stream errors and other events
                     }
                     None => {
                         break;

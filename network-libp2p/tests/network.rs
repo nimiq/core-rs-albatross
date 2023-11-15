@@ -9,7 +9,10 @@ use libp2p::{
     PeerId,
 };
 use nimiq_network_interface::{
-    network::{CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, Topic},
+    network::{
+        CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, SubscribeEvents,
+        Topic,
+    },
     peer_info::Services,
 };
 use nimiq_network_libp2p::{
@@ -21,6 +24,9 @@ use nimiq_utils::time::OffsetTime;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use tokio::time::timeout;
+
+mod helper;
+use self::helper::*;
 
 fn network_config(address: Multiaddr) -> Config {
     let keypair = Keypair::generate_ed25519();
@@ -57,22 +63,6 @@ fn network_config(address: Multiaddr) -> Config {
         memory_transport: true,
         required_services: Services::all(),
         tls: None,
-    }
-}
-
-fn assert_peer_joined(event: &NetworkEvent<PeerId>, wanted_peer_id: &PeerId) {
-    if let NetworkEvent::PeerJoined(peer_id, _) = event {
-        assert_eq!(peer_id, wanted_peer_id);
-    } else {
-        panic!("Event is not a NetworkEvent::PeerJoined: {:?}", event);
-    }
-}
-
-fn assert_peer_left(event: &NetworkEvent<PeerId>, wanted_peer_id: &PeerId) {
-    if let NetworkEvent::PeerLeft(peer_id) = event {
-        assert_eq!(peer_id, wanted_peer_id);
-    } else {
-        panic!("Event is not a NetworkEvent::PeerLeft: {:?}", event);
     }
 }
 
@@ -161,11 +151,11 @@ async fn create_connected_networks() -> (Network, Network) {
 
     log::debug!("Waiting for join events");
 
-    let event1 = events1.next().await.unwrap().unwrap();
+    let event1 = get_next_peer_event(&mut events1).await;
     log::trace!(event = ?event1, "Event 1");
     assert_peer_joined(&event1, &net2.get_local_peer_id());
 
-    let event2 = events2.next().await.unwrap().unwrap();
+    let event2 = get_next_peer_event(&mut events2).await;
     log::trace!(event = ?event2, "Event 2");
     assert_peer_joined(&event2, &net1.get_local_peer_id());
 
@@ -209,11 +199,11 @@ async fn create_double_connected_networks() -> (Network, Network) {
 
     log::debug!("Waiting for join events");
 
-    let event1 = events1.next().await.unwrap().unwrap();
+    let event1 = get_next_peer_event(&mut events1).await;
     log::trace!(event = ?event1, "Event 1");
     assert_peer_joined(&event1, &net2.get_local_peer_id());
 
-    let event2 = events2.next().await.unwrap().unwrap();
+    let event2 = get_next_peer_event(&mut events2).await;
     log::trace!(event = ?event2, "Event 2");
     assert_peer_joined(&event2, &net1.get_local_peer_id());
 
@@ -262,12 +252,13 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
 
     // Wait for all PeerJoined events
     let all_joined = futures::stream::select_all(events)
-        .take(n_peers * (n_peers - 1))
+        .take(n_peers * (n_peers - 1 + 1/*1 x DHT bootstrapped*/))
         .for_each(|event| async move {
             match event {
                 Ok(NetworkEvent::PeerJoined(peer_id, _)) => {
                     log::info!(%peer_id, "Received peer joined event");
                 }
+                Ok(NetworkEvent::DhtBootstrapped) => {}
                 _ => log::error!(?event, "Unexpected NetworkEvent"),
             };
         });
@@ -319,11 +310,11 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
             .await;
 
         // Assert the peer has left both networks
-        let close_event1 = events1.next().await.unwrap().unwrap();
+        let close_event1 = get_next_peer_event(&mut events1).await;
         assert_peer_left(&close_event1, peer_id2);
         drop(events1);
 
-        let close_event2 = events2.next().await.unwrap().unwrap();
+        let close_event2 = get_next_peer_event(&mut events2).await;
         assert_peer_left(&close_event2, peer_id1);
         drop(events2);
 
@@ -337,10 +328,10 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
             .unwrap();
 
         // Assert the peer rejoined the network
-        let join_event1 = events1.next().await.unwrap().unwrap();
+        let join_event1 = get_next_peer_event(&mut events1).await;
         assert_peer_joined(&join_event1, peer_id2);
 
-        let join_event2 = events2.next().await.unwrap().unwrap();
+        let join_event2 = get_next_peer_event(&mut events2).await;
         assert_peer_joined(&join_event2, peer_id1);
 
         // Verify all peers are connected again
@@ -404,11 +395,11 @@ async fn connections_are_properly_closed_events() {
         .await;
     log::debug!("Closed peer");
 
-    let event1 = events1.next().await.unwrap().unwrap();
+    let event1 = get_next_peer_event(&mut events1).await;
     assert_peer_left(&event1, net2.local_peer_id());
     log::trace!(event = ?event1, "Event 1");
 
-    let event2 = events2.next().await.unwrap().unwrap();
+    let event2 = get_next_peer_event(&mut events2).await;
     assert_peer_left(&event2, net1.local_peer_id());
     log::trace!(event = ?event2, "Event 2");
 }
@@ -428,7 +419,7 @@ async fn connections_are_properly_closed_peers() {
         .await;
     log::debug!("Closed peer");
 
-    let event2 = events2.next().await.unwrap().unwrap();
+    let event2 = get_next_peer_event(&mut events2).await;
     assert_peer_left(&event2, &net1_peer_id);
     log::trace!(event = ?event2, "Event 2");
 
@@ -481,7 +472,7 @@ async fn ban_peer() {
     net1.dial_peer(net2_peer_id).await.unwrap();
 
     // Check that the connection to peer 1 (from peer 2 perspective) was closed
-    let event2 = events2.next().await.unwrap().unwrap();
+    let event2 = get_next_peer_event(&mut events2).await;
     assert_peer_left(&event2, &net1_peer_id);
     log::trace!(event = ?event2, "Event 2");
 

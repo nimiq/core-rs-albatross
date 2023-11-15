@@ -63,7 +63,7 @@ use crate::{
 pub type Consensus = AbstractConsensus<Network>;
 pub type ConsensusProxy = AbstractConsensusProxy<Network>;
 #[cfg(feature = "validator")]
-pub type Validator = AbstractValidator<Network, ValidatorNetworkImpl<Network>>;
+pub type Validator = AbstractValidator<ValidatorNetworkImpl<Network>>;
 #[cfg(feature = "validator")]
 pub type ValidatorProxy = AbstractValidatorProxy;
 

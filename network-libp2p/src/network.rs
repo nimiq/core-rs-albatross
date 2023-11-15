@@ -650,9 +650,7 @@ impl Network {
                         peer_id,
                     );
 
-                    if let Err(error) = events_tx.send(NetworkEvent::PeerLeft(peer_id)) {
-                        error!(%error, "could not send peer left event to channel");
-                    }
+                    let _ = events_tx.send(NetworkEvent::PeerLeft(peer_id));
                 }
             }
             SwarmEvent::IncomingConnection {
@@ -745,7 +743,12 @@ impl Network {
                                     }
                                     QueryResult::Bootstrap(result) => match result {
                                         Ok(result) => {
-                                            debug!(?result, "DHT bootstrap successful")
+                                            if result.num_remaining == 0 {
+                                                debug!(?result, "DHT bootstrap successful");
+
+                                                let _ =
+                                                    events_tx.send(NetworkEvent::DhtBootstrapped);
+                                            }
                                         }
                                         Err(e) => error!(error = %e, "DHT bootstrap error"),
                                     },
@@ -816,11 +819,8 @@ impl Network {
                                     .is_none()
                                 {
                                     info!(%peer_id, peer_address = %peer_info.get_address(), "Peer joined");
-                                    if let Err(error) =
-                                        events_tx.send(NetworkEvent::PeerJoined(peer_id, peer_info))
-                                    {
-                                        error!(%peer_id, %error, "could not send peer joined event to channel");
-                                    }
+                                    let _ = events_tx
+                                        .send(NetworkEvent::PeerJoined(peer_id, peer_info));
                                 } else {
                                     error!(%peer_id, "Peer joined but it already exists");
                                 }

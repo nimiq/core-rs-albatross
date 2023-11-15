@@ -42,6 +42,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         self.add_peer(peer_id);
                     }
                 }
+                Ok(_) => {}
                 Err(_) => return Poll::Ready(None),
             }
         }

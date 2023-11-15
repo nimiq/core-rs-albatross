@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use futures::{stream::BoxStream, StreamExt, TryFutureExt};
 use nimiq_bls::{lazy::LazyPublicKey, CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
-    network::{MsgAcceptance, Network, NetworkEvent, Topic},
+    network::{MsgAcceptance, Network, NetworkEvent, SubscribeEvents, Topic},
     request::{Message, Request, RequestCommon},
 };
 use nimiq_serde::{Deserialize, Serialize};
@@ -274,6 +274,10 @@ where
         TTopic: Topic + Sync,
     {
         Ok(self.network.subscribe::<TTopic>().await?)
+    }
+
+    fn subscribe_events(&self) -> SubscribeEvents<<Self::NetworkType as Network>::PeerId> {
+        self.network.subscribe_events()
     }
 
     fn cache<M: Message>(&self, _buffer_size: usize, _lifetime: Duration) {

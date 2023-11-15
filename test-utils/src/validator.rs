@@ -32,7 +32,7 @@ pub async fn build_validator<N: TestNetwork + NetworkInterface>(
     genesis_info: GenesisInfo,
     hub: &mut Option<MockHub>,
     is_prover_active: bool,
-) -> (Validator<N, ValidatorNetworkImpl<N>>, Consensus<N>)
+) -> (Validator<ValidatorNetworkImpl<N>>, Consensus<N>)
 where
     N::Error: Send,
     N::PeerId: Deserialize + Serialize,
@@ -42,7 +42,7 @@ where
     let consensus = node.consensus.expect("Could not create consensus");
     let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&consensus.network)));
     (
-        Validator::<N, ValidatorNetworkImpl<N>>::new(
+        Validator::<ValidatorNetworkImpl<N>>::new(
             node.environment,
             &consensus,
             node.blockchain,
@@ -63,7 +63,7 @@ pub async fn build_validators<N: TestNetwork + NetworkInterface>(
     peer_ids: &[u64],
     hub: &mut Option<MockHub>,
     is_prover_active: bool,
-) -> Vec<Validator<N, ValidatorNetworkImpl<N>>>
+) -> Vec<Validator<ValidatorNetworkImpl<N>>>
 where
     N::Error: Send,
     N::PeerId: Deserialize + Serialize,
@@ -145,10 +145,10 @@ where
 }
 
 pub fn validator_for_slot<N: TestNetwork + NetworkInterface>(
-    validators: &[Validator<N, ValidatorNetworkImpl<N>>],
+    validators: &[Validator<ValidatorNetworkImpl<N>>],
     block_number: u32,
     offset: u32,
-) -> &Validator<N, ValidatorNetworkImpl<N>>
+) -> &Validator<ValidatorNetworkImpl<N>>
 where
     N::Error: Send,
     N::PeerId: Deserialize + Serialize,
@@ -170,10 +170,10 @@ where
 }
 
 pub fn pop_validator_for_slot<N: TestNetwork + NetworkInterface>(
-    validators: &mut Vec<Validator<N, ValidatorNetworkImpl<N>>>,
+    validators: &mut Vec<Validator<ValidatorNetworkImpl<N>>>,
     block_number: u32,
     offset: u32,
-) -> Validator<N, ValidatorNetworkImpl<N>>
+) -> Validator<ValidatorNetworkImpl<N>>
 where
     N::Error: Send,
     N::PeerId: Deserialize + Serialize,

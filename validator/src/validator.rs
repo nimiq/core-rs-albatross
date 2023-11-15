@@ -26,7 +26,7 @@ use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, Signature as SchnorrSignatu
 use nimiq_macros::store_waker;
 use nimiq_mempool::{config::MempoolConfig, mempool::Mempool};
 use nimiq_network_interface::{
-    network::{MsgAcceptance, Network, PubsubId, Topic},
+    network::{MsgAcceptance, Network, NetworkEvent, PubsubId, SubscribeEvents, Topic},
     request::request_handler,
 };
 use nimiq_primitives::{coin::Coin, policy::Policy};
@@ -96,13 +96,14 @@ impl Clone for ValidatorProxy {
     }
 }
 
-pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 'static>
+pub struct Validator<TValidatorNetwork: ValidatorNetwork + 'static>
 where
     <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
 {
-    pub consensus: ConsensusProxy<TNetwork>,
+    pub consensus: ConsensusProxy<TValidatorNetwork::NetworkType>,
     pub blockchain: Arc<RwLock<Blockchain>>,
     network: Arc<TValidatorNetwork>,
+    network_event_rx: SubscribeEvents<<TValidatorNetwork::NetworkType as Network>::PeerId>,
 
     database: TableProxy,
     env: DatabaseProxy,
@@ -136,7 +137,7 @@ where
     control_mempool_monitor: TaskMonitor,
 }
 
-impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Validator<TNetwork, TValidatorNetwork>
+impl<TValidatorNetwork: ValidatorNetwork> Validator<TValidatorNetwork>
 where
     <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
 {
@@ -148,7 +149,7 @@ where
 
     pub fn new(
         env: DatabaseProxy,
-        consensus: &Consensus<TNetwork>,
+        consensus: &Consensus<TValidatorNetwork::NetworkType>,
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TValidatorNetwork>,
         validator_address: Address,
@@ -190,6 +191,7 @@ where
             consensus: consensus.proxy(),
             blockchain,
             network,
+            network_event_rx: network1.subscribe_events(),
 
             database,
             env,
@@ -250,7 +252,7 @@ where
     }
 
     fn init_network_request_receivers(
-        network: &Arc<TNetwork>,
+        network: &Arc<TValidatorNetwork::NetworkType>,
         macro_state: &Arc<RwLock<Option<MacroState>>>,
     ) {
         let stream = network.receive_requests::<RequestProposal>();
@@ -322,19 +324,10 @@ where
             .iter()
             .map(|validator| validator.voting_key.clone())
             .collect();
-        let key = self.voting_key();
         let network = Arc::clone(&self.network);
 
         // TODO might better be done without the task.
-        // However we have an entire batch to execute the task so it should not be extremely bad.
-        // Also the setting up of our own public key record should probably not be done here but in `init` instead.
         tokio::spawn(async move {
-            if let Err(err) = network
-                .set_public_key(&key.public_key.compress(), &key.secret_key)
-                .await
-            {
-                error!("could not set up DHT record: {:?}", err);
-            }
             network.set_validators(voting_keys).await;
         });
     }
@@ -439,6 +432,21 @@ where
             });
             self.mempool_state = MempoolState::Active;
         }
+    }
+
+    /// Publish our own entry to the DHT
+    fn publish_dht(&self) {
+        let key = self.voting_key();
+        let network = Arc::clone(&self.network);
+
+        tokio::spawn(async move {
+            if let Err(err) = network
+                .set_public_key(&key.public_key.compress(), &key.secret_key)
+                .await
+            {
+                error!("could not set up DHT record: {:?}", err);
+            }
+        });
     }
 
     /// This function resets the validator state when consensus is lost.
@@ -787,8 +795,7 @@ where
     }
 }
 
-impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
-    for Validator<TNetwork, TValidatorNetwork>
+impl<TValidatorNetwork: ValidatorNetwork> Future for Validator<TValidatorNetwork>
 where
     <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
 {
@@ -889,6 +896,17 @@ where
                     }
                 }
                 ValidatorStakingState::NoStake | ValidatorStakingState::Unknown => {}
+            }
+        }
+
+        // Check if DHT is bootstrapped and we can publish our record
+        while let Poll::Ready(Some(result)) = self.network_event_rx.poll_next_unpin(cx) {
+            match result {
+                Ok(NetworkEvent::DhtBootstrapped) => {
+                    self.publish_dht();
+                }
+                Ok(_) => {}
+                Err(e) => error!("{}", e),
             }
         }
 

@@ -18,6 +18,7 @@ use crate::{
 pub enum NetworkEvent<P> {
     PeerJoined(P, PeerInfo),
     PeerLeft(P),
+    DhtBootstrapped,
 }
 
 pub type SubscribeEvents<PeerId> =

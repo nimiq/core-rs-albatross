@@ -337,7 +337,7 @@ impl<N: Network> Future for RemoteEventDispatcher<N> {
                     // Remove the peer from internal data structures.
                     self.state.write().remove_peer(&peer_id);
                 }
-                Ok(NetworkEvent::PeerJoined(_peer_id, _)) => {}
+                Ok(_) => {}
                 Err(_) => return Poll::Pending,
             }
         }
