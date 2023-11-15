@@ -3,7 +3,7 @@
 //! need an off-circuit version of a primitive that is however guaranteed to be consistent with the on-circuit
 //! primitive used by one of our zk-SNARKs. They are also used for testing.
 
-pub use pedersen::pedersen_parameters;
+pub use pedersen::pedersen_parameters_mnt6;
 pub use serialize::*;
 pub use vk_commitment::*;
 

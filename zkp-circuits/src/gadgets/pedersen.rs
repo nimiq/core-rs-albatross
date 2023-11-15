@@ -89,7 +89,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use ark_mnt6_753::{constraints::G1Var, Fq as MNT6Fq, G1Projective};
+    use ark_mnt6_753::{constraints::G1Var, Fq as MNT6Fq, G1Projective, MNT6_753};
     use ark_r1cs_std::{prelude::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::test_rng;
@@ -113,7 +113,7 @@ mod tests {
         rng.fill_bytes(&mut bytes);
 
         // Generate the generators for the Pedersen hash.
-        let parameters = pedersen_generator_powers::<GenericWindow<5, MNT6Fq>>();
+        let parameters = pedersen_generator_powers::<GenericWindow<5, MNT6Fq>, MNT6_753>(1);
 
         // Evaluate Pedersen hash using the primitive version.
         let primitive_hash = pedersen_hash::<_, GenericWindow<5, MNT6Fq>>(&bytes, &parameters);

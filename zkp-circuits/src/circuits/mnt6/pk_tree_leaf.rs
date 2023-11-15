@@ -6,7 +6,7 @@ use ark_r1cs_std::{
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use nimiq_primitives::{policy::Policy, slots_allocation::PK_TREE_BREADTH};
-use nimiq_zkp_primitives::pedersen_parameters;
+use nimiq_zkp_primitives::pedersen_parameters_mnt6;
 use rand::{distributions::Standard, prelude::Distribution};
 
 use crate::{
@@ -67,7 +67,7 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeLeafCircuit {
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT6Fq>) -> Result<(), SynthesisError> {
         // Allocate all the constants.
         let pedersen_generators_var =
-            DefaultPedersenParametersVar::new_constant(cs.clone(), pedersen_parameters())?;
+            DefaultPedersenParametersVar::new_constant(cs.clone(), pedersen_parameters_mnt6())?;
 
         // Allocate all the witnesses.
         let pks_var = Vec::<G2Var>::new_witness(cs.clone(), || Ok(&self.pks[..]))?;

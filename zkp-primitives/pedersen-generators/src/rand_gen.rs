@@ -53,7 +53,7 @@
 use nimiq_hash::blake2s::Blake2sWithParameterBlock;
 
 /// This function will return 32 verifiably random bytes.
-pub fn generate_random_seed() -> Vec<u8> {
+pub fn generate_random_seed(personalization: u64) -> [u8; 32] {
     // This will contain the initial random hashes and convert them into bytes.
     let block_00 = "00000000000000000011bcc88fff08e31cda3af4b1f2cdf7e8ae119e2940c105";
     let block_01 = "00000000000000000002173661019adb14422b4c32d84f9edf34e4e0479cc610";
@@ -78,8 +78,9 @@ pub fn generate_random_seed() -> Vec<u8> {
     let random_bytes = hex::decode(concatenated).unwrap();
 
     // Initialize Blake2s parameters.
-    let blake2s = Blake2sWithParameterBlock::new();
+    let mut blake2s = Blake2sWithParameterBlock::new();
+    blake2s.personalization = personalization.to_be_bytes();
 
     // Calculate the Blake2s hash.
-    blake2s.evaluate(random_bytes.as_ref())
+    blake2s.evaluate_fixed(random_bytes.as_ref())
 }

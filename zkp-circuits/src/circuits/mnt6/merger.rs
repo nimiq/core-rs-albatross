@@ -10,7 +10,7 @@ use ark_r1cs_std::{
     uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use nimiq_zkp_primitives::pedersen_parameters;
+use nimiq_zkp_primitives::pedersen_parameters_mnt6;
 use rand::Rng;
 
 use crate::gadgets::{
@@ -174,7 +174,7 @@ impl ConstraintSynthesizer<MNT6Fq> for MergerCircuit {
 
         let pedersen_generators = DefaultPedersenParametersVar::new_constant(
             cs.clone(),
-            pedersen_parameters().sub_window::<VkCommitmentWindow>(),
+            pedersen_parameters_mnt6().sub_window::<VkCommitmentWindow>(),
         )?;
         // vk_commitment_bytes.enforce_equal(&reference_commitment)?;
         vk_commitment

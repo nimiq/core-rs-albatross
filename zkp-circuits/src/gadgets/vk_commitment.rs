@@ -158,7 +158,7 @@ mod tests {
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
     use nimiq_test_log::test;
-    use nimiq_zkp_primitives::{pedersen_parameters, vk_commitment};
+    use nimiq_zkp_primitives::{pedersen_parameters_mnt6, vk_commitment};
 
     use crate::gadgets::mnt6::DefaultPedersenParametersVar;
 
@@ -203,7 +203,7 @@ mod tests {
         // Verify commitment.
         let pedersen_generators = DefaultPedersenParametersVar::new_constant(
             cs.clone(),
-            pedersen_parameters().sub_window::<VkCommitmentWindow>(),
+            pedersen_parameters_mnt6().sub_window::<VkCommitmentWindow>(),
         )
         .unwrap();
         assert!(gadget_comm
@@ -278,7 +278,7 @@ mod tests {
         // Verify commitment.
         let pedersen_generators = DefaultPedersenParametersVar::new_constant(
             cs.clone(),
-            pedersen_parameters().sub_window::<VkCommitmentWindow>(),
+            pedersen_parameters_mnt6().sub_window::<VkCommitmentWindow>(),
         )
         .unwrap();
         assert!(gadget_comm

@@ -15,7 +15,7 @@ use ark_r1cs_std::{
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use nimiq_pedersen_generators::GenericWindow;
 use nimiq_primitives::policy::Policy;
-use nimiq_zkp_primitives::pedersen_parameters;
+use nimiq_zkp_primitives::pedersen_parameters_mnt6;
 use rand::Rng;
 
 use crate::{
@@ -175,7 +175,7 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeNodeCircuit {
         // Allocate all the constants.
         let pedersen_generators_var = DefaultPedersenParametersVar::new_constant(
             cs.clone(),
-            pedersen_parameters().sub_window::<PkInnerNodeWindow>(),
+            pedersen_parameters_mnt6().sub_window::<PkInnerNodeWindow>(),
         )?;
 
         let vk_child_var =

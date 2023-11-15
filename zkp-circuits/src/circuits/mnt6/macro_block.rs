@@ -12,7 +12,7 @@ use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget, UInt32, UInt8};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use nimiq_block::MacroBlock;
 use nimiq_primitives::policy::Policy;
-use nimiq_zkp_primitives::pedersen_parameters;
+use nimiq_zkp_primitives::pedersen_parameters_mnt6;
 use rand::Rng;
 
 use super::pk_tree_node::{hash_g2, PkInnerNodeWindow};
@@ -122,7 +122,7 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
 
         let pedersen_generators_var = DefaultPedersenParametersVar::new_constant(
             cs.clone(),
-            pedersen_parameters().sub_window::<PkInnerNodeWindow>(),
+            pedersen_parameters_mnt6().sub_window::<PkInnerNodeWindow>(),
         )?;
 
         let vk_pk_tree_var =

@@ -4364,11 +4364,15 @@ dependencies = [
  "ark-crypto-primitives",
  "ark-ec",
  "ark-ff",
+ "ark-mnt4-753",
  "ark-mnt6-753",
+ "ark-std",
  "bencher",
  "hex",
  "nimiq-hash",
  "nimiq-primitives",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
 ]
 
 [[package]]

@@ -1,8 +1,10 @@
 use std::marker::PhantomData;
 
 use ark_crypto_primitives::crh::pedersen::Window;
+use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
-use ark_mnt6_753::G1Projective;
+use ark_mnt4_753::MNT4_753;
+use ark_mnt6_753::MNT6_753;
 use generators::POINT_CAPACITY;
 pub use generators::{pedersen_generator_powers, PedersenParameters};
 use nimiq_primitives::policy::Policy;
@@ -54,6 +56,10 @@ const fn num_windows() -> usize {
     }
 }
 
-pub fn default() -> PedersenParameters<G1Projective> {
-    pedersen_generator_powers::<DefaultWindow>()
+pub fn default_mnt6() -> PedersenParameters<<MNT6_753 as Pairing>::G1> {
+    pedersen_generator_powers::<DefaultWindow, MNT6_753>(2813876015388210123)
+}
+
+pub fn default_mnt4() -> PedersenParameters<<MNT4_753 as Pairing>::G1> {
+    pedersen_generator_powers::<DefaultWindow, MNT4_753>(5881400429606946784)
 }
