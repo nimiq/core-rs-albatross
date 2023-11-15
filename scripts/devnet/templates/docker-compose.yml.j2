@@ -17,6 +17,9 @@ services:
       - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
     ports:
       - 8443
+        {% if seed.enable_rpc %}
+      - {{ loop.index + 8647 }}:8648
+        {% endif %}
     networks:
       devnet:
         ipv4_address: 7.0.0.{{ loop.index + 99 }}
@@ -34,6 +37,9 @@ services:
       - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
     ports:
       - 8443
+        {% if validator.enable_rpc %}
+      - {{ loop.index + 9000 }}:8648
+        {% endif %}
     networks:
       devnet:
         ipv4_address: 7.0.0.{{ loop.index + 1}}
@@ -49,6 +55,9 @@ services:
       - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
     ports:
       - 8443
+        {% if regular_node.enable_rpc %}
+      - {{ loop.index + 9000 }}:8648
+        {% endif %}
     networks:
       devnet:
         ipv4_address: 7.0.0.{{ loop.index + 99 }}
@@ -66,6 +75,9 @@ services:
       - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
     ports:
       - 8443
+        {% if spammer.enable_rpc %}
+      - {{ loop.index + 9000 }}:8648
+        {% endif %}
     networks:
       devnet:
         ipv4_address: 7.0.0.{{ loop.index + 199 }}

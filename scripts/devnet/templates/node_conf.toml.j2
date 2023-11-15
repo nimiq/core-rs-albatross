@@ -46,6 +46,12 @@ url = "{{ loki['url'] }}"
 libp2p_swarm = "debug"
 lock_api = "trace"
 
+{% if rpc is not none %}
+[rpc-server]
+bind="{{ rpc['ip'] }}"
+port = {{ rpc['port'] }}
+
+{% endif %}
 {% if metrics is not none %}
 [metrics-server]
 bind="{{ metrics['ip'] }}"

@@ -91,10 +91,12 @@ class Topology:
         seeds = []
         spammers = []
         regular_nodes = []
-        port_bases = {'validator': {'listen': 9200, 'metrics': 9600},
-                      'seed': {'listen': 9100, 'metrics': 9500},
-                      'spammer': {'listen': 9900, 'metrics': 9950},
-                      'node': {'listen': 9300, 'metrics': 9700}}
+        port_bases = {
+            'seed': {'listen': 9100, 'rpc': 8100, 'metrics': 9500},
+            'validator': {'listen': 9200, 'rpc': 8200, 'metrics': 9600},
+            'spammer': {'listen': 9900, 'rpc': 8900, 'metrics': 9950},
+            'node': {'listen': 9300, 'rpc': 8300, 'metrics': 9700}
+        }
         containerized = self.topology_settings.is_env_containerized()
         if not all(key in ['validator', 'seed', 'spammer', 'node']
                    for key in topology):
@@ -114,8 +116,24 @@ class Topology:
                         "Unexpected restartable value for a node: "
                         f"{node['restartable']}")
                 name = f"{key}{count+1}"
+                rpc = None
                 metrics = None
                 container_image = None
+
+                if 'enable_rpc' in node:
+                    if not isinstance(node['enable_rpc'], bool):
+                        raise Exception(
+                            "Unexpected enable_rpc value for a node: "
+                            f"{node['enable_rpc']}")
+                    if node['enable_rpc']:
+                        if containerized:
+                            rpc_port = 8648
+                            rpc_ip = "0.0.0.0"
+                        else:
+                            rpc_port = port_bases[key]['rpc'] + count
+                            rpc_ip = "127.0.0.1"
+                        rpc = {'ip': rpc_ip, 'port': rpc_port}
+
                 if 'enable_metrics' in node:
                     if not isinstance(node['enable_metrics'], bool):
                         raise Exception(
@@ -146,18 +164,24 @@ class Topology:
                 if key == 'validator':
                     topology_node = Validator(
                         name, port, self.topology_settings, node['sync_mode'],
-                        metrics=metrics, container_image=container_image)
+                        rpc=rpc, metrics=metrics,
+                        container_image=container_image
+                    )
                     validators.append(topology_node)
                 elif key == 'seed':
                     topology_node = Seed(
                         name, port, self.topology_settings, node['sync_mode'],
-                        metrics=metrics, container_image=container_image)
+                        rpc=rpc, metrics=metrics,
+                        container_image=container_image
+                    )
                     seeds.append(topology_node)
                     self.seed_nodes.append(topology_node)
                 elif key == 'node':
                     topology_node = RegularNode(
                         name, port, self.topology_settings, node['sync_mode'],
-                        metrics=metrics, container_image=container_image)
+                        rpc=rpc, metrics=metrics,
+                        container_image=container_image
+                    )
                     regular_nodes.append(topology_node)
                 elif key == 'spammer':
                     if 'tpb' not in node:
@@ -168,7 +192,7 @@ class Topology:
                             f"{node['tpb']}")
                     topology_node = Spammer(
                         name, port, self.topology_settings, node['tpb'],
-                        node['sync_mode'], metrics=metrics,
+                        node['sync_mode'], rpc=rpc, metrics=metrics,
                         container_image=container_image)
                     spammers.append(topology_node)
                 # Now add them to the nodes attributes
@@ -187,24 +211,28 @@ class Topology:
         seeds_list = list(
             map(lambda seed:
                 {'name': seed.get_name(),
+                 'enable_rpc': seed.get_rpc() is not None,
                  'conf_path': seed.get_conf_dir(),
                  'container_image': seed.get_container_image()},
                 seeds))
         spammers_list = list(
             map(lambda spammer:
                 {'name': spammer.get_name(),
+                 'enable_rpc': spammer.get_rpc() is not None,
                  'conf_path': spammer.get_conf_dir(),
                  'container_image': spammer.get_container_image()},
                 spammers))
         regular_nodes_list = list(
             map(lambda node:
                 {'name': node.get_name(),
+                 'enable_rpc': node.get_rpc() is not None,
                  'conf_path': node.get_conf_dir(),
                  'container_image': node.get_container_image()},
                 regular_nodes))
         validators_list = list(
             map(lambda validator:
                 {'name': validator.get_name(),
+                 'enable_rpc': validator.get_rpc() is not None,
                  'conf_path': validator.get_conf_dir(),
                  'container_image': validator.get_container_image()},
                 validators))

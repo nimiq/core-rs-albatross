@@ -14,6 +14,23 @@ spec:
     app: {{ name }}-nimiq-client
 ---
 {% endif %}
+{% if enable_rpc %}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ name }}-rpc
+  namespace: {{ namespace }}
+  labels:
+    app: {{ name }}-nimiq-rpc
+spec:
+  type: NodePort
+  ports:
+  - port: 8648
+    protocol: TCP
+  selector:
+    app: {{ name }}-nimiq-client
+---
+{% endif %}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -39,6 +56,9 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 8443
+        {% if enable_rpc %}
+        - containerPort: 8648
+        {% endif %}
         {% if enable_metrics %}
         - containerPort: 9100
         {% endif %}

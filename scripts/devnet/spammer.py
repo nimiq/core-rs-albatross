@@ -19,6 +19,8 @@ class Spammer(Node):
     :type tpb: int
     :param sync_mode: The node sync mode (history, full or light)
     :type sync_mode: str
+    :param rpc: Optional rpc settings
+    :type rpc: Optional[dict]
     :param metrics: Optional metrics settings
     :type metrics: Optional[dict]
     :param container_image: Optional container image
@@ -27,13 +29,14 @@ class Spammer(Node):
 
     def __init__(self, name: str, listen_port: int,
                  topology_settings: TopologySettings, tpb: int,
-                 sync_mode: str = 'history', metrics: Optional[dict] = None,
+                 sync_mode: str = 'history', rpc: Optional[dict] = None,
+                 metrics: Optional[dict] = None,
                  container_image: Optional[str] = None):
         self.address = "NQ40 GCAA U3UX 8BKD GUN0 PG3T 17HA 4X5H TXVE"
         super(Spammer, self).__init__(NodeType.SPAMMER,
                                       name, "nimiq-spammer", listen_port,
-                                      topology_settings, sync_mode, metrics,
-                                      container_image,
+                                      topology_settings, sync_mode,
+                                      rpc, metrics, container_image,
                                       nimiq_exec_extra_args=['-t', str(tpb)])
 
     def get_address(self):
@@ -93,6 +96,7 @@ class Spammer(Node):
         int_genesis_file = f"{int_genesis_dir}/{genesis_filename}"
         filename = self.topology_settings.get_node_k8s_dir(self.name)
         namespace = self.topology_settings.get_namespace()
+        enable_rpc = self.get_rpc() is not None
         enable_metrics = self.get_metrics() is not None
         config_content = self.get_config_files_content(jinja_env, listen_ip,
                                                        seed_addresses)
@@ -105,6 +109,7 @@ class Spammer(Node):
                                   internal_genesis_dir=int_genesis_dir,
                                   genesis_filename=genesis_filename,
                                   config_content=config_content,
+                                  enable_rpc=enable_rpc,
                                   enable_metrics=enable_metrics,
                                   container_image=self.container_image)
         with open(filename, mode="w", encoding="utf-8") as file:
@@ -128,6 +133,7 @@ class Spammer(Node):
         """
         # Read and render the TOML template
         template = jinja_env.get_template("node_conf.toml.j2")
+        rpc = self.get_rpc()
         metrics = self.get_metrics()
         loki_settings = self.topology_settings.get_loki_settings()
         if loki_settings is not None:
@@ -137,5 +143,5 @@ class Spammer(Node):
             min_peers=3, port=self.get_listen_port(),
             state_path=self.get_state_dir(), listen_ip=listen_ip,
             sync_mode=self.get_sync_mode(), seed_addresses=seed_addresses,
-            metrics=metrics, spammer=True, loki=loki_settings)
+            rpc=rpc, metrics=metrics, spammer=True, loki=loki_settings)
         return content

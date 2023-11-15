@@ -42,6 +42,8 @@ class Node:
     :type topology_settings: TopologySettings
     :param sync_mode: The node sync mode (history, full or light)
     :type sync_mode: str
+    :param rpc: Optional rpc settings
+    :type rpc: Optional[dict]
     :param metrics: Optional metrics settings
     :type metrics: Optional[dict]
     :param container_image: Optional container image
@@ -51,15 +53,17 @@ class Node:
     :type nimiq_exec_extra_args: List[str]
     """
 
-    def __init__(self, type: NodeType, name: str, nimiq_exec: str,
-                 listen_port: int, topology_settings: TopologySettings,
-                 sync_mode: str = "full", metrics: Optional[dict] = None,
-                 container_image: Optional[str] = None,
-                 nimiq_exec_extra_args: List[str] = []):
+    def __init__(
+            self, type: NodeType, name: str, nimiq_exec: str, listen_port: int,
+            topology_settings: TopologySettings, sync_mode: str = "full",
+            rpc: Optional[dict] = None, metrics: Optional[dict] = None,
+            container_image: Optional[str] = None,
+            nimiq_exec_extra_args: List[str] = []):
         self.type = type
         self.name = name
         self.nimiq_exec = nimiq_exec
         self.listen_port = listen_port
+        self.rpc = rpc
         self.metrics = metrics
         self.container_image = container_image
         self.topology_settings = topology_settings
@@ -105,6 +109,15 @@ class Node:
         :rtype: int
         """
         return self.listen_port
+
+    def get_rpc(self):
+        """
+        Gets the rpc settings of the current node
+
+        :return: The rpc settings of the node.
+        :rtype: Optional[dict]
+        """
+        return self.rpc
 
     def get_metrics(self):
         """
@@ -376,6 +389,8 @@ class RegularNode(Node):
     :type topology_settings: TopologySettings
     :param sync_mode: The node sync mode (history, full or light)
     :type sync_mode: str
+    :param rpc: Optional rpc settings
+    :type rpc: Optional[dict]
     :param metrics: Optional metrics settings
     :type metrics: Optional[dict]
     :param container_image: Optional container image
@@ -384,11 +399,11 @@ class RegularNode(Node):
 
     def __init__(self, name: str, listen_port: int,
                  topology_settings: TopologySettings, sync_mode: str = "full",
-                 metrics: Optional[dict] = None,
+                 rpc: Optional[dict] = None, metrics: Optional[dict] = None,
                  container_image: Optional[str] = None):
         super(RegularNode, self).__init__(NodeType.REGULAR_NODE,
                                           name, "nimiq-client", listen_port,
-                                          topology_settings, sync_mode,
+                                          topology_settings, sync_mode, rpc,
                                           metrics, container_image)
 
     def generate_config_files(self, jinja_env: Environment,
@@ -465,6 +480,7 @@ class RegularNode(Node):
         """
         # Read and render the TOML template
         template = jinja_env.get_template("node_conf.toml.j2")
+        rpc = self.get_rpc()
         metrics = self.get_metrics()
         loki_settings = self.topology_settings.get_loki_settings()
         if loki_settings is not None:
@@ -474,7 +490,7 @@ class RegularNode(Node):
             min_peers=3, port=self.get_listen_port(),
             state_path=self.get_state_dir(), listen_ip=listen_ip,
             sync_mode=self.get_sync_mode(), seed_addresses=seed_addresses,
-            metrics=metrics, loki=loki_settings)
+            rpc=rpc, metrics=metrics, loki=loki_settings)
         return content
 
 
@@ -490,6 +506,8 @@ class Seed(Node):
     :type topology_settings: TopologySettings
     :param sync_mode: The node sync mode (history, full or light)
     :type sync_mode: str
+    :param rpc: Optional rpc settings
+    :type rpc: Optional[dict]
     :param metrics: Optional metrics settings
     :type metrics: Optional[dict]
     :param container_image: Optional container image
@@ -498,12 +516,12 @@ class Seed(Node):
 
     def __init__(self, name: str, listen_port: int,
                  topology_settings: TopologySettings, sync_mode: str = "full",
-                 metrics: Optional[dict] = None,
+                 rpc: Optional[dict] = None, metrics: Optional[dict] = None,
                  container_image: Optional[str] = None):
         super(Seed, self).__init__(NodeType.SEED,
                                    name, "nimiq-client", listen_port,
-                                   topology_settings, sync_mode, metrics,
-                                   container_image)
+                                   topology_settings, sync_mode, rpc,
+                                   metrics, container_image)
 
     def generate_config_files(self, jinja_env: Environment, listen_ip: str):
         """
@@ -535,6 +553,7 @@ class Seed(Node):
         int_genesis_file = f"{int_genesis_dir}/{genesis_filename}"
         filename = self.topology_settings.get_node_k8s_dir(self.name)
         namespace = self.topology_settings.get_namespace()
+        enable_rpc = self.get_rpc() is not None
         enable_metrics = self.get_metrics() is not None
         config_content = self.get_config_files_content(jinja_env, listen_ip)
         # Now read and render the template
@@ -546,6 +565,7 @@ class Seed(Node):
                                   internal_genesis_dir=int_genesis_dir,
                                   genesis_filename=genesis_filename,
                                   config_content=config_content,
+                                  enable_rpc=enable_rpc,
                                   enable_metrics=enable_metrics,
                                   container_image=self.container_image)
         with open(filename, mode="w", encoding="utf-8") as file:
@@ -565,6 +585,7 @@ class Seed(Node):
         """
         # Read and render the TOML template
         template = jinja_env.get_template("node_conf.toml.j2")
+        rpc = self.get_rpc()
         metrics = self.get_metrics()
         loki_settings = self.topology_settings.get_loki_settings()
         if loki_settings is not None:
@@ -573,6 +594,6 @@ class Seed(Node):
         content = template.render(
             min_peers=3, port=self.get_listen_port(),
             state_path=self.get_state_dir(), listen_ip=listen_ip,
-            sync_mode=self.get_sync_mode(), metrics=metrics,
+            sync_mode=self.get_sync_mode(), rpc=rpc, metrics=metrics,
             loki=loki_settings)
         return content
