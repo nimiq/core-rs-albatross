@@ -4597,6 +4597,7 @@ dependencies = [
  "nimiq-collections",
  "nimiq-macros",
  "nimiq-test-log",
+ "rand 0.8.5",
  "serde",
  "tokio",
  "tokio-stream",

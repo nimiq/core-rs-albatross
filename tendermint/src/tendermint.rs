@@ -13,6 +13,7 @@ use futures::{
 };
 use nimiq_collections::BitSet;
 use nimiq_macros::store_waker;
+use rand::{thread_rng, Rng};
 use tokio::{
     sync::mpsc,
     time::{error::Elapsed, Duration},
@@ -484,8 +485,9 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             // currently running, start a new one.
             if self.future_round_verification.is_none() && !self.future_round_messages.is_empty() {
                 did_something = true;
-                // TODO: choose at random
-                let (_, message) = self.future_round_messages.pop_first().unwrap();
+                let index = thread_rng().gen_range(0..self.future_round_messages.len());
+                let validator_id = *self.future_round_messages.keys().nth(index).unwrap();
+                let message = self.future_round_messages.remove(&validator_id).unwrap();
                 let (round, step) = message.tag;
                 let contributors = message.aggregation.all_contributors();
                 let verification = self
