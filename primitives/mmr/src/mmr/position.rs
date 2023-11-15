@@ -304,7 +304,7 @@ mod tests {
 
     #[test]
     fn it_correctly_computes_height() {
-        let heights = vec![
+        let heights = [
             0, 0, 1, 0, 0, 1, 2, 0, 0, 1, 0, 0, 1, 2, 3, 0, 0, 1, 0, 0, 1, 2,
         ];
         for i in 0..heights.len() {
@@ -314,7 +314,7 @@ mod tests {
 
     #[test]
     fn it_correctly_computes_indices() {
-        let leaf_indices = vec![0, 1, 3, 4, 7, 8, 10, 11, 15, 16, 18, 19];
+        let leaf_indices = [0, 1, 3, 4, 7, 8, 10, 11, 15, 16, 18, 19];
         for i in 0..leaf_indices.len() {
             assert_eq!(leaf_number_to_index(i), leaf_indices[i]);
         }

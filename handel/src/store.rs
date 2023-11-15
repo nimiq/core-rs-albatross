@@ -359,9 +359,7 @@ mod tests {
         type Registry = TestRegistry;
         type Verifier = TestVerifier;
         type Store = ReplaceStore<(), Self>;
-        fn identify(&self) -> () {
-            ()
-        }
+        fn identify(&self) {}
         fn node_id(&self) -> usize {
             0
         }

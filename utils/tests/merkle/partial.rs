@@ -335,7 +335,7 @@ fn it_correctly_computes_more_complex_proofs() {
      *   /   \     /   \     /   \    |
      *  v0   v1   v2   v3   v4   v5   v6
      */
-    let values = vec!["1", "2", "3", "4", "5", "6", "7"];
+    let values = ["1", "2", "3", "4", "5", "6", "7"];
 
     // Vary different trees.
     for end in 5usize..7 {

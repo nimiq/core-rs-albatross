@@ -435,7 +435,7 @@ impl Client {
     pub async fn get_account(&self, address: &AddressAnyType) -> Result<PlainAccountType, JsError> {
         let address = Address::from_any(address)?.take_native();
         let plain_accounts = self.get_plain_accounts(vec![address]).await?;
-        let account = plain_accounts.get(0).unwrap();
+        let account = plain_accounts.first().unwrap();
         Ok(serde_wasm_bindgen::to_value(account)?.into())
     }
 
@@ -459,7 +459,7 @@ impl Client {
     pub async fn get_staker(&self, address: &AddressAnyType) -> Result<PlainStakerType, JsError> {
         let address = Address::from_any(address)?.take_native();
         let plain_stakers = self.get_plain_stakers(vec![address]).await?;
-        let staker = plain_stakers.get(0).unwrap();
+        let staker = plain_stakers.first().unwrap();
         Ok(serde_wasm_bindgen::to_value(staker)?.into())
     }
 
@@ -486,7 +486,7 @@ impl Client {
     ) -> Result<PlainValidatorType, JsError> {
         let address = Address::from_any(address)?.take_native();
         let plain_validators = self.get_plain_validators(vec![address]).await?;
-        let validator = plain_validators.get(0).unwrap();
+        let validator = plain_validators.first().unwrap();
         Ok(serde_wasm_bindgen::to_value(validator)?.into())
     }
 

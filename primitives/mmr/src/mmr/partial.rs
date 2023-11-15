@@ -430,7 +430,7 @@ mod tests {
 
     #[test]
     fn it_correctly_discards_invalid_range_proofs() {
-        let nodes = vec![2, 3];
+        let nodes = [2, 3];
 
         let store = MemoryStore::new();
         let mut mmr = MerkleMountainRange::<TestHash, _>::new(store);

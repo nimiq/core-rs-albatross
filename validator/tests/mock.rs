@@ -165,7 +165,7 @@ async fn four_validators_can_do_skip_block() {
     // Wait for the new block producer to create a block.
     events.next().await;
 
-    assert!(blockchain.read().block_number() >= 1 + Policy::genesis_block_number());
+    assert!(blockchain.read().block_number() > Policy::genesis_block_number());
 }
 
 fn create_skip_block_update(

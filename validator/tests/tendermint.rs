@@ -43,7 +43,7 @@ async fn it_verifies_inferior_chain_proposals() {
     let inf_proposal1 = {
         let b = blockchain1.read();
         temp_producer1.producer.next_macro_block_proposal(
-            &*b,
+            &b,
             b.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0,
             vec![],
@@ -75,7 +75,7 @@ async fn it_verifies_inferior_chain_proposals() {
     let inf_proposal2 = {
         let b = blockchain1.read();
         temp_producer1.producer.next_macro_block_proposal(
-            &*b,
+            &b,
             b.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0,
             vec![],
@@ -103,7 +103,7 @@ async fn it_verifies_inferior_chain_proposals() {
     let main_chain_proposal = {
         let b = blockchain1.read();
         temp_producer1.producer.next_macro_block_proposal(
-            &*b,
+            &b,
             b.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0,
             vec![],

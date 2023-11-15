@@ -112,9 +112,8 @@ impl<'a> From<&'a PrivateKey> for PublicKey {
 
 impl<'a> From<&'a [u8; PublicKey::SIZE]> for PublicKey {
     fn from(bytes: &'a [u8; PublicKey::SIZE]) -> Self {
-        let vk_bytes =
-            ed25519_zebra::VerificationKeyBytes::try_from(*bytes).expect("Unexpected size for");
-        PublicKey(vk_bytes)
+        let public_key = ed25519_zebra::VerificationKeyBytes::from(*bytes);
+        PublicKey(public_key)
     }
 }
 

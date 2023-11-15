@@ -6,7 +6,7 @@ use nimiq_genesis_builder::{GenesisBuilder, GenesisInfo};
 fn usage(args: Vec<String>) -> ! {
     eprintln!(
         "Usage: {} GENESIS_FILE",
-        args.get(0).unwrap_or(&String::from("nimiq-genesis"))
+        args.first().unwrap_or(&String::from("nimiq-genesis"))
     );
     exit(1);
 }

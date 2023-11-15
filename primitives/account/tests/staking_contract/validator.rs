@@ -734,7 +734,7 @@ fn retire_validator_works() {
         validator.inactive_from,
         Some(Policy::election_block_after(block_state.number))
     );
-    assert_eq!(validator.retired, true);
+    assert!(validator.retired);
 
     // Try with an already retired validator.
     assert_eq!(
@@ -789,7 +789,7 @@ fn retire_validator_works() {
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
     );
     assert!(validator.inactive_from.is_none());
-    assert_eq!(validator.retired, false);
+    assert!(!validator.retired);
 
     // Try with a wrong signature.
     let invalid_tx = make_signed_incoming_transaction(
@@ -1045,7 +1045,7 @@ fn delete_validator_works() {
     );
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(validator.inactive_from, Some(effective_deactivation_block));
-    assert_eq!(validator.retired, true);
+    assert!(validator.retired);
 
     assert_eq!(
         validator_setup

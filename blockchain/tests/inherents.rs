@@ -162,10 +162,7 @@ fn it_can_create_batch_finalization_inherents() {
                     got_penalize = true;
                 } else {
                     assert_eq!(*actual_validator_address, *validator_address);
-                    assert_eq!(
-                        *value,
-                        Coin::from_u64_unchecked(875 - one_slot_reward as u64)
-                    );
+                    assert_eq!(*value, Coin::from_u64_unchecked(875 - one_slot_reward));
                     got_reward = true;
                 }
             }

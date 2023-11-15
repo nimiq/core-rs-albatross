@@ -71,7 +71,7 @@ impl TreeProof {
     }
 
     pub fn root_hash(&self) -> Blake2bHash {
-        self.heap.get(0).cloned().unwrap_or_else(hash_empty)
+        self.heap.first().cloned().unwrap_or_else(hash_empty)
     }
 }
 

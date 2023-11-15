@@ -200,7 +200,7 @@ async fn send_two_micro_blocks_out_of_order() {
         .buffered_blocks()
         .collect::<Vec<_>>();
     assert_eq!(blocks.len(), 1);
-    let (block_number, blocks) = blocks.get(0).unwrap();
+    let (block_number, blocks) = blocks.first().unwrap();
     assert_eq!(*block_number, 2 + Policy::genesis_block_number());
     assert_eq!(blocks[0], &block2);
 
@@ -398,7 +398,7 @@ async fn send_invalid_block() {
         .buffered_blocks()
         .collect::<Vec<_>>();
     assert_eq!(blocks.len(), 1);
-    let (block_number, blocks) = blocks.get(0).unwrap();
+    let (block_number, blocks) = blocks.first().unwrap();
     assert_eq!(*block_number, 2 + Policy::genesis_block_number());
     assert_eq!(blocks[0], &block2);
 
@@ -489,7 +489,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
         .buffered_blocks()
         .collect::<Vec<_>>();
     assert_eq!(blocks.len(), 1);
-    let (block_number, blocks) = blocks.get(0).unwrap();
+    let (block_number, blocks) = blocks.first().unwrap();
     assert_eq!(*block_number, 2 + genesis_block_number);
     assert_eq!(blocks[0], &block2);
 
@@ -576,7 +576,7 @@ async fn request_missing_blocks_across_macro_block() {
         .buffered_blocks()
         .collect::<Vec<_>>();
     assert_eq!(blocks.len(), 1);
-    let (block_number, blocks) = blocks.get(0).unwrap();
+    let (block_number, blocks) = blocks.first().unwrap();
     assert_eq!(*block_number, block2.block_number());
     assert_eq!(blocks[0], &block2);
 
@@ -613,7 +613,7 @@ async fn request_missing_blocks_across_macro_block() {
         .buffered_blocks()
         .collect::<Vec<_>>();
     assert_eq!(blocks.len(), 1);
-    let (block_number, blocks) = blocks.get(0).unwrap();
+    let (block_number, blocks) = blocks.first().unwrap();
     assert_eq!(*block_number, block2.block_number());
     assert_eq!(blocks[0], &block2);
 

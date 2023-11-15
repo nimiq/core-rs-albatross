@@ -427,9 +427,7 @@ impl StakerSetup {
                 validator_setup
             }
             ValidatorState::Deleted => {
-                let validator_setup =
-                    ValidatorSetup::setup_deleted_validator(Some(active_stake + inactive_stake));
-                validator_setup
+                ValidatorSetup::setup_deleted_validator(Some(active_stake + inactive_stake))
             }
         };
 

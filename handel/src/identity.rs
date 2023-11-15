@@ -132,7 +132,7 @@ mod test {
     fn empty_identity() {
         let identity = Identity::new(BitSet::new());
 
-        assert!(identity.len() == 0);
+        assert!(identity.is_empty());
         assert!(identity.is_empty());
     }
 

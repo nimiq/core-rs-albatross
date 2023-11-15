@@ -1057,7 +1057,7 @@ fn can_revert_inherents() {
         jailed_validator: JailedValidator {
             slots: slot_start..slot_end,
             validator_address: Address::from(&validator_key_pair),
-            /// The `offense_event_block` identifies the block at which the malicious behaviour occurred.
+            // The `offense_event_block` identifies the block at which the malicious behaviour occurred.
             offense_event_block: block_state.number - 1,
         },
         new_epoch_slot_range: None,

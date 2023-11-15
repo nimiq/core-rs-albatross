@@ -371,7 +371,7 @@ fn it_correctly_computes_more_complex_proofs() {
 #[test]
 fn it_correctly_computes_absence_proofs() {
     let values = vec!["1", "2", "3", "5", "7", "8", "9"];
-    let missing_values = vec!["0", "4", "6"];
+    let missing_values = ["0", "4", "6"];
     /*
      *            h6
      *         /      \

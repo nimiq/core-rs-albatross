@@ -593,7 +593,7 @@ mod test {
     fn fork_proof_sort_key() {
         let key = KeyPair::from(
             PrivateKey::from_bytes(
-                &hex::decode(&"8a535c4be49186007503231c8569f873eb512eae308d9be7e7de20af1ddc1663")
+                &hex::decode("8a535c4be49186007503231c8569f873eb512eae308d9be7e7de20af1ddc1663")
                     .unwrap(),
             )
             .unwrap(),
@@ -691,7 +691,7 @@ mod test {
     fn double_proposal_proof_sort_key() {
         let key = KeyPair::from(
             PrivateKey::from_bytes(
-                &hex::decode(&"8a535c4be49186007503231c8569f873eb512eae308d9be7e7de20af1ddc1663")
+                &hex::decode("8a535c4be49186007503231c8569f873eb512eae308d9be7e7de20af1ddc1663")
                     .unwrap(),
             )
             .unwrap(),
@@ -815,7 +815,7 @@ mod test {
 
     #[test]
     fn double_vote_proof_sort_key() {
-        let key = SecretKey::deserialize_from_vec(&hex::decode(&"f82ec9bb46d94c6bd6272d55e08fa5bfb911257136d205d7ee41c4f8fd839cf7a38e156c23d03c10597a4faa52a28a638756cdd83355db3eaafe37c5a94cc5c062f6de73890a6387175e579ef0083e3fe516dc61c2fab73e2183ea58a0b700").unwrap()).unwrap();
+        let key = SecretKey::deserialize_from_vec(&hex::decode("f82ec9bb46d94c6bd6272d55e08fa5bfb911257136d205d7ee41c4f8fd839cf7a38e156c23d03c10597a4faa52a28a638756cdd83355db3eaafe37c5a94cc5c062f6de73890a6387175e579ef0083e3fe516dc61c2fab73e2183ea58a0b700").unwrap()).unwrap();
 
         let signers: BitSet = [0].into_iter().collect();
 
@@ -905,7 +905,7 @@ mod test {
             signature1,
             signers.clone(),
             proposal2.clone(),
-            signature2.clone(),
+            signature2,
             signers.clone(),
         )
         .into();
@@ -916,7 +916,7 @@ mod test {
             signature2,
             signers.clone(),
             proposal3.clone(),
-            signature3.clone(),
+            signature3,
             signers.clone(),
         )
         .into();
@@ -927,7 +927,7 @@ mod test {
             signature3,
             signers.clone(),
             proposal1.clone(),
-            signature1.clone(),
+            signature1,
             signers.clone(),
         )
         .into();
@@ -939,7 +939,7 @@ mod test {
             signature4,
             signers.clone(),
             proposal2.clone(),
-            signature5.clone(),
+            signature5,
             signers.clone(),
         )
         .into();
@@ -951,7 +951,7 @@ mod test {
             signature6,
             signers.clone(),
             proposal2.clone(),
-            signature7.clone(),
+            signature7,
             signers.clone(),
         )
         .into();
@@ -963,7 +963,7 @@ mod test {
             signature8,
             signers.clone(),
             proposal2.clone(),
-            signature9.clone(),
+            signature9,
             signers.clone(),
         )
         .into();
@@ -975,7 +975,7 @@ mod test {
             signature10,
             signers.clone(),
             proposal2.clone(),
-            signature11.clone(),
+            signature11,
             signers.clone(),
         )
         .into();
@@ -989,7 +989,7 @@ mod test {
 
         let mut different = vec![proof4, proof5, proof6, proof7];
         let num_different = different.len();
-        different.sort_by(|p1, p2| p1.sort_key().cmp(&p2.sort_key()));
+        different.sort_by_key(|p1| p1.sort_key());
         different.dedup_by(|p1, p2| p1.sort_key() == p2.sort_key());
         assert_eq!(different.len(), num_different);
     }
