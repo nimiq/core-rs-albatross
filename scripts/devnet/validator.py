@@ -168,19 +168,12 @@ class Validator(Node):
         if loki_settings is not None:
             loki_settings = loki_settings.format_for_config_file()
             loki_settings['extra_fields']['nimiq_node'] = self.name
-        if metrics is not None:
-            config_content = template.render(
-                min_peers=3, port=self.get_listen_port(),
-                state_path=self.get_state_dir(), listen_ip=listen_ip,
-                sync_mode=self.get_sync_mode(), validator=data,
-                seed_addresses=seed_addresses, metrics=metrics,
-                loki=loki_settings)
-        else:
-            config_content = template.render(
-                min_peers=3, port=self.get_listen_port(),
-                state_path=self.get_state_dir(), listen_ip=listen_ip,
-                sync_mode=self.get_sync_mode(), validator=data,
-                seed_addresses=seed_addresses, loki=loki_settings)
+        config_content = template.render(
+            min_peers=3, port=self.get_listen_port(),
+            state_path=self.get_state_dir(), listen_ip=listen_ip,
+            sync_mode=self.get_sync_mode(), validator=data,
+            seed_addresses=seed_addresses, metrics=metrics,
+            loki=loki_settings)
 
         # Read and render the YAML template
         template = jinja_env.get_template("ansible.yml.j2")
