@@ -54,6 +54,7 @@ port = {{ metrics['port'] }}
 {% endif %}
 {% if validator is defined %}
 [validator]
+automatic_reactivate = true
 validator_address = "{{ validator['validator_address'] }}"
 signing_key_file = "{{ state_path }}/signing_key.dat"
 signing_key = "{{ validator['signing_key'] }}"
