@@ -9,4 +9,7 @@ pub mod bits;
 pub mod pedersen;
 pub mod recursive_input;
 pub mod serialize;
+pub mod serialized_vk;
+pub mod vk_commitment;
+pub mod vks_commitment;
 pub mod y_to_bit;

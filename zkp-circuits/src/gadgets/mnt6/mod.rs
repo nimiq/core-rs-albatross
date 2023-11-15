@@ -5,11 +5,9 @@ pub use check_sig::*;
 pub use hash_to_curve::*;
 pub use macro_block::*;
 pub use pedersen::*;
-pub use vk_commitment::*;
 
 mod check_sig;
 mod hash_to_curve;
 mod macro_block;
 mod pedersen;
-mod vk_commitment;
 mod y_to_bit;

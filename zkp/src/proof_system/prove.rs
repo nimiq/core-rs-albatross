@@ -856,7 +856,6 @@ fn prove_merger<R: CryptoRng + Rng>(
         genesis_flag,
         genesis_header_hash,
         final_header_hash,
-        vk_commitment,
     );
 
     // Create the proof.
@@ -911,7 +910,8 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
 
     // Load the verifying key for Merger Wrapper from file.
     let mut file = File::open(verifying_keys.join("merger_wrapper.bin"))?;
-    let vk_merger_wrapper = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
+    let vk_merger_wrapper: VerifyingKey<MNT6_753> =
+        VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Calculate the inputs.
     let genesis_header_hash = match genesis_data {
