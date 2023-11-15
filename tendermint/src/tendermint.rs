@@ -428,24 +428,13 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
                                 return None;
                             }
                         }
+                    } else {
+                        // TODO: ban the peer
                     }
                 }
             }
 
-            // If no future round aggregation verification is currently running, start a new one.
-            if self.future_round_verification.is_none() && !self.future_round_messages.is_empty() {
-                // TODO: choose at random
-                let (_, message) = self.future_round_messages.pop_first().unwrap();
-                let (round, step) = message.tag;
-                let contributors = message.aggregation.all_contributors();
-                let verification = self
-                    .protocol
-                    .verify_aggregation_message(round, step, message.aggregation)
-                    .map(move |result| result.map(move |()| (round, contributors)));
-                self.future_round_verification = Some(Box::pin(verification));
-            }
-
-            // Finally, check if we have new messages.
+            // Check if we have new messages.
             //
             // the state changes if there is at least one message to process as they are kept for future reference.
             if let Poll::Ready(Some(mut message)) = self.level_update_stream.poll_next_unpin(cx) {
@@ -489,6 +478,21 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
                         "received level update for non running aggregation",
                     );
                 }
+            }
+
+            // Finally, if no future round aggregation verification is
+            // currently running, start a new one.
+            if self.future_round_verification.is_none() && !self.future_round_messages.is_empty() {
+                did_something = true;
+                // TODO: choose at random
+                let (_, message) = self.future_round_messages.pop_first().unwrap();
+                let (round, step) = message.tag;
+                let contributors = message.aggregation.all_contributors();
+                let verification = self
+                    .protocol
+                    .verify_aggregation_message(round, step, message.aggregation)
+                    .map(move |result| result.map(move |()| (round, contributors)));
+                self.future_round_verification = Some(Box::pin(verification));
             }
         }
         None
