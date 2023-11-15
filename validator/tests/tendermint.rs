@@ -138,7 +138,7 @@ async fn it_verifies_inferior_chain_proposals() {
         signature: main_chain_sig,
     };
 
-    assert!(interface.verify_proposal(&message, None, false).is_ok());
+    assert!(interface.verify_proposal(&message, None).is_ok());
 
     // Make sure the second inferior chain proposal is not acceptable without the micro block
     let inf_chain2 = ProposalMessage {
@@ -151,14 +151,14 @@ async fn it_verifies_inferior_chain_proposals() {
         message: inf_chain2,
         signature: inf_chain2_sig,
     };
-    assert!(interface.verify_proposal(&message, None, false).is_err());
+    assert!(interface.verify_proposal(&message, None).is_err());
 
     // push the micro block and then make sure the proposal is ok
     temp_producer2
         .push(last)
         .expect("Pushing inferior micro block should succeed.");
     let body = interface
-        .verify_proposal(&message, None, false)
+        .verify_proposal(&message, None)
         .expect("Verification must succeed.");
 
     assert_eq!(inf_proposal2.body.expect(""), body.0);
@@ -174,12 +174,12 @@ async fn it_verifies_inferior_chain_proposals() {
         message: inf_chain1.clone(),
         signature: inf_chain1_sig,
     };
-    assert!(interface.verify_proposal(&message, None, false).is_err());
+    assert!(interface.verify_proposal(&message, None).is_err());
 
     temp_producer2
         .push(second_to_last1)
         .expect("Pushing inferior micro block should succeed.");
-    assert!(interface.verify_proposal(&message, None, false).is_err());
+    assert!(interface.verify_proposal(&message, None).is_err());
 
     temp_producer2
         .push(second_to_last2)
@@ -188,7 +188,7 @@ async fn it_verifies_inferior_chain_proposals() {
     // After the last micro block is pushed the proposal should verify
     // The calculated body should match the one given by block production itself.
     let body = interface
-        .verify_proposal(&message, None, false)
+        .verify_proposal(&message, None)
         .expect("Verification must succeed.");
     assert_eq!(inf_proposal1.body.clone().expect(""), body.0);
 }

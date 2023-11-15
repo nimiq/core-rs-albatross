@@ -174,8 +174,8 @@ where
         };
         let macro_state = Arc::new(RwLock::new(macro_state));
 
-        let network1 = Arc::clone(&network);
-        let (proposal_sender, proposal_receiver) = ProposalBuffer::new();
+        let (proposal_sender, proposal_receiver) =
+            ProposalBuffer::new(Arc::clone(&blockchain), Arc::clone(&network));
 
         let mempool = Arc::new(Mempool::new(Arc::clone(&blockchain), mempool_config));
         let mempool_state = MempoolState::Inactive;
@@ -185,8 +185,8 @@ where
         let mut this = Self {
             consensus: consensus.proxy(),
             blockchain,
-            network,
-            network_event_rx: network1.subscribe_events(),
+            network: Arc::clone(&network),
+            network_event_rx: network.subscribe_events(),
 
             database,
             env,
@@ -223,7 +223,7 @@ where
         this.init();
 
         tokio::spawn(async move {
-            network1
+            network
                 .subscribe::<ProposalTopic<TValidatorNetwork>>()
                 .await
                 .expect("Failed to subscribe to proposal topic")

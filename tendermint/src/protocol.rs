@@ -10,10 +10,6 @@ use crate::utils::Step;
 pub enum ProposalError {
     /// Invalid proposals may be used to punish the proposer.
     InvalidProposal,
-    /// Proposals with invalid signatures must be ignored, but the peer who broadcasted it may be banned.
-    InvalidSignature,
-    /// Collectively used for all problems not accounted for by InvalidProposal and InvalidSignature.
-    Other,
 }
 
 #[derive(Clone, Debug)]
@@ -123,7 +119,6 @@ pub trait Protocol: Clone + Send + Sync + Unpin + Sized + 'static {
         &self,
         proposal: &SignedProposalMessage<Self::Proposal, Self::ProposalSignature>,
         precalculated_inherent: Option<Self::Inherent>,
-        signature_only: bool,
     ) -> Result<Self::Inherent, ProposalError>;
 
     /// Broadcasts a signed proposal given as `proposal`.

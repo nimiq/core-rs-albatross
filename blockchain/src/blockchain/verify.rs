@@ -5,7 +5,6 @@ use nimiq_database::{
     traits::{ReadTransaction, WriteTransaction},
     TransactionProxy as DBTransaction, WriteTransactionProxy,
 };
-use nimiq_keys::Signature;
 use nimiq_primitives::policy::Policy;
 
 use crate::{blockchain_state::BlockchainState, BlockProducer, Blockchain};
@@ -311,29 +310,16 @@ impl Blockchain {
     }
 
     /// Verifies a `proposed_block`, given the round it is proposed in as well as its valid round if applicable.
-    ///
-    /// For signature verification the signature as well as the supposedly signed payload are needed. They are
-    /// different from the eventual justification as the signature here is a Schnorr signature from the proposer,
-    /// whereas the final proof will be an aggregated bls key of all contributing validators.
     pub fn verify_macro_block_proposal(
         &self,
         proposed_block: MacroBlock,
         round: u32,
         valid_round: Option<u32>,
-        signed_data: Vec<u8>,
-        signature: &Signature,
-        signature_only: bool,
     ) -> Result<MacroBody, PushError> {
         // If the accounts tree is not complete nothing can be done
         if !self.accounts_complete() {
             // Maybe introduce a proper error here. Is this even needed?
             return Err(PushError::IncompleteAccountsTrie);
-        }
-
-        // No inherent was given, but signature verification is the only required step, independent from
-        // the result this can never work, as the inherent would have to be returned.
-        if proposed_block.body.is_none() && signature_only {
-            return Err(PushError::InvalidBlock(BlockError::MissingBody));
         }
 
         // Get the seed of the preceding block.
@@ -342,40 +328,27 @@ impl Blockchain {
             .map_err(PushError::BlockchainError)?
             .header();
 
-        // Create a read transaction to use in the following queries.
-        // It is not necessary for the correct execution and only is created to not create 3 different
-        // ones within the 3 function calls making use of it here.
-        let txn = self.read_transaction();
-
-        // Get the validator for this round.
-        let mut proposer = self
-            .get_proposer_at(
-                proposed_block.block_number(),
-                round,
-                prev_header.seed().entropy(),
-                Some(&txn),
-            )
-            .expect("Couldn't find slot owner!")
-            .validator
-            .signing_key;
-
-        // Verify the signature. The proposal is signed by the proposer of the round the proposal is used in.
-        if !proposer.verify(signature, signed_data.as_slice()) {
-            return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
-        }
-
-        if signature_only {
-            return Ok(proposed_block.body.unwrap());
-        }
-
         // The VRF seed will be signed by the proposer of the original round the proposal was proposed in.
-        // The round is specified within the header itself, and it should only ever differ from the `round`
-        // value provided if `valid_round` is Some(vr). Importantly though, that very vr is not necessarily
+        // The round is specified within the header itself, and it should only ever differ from the round
+        // value provided if valid_round = Some(vr). Importantly though, that very vr is not necessarily
         // the same as the round given in the header, as it might not be the first time this proposal is
         // re-proposed.
-        if proposed_block.header.round != round {
+        if let Some(vr) = valid_round {
+            if vr < proposed_block.header.round || vr >= round {
+                // A VR only makes sense if it is at least the original round of the proposal,
+                // while also not being in the future.
+                warn!(
+                    valid_round,
+                    round,
+                    ?proposed_block,
+                    "Re-proposing proposal with bogus VR"
+                );
+                // Reject the proposal.
+                return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
+            }
+        } else {
             // Log a warning if a block is re-proposed but fails to produce the proper vr.
-            if valid_round.is_none() {
+            if proposed_block.header.round != round {
                 warn!(
                     valid_round,
                     round,
@@ -385,18 +358,24 @@ impl Blockchain {
                 // Reject the proposal.
                 return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
             }
-            // Get the original proposer if it differs from the one proposing the proposal in this round.
-            proposer = self
-                .get_proposer_at(
-                    proposed_block.block_number(),
-                    proposed_block.header.round,
-                    prev_header.seed().entropy(),
-                    Some(&txn),
-                )
-                .expect("Couldn't find slot owner!")
-                .validator
-                .signing_key;
         }
+
+        // Create a read transaction to use in the following queries.
+        // It is not necessary for the correct execution and only is created to not create 2 different
+        // ones within the 2 function calls making use of it here.
+        let txn = self.read_transaction();
+
+        // Get the original proposer of the proposal.
+        let proposer = self
+            .get_proposer_at(
+                proposed_block.block_number(),
+                proposed_block.header.round,
+                prev_header.seed().entropy(),
+                Some(&txn),
+            )
+            .expect("Couldn't find slot owner!")
+            .validator
+            .signing_key;
 
         // Fetch predecessor block. Fail if it doesn't exist.
         let predecessor = self

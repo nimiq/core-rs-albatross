@@ -283,7 +283,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             Entry::Vacant(inherent_entry) => {
                 // The inherent is unknown. The proposal itself cannot be known either.
                 // Do full verification while also creating the inherent.
-                match self.protocol.verify_proposal(&proposal, None, false) {
+                match self.protocol.verify_proposal(&proposal, None) {
                     Ok(inherent) => {
                         // Use proposal and created inherent to produce the hash
                         let proposal_hash = proposal.message.proposal.hash();
@@ -321,11 +321,10 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
                     self.state.known_proposals.entry(proposal_hash.clone())
                 {
                     // The proposal is not known, but the inherent is. Simplify verification as the inherent does not need to be produced.
-                    match self.protocol.verify_proposal(
-                        &proposal,
-                        Some(inherent_entry.get().clone()),
-                        false,
-                    ) {
+                    match self
+                        .protocol
+                        .verify_proposal(&proposal, Some(inherent_entry.get().clone()))
+                    {
                         Ok(_) => {
                             // The proposal is valid.
                             // Insert it to the so far vacant entry in the known proposals collection and return the hash.
@@ -344,23 +343,9 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
                     }
                 } else {
                     // The proposal as well as the inherent are known.
-                    // Only verify the signature as the validity of the proposal itself has already been performed
-                    // when it was originally added to `known_proposals`.
-                    match self.protocol.verify_proposal(
-                        &proposal,
-                        Some(inherent_entry.get().clone()),
-                        true,
-                    ) {
-                        Ok(_) => proposal_hash,
-                        Err(error) => {
-                            log::debug!(
-                                ?error,
-                                ?proposal.message,
-                                "Proposal did not verify"
-                            );
-                            return None;
-                        }
-                    }
+                    // Validity of the proposal was determined, when it was originally
+                    // verified entering the `known_proposals` collection. No further work required, return the hash.
+                    proposal_hash
                 }
             }
         };

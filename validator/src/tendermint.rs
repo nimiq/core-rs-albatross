@@ -4,15 +4,15 @@ use futures::{
     future::{self, BoxFuture, FutureExt},
     stream::{BoxStream, StreamExt},
 };
-use nimiq_block::{Block, BlockError, MacroBlock, TendermintProof};
+use nimiq_block::{Block, MacroBlock, TendermintProof};
 use nimiq_blockchain::{BlockProducer, Blockchain};
-use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_collections::BitSet;
 use nimiq_handel::{
     aggregation::Aggregation, identity::IdentityRegistry, protocol::Protocol as _,
     verifier::VerificationResult,
 };
-use nimiq_hash::{Blake2sHash, Blake2sHasher, Hash, Hasher, SerializeContent};
+use nimiq_hash::{Blake2sHash, Hash};
 use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_primitives::{
     policy::Policy, slots_allocation::Validators, TendermintIdentifier, TendermintStep,
@@ -316,7 +316,6 @@ where
         &self,
         proposal: &SignedProposalMessage<Self::Proposal, Self::ProposalSignature>,
         precalculated_inherent: Option<Self::Inherent>,
-        signature_only: bool,
     ) -> Result<Self::Inherent, ProposalError> {
         // Assemble the proposed header with the body into a MacroBlock.
         let proposed_block = MacroBlock {
@@ -335,27 +334,11 @@ where
                 proposed_block,
                 proposal.message.round,
                 proposal.message.valid_round,
-                SignedProposal::hash(
-                    &proposal.message.proposal.0,
-                    proposal.message.round,
-                    proposal.message.valid_round,
-                )
-                .serialize_to_vec(),
-                &proposal.signature.0,
-                signature_only,
             )
             .map(Body)
             .map_err(|error| {
                 log::debug!(?error, ?proposal, "Proposal verification failed",);
-                // Special case for invalid signatures, as that means the proposer is not the signer.
-                // It is needed as the proposer if he produces a faulty block might be subjected to
-                // some sort of punishment or mitigation whereas with an invalid signature it would be
-                // the one relaying the message, who would potentially be subjected to protective measures.
-                if error == PushError::InvalidBlock(BlockError::InvalidJustification) {
-                    ProposalError::InvalidSignature
-                } else {
-                    ProposalError::InvalidProposal
-                }
+                ProposalError::InvalidProposal
             })
     }
 

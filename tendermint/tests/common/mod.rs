@@ -166,18 +166,15 @@ impl Protocol for Validator {
         &self,
         proposal: &SignedProposalMessage<Self::Proposal, Self::ProposalSignature>,
         precalculated_inherent: Option<Self::Inherent>,
-        signature_only: bool,
     ) -> Result<Self::Inherent, ProposalError> {
         if proposal.signature {
-            if signature_only {
-                Ok(precalculated_inherent.expect("Must not call verify_proposal(_, None, true)"))
-            } else if let Some(inherent) = precalculated_inherent {
+            if let Some(inherent) = precalculated_inherent {
                 Ok(inherent)
             } else {
                 Ok(TestInherent(proposal.message.proposal.0))
             }
         } else {
-            Err(ProposalError::InvalidSignature)
+            Err(ProposalError::InvalidProposal)
         }
     }
 
