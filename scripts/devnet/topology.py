@@ -362,6 +362,7 @@ class Topology:
                 f"No new blocks were produced after {mon_time}s")
         else:
             logging.info(f"Latest block number: {latest_block_number}")
+            self.latest_block_number = latest_block_number
 
     def __cleanup(self):
         """
