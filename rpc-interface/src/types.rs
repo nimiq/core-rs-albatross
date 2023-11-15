@@ -323,6 +323,7 @@ pub struct PolicyConstants {
     pub blocks_per_epoch: u32,
     pub validator_deposit: u64,
     pub total_supply: u64,
+    pub block_separation_time: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

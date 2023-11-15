@@ -28,6 +28,7 @@ impl PolicyInterface for PolicyDispatcher {
             blocks_per_epoch: Policy::blocks_per_epoch(),
             validator_deposit: Policy::VALIDATOR_DEPOSIT,
             total_supply: Policy::TOTAL_SUPPLY,
+            block_separation_time: Policy::BLOCK_SEPARATION_TIME,
         }
         .into())
     }
