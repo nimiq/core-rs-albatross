@@ -266,7 +266,7 @@ pub struct PenalizeEvent {
     pub validator_address: Address,
     /// The slot of the validator that was punished.
     pub slot: u16,
-    /// The block height at which the offense occured.
+    /// The block height at which the offense occurred.
     pub offense_event_block: u32,
 }
 
@@ -277,7 +277,7 @@ pub struct JailEvent {
     pub validator_address: Address,
     /// The slots of the offending validator.
     pub slots: Range<u16>,
-    /// The block height at which the offense occured.
+    /// The block height at which the offense occurred.
     pub offense_event_block: u32,
     /// Slot range of the validator in the next epoch.
     pub new_epoch_slot_range: Option<Range<u16>>,

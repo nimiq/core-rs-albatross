@@ -51,7 +51,7 @@ where
                 }
             }
 
-            // An error occured
+            // An error occurred
             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
 
             // Reader is not ready
@@ -141,7 +141,7 @@ where
                     // Wait for more data.
                     Poll::Pending => return Poll::Pending,
 
-                    // An error occured.
+                    // An error occurred.
                     Poll::Ready(Err(e)) => {
                         return {
                             error!(error = %e, "Inner AsyncRead returned an error");

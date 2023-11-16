@@ -26,7 +26,7 @@ pub enum EquivocationLocator {
 pub struct ForkLocator {
     /// The address of the validator committing the equivocation.
     pub validator_address: Address,
-    /// The block height at which the equivocation occured.
+    /// The block height at which the equivocation occurred.
     pub block_number: u32,
 }
 
@@ -37,9 +37,9 @@ pub struct ForkLocator {
 pub struct DoubleProposalLocator {
     /// The address of the validator committing the equivocation.
     pub validator_address: Address,
-    /// The block height at which the equivocation occured.
+    /// The block height at which the equivocation occurred.
     pub block_number: u32,
-    /// The round number at which the equivocation occured.
+    /// The round number at which the equivocation occurred.
     pub round: u32,
 }
 
@@ -50,11 +50,11 @@ pub struct DoubleProposalLocator {
 pub struct DoubleVoteLocator {
     /// The address of the validator committing the equivocation.
     pub validator_address: Address,
-    /// The block height at which the equivocation occured.
+    /// The block height at which the equivocation occurred.
     pub block_number: u32,
-    /// The round number at which the equivocation occured.
+    /// The round number at which the equivocation occurred.
     pub round: u32,
-    /// The tendermint step in which the equivocation occured.
+    /// The tendermint step in which the equivocation occurred.
     pub step: TendermintStep,
 }
 

@@ -368,7 +368,7 @@ impl Client {
             .await;
 
         if !is_established {
-            // The stream terminated before an `Established` event occured
+            // The stream terminated before an `Established` event occurred
             return Err(JsError::new("Stream ended"));
         }
 
