@@ -25,29 +25,58 @@ This package contains the WASM file bundled for three [targets](https://rustwasm
 
 ### With Bundlers
 
-If you use any bundler in your code, like Webpack, you should probably use the `bundler` target exported from the package root. If that doesn't work, or you require the `web` target for your use-case, jump to the [With ES Modules](#with-es-modules) section.
+If you use any bundler for your project, like Webpack or Vite, you should probably use the `bundler` target exported from the package root. If that doesn't work, or you require the `web` target for your use-case, jump to the [With ES Modules](#with-es-modules) section.
 
-> **Note**
-> For Webpack 5, you have to [enable the `asyncWebAssembly` experiment in your config](https://webpack.js.org/configuration/experiments/).
+> [!IMPORTANT]
+> For Webpack 5:
+> - Enable the [`asyncWebAssembly`](https://webpack.js.org/configuration/experiments/#asyncWebAssembly) experiment in your config.
+> - Dynamically import the package with `await import()`.
+
+> [!IMPORTANT]
+> For Vite:
+> - Use the [`vite-plugin-wasm`](https://www.npmjs.com/package/vite-plugin-wasm) plugin.
+> - Exclude this package from Vite's dependency optimization:
+> ```ts
+> // vite.config.ts
+> optimizeDeps: {
+>    exclude: ['@nimiq/core-web'],
+> }
+> ```
+
+> [!IMPORTANT]
+> For Nuxt:
+> - Use the [`vite-plugin-wasm`](https://www.npmjs.com/package/vite-plugin-wasm) plugin.
+> - Exclude this package from Vite's dependency optimization:
+> ```ts
+> // nuxt.config.ts
+> vite: {
+>   optimizeDeps: {
+>      exclude: ['@nimiq/core-web'],
+>   }
+> }
+> ```
+> - Ensure the package is only run client-side: either set [`ssr: false`](https://nuxt.com/docs/guide/concepts/rendering#client-side-rendering) in your Nuxt config, import this package only in client-side plugins, or wrap it in [`<ClientOnly>`](https://nuxt.com/docs/api/components/client-only).
 
 ```js
-// Import the package asynchronously:
+// With Webpack: import the package asynchronously:
 const Nimiq = await import('@nimiq/core-web');
+// With Vite, import at the top of your file:
+import * as Nimiq from '@nimiq/core-web';
 
 // Create a configuration builder:
 const config = new Nimiq.ClientConfiguration();
 
-// Connect to the Albatross Testnet:
+// Change the config, if necessary:
+// --------------------------------
+// Specify the network to use:
 // Optional, default is 'testalbatross'
 config.network('testalbatross');
-
 // Specify the seed nodes to initially connect to:
 // Optional, default is ['/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss']
 config.seedNodes(['/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss']);
-
 // Change the lowest log level that is output to the console:
 // Optional, default is 'info'
-config.logLevel('info');
+config.logLevel('debug');
 
 // Instantiate and launch the client:
 const client = await Nimiq.Client.create(config.build());
@@ -56,7 +85,7 @@ const client = await Nimiq.Client.create(config.build());
 ### With ES Modules
 
 ```js
-// Import the package from the /web path:
+// Import the loader and package from the /web path:
 import init, * as Nimiq from '@nimiq/core-web/web';
 
 // Load and initialize the WASM file
@@ -64,17 +93,8 @@ init().then(() => {
     // Create a configuration builder:
     const config = new Nimiq.ClientConfiguration();
 
-    // Connect to the Albatross Testnet:
-    // Optional, default is 'testalbatross'
-    config.network('testalbatross');
-
-    // Specify the seed nodes to initially connect to:
-    // Optional, default is ['/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss']
-    config.seedNodes(['/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss']);
-
-    // Change the lowest log level that is output to the console:
-    // Optional, default is 'info'
-    config.logLevel('debug');
+    // Change the config as shown above, if necessary
+    // ...
 
     // Instantiate and launch the client:
     const client = await Nimiq.Client.create(config.build());
@@ -96,17 +116,8 @@ async function main() {
     // Create a configuration builder:
     const config = new Nimiq.ClientConfiguration();
 
-    // Connect to the Albatross Testnet:
-    // Optional, default is 'testalbatross'
-    config.network('testalbatross');
-
-    // Specify the seed nodes to initially connect to:
-    // Optional, default is ['/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss']
-    config.seedNodes(['/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss']);
-
-    // Change the lowest log level that is output to the console:
-    // Optional, default is 'info'
-    config.logLevel('info');
+    // Change the config as shown above, if necessary
+    // ...
 
     // Instantiate and launch the client:
     const client = await Nimiq.Client.create(config.build());
@@ -116,7 +127,7 @@ main();
 
 ## 🐛 Issues, Bugs and Feedback
 
-This is an early version of the client code compiled to WebAssembly and as such there will be problems and friction, especially now that more people try it out in more environments than we could ever test ourselves.
+This is an early version of the client code compiled to WebAssembly and as such there can be problems and friction, especially now that more people try it out in more environments than we could ever test ourselves.
 
 If you encounter issues or you find a bug, please open an issue in our Github at https://github.com/nimiq/core-rs-albatross.
 
