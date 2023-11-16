@@ -1153,27 +1153,82 @@ mod tests {
         let env = VolatileDatabase::new(20).unwrap();
         let history_store = HistoryStore::new(env.clone());
 
+        let mut txn = env.write_transaction();
+        let history_root_initial = history_store.get_history_tree_root(0, Some(&txn)).unwrap();
+
+        let size_proof = history_store
+            .prove_num_leaves(0, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root_initial));
+        assert_eq!(size_proof.size(), 0);
+
+        let size_proof = history_store
+            .prove_num_leaves(100, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root_initial));
+        assert_eq!(size_proof.size(), 0);
+
         // Create historic transactions.
-        let ext_0 = create_transaction(1, 0);
-        let ext_1 = create_transaction(3, 1);
-        let ext_2 = create_transaction(7, 2);
+        let ext_0 = create_transaction(3, 0);
+        let ext_1 = create_transaction(4, 1);
+        let ext_2 = create_transaction(5, 2);
         let ext_3 = create_transaction(8, 3);
 
-        let hist_txs = vec![ext_0, ext_1, ext_2, ext_3];
+        // Add first historic transaction to History Store.
+        let (history_root0, _) = history_store.add_to_history(&mut txn, 0, &[ext_0]).unwrap();
 
-        // Add historic transactions to History Store.
-        let mut txn = env.write_transaction();
-        let (history_root, _) = history_store
-            .add_to_history(&mut txn, 0, &hist_txs)
-            .unwrap();
+        let size_proof = history_store
+            .prove_num_leaves(0, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root_initial));
+        assert_eq!(size_proof.size(), 0);
+
+        let size_proof = history_store
+            .prove_num_leaves(100, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root0));
+        assert_eq!(size_proof.size(), 1);
+
+        // Add remaining historic transaction to History Store.
+        let (history_root1, _) = history_store.add_to_history(&mut txn, 0, &[ext_1]).unwrap();
+        let (history_root2, _) = history_store.add_to_history(&mut txn, 0, &[ext_2]).unwrap();
+        let (history_root3, _) = history_store.add_to_history(&mut txn, 0, &[ext_3]).unwrap();
 
         // Prove number of leaves.
         let size_proof = history_store
+            .prove_num_leaves(2, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root_initial));
+        assert_eq!(size_proof.size(), 0);
+
+        let size_proof = history_store
+            .prove_num_leaves(3, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root0));
+        assert_eq!(size_proof.size(), 1);
+
+        let size_proof = history_store
+            .prove_num_leaves(4, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root1));
+        assert_eq!(size_proof.size(), 2);
+
+        let size_proof = history_store
+            .prove_num_leaves(5, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root2));
+        assert_eq!(size_proof.size(), 3);
+
+        let size_proof = history_store
             .prove_num_leaves(8, Some(&txn))
             .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root3));
+        assert_eq!(size_proof.size(), 4);
 
-        // Verify method works.
-        assert!(size_proof.verify(&history_root));
+        let size_proof = history_store
+            .prove_num_leaves(100, Some(&txn))
+            .expect("Should be able to prove number of leaves");
+        assert!(size_proof.verify(&history_root3));
         assert_eq!(size_proof.size(), 4);
     }
 

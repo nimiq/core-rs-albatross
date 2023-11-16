@@ -73,6 +73,7 @@ pub fn prove_num_leaves<
             size as u64,
             f(hash).ok_or(Error::InconsistentStore)?,
         )),
+        None => Ok(SizeProof::EmptyTree),
         _ => Err(Error::ProveInvalidLeaves),
     }
 }
