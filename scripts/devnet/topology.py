@@ -126,7 +126,7 @@ class Topology:
                             metrics_port = 9100
                             metrics_ip = "0.0.0.0"
                         else:
-                            metrics_port = port_bases[node]['metrics'] + count
+                            metrics_port = port_bases[key]['metrics'] + count
                             metrics_ip = "127.0.0.1"
                         metrics = {'ip': metrics_ip, 'port': metrics_port}
 
