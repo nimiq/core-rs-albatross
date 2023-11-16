@@ -205,7 +205,7 @@ fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
 
     let agg_pk_bytes = serialize_g2_mnt6(&agg_pk);
 
-    let hash = default_pedersen_hash(&agg_pk_bytes);
+    let hash = default_pedersen_hash::<MNT6_753>(&agg_pk_bytes);
     let agg_pk_commitment = serialize_g1_mnt6(&hash);
 
     if proof_caching
@@ -373,7 +373,7 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
     }
 
     let agg_pk_bytes = serialize_g2_mnt6(&agg_pk);
-    let hash = default_pedersen_hash(&agg_pk_bytes);
+    let hash = default_pedersen_hash::<MNT6_753>(&agg_pk_bytes);
     let left_agg_pk_comm = serialize_g1_mnt6(&hash);
 
     // Calculate the right aggregate public key commitment.
@@ -386,7 +386,7 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
     }
 
     let agg_pk_bytes = serialize_g2_mnt6(&agg_pk);
-    let hash = default_pedersen_hash(&agg_pk_bytes);
+    let hash = default_pedersen_hash::<MNT6_753>(&agg_pk_bytes);
     let right_agg_pk_comm = serialize_g1_mnt6(&hash);
 
     // Create the circuit.
@@ -580,7 +580,7 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
     }
 
     let agg_pk_bytes = serialize_g2_mnt6(&agg_pk);
-    let hash = default_pedersen_hash(&agg_pk_bytes);
+    let hash = default_pedersen_hash::<MNT6_753>(&agg_pk_bytes);
     let agg_pk_comm = serialize_g1_mnt6(&hash);
 
     // Create the circuit.
@@ -844,7 +844,7 @@ fn prove_merger<R: CryptoRng + Rng>(
     };
 
     // Calculate the inputs.
-    let vk_commitment = vk_commitment(vk_merger_wrapper.clone());
+    let vk_commitment = vk_commitment(&vk_merger_wrapper);
 
     // Create the circuit.
     let circuit = MergerCircuit::new(
@@ -919,7 +919,7 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
         Some((_, x)) => x,
     };
 
-    let vk_commitment = vk_commitment(vk_merger_wrapper);
+    let vk_commitment = vk_commitment(&vk_merger_wrapper);
 
     // Create the circuit.
     let circuit = MergerWrapperCircuit::new(

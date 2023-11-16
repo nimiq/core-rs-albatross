@@ -86,11 +86,7 @@ pub fn simulate_merger_wrapper(
     inputs.append(&mut genesis_header_hash);
     inputs.append(&mut final_header_hash);
 
-    inputs.append(
-        &mut vk_commitment(verifying_key.clone())
-            .to_field_elements()
-            .unwrap(),
-    );
+    inputs.append(&mut vk_commitment(&verifying_key).to_field_elements().unwrap());
 
     // Simulate proof.
     let toxic_waste = load_merger_wrapper_simulator(path).expect("Missing toxic waste.");

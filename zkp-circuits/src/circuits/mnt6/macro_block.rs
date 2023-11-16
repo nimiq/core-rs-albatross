@@ -18,6 +18,7 @@ use rand::Rng;
 use super::pk_tree_node::{hash_g2, PkInnerNodeWindow};
 use crate::{
     blake2s::evaluate_blake2s,
+    circuits::{num_inputs, CircuitInput},
     gadgets::{
         mnt6::{DefaultPedersenParametersVar, MacroBlockGadget},
         recursive_input::RecursiveInputVar,
@@ -47,6 +48,10 @@ pub struct MacroBlockCircuit {
     // Inputs (public)
     pub prev_header_hash: [u8; 32],
     pub final_header_hash: [u8; 32],
+}
+
+impl CircuitInput for MacroBlockCircuit {
+    const NUM_INPUTS: usize = num_inputs::<MNT6_753>(&[32, 32]);
 }
 
 impl MacroBlockCircuit {

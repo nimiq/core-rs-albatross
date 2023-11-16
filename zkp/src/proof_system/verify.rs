@@ -24,11 +24,7 @@ pub fn verify(
     inputs.append(&mut genesis_header_hash.0.to_field_elements().unwrap());
     inputs.append(&mut final_header_hash.0.to_field_elements().unwrap());
 
-    inputs.append(
-        &mut vk_commitment(verifying_key.clone())
-            .to_field_elements()
-            .unwrap(),
-    );
+    inputs.append(&mut vk_commitment(&verifying_key).to_field_elements().unwrap());
 
     // Verify proof.
     let result = Groth16::<MNT6_753>::verify(verifying_key, &inputs, &proof)?;

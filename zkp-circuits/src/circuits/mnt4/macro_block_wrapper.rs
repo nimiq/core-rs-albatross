@@ -12,7 +12,10 @@ use ark_r1cs_std::{
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use rand::Rng;
 
-use crate::gadgets::recursive_input::RecursiveInputVar;
+use crate::{
+    circuits::{num_inputs, CircuitInput},
+    gadgets::recursive_input::RecursiveInputVar,
+};
 
 /// This is the macro block wrapper circuit. It takes as inputs the previous header hash and a
 /// final header hash and it produces a proof that there exists a valid SNARK proof that transforms
@@ -32,6 +35,10 @@ pub struct MacroBlockWrapperCircuit {
     // Inputs (public)
     prev_header_hash: [u8; 32],
     final_header_hash: [u8; 32],
+}
+
+impl CircuitInput for MacroBlockWrapperCircuit {
+    const NUM_INPUTS: usize = num_inputs::<MNT4_753>(&[32, 32]);
 }
 
 impl MacroBlockWrapperCircuit {
