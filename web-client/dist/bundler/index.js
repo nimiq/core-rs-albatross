@@ -9,7 +9,7 @@ setupMainThreadTransferHandlers(Comlink, {
 });
 
 const Client = clientFactory(
-    () => new Worker(new URL('./worker.js', import.meta.url)),
+    () => new Worker(new URL('./worker.js', import.meta.url), { type : 'module' }),
     worker => Comlink.wrap(worker),
 );
 
