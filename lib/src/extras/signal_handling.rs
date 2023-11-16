@@ -6,7 +6,7 @@ pub fn initialize_signal_handler() {
 
     if let Ok(mut signals) = signals {
         tokio::spawn(async move {
-            for _ in signals.forever() {
+            if signals.forever().next().is_some() {
                 log::warn!("Received Ctrl+C. Closing client");
                 // Add some delay for the log message to propagate into loki
                 sleep(Duration::from_millis(200)).await;

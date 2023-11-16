@@ -903,17 +903,14 @@ impl Client {
                             // Subscribe to all addresses at the new peer
                             let owned_consensus = consensus.clone();
                             let owned_subscribed_addresses = Rc::clone(&subscribed_addresses);
+                            let addresses = owned_subscribed_addresses
+                                .borrow()
+                                .keys()
+                                .cloned()
+                                .collect();
                             spawn_local(async move {
                                 let _ = owned_consensus
-                                    .subscribe_to_addresses(
-                                        owned_subscribed_addresses
-                                            .borrow()
-                                            .keys()
-                                            .cloned()
-                                            .collect(),
-                                        1,
-                                        Some(peer_id),
-                                    )
+                                    .subscribe_to_addresses(addresses, 1, Some(peer_id))
                                     .await;
                                 log::debug!(
                                     peer_id=%peer_id,
