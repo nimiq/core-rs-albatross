@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, error::Error, sync::Arc};
 
 use async_trait::async_trait;
 use futures::{stream::BoxStream, StreamExt, TryFutureExt};
@@ -62,14 +62,13 @@ where
         }
     }
 
-    /// Returns the local validator ID.
-    fn local_validator_id(&self) -> u16 {
+    /// Returns the local validator ID, if elected, `Err(NotElected)` otherwise.
+    fn local_validator_id<T: Error + 'static>(&self) -> Result<u16, NetworkError<T>> {
         self.state
             .read()
             .own_validator_id
-            .expect("active validator")
-            .try_into()
-            .unwrap()
+            .map(|id| id.try_into().unwrap())
+            .ok_or(NetworkError::NotElected)
     }
 
     /// Looks up the peer ID for a validator public key in the DHT.
@@ -194,7 +193,7 @@ where
 
     async fn send_to<M: Message>(&self, validator_id: usize, msg: M) -> Result<(), Self::Error> {
         let msg = ValidatorMessage {
-            validator_id: self.local_validator_id(),
+            validator_id: self.local_validator_id()?,
             inner: msg,
         };
         if let Ok(peer_id) = self.get_validator_peer_id(validator_id).await {
@@ -216,7 +215,7 @@ where
         NetworkError<<Self::NetworkType as Network>::Error>,
     > {
         let request = ValidatorMessage {
-            validator_id: self.local_validator_id(),
+            validator_id: self.local_validator_id()?,
             inner: request,
         };
         if let Ok(peer_id) = self.get_validator_peer_id(validator_id).await {

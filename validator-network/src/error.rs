@@ -13,6 +13,9 @@ where
     #[error("Unreachable")]
     Unreachable,
 
+    #[error("We are not an elected validator")]
+    NotElected,
+
     /// If no specific set of peers was given but no connection could be established indicating that self is unreachable
     #[error("Network is offline")]
     Offline,
