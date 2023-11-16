@@ -1,0 +1,23 @@
+[[validator]]
+restartable = true
+sync_mode = "history"
+
+[[validator]]
+restartable = true
+sync_mode = "history"
+
+[[validator]]
+restartable = true
+sync_mode = "history"
+
+[[validator]]
+restartable = true
+sync_mode = "history"
+
+[[validator]]
+restartable = true
+sync_mode = "history"
+
+[[seed]]
+restartable = false
+sync_mode = "history"
