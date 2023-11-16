@@ -9,11 +9,14 @@ use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::historic_transaction::HistoricTransaction;
 use nimiq_transaction::{
     account::{
-        htlc_contract::CreationTransactionData as HtlcCreationTransactionData,
+        htlc_contract::{
+            AnyHash, CreationTransactionData as HtlcCreationTransactionData,
+            OutgoingHTLCTransactionProof,
+        },
         staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionData},
         vesting_contract::CreationTransactionData as VestingCreationTransactionData,
     },
-    TransactionFlags, TransactionFormat,
+    SignatureProof, TransactionFlags, TransactionFormat,
 };
 #[cfg(feature = "primitives")]
 use nimiq_transaction_builder::TransactionProofBuilder;
@@ -475,13 +478,16 @@ impl Transaction {
                                 staker: staker_address.to_user_friendly_address(),
                             })
                         }
-                        IncomingStakingTransactionData::UpdateStaker { new_delegation, .. } => {
-                            PlainTransactionRecipientData::UpdateStaker(PlainUpdateStakerData {
-                                raw: hex::encode(self.recipient_data()),
-                                new_delegation: new_delegation
-                                    .map(|address| address.to_user_friendly_address()),
-                            })
-                        }
+                        IncomingStakingTransactionData::UpdateStaker {
+                            new_delegation,
+                            reactivate_all_stake,
+                            ..
+                        } => PlainTransactionRecipientData::UpdateStaker(PlainUpdateStakerData {
+                            raw: hex::encode(self.recipient_data()),
+                            new_delegation: new_delegation
+                                .map(|address| address.to_user_friendly_address()),
+                            reactivate_all_stake,
+                        }),
                         IncomingStakingTransactionData::CreateValidator {
                             signing_key,
                             voting_key,
@@ -565,27 +571,11 @@ impl Transaction {
                         sender: data.sender.to_user_friendly_address(),
                         recipient: data.recipient.to_user_friendly_address(),
                         hash_algorithm: match data.hash_root {
-                            nimiq_transaction::account::htlc_contract::AnyHash::Blake2b(_) => {
-                                "blake2b".to_string()
-                            }
-                            nimiq_transaction::account::htlc_contract::AnyHash::Sha256(_) => {
-                                "sha256".to_string()
-                            }
-                            nimiq_transaction::account::htlc_contract::AnyHash::Sha512(_) => {
-                                "sha512".to_string()
-                            }
+                            AnyHash::Blake2b(_) => "blake2b".to_string(),
+                            AnyHash::Sha256(_) => "sha256".to_string(),
+                            AnyHash::Sha512(_) => "sha512".to_string(),
                         },
-                        hash_root: match data.hash_root {
-                            nimiq_transaction::account::htlc_contract::AnyHash::Blake2b(hash) => {
-                                hash.to_hex()
-                            }
-                            nimiq_transaction::account::htlc_contract::AnyHash::Sha256(hash) => {
-                                hash.to_hex()
-                            }
-                            nimiq_transaction::account::htlc_contract::AnyHash::Sha512(hash) => {
-                                hash.to_hex()
-                            }
-                        },
+                        hash_root: data.hash_root.to_hex(),
                         hash_count: data.hash_count,
                         timeout: data.timeout,
                     })
@@ -595,8 +585,75 @@ impl Transaction {
                     })
                 }
             },
-            proof: PlainTransactionProof {
-                raw: hex::encode(self.proof()),
+            proof: {
+                if self.inner.proof.is_empty() {
+                    PlainTransactionProof::Empty(PlainEmptyProof {})
+                } else if self.inner.sender_type == AccountType::HTLC {
+                    let proof = OutgoingHTLCTransactionProof::parse(&self.inner).unwrap();
+                    match proof {
+                        OutgoingHTLCTransactionProof::RegularTransfer {
+                            hash_depth,
+                            hash_root,
+                            pre_image,
+                            signature_proof,
+                        } => PlainTransactionProof::HtlcTransfer(PlainHtlcTransferProof {
+                            raw: hex::encode(self.proof()),
+                            ty: "regular-transfer".to_string(),
+                            hash_algorithm: match hash_root {
+                                AnyHash::Blake2b(_) => "blake2b".to_string(),
+                                AnyHash::Sha256(_) => "sha256".to_string(),
+                                AnyHash::Sha512(_) => "sha512".to_string(),
+                            },
+                            hash_depth,
+                            hash_root: hash_root.to_hex(),
+                            pre_image: pre_image.to_hex(),
+                            signer: signature_proof.compute_signer().to_user_friendly_address(),
+                            signature: signature_proof.signature.to_hex(),
+                            public_key: signature_proof.public_key.to_hex(),
+                            path_length: signature_proof.merkle_path.len() as u8,
+                        }),
+                        OutgoingHTLCTransactionProof::TimeoutResolve {
+                            signature_proof_sender,
+                        } => PlainTransactionProof::HtlcTimeout(PlainHtlcTimeoutProof {
+                            raw: hex::encode(self.proof()),
+                            ty: "timeout-resolve".to_string(),
+                            creator: signature_proof_sender
+                                .compute_signer()
+                                .to_user_friendly_address(),
+                            creator_signature: signature_proof_sender.signature.to_hex(),
+                            creator_public_key: signature_proof_sender.public_key.to_hex(),
+                            creator_path_length: signature_proof_sender.merkle_path.len() as u8,
+                        }),
+                        OutgoingHTLCTransactionProof::EarlyResolve {
+                            signature_proof_recipient,
+                            signature_proof_sender,
+                        } => PlainTransactionProof::HtlcEarlyResolve(PlainHtlcEarlyResolveProof {
+                            raw: hex::encode(self.proof()),
+                            ty: "early-resolve".to_string(),
+                            signer: signature_proof_recipient
+                                .compute_signer()
+                                .to_user_friendly_address(),
+                            signature: signature_proof_recipient.signature.to_hex(),
+                            public_key: signature_proof_recipient.public_key.to_hex(),
+                            path_length: signature_proof_recipient.merkle_path.len() as u8,
+                            creator: signature_proof_sender
+                                .compute_signer()
+                                .to_user_friendly_address(),
+                            creator_signature: signature_proof_sender.signature.to_hex(),
+                            creator_public_key: signature_proof_sender.public_key.to_hex(),
+                            creator_path_length: signature_proof_sender.merkle_path.len() as u8,
+                        }),
+                    }
+                } else {
+                    let proof = SignatureProof::deserialize_from_vec(&self.inner.proof).unwrap();
+                    PlainTransactionProof::Standard(PlainStandardProof {
+                        raw: hex::encode(self.proof()),
+                        signature: proof.signature.to_hex(),
+                        public_key: proof.public_key.to_hex(),
+                        signer: proof.compute_signer().to_user_friendly_address(),
+                        path_length: proof.merkle_path.len() as u8,
+                    })
+                }
             },
             size: self.serialized_size(),
             valid: self.verify(None).is_ok(),
@@ -632,12 +689,19 @@ impl Transaction {
             plain.validity_start_height,
             from_network_id(NetworkId::from_str(&plain.network)?),
         )?;
-        tx.set_proof(hex::decode(&plain.proof.raw)?);
+        tx.set_proof(hex::decode(match plain.proof {
+            PlainTransactionProof::Empty(_) => "",
+            PlainTransactionProof::Standard(ref data) => &data.raw,
+            PlainTransactionProof::HtlcTransfer(ref data) => &data.raw,
+            PlainTransactionProof::HtlcTimeout(ref data) => &data.raw,
+            PlainTransactionProof::HtlcEarlyResolve(ref data) => &data.raw,
+        })?);
 
         Ok(tx)
     }
 }
 
+/// Enum over all possible meanings of a transaction's sender data.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(untagged)]
 pub enum PlainTransactionSenderData {
@@ -646,7 +710,7 @@ pub enum PlainTransactionSenderData {
     RemoveStake(PlainRawData),
 }
 
-/// Placeholder struct to serialize data of transactions as hex strings in the style of the Nimiq 1.0 library.
+/// Enum over all possible meanings of a transaction's recipient data.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(untagged)]
 pub enum PlainTransactionRecipientData {
@@ -662,11 +726,13 @@ pub enum PlainTransactionRecipientData {
     SetInactiveStake(PlainSetInactiveStakeData),
 }
 
+/// Placeholder struct to serialize data of transactions as hex strings in the style of the Nimiq 1.0 library.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 pub struct PlainRawData {
     pub raw: String,
 }
 
+/// JSON-compatible and human-readable format of vesting creation data.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainVestingData {
@@ -677,6 +743,7 @@ pub struct PlainVestingData {
     pub step_amount: u64,
 }
 
+/// JSON-compatible and human-readable format of HTLC creation data.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainHtlcData {
@@ -689,6 +756,7 @@ pub struct PlainHtlcData {
     pub timeout: u64,
 }
 
+/// JSON-compatible and human-readable format of validator creation data.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainCreateValidatorData {
@@ -700,6 +768,7 @@ pub struct PlainCreateValidatorData {
     proof_of_knowledge: String,
 }
 
+/// JSON-compatible and human-readable format of validator update data.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainUpdateValidatorData {
@@ -711,7 +780,8 @@ pub struct PlainUpdateValidatorData {
     new_proof_of_knowledge: Option<String>,
 }
 
-// Used for DeactivateValidator & ReactivateValidator, as they have the same fields.
+/// JSON-compatible and human-readable format of validator deactivation/reactivation data.
+/// Used for DeactivateValidator & ReactivateValidator, as they have the same fields.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainValidatorData {
@@ -719,6 +789,7 @@ pub struct PlainValidatorData {
     pub validator: String,
 }
 
+/// JSON-compatible and human-readable format of staker creation data.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainCreateStakerData {
@@ -726,6 +797,7 @@ pub struct PlainCreateStakerData {
     pub delegation: Option<String>,
 }
 
+/// JSON-compatible and human-readable format of add stake data.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainAddStakeData {
@@ -733,13 +805,16 @@ pub struct PlainAddStakeData {
     pub staker: String,
 }
 
+/// JSON-compatible and human-readable format of update staker data.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainUpdateStakerData {
     pub raw: String,
     pub new_delegation: Option<String>,
+    pub reactivate_all_stake: bool,
 }
 
+/// JSON-compatible and human-readable format of set inactive stake data.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainSetInactiveStakeData {
@@ -747,10 +822,81 @@ pub struct PlainSetInactiveStakeData {
     pub new_inactive_balance: u64,
 }
 
-/// Placeholder struct to serialize proofs of transactions as hex strings in the style of the Nimiq 1.0 library.
+/// Enum over all possible meanings of a transaction's proof.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
-pub struct PlainTransactionProof {
+#[serde(untagged)]
+pub enum PlainTransactionProof {
+    Empty(PlainEmptyProof),
+    Standard(PlainStandardProof),
+    HtlcTransfer(PlainHtlcTransferProof),
+    HtlcTimeout(PlainHtlcTimeoutProof),
+    HtlcEarlyResolve(PlainHtlcEarlyResolveProof),
+}
+
+/// Placeholder struct to serialize an empty proof of transactions
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+pub struct PlainEmptyProof {}
+
+/// JSON-compatible and human-readable format of standard transaction proofs.
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainStandardProof {
     pub raw: String,
+    pub signature: String,
+    pub public_key: String,
+    pub signer: String,
+    pub path_length: u8,
+}
+
+/// JSON-compatible and human-readable format of HTLC transfer proofs.
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainHtlcTransferProof {
+    pub raw: String,
+    #[serde(rename = "type")]
+    pub ty: String,
+    pub hash_algorithm: String,
+    pub hash_depth: u8,
+    pub hash_root: String,
+    pub pre_image: String,
+    /// The signer (also called the "recipient") of the HTLC
+    pub signer: String,
+    pub signature: String,
+    pub public_key: String,
+    pub path_length: u8,
+}
+
+/// JSON-compatible and human-readable format of HTLC timeout proofs.
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainHtlcTimeoutProof {
+    pub raw: String,
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// The creator (also called the "sender") of the HTLC
+    pub creator: String,
+    pub creator_signature: String,
+    pub creator_public_key: String,
+    pub creator_path_length: u8,
+}
+
+/// JSON-compatible and human-readable format of HTLC early resolve proofs.
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainHtlcEarlyResolveProof {
+    pub raw: String,
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// The signer (also called the "recipient") of the HTLC
+    pub signer: String,
+    pub signature: String,
+    pub public_key: String,
+    pub path_length: u8,
+    /// The creator (also called the "sender") of the HTLC
+    pub creator: String,
+    pub creator_signature: String,
+    pub creator_public_key: String,
+    pub creator_path_length: u8,
 }
 
 /// JSON-compatible and human-readable format of transactions. E.g. addresses are presented in their human-readable

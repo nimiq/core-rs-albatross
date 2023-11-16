@@ -80,12 +80,21 @@ pub enum AnyHash {
 }
 
 impl AnyHash {
-    /// Returns the hex string representation of a hash
+    /// Returns the hex string representation of the hash
     pub fn to_hex(&self) -> String {
         match self {
             AnyHash::Blake2b(hash) => hash.to_hex(),
             AnyHash::Sha256(hash) => hash.to_hex(),
             AnyHash::Sha512(hash) => hash.to_hex(),
+        }
+    }
+
+    /// Returns the raw bytes of the hash
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            AnyHash::Blake2b(hash) => &hash.0,
+            AnyHash::Sha256(hash) => &hash.0,
+            AnyHash::Sha512(hash) => &hash.0,
         }
     }
 }
@@ -114,21 +123,29 @@ impl From<Sha512Hash> for AnyHash {
     }
 }
 
-impl AnyHash {
-    pub fn as_bytes(&self) -> &[u8] {
-        match self {
-            AnyHash::Blake2b(hash) => &hash.0,
-            AnyHash::Sha256(hash) => &hash.0,
-            AnyHash::Sha512(hash) => &hash.0,
-        }
-    }
-}
-
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
 #[repr(u8)]
 pub enum PreImage {
     PreImage32(AnyHash32),
     PreImage64(AnyHash64),
+}
+
+impl PreImage {
+    /// Returns the hex string representation of the pre-image
+    pub fn to_hex(&self) -> String {
+        match self {
+            PreImage::PreImage32(hash) => hash.to_hex(),
+            PreImage::PreImage64(hash) => hash.to_hex(),
+        }
+    }
+
+    /// Returns the raw bytes of the pre-image
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            PreImage::PreImage32(hash) => &hash.0,
+            PreImage::PreImage64(hash) => &hash.0,
+        }
+    }
 }
 
 impl Default for PreImage {
@@ -165,15 +182,6 @@ impl FromStr for PreImage {
             Ok(PreImage::PreImage64(AnyHash64::from_str(s)?))
         } else {
             Err(nimiq_macros::hex::FromHexError::InvalidStringLength)
-        }
-    }
-}
-
-impl PreImage {
-    pub fn as_bytes(&self) -> &[u8] {
-        match self {
-            PreImage::PreImage32(hash) => &hash.0,
-            PreImage::PreImage64(hash) => &hash.0,
         }
     }
 }
