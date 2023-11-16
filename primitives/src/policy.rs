@@ -144,18 +144,18 @@ impl Policy {
     #[inline]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = TRANSACTION_VALIDITY_WINDOW))]
     pub fn transaction_validity_window() -> u32 {
-        GLOBAL_POLICY
-            .get_or_init(Self::default)
-            .transaction_validity_window
+        let policy = GLOBAL_POLICY.get_or_init(Self::default);
+        assert!(policy.batches_per_epoch as u32 >= policy.transaction_validity_window);
+        policy.transaction_validity_window
     }
 
     /// Number of blocks a transaction is valid with Albatross consensus.
     #[inline]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = TRANSACTION_VALIDITY_WINDOW_BLOCKS))]
     pub fn transaction_validity_window_blocks() -> u32 {
-        GLOBAL_POLICY
-            .get_or_init(Self::default)
-            .transaction_validity_window
+        let policy = GLOBAL_POLICY.get_or_init(Self::default);
+        assert!(policy.batches_per_epoch as u32 >= policy.transaction_validity_window);
+        policy.transaction_validity_window
             * GLOBAL_POLICY.get_or_init(Self::default).blocks_per_batch
     }
 
