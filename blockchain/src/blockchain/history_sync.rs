@@ -6,7 +6,11 @@ use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
 };
 use nimiq_database::{traits::WriteTransaction, WriteTransactionProxy};
-use nimiq_primitives::{coin::Coin, policy::Policy};
+use nimiq_primitives::{
+    coin::Coin,
+    policy::Policy,
+    slots_allocation::{JailedValidator, PenalizedSlot},
+};
 use nimiq_serde::Serialize;
 use nimiq_transaction::{
     historic_transaction::{HistoricTransaction, HistoricTransactionData},
@@ -180,8 +184,28 @@ impl Blockchain {
                     })
                 }
                 HistoricTransactionData::Equivocation(_) => {}
-                HistoricTransactionData::Penalize(_) => {}
-                HistoricTransactionData::Jail(_) => {}
+                HistoricTransactionData::Penalize(pen) => {
+                    block_inherents
+                        .last_mut()
+                        .unwrap()
+                        .push(Inherent::Penalize {
+                            slot: PenalizedSlot {
+                                slot: pen.slot,
+                                validator_address: pen.validator_address.clone(),
+                                offense_event_block: pen.offense_event_block,
+                            },
+                        })
+                }
+                HistoricTransactionData::Jail(jail) => {
+                    block_inherents.last_mut().unwrap().push(Inherent::Jail {
+                        jailed_validator: JailedValidator {
+                            slots: jail.slots.clone(),
+                            validator_address: jail.validator_address.clone(),
+                            offense_event_block: jail.offense_event_block,
+                        },
+                        new_epoch_slot_range: jail.new_epoch_slot_range.clone(),
+                    })
+                }
             }
         }
 

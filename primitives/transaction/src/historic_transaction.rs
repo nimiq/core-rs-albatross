@@ -1,4 +1,4 @@
-use std::{error, fmt, io};
+use std::{error, fmt, io, ops::Range};
 
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash};
@@ -96,18 +96,22 @@ impl HistoricTransaction {
                     block_time,
                     data: HistoricTransactionData::Penalize(PenalizeEvent {
                         validator_address: slot.validator_address,
+                        slot: slot.slot,
                         offense_event_block: slot.offense_event_block,
                     }),
                 }),
                 Inherent::Jail {
-                    jailed_validator, ..
+                    jailed_validator,
+                    new_epoch_slot_range,
                 } => hist_txs.push(HistoricTransaction {
                     network_id,
                     block_number,
                     block_time,
                     data: HistoricTransactionData::Jail(JailEvent {
                         validator_address: jailed_validator.validator_address,
+                        slots: jailed_validator.slots,
                         offense_event_block: jailed_validator.offense_event_block,
+                        new_epoch_slot_range,
                     }),
                 }),
                 Inherent::FinalizeBatch => {}
@@ -260,6 +264,8 @@ pub struct RewardEvent {
 pub struct PenalizeEvent {
     /// The validator address of the offending validator.
     pub validator_address: Address,
+    /// The slot of the validator that was punished.
+    pub slot: u16,
     /// The block height at which the offense occured.
     pub offense_event_block: u32,
 }
@@ -269,6 +275,10 @@ pub struct PenalizeEvent {
 pub struct JailEvent {
     /// The validator address of the offending validator.
     pub validator_address: Address,
+    /// The slots of the offending validator.
+    pub slots: Range<u16>,
     /// The block height at which the offense occured.
     pub offense_event_block: u32,
+    /// Slot range of the validator in the next epoch.
+    pub new_epoch_slot_range: Option<Range<u16>>,
 }

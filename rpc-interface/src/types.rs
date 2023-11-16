@@ -624,6 +624,7 @@ impl Inherent {
             },
             HistoricTransactionData::Penalize(PenalizeEvent {
                 validator_address,
+                slot: _,
                 offense_event_block,
             }) => Inherent::Penalize {
                 block_number: hist_tx.block_number,
@@ -633,7 +634,9 @@ impl Inherent {
             },
             HistoricTransactionData::Jail(JailEvent {
                 validator_address,
+                slots: _,
                 offense_event_block,
+                new_epoch_slot_range: _,
             }) => Inherent::Jail {
                 block_number: hist_tx.block_number,
                 block_time: hist_tx.block_time,
