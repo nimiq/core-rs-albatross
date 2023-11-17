@@ -455,6 +455,9 @@ impl Transaction {
 
 impl SerializeContent for Transaction {
     fn serialize_content<W: Write, H>(&self, writer: &mut W) -> io::Result<()> {
+        // This implementation must be kept in sync with
+        // `HistoricTransaction::tx_hash`.
+
         // Serialize data as in PoW (2 bytes for the length and then the data
         // which in PoS is the recipient data) for backwards compatibility
         writer.write_all(&(self.recipient_data.len() as u16).to_be_bytes())?;

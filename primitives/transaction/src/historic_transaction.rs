@@ -1,7 +1,7 @@
-use std::{error, fmt, io, ops::Range};
+use std::{error, fmt, io, io::Write, ops::Range};
 
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake2bHash, Blake2bHasher, Hash, Hasher};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::Address;
 use nimiq_mmr::hash::Hash as MMRHash;
@@ -155,15 +155,42 @@ impl HistoricTransaction {
         }
     }
 
-    /// Returns the hash of the underlying transaction/inherent. For reward inherents we return the
-    /// hash of the corresponding reward transaction. This results into an unique hash for the
-    /// reward inherents (which wouldn't happen otherwise) and allows front-end to fetch rewards by
-    /// their transaction hash.
+    /// Returns the hash based on the underlying transaction/event.
     pub fn tx_hash(&self) -> Blake2bHash {
         match &self.data {
             HistoricTransactionData::Basic(tx) => tx.hash(),
-            // TODO: check for freedom of hash prefixes
-            _ => self.data.hash(),
+            _ => {
+                let block_height = if matches!(self.data, HistoricTransactionData::Equivocation(_))
+                {
+                    // Equivocations are not distinguished by block height.
+                    0
+                } else {
+                    self.block_number
+                };
+                let mut hasher = Blake2bHasher::new();
+
+                // The following ensures a separate hashing-namespace for
+                // inherents, by preventing self.data from serializing to a
+                // valid transaction (accidentally or on purpose), by following
+                // the serialization of a transaction until an impossible byte
+                // (sender type).
+                hasher.write_all(b"\x00\x00").unwrap(); // recipient data len
+                {} // recipient data
+                hasher
+                    .write_all(b"\x00\x00\x00\x00\x00\x00\x00\x00")
+                    .unwrap(); // sender
+                hasher
+                    .write_all(b"\x00\x00\x00\x00\x00\x00\x00\x00")
+                    .unwrap(); // sender
+                hasher.write_all(b"\x00\x00\x00\x00").unwrap(); // sender
+                hasher.write_all(b"\xff").unwrap(); // sender_type (HistoricTransaction = 0xff)
+
+                // Hash the actual data.
+                self.network_id.serialize_to_writer(&mut hasher).unwrap();
+                block_height.serialize_to_writer(&mut hasher).unwrap();
+                self.data.serialize_to_writer(&mut hasher).unwrap();
+                hasher.finish()
+            }
         }
     }
 
