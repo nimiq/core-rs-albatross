@@ -148,8 +148,28 @@ where
         // Before progressing any further the signature must be verified against the stated proposer of the message.
         // Whether or not that proposer is the correct proposer will be checked when polling the proposal out of the buffer.
 
-        // Fetch current validators and get the validator whose id was presented in the proposal message.
-        let validators = self.blockchain.read().current_validators().unwrap();
+        // Take the lock on blockchain to extract the current validators while making sure the height of the
+        // proposal is in the future
+        let bc = self.blockchain.read();
+        if bc.block_number() >= proposal.0.proposal.block_number {
+            // The proposal is older than the current height, meaning the macro block was finalized and cannot be changed.
+            // Proposal should be dropped.
+            self.network
+                .validate_message::<ProposalTopic<TValidatorNetwork>>(
+                    proposal.1,
+                    MsgAcceptance::Ignore,
+                );
+            return;
+        }
+
+        // Fetch current validators.
+        let validators = bc.current_validators().unwrap();
+
+        // No need to hold the lock as validators would only change with an election block which makes
+        // the validity of proposals moot.
+        drop(bc);
+
+        // Get the validator whose id was presented in the proposal message.
         let stated_proposer = validators.get_validator_by_slot_band(proposal.0.signer);
 
         // Calculate the hash which had been signed.
@@ -261,6 +281,17 @@ where
 
             // Get a read lock of the blockchain.
             let blockchain = self.blockchain.read();
+
+            if blockchain.block_number() >= signed_proposal.proposal.block_number {
+                // Proposal is outdated, remove and keep on looking.
+                let (_proposal, id) = entry.remove();
+                self.network
+                    .validate_message::<ProposalTopic<TValidatorNetwork>>(
+                        id,
+                        MsgAcceptance::Ignore,
+                    );
+                return None;
+            }
 
             // Try and retrieve the predecessor of the proposal.
             match blockchain.get_block(&signed_proposal.proposal.parent_hash, false, None) {
