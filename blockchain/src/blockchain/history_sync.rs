@@ -161,15 +161,46 @@ impl Blockchain {
         let mut block_timestamps = vec![];
         let mut block_transactions = vec![];
         let mut block_inherents = vec![];
-        let mut prev = 0;
+
+        let mut prev_batch = 0;
+        let mut prev_block = 0;
 
         for hist_tx in history.iter().skip(first_new_hist_tx) {
-            if hist_tx.block_number > prev {
+            if hist_tx.block_number > prev_block {
+                // If a macro block does not have any history items, we need to add it here so that
+                // we always commit FinalizeBatch/FinalizeEpoch inherents.
+                // FIXME We're missing the block timestamp to do this correctly.
+                //  Also, this works only if a single macro block is missing between history items.
+                let batch_number = Policy::batch_at(hist_tx.block_number);
+                if batch_number > prev_batch
+                    && block_numbers
+                        .last()
+                        .map(|block_number| !Policy::is_macro_block_at(*block_number))
+                        .unwrap_or(false)
+                {
+                    debug!(
+                        history_item_block_number = hist_tx.block_number,
+                        prev_block,
+                        history_item_batch = batch_number,
+                        prev_batch,
+                        last_block_number = ?block_numbers.last(),
+                        "Inserting macro block"
+                    );
+                    assert_eq!(batch_number, prev_batch + 1, "Missing batch");
+
+                    block_numbers.push(Policy::macro_block_of(prev_batch).unwrap());
+                    block_timestamps.push(0); // FIXME
+                    block_transactions.push(vec![]);
+                    block_inherents.push(vec![]);
+                }
+
                 block_numbers.push(hist_tx.block_number);
                 block_timestamps.push(hist_tx.block_time);
                 block_transactions.push(vec![]);
                 block_inherents.push(vec![]);
-                prev = hist_tx.block_number;
+
+                prev_batch = batch_number;
+                prev_block = hist_tx.block_number;
             }
 
             match &hist_tx.data {
@@ -207,6 +238,22 @@ impl Blockchain {
                     })
                 }
             }
+        }
+
+        // Add the final macro block (the one we're proving against) if it's not included yet.
+        if block_numbers
+            .last()
+            .map(|block_number| *block_number != block.block_number())
+            .unwrap_or(true)
+        {
+            debug!(
+                block_number = block.block_number(),
+                "Inserting final macro block"
+            );
+            block_numbers.push(block.block_number());
+            block_timestamps.push(0); // FIXME
+            block_transactions.push(vec![]);
+            block_inherents.push(vec![]);
         }
 
         // We go over the blocks one more time and add the FinalizeBatch and FinalizeEpoch inherents
