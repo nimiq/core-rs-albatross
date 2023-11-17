@@ -23,7 +23,7 @@ jobs:
         - test: FourValidatorsReconnect
           devnet_args: -t .github/devnet_topologies/four_validators.toml
         - test: MultipleValidatorsDown
-          devnet_args: -t .github/devnet_topologies/five_validators.toml -k 2 -ut 100
+          devnet_args: -t .github/devnet_topologies/seven_validators.toml -k 2 -ut 100
         - test: FourValidatorsReconnectRmDatabase
           devnet_args: -t .github/devnet_topologies/four_validators.toml -d -ut 100
         - test: FourValidatorsReconnectSpammer
