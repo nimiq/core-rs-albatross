@@ -261,7 +261,7 @@ class Node:
         :return: A boolean indicating if a panic has happened or not
         :rtype: bool
         """
-        panics = subprocess.run(["grep", "ERROR.*panic[[:blank:]]",
+        panics = subprocess.run(["grep", "ERROR.*panicked[[:blank:]]",
                                  self.get_log()], capture_output=True,
                                 shell=False, text=True).stdout
         return len(panics) != 0
