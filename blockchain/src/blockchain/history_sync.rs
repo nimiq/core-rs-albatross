@@ -269,22 +269,6 @@ impl Blockchain {
         // Unwrap the block.
         let macro_block = block.unwrap_macro_ref();
 
-        // Check the state_root hash against the one in the block.
-        let wanted_state_root = this.state.accounts.get_root_hash_assert(Some(&txn));
-        if macro_block.header.state_root != wanted_state_root {
-            warn!(
-                block = %macro_block,
-                reason = "header accounts hash doesn't match real accounts hash",
-                state_root = %macro_block.header.state_root,
-                %wanted_state_root,
-                "Rejecting block",
-            );
-            txn.abort();
-            #[cfg(feature = "metrics")]
-            this.metrics.note_invalid_block();
-            return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
-        }
-
         // Macro blocks are final and receipts for the previous batch are no longer necessary
         // as rebranching across this block is not possible.
         this.chain_store.clear_revert_infos(&mut txn);
@@ -300,6 +284,15 @@ impl Blockchain {
         chain_info.history_tree_len =
             this.history_store
                 .total_len_at_epoch(block.epoch_number(), Some(&txn)) as u64;
+
+        debug!(
+            epoch_number = block.epoch_number(),
+            history_len = history.len(),
+            first_new_hist_tx,
+            effective_history_len = history.len() - first_new_hist_tx,
+            history_tree_len = chain_info.history_tree_len,
+            "extend_history_sync"
+        );
 
         this.chain_store
             .put_chain_info(&mut txn, &block_hash, &chain_info, true);
@@ -318,6 +311,22 @@ impl Blockchain {
                 "Rejecting block",
             );
             return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
+        }
+
+        // Check the state_root hash against the one in the block.
+        let wanted_state_root = this.state.accounts.get_root_hash_assert(Some(&txn));
+        if macro_block.header.state_root != wanted_state_root {
+            warn!(
+                block = %macro_block,
+                reason = "header accounts hash doesn't match real accounts hash",
+                state_root = %macro_block.header.state_root,
+                %wanted_state_root,
+                "Rejecting block",
+            );
+            txn.abort();
+            #[cfg(feature = "metrics")]
+            this.metrics.note_invalid_block();
+            return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
         }
 
         // Give up database transactions and push lock before creating notifications.
