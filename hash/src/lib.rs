@@ -149,6 +149,11 @@ impl io::Write for Blake2bHasher {
         Ok(buf.len())
     }
 
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.0.update(buf);
+        Ok(())
+    }
+
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
     }
@@ -239,6 +244,11 @@ impl io::Write for Blake2sHasher {
         Ok(buf.len())
     }
 
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.0.update(buf);
+        Ok(())
+    }
+
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
     }
@@ -319,6 +329,11 @@ impl io::Write for Argon2dHasher {
         Ok(buf.len())
     }
 
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.buf.extend(buf);
+        Ok(())
+    }
+
     fn flush(&mut self) -> Result<(), io::Error> {
         Ok(())
     }
@@ -373,6 +388,11 @@ impl io::Write for Sha256Hasher {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.0.update(buf);
         Ok(buf.len())
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.0.update(buf);
+        Ok(())
     }
 
     fn flush(&mut self) -> io::Result<()> {

@@ -160,6 +160,11 @@ impl io::Write for Sha512Hasher {
         Ok(buf.len())
     }
 
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.0.update(buf);
+        Ok(())
+    }
+
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
     }
