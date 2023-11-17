@@ -14,7 +14,7 @@ use nimiq_test_utils::{
     zkp_test_data::{get_base_seed, simulate_merger_wrapper, ZKP_TEST_KEYS_PATH},
 };
 use nimiq_utils::time::OffsetTime;
-use nimiq_zkp::ZKP_VERIFYING_KEY;
+use nimiq_zkp::ZKP_VERIFYING_DATA;
 use nimiq_zkp_component::{
     proof_store::{DBProofStore, ProofStore},
     proof_utils::validate_proof,
@@ -113,7 +113,7 @@ async fn peers_reply_with_valid_proof() {
     let new_proof = simulate_merger_wrapper(
         Path::new(ZKP_TEST_KEYS_PATH),
         &blockchain2,
-        &ZKP_VERIFYING_KEY,
+        &ZKP_VERIFYING_DATA,
         &mut get_base_seed(),
     );
     log::info!("setting proof");
@@ -197,7 +197,7 @@ async fn peers_reply_with_valid_proof_and_election_block() {
     let new_proof = simulate_merger_wrapper(
         Path::new(ZKP_TEST_KEYS_PATH),
         &blockchain2,
-        &ZKP_VERIFYING_KEY,
+        &ZKP_VERIFYING_DATA,
         &mut get_base_seed(),
     );
     log::info!("setting proof");

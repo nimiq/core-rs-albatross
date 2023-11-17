@@ -1,8 +1,8 @@
 use ark_crypto_primitives::snark::SNARKGadget;
 use ark_ff::UniformRand;
 use ark_groth16::{
-    constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
-    Proof, VerifyingKey,
+    constraints::{Groth16VerifierGadget, ProofVar},
+    Proof,
 };
 use ark_mnt4_753::{constraints::PairingVar, Fq as MNT4Fq, G1Affine, G2Affine, MNT4_753};
 use ark_r1cs_std::{
@@ -11,9 +11,16 @@ use ark_r1cs_std::{
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use nimiq_primitives::policy::Policy;
+use nimiq_zkp_primitives::pedersen::pedersen_parameters_mnt4;
 use rand::Rng;
 
-use crate::gadgets::{bits::BitVec, recursive_input::RecursiveInputVar};
+use crate::{
+    circuits::vk_commitments::{CircuitId, VerifyingKeyHelper, VerifyingKeys},
+    gadgets::{
+        bits::BitVec, mnt4::DefaultPedersenParametersVar, recursive_input::RecursiveInputVar,
+        vk_commitment::VkCommitmentWindow,
+    },
+};
 
 /// This is the node subcircuit of the PKTreeCircuit. See PKTreeLeafCircuit for more details.
 /// Its purpose it two-fold:
@@ -26,9 +33,9 @@ pub struct PKTreeNodeCircuit {
     // Constants for the circuit. Careful, changing these values result in a different circuit, so
     // whenever you change these values you need to generate new proving and verifying keys.
     tree_level: usize,
-    vk_child: VerifyingKey<MNT4_753>,
 
     // Witnesses (private)
+    keys: VerifyingKeys,
     l_proof: Proof<MNT4_753>,
     r_proof: Proof<MNT4_753>,
 
@@ -38,12 +45,18 @@ pub struct PKTreeNodeCircuit {
     l_agg_pk_commitment: [u8; 95],
     r_agg_pk_commitment: [u8; 95],
     signer_bitmap_chunk: Vec<bool>,
+    vks_commitment: [u8; 95 * 2],
 }
 
 impl PKTreeNodeCircuit {
+    pub fn num_inputs(tree_level: usize) -> usize {
+        let num_bits = Policy::SLOTS as usize / 2_usize.pow(tree_level as u32);
+        crate::circuits::num_inputs::<MNT4_753>(&[32, 32, 95, 95, num_bits.div_ceil(8), 95 * 2])
+    }
+
     pub fn new(
         tree_level: usize,
-        vk_child: VerifyingKey<MNT4_753>,
+        keys: VerifyingKeys,
         l_proof: Proof<MNT4_753>,
         r_proof: Proof<MNT4_753>,
         l_pk_node_hash: [u8; 32],
@@ -54,7 +67,8 @@ impl PKTreeNodeCircuit {
     ) -> Self {
         Self {
             tree_level,
-            vk_child,
+            vks_commitment: keys.commitment(),
+            keys,
             l_proof,
             r_proof,
             l_pk_node_hash,
@@ -65,11 +79,7 @@ impl PKTreeNodeCircuit {
         }
     }
 
-    pub fn rand<R: Rng + ?Sized>(
-        tree_level: usize,
-        vk_child: VerifyingKey<MNT4_753>,
-        rng: &mut R,
-    ) -> Self {
+    pub fn rand<R: Rng + ?Sized>(tree_level: usize, rng: &mut R) -> Self {
         let l_proof = Proof {
             a: G1Affine::rand(rng),
             b: G2Affine::rand(rng),
@@ -102,9 +112,11 @@ impl PKTreeNodeCircuit {
             signer_bitmap_chunk.push(rng.gen());
         }
 
-        PKTreeNodeCircuit {
+        let keys = VerifyingKeys::rand(rng);
+
+        PKTreeNodeCircuit::new(
             tree_level,
-            vk_child,
+            keys,
             l_proof,
             r_proof,
             l_pk_node_hash,
@@ -112,16 +124,18 @@ impl PKTreeNodeCircuit {
             l_agg_pk_commitment,
             r_agg_pk_commitment,
             signer_bitmap_chunk,
-        }
+        )
     }
 }
 
 impl ConstraintSynthesizer<MNT4Fq> for PKTreeNodeCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fq>) -> Result<(), SynthesisError> {
-        // Allocate all the constants.
-        let vk_child_var =
-            VerifyingKeyVar::<MNT4_753, PairingVar>::new_constant(cs.clone(), &self.vk_child)?;
+        // Allocate constants.
+        let pedersen_generators = DefaultPedersenParametersVar::new_constant(
+            cs.clone(),
+            pedersen_parameters_mnt4().sub_window::<VkCommitmentWindow>(),
+        )?;
 
         // Allocate all the witnesses.
         let l_proof_var =
@@ -142,10 +156,26 @@ impl ConstraintSynthesizer<MNT4Fq> for PKTreeNodeCircuit {
             UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.r_agg_pk_commitment)?;
 
         let signer_bitmap_chunk_bits =
-            BitVec::<MNT4Fq>::new_input_vec(cs, &self.signer_bitmap_chunk[..])?;
+            BitVec::<MNT4Fq>::new_input_vec(cs.clone(), &self.signer_bitmap_chunk[..])?;
         let signer_bitmap_bits = signer_bitmap_chunk_bits.0
             [..Policy::SLOTS as usize / 2_usize.pow(self.tree_level as u32)]
             .to_vec();
+        let vks_commitment_var = UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.vks_commitment)?;
+
+        // Allocate the vk gadget.
+        let vk_helper = VerifyingKeyHelper::new_and_verify::<PairingVar>(
+            cs.clone(),
+            self.keys.clone(),
+            &vks_commitment_var,
+            &pedersen_generators,
+        )?;
+
+        // Get merger vk.
+        let child_vk = vk_helper.get_and_verify_vk(
+            cs,
+            CircuitId::PkTree(self.tree_level + 1),
+            &pedersen_generators,
+        )?;
 
         // Split the signer's bitmap chunk into two, for the left and right child nodes.
         let (l_signer_bitmap_bits, r_signer_bitmap_bits) = signer_bitmap_bits
@@ -156,9 +186,13 @@ impl ConstraintSynthesizer<MNT4Fq> for PKTreeNodeCircuit {
         proof_inputs.push(&l_pk_node_hash_var)?;
         proof_inputs.push(&l_agg_pk_commitment_var)?;
         proof_inputs.push(l_signer_bitmap_bits)?;
+        // We only pass the vks commitment to non-leaf nodes.
+        if self.tree_level < 4 {
+            proof_inputs.push(&vks_commitment_var)?;
+        }
 
         Groth16VerifierGadget::<MNT4_753, PairingVar>::verify(
-            &vk_child_var,
+            &child_vk,
             &proof_inputs.into(),
             &l_proof_var,
         )?
@@ -169,9 +203,13 @@ impl ConstraintSynthesizer<MNT4Fq> for PKTreeNodeCircuit {
         proof_inputs.push(&r_pk_node_hash_var)?;
         proof_inputs.push(&r_agg_pk_commitment_var)?;
         proof_inputs.push(r_signer_bitmap_bits)?;
+        // We only pass the vks commitment to non-leaf nodes.
+        if self.tree_level < 4 {
+            proof_inputs.push(&vks_commitment_var)?;
+        }
 
         Groth16VerifierGadget::<MNT4_753, PairingVar>::verify(
-            &vk_child_var,
+            &child_vk,
             &proof_inputs.into(),
             &r_proof_var,
         )?

@@ -1,7 +1,6 @@
 use std::{fs::File, path::Path, sync::Arc};
 
 use ark_ff::ToConstraintField;
-use ark_groth16::VerifyingKey;
 use ark_mnt6_753::MNT6_753;
 use ark_serialize::CanonicalDeserialize;
 use nimiq_blockchain::Blockchain;
@@ -10,7 +9,7 @@ use nimiq_genesis::NetworkInfo;
 use nimiq_hash::HashOutput;
 use nimiq_zkp_circuits::test_setup::ToxicWaste;
 use nimiq_zkp_component::types::ZKProof;
-use nimiq_zkp_primitives::vk_commitment;
+use nimiq_zkp_primitives::VerifyingData;
 use parking_lot::RwLock;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -66,7 +65,7 @@ pub fn load_merger_wrapper_simulator(path: &Path) -> Option<ToxicWaste<MNT6_753>
 pub fn simulate_merger_wrapper(
     path: &Path,
     blockchain: &Arc<RwLock<Blockchain>>,
-    verifying_key: &VerifyingKey<MNT6_753>,
+    verifying_data: &VerifyingData,
     rng: &mut impl Rng,
 ) -> ZKProof {
     let block = blockchain.read().state.election_head.clone();
@@ -86,7 +85,7 @@ pub fn simulate_merger_wrapper(
     inputs.append(&mut genesis_header_hash);
     inputs.append(&mut final_header_hash);
 
-    inputs.append(&mut vk_commitment(&verifying_key).to_field_elements().unwrap());
+    inputs.append(&mut verifying_data.keys_commitment.to_field_elements().unwrap());
 
     // Simulate proof.
     let toxic_waste = load_merger_wrapper_simulator(path).expect("Missing toxic waste.");

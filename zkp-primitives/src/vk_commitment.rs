@@ -1,5 +1,6 @@
 use ark_ec::pairing::Pairing;
 use ark_groth16::VerifyingKey;
+use ark_mnt6_753::MNT6_753;
 use ark_serialize::CanonicalSerialize;
 
 use crate::pedersen::{default_pedersen_hash, DefaultPedersenParameters95};
@@ -36,4 +37,10 @@ pub fn vks_commitment<E: Pairing + DefaultPedersenParameters95>(
 
     // Serialize the Pedersen commitment.
     E::g1_to_bytes(&hash)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VerifyingData {
+    pub merger_wrapper_vk: VerifyingKey<MNT6_753>,
+    pub keys_commitment: [u8; 95 * 2],
 }

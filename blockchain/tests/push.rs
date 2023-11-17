@@ -25,7 +25,7 @@ use nimiq_test_utils::{
 };
 use nimiq_utils::key_rng::SecureGenerate;
 use nimiq_vrf::VrfSeed;
-use nimiq_zkp::ZKP_VERIFYING_KEY;
+use nimiq_zkp::ZKP_VERIFYING_DATA;
 
 pub fn expect_push_micro_block(config: BlockConfig, expected_res: Result<PushResult, PushError>) {
     if config.test_micro {
@@ -585,7 +585,7 @@ fn can_push_zkps() {
     let zkp_proof = simulate_merger_wrapper(
         Path::new(ZKP_TEST_KEYS_PATH),
         &temp_producer1.blockchain,
-        &ZKP_VERIFYING_KEY,
+        &ZKP_VERIFYING_DATA,
         &mut get_base_seed(),
     );
 

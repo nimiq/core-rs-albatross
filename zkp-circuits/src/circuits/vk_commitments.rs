@@ -6,7 +6,7 @@ use ark_mnt6_753::MNT6_753;
 use ark_r1cs_std::{groups::GroupOpsBounds, pairing::PairingVar, uint8::UInt8};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_std::UniformRand;
-use nimiq_primitives::policy::Policy;
+use log::error;
 use nimiq_zkp_primitives::{pedersen::DefaultPedersenParameters95, vk_commitment, vks_commitment};
 use rand::Rng;
 
@@ -16,9 +16,14 @@ use crate::gadgets::{
 };
 
 use super::{
-    mnt4::{MacroBlockWrapperCircuit, MergerWrapperCircuit},
-    mnt6::{MacroBlockCircuit, MergerCircuit},
-    num_inputs, CircuitInput,
+    mnt4::{
+        MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as MNT4PKTreeNodeCircuit,
+    },
+    mnt6::{
+        MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit,
+        PKTreeNodeCircuit as MNT6PKTreeNodeCircuit,
+    },
+    CircuitInput,
 };
 
 type BasePrimeField<E> = <<<E as Pairing>::G1 as CurveGroup>::BaseField as Field>::BasePrimeField;
@@ -79,12 +84,16 @@ impl Default for VerifyingKeys {
             pk_tree_mnt4: vec![],
         };
         for tree_level in 0..=5 {
-            let num_bits = Policy::SLOTS as usize / 2_usize.pow(tree_level as u32);
             if tree_level % 2 == MNT6_753::VK_COMMITMENT_INDEX {
-                let num_inputs = num_inputs::<MNT6_753>(&[32, 32, 95, 95, (num_bits + 8 - 1) / 8]);
-                keys.pk_tree_mnt6.push(dummy_vk(num_inputs));
+                keys.pk_tree_mnt6
+                    .push(dummy_vk(MNT4PKTreeNodeCircuit::num_inputs(tree_level)));
             } else {
-                let num_inputs = num_inputs::<MNT4_753>(&[32, 95, (num_bits + 8 - 1) / 8]);
+                // The leaf node does not require the vks commitment.
+                let num_inputs = if tree_level == 5 {
+                    PKTreeLeafCircuit::num_inputs(tree_level)
+                } else {
+                    MNT6PKTreeNodeCircuit::num_inputs(tree_level)
+                };
                 keys.pk_tree_mnt4.push(dummy_vk(num_inputs));
             }
         }
@@ -183,7 +192,7 @@ impl PairingRelatedKeys<MNT4_753> for VerifyingKeys {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum CircuitId {
     MergerWrapper,
     Merger,
@@ -233,7 +242,7 @@ where
     pub fn new_and_verify<PV: PairingVar<P, BasePrimeField<P>>>(
         cs: ConstraintSystemRef<BasePrimeField<P>>,
         keys: VerifyingKeys,
-        commitment: Vec<UInt8<BasePrimeField<P>>>,
+        commitment: &Vec<UInt8<BasePrimeField<P>>>,
         pedersen_generators: &PedersenParametersVar<P::G1, PV::G1Var>,
     ) -> Result<Self, SynthesisError>
     where
@@ -269,8 +278,10 @@ where
         PV::G1Var: SerializeGadget<BasePrimeField<P>>,
         PV::G2Var: SerializeGadget<BasePrimeField<P>>,
     {
-        let vk = PairingRelatedKeys::<P>::get_key(&self.keys, circuit_id)
-            .ok_or(SynthesisError::Unsatisfiable)?;
+        let vk = PairingRelatedKeys::<P>::get_key(&self.keys, circuit_id).ok_or_else(|| {
+            error!("Could not load key {:?}.", circuit_id);
+            SynthesisError::Unsatisfiable
+        })?;
         let (c_index, i) = circuit_id.index();
         assert_eq!(c_index, P::VK_COMMITMENT_INDEX);
         let commitment = self.vks_commitment_gadget.vk_commitments[i].clone();
@@ -336,7 +347,7 @@ mod tests {
         let vks_gadget = VerifyingKeyHelper::<MNT6_753>::new_and_verify::<MNT6PairingVar>(
             cs.clone(),
             keys.clone(),
-            commitment_var,
+            &commitment_var,
             &pedersen_generators,
         )
         .unwrap();
@@ -398,7 +409,7 @@ mod tests {
         let vks_gadget = VerifyingKeyHelper::<MNT4_753>::new_and_verify::<MNT4PairingVar>(
             cs.clone(),
             keys.clone(),
-            commitment_var,
+            &commitment_var,
             &pedersen_generators,
         )
         .unwrap();

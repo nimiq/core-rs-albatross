@@ -1,8 +1,8 @@
 use ark_crypto_primitives::snark::SNARKGadget;
 use ark_ff::UniformRand;
 use ark_groth16::{
-    constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
-    Proof, VerifyingKey,
+    constraints::{Groth16VerifierGadget, ProofVar},
+    Proof,
 };
 use ark_mnt6_753::{
     constraints::{G2Var, PairingVar},
@@ -15,13 +15,18 @@ use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::pedersen_parameters_mnt6;
 use rand::Rng;
 
-use super::pk_tree_node::{hash_g2, PkInnerNodeWindow};
+use super::pk_tree_node::hash_g2;
 use crate::{
     blake2s::evaluate_blake2s,
-    circuits::{num_inputs, CircuitInput},
+    circuits::{
+        num_inputs,
+        vk_commitments::{CircuitId, VerifyingKeyHelper, VerifyingKeys},
+        CircuitInput,
+    },
     gadgets::{
         mnt6::{DefaultPedersenParametersVar, MacroBlockGadget},
         recursive_input::RecursiveInputVar,
+        vk_commitment::VkCommitmentWindow,
     },
 };
 
@@ -33,10 +38,8 @@ use crate::{
 /// public keys with the public keys of the new validator list.
 #[derive(Clone)]
 pub struct MacroBlockCircuit {
-    // Verifying key for the PKTree circuit. Not an input to the SNARK circuit.
-    vk_pk_tree: VerifyingKey<MNT6_753>,
-
     // Witnesses (private)
+    keys: VerifyingKeys,
     prev_pk_tree_proof: Proof<MNT6_753>,
     l_pk_node_hash: [u8; 32],
     r_pk_node_hash: [u8; 32],
@@ -48,15 +51,16 @@ pub struct MacroBlockCircuit {
     // Inputs (public)
     pub prev_header_hash: [u8; 32],
     pub final_header_hash: [u8; 32],
+    vks_commitment: [u8; 95 * 2],
 }
 
 impl CircuitInput for MacroBlockCircuit {
-    const NUM_INPUTS: usize = num_inputs::<MNT6_753>(&[32, 32]);
+    const NUM_INPUTS: usize = num_inputs::<MNT6_753>(&[32, 32, 95 * 2]);
 }
 
 impl MacroBlockCircuit {
     pub fn new(
-        vk_pk_tree: VerifyingKey<MNT6_753>,
+        keys: VerifyingKeys,
         prev_pk_tree_proof: Proof<MNT6_753>,
         l_pk_node_hash: [u8; 32],
         r_pk_node_hash: [u8; 32],
@@ -69,7 +73,8 @@ impl MacroBlockCircuit {
         let final_header_hash = final_block.hash_blake2s().0;
 
         Self {
-            vk_pk_tree,
+            vks_commitment: keys.commitment(),
+            keys,
             prev_pk_tree_proof,
             l_pk_node_hash,
             r_pk_node_hash,
@@ -82,7 +87,7 @@ impl MacroBlockCircuit {
         }
     }
 
-    pub fn rand<R: Rng + ?Sized>(vk_child: VerifyingKey<MNT6_753>, rng: &mut R) -> Self {
+    pub fn rand<R: Rng + ?Sized>(rng: &mut R) -> Self {
         let proof = Proof {
             a: G1Affine::rand(rng),
             b: G2Affine::rand(rng),
@@ -105,8 +110,10 @@ impl MacroBlockCircuit {
 
         let r_agg_commitment = G2Projective::rand(rng);
 
+        let keys = VerifyingKeys::rand(rng);
+
         MacroBlockCircuit::new(
-            vk_child,
+            keys,
             proof,
             l_pk_node_hash,
             r_pk_node_hash,
@@ -127,11 +134,8 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
 
         let pedersen_generators_var = DefaultPedersenParametersVar::new_constant(
             cs.clone(),
-            pedersen_parameters_mnt6().sub_window::<PkInnerNodeWindow>(),
+            pedersen_parameters_mnt6().sub_window::<VkCommitmentWindow>(),
         )?;
-
-        let vk_pk_tree_var =
-            VerifyingKeyVar::<MNT6_753, PairingVar>::new_constant(cs.clone(), &self.vk_pk_tree)?;
 
         // Allocate all the witnesses.
         let proof_var = ProofVar::<MNT6_753, PairingVar>::new_witness(cs.clone(), || {
@@ -158,7 +162,23 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
             UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.prev_header_hash)?;
         let final_header_hash_bytes =
             UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.final_header_hash)?;
+        let vks_commitment_var = UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.vks_commitment)?;
 
+        // Allocate the vk gadget.
+        let vk_helper = VerifyingKeyHelper::new_and_verify::<PairingVar>(
+            cs.clone(),
+            self.keys.clone(),
+            &vks_commitment_var,
+            &pedersen_generators_var,
+        )?;
+
+        // Verify equality for vk commitment. It just checks that the private input is correct by
+        // committing to it and then comparing the result with the vk commitment given as a public input.
+        let pk_tree_vk = vk_helper.get_and_verify_vk(
+            cs.clone(),
+            CircuitId::PkTree(0),
+            &pedersen_generators_var,
+        )?;
         // Check that the previous block and the final block are exactly one epoch length apart.
         let calculated_block_number =
             UInt32::addmany(&[prev_block_var.block_number.clone(), epoch_length_var])?;
@@ -203,9 +223,10 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
         proof_inputs.push(&l_agg_pk_commitment_bytes)?;
         proof_inputs.push(&r_agg_pk_commitment_bytes)?;
         proof_inputs.push(&final_block_var.signer_bitmap)?;
+        proof_inputs.push(&vks_commitment_var)?;
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
-            &vk_pk_tree_var,
+            &pk_tree_vk,
             &proof_inputs.into(),
             &proof_var,
         )?

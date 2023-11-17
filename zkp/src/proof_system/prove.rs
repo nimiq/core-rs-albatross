@@ -24,11 +24,12 @@ use nimiq_zkp_circuits::{
             MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT6,
             PKTreeNodeCircuit as NodeMNT6,
         },
+        vk_commitments::VerifyingKeys,
     },
+    setup::load_keys,
 };
 use nimiq_zkp_primitives::{
-    pedersen::default_pedersen_hash, serialize_g1_mnt6, serialize_g2_mnt6, vk_commitment,
-    NanoZKPError,
+    pedersen::default_pedersen_hash, serialize_g1_mnt6, serialize_g2_mnt6, NanoZKPError,
 };
 use rand::{thread_rng, CryptoRng, Rng};
 
@@ -98,6 +99,8 @@ pub fn prove(
     let prev_header_hash = prev_block.hash_blake2s().0;
     let final_header_hash = final_block.hash_blake2s().0;
 
+    let keys = load_keys(prover_keys_path)?;
+
     // Start generating proof for Macro Block.
     current_proof += 1;
     if !(proof_caching && proofs.join("macro_block.bin").exists()) {
@@ -109,6 +112,7 @@ pub fn prove(
 
         prove_macro_block(
             rng,
+            &keys,
             prev_block,
             final_block,
             debug_mode,
@@ -128,6 +132,7 @@ pub fn prove(
 
         prove_macro_block_wrapper(
             rng,
+            &keys,
             prev_header_hash,
             final_header_hash,
             debug_mode,
@@ -146,6 +151,7 @@ pub fn prove(
 
         prove_merger(
             rng,
+            &keys,
             prev_header_hash,
             final_header_hash,
             genesis_data.clone(),
@@ -164,6 +170,7 @@ pub fn prove(
 
     let proof = prove_merger_wrapper(
         rng,
+        &keys,
         prev_header_hash,
         final_header_hash,
         genesis_data,
@@ -266,6 +273,7 @@ fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
 
 fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
     rng: &mut R,
+    keys: &VerifyingKeys,
     position: usize,
     tree_level: usize,
     pks: &[G2MNT6],
@@ -312,6 +320,7 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
         // Next level is an inner node.
         l_pk_node_hash = prove_pk_tree_node_mnt6(
             rng,
+            &keys,
             2 * position,
             tree_level + 1,
             l_pks,
@@ -323,6 +332,7 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
 
         r_pk_node_hash = prove_pk_tree_node_mnt6(
             rng,
+            &keys,
             2 * position + 1,
             tree_level + 1,
             r_pks,
@@ -346,10 +356,6 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
     // Load the proving key from file.
     let mut file = File::open(proving_keys.join(format!("{name}.bin")))?;
     let proving_key = ProvingKey::deserialize_uncompressed_unchecked(&mut file)?;
-
-    // Load the verifying key from file.
-    let mut file = File::open(verifying_keys.join(format!("{vk_file}.bin")))?;
-    let vk_child = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the left proof from file.
     let left_position = 2 * position;
@@ -392,7 +398,7 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
     // Create the circuit.
     let circuit = NodeMNT4::new(
         tree_level,
-        vk_child,
+        keys.clone(),
         left_proof,
         right_proof,
         l_pk_node_hash,
@@ -423,6 +429,7 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
                 .to_field_elements()
                 .unwrap(),
         );
+        inputs.append(&mut keys.commitment().to_field_elements().unwrap());
 
         // Verify proof.
         assert!(Groth16::<MNT6_753>::verify(
@@ -439,6 +446,7 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
 
 fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
     rng: &mut R,
+    keys: &VerifyingKeys,
     position: usize,
     tree_level: usize,
     pks: &[G2MNT6],
@@ -472,6 +480,7 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
     // Next level is always an inner node.
     let (ll_pk_node_hash, lr_pk_node_hash) = prove_pk_tree_node_mnt4(
         rng,
+        &keys,
         2 * position,
         tree_level + 1,
         l_pks,
@@ -483,6 +492,7 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
 
     let (rl_pk_node_hash, rr_pk_node_hash) = prove_pk_tree_node_mnt4(
         rng,
+        &keys,
         2 * position + 1,
         tree_level + 1,
         r_pks,
@@ -520,10 +530,6 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
     // Load the proving key from file.
     let mut file = File::open(proving_keys.join(format!("{name}.bin")))?;
     let proving_key = ProvingKey::deserialize_uncompressed_unchecked(&mut file)?;
-
-    // Load the verifying key from file.
-    let mut file = File::open(verifying_keys.join(format!("{vk_file}.bin")))?;
-    let vk_child = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the left proof from file.
     let left_position = 2 * position;
@@ -586,7 +592,7 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
     // Create the circuit.
     let circuit = NodeMNT6::new(
         tree_level,
-        vk_child,
+        keys.clone(),
         left_proof,
         right_proof,
         agg_pk_chunks[0],
@@ -621,6 +627,7 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
                 .to_field_elements()
                 .unwrap(),
         );
+        inputs.append(&mut keys.commitment().to_field_elements().unwrap());
 
         // Verify proof.
         assert!(Groth16::<MNT4_753>::verify(
@@ -638,6 +645,7 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
 
 fn prove_macro_block<R: CryptoRng + Rng>(
     rng: &mut R,
+    keys: &VerifyingKeys,
     prev_block: MacroBlock,
     final_block: MacroBlock,
     debug_mode: bool,
@@ -664,6 +672,7 @@ fn prove_macro_block<R: CryptoRng + Rng>(
     // Generate the PK Tree proofs.
     let (l_pk_node_hash, r_pk_node_hash) = prove_pk_tree_node_mnt4(
         rng,
+        &keys,
         0,
         0,
         &prev_pks,
@@ -680,10 +689,6 @@ fn prove_macro_block<R: CryptoRng + Rng>(
     // Load the proving key from file.
     let mut file = File::open(proving_keys.join("macro_block.bin"))?;
     let proving_key = ProvingKey::deserialize_uncompressed_unchecked(&mut file)?;
-
-    // Load the verifying key from file.
-    let mut file = File::open(verifying_keys.join("pk_tree_0.bin"))?;
-    let vk_pk_tree = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Load the proof from file.
     let mut file = File::open(proofs.join("pk_tree_0_0.bin"))?;
@@ -707,7 +712,7 @@ fn prove_macro_block<R: CryptoRng + Rng>(
 
     // Create the circuit.
     let circuit = MacroBlockCircuit::new(
-        vk_pk_tree,
+        keys.clone(),
         proof,
         l_pk_node_hash,
         r_pk_node_hash,
@@ -732,6 +737,7 @@ fn prove_macro_block<R: CryptoRng + Rng>(
         let mut inputs = vec![];
         inputs.append(&mut prev_header_hash.to_field_elements().unwrap());
         inputs.append(&mut final_header_hash.to_field_elements().unwrap());
+        inputs.append(&mut keys.commitment().to_field_elements().unwrap());
 
         // Verify proof.
         assert!(Groth16::<MNT4_753>::verify(
@@ -747,6 +753,7 @@ fn prove_macro_block<R: CryptoRng + Rng>(
 
 fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
     rng: &mut R,
+    keys: &VerifyingKeys,
     prev_header_hash: [u8; 32],
     final_header_hash: [u8; 32],
     debug_mode: bool,
@@ -760,17 +767,13 @@ fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
     let mut file = File::open(proving_keys.join("macro_block_wrapper.bin"))?;
     let proving_key = ProvingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
-    // Load the verifying key from file.
-    let mut file = File::open(verifying_keys.join("macro_block.bin"))?;
-    let vk_macro_block = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
-
     // Load the proof from file.
     let mut file = File::open(proofs.join("macro_block.bin"))?;
     let proof = Proof::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Create the circuit.
     let circuit =
-        MacroBlockWrapperCircuit::new(vk_macro_block, proof, prev_header_hash, final_header_hash);
+        MacroBlockWrapperCircuit::new(keys.clone(), proof, prev_header_hash, final_header_hash);
 
     // Create the proof.
     let proof = Groth16::<MNT6_753>::prove(&proving_key, circuit, rng)?;
@@ -785,6 +788,7 @@ fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
         let mut inputs = vec![];
         inputs.append(&mut prev_header_hash.to_field_elements().unwrap());
         inputs.append(&mut final_header_hash.to_field_elements().unwrap());
+        inputs.append(&mut keys.commitment().to_field_elements().unwrap());
 
         // Verify proof.
         assert!(Groth16::<MNT6_753>::verify(
@@ -800,6 +804,7 @@ fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
 
 fn prove_merger<R: CryptoRng + Rng>(
     rng: &mut R,
+    keys: &VerifyingKeys,
     prev_header_hash: [u8; 32],
     final_header_hash: [u8; 32],
     genesis_data: Option<(Proof<MNT6_753>, [u8; 32])>,
@@ -813,17 +818,9 @@ fn prove_merger<R: CryptoRng + Rng>(
     let mut file = File::open(proving_keys.join("merger.bin"))?;
     let proving_key = ProvingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
-    // Load the verifying key for Macro Block Wrapper from file.
-    let mut file = File::open(verifying_keys.join("macro_block_wrapper.bin"))?;
-    let vk_macro_block_wrapper = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
-
     // Load the proof for Macro Block Wrapper from file.
     let mut file = File::open(proofs.join("macro_block_wrapper.bin"))?;
     let proof_macro_block_wrapper = Proof::deserialize_uncompressed_unchecked(&mut file)?;
-
-    // Load the verifying key for Merger Wrapper from file.
-    let mut file = File::open(verifying_keys.join("merger_wrapper.bin"))?;
-    let vk_merger_wrapper = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Get the intermediate header hash.
     let intermediate_header_hash = prev_header_hash;
@@ -843,15 +840,11 @@ fn prove_merger<R: CryptoRng + Rng>(
         Some((proof, genesis_header_hash)) => (proof, genesis_header_hash, false),
     };
 
-    // Calculate the inputs.
-    let vk_commitment = vk_commitment(&vk_merger_wrapper);
-
     // Create the circuit.
     let circuit = MergerCircuit::new(
-        vk_macro_block_wrapper,
+        keys.clone(),
         proof_merger_wrapper,
         proof_macro_block_wrapper,
-        vk_merger_wrapper,
         intermediate_header_hash,
         genesis_flag,
         genesis_header_hash,
@@ -871,7 +864,7 @@ fn prove_merger<R: CryptoRng + Rng>(
         let mut inputs = vec![];
         inputs.append(&mut genesis_header_hash.to_field_elements().unwrap());
         inputs.append(&mut final_header_hash.to_field_elements().unwrap());
-        inputs.append(&mut vk_commitment.to_field_elements().unwrap());
+        inputs.append(&mut keys.commitment().to_field_elements().unwrap());
 
         // Verify proof.
         assert!(Groth16::<MNT4_753>::verify(
@@ -887,6 +880,7 @@ fn prove_merger<R: CryptoRng + Rng>(
 
 fn prove_merger_wrapper<R: CryptoRng + Rng>(
     rng: &mut R,
+    keys: &VerifyingKeys,
     prev_header_hash: [u8; 32],
     final_header_hash: [u8; 32],
     genesis_data: Option<(Proof<MNT6_753>, [u8; 32])>,
@@ -900,18 +894,9 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
     let mut file = File::open(proving_keys.join("merger_wrapper.bin"))?;
     let proving_key = ProvingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
-    // Load the verifying key from file.
-    let mut file = File::open(verifying_keys.join("merger.bin"))?;
-    let vk_merger = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
-
     // Load the proof from file.
     let mut file = File::open(proofs.join("merger.bin"))?;
     let proof = Proof::deserialize_uncompressed_unchecked(&mut file)?;
-
-    // Load the verifying key for Merger Wrapper from file.
-    let mut file = File::open(verifying_keys.join("merger_wrapper.bin"))?;
-    let vk_merger_wrapper: VerifyingKey<MNT6_753> =
-        VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
 
     // Calculate the inputs.
     let genesis_header_hash = match genesis_data {
@@ -919,16 +904,9 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
         Some((_, x)) => x,
     };
 
-    let vk_commitment = vk_commitment(&vk_merger_wrapper);
-
     // Create the circuit.
-    let circuit = MergerWrapperCircuit::new(
-        vk_merger,
-        proof,
-        genesis_header_hash,
-        final_header_hash,
-        vk_commitment,
-    );
+    let circuit =
+        MergerWrapperCircuit::new(keys.clone(), proof, genesis_header_hash, final_header_hash);
 
     // Create the proof.
     let proof = Groth16::<MNT6_753>::prove(&proving_key, circuit, rng)?;
@@ -943,7 +921,7 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
         let mut inputs = vec![];
         inputs.append(&mut genesis_header_hash.to_field_elements().unwrap());
         inputs.append(&mut final_header_hash.to_field_elements().unwrap());
-        inputs.append(&mut vk_commitment.to_field_elements().unwrap());
+        inputs.append(&mut keys.commitment().to_field_elements().unwrap());
 
         // Verify proof.
         assert!(Groth16::<MNT6_753>::verify(

@@ -1,15 +1,20 @@
-use std::{fs::File, io, time::Instant};
+use std::{fs::File, io, path::PathBuf, time::Instant};
 
 use ark_groth16::Proof;
 use ark_serialize::CanonicalDeserialize;
 use log::metadata::LevelFilter;
+use nimiq_genesis::NetworkInfo;
 use nimiq_log::TargetsExt;
-use nimiq_primitives::{networks::NetworkId, policy::Policy};
+use nimiq_primitives::{
+    networks::NetworkId,
+    policy::{Policy, TEST_POLICY},
+};
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer, blockchain_with_rng::produce_macro_blocks_with_rng,
     test_rng::test_rng,
 };
-use nimiq_zkp::{verify::verify, ZKP_VERIFYING_KEY};
+use nimiq_zkp::{verify::verify, ZKP_VERIFYING_DATA};
+use nimiq_zkp_circuits::setup::load_verifying_data;
 use tracing_subscriber::{filter::Targets, prelude::*};
 
 fn initialize() {
@@ -23,6 +28,15 @@ fn initialize() {
                 .with_env(),
         )
         .init();
+
+    // Run tests with different policy values:
+    let mut policy_config = TEST_POLICY;
+    // The genesis block number must be set accordingly
+    let network_info = NetworkInfo::from_network_id(NetworkId::UnitAlbatross);
+    let genesis_block = network_info.genesis_block();
+    policy_config.genesis_block_number = genesis_block.block_number();
+
+    let _ = Policy::get_or_init(policy_config);
 }
 
 /// Verifies a proof for a chain of election blocks. The random parameters generation uses always
@@ -31,7 +45,10 @@ fn initialize() {
 /// Run this example with `cargo run --release --example verify`.
 fn main() {
     initialize();
-    ZKP_VERIFYING_KEY.init_with_network_id(NetworkId::DevAlbatross);
+    // use the current directory
+    ZKP_VERIFYING_DATA.init_with_data(
+        load_verifying_data(&PathBuf::new()).expect("No keys in current directory"),
+    );
 
     // Ask user for the number of epochs.
     println!("Enter the number of epochs to verify:");
@@ -47,6 +64,8 @@ fn main() {
     println!("====== Generating random inputs ======");
     let block_producer = TemporaryBlockProducer::new();
 
+    let offset = Policy::genesis_block_number();
+
     // Get initial random parameters.
     produce_macro_blocks_with_rng(
         &block_producer.producer,
@@ -57,13 +76,17 @@ fn main() {
 
     let blockchain_rg = block_producer.blockchain.read();
     let genesis_header_hash = blockchain_rg
-        .get_block_at(0, true, None)
+        .get_block_at(offset, true, None)
         .unwrap()
         .unwrap_macro()
         .hash_blake2s();
     // Get final random parameters.
     let final_header_hash = blockchain_rg
-        .get_block_at(number_epochs * Policy::blocks_per_epoch(), true, None)
+        .get_block_at(
+            offset + number_epochs * Policy::blocks_per_epoch(),
+            true,
+            None,
+        )
         .unwrap()
         .unwrap_macro()
         .hash_blake2s();
@@ -82,7 +105,7 @@ fn main() {
         genesis_header_hash,
         final_header_hash,
         proof,
-        &ZKP_VERIFYING_KEY,
+        &ZKP_VERIFYING_DATA,
     )
     .unwrap();
 

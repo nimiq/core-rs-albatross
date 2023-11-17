@@ -2,7 +2,7 @@ use nimiq_block::{Block, BlockError};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
 };
-use nimiq_zkp::{verify::verify, NanoProof, ZKP_VERIFYING_KEY};
+use nimiq_zkp::{verify::verify, NanoProof, ZKP_VERIFYING_DATA};
 use parking_lot::RwLockUpgradableReadGuard;
 
 use crate::blockchain::LightBlockchain;
@@ -55,7 +55,7 @@ impl LightBlockchain {
                 this.genesis_block.unwrap_macro_ref().hash_blake2s(),
                 block_hash_blake2s,
                 proof,
-                &ZKP_VERIFYING_KEY,
+                &ZKP_VERIFYING_DATA,
             );
 
             if verify_result.is_err() || !verify_result.unwrap() {

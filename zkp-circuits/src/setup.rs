@@ -1,17 +1,18 @@
 use std::{
-    fs::{DirBuilder, File},
+    fs::{self, DirBuilder, File},
     path::Path,
 };
 
 use ark_crypto_primitives::snark::CircuitSpecificSetupSNARK;
-use ark_ec::{mnt6::MNT6, pairing::Pairing};
+use ark_ec::pairing::Pairing;
 use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
 use ark_mnt4_753::MNT4_753;
-use ark_mnt6_753::{Config, MNT6_753};
+use ark_mnt6_753::MNT6_753;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_zkp_primitives::NanoZKPError;
+use nimiq_serde::Deserialize;
+use nimiq_zkp_primitives::{NanoZKPError, VerifyingData};
 use rand::{CryptoRng, Rng};
 
 use crate::{
@@ -21,6 +22,8 @@ use crate::{
             MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT6,
             PKTreeNodeCircuit as NodeMNT6,
         },
+        vk_commitments::VerifyingKeys,
+        CircuitInput,
     },
     metadata::VerifyingKeyMetadata,
 };
@@ -46,15 +49,15 @@ pub fn setup<R: Rng + CryptoRng>(
 
     setup_pk_tree_leaf(&mut rng, path, "pk_tree_5")?;
 
-    setup_pk_tree_node_mnt4(&mut rng, path, "pk_tree_5", "pk_tree_4", 4)?;
+    setup_pk_tree_node_mnt4(&mut rng, path, "pk_tree_4", 4)?;
 
-    setup_pk_tree_node_mnt6(&mut rng, path, "pk_tree_4", "pk_tree_3", 3)?;
+    setup_pk_tree_node_mnt6(&mut rng, path, "pk_tree_3", 3)?;
 
-    setup_pk_tree_node_mnt4(&mut rng, path, "pk_tree_3", "pk_tree_2", 2)?;
+    setup_pk_tree_node_mnt4(&mut rng, path, "pk_tree_2", 2)?;
 
-    setup_pk_tree_node_mnt6(&mut rng, path, "pk_tree_2", "pk_tree_1", 1)?;
+    setup_pk_tree_node_mnt6(&mut rng, path, "pk_tree_1", 1)?;
 
-    setup_pk_tree_node_mnt4(&mut rng, path, "pk_tree_1", "pk_tree_0", 0)?;
+    setup_pk_tree_node_mnt4(&mut rng, path, "pk_tree_0", 0)?;
 
     setup_macro_block(&mut rng, path)?;
 
@@ -66,23 +69,52 @@ pub fn setup<R: Rng + CryptoRng>(
 
     let network_info = NetworkInfo::from_network_id(network_id);
     let genesis_block = network_info.genesis_block().unwrap_macro();
-    let meta_data = VerifyingKeyMetadata::new(genesis_block.hash());
+    let keys = load_keys(path)?;
+    let meta_data = VerifyingKeyMetadata::new(genesis_block.hash(), keys.commitment());
 
     meta_data.save_to_file(path)?;
 
     Ok(())
 }
 
-pub fn load_verifying_key_from_file(
-    path: &Path,
-) -> Result<VerifyingKey<MNT6<Config>>, NanoZKPError> {
-    // Loads the verifying key from the preexisting file.
-    // Note: We only use the merger_wrapper for key verification purposes.
-    let mut file = File::open(path.join("verifying_keys").join("merger_wrapper.bin"))?;
-    let vk: VerifyingKey<MNT6<Config>> =
-        VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
+pub fn load_verifying_data(path: &Path) -> Result<VerifyingData, NanoZKPError> {
+    let metadata = fs::read(path.join(format!("meta_data.bin")))?;
+    let metadata = VerifyingKeyMetadata::deserialize_from_vec(&metadata)?;
+    Ok(VerifyingData {
+        merger_wrapper_vk: load_key(&path.join("verifying_keys"), "merger_wrapper")?,
+        keys_commitment: metadata.vks_commitment(),
+    })
+}
 
-    Ok(vk)
+fn load_key<E: Pairing>(dir_path: &Path, file_name: &str) -> Result<VerifyingKey<E>, NanoZKPError> {
+    let mut file = File::open(dir_path.join(format!("{file_name}.bin")))?;
+    Ok(VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?)
+}
+
+pub fn load_keys(dir_path: &Path) -> Result<VerifyingKeys, NanoZKPError> {
+    let verifying_keys = dir_path.join("verifying_keys");
+    let merger_wrapper = load_key(&verifying_keys, "merger_wrapper")?;
+    let merger = load_key(&verifying_keys, "merger")?;
+    let macro_block_wrapper = load_key(&verifying_keys, "macro_block_wrapper")?;
+    let macro_block = load_key(&verifying_keys, "macro_block")?;
+    let pk_tree0 = load_key(&verifying_keys, "pk_tree_0")?;
+    let pk_tree1 = load_key(&verifying_keys, "pk_tree_1")?;
+    let pk_tree2 = load_key(&verifying_keys, "pk_tree_2")?;
+    let pk_tree3 = load_key(&verifying_keys, "pk_tree_3")?;
+    let pk_tree4 = load_key(&verifying_keys, "pk_tree_4")?;
+    let pk_tree_leaf = load_key(&verifying_keys, "pk_tree_5")?;
+    Ok(VerifyingKeys::new(
+        merger_wrapper,
+        merger,
+        macro_block_wrapper,
+        macro_block,
+        pk_tree0,
+        pk_tree1,
+        pk_tree2,
+        pk_tree3,
+        pk_tree4,
+        pk_tree_leaf,
+    ))
 }
 
 pub fn all_files_created(path: &Path, prover_active: bool) -> bool {
@@ -115,6 +147,10 @@ fn setup_pk_tree_leaf<R: Rng + CryptoRng>(
     dir_path: &Path,
     name: &str,
 ) -> Result<(), NanoZKPError> {
+    if keys_exist(name, dir_path) {
+        return Ok(());
+    }
+
     let circuit: LeafMNT6 = rng.gen();
 
     let (pk, vk) = Groth16::<MNT4_753>::setup(circuit, rng)?;
@@ -126,21 +162,15 @@ fn setup_pk_tree_leaf<R: Rng + CryptoRng>(
 fn setup_pk_tree_node_mnt4<R: Rng + CryptoRng>(
     rng: &mut R,
     dir_path: &Path,
-    vk_file: &str,
     name: &str,
     tree_level: usize,
 ) -> Result<(), NanoZKPError> {
-    // Load the verifying key from file.
-    let mut file = File::open(
-        dir_path
-            .join("verifying_keys")
-            .join(format!("{vk_file}.bin")),
-    )?;
-
-    let vk_child = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
+    if keys_exist(name, dir_path) {
+        return Ok(());
+    }
 
     // Create parameters for our circuit
-    let circuit = NodeMNT4::rand(tree_level, vk_child, rng);
+    let circuit = NodeMNT4::rand(tree_level, rng);
 
     let (pk, vk) = Groth16::<MNT6_753>::setup(circuit, rng)?;
 
@@ -151,21 +181,15 @@ fn setup_pk_tree_node_mnt4<R: Rng + CryptoRng>(
 fn setup_pk_tree_node_mnt6<R: Rng + CryptoRng>(
     rng: &mut R,
     dir_path: &Path,
-    vk_file: &str,
     name: &str,
     tree_level: usize,
 ) -> Result<(), NanoZKPError> {
-    // Load the verifying key from file.
-    let mut file = File::open(
-        dir_path
-            .join("verifying_keys")
-            .join(format!("{vk_file}.bin")),
-    )?;
-
-    let vk_child = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
+    if keys_exist(name, dir_path) {
+        return Ok(());
+    }
 
     // Create parameters for our circuit
-    let circuit = NodeMNT6::rand(tree_level, vk_child, rng);
+    let circuit = NodeMNT6::rand(tree_level, rng);
 
     let (pk, vk) = Groth16::<MNT4_753>::setup(circuit, rng)?;
 
@@ -174,15 +198,15 @@ fn setup_pk_tree_node_mnt6<R: Rng + CryptoRng>(
 }
 
 fn setup_macro_block<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<(), NanoZKPError> {
-    // Load the verifying key from file.
-    let mut file = File::open(path.join("verifying_keys").join("pk_tree_0.bin"))?;
-
-    let vk_pk_tree = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
+    if keys_exist("macro_block", path) {
+        return Ok(());
+    }
 
     // Create parameters for our circuit
-    let circuit = MacroBlockCircuit::rand(vk_pk_tree, rng);
+    let circuit = MacroBlockCircuit::rand(rng);
 
     let (pk, vk) = Groth16::<MNT4_753>::setup(circuit, rng)?;
+    assert_eq!(vk.gamma_abc_g1.len(), MacroBlockCircuit::NUM_INPUTS + 1);
 
     // Save keys to file.
     keys_to_file(&pk, &vk, "macro_block", path)
@@ -192,47 +216,58 @@ fn setup_macro_block_wrapper<R: Rng + CryptoRng>(
     rng: &mut R,
     path: &Path,
 ) -> Result<(), NanoZKPError> {
+    if keys_exist("macro_block_wrapper", path) {
+        return Ok(());
+    }
+
     // Load the verifying key from file.
-    let mut file = File::open(path.join("verifying_keys").join("macro_block.bin"))?;
-
-    let vk_macro_block = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
-
     // Create parameters for our circuit
-    let circuit = MacroBlockWrapperCircuit::rand(vk_macro_block, rng);
+    let circuit = MacroBlockWrapperCircuit::rand(rng);
 
     let (pk, vk) = Groth16::<MNT6_753>::setup(circuit, rng)?;
+    assert_eq!(
+        vk.gamma_abc_g1.len(),
+        MacroBlockWrapperCircuit::NUM_INPUTS + 1
+    );
 
     // Save keys to file.
     keys_to_file(&pk, &vk, "macro_block_wrapper", path)
 }
 
 fn setup_merger<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<(), NanoZKPError> {
-    // Load the verifying key from file.
-    let mut file = File::open(path.join("verifying_keys").join("macro_block_wrapper.bin"))?;
+    if keys_exist("merger", path) {
+        return Ok(());
+    }
 
-    let vk_macro_block_wrapper = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
-
-    let circuit = MergerCircuit::rand(vk_macro_block_wrapper, rng);
+    let circuit = MergerCircuit::rand(rng);
 
     let (pk, vk) = Groth16::<MNT4_753>::setup(circuit, rng)?;
+    assert_eq!(vk.gamma_abc_g1.len(), MergerCircuit::NUM_INPUTS + 1);
 
     // Save keys to file.
     keys_to_file(&pk, &vk, "merger", path)
 }
 
 fn setup_merger_wrapper<R: Rng + CryptoRng>(rng: &mut R, path: &Path) -> Result<(), NanoZKPError> {
-    // Load the verifying key from file.
-    let mut file = File::open(path.join("verifying_keys").join("merger.bin"))?;
-
-    let vk_merger = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
+    if keys_exist("merger_wrapper", path) {
+        return Ok(());
+    }
 
     // Create parameters for our circuit
-    let circuit = MergerWrapperCircuit::rand(vk_merger, rng);
+    let circuit = MergerWrapperCircuit::rand(rng);
 
     let (pk, vk) = Groth16::<MNT6_753>::setup(circuit, rng)?;
+    assert_eq!(vk.gamma_abc_g1.len(), MergerWrapperCircuit::NUM_INPUTS + 1);
 
     // Save keys to file.
     keys_to_file(&pk, &vk, "merger_wrapper", path)
+}
+
+pub(crate) fn keys_exist(name: &str, path: &Path) -> bool {
+    let verifying_key = path.join("verifying_keys").join(format!("{name}.bin"));
+    let proving_key = path.join("proving_keys").join(format!("{name}.bin"));
+
+    proving_key.exists() && verifying_key.exists()
 }
 
 pub(crate) fn keys_to_file<T: Pairing>(

@@ -73,15 +73,17 @@ fn main() {
         &mut test_rng(true),
     );
 
+    let offset = Policy::genesis_block_number();
+
     for i in 0..number_epochs {
         // Get random parameters.
         let blockchain_rg = block_producer.blockchain.read();
         let prev_block = blockchain_rg
-            .get_block_at(i * Policy::blocks_per_epoch(), true, None)
+            .get_block_at(offset + i * Policy::blocks_per_epoch(), true, None)
             .unwrap()
             .unwrap_macro();
         let final_block = blockchain_rg
-            .get_block_at((i + 1) * Policy::blocks_per_epoch(), true, None)
+            .get_block_at(offset + (i + 1) * Policy::blocks_per_epoch(), true, None)
             .unwrap()
             .unwrap_macro();
 

@@ -1,16 +1,15 @@
 use std::{env, io::Cursor};
 
-use ark_ec::mnt6::MNT6;
 use ark_groth16::VerifyingKey;
-use ark_mnt6_753::Config;
 use ark_serialize::CanonicalDeserialize;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_serde::Deserialize;
 use nimiq_zkp_circuits::metadata::VerifyingKeyMetadata;
+use nimiq_zkp_primitives::VerifyingData;
 use once_cell::sync::OnceCell;
 
 pub struct ZKPVerifyingKey {
-    cell: OnceCell<VerifyingKey<MNT6<Config>>>,
+    cell: OnceCell<VerifyingData>,
 }
 
 impl ZKPVerifyingKey {
@@ -21,14 +20,14 @@ impl ZKPVerifyingKey {
     }
 
     pub fn init_with_network_id(&self, network_id: NetworkId) {
-        self.init_with_key(Self::init_verifying_key(network_id))
+        self.init_with_data(Self::init_verifying_key(network_id))
     }
 
-    pub fn init_with_key(&self, verifying_key: VerifyingKey<MNT6<Config>>) {
-        assert!(self.cell.set(verifying_key).is_ok())
+    pub fn init_with_data(&self, verifying_data: VerifyingData) {
+        assert!(self.cell.set(verifying_data).is_ok())
     }
 
-    fn init_verifying_key(network_id: NetworkId) -> VerifyingKey<MNT6<Config>> {
+    fn init_verifying_key(network_id: NetworkId) -> VerifyingData {
         let (key_bytes, metadata_bytes) = match network_id {
             NetworkId::DevAlbatross => (
                 include_bytes!(concat!(
@@ -72,17 +71,22 @@ impl ZKPVerifyingKey {
         );
 
         let mut serialized_cursor = Cursor::new(key_bytes);
-        VerifyingKey::deserialize_uncompressed_unchecked(&mut serialized_cursor)
-            .expect("Invalid verifying key. Please rebuild the client.")
+        VerifyingData {
+            merger_wrapper_vk: VerifyingKey::deserialize_uncompressed_unchecked(
+                &mut serialized_cursor,
+            )
+            .expect("Invalid verifying key. Please rebuild the client."),
+            keys_commitment: metadata.vks_commitment(),
+        }
     }
 }
 
 impl std::ops::Deref for ZKPVerifyingKey {
-    type Target = VerifyingKey<MNT6<Config>>;
-    fn deref(&self) -> &VerifyingKey<MNT6<Config>> {
+    type Target = VerifyingData;
+    fn deref(&self) -> &VerifyingData {
         self.cell
             .get_or_init(|| Self::init_verifying_key(NetworkId::UnitAlbatross))
     }
 }
 
-pub static ZKP_VERIFYING_KEY: ZKPVerifyingKey = ZKPVerifyingKey::new();
+pub static ZKP_VERIFYING_DATA: ZKPVerifyingKey = ZKPVerifyingKey::new();

@@ -1,8 +1,8 @@
 use ark_crypto_primitives::snark::SNARKGadget;
 use ark_ff::UniformRand;
 use ark_groth16::{
-    constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
-    Proof, VerifyingKey,
+    constraints::{Groth16VerifierGadget, ProofVar},
+    Proof,
 };
 use ark_mnt6_753::{
     constraints::{G2Var, PairingVar},
@@ -13,20 +13,19 @@ use ark_r1cs_std::{
     uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use nimiq_pedersen_generators::GenericWindow;
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::pedersen_parameters_mnt6;
 use rand::Rng;
 
 use crate::{
     blake2s::evaluate_blake2s,
+    circuits::vk_commitments::{CircuitId, VerifyingKeyHelper, VerifyingKeys},
     gadgets::{
         bits::BitVec, mnt6::DefaultPedersenParametersVar, pedersen::PedersenHashGadget,
         recursive_input::RecursiveInputVar, serialize::SerializeGadget,
+        vk_commitment::VkCommitmentWindow,
     },
 };
-
-pub(super) type PkInnerNodeWindow = GenericWindow<4, MNT6Fq>;
 
 pub(super) fn hash_g2(
     cs: &ConstraintSystemRef<MNT6Fq>,
@@ -36,7 +35,7 @@ pub(super) fn hash_g2(
     let bytes = g2.serialize_compressed(cs.clone())?;
 
     let pedersen_hash =
-        PedersenHashGadget::<_, _, PkInnerNodeWindow>::evaluate(&bytes, pedersen_generators_var)?;
+        PedersenHashGadget::<_, _, VkCommitmentWindow>::evaluate(&bytes, pedersen_generators_var)?;
 
     pedersen_hash.serialize_compressed(cs.clone())
 }
@@ -54,9 +53,9 @@ pub struct PKTreeNodeCircuit {
     // Constants for the circuit. Careful, changing these values result in a different circuit, so
     // whenever you change these values you need to generate new proving and verifying keys.
     tree_level: usize,
-    vk_child: VerifyingKey<MNT6_753>,
 
     // Witnesses (private)
+    keys: VerifyingKeys,
     l_proof: Proof<MNT6_753>,
     r_proof: Proof<MNT6_753>,
     ll_agg_pk_commitment: G2Projective,
@@ -73,12 +72,18 @@ pub struct PKTreeNodeCircuit {
     pk_node_hash: [u8; 32],
     agg_pk_commitment: [u8; 95],
     signer_bitmap_chunk: Vec<bool>,
+    vks_commitment: [u8; 95 * 2],
 }
 
 impl PKTreeNodeCircuit {
+    pub fn num_inputs(tree_level: usize) -> usize {
+        let num_bits = Policy::SLOTS as usize / 2_usize.pow(tree_level as u32);
+        crate::circuits::num_inputs::<MNT6_753>(&[32, 95, num_bits.div_ceil(8), 95 * 2])
+    }
+
     pub fn new(
         tree_level: usize,
-        vk_child: VerifyingKey<MNT6_753>,
+        keys: VerifyingKeys,
         l_proof: Proof<MNT6_753>,
         r_proof: Proof<MNT6_753>,
         ll_agg_pk_commitment: G2Projective,
@@ -95,7 +100,8 @@ impl PKTreeNodeCircuit {
     ) -> Self {
         Self {
             tree_level,
-            vk_child,
+            vks_commitment: keys.commitment(),
+            keys,
             l_proof,
             r_proof,
             ll_agg_pk_commitment,
@@ -112,11 +118,7 @@ impl PKTreeNodeCircuit {
         }
     }
 
-    pub fn rand<R: Rng + ?Sized>(
-        tree_level: usize,
-        vk_child: VerifyingKey<MNT6_753>,
-        rng: &mut R,
-    ) -> Self {
+    pub fn rand<R: Rng + ?Sized>(tree_level: usize, rng: &mut R) -> Self {
         let l_proof = Proof {
             a: G1Affine::rand(rng),
             b: G2Affine::rand(rng),
@@ -149,9 +151,11 @@ impl PKTreeNodeCircuit {
             signer_bitmap.push(rng.gen());
         }
 
+        let keys = VerifyingKeys::rand(rng);
+
         PKTreeNodeCircuit::new(
             tree_level,
-            vk_child,
+            keys,
             l_proof,
             r_proof,
             agg_pks[0],
@@ -175,11 +179,8 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeNodeCircuit {
         // Allocate all the constants.
         let pedersen_generators_var = DefaultPedersenParametersVar::new_constant(
             cs.clone(),
-            pedersen_parameters_mnt6().sub_window::<PkInnerNodeWindow>(),
+            pedersen_parameters_mnt6().sub_window::<VkCommitmentWindow>(),
         )?;
-
-        let vk_child_var =
-            VerifyingKeyVar::<MNT6_753, PairingVar>::new_constant(cs.clone(), &self.vk_child)?;
 
         // Allocate all the witnesses.
         let l_proof_var =
@@ -217,6 +218,24 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeNodeCircuit {
         let signer_bitmap_chunk_bits = signer_bitmap_chunk_bytes.0
             [..Policy::SLOTS as usize / 2_usize.pow(self.tree_level as u32)]
             .to_vec();
+
+        let vks_commitment_var = UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.vks_commitment)?;
+
+        // Allocate the vk gadget.
+        let vk_helper = VerifyingKeyHelper::new_and_verify::<PairingVar>(
+            cs.clone(),
+            self.keys.clone(),
+            &vks_commitment_var,
+            &pedersen_generators_var,
+        )?;
+
+        // Verify equality for vk commitment. It just checks that the private input is correct by
+        // committing to it and then comparing the result with the vk commitment given as a public input.
+        let child_vk = vk_helper.get_and_verify_vk(
+            cs.clone(),
+            CircuitId::PkTree(self.tree_level + 1),
+            &pedersen_generators_var,
+        )?;
 
         // Calculating the aggregate public key.
         let l_agg_pk_commitment_var = &ll_agg_pk_commitment_var + &lr_agg_pk_commitment_var;
@@ -270,9 +289,10 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeNodeCircuit {
         proof_inputs.push(&ll_agg_pk_commitment_bytes)?;
         proof_inputs.push(&lr_agg_pk_commitment_bytes)?;
         proof_inputs.push(l_signer_bitmap_bits)?;
+        proof_inputs.push(&vks_commitment_var)?;
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
-            &vk_child_var,
+            &child_vk,
             &proof_inputs.into(),
             &l_proof_var,
         )?
@@ -285,9 +305,10 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeNodeCircuit {
         proof_inputs.push(&rl_agg_pk_commitment_bytes)?;
         proof_inputs.push(&rr_agg_pk_commitment_bytes)?;
         proof_inputs.push(r_signer_bitmap_bits)?;
+        proof_inputs.push(&vks_commitment_var)?;
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
-            &vk_child_var,
+            &child_vk,
             &proof_inputs.into(),
             &r_proof_var,
         )?

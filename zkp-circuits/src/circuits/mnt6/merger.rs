@@ -1,8 +1,8 @@
 use ark_crypto_primitives::snark::SNARKGadget;
 use ark_ff::UniformRand;
 use ark_groth16::{
-    constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
-    Proof, VerifyingKey,
+    constraints::{Groth16VerifierGadget, ProofVar},
+    Proof,
 };
 use ark_mnt6_753::{constraints::PairingVar, Fq as MNT6Fq, G1Affine, G2Affine, MNT6_753};
 use ark_r1cs_std::{
@@ -14,11 +14,14 @@ use nimiq_zkp_primitives::pedersen_parameters_mnt6;
 use rand::Rng;
 
 use crate::{
-    circuits::{num_inputs, CircuitInput},
+    circuits::{
+        num_inputs,
+        vk_commitments::{CircuitId, VerifyingKeyHelper, VerifyingKeys},
+        CircuitInput,
+    },
     gadgets::{
-        mnt6::DefaultPedersenParametersVar,
-        recursive_input::RecursiveInputVar,
-        vk_commitment::{VkCommitmentGadget, VkCommitmentWindow},
+        mnt6::DefaultPedersenParametersVar, recursive_input::RecursiveInputVar,
+        vk_commitment::VkCommitmentWindow,
     },
 };
 
@@ -48,8 +51,7 @@ pub struct MergerCircuit {
     // Witnesses (private)
     proof_merger_wrapper: Proof<MNT6_753>,
     proof_macro_block_wrapper: Proof<MNT6_753>,
-    vk_macro_block_wrapper: VerifyingKey<MNT6_753>,
-    vk_merger_wrapper: VerifyingKey<MNT6_753>,
+    keys: VerifyingKeys,
     intermediate_header_hash: [u8; 32],
     genesis_flag: bool,
 
@@ -60,34 +62,32 @@ pub struct MergerCircuit {
 }
 
 impl CircuitInput for MergerCircuit {
-    const NUM_INPUTS: usize = num_inputs::<MNT6_753>(&[32, 32, 95]);
+    const NUM_INPUTS: usize = num_inputs::<MNT6_753>(&[32, 32, 95 * 2]);
 }
 
 impl MergerCircuit {
     pub fn new(
-        vk_macro_block_wrapper: VerifyingKey<MNT6_753>,
+        keys: VerifyingKeys,
         proof_merger_wrapper: Proof<MNT6_753>,
         proof_macro_block_wrapper: Proof<MNT6_753>,
-        vk_merger_wrapper: VerifyingKey<MNT6_753>,
         intermediate_header_hash: [u8; 32],
         genesis_flag: bool,
         genesis_header_hash: [u8; 32],
         final_header_hash: [u8; 32],
     ) -> Self {
         Self {
-            vk_macro_block_wrapper,
+            vks_commitment: keys.commitment(),
+            keys,
             proof_merger_wrapper,
             proof_macro_block_wrapper,
-            vk_merger_wrapper,
             intermediate_header_hash,
             genesis_flag,
             genesis_header_hash,
             final_header_hash,
-            vks_commitment: todo!(),
         }
     }
 
-    pub fn rand<R: Rng + ?Sized>(vk_child: VerifyingKey<MNT6_753>, rng: &mut R) -> Self {
+    pub fn rand<R: Rng + ?Sized>(rng: &mut R) -> Self {
         // Create dummy inputs.
         let proof_merger_wrapper = Proof {
             a: G1Affine::rand(rng),
@@ -101,14 +101,6 @@ impl MergerCircuit {
             c: G1Affine::rand(rng),
         };
 
-        let vk_merger_wrapper = VerifyingKey {
-            alpha_g1: G1Affine::rand(rng),
-            beta_g2: G2Affine::rand(rng),
-            gamma_g2: G2Affine::rand(rng),
-            delta_g2: G2Affine::rand(rng),
-            gamma_abc_g1: vec![G1Affine::rand(rng); 5],
-        };
-
         let mut intermediate_header_hash = [0u8; 32];
         rng.fill_bytes(&mut intermediate_header_hash);
 
@@ -120,12 +112,13 @@ impl MergerCircuit {
         let mut final_header_hash = [0u8; 32];
         rng.fill_bytes(&mut final_header_hash);
 
+        let keys = VerifyingKeys::rand(rng);
+
         // Create parameters for our circuit
         MergerCircuit::new(
-            vk_child,
+            keys,
             proof_merger_wrapper,
             proof_macro_block_wrapper,
-            vk_merger_wrapper,
             intermediate_header_hash,
             genesis_flag,
             genesis_header_hash,
@@ -137,9 +130,9 @@ impl MergerCircuit {
 impl ConstraintSynthesizer<MNT6Fq> for MergerCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT6Fq>) -> Result<(), SynthesisError> {
-        let vk_macro_block_wrapper_var = VerifyingKeyVar::<MNT6_753, PairingVar>::new_constant(
+        let pedersen_generators_var = DefaultPedersenParametersVar::new_constant(
             cs.clone(),
-            &self.vk_macro_block_wrapper,
+            pedersen_parameters_mnt6().sub_window::<VkCommitmentWindow>(),
         )?;
 
         // Allocate all the witnesses.
@@ -152,11 +145,6 @@ impl ConstraintSynthesizer<MNT6Fq> for MergerCircuit {
             ProofVar::<MNT6_753, PairingVar>::new_witness(cs.clone(), || {
                 Ok(&self.proof_macro_block_wrapper)
             })?;
-
-        // let vk_merger_wrapper_var =
-        //     VerifyingKeyVar::<MNT6_753, PairingVar>::new_witness(cs.clone(), || {
-        //         Ok(&self.vk_merger_wrapper)
-        //     })?;
 
         let intermediate_header_hash_bytes =
             UInt8::<MNT6Fq>::new_witness_vec(cs.clone(), &self.intermediate_header_hash)?;
@@ -171,22 +159,28 @@ impl ConstraintSynthesizer<MNT6Fq> for MergerCircuit {
         let final_header_hash_bytes =
             UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.final_header_hash)?;
 
-        let vk_commitment_bytes = UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.vks_commitment)?;
+        let vks_commitment_var = UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.vks_commitment)?;
 
-        let vk_commitment =
-            VkCommitmentGadget::new(cs.clone(), &self.vk_merger_wrapper, vk_commitment_bytes)?;
-        // let vk_commitment_bytes = UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &self.vk_commitment)?;
+        // Allocate the vk gadget.
+        let vk_helper = VerifyingKeyHelper::new_and_verify::<PairingVar>(
+            cs.clone(),
+            self.keys.clone(),
+            &vks_commitment_var,
+            &pedersen_generators_var,
+        )?;
 
         // Verify equality for vk commitment. It just checks that the private input is correct by
         // committing to it and then comparing the result with the vk commitment given as a public input.
-        // let reference_commitment = VKCommitmentGadget::evaluate(cs, &vk_merger_wrapper_var)?;
-
-        let pedersen_generators = DefaultPedersenParametersVar::new_constant(
+        let merger_wrapper_vk = vk_helper.get_and_verify_vk(
             cs.clone(),
-            pedersen_parameters_mnt6().sub_window::<VkCommitmentWindow>(),
+            CircuitId::MergerWrapper,
+            &pedersen_generators_var,
         )?;
-        // vk_commitment_bytes.enforce_equal(&reference_commitment)?;
-        vk_commitment.verify(cs.clone(), &pedersen_generators)?;
+        let macro_block_wrapper_vk = vk_helper.get_and_verify_vk(
+            cs.clone(),
+            CircuitId::MacroBlockWrapper,
+            &pedersen_generators_var,
+        )?;
 
         // Verify equality of genesis and intermediate header hashes. If the genesis flag is set to
         // true, it enforces the equality. If it is set to false, it doesn't. This is necessary for
@@ -200,10 +194,10 @@ impl ConstraintSynthesizer<MNT6Fq> for MergerCircuit {
         let mut proof_inputs = RecursiveInputVar::new();
         proof_inputs.push(&genesis_header_hash_bytes)?;
         proof_inputs.push(&intermediate_header_hash_bytes)?;
-        proof_inputs.push(&vk_commitment.vk_commitment)?;
+        proof_inputs.push(&vks_commitment_var)?;
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
-            &vk_commitment.vk,
+            &merger_wrapper_vk,
             &proof_inputs.into(),
             &proof_merger_wrapper_var,
         )?
@@ -213,9 +207,10 @@ impl ConstraintSynthesizer<MNT6Fq> for MergerCircuit {
         let mut proof_inputs = RecursiveInputVar::new();
         proof_inputs.push(&intermediate_header_hash_bytes)?;
         proof_inputs.push(&final_header_hash_bytes)?;
+        proof_inputs.push(&vks_commitment_var)?;
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
-            &vk_macro_block_wrapper_var,
+            &macro_block_wrapper_vk,
             &proof_inputs.into(),
             &proof_macro_block_wrapper_var,
         )?

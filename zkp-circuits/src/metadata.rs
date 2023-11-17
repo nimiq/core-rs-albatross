@@ -9,15 +9,17 @@ use nimiq_serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
 pub struct VerifyingKeyMetadata {
     genesis_hash: Blake2bHash,
+    vks_commitment: Vec<u8>,
     #[serde(with = "nimiq_serde::fixint::be")]
     blocks_per_epoch: u32,
 }
 
 impl VerifyingKeyMetadata {
-    pub fn new(genesis_hash: Blake2bHash) -> Self {
+    pub fn new(genesis_hash: Blake2bHash, vks_commitment: [u8; 95 * 2]) -> Self {
         Self {
             genesis_hash,
             blocks_per_epoch: Policy::blocks_per_epoch(),
+            vks_commitment: vks_commitment.to_vec(),
         }
     }
 
@@ -26,6 +28,13 @@ impl VerifyingKeyMetadata {
         // However, our circuits currently are generic over the genesis block,
         // which is why we exclude it from the check.
         self.blocks_per_epoch == Policy::blocks_per_epoch()
+    }
+
+    pub fn vks_commitment(&self) -> [u8; 95 * 2] {
+        self.vks_commitment
+            .clone()
+            .try_into()
+            .expect("Verifying keys committment has wrong size")
     }
 
     pub fn save_to_file(self, path: &Path) -> Result<(), io::Error> {

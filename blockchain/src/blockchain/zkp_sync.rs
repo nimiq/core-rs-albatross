@@ -6,7 +6,7 @@ use nimiq_blockchain_interface::{
 };
 use nimiq_database::traits::{ReadTransaction, WriteTransaction};
 use nimiq_primitives::policy::Policy;
-use nimiq_zkp::{verify::verify, NanoProof, ZKP_VERIFYING_KEY};
+use nimiq_zkp::{verify::verify, NanoProof, ZKP_VERIFYING_DATA};
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 use crate::Blockchain;
@@ -69,7 +69,7 @@ impl Blockchain {
                 genesis_hash_blake2s,
                 block.unwrap_macro_ref().hash_blake2s(),
                 proof,
-                &ZKP_VERIFYING_KEY,
+                &ZKP_VERIFYING_DATA,
             );
 
             if verify_result.is_err() || !verify_result.unwrap() {

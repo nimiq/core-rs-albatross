@@ -4,7 +4,7 @@ use log::level_filters::LevelFilter;
 use nimiq_genesis::NetworkId;
 use nimiq_log::TargetsExt;
 use nimiq_primitives::policy::{Policy, TEST_POLICY};
-use nimiq_zkp::ZKP_VERIFYING_KEY;
+use nimiq_zkp::ZKP_VERIFYING_DATA;
 use nimiq_zkp_component::prover_binary::prover_main;
 use tracing_subscriber::{filter::Targets, prelude::*};
 
@@ -30,5 +30,5 @@ fn initialize() {
     // Run tests with different policy values:
     // Shorter epochs and shorter batches
     let _ = Policy::get_or_init(TEST_POLICY);
-    ZKP_VERIFYING_KEY.init_with_network_id(NetworkId::UnitAlbatross);
+    ZKP_VERIFYING_DATA.init_with_network_id(NetworkId::UnitAlbatross);
 }

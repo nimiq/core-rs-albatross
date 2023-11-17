@@ -35,11 +35,9 @@ use nimiq_validator::validator::ValidatorProxy as AbstractValidatorProxy;
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 #[cfg(feature = "wallet")]
 use nimiq_wallet::WalletStore;
-use nimiq_zkp::ZKP_VERIFYING_KEY;
+use nimiq_zkp::ZKP_VERIFYING_DATA;
 #[cfg(feature = "zkp-prover")]
-use nimiq_zkp_circuits::setup::{
-    all_files_created, load_verifying_key_from_file, setup, DEVELOPMENT_SEED,
-};
+use nimiq_zkp_circuits::setup::{all_files_created, load_verifying_data, setup, DEVELOPMENT_SEED};
 #[cfg(feature = "database-storage")]
 use nimiq_zkp_component::proof_store::{DBProofStore, ProofStore};
 use nimiq_zkp_component::zkp_component::{
@@ -158,7 +156,7 @@ impl ClientInner {
         }
 
         // Load the correct verifying key.
-        ZKP_VERIFYING_KEY.init_with_network_id(config.network_id);
+        ZKP_VERIFYING_DATA.init_with_network_id(config.network_id);
 
         #[cfg(not(feature = "zkp-prover"))]
         if config.zkp.prover_active {
@@ -184,8 +182,8 @@ impl ClientInner {
                 config.zkp.prover_active,
             )?;
             log::info!("Setting the verification key.");
-            let vk = load_verifying_key_from_file(&config.zkp.prover_keys_path)?;
-            assert_eq!(vk, *ZKP_VERIFYING_KEY, "Verifying keys don't match. The build in verifying keys don't match the newly generated ones.");
+            let vk = load_verifying_data(&config.zkp.prover_keys_path)?;
+            assert_eq!(vk, *ZKP_VERIFYING_DATA, "Verifying keys don't match. The build in verifying keys don't match the newly generated ones.");
             log::debug!("Finished ZKP setup.");
         } else if config.network_id == NetworkId::TestAlbatross
             && config.zkp.prover_active

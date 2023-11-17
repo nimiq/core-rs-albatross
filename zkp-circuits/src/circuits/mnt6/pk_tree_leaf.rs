@@ -1,5 +1,5 @@
 use ark_ff::UniformRand;
-use ark_mnt6_753::{constraints::G2Var, Fq as MNT6Fq, G2Projective};
+use ark_mnt6_753::{constraints::G2Var, Fq as MNT6Fq, G2Projective, MNT6_753};
 use ark_r1cs_std::{
     prelude::{AllocVar, CondSelectGadget, CurveVar, EqGadget},
     uint8::UInt8,
@@ -47,6 +47,11 @@ pub struct PKTreeLeafCircuit {
 }
 
 impl PKTreeLeafCircuit {
+    pub fn num_inputs(tree_level: usize) -> usize {
+        let num_bits = Policy::SLOTS as usize / 2_usize.pow(tree_level as u32);
+        crate::circuits::num_inputs::<MNT6_753>(&[32, 95, num_bits.div_ceil(8)])
+    }
+
     pub fn new(
         pks: Vec<G2Projective>,
         pk_node_hash: [u8; 32],

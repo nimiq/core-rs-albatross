@@ -5,7 +5,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::policy::Policy;
-use nimiq_zkp::{verify::verify, ZKP_VERIFYING_KEY};
+use nimiq_zkp::{verify::verify, ZKP_VERIFYING_DATA};
 use nimiq_zkp_primitives::NanoZKPError;
 
 use super::types::ZKPState;
@@ -73,7 +73,7 @@ pub(crate) fn validate_proof_get_new_state(
         genesis_block.hash_blake2s(),
         new_block.hash_blake2s(),
         proof.clone(),
-        &ZKP_VERIFYING_KEY,
+        &ZKP_VERIFYING_DATA,
     )? {
         return Ok(ZKPState {
             latest_block: new_block,

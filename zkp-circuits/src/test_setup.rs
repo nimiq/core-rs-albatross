@@ -249,13 +249,8 @@ pub fn setup_merger_wrapper_simulation<R: Rng + CryptoRng>(
     rng: &mut R,
     path: &Path,
 ) -> Result<ToxicWaste<MNT6_753>, NanoZKPError> {
-    // Load the verifying key from file.
-    let mut file = File::open(path.join("verifying_keys").join("merger.bin"))?;
-
-    let vk_merger = VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?;
-
     // Create parameters for our circuit
-    let circuit = MergerWrapperCircuit::rand(vk_merger, rng);
+    let circuit = MergerWrapperCircuit::rand(rng);
 
     let (toxic_waste, pk) = ToxicWaste::setup_groth16(circuit, rng)?;
 
