@@ -242,7 +242,7 @@ mod test {
         assert!(level.active());
 
         // Check that it can properly select next peers (return empty vector)
-        let select_size = rng.gen_range(1..num_ids);
+        let select_size = rng.gen_range(0..num_ids) + 1;
         let iterations = num_ids / select_size;
         if id != 0 {
             for _ in 0..iterations {
