@@ -15,10 +15,7 @@ use nimiq_primitives::policy::Policy;
 use parking_lot::RwLock;
 
 use self::block_request_component::BlockRequestComponent;
-use super::{
-    block_queue::block_request_component::BlockRequestComponentEvent,
-    queue::{LiveSyncQueue, QueueConfig},
-};
+use super::{block_queue::block_request_component::BlockRequestComponentEvent, queue::QueueConfig};
 use crate::sync::peer_list::PeerList;
 
 pub mod block_request_component;
