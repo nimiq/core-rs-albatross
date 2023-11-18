@@ -5,6 +5,7 @@ use std::{
     cmp::{Ord, Ordering},
     convert::TryFrom,
     io,
+    io::Write,
     sync::Arc,
 };
 
@@ -433,27 +434,9 @@ impl Transaction {
     }
 
     pub fn serialize_content(&self) -> Vec<u8> {
-        // Serialize data as in PoW (2 bytes for the length and then the data
-        // which in PoS is the recipient data) for backwards compatibility
-        let mut res: Vec<u8> = (self.recipient_data.len() as u16)
-            .to_be_bytes()
-            .serialize_to_vec();
-        res.append(&mut self.recipient_data.clone());
-        res.append(&mut self.sender.serialize_to_vec());
-        res.append(&mut self.sender_type.serialize_to_vec());
-        res.append(&mut self.recipient.serialize_to_vec());
-        res.append(&mut self.recipient_type.serialize_to_vec());
-        res.append(&mut self.value.serialize_to_vec());
-        res.append(&mut self.fee.serialize_to_vec());
-        res.append(&mut self.validity_start_height.to_be_bytes().serialize_to_vec());
-        res.append(&mut self.network_id.serialize_to_vec());
-        res.append(&mut self.flags.serialize_to_vec());
-        // Only serialize the sender data if the network ID is a PoS one for
-        // backwards compatibility
-        if self.network_id.is_albatross() {
-            res.append(&mut self.sender_data.serialize_to_vec());
-        }
-        res
+        let mut result = Vec::new();
+        SerializeContent::serialize_content::<_, Blake2bHash>(self, &mut result).unwrap();
+        result
     }
 
     pub fn total_value(&self) -> Coin {
@@ -471,14 +454,26 @@ impl Transaction {
 }
 
 impl SerializeContent for Transaction {
-    fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
-        writer.write_all(&self.serialize_content())
-    }
-}
-
-impl std::hash::Hash for Transaction {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        std::hash::Hash::hash(&self.serialize_content(), state);
+    fn serialize_content<W: Write, H>(&self, writer: &mut W) -> io::Result<()> {
+        // Serialize data as in PoW (2 bytes for the length and then the data
+        // which in PoS is the recipient data) for backwards compatibility
+        writer.write_all(&(self.recipient_data.len() as u16).to_be_bytes())?;
+        writer.write_all(&self.recipient_data)?;
+        self.sender.serialize_to_writer(writer)?;
+        self.sender_type.serialize_to_writer(writer)?;
+        self.recipient.serialize_to_writer(writer)?;
+        self.recipient_type.serialize_to_writer(writer)?;
+        self.value.serialize_to_writer(writer)?;
+        self.fee.serialize_to_writer(writer)?;
+        writer.write_all(&self.validity_start_height.to_be_bytes())?;
+        self.network_id.serialize_to_writer(writer)?;
+        self.flags.serialize_to_writer(writer)?;
+        // Only serialize the sender data if the network ID is a PoS one for
+        // backwards compatibility
+        if self.network_id.is_albatross() {
+            self.sender_data.serialize_to_writer(writer)?;
+        }
+        Ok(())
     }
 }
 
