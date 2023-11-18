@@ -1,7 +1,7 @@
 use crate::{
     protocol::{Inherent, Proposal, ProposalMessage, Protocol, SignedProposalMessage},
     utils::{Return, Step},
-    Tendermint,
+    ProtocolError, Tendermint,
 };
 
 impl<TProtocol: Protocol> Tendermint<TProtocol> {
@@ -19,7 +19,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
     /// If the node fails to persist the state and crashes, restarting from the previous state and receiving the new (forked) predecessor
     /// will lead to a different proposal, but since the former proposal was not broadcast and was not acted on no harm is done, and the protocol
     /// is not breached.
-    pub(crate) fn propose(&mut self) -> Option<Return<TProtocol>> {
+    pub(crate) fn propose(&mut self) -> Result<Return<TProtocol>, ProtocolError> {
         // Retrieve the set of proposals for the current round. Create the set if it does not exist yet.
         let proposals = self
             .state
@@ -88,7 +88,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
                 .is_none());
 
             // yield state
-            return Some(Return::Update(self.state.clone()));
+            return Ok(Return::Update(self.state.clone()));
         }
 
         // At this point `proposals` is empty.
@@ -124,7 +124,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             proposals.insert(proposal_hash.clone(), (Some(*valid_round), signature));
 
             // Yield the state as it has changed.
-            Some(Return::Update(self.state.clone()))
+            Ok(Return::Update(self.state.clone()))
         } else {
             // No valid proposal is known.
             log::debug!(
@@ -133,7 +133,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             );
 
             // Create a new proposal.
-            let (message, inherent) = self.protocol.create_proposal(self.state.current_round);
+            let (message, inherent) = self.protocol.create_proposal(self.state.current_round)?;
 
             // Sign the proposal message
             let signature = self.protocol.sign_proposal(&message);
@@ -156,7 +156,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             proposals.insert(proposal_hash, (None, signature));
 
             // Yield the state as it has changed.
-            Some(Return::Update(self.state.clone()))
+            Ok(Return::Update(self.state.clone()))
         }
     }
 }

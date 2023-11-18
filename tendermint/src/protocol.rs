@@ -71,6 +71,11 @@ pub trait Inherent<InherentHash> {
     fn hash(&self) -> InherentHash;
 }
 
+#[derive(Clone, Debug)]
+pub enum ProtocolError {
+    Abort,
+}
+
 pub trait Protocol: Clone + Send + Sync + Unpin + Sized + 'static {
     type Proposal: Proposal<Self::ProposalHash, Self::InherentHash>
         + Unpin
@@ -90,10 +95,13 @@ pub trait Protocol: Clone + Send + Sync + Unpin + Sized + 'static {
     const F_PLUS_ONE: usize;
 
     /// Returns whether or not the validator this node is configured for is the block producer for given `round`
-    fn is_proposer(&self, round: u32) -> bool;
+    fn is_proposer(&self, round: u32) -> Result<bool, ProtocolError>;
 
     /// Creates the proposal for given `round`
-    fn create_proposal(&self, round: u32) -> (ProposalMessage<Self::Proposal>, Self::Inherent);
+    fn create_proposal(
+        &self,
+        round: u32,
+    ) -> Result<(ProposalMessage<Self::Proposal>, Self::Inherent), ProtocolError>;
 
     /// Signs a given `proposal_message` for sending it over the wire
     fn sign_proposal(

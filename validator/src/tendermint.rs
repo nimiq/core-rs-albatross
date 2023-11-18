@@ -7,7 +7,7 @@ use futures::{
 };
 use nimiq_block::{Block, BlockError, MacroBlock, TendermintProof};
 use nimiq_blockchain::{BlockProducer, Blockchain};
-use nimiq_blockchain_interface::PushError;
+use nimiq_blockchain_interface::{AbstractBlockchain, PushError};
 use nimiq_collections::BitSet;
 use nimiq_handel::{aggregation::Aggregation, identity::IdentityRegistry};
 use nimiq_hash::{Blake2sHash, Blake2sHasher, Hash, Hasher, SerializeContent};
@@ -18,7 +18,7 @@ use nimiq_primitives::{
 };
 use nimiq_serde::Serialize;
 use nimiq_tendermint::{
-    Proposal, ProposalError, ProposalMessage, Protocol, SignedProposalMessage, Step,
+    Proposal, ProposalError, ProposalMessage, Protocol, ProtocolError, SignedProposalMessage, Step,
     TaggedAggregationMessage,
 };
 use nimiq_validator_network::{
@@ -200,8 +200,13 @@ where
     const TIMEOUT_DELTA: u64 = 1000;
     const TIMEOUT_INIT: u64 = 1000;
 
-    fn is_proposer(&self, round: u32) -> bool {
+    fn is_proposer(&self, round: u32) -> Result<bool, ProtocolError> {
         let blockchain = self.blockchain.read();
+
+        // Abort if the blockchain has changed.
+        if blockchain.block_number() != self.block_height - 1 {
+            return Err(ProtocolError::Abort);
+        }
 
         // Get best block for preceding micro block.
         // The best block might change, thus the vrf is not stored in separation
@@ -218,13 +223,22 @@ where
         // Check if the slot bands match.
         // TODO Instead of identifying the validator by its slot_band, we should identify it by its
         // address instead.
-        proposer_slot.band == self.validator_slot_band
+        Ok(proposer_slot.band == self.validator_slot_band)
     }
 
-    fn create_proposal(&self, round: u32) -> (ProposalMessage<Self::Proposal>, Self::Inherent) {
+    fn create_proposal(
+        &self,
+        round: u32,
+    ) -> Result<(ProposalMessage<Self::Proposal>, Self::Inherent), ProtocolError> {
         let blockchain = self.blockchain.read();
-        let time = blockchain.time.now();
 
+        // Abort if the blockchain state has changed.
+        if blockchain.block_number() != self.block_height - 1 {
+            return Err(ProtocolError::Abort);
+        }
+
+        // Create the proposal.
+        let time = blockchain.time.now();
         let block = self
             .block_producer
             .next_macro_block_proposal(&blockchain, time, round, vec![]);
@@ -233,14 +247,14 @@ where
         let body = block.body.expect("produced blocks always have a body");
 
         // Return the block header and body as the proposal.
-        (
+        Ok((
             ProposalMessage {
                 proposal: Header(block.header, None), // Created proposals do not have a PubSubId
                 round,
                 valid_round: None,
             },
             Body(body),
-        )
+        ))
     }
 
     fn broadcast_proposal(

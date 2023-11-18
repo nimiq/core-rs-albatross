@@ -129,19 +129,22 @@ impl Protocol for Validator {
     const TIMEOUT_INIT: u64 = 100;
     const TIMEOUT_DELTA: u64 = 100;
 
-    fn is_proposer(&self, round: u32) -> bool {
-        *self.propose.get(round as usize).expect("Exceeded rounds")
+    fn is_proposer(&self, round: u32) -> Result<bool, ProtocolError> {
+        Ok(*self.propose.get(round as usize).expect("Exceeded rounds"))
     }
 
-    fn create_proposal(&self, round: u32) -> (ProposalMessage<Self::Proposal>, Self::Inherent) {
-        (
+    fn create_proposal(
+        &self,
+        round: u32,
+    ) -> Result<(ProposalMessage<Self::Proposal>, Self::Inherent), ProtocolError> {
+        Ok((
             ProposalMessage {
                 round,
                 valid_round: None,
                 proposal: TestProposal(round),
             },
             TestInherent(round),
-        )
+        ))
     }
 
     fn sign_proposal(

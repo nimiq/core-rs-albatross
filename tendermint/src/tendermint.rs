@@ -642,8 +642,23 @@ impl<TProtocol: Protocol> Stream for Tendermint<TProtocol> {
         // Run the state machine implementation.
         let state_machine_return = match self.state.current_step {
             Step::Propose => {
-                if self.protocol.is_proposer(self.state.current_round) {
-                    self.propose()
+                // Abort if we can't determine the proposer.
+                let is_proposer = self.protocol.is_proposer(self.state.current_round);
+                if is_proposer.is_err() {
+                    // Make sure we only return None from now on.
+                    self.decision = true;
+                    return Poll::Ready(None);
+                }
+
+                if is_proposer.unwrap() {
+                    // Abort if we can't create a proposal.
+                    let state_machine_return = self.propose();
+                    if state_machine_return.is_err() {
+                        // Make sure we only return None from now on.
+                        self.decision = true;
+                        return Poll::Ready(None);
+                    }
+                    Some(state_machine_return.unwrap())
                 } else {
                     self.await_proposal(cx)
                 }
@@ -656,7 +671,6 @@ impl<TProtocol: Protocol> Stream for Tendermint<TProtocol> {
             if let Some(Return::Update(_)) = &state_machine_return {
                 self.state_return_pending = false;
             }
-
             return Poll::Ready(state_machine_return);
         }
 
@@ -690,7 +704,6 @@ impl<TProtocol: Protocol> Stream for Tendermint<TProtocol> {
 
             if should_export_state {
                 self.state_return_pending = false;
-
                 return Poll::Ready(Some(Return::Update(self.state.clone())));
             }
         }
