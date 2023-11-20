@@ -18,10 +18,8 @@ async fn can_launch_process_and_parse_output() {
 
     let result = launch_generate_new_proof(recv, proof_input, Some(zkp_test_exe())).await;
 
-    assert_eq!(
-        result,
-        Err(ZKProofGenerationError::NanoZKP("invalid block".to_string()))
-    );
+    // Should fail because verifying keys cannot be loaded.
+    assert!(matches!(result, Err(ZKProofGenerationError::NanoZKP(_))));
 }
 
 #[test(tokio::test)]

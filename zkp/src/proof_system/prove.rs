@@ -320,7 +320,7 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
         // Next level is an inner node.
         l_pk_node_hash = prove_pk_tree_node_mnt6(
             rng,
-            &keys,
+            keys,
             2 * position,
             tree_level + 1,
             l_pks,
@@ -332,7 +332,7 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
 
         r_pk_node_hash = prove_pk_tree_node_mnt6(
             rng,
-            &keys,
+            keys,
             2 * position + 1,
             tree_level + 1,
             r_pks,
@@ -480,7 +480,7 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
     // Next level is always an inner node.
     let (ll_pk_node_hash, lr_pk_node_hash) = prove_pk_tree_node_mnt4(
         rng,
-        &keys,
+        keys,
         2 * position,
         tree_level + 1,
         l_pks,
@@ -492,7 +492,7 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
 
     let (rl_pk_node_hash, rr_pk_node_hash) = prove_pk_tree_node_mnt4(
         rng,
-        &keys,
+        keys,
         2 * position + 1,
         tree_level + 1,
         r_pks,
@@ -672,7 +672,7 @@ fn prove_macro_block<R: CryptoRng + Rng>(
     // Generate the PK Tree proofs.
     let (l_pk_node_hash, r_pk_node_hash) = prove_pk_tree_node_mnt4(
         rng,
-        &keys,
+        keys,
         0,
         0,
         &prev_pks,

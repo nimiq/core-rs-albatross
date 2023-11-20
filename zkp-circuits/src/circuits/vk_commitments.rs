@@ -10,11 +10,6 @@ use log::error;
 use nimiq_zkp_primitives::{pedersen::DefaultPedersenParameters95, vk_commitment, vks_commitment};
 use rand::Rng;
 
-use crate::gadgets::{
-    pedersen::PedersenParametersVar, serialize::SerializeGadget, vk_commitment::VkCommitmentGadget,
-    vks_commitment::VksCommitmentGadget,
-};
-
 use super::{
     mnt4::{
         MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as MNT4PKTreeNodeCircuit,
@@ -24,6 +19,10 @@ use super::{
         PKTreeNodeCircuit as MNT6PKTreeNodeCircuit,
     },
     CircuitInput,
+};
+use crate::gadgets::{
+    pedersen::PedersenParametersVar, serialize::SerializeGadget, vk_commitment::VkCommitmentGadget,
+    vks_commitment::VksCommitmentGadget,
 };
 
 type BasePrimeField<E> = <<<E as Pairing>::G1 as CurveGroup>::BaseField as Field>::BasePrimeField;
@@ -242,7 +241,7 @@ where
     pub fn new_and_verify<PV: PairingVar<P, BasePrimeField<P>>>(
         cs: ConstraintSystemRef<BasePrimeField<P>>,
         keys: VerifyingKeys,
-        commitment: &Vec<UInt8<BasePrimeField<P>>>,
+        commitment: &[UInt8<BasePrimeField<P>>],
         pedersen_generators: &PedersenParametersVar<P::G1, PV::G1Var>,
     ) -> Result<Self, SynthesisError>
     where
@@ -297,19 +296,19 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::gadgets::mnt4::DefaultPedersenParametersVar as MNT4PedersenParametersVar;
-    use crate::gadgets::mnt6::DefaultPedersenParametersVar as MNT6PedersenParametersVar;
     use ark_mnt4_753::{constraints::PairingVar as MNT4PairingVar, Fq as MNT4Fq, MNT4_753};
     use ark_mnt6_753::{constraints::PairingVar as MNT6PairingVar, Fq as MNT6Fq, MNT6_753};
-    use ark_r1cs_std::alloc::AllocVar;
-    use ark_r1cs_std::R1CSVar;
+    use ark_r1cs_std::{alloc::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
     use nimiq_zkp_primitives::{pedersen::pedersen_parameters_mnt4, pedersen_parameters_mnt6};
 
-    use crate::gadgets::vk_commitment::VkCommitmentWindow;
-
     use super::*;
+    use crate::gadgets::{
+        mnt4::DefaultPedersenParametersVar as MNT4PedersenParametersVar,
+        mnt6::DefaultPedersenParametersVar as MNT6PedersenParametersVar,
+        vk_commitment::VkCommitmentWindow,
+    };
 
     fn assert_eq_vk<E: Pairing, P: PairingVar<E, BasePrimeField<E>>>(
         vk: &VerifyingKey<E>,

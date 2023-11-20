@@ -78,7 +78,7 @@ pub fn setup<R: Rng + CryptoRng>(
 }
 
 pub fn load_verifying_data(path: &Path) -> Result<VerifyingData, NanoZKPError> {
-    let metadata = fs::read(path.join(format!("meta_data.bin")))?;
+    let metadata = fs::read(path.join("meta_data.bin"))?;
     let metadata = VerifyingKeyMetadata::deserialize_from_vec(&metadata)?;
     Ok(VerifyingData {
         merger_wrapper_vk: load_key(&path.join("verifying_keys"), "merger_wrapper")?,

@@ -31,9 +31,10 @@ pub const fn num_inputs<P: Pairing>(num_bytes: &[usize]) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use ark_mnt4_753::MNT4_753;
     use ark_mnt6_753::MNT6_753;
+
+    use super::*;
 
     #[test]
     fn test_num_inputs() {

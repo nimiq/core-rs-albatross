@@ -96,9 +96,8 @@ mod tests {
     use nimiq_test_log::test;
     use nimiq_zkp_primitives::{pedersen_parameters_mnt6, vk_commitment};
 
-    use crate::gadgets::mnt6::DefaultPedersenParametersVar;
-
     use super::*;
+    use crate::gadgets::mnt6::DefaultPedersenParametersVar;
 
     #[test]
     fn vk_commitment_test() {

@@ -1,8 +1,10 @@
 use std::{path::PathBuf, time::Instant};
 
 use nimiq_genesis::NetworkInfo;
-use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy::{Policy, TEST_POLICY};
+use nimiq_primitives::{
+    networks::NetworkId,
+    policy::{Policy, TEST_POLICY},
+};
 use nimiq_zkp_circuits::setup::setup;
 use rand::thread_rng;
 

@@ -4,12 +4,11 @@ use ark_r1cs_std::{eq::EqGadget, groups::GroupOpsBounds, pairing::PairingVar, ui
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use nimiq_zkp_primitives::pedersen::DefaultPedersenParameters95;
 
+use super::vk_commitment::VkCommitmentWindow;
 use crate::gadgets::{
     pedersen::{PedersenHashGadget, PedersenParametersVar},
     serialize::SerializeGadget,
 };
-
-use super::vk_commitment::VkCommitmentWindow;
 
 type BasePrimeField<E> = <<<E as Pairing>::G1 as CurveGroup>::BaseField as Field>::BasePrimeField;
 
@@ -76,7 +75,7 @@ impl<E: Pairing + DefaultPedersenParameters95> VksCommitmentGadget<E> {
 
         // Calculate the Pedersen hash.
         let hash =
-            PedersenHashGadget::<_, _, VkCommitmentWindow>::evaluate(&bytes, &pedersen_generators)?;
+            PedersenHashGadget::<_, _, VkCommitmentWindow>::evaluate(&bytes, pedersen_generators)?;
 
         // Serialize the Pedersen hash.
         let serialized_bytes = hash.serialize_compressed(cs)?;
@@ -98,9 +97,8 @@ mod tests {
     use nimiq_test_log::test;
     use nimiq_zkp_primitives::{pedersen_parameters_mnt6, vk_commitment, vks_commitment};
 
-    use crate::gadgets::mnt6::DefaultPedersenParametersVar;
-
     use super::*;
+    use crate::gadgets::mnt6::DefaultPedersenParametersVar;
 
     #[test]
     fn vks_commitment_test() {
