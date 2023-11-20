@@ -127,6 +127,18 @@ where
             Err(NetworkError::UnknownValidator(validator_id))
         }
     }
+
+    /// Clears the validator->peer_id cache.
+    /// The cached entry should be cleared when the peer id might have changed.
+    fn clear_validator_peer_id_cache(&self, validator_id: usize) {
+        let state = &mut *self.state.write();
+        let validator_key = state.validator_keys.get(validator_id);
+        if let Some(validator_key) = validator_key {
+            state
+                .validator_peer_id_cache
+                .remove(validator_key.compressed());
+        }
+    }
 }
 
 /// Messages sent over the validator network get augmented with the sending
@@ -199,7 +211,12 @@ where
         if let Ok(peer_id) = self.get_validator_peer_id(validator_id).await {
             self.network
                 .message(msg, peer_id)
-                .map_err(NetworkError::Request)
+                .map_err(|e| {
+                    // The validator peer id might have changed and thus caused a connection failure.
+                    self.clear_validator_peer_id_cache(validator_id);
+
+                    NetworkError::Request(e)
+                })
                 .await
         } else {
             Err(NetworkError::Unreachable)
@@ -221,7 +238,12 @@ where
         if let Ok(peer_id) = self.get_validator_peer_id(validator_id).await {
             self.network
                 .request(request, peer_id)
-                .map_err(NetworkError::Request)
+                .map_err(|e| {
+                    // The validator peer id might have changed and thus caused a connection failure.
+                    self.clear_validator_peer_id_cache(validator_id);
+
+                    NetworkError::Request(e)
+                })
                 .await
         } else {
             Err(NetworkError::Unreachable)
