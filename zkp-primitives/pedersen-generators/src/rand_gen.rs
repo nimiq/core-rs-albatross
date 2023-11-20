@@ -50,7 +50,7 @@
 //!
 //! 624314 -> 000000000000000000132006558a816203cb442aeb9162ba1d8f6dac5f0a00ec
 
-use nimiq_hash::blake2s::Blake2sWithParameterBlock;
+use nimiq_hash::{Blake2bHash, Hash};
 
 /// This function will return 32 verifiably random bytes.
 pub fn generate_random_seed(personalization: u64) -> [u8; 32] {
@@ -75,12 +75,8 @@ pub fn generate_random_seed(personalization: u64) -> [u8; 32] {
         "{block_00}{block_01}{block_02}{block_03}{block_04}{block_05}{block_06}{block_07}{block_08}{block_09}{block_10}{block_11}{block_12}{block_13}{block_14}"
     );
 
-    let random_bytes = hex::decode(concatenated).unwrap();
+    let mut random_bytes = hex::decode(concatenated).unwrap();
+    random_bytes.extend_from_slice(&personalization.to_be_bytes());
 
-    // Initialize Blake2s parameters.
-    let mut blake2s = Blake2sWithParameterBlock::new();
-    blake2s.personalization = personalization.to_be_bytes();
-
-    // Calculate the Blake2s hash.
-    blake2s.evaluate_fixed(random_bytes.as_ref())
+    random_bytes.hash::<Blake2bHash>().0
 }

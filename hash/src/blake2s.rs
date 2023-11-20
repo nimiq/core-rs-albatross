@@ -85,14 +85,4 @@ impl Blake2sWithParameterBlock {
         b.update(input);
         b.finalize().as_bytes().into()
     }
-
-    pub fn evaluate_fixed(&self, input: &[u8]) -> [u8; 32] {
-        let mut b = Blake2s::with_parameter_block(&self.parameters());
-        b.update(input);
-        let res = b.finalize();
-        assert_eq!(res.len(), 32);
-        let mut ret = [0; 32];
-        ret.copy_from_slice(res.as_bytes());
-        ret
-    }
 }
