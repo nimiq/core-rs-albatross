@@ -92,7 +92,7 @@ impl Blake2sWithParameterBlock {
         let res = b.finalize();
         assert_eq!(res.len(), 32);
         let mut ret = [0; 32];
-        ret.copy_from_slice(&res.as_bytes());
+        ret.copy_from_slice(res.as_bytes());
         ret
     }
 }
