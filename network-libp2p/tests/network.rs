@@ -6,13 +6,9 @@ use libp2p::{
     identity::Keypair,
     multiaddr::{multiaddr, Multiaddr},
     swarm::KeepAlive,
-    PeerId,
 };
 use nimiq_network_interface::{
-    network::{
-        CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, SubscribeEvents,
-        Topic,
-    },
+    network::{CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, Topic},
     peer_info::Services,
 };
 use nimiq_network_libp2p::{

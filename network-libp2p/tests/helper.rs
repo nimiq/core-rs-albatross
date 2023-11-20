@@ -1,4 +1,4 @@
-use futures::{Stream, StreamExt};
+use futures::StreamExt;
 use nimiq_network_interface::network::{NetworkEvent, SubscribeEvents};
 use nimiq_network_libp2p::PeerId;
 

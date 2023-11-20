@@ -10,7 +10,7 @@ use libp2p::{
 #[cfg(feature = "tokio-time")]
 use nimiq_network_interface::network::CloseReason;
 use nimiq_network_interface::{
-    network::{Network as NetworkInterface, NetworkEvent},
+    network::Network as NetworkInterface,
     peer_info::Services,
     request::{
         InboundRequestError, OutboundRequestError, Request, RequestCommon, RequestError,
@@ -19,7 +19,7 @@ use nimiq_network_interface::{
 };
 use nimiq_network_libp2p::{
     discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact},
-    Config, Network, PeerId,
+    Config, Network,
 };
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_test_log::test;
