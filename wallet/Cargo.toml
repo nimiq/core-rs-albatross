@@ -16,7 +16,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 curve25519-dalek = { version = "4", features = ["digest"] }
-itertools = "0.11"
+itertools = "0.12"
 serde = "1.0"
 thiserror = "1.0"
 
