@@ -166,19 +166,22 @@ where
 
         // Drain ids and produce futures.
         for _ in 0..num_ids_to_request {
-            let id = self.ids_to_request.pop_front().unwrap().0;
-            let pubsub_id = self.ids_to_request.pop_front().unwrap().1;
+            let (id, pubsub_id) = self.ids_to_request.pop_front().unwrap();
+
+            // If we have a pubsub id, try to get the corresponding peer.
+            // If this fails, we still want to get and increment.
+            let pubsub_peer = pubsub_id.and_then(|pubsub_id| {
+                let peer_id = pubsub_id.propagation_source();
+
+                self.peers
+                    .read()
+                    .index_of(&peer_id)
+                    .map(|peer_index| (peer_id, peer_index))
+            });
 
             // If we know the peer that sent us this block, we ask them first.
-            let peer = match pubsub_id {
-                Some(pubsub_id) => {
-                    let peer_id = pubsub_id.propagation_source();
-
-                    self.peers
-                        .read()
-                        .index_of(&peer_id)
-                        .map(|peer_index| (peer_id, peer_index))
-                }
+            let peer = match pubsub_peer {
+                Some(pubsub_peer) => Some(pubsub_peer),
                 None => self
                     .peers
                     .read()

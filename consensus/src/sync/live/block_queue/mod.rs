@@ -11,7 +11,7 @@ use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction,
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId};
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
 use parking_lot::RwLock;
 
 use self::block_request_component::BlockRequestComponent;
@@ -250,7 +250,7 @@ impl<N: Network> BlockQueue<N> {
         }
 
         // We don't know the predecessor of this block, request it.
-        self.request_missing_blocks(parent_block_number, parent_hash, None, pubsub_id);
+        self.request_missing_blocks(parent_block_number, parent_hash, None, None, pubsub_id);
     }
 
     fn insert_block_into_buffer(&mut self, block: Block, pubsub_id: Option<N::PubsubId>) -> bool {
@@ -277,9 +277,10 @@ impl<N: Network> BlockQueue<N> {
         block_number: u32,
         block_hash: Blake2bHash,
         block_locator: Option<Blake2bHash>,
+        epoch_validators: Option<Validators>,
         pubsub_id: Option<N::PubsubId>,
     ) {
-        let (head_hash, head_height, macro_height, blocks) = {
+        let (head_hash, head_height, macro_height, blocks, epoch_validators) = {
             let blockchain = self.blockchain.read();
             let head_hash = blockchain.head_hash();
             let head_height = blockchain.block_number();
@@ -293,7 +294,20 @@ impl<N: Network> BlockQueue<N> {
                 false,
                 Direction::Backward,
             );
-            (head_hash, head_height, macro_height, blocks)
+            // If we have a set of validators given, we are in a follow-up request and reuse those.
+            // If none are given, this request should receive blocks only from the current epoch onwards,
+            // so we use the current validator set.
+            (
+                head_hash,
+                head_height,
+                macro_height,
+                blocks,
+                epoch_validators.unwrap_or_else(|| {
+                    blockchain
+                        .current_validators()
+                        .expect("Blockchain does not have a current validator set")
+                }),
+            )
         };
 
         if let Ok(blocks) = blocks {
@@ -305,6 +319,7 @@ impl<N: Network> BlockQueue<N> {
                 "Requesting missing blocks",
             );
 
+            // The block locators are the full batch of micro blocks.
             let block_locators = blocks.into_iter().map(|block| block.hash());
 
             let init_block_locators = if let Some(block_locator) = block_locator {
@@ -322,6 +337,7 @@ impl<N: Network> BlockQueue<N> {
                 block_number,
                 block_hash,
                 block_locators,
+                epoch_validators,
                 pubsub_id,
             );
         } else {
@@ -334,65 +350,28 @@ impl<N: Network> BlockQueue<N> {
         &mut self,
         target_block_number: u32,
         target_hash: Blake2bHash,
+        mut epoch_validators: Validators,
         blocks: Vec<Block>,
     ) -> Option<QueuedBlock<N>> {
+        // Verification is already done by the sync queue.
         if blocks.is_empty() {
-            log::debug!("Received empty missing blocks response");
             return None;
-        }
-
-        // Checks that the first block was part of the chain or block locators.
-        let first_block = blocks.first()?;
-        if !self
-            .blockchain
-            .read()
-            .contains(first_block.parent_hash(), false)
-            && !self.blocks_pending_push.contains(first_block.parent_hash())
-            && !self
-                .buffer
-                .get(&first_block.block_number().saturating_sub(1))
-                .map(|blocks| blocks.contains_key(first_block.parent_hash()))
-                .unwrap_or(false)
-        {
-            log::error!("Received invalid chain of missing blocks (first block not in chain or block locators)");
-            return None;
-        }
-        if first_block.block_number() > target_block_number {
-            log::error!(
-                first_block = first_block.block_number(),
-                target_block_number,
-                "Received invalid chain of missing blocks (first block > target)"
-            );
-            return None;
-        }
-
-        // Check that the chain of missing blocks is valid.
-        let mut previous = first_block;
-        for block in blocks.iter().skip(1) {
-            if block.block_number() == previous.block_number() + 1
-                && block.block_number() <= target_block_number
-                && block.parent_hash() == &previous.hash()
-            {
-                previous = block;
-            } else {
-                log::error!("Received invalid chain of missing blocks");
-                return None;
-            }
         }
 
         let last_block = blocks.last()?;
         let block_hash = last_block.hash();
-        if last_block.block_number() == target_block_number && block_hash != target_hash {
-            log::error!(
-                target_block_number,
-                %block_hash,
-                %target_hash,
-                "Received invalid missing blocks (invalid target block)"
-            );
-            return None;
-        }
         if block_hash != target_hash {
-            self.request_missing_blocks(target_block_number, target_hash, Some(block_hash), None);
+            // Check if we got a new validator set, otherwise reuse the previous one.
+            if last_block.is_election() {
+                epoch_validators = last_block.validators()?;
+            }
+            self.request_missing_blocks(
+                target_block_number,
+                target_hash,
+                Some(block_hash),
+                Some(epoch_validators),
+                None,
+            );
         }
 
         // Check whether the blockchain can push the missing blocks. This might not be the case if the reference
@@ -643,11 +622,15 @@ impl<N: Network> Stream for BlockQueue<N> {
                 Poll::Ready(Some(BlockRequestComponentEvent::ReceivedBlocks(
                     target_block_number,
                     target_hash,
+                    epoch_validators,
                     blocks,
                 ))) => {
-                    if let Some(block) =
-                        self.handle_missing_blocks(target_block_number, target_hash, blocks)
-                    {
+                    if let Some(block) = self.handle_missing_blocks(
+                        target_block_number,
+                        target_hash,
+                        epoch_validators,
+                        blocks,
+                    ) {
                         return Poll::Ready(Some(block));
                     }
                 }

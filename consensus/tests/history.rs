@@ -589,7 +589,12 @@ async fn request_missing_blocks_across_macro_block() {
             let genesis = req.locators.first().unwrap();
             let blocks = blockchain
                 .read()
-                .get_blocks(genesis, 2, true, Direction::Forward)
+                .get_blocks(
+                    genesis,
+                    Policy::blocks_per_batch(),
+                    true,
+                    Direction::Forward,
+                )
                 .unwrap();
 
             ResponseBlocks {
@@ -600,18 +605,24 @@ async fn request_missing_blocks_across_macro_block() {
     mock_node.request_missing_block_handler.unset();
     assert_eq!(req, RequestMissingBlocks::TYPE_ID);
 
-    // Run the block_queue one iteration, i.e. until it processed one block.
+    // Run the block_queue one iteration, i.e. until it processed one batch.
     // Needs to be pulled again to send the request missing block over the network.
     syncer.next().await;
+    // syncer.next().await;
+    let _ = poll!(syncer.next());
     let _ = poll!(syncer.next());
 
     // The blocks from the first missing blocks request should be applied now
-    assert_eq!(blockchain1.read().block_number(), 2 + genesis_block_number);
+    assert_eq!(
+        blockchain1.read().block_number(),
+        Policy::blocks_per_batch() + genesis_block_number
+    );
     let blocks = syncer
         .live_sync
         .queue()
         .buffered_blocks()
         .collect::<Vec<_>>();
+    // We have the last block buffered.
     assert_eq!(blocks.len(), 1);
     let (block_number, blocks) = blocks.first().unwrap();
     assert_eq!(*block_number, block2.block_number());
@@ -621,16 +632,11 @@ async fn request_missing_blocks_across_macro_block() {
     let req = mock_node.next().await.unwrap();
     assert_eq!(req, RequestMissingBlocks::TYPE_ID);
 
-    // Run the block_queue until is has produced three events:
-    //   - ReceivedMissingBlocks (3-31)
-    //   - ReceivedMissingBlocks (32-33)
-    //   - AcceptedBufferedBlock (34)
+    // Run the block_queue one iteration, i.e. until it processed the remaining blocks.
     syncer.next().await;
-    let _ = poll!(syncer.next());
-    let req = mock_node.next().await.unwrap();
-    assert_eq!(req, RequestMissingBlocks::TYPE_ID);
+    assert_eq!(blockchain1.read().block_number(), block1.block_number());
 
-    syncer.next().await;
+    // Now make sure the last block from the buffer is also applied.
     syncer.next().await;
 
     // Now all blocks should've been pushed to the blockchain.
