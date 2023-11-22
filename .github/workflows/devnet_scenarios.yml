@@ -29,12 +29,17 @@ jobs:
         - test: FourValidatorsReconnectSpammer
           devnet_args: -t .github/devnet_topologies/four_validators_spammer_1.toml -ut 100
         - test: MacroBlockProduction
-          pre: "sed -i 's/BLOCKS_PER_BATCH: u32 = 32;/BLOCKS_PER_BATCH: u32 = 2;/g' primitives/src/policy.rs"
+          # The number of blocks per epoch needs to stay the same (because of the ZKP keys)
+          pre: "grep 'blocks_per_batch: 60,' primitives/src/policy.rs &&
+                grep 'batches_per_epoch: 360,' primitives/src/policy.rs &&
+                sed -i 's/blocks_per_batch: 60,/blocks_per_batch: 60 \\/ 30,/g' primitives/src/policy.rs &&
+                sed -i 's/batches_per_epoch: 360,/batches_per_epoch: 360 \\* 30,/g' primitives/src/policy.rs"
           devnet_args: -t .github/devnet_topologies/four_validators_spammer_0.toml -k 0 -ut 100
         - test: Validators90sDown
           devnet_args: -t .github/devnet_topologies/four_validators_spammer_1.toml -dt 90 -ut 100
         - test: LowBlockProducerTimeout
-          pre: "sed -i 's/BLOCK_PRODUCER_TIMEOUT: u64 = 4 * 1000;/BLOCK_PRODUCER_TIMEOUT: u64 = 2 * 1000;/g' primitives/src/policy.rs"
+          pre: "grep 'BLOCK_PRODUCER_TIMEOUT: u64 = 2 \\* 1000;' primitives/src/policy.rs &&
+                sed -i 's/BLOCK_PRODUCER_TIMEOUT: u64 = 2 \\* 1000;/BLOCK_PRODUCER_TIMEOUT: u64 = 1000;/g' primitives/src/policy.rs"
           devnet_args: -t .github/devnet_topologies/four_validators_spammer_0.toml -k 0 -ut 100
 
     runs-on: ubuntu-22.04
