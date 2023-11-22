@@ -178,7 +178,7 @@ impl TransactionBuilder {
     /// * `re-activate staker funds`
     ///
     /// Signaling transactions have a special status as they also require an additional step
-    /// during the proof generation (see [`SignalingProofBuilder`]).
+    /// during the proof generation (see [`StakingDataBuilder`]).
     ///
     /// # Examples
     ///

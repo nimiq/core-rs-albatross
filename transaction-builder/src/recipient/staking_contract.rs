@@ -22,9 +22,9 @@ use crate::recipient::Recipient;
 ///
 /// Signaling transactions have a special status as they require a zero value
 /// as well as an additional step during the proof generation.
-/// Also see [`SignalingProofBuilder`].
+/// Also see [`StakingDataBuilder`].
 ///
-/// [`SignalingProofBuilder`]: ../../proof/staking_contract/struct.SignalingProofBuilder.html
+/// [`StakingDataBuilder`]: ../../proof/staking_contract/struct.StakingDataBuilder.html
 #[derive(Clone, Debug, Default)]
 pub struct StakingRecipientBuilder {
     data: Option<IncomingStakingTransactionData>,

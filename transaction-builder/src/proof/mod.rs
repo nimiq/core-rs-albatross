@@ -19,12 +19,12 @@ pub mod staking_contract;
 /// The proof mostly depends on the sender account (with the exception of incoming staking transactions).
 ///
 /// Thus, there exist four different types of proof builders:
-/// - [`StakingDataBuilder`] (that build the staking data and return a normal proof builder)
 /// - [`BasicProofBuilder`] (for basic and vesting sender accounts)
 /// - [`HtlcProofBuilder`] (for HTLC sender accounts)
 /// - [`StakingProofBuilder`] (for outgoing staking transactions)
+/// - [`StakingDataBuilder`] (that build the staking data and return a normal proof builder)
 ///
-/// [`SignalingProofBuilder`]: staking_contract/struct.StakingDataBuilder.html
+/// [`StakingDataBuilder`]: staking_contract/struct.StakingDataBuilder.html
 /// [`BasicProofBuilder`]: struct.BasicProofBuilder.html
 /// [`HtlcProofBuilder`]: htlc_contract/struct.HtlcProofBuilder.html
 /// [`StakingProofBuilder`]: staking_contract/struct.StakingProofBuilder.html
@@ -200,7 +200,7 @@ impl TransactionProofBuilder {
     /// This method has to be used for signaling transactions.
     /// It is used to populate the required signaling proof in the data field and can generate
     /// another proof builder for the actual proof field.
-    /// This method returns the underlying [`SignalingProofBuilder`].
+    /// This method returns the underlying [`StakingDataBuilder`].
     ///
     /// # Examples
     ///
@@ -244,7 +244,7 @@ impl TransactionProofBuilder {
     /// assert!(final_transaction.unwrap().verify(NetworkId::Main).is_ok());
     /// ```
     ///
-    /// [`SignalingProofBuilder`]: staking_contract/struct.SignalingProofBuilder.html
+    /// [`StakingDataBuilder`]: staking_contract/struct.StakingDataBuilder.html
     pub fn unwrap_in_staking(self) -> StakingDataBuilder {
         match self {
             TransactionProofBuilder::InStaking(builder) => builder,
