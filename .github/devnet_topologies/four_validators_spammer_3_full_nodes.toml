@@ -1,0 +1,24 @@
+[[validator]]
+restartable = true
+sync_mode = "full"
+
+[[validator]]
+restartable = true
+sync_mode = "full"
+
+[[validator]]
+restartable = true
+sync_mode = "history"
+
+[[validator]]
+restartable = true
+sync_mode = "full"
+
+[[spammer]]
+restartable = false
+sync_mode = "history"
+tpb = 150
+
+[[seed]]
+restartable = false
+sync_mode = "history"
