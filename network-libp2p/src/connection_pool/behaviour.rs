@@ -29,23 +29,37 @@ use wasm_timer::Interval;
 use super::Error;
 use crate::discovery::peer_contacts::PeerContactBook;
 
+/// Current state of connections and peers for connection limits
 #[derive(Clone, Debug)]
 struct Limits {
+    /// Number of peers connected per IP
     ip_count: HashMap<IpAddr, usize>,
+    /// Number of peers connected per IP subnet
     ip_subnet_count: HashMap<IpNetwork, usize>,
+    /// Total peer count
     peer_count: usize,
 }
 
+/// Connection pool behaviour configuration
 #[derive(Clone, Debug)]
 struct Config {
+    /// Desired count of peers
     peer_count_desired: usize,
+    /// Maximum count of peers
     peer_count_max: usize,
+    /// Maximum peer count per IP
     peer_count_per_ip_max: usize,
+    /// Maximum peer count per subnet
     peer_count_per_subnet_max: usize,
-    ipv4_subnet_mask: u8,
-    ipv6_subnet_mask: u8,
+    /// IPv4 subnet prefix length to apply to detect same connections for the same subnet
+    ipv4_subnet_prefix_len: u8,
+    /// IPv6 subnet prefix length to apply to detect same connections for the same subnet
+    ipv6_subnet_prefix_len: u8,
+    /// Maximum number of peer dialings that can be in progress
     dialing_count_max: usize,
+    /// Duration after which a peer will be re-dialed after it has been marked as down
     retry_down_after: Duration,
+    /// Interval duration for peer connections housekeeping
     housekeeping_interval: Duration,
 }
 
@@ -65,8 +79,8 @@ impl Default for Config {
             peer_count_max: 4000,
             peer_count_per_ip_max: 20,
             peer_count_per_subnet_max: 20,
-            ipv4_subnet_mask: 24,
-            ipv6_subnet_mask: 96,
+            ipv4_subnet_prefix_len: 24,
+            ipv6_subnet_prefix_len: 96,
             dialing_count_max: 3,
             retry_down_after: Duration::from_secs(60 * 10), // 10 minutes
             housekeeping_interval: Duration::from_secs(60 * 2), // 2 minutes
@@ -74,6 +88,9 @@ impl Default for Config {
     }
 }
 
+/// State of all of the connections the network has, like
+/// connected peers, peers being dialed, peers with failed dial attempts
+/// peers that are down or banned.
 struct ConnectionState<T> {
     /// Set of connection IDs being dialed.
     dialing: BTreeSet<T>,
@@ -159,7 +176,11 @@ impl<T: Ord> ConnectionState<T> {
             return;
         }
 
-        // TODO Ignore failures if down?
+        // Peer is already marked as down. There is no point in incrementing the
+        // number of failed attempts
+        if self.down.contains_key(&id) {
+            return;
+        }
 
         if let Some(num_attempts) = self.failed.get_mut(&id) {
             *num_attempts += 1;
@@ -207,7 +228,7 @@ impl<T: Ord> ConnectionState<T> {
     }
 
     /// Remove all connection IDs marked as down.
-    /// This will make a peer potentially able to be called again.
+    /// This will make an ID dial-able again.
     fn reset_down(&mut self) {
         self.down.clear()
     }
@@ -324,11 +345,11 @@ impl Behaviour {
         // Get IP from multiaddress if it exists.
         match address.iter().next() {
             Some(Protocol::Ip4(ip)) => Some(IpInfo {
-                subnet_ip: IpNetwork::new_truncate(ip, self.config.ipv4_subnet_mask).ok(),
+                subnet_ip: IpNetwork::new_truncate(ip, self.config.ipv4_subnet_prefix_len).ok(),
                 ip: IpAddr::V4(ip),
             }),
             Some(Protocol::Ip6(ip)) => Some(IpInfo {
-                subnet_ip: IpNetwork::new_truncate(ip, self.config.ipv6_subnet_mask).ok(),
+                subnet_ip: IpNetwork::new_truncate(ip, self.config.ipv6_subnet_prefix_len).ok(),
                 ip: IpAddr::V6(ip),
             }),
             _ => None,
@@ -348,10 +369,26 @@ impl Behaviour {
             "Maintaining peers"
         );
 
-        // Try to maintain at least `peer_count_desired` connections.
+        // If we are active and have less connections than the desired amount
+        // and we are not dialing anyone, it is most likely because we went down
+        // (i.e. we are or were offline).
+        // Make sure seeds and peers are dial-able again to reach desired peers.
+        // Otherwise we might be stuck in this state forever.
         if self.active
             && self.peer_ids.num_connected() < self.config.peer_count_desired
-            && self.peer_ids.num_dialing() < self.config.dialing_count_max
+            && self.peer_ids.num_dialing() + self.addresses.num_dialing() == 0
+        {
+            self.addresses.reset_down();
+            self.peer_ids.reset_down();
+        }
+
+        // Try to maintain at least `peer_count_desired` connections.
+        // Note: when counting dialing IDs we have to account for peer IDs and
+        // addresses (seeds may only be in the `addresses` set).
+        if self.active
+            && self.peer_ids.num_connected() < self.config.peer_count_desired
+            && self.peer_ids.num_dialing() + self.addresses.num_dialing()
+                < self.config.dialing_count_max
         {
             // Dial peers from the contact book.
             for peer_id in self.choose_peers_to_dial() {
@@ -380,16 +417,6 @@ impl Behaviour {
     pub fn start_connecting(&mut self) {
         self.active = true;
         self.maintain_peers();
-    }
-
-    /// Tells the behaviour to restart connecting to other peers.
-    /// For this, it clears the set of peers and addresses marked as down
-    /// and tells the network to start connecting again.
-    pub fn restart_connecting(&mut self) {
-        // Clean up the nodes marked as down
-        self.addresses.reset_down();
-        self.peer_ids.reset_down();
-        self.start_connecting();
     }
 
     /// Tells the behaviour to stop connecting to other peers.
@@ -646,8 +673,8 @@ impl Behaviour {
 
         self.addresses.mark_closed(address.clone());
         self.peer_ids.mark_closed(*peer_id);
+
         // If the connection was closed for any reason, don't dial the peer again.
-        // FIXME We want to be more selective here and only mark peers as down for specific CloseReasons.
         self.peer_ids.mark_down(*peer_id);
         self.addresses.mark_down(address.clone());
 
@@ -686,7 +713,6 @@ impl Behaviour {
             DialError::LocalPeerId { .. }
             | DialError::WrongPeerId { .. }
             | DialError::Aborted
-            | DialError::Transport(_)
             | DialError::NoAddresses
             | DialError::Denied { .. } => {
                 let peer_id = match peer_id {
@@ -697,6 +723,16 @@ impl Behaviour {
 
                 debug!(%peer_id, error = error_msg, "Failed to dial peer");
                 self.peer_ids.mark_failed(peer_id);
+                self.maintain_peers();
+            }
+            DialError::Transport(addresses) => {
+                debug!(?peer_id, error = error_msg, ?addresses, "Failed to dial");
+                if let Some(peer_id) = peer_id {
+                    self.peer_ids.mark_failed(peer_id);
+                }
+                for (address, _) in addresses {
+                    self.addresses.mark_failed(address.clone());
+                }
                 self.maintain_peers();
             }
             DialError::DialPeerConditionFalse(

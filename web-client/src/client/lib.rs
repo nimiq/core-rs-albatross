@@ -738,14 +738,14 @@ impl Client {
                     let network = network.clone();
                     spawn_local(async move {
                         let network = network.clone();
-                        network.restart_connecting().await;
+                        network.start_connecting().await;
                     });
                 } else if state == &JsString::from_str("visible").unwrap() {
                     log::debug!("Content became visible: restarting network");
                     let network = network.clone();
                     spawn_local(async move {
                         let network = network.clone();
-                        network.restart_connecting().await;
+                        network.start_connecting().await;
                     });
                 }
             }

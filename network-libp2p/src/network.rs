@@ -141,7 +141,6 @@ pub(crate) enum NetworkAction {
         output: oneshot::Sender<Vec<PeerId>>,
     },
     StartConnecting,
-    RestartConnecting,
     DisconnectPeer {
         peer_id: PeerId,
         reason: CloseReason,
@@ -1388,9 +1387,6 @@ impl Network {
             NetworkAction::StartConnecting => {
                 swarm.behaviour_mut().pool.start_connecting();
             }
-            NetworkAction::RestartConnecting => {
-                swarm.behaviour_mut().pool.restart_connecting();
-            }
             NetworkAction::ConnectPeersByServices {
                 services,
                 num_peers,
@@ -1445,27 +1441,17 @@ impl Network {
         }
     }
 
-    /// Tells the network to start connecting to any available peer or seed.
+    /// Tells the network to start connecting to any available peer or seed
+    /// until meeting the configured number of desired peer connections.
+    /// If there are no dial attempts being made and no connections to any
+    /// peer it clears the internal set of peers or addresses marked as down.
+    /// This is useful to instruct the network to reconnect after issuing a
+    /// `stop_connecting` call.
     pub async fn start_connecting(&self) {
         if let Err(error) = self
             .action_tx
             .clone()
             .send(NetworkAction::StartConnecting)
-            .await
-        {
-            error!(%error, "Failed to send NetworkAction::StartConnecting");
-        }
-    }
-
-    /// Tells the network to restart connecting to any available peer or seed.
-    /// For this, it clears the internal set of peers or addresses marked as down.
-    /// This is useful to instruct the network to reconnect after issuing a
-    /// `stop_connecting` call.
-    pub async fn restart_connecting(&self) {
-        if let Err(error) = self
-            .action_tx
-            .clone()
-            .send(NetworkAction::RestartConnecting)
             .await
         {
             error!(%error, "Failed to send NetworkAction::StartConnecting");
