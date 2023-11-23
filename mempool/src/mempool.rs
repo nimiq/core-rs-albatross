@@ -268,35 +268,6 @@ impl Mempool {
             .abort();
     }
 
-    /// This function prunes transactions from the mempool that were already included in the blockchain
-    /// This is generally used by history sync when it adopts epochs
-    pub fn mempool_clean_up(&self) {
-        // Acquire the mempool and blockchain locks
-        let blockchain = self.blockchain.read();
-        let mut mempool_state = self.state.write();
-
-        let transactions: Vec<Transaction> = mempool_state
-            .control_transactions
-            .transactions
-            .values()
-            .cloned()
-            .chain(
-                mempool_state
-                    .regular_transactions
-                    .transactions
-                    .values()
-                    .cloned(),
-            )
-            .collect();
-
-        for transaction in &transactions {
-            let tx_hash: Blake2bHash = transaction.hash();
-            if blockchain.contains_tx_in_validity_window(&tx_hash, None) {
-                mempool_state.remove(&blockchain, &tx_hash, EvictionReason::AlreadyIncluded);
-            }
-        }
-    }
-
     /// Updates the mempool given a set of reverted and adopted blocks.
     ///
     /// During a Blockchain extend event a new block is mined which implies that:
@@ -311,7 +282,7 @@ impl Mempool {
     /// 1.B and 2.A can be iterated over the txs in the adopted blocks, that is, it is not
     /// necessary to iterate all transactions in the mempool.
     ///
-    pub fn mempool_update(
+    pub fn update(
         &self,
         adopted_blocks: &[(Blake2bHash, Block)],
         reverted_blocks: &[(Blake2bHash, Block)],
@@ -400,7 +371,7 @@ impl Mempool {
     /// Needed after the consensus was lost and the mempool didn't receive any information during that time
     /// - Removes transactions that expired, that were included in a block already or for which the sender is lacking funds by now.
     /// - Recompute reserved balances.
-    pub fn mempool_update_full(&self) {
+    pub fn cleanup(&self) {
         let blockchain = self.blockchain.read();
         let mut mempool_state = self.state.write();
 

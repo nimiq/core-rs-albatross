@@ -1125,7 +1125,7 @@ async fn mempool_update() {
     send_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
 
     // Call mempool update
-    mempool.mempool_update(&adopted_micro_blocks[..], &reverted_micro_blocks[..]);
+    mempool.update(&adopted_micro_blocks[..], &reverted_micro_blocks[..]);
 
     // Get txns from mempool
     let (updated_txns, _) = mempool.get_transactions_for_block(10_000);
@@ -1276,7 +1276,7 @@ async fn mempool_update_aged_transaction() {
     );
 
     // Call mempool update, this should prune all the old transactions
-    mempool.mempool_update([].as_ref(), [].as_ref());
+    mempool.update([].as_ref(), [].as_ref());
 
     assert_eq!(
         mempool.num_transactions(),
@@ -1426,7 +1426,7 @@ async fn mempool_update_not_enough_balance() {
     }
 
     // Call mempool update
-    mempool.mempool_update(&adopted_micro_blocks[..], [].as_ref());
+    mempool.update(&adopted_micro_blocks[..], [].as_ref());
 
     // Get txns from mempool
     let (updated_txns, _) = mempool.get_transactions_for_block(10_000);
@@ -1585,7 +1585,7 @@ async fn mempool_update_pruned_account() {
     }
 
     // Call mempool update
-    mempool.mempool_update(&adopted_micro_blocks[..], [].as_ref());
+    mempool.update(&adopted_micro_blocks[..], [].as_ref());
 
     // Get txns from mempool
     let (updated_txns, _) = mempool.get_transactions_for_block(10_000);

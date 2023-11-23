@@ -156,6 +156,11 @@ impl Validators {
         Some(&self.validators[band as usize])
     }
 
+    /// Returns the slot band of a validator given its address, if it exists.
+    pub fn get_slot_band_by_address(&self, address: &Address) -> Option<u16> {
+        self.validator_map.get(address).cloned()
+    }
+
     /// Returns the G2 projective associated with each slot, in order.
     pub fn voting_keys_g2(&self) -> Vec<G2Projective> {
         self.voting_keys().iter().map(|pk| pk.public_key).collect()

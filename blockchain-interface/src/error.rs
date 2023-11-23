@@ -19,25 +19,6 @@ pub enum BlockchainEvent {
     EpochFinalized(Blake2bHash),
 }
 
-impl BlockchainEvent {
-    pub fn get_newest_hash(&self) -> Blake2bHash {
-        match self {
-            Self::Extended(h) => h,
-            Self::HistoryAdopted(h) => h,
-            Self::Rebranched(_, new_chain) => {
-                if let Some((h, _)) = new_chain.last() {
-                    h
-                } else {
-                    unreachable!()
-                }
-            }
-            Self::Finalized(h) => h,
-            Self::EpochFinalized(h) => h,
-        }
-        .clone()
-    }
-}
-
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum BlockchainError {
     #[error("Invalid genesis block stored. Are you on the right network?")]

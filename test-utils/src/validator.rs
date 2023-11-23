@@ -117,11 +117,6 @@ where
         )
         .await;
         let network: Arc<N> = Arc::clone(&c.network);
-        log::info!(
-            "Validator #{}: {}",
-            v.validator_slot_band(),
-            network.get_local_peer_id()
-        );
         validators.push(v);
         consensus.push(c);
         networks.push(network);
