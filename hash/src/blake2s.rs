@@ -1,44 +1,22 @@
 use blake2_rfc::blake2s::Blake2s;
 
 #[derive(Clone)]
-pub struct Blake2sWithParameterBlock {
-    pub output_size: u8,
-    pub key_size: u8,
-    pub fan_out: u8,
-    pub depth: u8,
-    pub leaf_length: u32,
-    pub node_offset: u32,
-    pub xof_output_size: u16,
-    pub node_depth: u8,
-    pub inner_length: u8,
-    pub salt: [u8; 8],
-    pub personalization: [u8; 8],
+pub struct Blake2xParameters {
+    output_size: u8,
+    key_size: u8,
+    fan_out: u8,
+    depth: u8,
+    leaf_length: u32,
+    node_offset: u32,
+    xof_output_size: u16,
+    node_depth: u8,
+    inner_length: u8,
+    salt: [u8; 8],
+    personalization: [u8; 8],
 }
 
-impl Default for Blake2sWithParameterBlock {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Blake2sWithParameterBlock {
-    pub fn new() -> Self {
-        Self {
-            output_size: 32,
-            key_size: 0,
-            fan_out: 1,
-            depth: 1,
-            leaf_length: 0,
-            node_offset: 0,
-            xof_output_size: 0,
-            node_depth: 0,
-            inner_length: 0,
-            salt: [0; 8],
-            personalization: [0; 8],
-        }
-    }
-
-    pub fn new_blake2x(i: usize, xof_output_size: u16) -> Self {
+impl Blake2xParameters {
+    pub fn new(i: usize, xof_output_size: u16) -> Self {
         Self {
             output_size: 32,
             key_size: 0,

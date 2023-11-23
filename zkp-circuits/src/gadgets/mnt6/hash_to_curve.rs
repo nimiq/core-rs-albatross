@@ -8,7 +8,7 @@ use ark_r1cs_std::{
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_std::Zero;
-use nimiq_hash::blake2s::Blake2sWithParameterBlock;
+use nimiq_hash::blake2s::Blake2xParameters;
 
 use crate::{blake2s::evaluate_blake2s_with_parameters, gadgets::y_to_bit::YToBitGadget};
 
@@ -25,7 +25,7 @@ impl HashToCurve {
 
         for i in 0..3 {
             // Initialize Blake2s parameters.
-            let blake2s_parameters = Blake2sWithParameterBlock::new_blake2x(i, 0xffff);
+            let blake2s_parameters = Blake2xParameters::new(i, 0xffff);
 
             // Calculate hash.
             hash_out.extend(evaluate_blake2s_with_parameters(

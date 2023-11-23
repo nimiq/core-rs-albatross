@@ -3,7 +3,7 @@ use std::fmt;
 use ark_ec::{AffineRepr, Group};
 use ark_ff::{One, PrimeField, ToConstraintField};
 use ark_mnt6_753::{Fq, G1Affine, G1Projective};
-use nimiq_hash::{blake2s::Blake2sWithParameterBlock, HashOutput};
+use nimiq_hash::{blake2s::Blake2xParameters, HashOutput};
 
 use crate::{CompressedSignature, SigHash};
 
@@ -36,7 +36,7 @@ impl Signature {
         let mut bytes = vec![];
 
         for i in 0..3 {
-            let blake2x = Blake2sWithParameterBlock::new_blake2x(i, 0xffff);
+            let blake2x = Blake2xParameters::new(i, 0xffff);
 
             let mut result = blake2x.evaluate(hash.as_bytes());
 
