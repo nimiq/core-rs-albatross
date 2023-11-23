@@ -15,7 +15,7 @@ use nimiq_network_interface::{
     peer_info::{PeerInfo, Services},
     request::{
         InboundRequestError, Message, OutboundRequestError, Request, RequestCommon, RequestError,
-        RequestKind, RequestType,
+        RequestKind, RequestSerialize, RequestType,
     },
 };
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};

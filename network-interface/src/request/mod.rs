@@ -138,7 +138,9 @@ pub trait RequestCommon:
     type Response: Deserialize + Serialize + Send;
     const MAX_REQUESTS: u32;
     const TIME_WINDOW: Duration = DEFAULT_MAX_REQUEST_RESPONSE_TIME_WINDOW;
+}
 
+pub trait RequestSerialize: RequestCommon {
     /// Serializes a request.
     /// A serialized request is composed of:
     /// - A varint for the Type ID of the request
@@ -176,6 +178,8 @@ pub trait RequestCommon:
         Self::deserialize_from_vec(message_buf)
     }
 }
+
+impl<T: RequestCommon> RequestSerialize for T {}
 
 pub trait Request: RequestCommon<Kind = RequestMarker> {}
 pub trait Message: RequestCommon<Kind = MessageMarker, Response = ()> {}

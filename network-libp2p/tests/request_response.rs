@@ -20,7 +20,7 @@ use nimiq_network_libp2p::{
     discovery::{self, peer_contacts::PeerContact},
     Config, Network,
 };
-use nimiq_serde::{Deserialize, DeserializeError, Serialize};
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use rand::{thread_rng, Rng};
 use tokio::time::Duration;
@@ -47,27 +47,6 @@ impl RequestCommon for TestRequest {
     type Response = TestResponse;
 
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_TEST_REQUEST;
-
-    fn serialize_request(&self) -> Vec<u8> {
-        let mut data = Vec::with_capacity(self.serialized_request_size());
-        nimiq_network_interface::request::RequestType::from_request::<Self>()
-            .serialize_to_writer(&mut data)
-            .unwrap();
-        Serialize::serialize_to_writer(self, &mut data).unwrap();
-        data
-    }
-
-    fn deserialize_request(buffer: &[u8]) -> Result<Self, DeserializeError> {
-        // Check for correct type.
-        let (ty, message_buf) = <u16>::deserialize_take(buffer)?;
-        if ty != nimiq_network_interface::request::RequestType::from_request::<Self>().0 {
-            return Err(DeserializeError::bad_encoding());
-        }
-
-        let message: Self = Deserialize::deserialize_from_vec(message_buf)?;
-
-        Ok(message)
-    }
 }
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 struct TestResponse {

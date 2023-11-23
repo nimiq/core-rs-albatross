@@ -47,7 +47,7 @@ use nimiq_network_interface::{
     peer_info::{PeerInfo, Services},
     request::{
         peek_type, InboundRequestError, Message, OutboundRequestError, Request, RequestCommon,
-        RequestError, RequestType,
+        RequestError, RequestSerialize, RequestType,
     },
 };
 use nimiq_primitives::task_executor::TaskExecutor;
