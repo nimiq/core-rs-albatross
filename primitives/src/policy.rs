@@ -103,7 +103,7 @@ impl Policy {
     /// The deposit necessary to create a validator in Lunas (1 NIM = 100,000 Lunas).
     /// A validator is someone who actually participates in block production. They are akin to miners
     /// in proof-of-work.
-    pub const VALIDATOR_DEPOSIT: u64 = 1_000_000_000;
+    pub const VALIDATOR_DEPOSIT: u64 = 10_000_000_000;
 
     /// The number of epochs a validator is put in jail for. The jailing only happens for severe offenses.
     pub const JAIL_EPOCHS: u32 = 8;
@@ -663,7 +663,7 @@ impl Default for Policy {
     fn default() -> Self {
         Policy {
             blocks_per_batch: 60,
-            batches_per_epoch: 360,
+            batches_per_epoch: 720,
             tendermint_timeout_init: 1000,
             tendermint_timeout_delta: 1000,
             state_chunks_max_size: 200, // #Nodes/accounts 200, TODO: Simulate with different sizes
