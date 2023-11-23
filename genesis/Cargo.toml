@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 hex = "0.4"
 serde = "1.0"
-url = "2.4"
+url = "2.5"
 
 nimiq-block = { workspace = true }
 nimiq-bls = { workspace = true }

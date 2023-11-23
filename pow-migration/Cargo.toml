@@ -63,7 +63,7 @@ tokio = { version = "1.32", features = [
 ] }
 toml = "0.8"
 tracing-subscriber = { version = "0.3", features = ["registry"] }
-url = "2.4"
+url = "2.5"
 
 [dev-dependencies]
 serde_json = "1.0"
