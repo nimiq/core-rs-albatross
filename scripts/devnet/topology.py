@@ -340,7 +340,7 @@ class Topology:
                 self.__generate_docker_k8s_dir(validators, seeds, spammers,
                                                regular_nodes)
 
-    def __run_monitor_for(self, mon_time: int, exp_down_nodes: list = []):
+    def __run_monitor_for(self, mon_time: int, exp_down_nodes: list = [], allow_stall: bool = False):
         """
         Runs and monitor all nodes for a period of time
 
@@ -382,7 +382,7 @@ class Topology:
             node_latest_block_number = node.get_latest_block_number()
             if node_latest_block_number > latest_block_number:
                 latest_block_number = node_latest_block_number
-        if latest_block_number <= self.latest_block_number:
+        if latest_block_number <= self.latest_block_number and not allow_stall:
             warnings = self.__cleanup()
             with open(self.result_file, 'a+') as result_file:
                 result_file.write("CHAIN-STALL\n")
@@ -481,6 +481,7 @@ class Topology:
             down_time = restart_settings.get_down_time()
             erase_state = restart_settings.get_erase_state()
             erase_db = restart_settings.get_erase_db()
+            allow_stall = restart_settings.get_allow_stall()
             for _ in range(max_restarts):
                 # Select nodes to kill
                 nodes_to_restart = random.sample(
@@ -500,7 +501,7 @@ class Topology:
                 logging.info(
                     f"Running with node(s) down for {down_time}s")
                 self.__run_monitor_for(
-                    down_time, exp_down_nodes=nodes_to_restart)
+                    down_time, nodes_to_restart, allow_stall)
 
                 for node in nodes_to_restart:
                     logging.info(

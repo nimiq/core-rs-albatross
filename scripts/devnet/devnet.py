@@ -79,6 +79,8 @@ def parse_args():
     parser.add_argument('-d', "--db", action='store_true',
                         help="Erases only the database state of the validator "
                         "as part of restarting it")
+    parser.add_argument('-as', "--allow-stall", action='store_true',
+                        help="Allow the chain to stall while nodes are down")
     parser.add_argument("--verbose", "-v", dest="log_level",
                         action="append_const", const=-1)
     parser.add_argument("--dry", action='store_true', help="Only generate "
@@ -102,7 +104,7 @@ def main():
     else:
         restart_settings = RestartSettings(
             args.up_time, args.down_time, args.restarts, args.kills, args.db,
-            args.erase)
+            args.erase, args.allow_stall)
         control_settings = ControlSettings(restart_settings)
     now = datetime.now()
     ts = now.strftime("%Y%m%d_%H%M%S")

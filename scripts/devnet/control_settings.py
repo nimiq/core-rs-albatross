@@ -23,13 +23,14 @@ class RestartSettings:
 
     def __init__(self, up_time: int, down_time: int, max_restarts: int,
                  sim_kills: int, erase_db: bool = False,
-                 erase_state: bool = False):
+                 erase_state: bool = False, allow_stall: bool = False):
         self.up_time = up_time
         self.down_time = down_time
         self.max_restarts = max_restarts
         self.sim_kills = sim_kills
         self.erase_db = erase_db
         self.erase_state = erase_state
+        self.allow_stall = allow_stall
 
     def get_up_time(self):
         """
@@ -86,6 +87,16 @@ class RestartSettings:
         :rtype: bool
         """
         return self.erase_state
+
+    def get_allow_stall(self):
+        """
+        Gets the flag that indicates whether the chain is allowed to stall while
+        nodes are down.
+
+        :return: The allow stall flag.
+        :rtype: bool
+        """
+        return self.allow_stall
 
 
 class ControlSettings:
