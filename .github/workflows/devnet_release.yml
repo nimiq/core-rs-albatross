@@ -21,6 +21,7 @@ jobs:
         - LowBlockProducerTimeout
         - FiveValidatorsWithSpammer
         - FiveValidatorsWithSpammerFullNodes
+        - FiveValidatorsWithSpammerProfile
 
         include:
         - test: FourValidatorsReconnect
@@ -45,6 +46,8 @@ jobs:
           devnet_args: -t .github/devnet_topologies/five_validators_spammer.toml -R -k 0
         - test: FiveValidatorsWithSpammerFullNodes
           devnet_args: -t .github/devnet_topologies/five_validators_spammer_full_nodes.toml -R -k 0
+        - test: FiveValidatorsWithSpammerProfile
+          devnet_args: -t .github/devnet_topologies/five_validators_spammer.toml -R -k 0 -sp spammer/src/spammer_profile.toml
 
     runs-on: ubuntu-22.04
 
