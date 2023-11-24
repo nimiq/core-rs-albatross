@@ -10,6 +10,9 @@ repository.workspace = true
 categories.workspace = true
 keywords.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"

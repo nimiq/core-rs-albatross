@@ -10,6 +10,9 @@ repository.workspace = true
 categories.workspace = true
 keywords.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 hex = "0.4"
 postcard = { version = "1.0", features = ["alloc"] }

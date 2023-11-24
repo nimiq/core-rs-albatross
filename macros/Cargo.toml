@@ -10,6 +10,9 @@ license = "Apache-2.0"
 categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
+[lints]
+workspace = true
+
 [dependencies]
 hex = "0.4"
 serde = "1.0"

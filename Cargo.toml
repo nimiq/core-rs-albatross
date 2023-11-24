@@ -160,6 +160,11 @@ license = "Apache-2.0"
 categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
+[workspace.lints]
+clippy.large_enum_variant = "allow"
+clippy.too_many_arguments = "allow"
+clippy.type_complexity = "allow"
+
 [workspace.dependencies]
 nimiq-account = { path = "primitives/account", default-features = false }
 nimiq-block = { path = "primitives/block", default-features = false }

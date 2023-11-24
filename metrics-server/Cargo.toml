@@ -16,6 +16,9 @@ is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
 is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
+[lints]
+workspace = true
+
 [dependencies]
 futures = "0.3"
 hyper = { version = "0.14.27", features = ["server", "tcp", "http2"] }

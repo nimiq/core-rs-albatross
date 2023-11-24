@@ -1,6 +1,0 @@
-[target.'cfg(all())']
-rustflags = [
-	"-Aclippy::large_enum_variant",
-	"-Aclippy::too_many_arguments",
-	"-Aclippy::type_complexity",
-]

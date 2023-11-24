@@ -16,6 +16,9 @@ is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
 is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
+[lints]
+workspace = true
+
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
 convert_case = "0.6"

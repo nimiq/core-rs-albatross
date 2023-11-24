@@ -15,6 +15,9 @@ is-it-maintained-issue-resolution = { repository = "nimiq/core-rs-albatross" }
 is-it-maintained-open-issues = { repository = "nimiq/core-rs-albatross" }
 maintenance = { status = "experimental" }
 
+[lints]
+workspace = true
+
 [lib]
 crate-type = ["cdylib"]
 

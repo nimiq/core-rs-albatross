@@ -10,6 +10,9 @@ repository.workspace = true
 categories.workspace = true
 keywords.workspace = true
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "nimiq-bls"
 path = "src/bls/main.rs"

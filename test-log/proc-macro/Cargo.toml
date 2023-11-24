@@ -7,6 +7,9 @@ license = "Apache-2.0 OR MIT"
 readme = "README.md"
 include = ["src/lib.rs", "LICENSE-*", "README.md", "CHANGELOG.md"]
 
+[lints]
+workspace = true
+
 [lib]
 proc-macro = true
 

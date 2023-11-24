@@ -16,6 +16,9 @@ is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
 is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
+[lints]
+workspace = true
+
 [dependencies]
 ark-ec = "0.4"
 ark-mnt6-753 = "0.4"

@@ -10,6 +10,9 @@ repository.workspace = true
 categories.workspace = true
 keywords.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 ark-crypto-primitives = { version = "0.4", features = ["crh"] }
 ark-ec = "0.4"

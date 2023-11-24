@@ -13,6 +13,9 @@ keywords.workspace = true
 [badges]
 travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 
+[lints]
+workspace = true
+
 [dependencies]
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
