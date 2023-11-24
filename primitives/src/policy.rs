@@ -413,11 +413,8 @@ impl Policy {
     /// If the index is out of bounds, None is returned
     #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = firstBlockOf))]
     pub fn first_block_of(epoch: u32) -> Option<u32> {
-        if epoch == 0 {
-            panic!("Called first_block_of for epoch 0");
-        }
-
-        (epoch - 1)
+        epoch
+            .checked_sub(1)?
             .checked_mul(Self::blocks_per_epoch())?
             .checked_add(1)?
             .checked_add(Self::genesis_block_number())
@@ -427,11 +424,8 @@ impl Policy {
     /// If the index is out of bounds, None is returned
     #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = firstBlockOfBatch))]
     pub fn first_block_of_batch(batch: u32) -> Option<u32> {
-        if batch == 0 {
-            panic!("Called first_block_of_batch for batch 0");
-        }
-
-        (batch - 1)
+        batch
+            .checked_sub(1)?
             .checked_mul(Self::blocks_per_batch())?
             .checked_add(1)?
             .checked_add(Self::genesis_block_number())
