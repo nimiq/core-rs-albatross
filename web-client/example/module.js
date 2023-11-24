@@ -128,6 +128,7 @@ init().then(async () => {
         const transaction = Nimiq.TransactionBuilder.newUpdateStaker(
             keyPair.toAddress(),
             Nimiq.Address.fromString(newDelegation),
+            true,
             BigInt(fee),
             await client.getHeadHeight(),
             await client.getNetworkId(),
