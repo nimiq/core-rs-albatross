@@ -1,3 +1,7 @@
+mod exp;
+
+pub use exp::exp;
+
 const fn num_bits<T>() -> usize {
     std::mem::size_of::<T>() * 8
 }

@@ -1,6 +1,7 @@
 use std::cmp;
 
 use nimiq_keys::Address;
+use nimiq_utils::math::exp;
 use once_cell::sync::OnceCell;
 #[cfg(feature = "ts-types")]
 use wasm_bindgen::prelude::*;
@@ -499,7 +500,7 @@ impl Policy {
         let exponent = -Policy::SUPPLY_DECAY * t;
 
         let supply = genesis_supply
-            + (Self::INITIAL_SUPPLY_VELOCITY / Self::SUPPLY_DECAY * (1.0 - exponent.exp())) as u64;
+            + (Self::INITIAL_SUPPLY_VELOCITY / Self::SUPPLY_DECAY * (1.0 - exp(exponent))) as u64;
 
         cmp::min(supply, Policy::TOTAL_SUPPLY)
     }
@@ -514,7 +515,7 @@ impl Policy {
         let t = delay as f64;
         let exponent = -Self::BLOCKS_DELAY_DECAY * t * t;
 
-        (1.0 - Self::MINIMUM_REWARDS_PERCENTAGE) * exponent.exp() + Self::MINIMUM_REWARDS_PERCENTAGE
+        (1.0 - Self::MINIMUM_REWARDS_PERCENTAGE) * exp(exponent) + Self::MINIMUM_REWARDS_PERCENTAGE
     }
 }
 
