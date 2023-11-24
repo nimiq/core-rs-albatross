@@ -21,13 +21,13 @@ jobs:
 
         include:
         - test: FourValidatorsReconnect
-          devnet_args: -t .github/devnet_topologies/four_validators.toml
+          devnet_args: -t .github/devnet_topologies/four_validators.toml -dt 20
         - test: MultipleValidatorsDown
-          devnet_args: -t .github/devnet_topologies/four_validators.toml -k 2 -ut 100 -as
+          devnet_args: -t .github/devnet_topologies/four_validators.toml -k 2 -ut 100 -dt 20 -as
         - test: FourValidatorsReconnectRmDatabase
-          devnet_args: -t .github/devnet_topologies/four_validators.toml -d -ut 100
+          devnet_args: -t .github/devnet_topologies/four_validators.toml -d -ut 100 -dt 20
         - test: FourValidatorsReconnectSpammer
-          devnet_args: -t .github/devnet_topologies/four_validators_spammer_1.toml -ut 100
+          devnet_args: -t .github/devnet_topologies/four_validators_spammer_1.toml -ut 100 -dt 20
         - test: MacroBlockProduction
           # The number of blocks per epoch needs to stay the same (because of the ZKP keys)
           pre: "grep 'blocks_per_batch: 60,' primitives/src/policy.rs &&
