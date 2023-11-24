@@ -917,6 +917,10 @@ impl Network {
                         match event.result {
                             Err(error) => {
                                 log::debug!(%error, ?event.peer, "Ping failed with peer");
+                                swarm
+                                    .behaviour_mut()
+                                    .pool
+                                    .close_connection(event.peer, CloseReason::RemoteClosed);
                             }
                             Ok(duration) => {
                                 log::trace!(?event.peer, ?duration, "Successful ping from peer");
