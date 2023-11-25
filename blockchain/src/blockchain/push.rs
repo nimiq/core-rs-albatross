@@ -89,7 +89,7 @@ impl Blockchain {
 
         // Verify the block.
         if let Err(e) = this.verify_block(&read_txn, &block, trusted) {
-            warn!(%block, reason = "Block verifications failed", "Rejecting block");
+            warn!(%block, error = %e, reason = "Block verifications failed", "Rejecting block");
             return Err(e);
         }
 

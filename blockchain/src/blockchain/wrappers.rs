@@ -89,16 +89,17 @@ impl Blockchain {
     ) -> Result<Slot, BlockchainError> {
         let block = self.get_block(block_hash, false, txn_option)?;
 
-        let offset = block
-            .vrf_offset()
-            .ok_or(BlockchainError::BlockJustificationNotFound)?;
-
         let vrf_entropy = self
             .get_block(block.parent_hash(), false, txn_option)?
             .seed()
             .entropy();
 
-        self.get_proposer(block.block_number(), offset, vrf_entropy, txn_option)
+        self.get_proposer(
+            block.block_number(),
+            block.vrf_offset(),
+            vrf_entropy,
+            txn_option,
+        )
     }
 
     pub fn get_macro_blocks(

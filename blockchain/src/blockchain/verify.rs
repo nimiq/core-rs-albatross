@@ -70,14 +70,10 @@ impl Blockchain {
         if !trusted {
             // Get the proposer for this block. The block's predecessor is not necessarily on the
             // main chain, thus the predecessor's VRF seed is used.
-            let offset = block.vrf_offset().ok_or_else(|| {
-                warn!(reason = "Failed to determine VRF offset", "Rejecting block");
-                PushError::InvalidBlock(BlockError::MissingJustification)
-            })?;
             let proposer = self
                 .get_proposer(
                     block.block_number(),
-                    offset,
+                    block.vrf_offset(),
                     predecessor.seed().entropy(),
                     Some(txn),
                 )

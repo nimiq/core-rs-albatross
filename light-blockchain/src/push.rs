@@ -87,13 +87,10 @@ impl LightBlockchain {
 
         // Get the slot owner of the block. Note that the predecessor must be taken into account
         // as the block is not guaranteed to be on the current main chain.
-        let offset = block
-            .vrf_offset()
-            .ok_or(PushError::InvalidBlock(BlockError::MissingJustification))?;
         let proposer = this
             .get_proposer(
                 block.block_number(),
-                offset,
+                block.vrf_offset(),
                 predecessor.seed().entropy(),
             )
             .map_err(|error| {

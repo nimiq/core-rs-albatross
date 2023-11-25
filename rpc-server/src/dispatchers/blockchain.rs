@@ -156,7 +156,6 @@ impl BlockchainInterface for BlockchainDispatcher {
                 .get_block_at(block_number, false)
                 .map_err(|_| Error::BlockNotFound(block_number))?
                 .vrf_offset()
-                .ok_or(Error::BlockNotFound(block_number))?
         };
 
         let slot = Slot::from_block_number(&blockchain, block_number, offset)

@@ -189,10 +189,12 @@ impl Block {
     }
 
     /// Returns the offset used as input to the VRF when determining the proposer of this block.
-    pub fn vrf_offset(&self) -> Option<u32> {
+    /// For macro blocks, this returns the round where the block was originally proposed (as
+    /// opposed to the round where the block was accepted).
+    pub fn vrf_offset(&self) -> u32 {
         match self {
-            Block::Macro(block) => block.justification.as_ref().map(|proof| proof.round),
-            Block::Micro(block) => Some(block.block_number()),
+            Block::Macro(block) => block.round(),
+            Block::Micro(block) => block.block_number(),
         }
     }
 

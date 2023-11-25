@@ -89,11 +89,8 @@ impl AbstractBlockchain for LightBlockchain {
 
     fn get_proposer_of(&self, block_hash: &Blake2bHash) -> Result<Slot, BlockchainError> {
         let block = self.get_block(block_hash, false)?;
-        let offset = block
-            .vrf_offset()
-            .ok_or(BlockchainError::BlockJustificationNotFound)?;
         let vrf_entropy = self.get_block(block.parent_hash(), false)?.seed().entropy();
-        self.get_proposer(block.block_number(), offset, vrf_entropy)
+        self.get_proposer(block.block_number(), block.vrf_offset(), vrf_entropy)
     }
 
     /// Fetches a given number of macro blocks, starting at a specific block (by its hash).
