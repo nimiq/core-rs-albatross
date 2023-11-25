@@ -17,7 +17,7 @@ cargo install wasm-pack
 or via their website. Once installed, the client can be built from this directory:
 
 ```sh
-./scripts/build-web.sh
+./scripts/build-web.sh && ./scripts/build-launcher.sh
 ```
 
 The above command will compile the Rust code to WebAssembly and generate the corresponding JS
@@ -37,4 +37,4 @@ To publish this package to NPM, run this command:
 ./scripts/npm-publish.sh
 ```
 
-This script builds both the `web` and `bundler` targets and publishes the package.
+This script builds the `web`, `bundler`, and `node` targets, the types and bindings and publishes the package.
