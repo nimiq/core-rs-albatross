@@ -5,7 +5,7 @@ use nimiq_blockchain_interface::{
 };
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::slots_allocation::{Validator, Validators};
+use nimiq_primitives::slots_allocation::{Slot, Validators};
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::blockchain::LightBlockchain;
@@ -82,14 +82,18 @@ impl AbstractBlockchain for LightBlockchain {
         self.chain_store.get_chain_info(hash, include_body).cloned()
     }
 
-    fn get_slot_owner_at(
-        &self,
-        block_number: u32,
-        offset: u32,
-    ) -> Result<(Validator, u16), BlockchainError> {
+    fn get_proposer_at(&self, block_number: u32, offset: u32) -> Result<Slot, BlockchainError> {
         let vrf_entropy = self.get_block_at(block_number - 1, false)?.seed().entropy();
+        self.get_proposer(block_number, offset, vrf_entropy)
+    }
 
-        self.get_proposer_at(block_number, offset, vrf_entropy)
+    fn get_proposer_of(&self, block_hash: &Blake2bHash) -> Result<Slot, BlockchainError> {
+        let block = self.get_block(block_hash, false)?;
+        let offset = block
+            .vrf_offset()
+            .ok_or(BlockchainError::BlockJustificationNotFound)?;
+        let vrf_entropy = self.get_block(block.parent_hash(), false)?.seed().entropy();
+        self.get_proposer(block.block_number(), offset, vrf_entropy)
     }
 
     /// Fetches a given number of macro blocks, starting at a specific block (by its hash).

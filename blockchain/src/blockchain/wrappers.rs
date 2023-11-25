@@ -9,7 +9,7 @@ use nimiq_database::TransactionProxy as DBTransaction;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::{
-    account::AccountError, key_nibbles::KeyNibbles, policy::Policy, slots_allocation::Validator,
+    account::AccountError, key_nibbles::KeyNibbles, policy::Policy, slots_allocation::Slot,
 };
 use nimiq_transaction::Transaction;
 
@@ -65,26 +65,40 @@ impl Blockchain {
             .get_chain_info(hash, include_body, txn_option)
     }
 
-    /// Returns the information for the slot owner at the given block height and offset. The
-    /// offset is the block number for micro blocks + skip blocks and to the round number for macro blocks.
-    pub fn get_slot_owner_at(
+    /// Returns information about the proposer at the given block height and offset.
+    /// The offset is the block number for micro blocks + skip blocks and the round number for macro blocks.
+    pub fn get_proposer_at(
         &self,
         block_number: u32,
         offset: u32,
         txn_option: Option<&DBTransaction>,
-    ) -> Result<(Validator, u16), BlockchainError> {
-        if Policy::is_micro_block_at(block_number) && block_number != offset {
-            error!(
-                block_number,
-                offset, "Micro blocks need to have their block number as offset"
-            );
-        }
+    ) -> Result<Slot, BlockchainError> {
         let vrf_entropy = self
             .get_block_at(block_number - 1, false, txn_option)?
             .seed()
             .entropy();
-        self.get_proposer_at(block_number, offset, vrf_entropy, txn_option)
-            .map(|slot| (slot.validator, slot.number))
+
+        self.get_proposer(block_number, offset, vrf_entropy, txn_option)
+    }
+
+    /// Returns information about the proposer of the block with the given `block_hash`.
+    pub fn get_proposer_of(
+        &self,
+        block_hash: &Blake2bHash,
+        txn_option: Option<&DBTransaction>,
+    ) -> Result<Slot, BlockchainError> {
+        let block = self.get_block(block_hash, false, txn_option)?;
+
+        let offset = block
+            .vrf_offset()
+            .ok_or(BlockchainError::BlockJustificationNotFound)?;
+
+        let vrf_entropy = self
+            .get_block(block.parent_hash(), false, txn_option)?
+            .seed()
+            .entropy();
+
+        self.get_proposer(block.block_number(), offset, vrf_entropy, txn_option)
     }
 
     pub fn get_macro_blocks(

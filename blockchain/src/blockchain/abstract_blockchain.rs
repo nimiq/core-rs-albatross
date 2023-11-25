@@ -5,7 +5,7 @@ use nimiq_blockchain_interface::{
 };
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::slots_allocation::{Validator, Validators};
+use nimiq_primitives::slots_allocation::{Slot, Validators};
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::Blockchain;
@@ -84,12 +84,12 @@ impl AbstractBlockchain for Blockchain {
         self.get_chain_info(hash, include_body, None)
     }
 
-    fn get_slot_owner_at(
-        &self,
-        block_number: u32,
-        offset: u32,
-    ) -> Result<(Validator, u16), BlockchainError> {
-        self.get_slot_owner_at(block_number, offset, None)
+    fn get_proposer_at(&self, block_number: u32, offset: u32) -> Result<Slot, BlockchainError> {
+        self.get_proposer_at(block_number, offset, None)
+    }
+
+    fn get_proposer_of(&self, block_hash: &Blake2bHash) -> Result<Slot, BlockchainError> {
+        self.get_proposer_of(block_hash, None)
     }
 
     fn get_macro_blocks(

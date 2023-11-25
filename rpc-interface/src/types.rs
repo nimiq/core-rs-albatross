@@ -163,10 +163,6 @@ impl Block {
         include_body: bool,
     ) -> Result<Self, BlockchainError> {
         let block_number = macro_block.block_number();
-        let timestamp = macro_block.timestamp();
-        let size = macro_block.serialized_size() as u32;
-        let batch = Policy::batch_at(block_number);
-        let epoch = Policy::epoch_at(block_number);
 
         let slots = macro_block.get_validators().map(Slots::from_slots);
 
@@ -191,12 +187,12 @@ impl Block {
 
         Ok(Block {
             hash: macro_block.hash(),
-            size,
-            batch,
-            epoch,
+            size: macro_block.serialized_size() as u32,
+            batch: Policy::batch_at(block_number),
+            epoch: Policy::epoch_at(block_number),
             version: macro_block.header.version,
             number: block_number,
-            timestamp,
+            timestamp: macro_block.header.timestamp,
             parent_hash: macro_block.header.parent_hash,
             seed: macro_block.header.seed,
             extra_data: macro_block.header.extra_data,
@@ -209,9 +205,73 @@ impl Block {
                 parent_election_hash: macro_block.header.parent_election_hash,
                 interlink: macro_block.header.interlink,
                 slots,
-
                 next_batch_initial_punished_set,
                 justification: macro_block.justification.map(TendermintProof::from),
+            },
+        })
+    }
+
+    pub fn from_micro_block(
+        blockchain: &BlockchainReadProxy,
+        micro_block: nimiq_block::MicroBlock,
+        include_body: bool,
+    ) -> Result<Self, BlockchainError> {
+        let block_number = micro_block.block_number();
+
+        let (equivocation_proofs, transactions) = match micro_block.body {
+            None => (None, None),
+            Some(ref body) => (
+                Some(
+                    body.equivocation_proofs
+                        .clone()
+                        .into_iter()
+                        .map(Into::into)
+                        .collect(),
+                ),
+                if include_body {
+                    let head_height = blockchain.head().block_number();
+                    Some(
+                        body.transactions
+                            .clone()
+                            .into_iter()
+                            .map(|tx| {
+                                // We obtain an internal executed transaction
+                                // We need to grab the internal transaction and map it to the RPC transaction structure
+                                ExecutedTransaction::from_blockchain(
+                                    tx,
+                                    block_number,
+                                    micro_block.header.timestamp,
+                                    head_height,
+                                )
+                            })
+                            .collect(),
+                    )
+                } else {
+                    None
+                },
+            ),
+        };
+
+        let block_hash = micro_block.hash();
+        Ok(Block {
+            hash: block_hash.clone(),
+            size: micro_block.serialized_size() as u32,
+            batch: Policy::batch_at(block_number),
+            epoch: Policy::epoch_at(block_number),
+            version: micro_block.header.version,
+            number: micro_block.header.block_number,
+            timestamp: micro_block.header.timestamp,
+            parent_hash: micro_block.header.parent_hash,
+            seed: micro_block.header.seed,
+            extra_data: micro_block.header.extra_data,
+            state_hash: micro_block.header.state_root,
+            body_hash: Some(micro_block.header.body_root),
+            history_hash: micro_block.header.history_root,
+            transactions,
+            additional_fields: BlockAdditionalFields::Micro {
+                producer: Slot::from_block_hash(blockchain, &block_hash)?,
+                equivocation_proofs,
+                justification: micro_block.justification.map(Into::into),
             },
         })
     }
@@ -221,73 +281,12 @@ impl Block {
         block: nimiq_block::Block,
         include_body: bool,
     ) -> Result<Self, BlockchainError> {
-        let block_number = block.block_number();
-        let timestamp = block.timestamp();
-        let size = block.serialized_size() as u32;
-        let batch = Policy::batch_at(block_number);
-        let epoch = Policy::epoch_at(block_number);
-
         match block {
             nimiq_block::Block::Macro(macro_block) => {
                 Self::from_macro_block(macro_block, include_body)
             }
-
             nimiq_block::Block::Micro(micro_block) => {
-                let (equivocation_proofs, transactions) = match micro_block.body {
-                    None => (None, None),
-                    Some(ref body) => (
-                        Some(
-                            body.equivocation_proofs
-                                .clone()
-                                .into_iter()
-                                .map(Into::into)
-                                .collect(),
-                        ),
-                        if include_body {
-                            let head_height = blockchain.head().block_number();
-                            Some(
-                                body.transactions
-                                    .clone()
-                                    .into_iter()
-                                    .map(|tx| {
-                                        // We obtain an internal executed transaction
-                                        // We need to grab the internal transaction and map it to the RPC transaction structure
-                                        ExecutedTransaction::from_blockchain(
-                                            tx,
-                                            block_number,
-                                            timestamp,
-                                            head_height,
-                                        )
-                                    })
-                                    .collect(),
-                            )
-                        } else {
-                            None
-                        },
-                    ),
-                };
-
-                Ok(Block {
-                    hash: micro_block.hash(),
-                    size,
-                    batch,
-                    epoch,
-                    version: micro_block.header.version,
-                    number: block_number,
-                    timestamp,
-                    parent_hash: micro_block.header.parent_hash,
-                    seed: micro_block.header.seed,
-                    extra_data: micro_block.header.extra_data,
-                    state_hash: micro_block.header.state_root,
-                    body_hash: Some(micro_block.header.body_root),
-                    history_hash: micro_block.header.history_root,
-                    transactions,
-                    additional_fields: BlockAdditionalFields::Micro {
-                        producer: Slot::from(blockchain, block_number, block_number)?,
-                        equivocation_proofs,
-                        justification: micro_block.justification.map(Into::into),
-                    },
-                })
+                Self::from_micro_block(blockchain, micro_block, include_body)
             }
         }
     }
@@ -334,19 +333,32 @@ pub struct Slot {
     pub public_key: CompressedPublicKey,
 }
 
+impl From<nimiq_primitives::slots_allocation::Slot> for Slot {
+    fn from(slot: nimiq_primitives::slots_allocation::Slot) -> Self {
+        Self {
+            slot_number: slot.number,
+            validator: slot.validator.address,
+            public_key: slot.validator.voting_key.compressed().clone(),
+        }
+    }
+}
+
 impl Slot {
-    pub fn from(
+    pub fn from_block_hash(
+        blockchain: &BlockchainReadProxy,
+        block_hash: &Blake2bHash,
+    ) -> Result<Self, BlockchainError> {
+        blockchain.get_proposer_of(block_hash).map(Into::into)
+    }
+
+    pub fn from_block_number(
         blockchain: &BlockchainReadProxy,
         block_number: u32,
         offset: u32,
     ) -> Result<Self, BlockchainError> {
-        let (validator, slot_number) = blockchain.get_slot_owner_at(block_number, offset)?;
-
-        Ok(Slot {
-            slot_number,
-            validator: validator.address,
-            public_key: validator.voting_key.compressed().clone(),
-        })
+        blockchain
+            .get_proposer_at(block_number, offset)
+            .map(Into::into)
     }
 }
 

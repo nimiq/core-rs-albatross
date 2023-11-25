@@ -3,17 +3,11 @@ use nimiq_collections::BitSet;
 use nimiq_database::TransactionProxy;
 use nimiq_primitives::{
     policy::Policy,
-    slots_allocation::{Validator, Validators},
+    slots_allocation::{Slot, Validators},
 };
 use nimiq_vrf::{Rng, VrfEntropy, VrfSeed, VrfUseCase};
 
 use crate::Blockchain;
-
-pub struct Slot {
-    pub number: u16,
-    pub band: u16,
-    pub validator: Validator,
-}
 
 /// Implements methods to handle slots and validators.
 impl Blockchain {
@@ -58,7 +52,7 @@ impl Blockchain {
         staking_contract.select_validators(&data_store.read(&txn), seed)
     }
 
-    pub fn get_proposer_at(
+    pub fn get_proposer(
         &self,
         block_number: u32,
         offset: u32,

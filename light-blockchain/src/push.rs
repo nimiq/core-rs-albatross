@@ -61,17 +61,6 @@ impl LightBlockchain {
             |height| this.get_block_at(height, false),
         );
 
-        // Get the intended slot owner.
-        let offset = if let Block::Macro(macro_block) = &block {
-            if let Some(proof) = &macro_block.justification {
-                proof.round
-            } else {
-                return Err(PushError::InvalidBlock(BlockError::MissingJustification));
-            }
-        } else {
-            block.block_number()
-        };
-
         // We expect full blocks (with body) for macro blocks and no body for micro blocks.
         if block.is_macro() {
             block
@@ -98,34 +87,37 @@ impl LightBlockchain {
 
         // Get the slot owner of the block. Note that the predecessor must be taken into account
         // as the block is not guaranteed to be on the current main chain.
-        let slot_owner = this
-            .get_proposer_at(
+        let offset = block
+            .vrf_offset()
+            .ok_or(PushError::InvalidBlock(BlockError::MissingJustification))?;
+        let proposer = this
+            .get_proposer(
                 block.block_number(),
                 offset,
                 predecessor.seed().entropy(),
             )
             .map_err(|error| {
-                log::warn!(%error, %block, reason = "failed to determine block proposer", "Rejecting block");
+                log::warn!(%error, %block, reason = "Failed to determine block proposer", "Rejecting block");
                 PushError::Orphan
             })?
-            .0;
+            .validator;
 
         // Verify that the block is valid for the given proposer.
-        block.verify_proposer(&slot_owner.signing_key, predecessor.seed())?;
+        block.verify_proposer(&proposer.signing_key, predecessor.seed())?;
 
         // Verify that the block is valid for the current validators.
         block.verify_validators(&this.current_validators().unwrap())?;
 
         // Detect forks in non-skip micro blocks.
         if block.is_micro() && !block.is_skip() {
-            let (validator, _) = this
-                .get_proposer_at(
+            let slot = this
+                .get_proposer(
                     block.block_number(),
                     block.block_number(),
                     prev_info.head.seed().entropy(),
                 )
                 .expect("Couldn't find slot owner");
-            this.detect_forks(block.unwrap_micro_ref(), &validator.address);
+            this.detect_forks(block.unwrap_micro_ref(), &slot.validator.address);
         }
 
         // Create the chain info for the new block.

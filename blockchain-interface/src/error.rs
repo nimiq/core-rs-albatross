@@ -33,6 +33,8 @@ pub enum BlockchainError {
     BlockNotFound,
     #[error("Block body not found")]
     BlockBodyNotFound,
+    #[error("Block justification not found")]
+    BlockJustificationNotFound,
     #[error("Block is not a macro block")]
     BlockIsNotMacro,
     #[error("No validators found")]

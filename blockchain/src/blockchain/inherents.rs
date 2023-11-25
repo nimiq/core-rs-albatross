@@ -114,7 +114,7 @@ impl Blockchain {
     ) -> Inherent {
         // Get the slot owner and slot number for this block number.
         let proposer_slot = self
-            .get_proposer_at(
+            .get_proposer(
                 skip_block_info.block_number,
                 skip_block_info.block_number,
                 skip_block_info.vrf_entropy.clone(),

@@ -289,8 +289,8 @@ fn it_correctly_creates_inherents_from_skip_block() {
     let skip_block = skip_block.unwrap_micro();
 
     let blockchain_rg = temp_producer1.blockchain.read();
-    let (validator, slot) = blockchain_rg
-        .get_slot_owner_at(skip_block.block_number(), skip_block.block_number(), None)
+    let slot = blockchain_rg
+        .get_proposer_at(skip_block.block_number(), skip_block.block_number(), None)
         .unwrap();
 
     let skip_block_info = SkipBlockInfo::from_micro_block(&skip_block);
@@ -308,8 +308,8 @@ fn it_correctly_creates_inherents_from_skip_block() {
         inherents,
         vec![Inherent::Penalize {
             slot: PenalizedSlot {
-                slot,
-                validator_address: validator.address,
+                slot: slot.number,
+                validator_address: slot.validator.address,
                 offense_event_block: skip_block.block_number()
             }
         }]
@@ -356,8 +356,8 @@ fn it_correctly_creates_inherents_from_fork_proof() {
         .push(fork_proof.into());
 
     let blockchain_rg = temp_producer1.blockchain.read();
-    let (validator, _slot) = blockchain_rg
-        .get_slot_owner_at(
+    let slot = blockchain_rg
+        .get_proposer_at(
             micro_block_fork1.block_number(),
             micro_block_fork1.block_number(),
             None,
@@ -379,8 +379,8 @@ fn it_correctly_creates_inherents_from_fork_proof() {
         inherents,
         vec![Inherent::Jail {
             jailed_validator: JailedValidator {
-                slots: validator.slots,
-                validator_address: validator.address,
+                slots: slot.validator.slots,
+                validator_address: slot.validator.address,
                 offense_event_block: micro_block_fork1.block_number(),
             },
             new_epoch_slot_range: None
@@ -441,8 +441,8 @@ fn it_correctly_creates_inherents_in_next_epoch_from_fork_proof() {
         .push(fork_proof.into());
 
     let blockchain_rg = temp_producer1.blockchain.read();
-    let (validator, _slot) = blockchain_rg
-        .get_slot_owner_at(
+    let slot = blockchain_rg
+        .get_proposer_at(
             micro_block_fork1.block_number(),
             micro_block_fork1.block_number(),
             None,
@@ -451,7 +451,7 @@ fn it_correctly_creates_inherents_in_next_epoch_from_fork_proof() {
     let current_epoch_validator = blockchain_rg
         .current_validators()
         .expect("We need to have validators")
-        .get_validator_by_address(&validator.address)
+        .get_validator_by_address(&slot.validator.address)
         .unwrap()
         .clone();
 
@@ -470,8 +470,8 @@ fn it_correctly_creates_inherents_in_next_epoch_from_fork_proof() {
         inherents,
         vec![Inherent::Jail {
             jailed_validator: JailedValidator {
-                slots: validator.slots,
-                validator_address: validator.address,
+                slots: slot.validator.slots,
+                validator_address: slot.validator.address,
                 offense_event_block: micro_block_fork1.block_number(),
             },
             new_epoch_slot_range: Some(current_epoch_validator.slots)
@@ -528,8 +528,8 @@ fn it_correctly_creates_inherents_from_double_proposal_proof() {
         .unwrap();
 
     let blockchain = temp_producer.blockchain.read();
-    let (validator, _slot) = blockchain
-        .get_slot_owner_at(header1.block_number, header1.round, None)
+    let slot = blockchain
+        .get_proposer_at(header1.block_number, header1.round, None)
         .unwrap();
 
     // Create the inherents from the double proposal proof.
@@ -545,8 +545,8 @@ fn it_correctly_creates_inherents_from_double_proposal_proof() {
         inherents,
         vec![Inherent::Jail {
             jailed_validator: JailedValidator {
-                slots: validator.slots,
-                validator_address: validator.address,
+                slots: slot.validator.slots,
+                validator_address: slot.validator.address,
                 offense_event_block: header1.block_number,
             },
             new_epoch_slot_range: None
@@ -614,8 +614,8 @@ fn it_correctly_creates_inherents_from_double_vote_proof() {
         .push(double_vote_proof.clone().into());
 
     let blockchain = temp_producer.blockchain.read();
-    let (validator, _slot) = blockchain
-        .get_slot_owner_at(header.block_number, header.round, None)
+    let slot = blockchain
+        .get_proposer_at(header.block_number, header.round, None)
         .unwrap();
 
     // Check that the double vote proof is valid.
@@ -639,8 +639,8 @@ fn it_correctly_creates_inherents_from_double_vote_proof() {
         inherents,
         vec![Inherent::Jail {
             jailed_validator: JailedValidator {
-                slots: validator.slots,
-                validator_address: validator.address,
+                slots: slot.validator.slots,
+                validator_address: slot.validator.address,
                 offense_event_block: header.block_number,
             },
             new_epoch_slot_range: None

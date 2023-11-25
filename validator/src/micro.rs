@@ -256,7 +256,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
     }
 
     fn is_our_turn(&self, blockchain: &Blockchain) -> bool {
-        let proposer_slot = blockchain.get_proposer_at(
+        let proposer_slot = blockchain.get_proposer(
             self.block_number,
             self.block_number,
             self.prev_seed.entropy(),

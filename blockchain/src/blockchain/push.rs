@@ -96,7 +96,7 @@ impl Blockchain {
         // Detect forks in non-skip micro blocks.
         if block.is_micro() && !block.is_skip() {
             let validator = this
-                .get_proposer_at(
+                .get_proposer(
                     block.block_number(),
                     block.block_number(),
                     prev_info.head.seed().entropy(),

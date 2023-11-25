@@ -29,6 +29,16 @@ pub const PK_TREE_DEPTH: usize = 5;
 /// This is the number of leaves in the PKTree circuit.
 pub const PK_TREE_BREADTH: usize = 2_usize.pow(PK_TREE_DEPTH as u32);
 
+/// A slot that is assigned to a validator.
+pub struct Slot {
+    /// The number identifying this slot.
+    pub number: u16,
+    /// The slot band this slot is part of.
+    pub band: u16,
+    /// The validator owning this slot.
+    pub validator: Validator,
+}
+
 /// A validator that owns some slots.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]

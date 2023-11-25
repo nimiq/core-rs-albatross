@@ -138,7 +138,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         )
     }
 
-    /// Returns the information for the slot owner at the given block height and offset. The
+    /// Returns information about the proposer slot at the given block height and offset. The
     /// offset is optional, it will default to getting the offset for the existing block
     /// at the given height.
     /// We only have this information available for the last 2 batches at most.
@@ -152,26 +152,17 @@ impl BlockchainInterface for BlockchainDispatcher {
         let offset = if let Some(offset) = offset_opt {
             offset
         } else {
-            let block = blockchain
+            blockchain
                 .get_block_at(block_number, false)
-                .map_err(|_| Error::BlockNotFound(block_number))?;
-            if let nimiq_block::Block::Macro(macro_block) = block {
-                if let Some(proof) = macro_block.justification {
-                    proof.round
-                } else {
-                    return Err(Error::UnexpectedMacroBlock(block_number));
-                }
-            } else {
-                // Skip and micro block offset is block number
-                block_number
-            }
+                .map_err(|_| Error::BlockNotFound(block_number))?
+                .vrf_offset()
+                .ok_or(Error::BlockNotFound(block_number))?
         };
 
-        Ok(RPCData::with_blockchain(
-            Slot::from(&blockchain, block_number, offset)
-                .map_err(|_| Error::BlockNotFound(block_number))?,
-            &blockchain,
-        ))
+        let slot = Slot::from_block_number(&blockchain, block_number, offset)
+            .map_err(|_| Error::BlockNotFound(block_number))?;
+
+        Ok(RPCData::with_blockchain(slot, &blockchain))
     }
 
     /// Tries to fetch a transaction (including reward transactions) given its hash.

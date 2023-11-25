@@ -9,7 +9,7 @@ use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::{
     networks::NetworkId,
     policy::Policy,
-    slots_allocation::{Validator, Validators},
+    slots_allocation::{Slot, Validators},
 };
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::{Rng, VrfEntropy, VrfUseCase};
@@ -101,12 +101,13 @@ impl LightBlockchain {
         }
     }
 
-    pub fn get_proposer_at(
+    // FIXME Duplicated function (also exists in full blockchain)
+    pub fn get_proposer(
         &self,
         block_number: u32,
         offset: u32,
         vrf_entropy: VrfEntropy,
-    ) -> Result<(Validator, u16), BlockchainError> {
+    ) -> Result<Slot, BlockchainError> {
         // Fetch the latest macro block that precedes the block at the given block_number.
         // We use the disabled_slots set from that macro block for the slot selection.
         let macro_block = self.get_block_at(Policy::macro_block_before(block_number), true)?;
@@ -126,9 +127,17 @@ impl LightBlockchain {
         // Get the validator that owns the proposer slot.
         let validator = validators.get_validator_by_slot_number(slot_number);
 
-        Ok((validator.clone(), slot_number))
+        // Also get the slot band for convenient access.
+        let slot_band = validators.get_band_from_slot(slot_number);
+
+        Ok(Slot {
+            number: slot_number,
+            band: slot_band,
+            validator: validator.clone(),
+        })
     }
 
+    // FIXME Duplicated function (also exists in full blockchain)
     fn compute_slot_number(offset: u32, vrf_entropy: VrfEntropy, disabled_slots: BitSet) -> u16 {
         // RNG for slot selection
         let mut rng = vrf_entropy.rng(VrfUseCase::ViewSlotSelection);

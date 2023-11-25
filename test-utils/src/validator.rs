@@ -150,16 +150,16 @@ where
 {
     let consensus = &validators.first().unwrap().consensus;
 
-    let (slot, _) = consensus
+    let slot = consensus
         .blockchain
         .read()
-        .get_slot_owner_at(block_number, offset)
+        .get_proposer_at(block_number, offset)
         .expect("Couldn't find slot owner!");
 
     validators
         .iter()
         .find(|validator| {
-            &validator.voting_key().public_key.compress() == slot.voting_key.compressed()
+            &validator.voting_key().public_key.compress() == slot.validator.voting_key.compressed()
         })
         .unwrap()
 }
@@ -175,16 +175,16 @@ where
 {
     let consensus = &validators.first().unwrap().consensus;
 
-    let (slot, _) = consensus
+    let slot = consensus
         .blockchain
         .read()
-        .get_slot_owner_at(block_number, offset)
+        .get_proposer_at(block_number, offset)
         .expect("Couldn't find slot owner!");
 
     let index = validators
         .iter()
         .position(|validator| {
-            &validator.voting_key().public_key.compress() == slot.voting_key.compressed()
+            &validator.voting_key().public_key.compress() == slot.validator.voting_key.compressed()
         })
         .unwrap();
     validators.remove(index)

@@ -188,6 +188,14 @@ impl Block {
         }
     }
 
+    /// Returns the offset used as input to the VRF when determining the proposer of this block.
+    pub fn vrf_offset(&self) -> Option<u32> {
+        match self {
+            Block::Macro(block) => block.justification.as_ref().map(|proof| proof.round),
+            Block::Micro(block) => Some(block.block_number()),
+        }
+    }
+
     /// Returns the header of the block.
     pub fn header(&self) -> BlockHeader {
         // TODO: Can we eliminate the clone()s here?

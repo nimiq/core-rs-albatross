@@ -11,7 +11,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_light_blockchain::LightBlockchain;
 use nimiq_primitives::{
     networks::NetworkId,
-    slots_allocation::{Validator, Validators},
+    slots_allocation::{Slot, Validators},
 };
 use parking_lot::{RwLock, RwLockReadGuard};
 
@@ -177,18 +177,18 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         )
     }
 
-    fn get_slot_owner_at(
-        &self,
-        block_number: u32,
-        offset: u32,
-    ) -> Result<(Validator, u16), BlockchainError> {
+    fn get_proposer_at(&self, block_number: u32, offset: u32) -> Result<Slot, BlockchainError> {
         gen_blockchain_match!(
             self,
             BlockchainReadProxy,
-            get_slot_owner_at,
+            get_proposer_at,
             block_number,
             offset
         )
+    }
+
+    fn get_proposer_of(&self, block_hash: &Blake2bHash) -> Result<Slot, BlockchainError> {
+        gen_blockchain_match!(self, BlockchainReadProxy, get_proposer_of, block_hash)
     }
 
     fn get_macro_blocks(

@@ -68,32 +68,27 @@ impl Blockchain {
         // In trusted don't do slot related checks since they are mostly signature verifications
         // that can be slow.
         if !trusted {
-            // Check block for slot and validators
-            // Get the intended block proposer.
-            let offset = if let Block::Macro(macro_block) = &block {
-                macro_block.round()
-            } else {
-                // Skip and micro block offset is block number
-                block.block_number()
-            };
-
-            // Get the validator for this round.
-            // The blocks predecessor is not necessarily on the main chain, thus the predecessors vrf seed is used.
-            let proposer_slot = self
-                .get_proposer_at(
+            // Get the proposer for this block. The block's predecessor is not necessarily on the
+            // main chain, thus the predecessor's VRF seed is used.
+            let offset = block.vrf_offset().ok_or_else(|| {
+                warn!(reason = "Failed to determine VRF offset", "Rejecting block");
+                PushError::InvalidBlock(BlockError::MissingJustification)
+            })?;
+            let proposer = self
+                .get_proposer(
                     block.block_number(),
                     offset,
                     predecessor.seed().entropy(),
                     Some(txn),
                 )
                 .map_err(|error| {
-                    warn!(%error, %block, reason = "failed to determine block proposer", "Rejecting block");
+                    warn!(%error, %block, reason = "Failed to determine block proposer", "Rejecting block");
                     PushError::Orphan
                 })?
                 .validator;
 
             // Verify that the block is valid for the given proposer.
-            block.verify_proposer(&proposer_slot.signing_key, predecessor.seed())?;
+            block.verify_proposer(&proposer.signing_key, predecessor.seed())?;
 
             // Verify that the block is valid for the current validators.
             block.verify_validators(&self.current_validators().unwrap())?;
@@ -367,7 +362,7 @@ impl Blockchain {
 
         // Get the original proposer of the proposal.
         let proposer = self
-            .get_proposer_at(
+            .get_proposer(
                 proposed_block.block_number(),
                 proposed_block.header.round,
                 prev_header.seed().entropy(),

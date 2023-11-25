@@ -189,7 +189,7 @@ where
 
         // Get the validator for this round.
         let proposer_slot = blockchain
-            .get_proposer_at(self.block_height, round, vrf_seed.entropy(), None)
+            .get_proposer(self.block_height, round, vrf_seed.entropy(), None)
             .expect("Couldn't find slot owner!");
 
         // Check if the slot bands match.
@@ -285,7 +285,7 @@ where
                     };
 
                     let proposer = blockchain
-                        .get_proposer_at(
+                        .get_proposer(
                             block_height,
                             signed_proposal.round,
                             vrf_seed.entropy(),

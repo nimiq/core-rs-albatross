@@ -309,7 +309,7 @@ where
 
                     // Calculate the validator who was supposed to produce the block.
                     let actual_validator = blockchain
-                        .get_proposer_at(
+                        .get_proposer(
                             signed_proposal.proposal.block_number,
                             signed_proposal.round,
                             block.header.seed.entropy(),

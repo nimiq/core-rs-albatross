@@ -4,7 +4,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{
     networks::NetworkId,
     policy::Policy,
-    slots_allocation::{Validator, Validators},
+    slots_allocation::{Slot, Validators},
 };
 
 use crate::{
@@ -105,11 +105,9 @@ pub trait AbstractBlockchain {
 
     /// Calculates the slot owner (represented as the validator plus the slot number) at a given
     /// block number and offset.
-    fn get_slot_owner_at(
-        &self,
-        block_number: u32,
-        offset: u32,
-    ) -> Result<(Validator, u16), BlockchainError>;
+    fn get_proposer_at(&self, block_number: u32, offset: u32) -> Result<Slot, BlockchainError>;
+
+    fn get_proposer_of(&self, block_hash: &Blake2bHash) -> Result<Slot, BlockchainError>;
 
     /// Fetches a given number of macro blocks, starting at a specific block (by its hash).
     /// It can fetch only election macro blocks if desired.
