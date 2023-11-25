@@ -1,7 +1,7 @@
 use ark_crypto_primitives::snark::SNARKGadget;
 use ark_ff::UniformRand;
 use ark_groth16::{
-    constraints::{Groth16VerifierGadget, ProofVar},
+    constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar},
     Proof,
 };
 use ark_mnt4_753::{constraints::PairingVar, Fq as MNT4Fq, G1Affine, G2Affine, MNT4_753};
@@ -11,15 +11,14 @@ use ark_r1cs_std::{
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use nimiq_primitives::policy::Policy;
-use nimiq_zkp_primitives::pedersen::pedersen_parameters_mnt4;
 use rand::Rng;
 
 use crate::{
-    circuits::vk_commitments::{CircuitId, VerifyingKeyHelper, VerifyingKeys},
-    gadgets::{
-        bits::BitVec, mnt4::DefaultPedersenParametersVar, recursive_input::RecursiveInputVar,
-        vk_commitment::VkCommitmentWindow,
+    circuits::{
+        mnt6::{PKTreeLeafCircuit, PKTreeNodeCircuit as OtherPKTreeNodeCircuit},
+        vk_commitments::{CircuitId, PairingRelatedKeys, VerifyingKeys},
     },
+    gadgets::{bits::BitVec, compressed_vk::CompressedInput, recursive_input::RecursiveInputVar},
 };
 
 /// This is the node subcircuit of the PKTreeCircuit. See PKTreeLeafCircuit for more details.
@@ -35,7 +34,6 @@ pub struct PKTreeNodeCircuit {
     tree_level: usize,
 
     // Witnesses (private)
-    keys: VerifyingKeys,
     l_proof: Proof<MNT4_753>,
     r_proof: Proof<MNT4_753>,
 
@@ -46,12 +44,27 @@ pub struct PKTreeNodeCircuit {
     r_agg_pk_commitment: [u8; 95],
     signer_bitmap_chunk: Vec<bool>,
     vks_commitment: [u8; 95 * 2],
+    keys: VerifyingKeys,
 }
 
 impl PKTreeNodeCircuit {
     pub fn num_inputs(tree_level: usize) -> usize {
         let num_bits = Policy::SLOTS as usize / 2_usize.pow(tree_level as u32);
-        crate::circuits::num_inputs::<MNT4_753>(&[32, 32, 95, 95, num_bits.div_ceil(8), 95 * 2])
+        let num_sub_inputs = if tree_level == 4 {
+            PKTreeLeafCircuit::num_inputs(tree_level + 1)
+        } else {
+            OtherPKTreeNodeCircuit::num_inputs(tree_level + 1)
+        };
+        let vk_size = /* num G1 */ (2 + num_sub_inputs) + /* G2 size */ 2 * /* num G2 */ 3;
+        crate::circuits::num_inputs::<MNT4_753>(&[
+            32,
+            32,
+            95,
+            95,
+            num_bits.div_ceil(8),
+            95 * 2,
+            /* y bits */ (5 + num_sub_inputs).div_ceil(8),
+        ]) + vk_size
     }
 
     pub fn new(
@@ -131,12 +144,6 @@ impl PKTreeNodeCircuit {
 impl ConstraintSynthesizer<MNT4Fq> for PKTreeNodeCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fq>) -> Result<(), SynthesisError> {
-        // Allocate constants.
-        let pedersen_generators = DefaultPedersenParametersVar::new_constant(
-            cs.clone(),
-            pedersen_parameters_mnt4().sub_window::<VkCommitmentWindow>(),
-        )?;
-
         // Allocate all the witnesses.
         let l_proof_var =
             ProofVar::<MNT4_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.l_proof))?;
@@ -162,20 +169,12 @@ impl ConstraintSynthesizer<MNT4Fq> for PKTreeNodeCircuit {
             .to_vec();
         let vks_commitment_var = UInt8::<MNT4Fq>::new_input_vec(cs.clone(), &self.vks_commitment)?;
 
-        // Allocate the vk gadget.
-        let vk_helper = VerifyingKeyHelper::new_and_verify::<PairingVar>(
-            cs.clone(),
-            self.keys.clone(),
-            &vks_commitment_var,
-            &pedersen_generators,
-        )?;
-
         // Get merger vk.
-        let child_vk = vk_helper.get_and_verify_vk(
-            cs,
-            CircuitId::PkTree(self.tree_level + 1),
-            &pedersen_generators,
-        )?;
+        let child_vk = VerifyingKeyVar::new_compressed_input(cs.clone(), || {
+            self.keys
+                .get_key(CircuitId::PkTree(self.tree_level + 1))
+                .ok_or(SynthesisError::AssignmentMissing)
+        })?;
 
         // Split the signer's bitmap chunk into two, for the left and right child nodes.
         let (l_signer_bitmap_bits, r_signer_bitmap_bits) = signer_bitmap_bits

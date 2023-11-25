@@ -1,3 +1,6 @@
+use std::marker::PhantomData;
+
+use ark_crypto_primitives::crh::pedersen::Window;
 use ark_ec::{pairing::Pairing, CurveGroup};
 use ark_ff::Field;
 use ark_groth16::{constraints::VerifyingKeyVar, VerifyingKey};
@@ -14,21 +17,23 @@ use crate::gadgets::{
 
 type BasePrimeField<E> = <<<E as Pairing>::G1 as CurveGroup>::BaseField as Field>::BasePrimeField;
 
+pub type VkCommitmentWindow = DefaultWindow;
+
 /// This gadget is meant to calculate a commitment in-circuit for a verifying key of a SNARK.
 /// Since the verifying key might not be compatible with the current curve, it supports opening
 /// the commitment to the serialization only. Then, on a recursive circuit, the verifying key can
 /// be matched to its corresponding serialization.
-pub struct VkCommitmentGadget<E: Pairing, P: PairingVar<E, BasePrimeField<E>>> {
+pub struct VkCommitmentGadget<E: Pairing, P: PairingVar<E, BasePrimeField<E>>, W: Window> {
     // Public input: vk commitment
     pub vk_commitment: Vec<UInt8<BasePrimeField<E>>>,
 
     // Private input: actual vk
     pub vk: VerifyingKeyVar<E, P>,
+
+    _window: PhantomData<W>,
 }
 
-pub type VkCommitmentWindow = DefaultWindow;
-
-impl<E: Pairing, P: PairingVar<E, BasePrimeField<E>>> VkCommitmentGadget<E, P>
+impl<E: Pairing, P: PairingVar<E, BasePrimeField<E>>, W: Window> VkCommitmentGadget<E, P, W>
 where
     P::G1Var: SerializeGadget<BasePrimeField<E>>,
     P::G2Var: SerializeGadget<BasePrimeField<E>>,
@@ -57,6 +62,7 @@ where
         Ok(Self {
             vk_commitment: commitment,
             vk: VerifyingKeyVar::new_witness(cs, || Ok(vk))?,
+            _window: PhantomData,
         })
     }
 
@@ -73,11 +79,10 @@ where
         let bytes = self.vk.serialize_compressed(cs.clone())?;
 
         // Calculate the Pedersen hash.
-        let hash =
-            PedersenHashGadget::<_, _, VkCommitmentWindow>::evaluate(&bytes, pedersen_generators)?;
+        let hash = PedersenHashGadget::<_, _, W>::evaluate(&bytes, pedersen_generators)?;
 
         // Serialize the Pedersen hash.
-        let serialized_bytes = hash.serialize_compressed(cs)?;
+        let serialized_bytes = hash.serialize_compressed(cs.clone())?;
 
         self.vk_commitment.enforce_equal(&serialized_bytes)
     }
@@ -128,13 +133,14 @@ mod tests {
             pedersen_parameters_mnt6().sub_window::<VkCommitmentWindow>(),
         )
         .unwrap();
-        let gadget_comm = VkCommitmentGadget::<MNT6_753, PairingVar>::new_and_verify(
-            cs.clone(),
-            &vk,
-            comm,
-            &pedersen_generators,
-        )
-        .unwrap();
+        let gadget_comm =
+            VkCommitmentGadget::<MNT6_753, PairingVar, VkCommitmentWindow>::new_and_verify(
+                cs.clone(),
+                &vk,
+                comm,
+                &pedersen_generators,
+            )
+            .unwrap();
 
         // Compare the two versions bit by bit.
         assert_eq!(primitive_comm.len(), gadget_comm.vk_commitment.len());

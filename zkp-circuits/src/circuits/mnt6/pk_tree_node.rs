@@ -231,11 +231,20 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeNodeCircuit {
 
         // Verify equality for vk commitment. It just checks that the private input is correct by
         // committing to it and then comparing the result with the vk commitment given as a public input.
-        let child_vk = vk_helper.get_and_verify_vk(
+        let child_vk = vk_helper.get_and_verify_vk::<_, VkCommitmentWindow>(
             cs.clone(),
             CircuitId::PkTree(self.tree_level + 1),
             &pedersen_generators_var,
         )?;
+
+        // Also retrieve the vk required by the child -- we will pass it as a public input due to
+        // limited constraints.
+        let (child_pk_tree_ybits, child_pk_tree_vk) = vk_helper
+            .get_and_verify_nonnative_vk::<PairingVar, VkCommitmentWindow>(
+                cs.clone(),
+                CircuitId::PkTree(self.tree_level + 2),
+                &pedersen_generators_var,
+            )?;
 
         // Calculating the aggregate public key.
         let l_agg_pk_commitment_var = &ll_agg_pk_commitment_var + &lr_agg_pk_commitment_var;
@@ -290,6 +299,8 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeNodeCircuit {
         proof_inputs.push(&lr_agg_pk_commitment_bytes)?;
         proof_inputs.push(l_signer_bitmap_bits)?;
         proof_inputs.push(&vks_commitment_var)?;
+        proof_inputs.push(&child_pk_tree_ybits)?;
+        proof_inputs.append(child_pk_tree_vk.clone())?;
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
             &child_vk,
@@ -306,6 +317,8 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeNodeCircuit {
         proof_inputs.push(&rr_agg_pk_commitment_bytes)?;
         proof_inputs.push(r_signer_bitmap_bits)?;
         proof_inputs.push(&vks_commitment_var)?;
+        proof_inputs.push(&child_pk_tree_ybits)?;
+        proof_inputs.append(child_pk_tree_vk)?;
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
             &child_vk,

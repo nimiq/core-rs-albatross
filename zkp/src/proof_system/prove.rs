@@ -10,6 +10,7 @@ use ark_ff::{ToConstraintField, Zero};
 use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey};
 use ark_mnt4_753::{Fq as MNT4Fq, MNT4_753};
 use ark_mnt6_753::{Fq as MNT6Fq, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
+use ark_relations::r1cs::SynthesisError;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
 use nimiq_block::MacroBlock;
@@ -24,12 +25,13 @@ use nimiq_zkp_circuits::{
             MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT6,
             PKTreeNodeCircuit as NodeMNT6,
         },
-        vk_commitments::VerifyingKeys,
+        vk_commitments::{CircuitId, PairingRelatedKeys, VerifyingKeys},
     },
     setup::load_keys,
 };
 use nimiq_zkp_primitives::{
-    pedersen::default_pedersen_hash, serialize_g1_mnt6, serialize_g2_mnt6, NanoZKPError,
+    ext_traits::CompressedComposite, pedersen::default_pedersen_hash, serialize_g1_mnt6,
+    serialize_g2_mnt6, NanoZKPError,
 };
 use rand::{thread_rng, CryptoRng, Rng};
 
@@ -423,13 +425,21 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
         inputs.append(&mut r_pk_node_hash.to_field_elements().unwrap());
         inputs.append(&mut left_agg_pk_comm.to_field_elements().unwrap());
         inputs.append(&mut right_agg_pk_comm.to_field_elements().unwrap());
-
         inputs.append(
             &mut BitVec::<MNT4Fq>::to_bytes_le(signer_bitmap)
                 .to_field_elements()
                 .unwrap(),
         );
         inputs.append(&mut keys.commitment().to_field_elements().unwrap());
+
+        let child_key: &VerifyingKey<MNT4_753> = keys
+            .get_key(CircuitId::PkTree(tree_level + 1))
+            .ok_or(SynthesisError::AssignmentMissing)?;
+        let (y_bytes, mut elements) = child_key
+            .to_field_elements()
+            .ok_or(SynthesisError::AssignmentMissing)?;
+        inputs.append(&mut y_bytes.to_field_elements().unwrap());
+        inputs.append(&mut elements);
 
         // Verify proof.
         assert!(Groth16::<MNT6_753>::verify(

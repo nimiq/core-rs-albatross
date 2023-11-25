@@ -31,6 +31,11 @@ impl<F: PrimeField, CF: PrimeField> RecursiveInputVar<F, CF> {
         Ok(())
     }
 
+    pub fn append(&mut self, boolean_input: BooleanInputVar<F, CF>) -> Result<(), SynthesisError> {
+        self.val.extend(boolean_input);
+        Ok(())
+    }
+
     pub fn len(&self) -> usize {
         self.val.len()
     }

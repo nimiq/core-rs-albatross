@@ -3,7 +3,10 @@ use ark_groth16::VerifyingKey;
 use ark_mnt6_753::MNT6_753;
 use ark_serialize::CanonicalSerialize;
 
-use crate::pedersen::{default_pedersen_hash, DefaultPedersenParameters95};
+use crate::{
+    ext_traits::{CompressedAffine, CompressedComposite},
+    pedersen::{default_pedersen_hash, DefaultPedersenParameters95},
+};
 
 /// This function is meant to calculate a commitment off-circuit for a verifying key of a SNARK in the
 /// MNT6-753 curve. This means we can open this commitment inside of a circuit in the MNT4-753 curve
@@ -21,6 +24,23 @@ pub fn vk_commitment<E: Pairing + DefaultPedersenParameters95>(vk: &VerifyingKey
 
     // Serialize the Pedersen commitment.
     E::g1_to_bytes(&hash)
+}
+
+pub fn non_native_vk_commitment<CP: Pairing + DefaultPedersenParameters95, P: Pairing>(
+    vk: &VerifyingKey<P>,
+) -> [u8; 95]
+where
+    P::G1Affine: CompressedAffine<P::BaseField>,
+    P::G2Affine: CompressedAffine<P::BaseField>,
+{
+    // Get representation.
+    let repr = vk.to_bytes().unwrap();
+
+    // Calculate the Pedersen hash.
+    let hash = default_pedersen_hash::<CP>(&repr);
+
+    // Serialize the Pedersen commitment.
+    CP::g1_to_bytes(&hash)
 }
 
 /// Combines multiple commitments into one.

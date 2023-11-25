@@ -114,8 +114,11 @@ impl ConstraintSynthesizer<MNT4Fq> for MergerWrapperCircuit {
         )?;
 
         // Get merger vk.
-        let merger_vk =
-            vk_helper.get_and_verify_vk(cs.clone(), CircuitId::Merger, &pedersen_generators)?;
+        let merger_vk = vk_helper.get_and_verify_vk::<_, VkCommitmentWindow>(
+            cs.clone(),
+            CircuitId::Merger,
+            &pedersen_generators,
+        )?;
 
         // Verify the ZK proof.
         let mut proof_inputs = RecursiveInputVar::new();

@@ -13,17 +13,12 @@ fn evaluate_circuit<F: Field, C: ConstraintSynthesizer<F> + Clone>(circuit: C, c
     cs.set_optimization_goal(OptimizationGoal::Constraints);
     circuit.clone().generate_constraints(cs.clone()).unwrap();
     cs.finalize();
-    let num_optimized_constraints = cs.num_constraints().next_power_of_two().ilog2();
-
-    let cs = ConstraintSystem::new_ref();
-    cs.set_optimization_goal(OptimizationGoal::Weight);
-    circuit.generate_constraints(cs.clone()).unwrap();
-    cs.finalize();
-    let num_optimized_weight = cs.num_constraints().next_power_of_two().ilog2();
+    let num_constraints = cs.num_constraints();
+    let num_constraints_powers = num_constraints.next_power_of_two().ilog2();
 
     info!(
-        "- {}: opt_constraints=2^{}, opt_weight=2^{}",
-        circuit_name, num_optimized_constraints, num_optimized_weight
+        "- {}: opt_constraints=2^{} ({})",
+        circuit_name, num_constraints_powers, num_constraints
     );
 }
 
@@ -45,7 +40,7 @@ fn main() {
     let mut rng = thread_rng();
 
     let circuit: mnt6::PKTreeLeafCircuit = rng.gen();
-    evaluate_circuit(circuit, "pk_tree_leaf");
+    evaluate_circuit(circuit, "pk_tree_leaf mnt6");
 
     let circuit = mnt4::PKTreeNodeCircuit::rand(0, &mut rng);
     evaluate_circuit(circuit, "pk_tree_node mnt4");
@@ -54,16 +49,16 @@ fn main() {
     evaluate_circuit(circuit, "pk_tree_node mnt6");
 
     let circuit = mnt6::MacroBlockCircuit::rand(&mut rng);
-    evaluate_circuit(circuit, "macro_block");
+    evaluate_circuit(circuit, "macro_block mnt6");
 
     let circuit = mnt4::MacroBlockWrapperCircuit::rand(&mut rng);
-    evaluate_circuit(circuit, "macro_block_wrapper");
+    evaluate_circuit(circuit, "macro_block_wrapper mnt4");
 
     let circuit = mnt6::MergerCircuit::rand(&mut rng);
-    evaluate_circuit(circuit, "merger");
+    evaluate_circuit(circuit, "merger mnt6");
 
     let circuit = mnt4::MergerWrapperCircuit::rand(&mut rng);
-    evaluate_circuit(circuit, "merger_wrapper");
+    evaluate_circuit(circuit, "merger_wrapper mnt4");
 
     info!("====== ZKP constraint estimation finished ======");
     info!("Total time elapsed: {:?} seconds", start.elapsed());

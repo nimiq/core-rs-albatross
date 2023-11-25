@@ -6,6 +6,9 @@ pub mod mnt6;
 
 pub mod be_bytes;
 pub mod bits;
+pub mod compressed_affine;
+pub mod compressed_vk;
+pub mod ext_traits;
 pub mod pedersen;
 pub mod recursive_input;
 pub mod serialize;

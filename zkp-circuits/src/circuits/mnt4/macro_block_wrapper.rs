@@ -114,8 +114,11 @@ impl ConstraintSynthesizer<MNT4Fq> for MacroBlockWrapperCircuit {
         )?;
 
         // Get merger vk.
-        let macro_block_vk =
-            vk_helper.get_and_verify_vk(cs, CircuitId::MacroBlock, &pedersen_generators)?;
+        let macro_block_vk = vk_helper.get_and_verify_vk::<_, VkCommitmentWindow>(
+            cs,
+            CircuitId::MacroBlock,
+            &pedersen_generators,
+        )?;
 
         // Verify the ZK proof.
         let mut proof_inputs = RecursiveInputVar::new();

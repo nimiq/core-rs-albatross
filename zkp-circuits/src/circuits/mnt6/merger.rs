@@ -171,12 +171,12 @@ impl ConstraintSynthesizer<MNT6Fq> for MergerCircuit {
 
         // Verify equality for vk commitment. It just checks that the private input is correct by
         // committing to it and then comparing the result with the vk commitment given as a public input.
-        let merger_wrapper_vk = vk_helper.get_and_verify_vk(
+        let merger_wrapper_vk = vk_helper.get_and_verify_vk::<_, VkCommitmentWindow>(
             cs.clone(),
             CircuitId::MergerWrapper,
             &pedersen_generators_var,
         )?;
-        let macro_block_wrapper_vk = vk_helper.get_and_verify_vk(
+        let macro_block_wrapper_vk = vk_helper.get_and_verify_vk::<_, VkCommitmentWindow>(
             cs.clone(),
             CircuitId::MacroBlockWrapper,
             &pedersen_generators_var,

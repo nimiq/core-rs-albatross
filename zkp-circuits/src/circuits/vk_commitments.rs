@@ -1,13 +1,19 @@
+use ark_crypto_primitives::{crh::pedersen::Window, snark::BooleanInputVar};
 use ark_ec::{pairing::Pairing, CurveGroup};
 use ark_ff::Field;
 use ark_groth16::{constraints::VerifyingKeyVar, VerifyingKey};
 use ark_mnt4_753::MNT4_753;
 use ark_mnt6_753::MNT6_753;
-use ark_r1cs_std::{groups::GroupOpsBounds, pairing::PairingVar, uint8::UInt8};
+use ark_r1cs_std::{
+    alloc::AllocVar, eq::EqGadget, groups::GroupOpsBounds, pairing::PairingVar, uint8::UInt8,
+};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_std::UniformRand;
 use log::error;
-use nimiq_zkp_primitives::{pedersen::DefaultPedersenParameters95, vk_commitment, vks_commitment};
+use nimiq_zkp_primitives::{
+    ext_traits::CompressedComposite, non_native_vk_commitment,
+    pedersen::DefaultPedersenParameters95, vk_commitment, vks_commitment,
+};
 use rand::Rng;
 
 use super::{
@@ -21,7 +27,10 @@ use super::{
     CircuitInput,
 };
 use crate::gadgets::{
-    pedersen::PedersenParametersVar, serialize::SerializeGadget, vk_commitment::VkCommitmentGadget,
+    ext_traits::ToUncompressedBytesGadget,
+    pedersen::{PedersenHashGadget, PedersenParametersVar},
+    serialize::SerializeGadget,
+    vk_commitment::VkCommitmentGadget,
     vks_commitment::VksCommitmentGadget,
 };
 
@@ -123,15 +132,24 @@ impl VerifyingKeys {
         }
     }
 
-    /// We commit to mnt4 and mnt6 vks separately and concatenate the commitments.
+    /// Most of the time, we unpack the verifying key on the circuit where it's being used.
+    /// Due to limited circuit sizes, the pk tree is an exception.
+    /// While we commit to mnt4 and mnt6 vks separately and concatenate the commitments,
+    /// the mnt6 commitment also contains the mnt4 pk tree keys.
+    /// That allows us to verify them on bigger circuits.
+    ///
     /// We first commit to the individual keys and then hash the commitments together.
     /// This way we can unpack the respective commitment on the right curve.
     /// Passing them as one saves us one public input.
     pub fn commitment(&self) -> [u8; 95 * 2] {
-        let mnt6_commitments = PairingRelatedKeys::<MNT6_753>::get_keys(self)
+        let mut mnt6_commitments = PairingRelatedKeys::<MNT6_753>::get_keys(self)
             .iter()
             .map(|key| vk_commitment(key))
             .collect::<Vec<_>>();
+        // Also add mnt4 pk tree keys so we can prove them and pass them through.
+        for vk in self.pk_tree_mnt4.iter() {
+            mnt6_commitments.push(non_native_vk_commitment::<MNT6_753, MNT4_753>(vk));
+        }
         let mnt6_commitment = vks_commitment::<MNT6_753>(&mnt6_commitments);
 
         let mnt4_commitments = PairingRelatedKeys::<MNT4_753>::get_keys(self)
@@ -146,10 +164,13 @@ impl VerifyingKeys {
     }
 }
 
+#[allow(clippy::len_without_is_empty)]
 pub trait PairingRelatedKeys<E: Pairing> {
     fn get_keys(&self) -> Vec<&VerifyingKey<E>>;
     fn get_key(&self, circuit_id: CircuitId) -> Option<&VerifyingKey<E>>;
+    fn len(&self) -> usize;
 }
+
 impl PairingRelatedKeys<MNT6_753> for VerifyingKeys {
     fn get_keys(&self) -> Vec<&VerifyingKey<MNT6_753>> {
         let mut mnt6_keys = vec![&self.merger_wrapper, &self.macro_block_wrapper];
@@ -169,7 +190,12 @@ impl PairingRelatedKeys<MNT6_753> for VerifyingKeys {
             _ => None,
         }
     }
+
+    fn len(&self) -> usize {
+        2 + self.pk_tree_mnt6.len()
+    }
 }
+
 impl PairingRelatedKeys<MNT4_753> for VerifyingKeys {
     fn get_keys(&self) -> Vec<&VerifyingKey<MNT4_753>> {
         let mut mnt4_keys = vec![&self.merger, &self.macro_block];
@@ -188,6 +214,10 @@ impl PairingRelatedKeys<MNT4_753> for VerifyingKeys {
             }
             _ => None,
         }
+    }
+
+    fn len(&self) -> usize {
+        2 + self.pk_tree_mnt4.len()
     }
 }
 
@@ -250,10 +280,16 @@ where
     {
         let sub_commitment =
             &commitment[P::VK_COMMITMENT_INDEX * 95..(P::VK_COMMITMENT_INDEX + 1) * 95];
-        let vk_commitments = PairingRelatedKeys::<P>::get_keys(&keys)
+        let mut vk_commitments = PairingRelatedKeys::<P>::get_keys(&keys)
             .iter()
             .map(|key| Some(vk_commitment(key)))
             .collect::<Vec<_>>();
+        if P::VK_COMMITMENT_INDEX == MNT6_753::VK_COMMITMENT_INDEX {
+            // Also add mnt4 pk tree keys so we can prove them and pass them through.
+            for vk in keys.pk_tree_mnt4.iter() {
+                vk_commitments.push(Some(non_native_vk_commitment::<P, MNT4_753>(vk)));
+            }
+        }
 
         Ok(Self {
             keys,
@@ -266,7 +302,7 @@ where
         })
     }
 
-    pub fn get_and_verify_vk<PV: PairingVar<P, BasePrimeField<P>>>(
+    pub fn get_and_verify_vk<PV: PairingVar<P, BasePrimeField<P>>, W: Window>(
         &self,
         cs: ConstraintSystemRef<BasePrimeField<P>>,
         circuit_id: CircuitId,
@@ -284,13 +320,76 @@ where
         let (c_index, i) = circuit_id.index();
         assert_eq!(c_index, P::VK_COMMITMENT_INDEX);
         let commitment = self.vks_commitment_gadget.vk_commitments[i].clone();
-        let vk_commitment_gadget = VkCommitmentGadget::<P, PV>::new_and_verify(
+        let vk_commitment_gadget = VkCommitmentGadget::<P, PV, W>::new_and_verify(
             cs.clone(),
             vk,
             commitment,
             pedersen_generators,
         )?;
         Ok(vk_commitment_gadget.vk)
+    }
+
+    pub fn get_and_verify_nonnative_vk<PV: PairingVar<P, BasePrimeField<P>>, W: Window>(
+        &self,
+        cs: ConstraintSystemRef<BasePrimeField<P>>,
+        circuit_id: CircuitId,
+        pedersen_generators: &PedersenParametersVar<P::G1, PV::G1Var>,
+    ) -> Result<
+        (
+            Vec<UInt8<BasePrimeField<P>>>,
+            BooleanInputVar<BasePrimeField<MNT4_753>, BasePrimeField<P>>,
+        ),
+        SynthesisError,
+    >
+    where
+        for<'a> &'a PV::G1Var: GroupOpsBounds<'a, P::G1, PV::G1Var>,
+        PV::G1Var: SerializeGadget<BasePrimeField<P>>,
+        PV::G2Var: SerializeGadget<BasePrimeField<P>>,
+    {
+        let (c_index, _) = circuit_id.index();
+        // Check preconditions for this function:
+        // It is only to be used to pass through pk tree verifying keys.
+        let i = if let CircuitId::PkTree(i) = circuit_id {
+            PairingRelatedKeys::<P>::len(&self.keys) + (i / 2) // 0 based index for this circuit
+        } else {
+            error!("Nonnative VKs only work for pk tree vks on mnt6");
+            return Err(SynthesisError::Unsatisfiable);
+        };
+
+        if P::VK_COMMITMENT_INDEX != MNT6_753::VK_COMMITMENT_INDEX
+            || c_index != MNT4_753::VK_COMMITMENT_INDEX
+        {
+            error!("Nonnative VKs only work for pk tree vks on mnt6");
+            return Err(SynthesisError::Unsatisfiable);
+        }
+
+        let vk =
+            PairingRelatedKeys::<MNT4_753>::get_key(&self.keys, circuit_id).ok_or_else(|| {
+                error!("Could not load key {:?}.", circuit_id);
+                SynthesisError::Unsatisfiable
+            })?;
+
+        let commitment = self.vks_commitment_gadget.vk_commitments[i].clone();
+
+        let (bytes, elems) = vk
+            .to_field_elements()
+            .ok_or(SynthesisError::AssignmentMissing)?;
+        let bytes_var = UInt8::new_witness_vec(cs.clone(), &bytes)?;
+        let vk_var = BooleanInputVar::new_witness(cs.clone(), || Ok(elems))?;
+
+        // Initialize Boolean vector.
+        let mut bytes = bytes_var.clone();
+        bytes.append(&mut vk_var.to_bytes());
+
+        // Calculate the Pedersen hash.
+        let hash = PedersenHashGadget::<_, _, W>::evaluate(&bytes, pedersen_generators)?;
+
+        // Serialize the Pedersen hash.
+        let serialized_bytes = hash.serialize_compressed(cs)?;
+
+        commitment.enforce_equal(&serialized_bytes)?;
+
+        Ok((bytes_var, vk_var))
     }
 }
 
@@ -352,7 +451,7 @@ mod tests {
         .unwrap();
 
         let vk_var = vks_gadget
-            .get_and_verify_vk::<MNT6PairingVar>(
+            .get_and_verify_vk::<MNT6PairingVar, VkCommitmentWindow>(
                 cs.clone(),
                 CircuitId::MergerWrapper,
                 &pedersen_generators,
@@ -361,7 +460,7 @@ mod tests {
         assert_eq_vk(&keys.merger_wrapper, &vk_var);
 
         let vk_var = vks_gadget
-            .get_and_verify_vk::<MNT6PairingVar>(
+            .get_and_verify_vk::<MNT6PairingVar, VkCommitmentWindow>(
                 cs.clone(),
                 CircuitId::MacroBlockWrapper,
                 &pedersen_generators,
@@ -371,13 +470,31 @@ mod tests {
 
         for i in [0, 2, 4] {
             let vk_var = vks_gadget
-                .get_and_verify_vk::<MNT6PairingVar>(
+                .get_and_verify_vk::<MNT6PairingVar, VkCommitmentWindow>(
                     cs.clone(),
                     CircuitId::PkTree(i),
                     &pedersen_generators,
                 )
                 .unwrap();
             assert_eq_vk(&keys.pk_tree_mnt6[i / 2], &vk_var);
+        }
+
+        for i in [1, 3, 5] {
+            let (mut bytes, vk_var) = vks_gadget
+                .get_and_verify_nonnative_vk::<MNT6PairingVar, VkCommitmentWindow>(
+                    cs.clone(),
+                    CircuitId::PkTree(i),
+                    &pedersen_generators,
+                )
+                .unwrap();
+            let mut vk_var = vk_var.to_bytes();
+            bytes.append(&mut vk_var);
+            let key: &VerifyingKey<MNT4_753> = keys.get_key(CircuitId::PkTree(i)).unwrap();
+            let key_bytes = key.to_bytes().unwrap();
+            assert_eq!(bytes.len(), key_bytes.len());
+            for (a, b) in bytes.iter().zip(key_bytes.iter()) {
+                assert_eq!(a.value().unwrap(), *b);
+            }
         }
 
         assert!(cs.is_satisfied().unwrap());
@@ -414,7 +531,7 @@ mod tests {
         .unwrap();
 
         let vk_var = vks_gadget
-            .get_and_verify_vk::<MNT4PairingVar>(
+            .get_and_verify_vk::<MNT4PairingVar, VkCommitmentWindow>(
                 cs.clone(),
                 CircuitId::Merger,
                 &pedersen_generators,
@@ -423,7 +540,7 @@ mod tests {
         assert_eq_vk(&keys.merger, &vk_var);
 
         let vk_var = vks_gadget
-            .get_and_verify_vk::<MNT4PairingVar>(
+            .get_and_verify_vk::<MNT4PairingVar, VkCommitmentWindow>(
                 cs.clone(),
                 CircuitId::MacroBlock,
                 &pedersen_generators,
@@ -433,7 +550,7 @@ mod tests {
 
         for i in [1, 3, 5] {
             let vk_var = vks_gadget
-                .get_and_verify_vk::<MNT4PairingVar>(
+                .get_and_verify_vk::<MNT4PairingVar, VkCommitmentWindow>(
                     cs.clone(),
                     CircuitId::PkTree(i),
                     &pedersen_generators,

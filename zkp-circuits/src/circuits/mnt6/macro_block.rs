@@ -174,11 +174,21 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
 
         // Verify equality for vk commitment. It just checks that the private input is correct by
         // committing to it and then comparing the result with the vk commitment given as a public input.
-        let pk_tree_vk = vk_helper.get_and_verify_vk(
+        let pk_tree_vk = vk_helper.get_and_verify_vk::<_, VkCommitmentWindow>(
             cs.clone(),
             CircuitId::PkTree(0),
             &pedersen_generators_var,
         )?;
+
+        // Also retrieve the vk required by the child -- we will pass it as a public input due to
+        // limited constraints.
+        let (child_pk_tree_ybits, child_pk_tree_vk) = vk_helper
+            .get_and_verify_nonnative_vk::<PairingVar, VkCommitmentWindow>(
+                cs.clone(),
+                CircuitId::PkTree(1),
+                &pedersen_generators_var,
+            )?;
+
         // Check that the previous block and the final block are exactly one epoch length apart.
         let calculated_block_number =
             UInt32::addmany(&[prev_block_var.block_number.clone(), epoch_length_var])?;
@@ -224,6 +234,8 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
         proof_inputs.push(&r_agg_pk_commitment_bytes)?;
         proof_inputs.push(&final_block_var.signer_bitmap)?;
         proof_inputs.push(&vks_commitment_var)?;
+        proof_inputs.push(&child_pk_tree_ybits)?;
+        proof_inputs.append(child_pk_tree_vk)?;
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
             &pk_tree_vk,
