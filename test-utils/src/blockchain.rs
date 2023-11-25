@@ -125,9 +125,8 @@ pub fn fill_micro_blocks_with_txns(
 ) {
     let init_height = blockchain.read().block_number();
     let key_pair = KeyPair::from(PrivateKey::from_str(REWARD_KEY).unwrap());
-    assert!(Policy::is_macro_block_at(init_height));
 
-    let macro_block_number = init_height + Policy::blocks_per_batch();
+    let macro_block_number = Policy::macro_block_after(init_height + 1);
 
     for i in (init_height + 1)..macro_block_number {
         log::debug!(" Current Height: {}", i);
