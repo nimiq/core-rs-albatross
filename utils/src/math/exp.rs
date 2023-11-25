@@ -68,14 +68,15 @@
  */
 
 const HALF: [f64; 2] = [0.5, -0.5];
-const LN2HI: f64 = 6.93147180369123816490e-01; /* 0x3fe62e42, 0xfee00000 */
-const LN2LO: f64 = 1.90821492927058770002e-10; /* 0x3dea39ef, 0x35793c76 */
-const INVLN2: f64 = 1.44269504088896338700e+00; /* 0x3ff71547, 0x652b82fe */
-const P1: f64 = 1.66666666666666019037e-01; /* 0x3FC55555, 0x5555553E */
-const P2: f64 = -2.77777777770155933842e-03; /* 0xBF66C16C, 0x16BEBD93 */
-const P3: f64 = 6.61375632143793436117e-05; /* 0x3F11566A, 0xAF25DE2C */
-const P4: f64 = -1.65339022054652515390e-06; /* 0xBEBBBD41, 0xC5D26BF1 */
-const P5: f64 = 4.13813679705723846039e-08; /* 0x3E663769, 0x72BEA4D0 */
+const LN2HI: f64 = 6.931_471_803_691_238e-1; /* 0x3fe62e42, 0xfee00000 */
+const LN2LO: f64 = 1.908_214_929_270_587_7e-10; /* 0x3dea39ef, 0x35793c76 */
+#[allow(clippy::approx_constant)]
+const INVLN2: f64 = 1.442_695_040_888_963_4; /* 0x3ff71547, 0x652b82fe */
+const P1: f64 = 1.666_666_666_666_660_2e-1; /* 0x3FC55555, 0x5555553E */
+const P2: f64 = -2.777_777_777_701_559_3e-3; /* 0xBF66C16C, 0x16BEBD93 */
+const P3: f64 = 6.613_756_321_437_934e-5; /* 0x3F11566A, 0xAF25DE2C */
+const P4: f64 = -1.653_390_220_546_525_2e-6; /* 0xBEBBBD41, 0xC5D26BF1 */
+const P5: f64 = 4.138_136_797_057_238_5e-8; /* 0x3E663769, 0x72BEA4D0 */
 
 macro_rules! force_eval {
     ($e:expr) => {
@@ -95,15 +96,13 @@ pub fn exp(mut x: f64) -> f64 {
 
     let hi: f64;
     let lo: f64;
-    let c: f64;
-    let xx: f64;
-    let y: f64;
+
     let k: i32;
-    let sign: i32;
+
     let mut hx: u32;
 
     hx = (x.to_bits() >> 32) as u32;
-    sign = (hx >> 31) as i32;
+    let sign: i32 = (hx >> 31) as i32;
     hx &= 0x7fffffff; /* high word of |x| */
 
     /* special cases */
@@ -112,15 +111,15 @@ pub fn exp(mut x: f64) -> f64 {
         if x.is_nan() {
             return x;
         }
-        if x > 709.782712893383973096 {
+        if x > 709.782_712_893_384 {
             /* overflow if x!=inf */
             x *= x1p1023;
             return x;
         }
-        if x < -708.39641853226410622 {
+        if x < -708.396_418_532_264_1 {
             /* underflow if x!=-inf */
             force_eval!((-x1p_149 / x) as f32);
-            if x < -745.13321910194110842 {
+            if x < -745.133_219_101_941_1 {
                 return 0.;
             }
         }
@@ -150,9 +149,9 @@ pub fn exp(mut x: f64) -> f64 {
     }
 
     /* x is now in primary range */
-    xx = x * x;
-    c = x - xx * (P1 + xx * (P2 + xx * (P3 + xx * (P4 + xx * P5))));
-    y = 1. + (x * c / (2. - c) - lo + hi);
+    let xx: f64 = x * x;
+    let c: f64 = x - xx * (P1 + xx * (P2 + xx * (P3 + xx * (P4 + xx * P5))));
+    let y: f64 = 1. + (x * c / (2. - c) - lo + hi);
     if k == 0 {
         y
     } else {

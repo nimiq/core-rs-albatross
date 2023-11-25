@@ -131,8 +131,8 @@ mod tests {
 
         let vk_comm1 = vk_commitment(&vk1);
         let vk_comm2 = vk_commitment(&vk2);
-        let vk_comms = vec![Some(vk_comm1.clone()), Some(vk_comm2.clone())];
-        let vks_comm = vks_commitment::<MNT6_753>(&vec![vk_comm1, vk_comm2]);
+        let vk_comms = vec![Some(vk_comm1), Some(vk_comm2)];
+        let vks_comm = vks_commitment::<MNT6_753>(&[vk_comm1, vk_comm2]);
 
         // Evaluate vk commitment using the gadget version.
         let pedersen_generators = DefaultPedersenParametersVar::new_constant(
