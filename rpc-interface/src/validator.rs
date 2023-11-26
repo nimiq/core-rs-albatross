@@ -18,4 +18,8 @@ pub trait ValidatorInterface {
         &mut self,
         automatic_reactivate: bool,
     ) -> RPCResult<(), (), Self::Error>;
+
+    async fn is_validator_elected(&mut self) -> RPCResult<bool, (), Self::Error>;
+
+    async fn is_validator_synced(&mut self) -> RPCResult<bool, (), Self::Error>;
 }

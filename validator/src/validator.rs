@@ -51,10 +51,10 @@ enum ValidatorStakingState {
     Unknown,
 }
 
-struct ConsensusState {
+pub struct ConsensusState {
     equivocation_proofs: EquivocationProofPool,
-    consensus_established: bool,
-    validity_window_synced: bool,
+    pub consensus_established: bool,
+    pub validity_window_synced: bool,
 }
 
 /// Validator inactivity
@@ -69,6 +69,8 @@ pub struct ValidatorProxy {
     pub voting_key: Arc<RwLock<BlsKeyPair>>,
     pub fee_key: Arc<RwLock<SchnorrKeyPair>>,
     pub automatic_reactivate: Arc<AtomicBool>,
+    pub slot_band: Arc<RwLock<Option<u16>>>,
+    pub consensus_state: Arc<RwLock<ConsensusState>>,
 }
 
 impl Clone for ValidatorProxy {
@@ -79,6 +81,8 @@ impl Clone for ValidatorProxy {
             voting_key: Arc::clone(&self.voting_key),
             fee_key: Arc::clone(&self.fee_key),
             automatic_reactivate: Arc::clone(&self.automatic_reactivate),
+            slot_band: Arc::clone(&self.slot_band),
+            consensus_state: Arc::clone(&self.consensus_state),
         }
     }
 }
@@ -106,8 +110,8 @@ where
     network_event_rx: SubscribeEvents<<TValidatorNetwork::NetworkType as Network>::PeerId>,
     fork_event_rx: BroadcastStream<ForkEvent>,
 
-    slot_band: Option<u16>,
-    consensus_state: ConsensusState,
+    slot_band: Arc<RwLock<Option<u16>>>,
+    consensus_state: Arc<RwLock<ConsensusState>>,
     validator_state: Option<InactivityState>,
     automatic_reactivate: Arc<AtomicBool>,
 
@@ -209,8 +213,8 @@ where
             network_event_rx,
             fork_event_rx,
 
-            slot_band: None,
-            consensus_state: blockchain_state,
+            slot_band: Arc::new(RwLock::new(None)),
+            consensus_state: Arc::new(RwLock::new(blockchain_state)),
             validator_state: None,
             automatic_reactivate,
 
@@ -243,7 +247,7 @@ where
     }
 
     fn init_epoch(&mut self) {
-        self.slot_band = None;
+        *self.slot_band.write() = None;
 
         if !self.is_synced() {
             return;
@@ -274,9 +278,9 @@ where
 
         let validators = blockchain.current_validators().unwrap();
 
-        self.slot_band = validators.get_slot_band_by_address(&self.validator_address());
+        *self.slot_band.write() = validators.get_slot_band_by_address(&self.validator_address());
 
-        if let Some(slot_band) = self.slot_band {
+        if let Some(slot_band) = *self.slot_band.read() {
             log::info!(
                 validator_address = %self.validator_address(),
                 validator_slot_band = slot_band,
@@ -292,7 +296,7 @@ where
         }
 
         // Inform the network about the current validator ID.
-        self.network.set_validator_id(self.slot_band);
+        self.network.set_validator_id(*self.slot_band.read());
 
         let voting_keys: Vec<LazyPublicKey> = validators
             .iter()
@@ -353,6 +357,7 @@ where
             BlockType::Micro => {
                 let equivocation_proofs = self
                     .consensus_state
+                    .read()
                     .equivocation_proofs
                     .get_equivocation_proofs_for_block(Self::EQUIVOCATION_PROOFS_MAX_SIZE);
                 let prev_seed = head.seed().clone();
@@ -410,7 +415,7 @@ where
     }
 
     fn pause(&mut self) {
-        self.slot_band = None;
+        *self.slot_band.write() = None;
         self.macro_producer = None;
         self.micro_producer = None;
 
@@ -437,9 +442,11 @@ where
         // of the batch size – thus it is again a macro block.
 
         let was_synced = self.is_synced();
-        self.consensus_state.consensus_established = self.consensus.is_established();
-        self.consensus_state.validity_window_synced =
+        let mut consensus_state = self.consensus_state.write();
+        consensus_state.consensus_established = self.consensus.is_established();
+        consensus_state.validity_window_synced =
             self.blockchain.read().can_enforce_validity_window();
+        drop(consensus_state);
         let is_synced = self.is_synced();
 
         if !was_synced && is_synced {
@@ -491,7 +498,10 @@ where
             .expect("Head block not found");
 
         // Update mempool and blockchain state
-        self.consensus_state.equivocation_proofs.apply_block(&block);
+        self.consensus_state
+            .write()
+            .equivocation_proofs
+            .apply_block(&block);
 
         // Mempool updates are only done once we are synced.
         if self.is_synced() {
@@ -508,12 +518,14 @@ where
         new_chain: &[(Blake2bHash, Block)],
     ) {
         // Update mempool and blockchain state
+        let mut consensus_state = self.consensus_state.write();
         for (_hash, block) in old_chain.iter() {
-            self.consensus_state.equivocation_proofs.revert_block(block);
+            consensus_state.equivocation_proofs.revert_block(block);
         }
         for (_hash, block) in new_chain.iter() {
-            self.consensus_state.equivocation_proofs.apply_block(block);
+            consensus_state.equivocation_proofs.apply_block(block);
         }
+        drop(consensus_state);
 
         // Mempool updates are only done once we are synced.
         if self.is_synced() {
@@ -539,8 +551,10 @@ where
         {
             return;
         }
-        self.consensus_state.equivocation_proofs.insert(proof);
-        drop(blockchain);
+        self.consensus_state
+            .write()
+            .equivocation_proofs
+            .insert(proof);
     }
 
     fn poll_macro(&mut self, cx: &mut Context<'_>) {
@@ -709,13 +723,14 @@ where
 
     /// Checks whether we are an elected validator in the current epoch.
     fn is_elected(&self) -> bool {
-        self.slot_band.is_some()
+        self.slot_band.read().is_some()
     }
 
     /// Checks whether the validator fulfills the conditions for producing valid blocks.
     /// This includes having consensus, being able to extend the history tree and to enforce transaction validity.
     fn is_synced(&self) -> bool {
-        self.consensus_state.consensus_established && self.consensus_state.validity_window_synced
+        let consensus_state = self.consensus_state.read();
+        consensus_state.consensus_established && consensus_state.validity_window_synced
     }
 
     fn get_staking_state(&self, blockchain: &Blockchain) -> ValidatorStakingState {
@@ -772,7 +787,7 @@ where
     }
 
     pub fn validator_slot_band(&self) -> u16 {
-        self.slot_band.expect("Validator not elected")
+        self.slot_band.read().expect("Validator not elected")
     }
 
     pub fn validator_address(&self) -> Address {
@@ -798,6 +813,8 @@ where
             voting_key: Arc::clone(&self.voting_key),
             fee_key: Arc::clone(&self.fee_key),
             automatic_reactivate: Arc::clone(&self.automatic_reactivate),
+            slot_band: Arc::clone(&self.slot_band),
+            consensus_state: Arc::clone(&self.consensus_state),
         }
     }
 

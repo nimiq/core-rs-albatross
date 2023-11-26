@@ -57,4 +57,15 @@ impl ValidatorInterface for ValidatorDispatcher {
         log::debug!("Automatic reactivation set to {}.", automatic_reactivate);
         Ok(().into())
     }
+
+    async fn is_validator_elected(&mut self) -> RPCResult<bool, (), Self::Error> {
+        let is_elected = self.validator.slot_band.read().is_some();
+        Ok(is_elected.into())
+    }
+
+    async fn is_validator_synced(&mut self) -> RPCResult<bool, (), Self::Error> {
+        let state = self.validator.consensus_state.read();
+        let is_synced = state.consensus_established && state.validity_window_synced;
+        Ok(is_synced.into())
+    }
 }
