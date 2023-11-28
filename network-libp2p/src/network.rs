@@ -189,7 +189,7 @@ struct TaskState {
     requests: HashMap<OutboundRequestId, oneshot::Sender<Result<Bytes, RequestError>>>,
     #[cfg(feature = "metrics")]
     requests_initiated: HashMap<OutboundRequestId, Instant>,
-    response_channels: HashMap<InboundRequestId, ResponseChannel<OutgoingResponse>>,
+    response_channels: HashMap<InboundRequestId, ResponseChannel<Option<OutgoingResponse>>>,
     receive_requests: HashMap<RequestType, mpsc::Sender<(Bytes, InboundRequestId, PeerId)>>,
 }
 
@@ -939,90 +939,103 @@ impl Network {
                                 request,
                                 channel,
                             } => {
-                                // TODO Add rate limiting (per peer).
-                                if let Ok(type_id) = peek_type(&request) {
-                                    trace!(
-                                        %request_id,
-                                        %peer_id,
-                                        %type_id,
-                                        content = &*base64::prelude::BASE64_STANDARD.encode(&request),
-                                        "Incoming request from peer",
-                                    );
-                                    // Check if we have a receiver registered for this message type
-                                    let sender = match state.receive_requests.get_mut(&type_id) {
-                                        // Check if the sender is still alive, if not remove it
-                                        Some(sender) if !sender.is_closed() => Some(sender),
-                                        Some(_) => {
-                                            state.receive_requests.remove(&type_id);
-                                            None
-                                        }
-                                        None => None,
-                                    };
-                                    // If we have a receiver, pass the request. Otherwise send a default empty response
-                                    if let Some(sender) = sender {
-                                        if type_id.requires_response() {
-                                            state.response_channels.insert(request_id, channel);
+                                // We might get empty requests (None) because of our codec implementation
+                                if let Some(request) = request {
+                                    // TODO Add rate limiting (per peer).
+                                    if let Ok(type_id) = peek_type(&request) {
+                                        trace!(
+                                            %request_id,
+                                            %peer_id,
+                                            %type_id,
+                                            content = &*base64::prelude::BASE64_STANDARD.encode(&request),
+                                            "Incoming request from peer",
+                                        );
+                                        // Check if we have a receiver registered for this message type
+                                        let sender = match state.receive_requests.get_mut(&type_id)
+                                        {
+                                            // Check if the sender is still alive, if not remove it
+                                            Some(sender) if !sender.is_closed() => Some(sender),
+                                            Some(_) => {
+                                                state.receive_requests.remove(&type_id);
+                                                None
+                                            }
+                                            None => None,
+                                        };
+                                        // If we have a receiver, pass the request. Otherwise send a default empty response
+                                        if let Some(sender) = sender {
+                                            if type_id.requires_response() {
+                                                state.response_channels.insert(request_id, channel);
+                                            } else {
+                                                // Respond on behalf of the actual
+                                                // receiver because the actual
+                                                // receiver isn't interested in
+                                                // responding.
+                                                let response: Result<(), InboundRequestError> =
+                                                    Ok(());
+                                                if swarm
+                                                    .behaviour_mut()
+                                                    .request_response
+                                                    .send_response(
+                                                        channel,
+                                                        Some(response.serialize_to_vec()),
+                                                    )
+                                                    .is_err()
+                                                {
+                                                    error!(
+                                                        %request_id,
+                                                        %peer_id,
+                                                        %type_id,
+                                                        "Could not send auto response",
+                                                    );
+                                                }
+                                            }
+                                            if let Err(e) = sender.try_send((
+                                                request.into(),
+                                                request_id,
+                                                peer_id,
+                                            )) {
+                                                error!(
+                                                    %request_id,
+                                                    %peer_id,
+                                                    %type_id,
+                                                    error = %e,
+                                                    "Failed to dispatch request from peer",
+                                                );
+                                            }
                                         } else {
-                                            // Respond on behalf of the actual
-                                            // receiver because the actual
-                                            // receiver isn't interested in
-                                            // responding.
-                                            let response: Result<(), InboundRequestError> = Ok(());
+                                            trace!(
+                                                %request_id,
+                                                %peer_id,
+                                                %type_id,
+                                                "No receiver found for requests of this type, replying with a 'NoReceiver' error",
+                                            );
+                                            let err: Result<(), InboundRequestError> =
+                                                Err(InboundRequestError::NoReceiver);
                                             if swarm
                                                 .behaviour_mut()
                                                 .request_response
-                                                .send_response(channel, response.serialize_to_vec())
+                                                .send_response(
+                                                    channel,
+                                                    Some(err.serialize_to_vec()),
+                                                )
                                                 .is_err()
                                             {
                                                 error!(
                                                     %request_id,
                                                     %peer_id,
                                                     %type_id,
-                                                    "Could not send auto response",
+                                                    "Could not send default response",
                                                 );
-                                            }
-                                        }
-                                        if let Err(e) =
-                                            sender.try_send((request.into(), request_id, peer_id))
-                                        {
-                                            error!(
-                                                %request_id,
-                                                %peer_id,
-                                                %type_id,
-                                                error = %e,
-                                                "Failed to dispatch request from peer",
-                                            );
+                                            };
                                         }
                                     } else {
-                                        trace!(
+                                        error!(
                                             %request_id,
                                             %peer_id,
-                                            %type_id,
-                                            "No receiver found for requests of this type, replying with a 'NoReceiver' error",
+                                            content = &*base64::prelude::BASE64_STANDARD.encode(&request),
+                                            "Could not parse request type",
                                         );
-                                        let err: Result<(), InboundRequestError> =
-                                            Err(InboundRequestError::NoReceiver);
-                                        if swarm
-                                            .behaviour_mut()
-                                            .request_response
-                                            .send_response(channel, err.serialize_to_vec())
-                                            .is_err()
-                                        {
-                                            error!(
-                                                %request_id,
-                                                %peer_id,
-                                                %type_id,
-                                                "Could not send default response",
-                                            );
-                                        };
                                     }
-                                } else {
-                                    error!(
-                                        %request_id,
-                                        %peer_id,
-                                        content = &*base64::prelude::BASE64_STANDARD.encode(&request),
-                                        "Could not parse request type",
-                                    );
                                 }
                             }
                             request_response::Message::Response {
@@ -1035,7 +1048,17 @@ impl Network {
                                     "Incoming response from peer",
                                 );
                                 if let Some(channel) = state.requests.remove(&request_id) {
-                                    if channel.send(Ok(response.into())).is_err() {
+                                    // We might get empty responses (None) because of the implementation of our codecs.
+                                    if channel
+                                        .send(
+                                            response
+                                                .ok_or(RequestError::OutboundRequest(
+                                                    OutboundRequestError::Timeout,
+                                                ))
+                                                .map(|data| data.into()),
+                                        )
+                                        .is_err()
+                                    {
                                         error!(%request_id, %peer_id, error = "receiver hung up", "could not send response to channel");
                                     }
 
@@ -1313,7 +1336,7 @@ impl Network {
                 let request_id = swarm
                     .behaviour_mut()
                     .request_response
-                    .send_request(&peer_id, request);
+                    .send_request(&peer_id, Some(request));
                 trace!(
                     %request_id,
                     %peer_id,
@@ -1338,7 +1361,7 @@ impl Network {
                             swarm
                                 .behaviour_mut()
                                 .request_response
-                                .send_response(response_channel, response)
+                                .send_response(response_channel, Some(response))
                                 .map_err(NetworkError::ResponseChannelClosed),
                         )
                         .is_err()
