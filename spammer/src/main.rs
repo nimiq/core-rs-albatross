@@ -24,7 +24,7 @@ use nimiq_block::BlockType;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_keys::{Address, KeyPair, PrivateKey, SecureGenerate};
 use nimiq_mempool::mempool::Mempool;
-use nimiq_primitives::{coin::Coin, networks::NetworkId};
+use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
 use rand::{
@@ -245,7 +245,7 @@ async fn main_inner() -> Result<(), Error> {
         panic!("Could not start spammer");
     };
 
-    let rolling_window = 32usize;
+    let rolling_window = Policy::blocks_per_batch() as usize;
 
     let mut stat_exerts: VecDeque<StatsExert> = VecDeque::new();
     let mut tx_count_total = 0usize;
@@ -470,14 +470,14 @@ fn generate_basic_transactions(
             }
 
             //We need to make sure the txns are mined and included in the blockchain first.
-            if current_block_number - account.block_number <= 32 {
+            if current_block_number - account.block_number < Policy::blocks_per_batch() {
                 continue;
             }
 
             // We generate a new recipient
             let new_kp = KeyPair::generate(&mut rng);
             let recipient = Address::from(&new_kp);
-            let amount = Coin::from_u64_unchecked(50);
+            let amount = Coin::from_u64_unchecked(1);
 
             let tx = TransactionBuilder::new_basic(
                 &account.key_pair,
@@ -546,7 +546,7 @@ fn generate_vesting_contracts(
     let current_block_number = state.current_block_number;
 
     state.vesting_contracs.retain(|contract| {
-        if current_block_number - contract.block_number <= 32 {
+        if current_block_number - contract.block_number < Policy::blocks_per_batch() {
             true
         } else {
             let tx = TransactionBuilder::new_redeem_vesting(

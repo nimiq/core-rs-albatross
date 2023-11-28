@@ -37,7 +37,7 @@ class Spammer(Node):
         if topology_settings.spammer_profile is None:
             nimiq_exec_extra_args=['-t', str(tpb)]
         else:
-            nimiq_exec_extra_args=['-t', str(tpb), '--profile', topology_settings.spammer_profile]
+            nimiq_exec_extra_args=['--profile', topology_settings.spammer_profile]
 
         super(Spammer, self).__init__(NodeType.SPAMMER,
                                       name, "nimiq-spammer", listen_port,
