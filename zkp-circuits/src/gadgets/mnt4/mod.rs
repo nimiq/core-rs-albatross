@@ -3,6 +3,5 @@
 
 pub use pedersen::*;
 
-
 mod pedersen;
 mod y_to_bit;
