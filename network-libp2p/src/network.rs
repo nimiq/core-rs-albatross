@@ -67,7 +67,7 @@ use crate::network_metrics::NetworkMetrics;
 use crate::{
     behaviour, connection_pool,
     discovery::{behaviour::Event, peer_contacts::PeerContactBook},
-    dispatch::codecs::typed::{IncomingRequest, OutgoingResponse},
+    dispatch::codecs::{IncomingRequest, OutgoingResponse},
     rate_limiting::{PendingDeletion, RateLimit},
     Config, NetworkError, TlsConfig,
 };

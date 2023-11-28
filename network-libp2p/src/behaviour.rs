@@ -13,7 +13,7 @@ use parking_lot::RwLock;
 use crate::{
     connection_pool,
     discovery::{self, peer_contacts::PeerContactBook},
-    dispatch::codecs::typed::MessageCodec,
+    dispatch::codecs::MessageCodec,
     Config,
 };
 

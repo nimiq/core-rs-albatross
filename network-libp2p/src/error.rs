@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::dispatch::codecs::typed::MessageCodec;
+use crate::dispatch::codecs::MessageCodec;
 
 #[derive(Debug, Error)]
 pub enum NetworkError {
