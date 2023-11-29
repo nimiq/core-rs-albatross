@@ -68,6 +68,7 @@ impl Blockchain {
                         macro_block.header.timestamp,
                         vec![],
                         inherents,
+                        vec![],
                     );
                     total_tx_size = self
                         .history_store
@@ -148,6 +149,10 @@ impl Blockchain {
                         micro_block.header.timestamp,
                         body.transactions.clone(),
                         inherents,
+                        body.equivocation_proofs
+                            .iter()
+                            .map(|proof| proof.locator())
+                            .collect(),
                     );
                     total_tx_size = self
                         .history_store

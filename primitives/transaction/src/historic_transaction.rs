@@ -56,6 +56,7 @@ impl HistoricTransaction {
         block_time: u64,
         transactions: Vec<ExecutedTransaction>,
         inherents: Vec<Inherent>,
+        equivocation_locator: Vec<EquivocationLocator>,
     ) -> Vec<HistoricTransaction> {
         let mut hist_txs = vec![];
 
@@ -113,6 +114,15 @@ impl HistoricTransaction {
                 Inherent::FinalizeBatch => {}
                 Inherent::FinalizeEpoch => {}
             }
+        }
+
+        for locator in equivocation_locator {
+            hist_txs.push(HistoricTransaction {
+                network_id,
+                block_number,
+                block_time,
+                data: HistoricTransactionData::Equivocation(EquivocationEvent { locator }),
+            });
         }
 
         hist_txs

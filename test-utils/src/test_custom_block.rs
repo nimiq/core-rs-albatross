@@ -122,6 +122,11 @@ pub fn next_micro_block(
         timestamp,
         executed_txns.clone(),
         inherents,
+        config
+            .equivocation_proofs
+            .iter()
+            .map(|proof| proof.locator())
+            .collect(),
     );
 
     let mut txn = blockchain.write_transaction();
@@ -215,6 +220,7 @@ pub fn next_skip_block(
         timestamp,
         vec![],
         inherents,
+        vec![],
     );
 
     let mut txn = blockchain.write_transaction();
@@ -357,6 +363,7 @@ pub fn next_macro_block_proposal(
         timestamp,
         vec![],
         inherents,
+        vec![],
     );
 
     let mut txn = blockchain.write_transaction();

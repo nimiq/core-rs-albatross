@@ -136,6 +136,10 @@ impl BlockProducer {
             timestamp,
             executed_txns.clone(),
             inherents,
+            equivocation_proofs
+                .iter()
+                .map(|proof| proof.locator())
+                .collect(),
         );
 
         // Store the historic transactions into the history tree and calculate the history root.
@@ -307,6 +311,7 @@ impl BlockProducer {
             timestamp,
             vec![],
             inherents,
+            vec![],
         );
 
         // Store the historic transactions into the history tree and calculate the history root.

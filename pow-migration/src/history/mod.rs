@@ -183,7 +183,8 @@ pub async fn get_history_root(
                 block_height,
                 block.timestamp.into(),
                 transactions,
-                [].to_vec(),
+                vec![],
+                vec![],
             ),
         );
         txn.commit();

@@ -12,6 +12,7 @@ target
 .nimiq_*
 proving_keys
 .zkp*/verifying_keys/*
+.zkp_testing
 proofs
 !.zkp*/verifying_keys/merger_wrapper.bin
 temp-logs
