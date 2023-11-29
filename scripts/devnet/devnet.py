@@ -51,7 +51,7 @@ def parse_args():
     parser.add_argument('-o', "--output", metavar='DIR', type=str,
                         help="Output directory", default="/tmp/nimiq-devnet")
     parser.add_argument('-sp', "--spammer-profile", type=str,
-                        help="Spammer generation profile to be used", default=None)
+                        help="Spammer generation profile", default=None)
     parser.add_argument('-R', '--release', action='store_true', help="Compiles"
                         " and runs the code in release mode")
     parser.add_argument('-m', "--metrics", action="store_true",
@@ -150,7 +150,8 @@ def main():
 
     topology_settings = TopologySettings(
         nimiq_dir, logs_dir, conf_dir, state_dir, args.release,
-        args.namespace, args.env, args.spammer_profile, loki_settings=loki_settings, )
+        args.namespace, args.env, args.spammer_profile,
+        loki_settings=loki_settings)
 
     # Now create topology object and run it
     topology = Topology(topology_settings)

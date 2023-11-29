@@ -90,8 +90,8 @@ class RestartSettings:
 
     def get_allow_stall(self):
         """
-        Gets the flag that indicates whether the chain is allowed to stall while
-        nodes are down.
+        Gets the flag that indicates whether the chain is allowed
+        to stall while nodes are down.
 
         :return: The allow stall flag.
         :rtype: bool

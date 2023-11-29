@@ -340,7 +340,8 @@ class Topology:
                 self.__generate_docker_k8s_dir(validators, seeds, spammers,
                                                regular_nodes)
 
-    def __run_monitor_for(self, mon_time: int, exp_down_nodes: list = [], allow_stall: bool = False):
+    def __run_monitor_for(self, mon_time: int, exp_down_nodes: list = [],
+                          allow_stall: bool = False):
         """
         Runs and monitor all nodes for a period of time
 

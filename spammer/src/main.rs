@@ -469,7 +469,7 @@ fn generate_basic_transactions(
                 continue;
             }
 
-            //We need to make sure the txns are mined and included in the blockchain first.
+            // We need to make sure the txns are included in the blockchain first.
             if current_block_number - account.block_number < Policy::blocks_per_batch() {
                 continue;
             }

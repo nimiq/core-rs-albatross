@@ -34,10 +34,11 @@ class Spammer(Node):
                  container_image: Optional[str] = None):
         self.address = "NQ40 GCAA U3UX 8BKD GUN0 PG3T 17HA 4X5H TXVE"
 
-        if topology_settings.spammer_profile is None:
-            nimiq_exec_extra_args=['-t', str(tpb)]
+        if topology_settings.get_spammer_profile() is None:
+            nimiq_exec_extra_args = ['-t', str(tpb)]
         else:
-            nimiq_exec_extra_args=['--profile', topology_settings.spammer_profile]
+            nimiq_exec_extra_args = ['--profile',
+                                     topology_settings.spammer_profile]
 
         super(Spammer, self).__init__(NodeType.SPAMMER,
                                       name, "nimiq-spammer", listen_port,

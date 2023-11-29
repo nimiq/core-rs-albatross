@@ -239,6 +239,15 @@ class TopologySettings:
         """
         return self.env
 
+    def get_spammer_profile(self):
+        """
+        Gets the spammer profile (if any)
+
+        :return: The path to the spammer profile
+        :rtype: str
+        """
+        return self.spammer_profile
+
     def is_env_containerized(self):
         """
         Returns whether the environment is containerized (docker-compose or
