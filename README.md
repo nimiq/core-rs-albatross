@@ -39,6 +39,9 @@ For more detailed information about how to connect and use the testnet network, 
 ## System requirements
 
 - 64-bit computing architecture.
+- 2 or more CPU cores
+- 2GB of available RAM memory
+- 5GB of free disk space, an SSD is highly recommended (100GB or more is required for history nodes)
 - File systems with sparse file support.
 - It is highly recommended to run a clock synchronization protocol such as NTP. This
   is needed for properly accept blocks according to the timestamp and it is specially
@@ -147,7 +150,6 @@ Overview of exposed ports:
 | 8443 | Incoming connections port |
 | 8648 | RPC port |
 | 9100 | Metrics port |
-
 
 ## Contributing
 
