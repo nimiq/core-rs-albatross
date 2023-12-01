@@ -465,13 +465,14 @@ impl Transaction {
                     // Parse transaction data
                     let data = IncomingStakingTransactionData::parse(&self.inner).unwrap();
                     match data {
-                        IncomingStakingTransactionData::CreateStaker { delegation, .. } => {
-                            PlainTransactionRecipientData::CreateStaker(PlainCreateStakerData {
-                                raw: hex::encode(self.recipient_data()),
-                                delegation: delegation
-                                    .map(|address| address.to_user_friendly_address()),
-                            })
-                        }
+                        IncomingStakingTransactionData::CreateStaker {
+                            delegation,
+                            proof: _proof,
+                        } => PlainTransactionRecipientData::CreateStaker(PlainCreateStakerData {
+                            raw: hex::encode(self.recipient_data()),
+                            delegation: delegation
+                                .map(|address| address.to_user_friendly_address()),
+                        }),
                         IncomingStakingTransactionData::AddStake { staker_address } => {
                             PlainTransactionRecipientData::AddStake(PlainAddStakeData {
                                 raw: hex::encode(self.recipient_data()),
@@ -481,7 +482,7 @@ impl Transaction {
                         IncomingStakingTransactionData::UpdateStaker {
                             new_delegation,
                             reactivate_all_stake,
-                            ..
+                            proof: _proof,
                         } => PlainTransactionRecipientData::UpdateStaker(PlainUpdateStakerData {
                             raw: hex::encode(self.recipient_data()),
                             new_delegation: new_delegation
@@ -494,7 +495,7 @@ impl Transaction {
                             reward_address,
                             signal_data,
                             proof_of_knowledge,
-                            ..
+                            proof: _proof,
                         } => PlainTransactionRecipientData::CreateValidator(
                             PlainCreateValidatorData {
                                 raw: hex::encode(self.recipient_data()),
@@ -511,7 +512,7 @@ impl Transaction {
                             new_reward_address,
                             new_signal_data,
                             new_proof_of_knowledge,
-                            ..
+                            proof: _proof,
                         } => PlainTransactionRecipientData::UpdateValidator(
                             PlainUpdateValidatorData {
                                 raw: hex::encode(self.recipient_data()),
@@ -530,7 +531,7 @@ impl Transaction {
                         ),
                         IncomingStakingTransactionData::DeactivateValidator {
                             validator_address,
-                            ..
+                            proof: _proof,
                         } => {
                             PlainTransactionRecipientData::DeactivateValidator(PlainValidatorData {
                                 raw: hex::encode(self.recipient_data()),
@@ -539,21 +540,21 @@ impl Transaction {
                         }
                         IncomingStakingTransactionData::ReactivateValidator {
                             validator_address,
-                            ..
+                            proof: _proof,
                         } => {
                             PlainTransactionRecipientData::ReactivateValidator(PlainValidatorData {
                                 raw: hex::encode(self.recipient_data()),
                                 validator: validator_address.to_user_friendly_address(),
                             })
                         }
-                        IncomingStakingTransactionData::RetireValidator { .. } => {
+                        IncomingStakingTransactionData::RetireValidator { proof: _proof } => {
                             PlainTransactionRecipientData::RetireValidator(PlainRawData {
                                 raw: hex::encode(self.recipient_data()),
                             })
                         }
                         IncomingStakingTransactionData::SetInactiveStake {
                             new_inactive_balance,
-                            ..
+                            proof: _proof,
                         } => PlainTransactionRecipientData::SetInactiveStake(
                             PlainSetInactiveStakeData {
                                 raw: hex::encode(self.recipient_data()),
