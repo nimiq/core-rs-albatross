@@ -531,16 +531,23 @@ impl Transaction {
                         IncomingStakingTransactionData::DeactivateValidator {
                             validator_address,
                             ..
+                        } => {
+                            PlainTransactionRecipientData::DeactivateValidator(PlainValidatorData {
+                                raw: hex::encode(self.recipient_data()),
+                                validator: validator_address.to_user_friendly_address(),
+                            })
                         }
-                        | IncomingStakingTransactionData::ReactivateValidator {
+                        IncomingStakingTransactionData::ReactivateValidator {
                             validator_address,
                             ..
-                        } => PlainTransactionRecipientData::GenericValidator(PlainValidatorData {
-                            raw: hex::encode(self.recipient_data()),
-                            validator: validator_address.to_user_friendly_address(),
-                        }),
+                        } => {
+                            PlainTransactionRecipientData::ReactivateValidator(PlainValidatorData {
+                                raw: hex::encode(self.recipient_data()),
+                                validator: validator_address.to_user_friendly_address(),
+                            })
+                        }
                         IncomingStakingTransactionData::RetireValidator { .. } => {
-                            PlainTransactionRecipientData::Raw(PlainRawData {
+                            PlainTransactionRecipientData::RetireValidator(PlainRawData {
                                 raw: hex::encode(self.recipient_data()),
                             })
                         }
@@ -596,27 +603,27 @@ impl Transaction {
                             hash_root,
                             pre_image,
                             signature_proof,
-                        } => PlainTransactionProof::HtlcTransfer(PlainHtlcTransferProof {
-                            raw: hex::encode(self.proof()),
-                            ty: "regular-transfer".to_string(),
-                            hash_algorithm: match hash_root {
-                                AnyHash::Blake2b(_) => "blake2b".to_string(),
-                                AnyHash::Sha256(_) => "sha256".to_string(),
-                                AnyHash::Sha512(_) => "sha512".to_string(),
-                            },
-                            hash_depth,
-                            hash_root: hash_root.to_hex(),
-                            pre_image: pre_image.to_hex(),
-                            signer: signature_proof.compute_signer().to_user_friendly_address(),
-                            signature: signature_proof.signature.to_hex(),
-                            public_key: signature_proof.public_key.to_hex(),
-                            path_length: signature_proof.merkle_path.len() as u8,
-                        }),
+                        } => {
+                            PlainTransactionProof::RegularTransfer(PlainHtlcRegularTransferProof {
+                                raw: hex::encode(self.proof()),
+                                hash_algorithm: match hash_root {
+                                    AnyHash::Blake2b(_) => "blake2b".to_string(),
+                                    AnyHash::Sha256(_) => "sha256".to_string(),
+                                    AnyHash::Sha512(_) => "sha512".to_string(),
+                                },
+                                hash_depth,
+                                hash_root: hash_root.to_hex(),
+                                pre_image: pre_image.to_hex(),
+                                signer: signature_proof.compute_signer().to_user_friendly_address(),
+                                signature: signature_proof.signature.to_hex(),
+                                public_key: signature_proof.public_key.to_hex(),
+                                path_length: signature_proof.merkle_path.len() as u8,
+                            })
+                        }
                         OutgoingHTLCTransactionProof::TimeoutResolve {
                             signature_proof_sender,
-                        } => PlainTransactionProof::HtlcTimeout(PlainHtlcTimeoutProof {
+                        } => PlainTransactionProof::TimeoutResolve(PlainHtlcTimeoutResolveProof {
                             raw: hex::encode(self.proof()),
-                            ty: "timeout-resolve".to_string(),
                             creator: signature_proof_sender
                                 .compute_signer()
                                 .to_user_friendly_address(),
@@ -627,9 +634,8 @@ impl Transaction {
                         OutgoingHTLCTransactionProof::EarlyResolve {
                             signature_proof_recipient,
                             signature_proof_sender,
-                        } => PlainTransactionProof::HtlcEarlyResolve(PlainHtlcEarlyResolveProof {
+                        } => PlainTransactionProof::EarlyResolve(PlainHtlcEarlyResolveProof {
                             raw: hex::encode(self.proof()),
-                            ty: "early-resolve".to_string(),
                             signer: signature_proof_recipient
                                 .compute_signer()
                                 .to_user_friendly_address(),
@@ -677,7 +683,9 @@ impl Transaction {
                 PlainTransactionRecipientData::Htlc(ref data) => &data.raw,
                 PlainTransactionRecipientData::CreateValidator(ref data) => &data.raw,
                 PlainTransactionRecipientData::UpdateValidator(ref data) => &data.raw,
-                PlainTransactionRecipientData::GenericValidator(ref data) => &data.raw,
+                PlainTransactionRecipientData::DeactivateValidator(ref data) => &data.raw,
+                PlainTransactionRecipientData::ReactivateValidator(ref data) => &data.raw,
+                PlainTransactionRecipientData::RetireValidator(ref data) => &data.raw,
                 PlainTransactionRecipientData::CreateStaker(ref data) => &data.raw,
                 PlainTransactionRecipientData::AddStake(ref data) => &data.raw,
                 PlainTransactionRecipientData::UpdateStaker(ref data) => &data.raw,
@@ -692,9 +700,9 @@ impl Transaction {
         tx.set_proof(hex::decode(match plain.proof {
             PlainTransactionProof::Empty(_) => "",
             PlainTransactionProof::Standard(ref data) => &data.raw,
-            PlainTransactionProof::HtlcTransfer(ref data) => &data.raw,
-            PlainTransactionProof::HtlcTimeout(ref data) => &data.raw,
-            PlainTransactionProof::HtlcEarlyResolve(ref data) => &data.raw,
+            PlainTransactionProof::RegularTransfer(ref data) => &data.raw,
+            PlainTransactionProof::TimeoutResolve(ref data) => &data.raw,
+            PlainTransactionProof::EarlyResolve(ref data) => &data.raw,
         })?);
 
         Ok(tx)
@@ -703,7 +711,7 @@ impl Transaction {
 
 /// Enum over all possible meanings of a transaction's sender data.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
-#[serde(untagged)]
+#[serde(tag = "type", rename_all = "kebab-case")]
 pub enum PlainTransactionSenderData {
     Raw(PlainRawData),
     DeleteValidator(PlainRawData),
@@ -712,14 +720,16 @@ pub enum PlainTransactionSenderData {
 
 /// Enum over all possible meanings of a transaction's recipient data.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
-#[serde(untagged)]
+#[serde(tag = "type", rename_all = "kebab-case")]
 pub enum PlainTransactionRecipientData {
     Raw(PlainRawData),
     Vesting(PlainVestingData),
     Htlc(PlainHtlcData),
     CreateValidator(PlainCreateValidatorData),
     UpdateValidator(PlainUpdateValidatorData),
-    GenericValidator(PlainValidatorData),
+    DeactivateValidator(PlainValidatorData),
+    ReactivateValidator(PlainValidatorData),
+    RetireValidator(PlainRawData),
     CreateStaker(PlainCreateStakerData),
     AddStake(PlainAddStakeData),
     UpdateStaker(PlainUpdateStakerData),
@@ -824,13 +834,13 @@ pub struct PlainSetInactiveStakeData {
 
 /// Enum over all possible meanings of a transaction's proof.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
-#[serde(untagged)]
+#[serde(tag = "type", rename_all = "kebab-case")]
 pub enum PlainTransactionProof {
     Empty(PlainEmptyProof),
     Standard(PlainStandardProof),
-    HtlcTransfer(PlainHtlcTransferProof),
-    HtlcTimeout(PlainHtlcTimeoutProof),
-    HtlcEarlyResolve(PlainHtlcEarlyResolveProof),
+    RegularTransfer(PlainHtlcRegularTransferProof),
+    TimeoutResolve(PlainHtlcTimeoutResolveProof),
+    EarlyResolve(PlainHtlcEarlyResolveProof),
 }
 
 /// Placeholder struct to serialize an empty proof of transactions
@@ -851,10 +861,8 @@ pub struct PlainStandardProof {
 /// JSON-compatible and human-readable format of HTLC transfer proofs.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub struct PlainHtlcTransferProof {
+pub struct PlainHtlcRegularTransferProof {
     pub raw: String,
-    #[serde(rename = "type")]
-    pub ty: String,
     pub hash_algorithm: String,
     pub hash_depth: u8,
     pub hash_root: String,
@@ -869,10 +877,8 @@ pub struct PlainHtlcTransferProof {
 /// JSON-compatible and human-readable format of HTLC timeout proofs.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub struct PlainHtlcTimeoutProof {
+pub struct PlainHtlcTimeoutResolveProof {
     pub raw: String,
-    #[serde(rename = "type")]
-    pub ty: String,
     /// The creator (also called the "sender") of the HTLC
     pub creator: String,
     pub creator_signature: String,
@@ -885,8 +891,6 @@ pub struct PlainHtlcTimeoutProof {
 #[serde(rename_all = "camelCase")]
 pub struct PlainHtlcEarlyResolveProof {
     pub raw: String,
-    #[serde(rename = "type")]
-    pub ty: String,
     /// The signer (also called the "recipient") of the HTLC
     pub signer: String,
     pub signature: String,
