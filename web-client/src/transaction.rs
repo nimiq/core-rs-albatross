@@ -386,6 +386,10 @@ impl Transaction {
             Ok(Transaction::from_native(
                 nimiq_transaction::Transaction::deserialize_from_vec(&hex::decode(string)?)?,
             ))
+        } else if let Ok(bytes) = serde_wasm_bindgen::from_value::<Vec<u8>>(js_value.to_owned()) {
+            Ok(Transaction::from_native(
+                nimiq_transaction::Transaction::deserialize_from_vec(&bytes)?,
+            ))
         } else {
             Err(JsError::new("Failed to parse transaction."))
         }
@@ -1144,13 +1148,13 @@ extern "C" {
 #[cfg(feature = "primitives")]
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(typescript_type = "Transaction | PlainTransaction | string")]
+    #[wasm_bindgen(typescript_type = "Transaction | PlainTransaction | string | Uint8Array")]
     pub type TransactionAnyType;
 }
 
 #[cfg(not(feature = "primitives"))]
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(typescript_type = "PlainTransaction | string")]
+    #[wasm_bindgen(typescript_type = "PlainTransaction | string | Uint8Array")]
     pub type TransactionAnyType;
 }
