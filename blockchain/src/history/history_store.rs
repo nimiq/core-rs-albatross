@@ -1141,8 +1141,8 @@ mod tests {
     use nimiq_primitives::{coin::Coin, networks::NetworkId};
     use nimiq_test_log::test;
     use nimiq_transaction::{
-        historic_transaction::RewardEvent, ExecutedTransaction,
-        Transaction as BlockchainTransaction,
+        historic_transaction::{JailEvent, PenalizeEvent, RewardEvent},
+        ExecutedTransaction, ForkLocator, Transaction as BlockchainTransaction,
     };
 
     use super::*;
@@ -1404,6 +1404,21 @@ mod tests {
             Coin::from_u64_unchecked(7),
         );
 
+        assert!(query_2[3].is_not_basic());
+        assert_eq!(query_2[3], create_jail_inherent(query_2[3].block_number));
+
+        assert!(query_2[4].is_not_basic());
+        assert_eq!(
+            query_2[4],
+            create_penalize_inherent(query_2[4].block_number)
+        );
+
+        assert!(query_2[5].is_not_basic());
+        assert_eq!(
+            query_2[5],
+            create_equivocation_inherent(query_2[5].block_number)
+        );
+
         // Remove historic transactions from History Store.
         history_store.remove_partial_history(&mut txn, 0, 2);
         history_store.remove_partial_history(&mut txn, 1, 3);
@@ -1412,6 +1427,7 @@ mod tests {
         // order they were inserted.
         let query_0 = history_store.get_block_transactions(genesis_block_number, Some(&txn));
 
+        assert_eq!(query_0.len(), 1);
         assert!(!query_0[0].is_not_basic());
         assert_eq!(query_0[0].block_number, genesis_block_number);
         assert_eq!(
@@ -1421,6 +1437,7 @@ mod tests {
 
         let query_1 = history_store.get_block_transactions(1 + genesis_block_number, Some(&txn));
 
+        assert_eq!(query_1.len(), 2);
         assert!(!query_1[0].is_not_basic());
         assert_eq!(query_1[0].block_number, 1 + genesis_block_number);
         assert_eq!(
@@ -1435,7 +1452,35 @@ mod tests {
             Coin::from_u64_unchecked(4),
         );
 
-        let query_2 = history_store.get_block_transactions(2 + genesis_block_number, Some(&txn));
+        let query_2: Vec<HistoricTransaction> =
+            history_store.get_block_transactions(2 + genesis_block_number, Some(&txn));
+
+        assert_eq!(query_2.len(), 3);
+        assert!(!query_2[0].is_not_basic());
+        assert_eq!(query_2[0].block_number, 2 + genesis_block_number);
+        assert_eq!(
+            query_2[0].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(5),
+        );
+
+        assert!(!query_2[1].is_not_basic());
+        assert_eq!(query_2[1].block_number, 2 + genesis_block_number);
+        assert_eq!(
+            query_2[1].unwrap_basic().get_raw_transaction().value,
+            Coin::from_u64_unchecked(6),
+        );
+
+        assert!(query_2[2].is_not_basic());
+        assert_eq!(query_2[2].block_number, 2 + genesis_block_number);
+        assert_eq!(
+            query_2[2].unwrap_reward().value,
+            Coin::from_u64_unchecked(7),
+        );
+
+        // Remove all historic transactions from the last epoch.
+        history_store.remove_partial_history(&mut txn, 1, 3);
+        let query_2: Vec<HistoricTransaction> =
+            history_store.get_block_transactions(2 + genesis_block_number, Some(&txn));
 
         assert!(query_2.is_empty());
     }
@@ -1562,7 +1607,7 @@ mod tests {
         // Verify method works.
         assert_eq!(history_store.num_epoch_transactions(0, Some(&txn)), 3);
 
-        assert_eq!(history_store.num_epoch_transactions(1, Some(&txn)), 5);
+        assert_eq!(history_store.num_epoch_transactions(1, Some(&txn)), 8);
 
         // Remove historic transactions to History Store.
         history_store.remove_partial_history(&mut txn, 1, 3);
@@ -1570,7 +1615,7 @@ mod tests {
         // Verify method works.
         assert_eq!(history_store.num_epoch_transactions(0, Some(&txn)), 3);
 
-        assert_eq!(history_store.num_epoch_transactions(1, Some(&txn)), 2);
+        assert_eq!(history_store.num_epoch_transactions(1, Some(&txn)), 5);
     }
 
     #[test]
@@ -1725,10 +1770,10 @@ mod tests {
         for i in genesis_block_number..=(16 * Policy::blocks_per_batch() + genesis_block_number) {
             if Policy::is_macro_block_at(i) {
                 let hist_txs = vec![
-                    create_inherent(i, 1),
-                    create_inherent(i, 2),
-                    create_inherent(i, 3),
-                    create_inherent(i, 4),
+                    create_reward_inherent(i, 1),
+                    create_reward_inherent(i, 2),
+                    create_reward_inherent(i, 3),
+                    create_reward_inherent(i, 4),
                 ];
 
                 history_store.add_to_history(&mut txn, Policy::epoch_at(i), &hist_txs);
@@ -1764,7 +1809,7 @@ mod tests {
         }
     }
 
-    fn create_inherent(block: u32, value: u64) -> HistoricTransaction {
+    fn create_reward_inherent(block: u32, value: u64) -> HistoricTransaction {
         let reward_address =
             Address::from_user_friendly_address("NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T")
                 .unwrap();
@@ -1776,6 +1821,56 @@ mod tests {
                 validator_address: Address::burn_address(),
                 reward_address,
                 value: Coin::from_u64_unchecked(value),
+            }),
+        }
+    }
+
+    fn create_jail_inherent(block: u32) -> HistoricTransaction {
+        let jail_address =
+            Address::from_user_friendly_address("NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T")
+                .unwrap();
+        HistoricTransaction {
+            network_id: NetworkId::UnitAlbatross,
+            block_number: block,
+            block_time: 0,
+            data: HistoricTransactionData::Jail(JailEvent {
+                validator_address: jail_address,
+                slots: 1..3,
+                offense_event_block: block,
+                new_epoch_slot_range: None,
+            }),
+        }
+    }
+
+    fn create_penalize_inherent(block: u32) -> HistoricTransaction {
+        let jail_address =
+            Address::from_user_friendly_address("NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T")
+                .unwrap();
+        HistoricTransaction {
+            network_id: NetworkId::UnitAlbatross,
+            block_number: block,
+            block_time: 0,
+            data: HistoricTransactionData::Penalize(PenalizeEvent {
+                validator_address: jail_address,
+                offense_event_block: block,
+                slot: 0,
+            }),
+        }
+    }
+
+    fn create_equivocation_inherent(block: u32) -> HistoricTransaction {
+        let address =
+            Address::from_user_friendly_address("NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T")
+                .unwrap();
+        HistoricTransaction {
+            network_id: NetworkId::UnitAlbatross,
+            block_number: block,
+            block_time: 0,
+            data: HistoricTransactionData::Equivocation(EquivocationEvent {
+                locator: EquivocationLocator::Fork(ForkLocator {
+                    validator_address: address,
+                    block_number: block,
+                }),
             }),
         }
     }
@@ -1805,13 +1900,20 @@ mod tests {
         let genesis_block_number = Policy::genesis_block_number();
         let ext_0 = create_transaction(genesis_block_number + 0, 0);
         let ext_1 = create_transaction(genesis_block_number + 0, 1);
-        let ext_2 = create_inherent(genesis_block_number + 0, 2);
+        let ext_2 = create_reward_inherent(genesis_block_number + 0, 2);
+
         let ext_3 = create_transaction(genesis_block_number + 1, 3);
-        let ext_4 = create_inherent(genesis_block_number + 1, 4);
+        let ext_4 = create_reward_inherent(genesis_block_number + 1, 4);
+
         let ext_5 = create_transaction(genesis_block_number + 2, 5);
         let ext_6 = create_transaction(genesis_block_number + 2, 6);
-        let ext_7 = create_inherent(genesis_block_number + 2, 7);
+        let ext_7 = create_reward_inherent(genesis_block_number + 2, 7);
+        let ext_8 = create_jail_inherent(genesis_block_number + 2);
+        let ext_9 = create_penalize_inherent(genesis_block_number + 2);
+        let ext_10 = create_equivocation_inherent(genesis_block_number + 2);
 
-        vec![ext_0, ext_1, ext_2, ext_3, ext_4, ext_5, ext_6, ext_7]
+        vec![
+            ext_0, ext_1, ext_2, ext_3, ext_4, ext_5, ext_6, ext_7, ext_8, ext_9, ext_10,
+        ]
     }
 }
