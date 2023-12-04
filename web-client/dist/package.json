@@ -10,31 +10,31 @@
     "type": "git",
     "url": "https://github.com/nimiq/core-rs-albatross"
   },
-  "main": "./node/index.js",
+  "main": "./nodejs/index.js",
   "module": "./bundler/index.js",
-  "types": "./types/index.d.ts",
+  "types": "./types/bundler.d.ts",
   "exports": {
     ".": {
       "node": {
-        "import": "./node/index.mjs",
-        "require": "./node/index.js"
+        "import": "./nodejs/index.mjs",
+        "require": "./nodejs/index.js"
       },
       "browser": "./bundler/index.js",
-      "types": "./types/index.d.ts"
+      "types": "./types/bundler.d.ts"
     },
     "./web": {
       "browser": "./web/index.js",
-      "types": "./types/index.d.ts"
+      "types": "./types/web.d.ts"
     }
   },
   "homepage": "https://nimiq.com",
   "sideEffects": [
     "./bundler/main-wasm/index.js",
     "./bundler/worker-wasm/index.js",
-    "./node/main-wasm/index.js",
-    "./node/worker-wasm/index.js",
-    "./node/main-wasm/index.mjs",
-    "./node/worker-wasm/index.mjs",
+    "./nodejs/main-wasm/index.js",
+    "./nodejs/main-wasm/index.mjs",
+    "./nodejs/worker-wasm/index.js",
+    "./nodejs/worker-wasm/index.mjs",
     "./web/main-wasm/index.js",
     "./web/worker-wasm/index.js"
   ],
