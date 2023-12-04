@@ -7,8 +7,24 @@
   <body>
     <script type="module" src="./module.js"></script>
 
-    <!-- Run an animation on the main thread (CPU) with JS -->
-    <div id="dead-mans-switch"></div>
+    <div>
+      Consensus: <strong id="consensus" class="connecting">connecting</strong>
+    </div>
+
+    <div>
+      Peers: <strong id="peers">0</strong>
+    </div>
+
+    <div>
+      Block: <strong id="block">-</strong>
+    </div>
+
+    <br />
+    <div>
+      Main-thread unblocked:
+      <!-- Run an animation on the main thread (CPU) with JS -->
+      <div id="dead-mans-switch"></div>
+    </div>
     <script>
       const deadMansSwitch = document.querySelector('#dead-mans-switch');
 
@@ -23,14 +39,28 @@
     </script>
     <style>
       body {
+        font-family: system-ui;
         margin: 100px;
       }
 
       #dead-mans-switch {
-        width: 50px;
-        margin-left: -20px;
-        height: 5px;
+        display: inline-block;
+        margin-left: 5px;
+        width: 20px;
+        height: 2px;
         background: black;
+      }
+
+      #consensus.connecting {
+        color: firebrick;
+      }
+
+      #consensus.syncing {
+        color: orange;
+      }
+
+      #consensus.established {
+        color: green;
       }
     </style>
   </body>

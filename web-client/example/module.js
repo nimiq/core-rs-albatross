@@ -9,27 +9,29 @@ init().then(async () => {
     const client = await Nimiq.Client.create(config.build());
     window.client = client; // Prevent garbage collection and for playing around
 
-    client.addConsensusChangedListener(
-        (state) => {
-            console.log(`Consensus ${state.toUpperCase()}`);
-        },
-    );
+    client.addConsensusChangedListener((state) => {
+        console.log(`Consensus ${state.toUpperCase()}`);
+        document.querySelector('#consensus').textContent = state;
+        document.querySelector('#consensus').classList.toggle('connecting', state === 'connecting');
+        document.querySelector('#consensus').classList.toggle('syncing', state === 'syncing');
+        document.querySelector('#consensus').classList.toggle('established', state === 'established');
+    });
 
-    client.addHeadChangedListener(
-        async (hash, reason, revertedBlocks, adoptedBlocks) => {
-            const block = await client.getBlock(hash);
-            const rebranchLength = revertedBlocks.length;
+    client.addHeadChangedListener(async (hash, reason, revertedBlocks, adoptedBlocks) => {
+        const block = await client.getBlock(hash);
+        const rebranchLength = revertedBlocks.length;
 
-            console.log([
-                'Blockchain:',
-                reason,
-                ...(rebranchLength ? [rebranchLength] : []),
-                'at',
-                block.height,
-                `(${new Date(block.timestamp).toISOString().substring(0, 19).replace('T', ' ')} UTC)`
-            ].join(' '));
-        },
-    );
+        console.log([
+            'Blockchain:',
+            reason,
+            ...(rebranchLength ? [rebranchLength] : []),
+            'at',
+            block.height,
+            `(${new Date(block.timestamp).toISOString().substring(0, 19).replace('T', ' ')} UTC)`
+        ].join(' '));
+
+        document.querySelector('#block').textContent = block.height;
+    });
 
     client.addPeerChangedListener((peerId, reason, numPeers, peerInfo) => {
         if (peerInfo) {
@@ -38,6 +40,8 @@ init().then(async () => {
         } else {
             console.log(`Peer ${reason}: ${peerId} - now ${numPeers} peers connected`);
         }
+
+        document.querySelector('#peers').textContent = numPeers;
     });
 
     /**
