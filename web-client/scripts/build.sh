@@ -40,8 +40,16 @@ function generate() {
 }
 
 # Prepare build environment
-printf "Preparing build environment...\n"
-cargo install wasm-bindgen-cli wasm-opt
+if ! command -v wasm-bindgen &> /dev/null
+then
+    printf "Installing wasm-bindgen...\n"
+    cargo install wasm-bindgen-cli
+fi
+if ! command -v wasm-opt &> /dev/null
+then
+    printf "Installing wasm-opt...\n"
+    cargo install wasm-opt
+fi
 
 # Primitives
 compile "primitives"

@@ -1,0 +1,37 @@
+name: Publish web-client to npm
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Protoc
+        run: sudo apt-get install protobuf-compiler
+      - uses: jetli/wasm-bindgen-action@v0.2.0
+        with:
+          version: 'latest'
+      - name: Build package
+        working-directory: ./web-client
+        run: ./scripts/build.sh
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm install -g npm
+      - name: Publish to npm
+        working-directory: ./web-client/dist
+        run: npm publish --tag next --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.SISOU_NPM_TOKEN }}
