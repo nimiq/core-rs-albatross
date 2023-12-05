@@ -214,7 +214,7 @@ impl Blockchain {
                         value: ev.value,
                     })
                 }
-                HistoricTransactionData::Equivocation(_event) => {}
+                HistoricTransactionData::Equivocation(_) => {}
                 HistoricTransactionData::Penalize(pen) => {
                     block_inherents
                         .last_mut()

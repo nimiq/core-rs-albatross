@@ -128,7 +128,11 @@ impl HistoricTransaction {
         hist_txs
     }
 
-    pub fn count(num_transactions: usize, inherents: &[Inherent]) -> usize {
+    pub fn count(
+        num_transactions: usize,
+        inherents: &[Inherent],
+        equivocation_locator: Vec<EquivocationLocator>,
+    ) -> usize {
         num_transactions
             + inherents
                 .iter()
@@ -140,6 +144,7 @@ impl HistoricTransaction {
                     Inherent::FinalizeEpoch => None,
                 })
                 .count()
+            + equivocation_locator.len()
     }
 
     /// Checks if the historic transaction is an inherent.
