@@ -30,7 +30,7 @@ nimiq-keys = { workspace = true, features = ["serde-derive"] }
 nimiq-macros = { workspace = true }
 nimiq-mmr = { workspace = true, features = ["serde-derive"] }
 nimiq-network-interface = { workspace = true }
-nimiq-primitives = { workspace = true, features = ["account", "coin", "networks", "policy", "serde-derive", "slots"] }
+nimiq-primitives = { workspace = true, features = ["account", "coin", "networks", "policy", "serde-derive", "slots", "tendermint"] }
 nimiq-serde = { workspace = true }
 nimiq-utils = { workspace = true, features = ["merkle"] }
 
