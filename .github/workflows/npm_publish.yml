@@ -25,7 +25,7 @@ jobs:
       - name: Build package
         working-directory: ./web-client
         run: ./scripts/build.sh
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
           node-version: '18.x'
           registry-url: 'https://registry.npmjs.org'
