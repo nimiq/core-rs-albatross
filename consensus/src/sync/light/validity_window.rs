@@ -1,140 +1,43 @@
 use std::{
-    collections::HashMap,
-    pin::Pin,
     sync::Arc,
-    task::{Context, Poll, Waker},
+    task::{Context, Poll},
 };
 
-use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, Stream, StreamExt};
+use futures::{FutureExt, StreamExt};
 #[cfg(feature = "full")]
 use nimiq_blockchain::{Blockchain, CHUNK_SIZE};
 use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
-use nimiq_macros::store_waker;
 use nimiq_mmr::mmr::position::leaf_number_to_index;
 use nimiq_network_interface::{
     network::{CloseReason, Network},
     request::RequestError,
 };
-use nimiq_primitives::{policy::Policy, task_executor::TaskExecutor};
-use parking_lot::RwLock;
+use nimiq_primitives::policy::Policy;
 
-use super::syncer::{ValidityWindowSync, ValidityWindowSyncReturn};
+use super::LightMacroSync;
 #[cfg(feature = "full")]
 use crate::messages::{
     HistoryChunk, RequestHistoryChunk, RequestValidityWindowStart, ValidityWindowStartResponse,
 };
-
-/// The Validity Window Syncer is a component that operates between the macro sync and the live sync
-/// Its purpose is to sync all the historic transactions that happened during the current validity window
-/// This is because, as a validator, we need to enforce the "tx in validity window" check when producing blocks
-#[cfg(feature = "full")]
-pub struct ValidityWindowSyncer<TNetwork: Network> {
-    /// The blockchain reference
-    pub(crate) blockchain: Arc<RwLock<Blockchain>>,
-
-    /// Reference to the network
-    pub(crate) network: Arc<TNetwork>,
-
-    /// Used to track the validity chunks we have requested on a per peer basis
-    pub(crate) peer_requests: HashMap<TNetwork::PeerId, ValidityChunkRequest>,
-
-    /// The stream for validity window start proofs
-    pub(crate) validity_window_start: FuturesUnordered<
-        BoxFuture<
-            'static,
-            (
-                Result<ValidityWindowStartResponse, RequestError>,
-                TNetwork::PeerId,
-            ),
-        >,
-    >,
-
-    /// The stream for validity window history chunk requests
-    pub(crate) validity_window_chunks: FuturesUnordered<
-        BoxFuture<'static, (Result<HistoryChunk, RequestError>, TNetwork::PeerId)>,
-    >,
-
-    /// This is just a list of peers that are already synced
-    pub(crate) synced_peers: Vec<TNetwork::PeerId>,
-
-    /// The latest block number towards which the validity window was fully synced.
-    pub(crate) synced_validity_start: u32,
-
-    /// Task executor to be compatible with wasm and not wasm environments,
-    pub(crate) executor: Box<dyn TaskExecutor + Send + 'static>,
-
-    /// Waker used for the poll next function
-    pub(crate) waker: Option<Waker>,
-}
-
-/// Struct used to track the history chunk requests that we have made on a per peer basis.
-pub struct ValidityChunkRequest {
-    /// This corresponds to the block that should be used to verify the proof.
-    verifier_block_number: u32,
-    /// The root hash that should be used to verify the proof.
-    root_hash: Blake2bHash,
-    /// The chunk index that was requested.
-    chunk_index: u32,
-    /// Initial leaf index offset
-    initial_offset: u32,
-    /// Validity start block number that we are syncing with this peer
-    validity_start: u32,
-}
+use crate::sync::{light::sync::ValidityChunkRequest, syncer::MacroSyncReturn};
 
 #[cfg(feature = "full")]
-impl<TNetwork: Network> ValidityWindowSyncer<TNetwork> {
-    pub fn new(
-        blockchain: Arc<RwLock<Blockchain>>,
-        network: Arc<TNetwork>,
-        executor: impl TaskExecutor + Send + 'static,
-    ) -> Self {
-        Self {
-            blockchain,
-            network,
-            peer_requests: HashMap::new(),
-            validity_window_start: FuturesUnordered::new(),
-            validity_window_chunks: FuturesUnordered::new(),
-            waker: None,
-            executor: Box::new(executor),
-            synced_peers: Vec::new(),
-            synced_validity_start: 0,
-        }
-    }
-
-    pub fn peers(&self) -> impl Iterator<Item = &TNetwork::PeerId> {
-        self.peer_requests.keys()
-    }
-
-    pub fn remove_peer_requests(&mut self, peer_id: TNetwork::PeerId) {
-        self.peer_requests.remove(&peer_id);
-    }
-
-    pub fn disconnect_peer(&mut self, peer_id: TNetwork::PeerId, reason: CloseReason) {
-        // Remove all pending peer requests (if any)
-        self.remove_peer_requests(peer_id);
-        let network = Arc::clone(&self.network);
-        // We disconnect from this peer
-        self.executor.exec(Box::pin({
-            async move {
-                network.disconnect_peer(peer_id, reason).await;
-            }
-        }));
-    }
-
+impl<TNetwork: Network> LightMacroSync<TNetwork> {
     pub async fn discover_validity_window_items(
         network: Arc<TNetwork>,
-        blockchain: Arc<RwLock<Blockchain>>,
+        macro_head_number: u32,
+        macro_head_hash: Blake2bHash,
         peer_id: TNetwork::PeerId,
     ) -> Result<ValidityWindowStartResponse, RequestError> {
-        let macro_head = blockchain.read().macro_head();
-
         // Send the request to discover the start of the validity window.
+        log::debug!("Requesting Validity Window Start items");
         network
             .request::<RequestValidityWindowStart>(
                 RequestValidityWindowStart {
-                    macro_head_number: macro_head.block_number(),
-                    macro_head_hash: macro_head.hash(),
+                    macro_head_number,
+                    macro_head_hash,
                 },
                 peer_id,
             )
@@ -161,10 +64,10 @@ impl<TNetwork: Network> ValidityWindowSyncer<TNetwork> {
             .await
     }
 
-    fn poll_validity_window_discover_requests(
+    pub fn poll_validity_window_discover_requests(
         &mut self,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<ValidityWindowSyncReturn<TNetwork::PeerId>>> {
+    ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
         while let Poll::Ready(Some((request_result, peer_id))) =
             self.validity_window_start.poll_next_unpin(cx)
         {
@@ -190,9 +93,7 @@ impl<TNetwork: Network> ValidityWindowSyncer<TNetwork> {
                             // In this case we recieve a proof that contains only that transaction
                             if proof.history.len() == 1 && proof.positions[0] == 1 {
                                 if proof.history[0].block_number < validity_window_bn {
-                                    return Poll::Ready(Some(ValidityWindowSyncReturn::Outdated(
-                                        peer_id,
-                                    )));
+                                    return Poll::Ready(Some(MacroSyncReturn::Outdated(peer_id)));
                                 }
 
                                 let verification_result = proof
@@ -204,7 +105,7 @@ impl<TNetwork: Network> ValidityWindowSyncer<TNetwork> {
                                     return Poll::Ready(None);
                                 }
 
-                                self.peer_requests.insert(
+                                self.validity_requests.insert(
                                     peer_id,
                                     ValidityChunkRequest {
                                         verifier_block_number: macro_head.block_number(),
@@ -298,9 +199,7 @@ impl<TNetwork: Network> ValidityWindowSyncer<TNetwork> {
                         if txn_proof_bn != validity_window_bn {
                             if txn_proof_bn < validity_window_bn {
                                 // Peer is outdated so we emit it.
-                                return Poll::Ready(Some(ValidityWindowSyncReturn::Outdated(
-                                    peer_id,
-                                )));
+                                return Poll::Ready(Some(MacroSyncReturn::Outdated(peer_id)));
                             } else {
                                 log::warn!(peer=%peer_id,"The proof is ahead than our current validity window");
                                 self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
@@ -317,7 +216,7 @@ impl<TNetwork: Network> ValidityWindowSyncer<TNetwork> {
                                 let election = self
                                     .blockchain
                                     .read()
-                                    .get_block_at(validity_window_bn, false, None)
+                                    .get_block_at(validity_window_bn, false)
                                     .unwrap();
                                 (validity_window_bn, election.history_root().clone())
                             } else if next_election < macro_head.block_number() {
@@ -325,7 +224,7 @@ impl<TNetwork: Network> ValidityWindowSyncer<TNetwork> {
                                 let election = self
                                     .blockchain
                                     .read()
-                                    .get_block_at(next_election, false, None)
+                                    .get_block_at(next_election, false)
                                     .unwrap();
                                 (next_election, election.history_root().clone())
                             } else {
@@ -356,7 +255,7 @@ impl<TNetwork: Network> ValidityWindowSyncer<TNetwork> {
                         // Create a new chunk tracker structure for this peer
                         let first_chunk = (first_leaf_index as u32) / (CHUNK_SIZE as u32);
 
-                        self.peer_requests.insert(
+                        self.validity_requests.insert(
                             peer_id,
                             ValidityChunkRequest {
                                 verifier_block_number,
@@ -399,7 +298,7 @@ impl<TNetwork: Network> ValidityWindowSyncer<TNetwork> {
                             // So we just proceed to request the first history chunk.
                             let verifier_block_number = macro_head.block_number();
                             let network = Arc::clone(&self.network);
-                            self.peer_requests.insert(
+                            self.validity_requests.insert(
                                 peer_id,
                                 ValidityChunkRequest {
                                     verifier_block_number,
@@ -440,10 +339,10 @@ impl<TNetwork: Network> ValidityWindowSyncer<TNetwork> {
         Poll::Pending
     }
 
-    fn poll_validity_window_chunks(
+    pub fn poll_validity_window_chunks(
         &mut self,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<ValidityWindowSyncReturn<TNetwork::PeerId>>> {
+    ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
         while let Poll::Ready(Some((chunk, peer_id))) =
             self.validity_window_chunks.poll_next_unpin(cx)
         {
@@ -455,13 +354,13 @@ impl<TNetwork: Network> ValidityWindowSyncer<TNetwork> {
 
             if synced_validity_start == current_validity_start {
                 // Already synced
-                return Poll::Ready(Some(ValidityWindowSyncReturn::Good(peer_id)));
+                return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
             }
 
             match chunk {
                 Ok(history_chunk) => {
                     if let Some(chunk) = history_chunk.chunk {
-                        let peer_request = self.peer_requests.get_mut(&peer_id).unwrap();
+                        let peer_request = self.validity_requests.get_mut(&peer_id).unwrap();
                         let expected_root = &peer_request.root_hash;
                         let verifier_block_number = peer_request.verifier_block_number;
 
@@ -473,22 +372,25 @@ impl<TNetwork: Network> ValidityWindowSyncer<TNetwork> {
                             .map_or(false, |result| result);
 
                         if verification_result {
-                            Blockchain::extend_validity_sync(
-                                self.blockchain.upgradable_read(),
-                                Policy::epoch_at(verifier_block_number),
-                                &chunk.history,
-                            );
+                            let leaf_count = match &self.blockchain {
+                                BlockchainProxy::Full(blockchain) => {
+                                    Blockchain::extend_validity_sync(
+                                        blockchain.upgradable_read(),
+                                        Policy::epoch_at(verifier_block_number),
+                                        &chunk.history,
+                                    );
+
+                                    blockchain
+                                        .read()
+                                        .history_store
+                                        .length_at(verifier_block_number, None)
+                                        as usize
+                                }
+                                BlockchainProxy::Light(_) => unreachable!(),
+                            };
 
                             // We need to check if this is the last chunk:
                             let prover_mmr_size = chunk.proof.proof.mmr_size;
-
-                            // Obtain our number of leaves
-                            let leaf_count = self
-                                .blockchain
-                                .read()
-                                .history_store
-                                .length_at(verifier_block_number, None)
-                                as usize;
 
                             // Now we need to add the initial offseat
                             let offset = leaf_number_to_index(
@@ -504,7 +406,7 @@ impl<TNetwork: Network> ValidityWindowSyncer<TNetwork> {
                                 // We are complete so we emit the peer
                                 self.remove_peer_requests(peer_id);
 
-                                return Poll::Ready(Some(ValidityWindowSyncReturn::Good(peer_id)));
+                                return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
                             }
 
                             // Update the peer tracker structure
@@ -537,7 +439,7 @@ impl<TNetwork: Network> ValidityWindowSyncer<TNetwork> {
                         }
                     } else {
                         // Treating this as the peer doesnt have anything to sync
-                        return Poll::Ready(Some(ValidityWindowSyncReturn::Good(peer_id)));
+                        return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
 
                         //If the peer didnt provide any History Chunk, we disconnect from the peer.
                         //log::debug!(" The peer didn't provide any chunk, disconnecting from peer");
@@ -548,100 +450,6 @@ impl<TNetwork: Network> ValidityWindowSyncer<TNetwork> {
                     log::error!( error=%err, peer=%peer_id, "There was a request error when trying to request a history chunk");
                 }
             }
-        }
-
-        Poll::Pending
-    }
-}
-
-#[cfg(feature = "full")]
-impl<TNetwork: Network> ValidityWindowSync<TNetwork::PeerId> for ValidityWindowSyncer<TNetwork> {
-    fn add_peer(&mut self, peer_id: TNetwork::PeerId) {
-        let network = Arc::clone(&self.network);
-        let blockchain = Arc::clone(&self.blockchain);
-
-        let synced_validity_start = self.synced_validity_start;
-
-        let macro_head = blockchain.read().macro_head().block_number();
-        let current_validity_start =
-            macro_head.saturating_sub(Policy::transaction_validity_window_blocks());
-
-        if synced_validity_start == current_validity_start {
-            self.synced_peers.push(peer_id);
-        } else {
-            // In this case we have something to sync
-            self.validity_window_start.push(
-                async move {
-                    (
-                        Self::discover_validity_window_items(network, blockchain, peer_id).await,
-                        peer_id,
-                    )
-                }
-                .boxed(),
-            );
-        }
-
-        // Pushing the future to FuturesUnordered above does not wake the task that
-        // polls `validity_window_stream`. Therefore, we need to wake the task manually.
-        if let Some(waker) = &self.waker {
-            waker.wake_by_ref();
-        }
-    }
-}
-
-#[cfg(feature = "full")]
-impl<TNetwork: Network> Stream for ValidityWindowSyncer<TNetwork> {
-    type Item = ValidityWindowSyncReturn<TNetwork::PeerId>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        store_waker!(self, waker, cx);
-
-        if let Some(peer) = self.synced_peers.pop() {
-            return Poll::Ready(Some(ValidityWindowSyncReturn::Good(peer)));
-        }
-
-        if let Poll::Ready(o) = self.poll_validity_window_discover_requests(cx) {
-            return Poll::Ready(o);
-        }
-
-        if let Poll::Ready(o) = self.poll_validity_window_chunks(cx) {
-            return Poll::Ready(o);
-        }
-
-        Poll::Pending
-    }
-}
-
-pub struct NullValidityWindowSyncer<TNetwork: Network> {
-    pub(crate) peers: Vec<TNetwork::PeerId>,
-}
-
-impl<TNetwork: Network> NullValidityWindowSyncer<TNetwork> {
-    pub fn new() -> Self {
-        Self { peers: Vec::new() }
-    }
-}
-
-impl<TNetwork: Network> Default for NullValidityWindowSyncer<TNetwork> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<TNetwork: Network> ValidityWindowSync<TNetwork::PeerId>
-    for NullValidityWindowSyncer<TNetwork>
-{
-    fn add_peer(&mut self, peer_id: TNetwork::PeerId) {
-        self.peers.push(peer_id);
-    }
-}
-
-impl<TNetwork: Network> Stream for NullValidityWindowSyncer<TNetwork> {
-    type Item = ValidityWindowSyncReturn<TNetwork::PeerId>;
-
-    fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        if let Some(peer) = self.peers.pop() {
-            return Poll::Ready(Some(ValidityWindowSyncReturn::Good(peer)));
         }
 
         Poll::Pending

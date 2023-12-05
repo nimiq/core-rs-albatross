@@ -217,9 +217,50 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 // We are synced with this peer.
                 debug!(
                     peer_id = ?epoch_ids.sender,
-                    "Finished syncing with peer");
+                    "Finished macro syncing with peer");
 
-                return Poll::Ready(Some(MacroSyncReturn::Good(epoch_ids.sender)));
+                match self.blockchain {
+                    #[cfg(feature = "full")]
+                    BlockchainProxy::Full(ref blockchain) => {
+                        // If we are a full node we need to sync the validity window if we can not enforce it.
+                        let blockchain_rg = blockchain.read();
+
+                        if blockchain_rg.can_enforce_validity_window() {
+                            // We can enforce the validity window, so we are done.
+                            return Poll::Ready(Some(MacroSyncReturn::Good(epoch_ids.sender)));
+                        } else {
+                            // We need to sync the validity window
+                            let macro_head = blockchain_rg.macro_head();
+
+                            let network = Arc::clone(&self.network);
+                            self.validity_window_start.push(
+                                async move {
+                                    (
+                                        Self::discover_validity_window_items(
+                                            network,
+                                            macro_head.block_number(),
+                                            macro_head.hash(),
+                                            epoch_ids.sender,
+                                        )
+                                        .await,
+                                        epoch_ids.sender,
+                                    )
+                                }
+                                .boxed(),
+                            );
+
+                            // Pushing the future to FuturesUnordered above does not wake the task that
+                            // polls `validity_window_stream`. Therefore, we need to wake the task manually.
+                            if let Some(waker) = &self.waker {
+                                waker.wake_by_ref();
+                            }
+                        }
+                    }
+                    BlockchainProxy::Light(_) => {
+                        // If we are a light node, we are done and we emit this peer.
+                        return Poll::Ready(Some(MacroSyncReturn::Good(epoch_ids.sender)));
+                    }
+                }
             } else {
                 #[cfg(feature = "full")]
                 if let BlockchainProxy::Full(_) = self.blockchain {
@@ -421,6 +462,16 @@ impl<TNetwork: Network> Stream for LightMacroSync<TNetwork> {
         if let Poll::Ready(o) = self.poll_macro_blocks(cx) {
             return Poll::Ready(o);
         }
+        #[cfg(feature = "full")]
+        {
+            if let Poll::Ready(o) = self.poll_validity_window_discover_requests(cx) {
+                return Poll::Ready(o);
+            }
+
+            if let Poll::Ready(o) = self.poll_validity_window_chunks(cx) {
+                return Poll::Ready(o);
+            }
+        }
 
         Poll::Pending
     }
@@ -445,7 +496,9 @@ mod tests {
     use parking_lot::RwLock;
 
     use crate::{
-        messages::{RequestBlock, RequestMacroChain},
+        messages::{
+            RequestBlock, RequestHistoryChunk, RequestMacroChain, RequestValidityWindowStart,
+        },
         sync::{light::LightMacroSync, syncer::MacroSyncReturn},
     };
 
@@ -484,6 +537,23 @@ mod tests {
             network.receive_requests::<RequestBlock>(),
             blockchain,
         ));
+
+        match blockchain {
+            BlockchainProxy::Full(full_blockchain) => {
+                tokio::spawn(request_handler(
+                    network,
+                    network.receive_requests::<RequestValidityWindowStart>(),
+                    full_blockchain,
+                ));
+
+                tokio::spawn(request_handler(
+                    network,
+                    network.receive_requests::<RequestHistoryChunk>(),
+                    full_blockchain,
+                ));
+            }
+            BlockchainProxy::Light(_) => {}
+        };
     }
 
     #[test(tokio::test)]

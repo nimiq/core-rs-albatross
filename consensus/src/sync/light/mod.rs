@@ -1,6 +1,7 @@
 mod sync;
 mod sync_requests;
 mod sync_stream;
+mod validity_window;
 
 use nimiq_primitives::policy::Policy;
 pub use sync::LightMacroSync;

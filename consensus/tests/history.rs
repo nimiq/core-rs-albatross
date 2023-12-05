@@ -15,7 +15,6 @@ use nimiq_consensus::{
     sync::{
         live::{block_queue::BlockQueue, queue::QueueConfig, BlockLiveSync},
         syncer::{LiveSync, MacroSync, MacroSyncReturn, Syncer},
-        validity_window_syncer::NullValidityWindowSyncer,
     },
 };
 use nimiq_database::volatile::VolatileDatabase;
@@ -105,9 +104,7 @@ async fn send_single_micro_block_to_block_queue() {
         bls_cache(),
     );
 
-    let null_sync = NullValidityWindowSyncer::<MockNetwork>::new();
-
-    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new(), null_sync);
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
     let mock_node =
         MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());
@@ -164,9 +161,7 @@ async fn send_two_micro_blocks_out_of_order() {
         bls_cache(),
     );
 
-    let null_sync = NullValidityWindowSyncer::<MockNetwork>::new();
-
-    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new(), null_sync);
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
     let mut mock_node =
         MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());
@@ -266,9 +261,8 @@ async fn send_micro_blocks_out_of_order() {
         block_queue,
         bls_cache(),
     );
-    let null_sync = NullValidityWindowSyncer::<MockNetwork>::new();
 
-    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new(), null_sync);
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
     let mock_node =
         MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());
@@ -360,8 +354,8 @@ async fn send_invalid_block() {
         block_queue,
         bls_cache(),
     );
-    let null_sync = NullValidityWindowSyncer::<MockNetwork>::new();
-    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new(), null_sync);
+
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
     let mut mock_node =
         MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());
@@ -467,8 +461,8 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
         block_queue,
         bls_cache(),
     );
-    let null_sync = NullValidityWindowSyncer::<MockNetwork>::new();
-    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new(), null_sync);
+
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
     let mut mock_node =
         MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());
@@ -554,8 +548,8 @@ async fn request_missing_blocks_across_macro_block() {
         block_queue,
         bls_cache(),
     );
-    let null_sync = NullValidityWindowSyncer::<MockNetwork>::new();
-    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new(), null_sync);
+
+    let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
     let mut mock_node =
         MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());
@@ -697,8 +691,8 @@ async fn put_peer_back_into_sync_mode() {
         block_queue,
         bls_cache(),
     );
-    let null_sync = NullValidityWindowSyncer::<MockNetwork>::new();
-    let mut syncer = Syncer::new(live_sync, history_sync, null_sync);
+
+    let mut syncer = Syncer::new(live_sync, history_sync);
 
     let mock_node =
         MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());

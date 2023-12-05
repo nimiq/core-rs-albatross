@@ -18,6 +18,8 @@ use nimiq_zkp_component::{
     zkp_component::ZKPComponentProxy,
 };
 
+#[cfg(feature = "full")]
+use crate::messages::{HistoryChunk, ValidityWindowStartResponse};
 use crate::{
     messages::{BlockError, Checkpoint},
     sync::syncer::MacroSync,
@@ -49,6 +51,20 @@ impl<T> EpochIds<T> {
     pub(crate) fn last_epoch_number(&self) -> usize {
         self.checkpoint_epoch_number().saturating_sub(1)
     }
+}
+
+/// Struct used to track the history chunk requests that we have made on a per peer basis.
+pub struct ValidityChunkRequest {
+    /// This corresponds to the block that should be used to verify the proof.
+    pub verifier_block_number: u32,
+    /// The root hash that should be used to verify the proof.
+    pub root_hash: Blake2bHash,
+    /// The chunk index that was requested.
+    pub chunk_index: u32,
+    /// Initial leaf index offset
+    pub initial_offset: u32,
+    /// Validity start block number that we are syncing with this peer
+    pub validity_start: u32,
 }
 
 /// This struct is used to track all the macro requests sent to a particular peer
@@ -141,6 +157,26 @@ pub struct LightMacroSync<TNetwork: Network> {
             ),
         >,
     >,
+    #[cfg(feature = "full")]
+    /// The stream for validity window start proofs
+    pub(crate) validity_window_start: FuturesUnordered<
+        BoxFuture<
+            'static,
+            (
+                Result<ValidityWindowStartResponse, RequestError>,
+                TNetwork::PeerId,
+            ),
+        >,
+    >,
+    #[cfg(feature = "full")]
+    /// The stream for validity window history chunk requests
+    pub(crate) validity_window_chunks: FuturesUnordered<
+        BoxFuture<'static, (Result<HistoryChunk, RequestError>, TNetwork::PeerId)>,
+    >,
+    /// Used to track the validity chunks we have requested on a per peer basis
+    pub(crate) validity_requests: HashMap<TNetwork::PeerId, ValidityChunkRequest>,
+    /// The latest block number towards which the validity window was fully synced.
+    pub(crate) synced_validity_start: u32,
     /// Minimum distance to light sync in #blocks from the peers head.
     pub(crate) full_sync_threshold: u32,
     /// Task executor to be compatible with wasm and not wasm environments,
@@ -170,6 +206,12 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             executor: Box::new(executor),
             full_sync_threshold,
             block_headers: Default::default(),
+            #[cfg(feature = "full")]
+            validity_window_start: FuturesUnordered::new(),
+            #[cfg(feature = "full")]
+            validity_window_chunks: FuturesUnordered::new(),
+            validity_requests: HashMap::new(),
+            synced_validity_start: 0,
         }
     }
 
