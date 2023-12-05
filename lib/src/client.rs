@@ -257,9 +257,9 @@ impl ClientInner {
             // Check that the provided private key has the expected format and convert the PEM file to DER format.
             let private_key = fs::read(tls_config.private_key).and_then(|private_key_bytes| {
                 match rustls_pemfile::read_one(&mut &*private_key_bytes)? {
-                    Some(Item::ECKey(key)) => Ok(key),
-                    Some(Item::PKCS8Key(key)) => Ok(key),
-                    Some(Item::RSAKey(key)) => Ok(key),
+                    Some(Item::Sec1Key(key)) => Ok(key.secret_sec1_der().to_vec()),
+                    Some(Item::Pkcs8Key(key)) => Ok(key.secret_pkcs8_der().to_vec()),
+                    Some(Item::Pkcs1Key(key)) => Ok(key.secret_pkcs1_der().to_vec()),
                     _ => Err(std::io::Error::new(
                         std::io::ErrorKind::InvalidData,
                         "Invalid TLS private key",
@@ -271,10 +271,9 @@ impl ClientInner {
             // We could have several certificates in the same file, read them all and build the array of certificates
             // that the network requires.
             let certificates = fs::read(tls_config.certificates).and_then(|certificate_bytes| {
-                rustls_pemfile::read_all(&mut &*certificate_bytes)?
-                    .into_iter()
+                rustls_pemfile::read_all(&mut &*certificate_bytes)
                     .map(|item| match item {
-                        Item::X509Certificate(cert) => Ok(cert),
+                        Ok(Item::X509Certificate(cert)) => Ok(cert.to_vec()),
                         _ => Err(std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
                             "Invalid TLS certificate(s)",
