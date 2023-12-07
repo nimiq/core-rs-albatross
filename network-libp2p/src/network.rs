@@ -15,7 +15,7 @@ use instant::Instant;
 #[cfg(all(target_family = "wasm", not(feature = "tokio-websocket")))]
 use libp2p::websocket_websys;
 use libp2p::{
-    core,
+    autonat, core,
     core::{
         muxing::StreamMuxerBox,
         transport::{Boxed, MemoryTransport},
@@ -172,10 +172,24 @@ impl<P: Clone> ValidateMessage<P> {
     }
 }
 
+#[derive(Default, PartialEq)]
+enum DhtBootStrapState {
+    /// DHT bootstrap has been started
+    #[default]
+    NotStarted,
+    /// DHT bootstrap has been started
+    Started,
+    /// DHT bootstrap has been completed
+    Completed,
+}
+
 #[derive(Default)]
 struct TaskState {
+    /// Senders for DHT (kad) put operations
     dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
+    /// Senders for DHT (kad) get operations
     dht_gets: HashMap<QueryId, oneshot::Sender<Result<Vec<u8>, NetworkError>>>,
+    /// Senders per Gossibsub topic
     gossip_topics: HashMap<
         gossipsub::TopicHash,
         (
@@ -183,11 +197,18 @@ struct TaskState {
             bool,
         ),
     >,
-    is_bootstrapped: bool,
+    /// DHT (kad) has been bootstrapped
+    dht_bootstrap_state: DhtBootStrapState,
+    /// DHT (kad) is in server mode
+    dht_server_mode: bool,
+    /// Senders per `OutboundRequestId` for request-response
     requests: HashMap<OutboundRequestId, oneshot::Sender<Result<Bytes, RequestError>>>,
+    /// Time spent per `OutboundRequestId` for request-response
     #[cfg(feature = "metrics")]
     requests_initiated: HashMap<OutboundRequestId, Instant>,
+    /// Senders for receiving responses per `InboundRequestId` for request-response
     response_channels: HashMap<InboundRequestId, ResponseChannel<Option<OutgoingResponse>>>,
+    /// Senders for replying to requests per `RequestType` for request-response
     receive_requests: HashMap<RequestType, mpsc::Sender<(Bytes, InboundRequestId, PeerId)>>,
 }
 
@@ -202,6 +223,7 @@ impl PubsubId<PeerId> for GossipsubId<PeerId> {
         self.propagation_source
     }
 }
+
 pub struct Network {
     /// The local ID that is used to identify our peer
     local_peer_id: PeerId,
@@ -243,7 +265,17 @@ impl Network {
             ip_colocation_factor_threshold: 20.0,
             ..Default::default()
         };
-        let swarm = Self::new_swarm(config, Arc::clone(&contacts), params.clone());
+        // Only force the server mode if we are doing a memory transport.
+        // Otherwise expect the regular flow: DHT will get in server mode once a confirmed address is obtained using Autonat.
+        // In memory transport we don't have a mechanism that sets the DHT in server mode such as confirming an address
+        // with Autonat. This is because Autonat v1 only works with IP addresses.
+        let force_dht_server_mode = config.memory_transport;
+        let swarm = Self::new_swarm(
+            config,
+            Arc::clone(&contacts),
+            params.clone(),
+            force_dht_server_mode,
+        );
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
         let connected_peers = Arc::new(RwLock::new(HashMap::new()));
@@ -272,6 +304,7 @@ impl Network {
             Arc::clone(&rate_limits_pending_deletion),
             update_scores,
             contacts,
+            force_dht_server_mode,
             #[cfg(feature = "metrics")]
             metrics.clone(),
         )));
@@ -373,12 +406,14 @@ impl Network {
         config: Config,
         contacts: Arc<RwLock<PeerContactBook>>,
         peer_score_params: gossipsub::PeerScoreParams,
+        force_dht_server_mode: bool,
     ) -> Swarm<behaviour::Behaviour> {
         let keypair = config.keypair.clone();
         let transport =
             Self::new_transport(&keypair, config.memory_transport, &config.tls).unwrap();
 
-        let behaviour = behaviour::Behaviour::new(config, contacts, peer_score_params);
+        let behaviour =
+            behaviour::Behaviour::new(config, contacts, peer_score_params, force_dht_server_mode);
 
         // TODO add proper config
         #[cfg(not(target_family = "wasm"))]
@@ -483,9 +518,11 @@ impl Network {
         rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
         mut update_scores: Interval,
         contacts: Arc<RwLock<PeerContactBook>>,
+        force_dht_server_mode: bool,
         #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
     ) {
         let mut task_state = TaskState::default();
+        task_state.dht_server_mode = force_dht_server_mode;
 
         let peer_id = Swarm::local_peer_id(&swarm);
         let task_span = trace_span!("swarm task", peer_id=?peer_id);
@@ -588,12 +625,12 @@ impl Network {
                         .add_peer_address(peer_id, listen_addr.clone());
 
                     // Bootstrap Kademlia if we're performing our first connection
-                    if !state.is_bootstrapped {
+                    if state.dht_bootstrap_state == DhtBootStrapState::NotStarted {
                         debug!("Bootstrapping DHT");
                         if swarm.behaviour_mut().dht.bootstrap().is_err() {
                             error!("Bootstrapping DHT error: No known peers");
                         }
-                        state.is_bootstrapped = true;
+                        state.dht_bootstrap_state = DhtBootStrapState::Started;
                     }
                 }
             }
@@ -671,6 +708,21 @@ impl Network {
 
             SwarmEvent::Behaviour(event) => {
                 match event {
+                    behaviour::BehaviourEvent::Autonat(event) => match event {
+                        autonat::Event::InboundProbe(event) => {
+                            log::trace!(?event, "Inbound probe");
+                        }
+                        autonat::Event::OutboundProbe(event) => {
+                            log::trace!(?event, "Outbound probe");
+                        }
+                        autonat::Event::StatusChanged { old, new } => {
+                            log::debug!(?old, ?new, "Autonat status changed");
+                            if new == autonat::NatStatus::Private {
+                                log::warn!("Couldn't detect a public reachable address. Validator network operations won't be possible");
+                                log::warn!("You may need to find a relay to enable validator network operations");
+                            }
+                        }
+                    },
                     behaviour::BehaviourEvent::ConnectionLimits(_) => {}
                     behaviour::BehaviourEvent::Dht(event) => {
                         match event {
@@ -733,9 +785,11 @@ impl Network {
                                         Ok(result) => {
                                             if result.num_remaining == 0 {
                                                 debug!(?result, "DHT bootstrap successful");
-
-                                                let _ =
-                                                    events_tx.send(NetworkEvent::DhtBootstrapped);
+                                                state.dht_bootstrap_state =
+                                                    DhtBootStrapState::Completed;
+                                                if state.dht_server_mode {
+                                                    let _ = events_tx.send(NetworkEvent::DhtReady);
+                                                }
                                             }
                                         }
                                         Err(e) => error!(error = %e, "DHT bootstrap error"),
@@ -788,6 +842,15 @@ impl Network {
                                 warn!(
                                     "DHT record verification failed: Invalid public key received"
                                 );
+                            }
+                            kad::Event::ModeChanged { new_mode } => {
+                                debug!(%new_mode, "DHT mode changed");
+                                if new_mode == kad::Mode::Server {
+                                    state.dht_server_mode = true;
+                                    if state.dht_bootstrap_state == DhtBootStrapState::Completed {
+                                        let _ = events_tx.send(NetworkEvent::DhtReady);
+                                    }
+                                }
                             }
                             _ => {}
                         }
@@ -879,12 +942,12 @@ impl Network {
                                     swarm.behaviour_mut().add_peer_address(peer_id, listen_addr);
 
                                     // Bootstrap Kademlia if we're adding our first address
-                                    if !state.is_bootstrapped {
+                                    if state.dht_bootstrap_state == DhtBootStrapState::NotStarted {
                                         debug!("Bootstrapping DHT");
                                         if swarm.behaviour_mut().dht.bootstrap().is_err() {
                                             error!("Bootstrapping DHT error: No known peers");
                                         }
-                                        state.is_bootstrapped = true;
+                                        state.dht_bootstrap_state = DhtBootStrapState::Started;
                                     }
                                 }
                             }

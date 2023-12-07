@@ -119,12 +119,18 @@ impl Behaviour {
         let house_keeping_timer = Interval::new(config.house_keeping_interval);
         peer_contact_book.write().update_own_contact(&keypair);
 
+        // Report our own known addresses as candidates to the swarm
+        let mut events = VecDeque::new();
+        for address in peer_contact_book.read().get_own_contact().addresses() {
+            events.push_back(ToSwarm::NewExternalAddrCandidate(address.clone()));
+        }
+
         Self {
             config,
             keypair,
             connected_peers: HashSet::new(),
             peer_contact_book,
-            events: VecDeque::new(),
+            events,
             house_keeping_timer,
         }
     }

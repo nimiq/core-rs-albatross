@@ -22,7 +22,7 @@ pub fn assert_peer_left(event: &NetworkEvent<PeerId>, wanted_peer_id: &PeerId) {
 pub async fn get_next_peer_event(events: &mut SubscribeEvents<PeerId>) -> NetworkEvent<PeerId> {
     while let Ok(event) = events.next().await.unwrap() {
         match event {
-            NetworkEvent::DhtBootstrapped => {}
+            NetworkEvent::DhtReady => {}
             _ => return event,
         }
     }

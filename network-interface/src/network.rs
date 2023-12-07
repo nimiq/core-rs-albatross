@@ -14,11 +14,15 @@ use crate::{
     request::{Message, Request, RequestError},
 };
 
+/// Network events that the network will report when subscribing
 #[derive(Clone, Debug)]
 pub enum NetworkEvent<P> {
+    /// A connection to a new peer has been started
     PeerJoined(P, PeerInfo),
+    /// A peer disconnected
     PeerLeft(P),
-    DhtBootstrapped,
+    /// DHT is ready (bootstrapped and in server mode) to publish records
+    DhtReady,
 }
 
 pub type SubscribeEvents<PeerId> =

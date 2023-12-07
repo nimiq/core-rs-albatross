@@ -880,7 +880,7 @@ where
         // Check if DHT is bootstrapped and we can publish our record
         while let Poll::Ready(Some(result)) = self.network_event_rx.poll_next_unpin(cx) {
             match result {
-                Ok(NetworkEvent::DhtBootstrapped) => {
+                Ok(NetworkEvent::DhtReady) => {
                     self.publish_dht();
                 }
                 Ok(_) => {}

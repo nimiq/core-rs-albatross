@@ -249,7 +249,7 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
                 Ok(NetworkEvent::PeerJoined(peer_id, _)) => {
                     log::info!(%local_peer_id, %peer_id, "Received peer joined event");
                 }
-                Ok(NetworkEvent::DhtBootstrapped) => {}
+                Ok(NetworkEvent::DhtReady) => {}
                 _ => log::error!(?event, "Unexpected NetworkEvent"),
             };
         });

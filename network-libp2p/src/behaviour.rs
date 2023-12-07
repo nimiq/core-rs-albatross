@@ -1,7 +1,7 @@
 use std::{iter, sync::Arc};
 
 use libp2p::{
-    connection_limits, gossipsub, identify,
+    autonat, connection_limits, gossipsub, identify,
     kad::{self, store::MemoryStore},
     ping, request_response,
     swarm::NetworkBehaviour,
@@ -35,6 +35,7 @@ pub struct Behaviour {
     pub dht: kad::Behaviour<MemoryStore>,
     pub gossipsub: gossipsub::Behaviour,
     pub identify: identify::Behaviour,
+    pub autonat: autonat::Behaviour,
     pub ping: ping::Behaviour,
     pub request_response: request_response::Behaviour<MessageCodec>,
 }
@@ -44,6 +45,7 @@ impl Behaviour {
         config: Config,
         contacts: Arc<RwLock<PeerContactBook>>,
         peer_score_params: gossipsub::PeerScoreParams,
+        force_dht_server_mode: bool,
     ) -> Self {
         let public_key = config.keypair.public();
         let peer_id = public_key.to_peer_id();
@@ -51,9 +53,9 @@ impl Behaviour {
         // DHT behaviour
         let store = MemoryStore::new(peer_id);
         let mut dht = kad::Behaviour::with_config(peer_id, store, config.kademlia);
-        // Fixme: This could be avoided with a protocol such as Autonat that properly set external addresses to the
-        // swarm and also avoids us to add addresses that are purely connection candidates.
-        dht.set_mode(Some(kad::Mode::Server));
+        if force_dht_server_mode {
+            dht.set_mode(Some(kad::Mode::Server));
+        }
 
         // Discovery behaviour
         let discovery = discovery::Behaviour::new(
@@ -92,11 +94,14 @@ impl Behaviour {
 
         // Request Response behaviour
         let protocol = StreamProtocol::new("/nimiq/reqres/0.0.1");
-        let config = request_response::Config::default();
+        let req_res_config = request_response::Config::default();
         let request_response = request_response::Behaviour::new(
             iter::once((protocol, request_response::ProtocolSupport::Full)),
-            config,
+            req_res_config,
         );
+
+        // Autonat behaviour
+        let autonat = autonat::Behaviour::new(peer_id, autonat::Config::default());
 
         // Connection limits behaviour
         let limits = connection_limits::ConnectionLimits::default()
@@ -115,6 +120,7 @@ impl Behaviour {
             ping,
             pool,
             request_response,
+            autonat,
             connection_limits,
         }
     }
