@@ -44,7 +44,7 @@ struct Limits {
 #[derive(Clone, Debug)]
 struct Config {
     /// Desired count of peers
-    peer_count_desired: usize,
+    desired_peer_count: usize,
     /// Maximum count of peers
     peer_count_max: usize,
     /// Maximum peer count per IP
@@ -75,7 +75,7 @@ struct IpInfo {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            peer_count_desired: 12,
+            desired_peer_count: 12,
             peer_count_max: 4000,
             peer_count_per_ip_max: 20,
             peer_count_per_subnet_max: 20,
@@ -310,13 +310,17 @@ impl Behaviour {
         own_peer_id: PeerId,
         seeds: Vec<Multiaddr>,
         required_services: Services,
+        desired_peer_count: usize,
     ) -> Self {
         let limits = Limits {
             ip_count: HashMap::new(),
             ip_subnet_count: HashMap::new(),
             peer_count: 0,
         };
-        let config = Config::default();
+        let config = Config {
+            desired_peer_count,
+            ..Default::default()
+        };
         let housekeeping_timer = wasm_timer::Interval::new(config.housekeeping_interval);
 
         Self {
@@ -356,7 +360,7 @@ impl Behaviour {
         }
     }
 
-    /// Tries to maintain at least `peer_count_desired` connections.
+    /// Tries to maintain at least `desired_peer_count` connections.
     ///
     /// For this it will try to select peers or seeds to dial in order to
     /// achieve that many connection.
@@ -375,18 +379,18 @@ impl Behaviour {
         // Make sure seeds and peers are dial-able again to reach desired peers.
         // Otherwise we might be stuck in this state forever.
         if self.active
-            && self.peer_ids.num_connected() < self.config.peer_count_desired
+            && self.peer_ids.num_connected() < self.config.desired_peer_count
             && self.peer_ids.num_dialing() + self.addresses.num_dialing() == 0
         {
             self.addresses.reset_down();
             self.peer_ids.reset_down();
         }
 
-        // Try to maintain at least `peer_count_desired` connections.
+        // Try to maintain at least `desired_peer_count` connections.
         // Note: when counting dialing IDs we have to account for peer IDs and
         // addresses (seeds may only be in the `addresses` set).
         if self.active
-            && self.peer_ids.num_connected() < self.config.peer_count_desired
+            && self.peer_ids.num_connected() < self.config.desired_peer_count
             && self.peer_ids.num_dialing() + self.addresses.num_dialing()
                 < self.config.dialing_count_max
         {
@@ -447,7 +451,7 @@ impl Behaviour {
 
     fn choose_peers_to_dial(&self) -> Vec<PeerId> {
         let num_peers = usize::min(
-            self.config.peer_count_desired - self.peer_ids.num_connected(),
+            self.config.desired_peer_count - self.peer_ids.num_connected(),
             self.config.dialing_count_max - self.peer_ids.num_dialing(),
         );
         let contacts = self.contacts.read();

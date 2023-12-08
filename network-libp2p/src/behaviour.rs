@@ -85,6 +85,7 @@ impl Behaviour {
             peer_id,
             config.seeds,
             config.discovery.required_services,
+            config.desired_peer_count,
         );
 
         // Request Response behaviour

@@ -70,6 +70,7 @@ impl TestNetwork for Network {
             true,
             Services::all(),
             None,
+            3,
             true,
             false,
             true,
