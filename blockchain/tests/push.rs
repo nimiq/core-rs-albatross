@@ -688,20 +688,20 @@ fn it_pushes_and_reverts_equivocation_proof_block() {
     assert_eq!(hist_tx_after[1].block_number, header_3.block_number);
     assert_eq!(
         hist_tx_after[0].data,
-        HistoricTransactionData::Jail(JailEvent {
-            validator_address: validator_address(),
-            slots: 0..512,
-            offense_event_block: header_2a.block_number,
-            new_epoch_slot_range: None
-        })
-    );
-    assert_eq!(
-        hist_tx_after[1].data,
         HistoricTransactionData::Equivocation(EquivocationEvent {
             locator: EquivocationLocator::Fork(ForkLocator {
                 validator_address: validator_address(),
                 block_number: header_2a.block_number
             })
+        })
+    );
+    assert_eq!(
+        hist_tx_after[1].data,
+        HistoricTransactionData::Jail(JailEvent {
+            validator_address: validator_address(),
+            slots: 0..512,
+            offense_event_block: header_2a.block_number,
+            new_epoch_slot_range: None
         })
     );
 

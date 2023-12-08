@@ -69,6 +69,15 @@ impl HistoricTransaction {
             })
         }
 
+        for locator in equivocation_locator {
+            hist_txs.push(HistoricTransaction {
+                network_id,
+                block_number,
+                block_time,
+                data: HistoricTransactionData::Equivocation(EquivocationEvent { locator }),
+            });
+        }
+
         for inherent in inherents {
             match inherent {
                 Inherent::Reward {
@@ -114,15 +123,6 @@ impl HistoricTransaction {
                 Inherent::FinalizeBatch => {}
                 Inherent::FinalizeEpoch => {}
             }
-        }
-
-        for locator in equivocation_locator {
-            hist_txs.push(HistoricTransaction {
-                network_id,
-                block_number,
-                block_time,
-                data: HistoricTransactionData::Equivocation(EquivocationEvent { locator }),
-            });
         }
 
         hist_txs
