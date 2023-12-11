@@ -18,7 +18,7 @@ futures = { package = "futures-util", version = "0.3" }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 rand = "0.8"
 serde = "1.0"
-tokio = { version = "1.32", features = [
+tokio = { version = "1.35", features = [
     "macros",
     "rt-multi-thread",
     "tracing",
@@ -30,7 +30,7 @@ nimiq-macros = { workspace = true }
 
 [dev-dependencies]
 nimiq-test-log = { workspace = true }
-tokio = { version = "1.32", features = [
+tokio = { version = "1.35", features = [
     "macros",
     "rt-multi-thread",
     "tracing",
