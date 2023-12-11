@@ -59,7 +59,7 @@ serde = "1.0"
 serde_derive = "1.0"
 thiserror = "1.0"
 time = "0.3"
-tokio = { version = "1.32", features = [
+tokio = { version = "1.35", features = [
     "macros",
     "rt-multi-thread",
     "tracing",
