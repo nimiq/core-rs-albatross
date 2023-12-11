@@ -5,17 +5,34 @@ use nimiq_block::{
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::AggregateSignature;
 use nimiq_database::traits::WriteTransaction;
+use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
+use nimiq_keys::{KeyPair, PrivateKey};
 use nimiq_primitives::{policy::Policy, TendermintIdentifier, TendermintStep, TendermintVote};
+use nimiq_serde::Deserialize;
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
-    blockchain::{produce_macro_blocks, validator_address},
+    blockchain::{generate_transactions, produce_macro_blocks, validator_address},
     test_custom_block::{next_micro_block, BlockConfig},
 };
-use nimiq_transaction::historic_transaction::{
-    EquivocationEvent, HistoricTransaction, HistoricTransactionData, JailEvent, PenalizeEvent,
+use nimiq_transaction::{
+    historic_transaction::{
+        EquivocationEvent, HistoricTransaction, HistoricTransactionData, JailEvent, PenalizeEvent,
+        RewardEvent,
+    },
+    ExecutedTransaction, Transaction,
 };
+
+fn key_pair_with_funds() -> KeyPair {
+    let priv_key: PrivateKey =
+        Deserialize::deserialize_from_vec(
+            &hex::decode("6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587")
+                .unwrap()[..],
+        )
+        .unwrap();
+    priv_key.into()
+}
 
 fn get_hist_tx(temp_producer: &TemporaryBlockProducer) -> Vec<HistoricTransaction> {
     let blockchain = temp_producer.blockchain.read();
@@ -42,26 +59,11 @@ fn setup_blockchain_with_history() -> (TemporaryBlockProducer, TemporaryBlockPro
         Ok(PushResult::Extended)
     );
 
-    let fork_equivocation = do_fork(&temp_producer1, &temp_producer2);
+    add_block_assert_history_store(&temp_producer1, vec![], vec![], true);
 
-    let block = next_micro_block(
-        &temp_producer1.producer.signing_key,
-        &temp_producer1.blockchain.read(),
-        &BlockConfig {
-            equivocation_proofs: vec![fork_equivocation.clone()],
-            test_macro: false,
-            test_election: false,
-            ..Default::default()
-        },
-    );
-    assert_eq!(
-        &temp_producer1.push(Block::Micro(block.clone())),
-        &Ok(PushResult::Extended)
-    );
-    assert_eq!(
-        &temp_producer2.push(Block::Micro(block)),
-        &Ok(PushResult::Extended)
-    );
+    let block = temp_producer1.blockchain.read().head();
+
+    assert_eq!(&temp_producer2.push(block), &Ok(PushResult::Extended));
 
     (temp_producer1, temp_producer2)
 }
@@ -195,6 +197,7 @@ fn do_double_vote(temp_producer1: &TemporaryBlockProducer) -> EquivocationProof 
 fn add_block_assert_history_store(
     temp_producer1: &TemporaryBlockProducer,
     equivocation_proofs: Vec<EquivocationProof>,
+    transactions: Vec<Transaction>,
     is_skip_block: bool,
 ) -> (Vec<HistoricTransaction>, Vec<HistoricTransaction>) {
     // Get initial history store.
@@ -206,7 +209,7 @@ fn add_block_assert_history_store(
     } else {
         None
     };
-    let block_3 = next_micro_block(
+    let micro_block = next_micro_block(
         &temp_producer1.producer.signing_key,
         &temp_producer1.blockchain.read(),
         &BlockConfig {
@@ -214,14 +217,15 @@ fn add_block_assert_history_store(
             test_macro: false,
             test_election: false,
             skip_block_proof,
+            transactions: transactions.clone(),
             ..Default::default()
         },
     );
-    let header_3 = block_3.header.clone();
-    let is_skip_block = block_3.is_skip_block();
+    let header = micro_block.header.clone();
+    let is_skip_block = micro_block.is_skip_block();
 
     assert_eq!(
-        &temp_producer1.push(Block::Micro(block_3)),
+        &temp_producer1.push(Block::Micro(micro_block)),
         &Ok(PushResult::Extended)
     );
 
@@ -229,19 +233,30 @@ fn add_block_assert_history_store(
     let hist_tx_after = get_hist_tx(&temp_producer1);
 
     // Assert that the jail inherent and equivocation proofs are present in history store.
-    // There is 1 inherent generated per equivocation proof.
-    let mut expected_len = hist_tx_pre.len() + equivocation_proofs.len() * 2;
+    // There is 1 inherent and 1 event generated per equivocation proof.
+    let mut expected_len = hist_tx_pre.len() + equivocation_proofs.len() * 2 + transactions.len();
     if is_skip_block {
         expected_len += 1;
     }
     assert_eq!(hist_tx_after.len(), expected_len);
 
     let mut i = hist_tx_pre.len();
+    for transaction in transactions {
+        let hist_tx_equiv = &hist_tx_after[i];
+        i += 1;
+
+        assert_eq!(hist_tx_equiv.block_number, header.block_number);
+        assert_eq!(
+            hist_tx_equiv.data,
+            HistoricTransactionData::Basic(ExecutedTransaction::Ok(transaction))
+        );
+    }
+
     for equivocation_proof in equivocation_proofs.iter() {
         let hist_tx_equiv = &hist_tx_after[i];
         i += 1;
 
-        assert_eq!(hist_tx_equiv.block_number, header_3.block_number);
+        assert_eq!(hist_tx_equiv.block_number, header.block_number);
         assert_eq!(
             hist_tx_equiv.data,
             HistoricTransactionData::Equivocation(EquivocationEvent {
@@ -254,7 +269,7 @@ fn add_block_assert_history_store(
         let hist_tx_inherent = &hist_tx_after[i];
         i += 1;
 
-        assert_eq!(hist_tx_inherent.block_number, header_3.block_number);
+        assert_eq!(hist_tx_inherent.block_number, header.block_number);
         assert_eq!(
             hist_tx_inherent.data,
             HistoricTransactionData::Jail(JailEvent {
@@ -269,13 +284,13 @@ fn add_block_assert_history_store(
     if is_skip_block {
         let hist_tx_inherent = &hist_tx_after[i];
 
-        assert_eq!(hist_tx_inherent.block_number, header_3.block_number);
+        assert_eq!(hist_tx_inherent.block_number, header.block_number);
         assert_eq!(
             hist_tx_inherent.data,
             HistoricTransactionData::Penalize(PenalizeEvent {
                 validator_address: validator_address(),
                 slot: 0,
-                offense_event_block: header_3.block_number
+                offense_event_block: header.block_number
             })
         );
     }
@@ -285,8 +300,6 @@ fn add_block_assert_history_store(
 
 #[test]
 fn it_pushes_and_reverts_fork_equivocation_block() {
-    // Produce a fork in producer 1.
-
     // Adds the same initial block to both producers.
     let (temp_producer1, temp_producer2) = setup_blockchain_with_history();
 
@@ -294,7 +307,7 @@ fn it_pushes_and_reverts_fork_equivocation_block() {
 
     // Get initial history store.
     let (hist_tx_pre, _) =
-        add_block_assert_history_store(&temp_producer1, vec![fork_equivocation], false);
+        add_block_assert_history_store(&temp_producer1, vec![fork_equivocation], vec![], false);
 
     // Revert block and assert that history store is reverted as well.
     revert_block(&temp_producer1, &hist_tx_pre);
@@ -302,8 +315,6 @@ fn it_pushes_and_reverts_fork_equivocation_block() {
 
 #[test]
 fn it_pushes_and_reverts_double_proposal_equivocation_block() {
-    // Produce a fork in producer 1.
-
     // Adds the same initial block to both producers.
     let (temp_producer1, temp_producer2) = setup_blockchain_with_history();
 
@@ -311,7 +322,7 @@ fn it_pushes_and_reverts_double_proposal_equivocation_block() {
 
     // Get initial history store.
     let (hist_tx_pre, _) =
-        add_block_assert_history_store(&temp_producer1, vec![double_proposal_proof], false);
+        add_block_assert_history_store(&temp_producer1, vec![double_proposal_proof], vec![], false);
 
     // Revert block and assert that history store is reverted as well.
     revert_block(&temp_producer1, &hist_tx_pre);
@@ -319,8 +330,6 @@ fn it_pushes_and_reverts_double_proposal_equivocation_block() {
 
 #[test]
 fn it_pushes_and_reverts_double_vote_equivocation_block() {
-    // Produce a fork in producer 1.
-
     // Adds the same initial block to both producers.
     let (temp_producer1, _temp_producer2) = setup_blockchain_with_history();
 
@@ -328,7 +337,7 @@ fn it_pushes_and_reverts_double_vote_equivocation_block() {
 
     // Get initial history store.
     let (hist_tx_pre, _) =
-        add_block_assert_history_store(&temp_producer1, vec![double_vote_proof], false);
+        add_block_assert_history_store(&temp_producer1, vec![double_vote_proof], vec![], false);
 
     // Revert block and assert that history store is reverted as well.
     revert_block(&temp_producer1, &hist_tx_pre);
@@ -336,16 +345,76 @@ fn it_pushes_and_reverts_double_vote_equivocation_block() {
 
 #[test]
 fn it_pushes_and_reverts_skip_block() {
-    // Produce a fork in producer 1.
-
     // Adds the same initial block to both producers.
     let (temp_producer1, _temp_producer2) = setup_blockchain_with_history();
 
     // Get initial history store.
     let hist_tx_pre = get_hist_tx(&temp_producer1);
 
-    add_block_assert_history_store(&temp_producer1, vec![], true);
+    // Adds skip block.
+    add_block_assert_history_store(&temp_producer1, vec![], vec![], true);
 
     // Revert block and assert that history store is reverted as well.
     revert_block(&temp_producer1, &hist_tx_pre);
+}
+
+#[test]
+fn it_pushes_and_reverts_block_with_txns() {
+    // Adds the same initial block to both producers.
+    let (temp_producer1, _temp_producer2) = setup_blockchain_with_history();
+
+    // Get initial history store.
+    let hist_tx_pre = get_hist_tx(&temp_producer1);
+
+    // Adds block with transactions.
+    let key_pair = key_pair_with_funds();
+    let mut txns = generate_transactions(
+        &key_pair,
+        temp_producer1.blockchain.read().block_number(),
+        NetworkId::UnitAlbatross,
+        3,
+        0,
+    );
+    txns.sort_unstable();
+
+    add_block_assert_history_store(&temp_producer1, vec![], txns, false);
+
+    // Revert block and assert that history store is reverted as well.
+    revert_block(&temp_producer1, &hist_tx_pre);
+}
+
+#[test]
+fn it_pushes_macro_block_with_rewards() {
+    // Adds the same initial block to both producers.
+    let (temp_producer1, _temp_producer2) = setup_blockchain_with_history();
+
+    // Get initial history store.
+    let hist_tx_pre = get_hist_tx(&temp_producer1);
+
+    // Adds block with transactions.
+    produce_macro_blocks(&temp_producer1.producer, &temp_producer1.blockchain, 2);
+
+    let hist_tx_after = get_hist_tx(&temp_producer1);
+
+    // Simple case. 1x Reward to validator.
+    let reward_txs = {
+        let macro_block = temp_producer1.blockchain.read().head().unwrap_macro();
+        macro_block.body.unwrap().transactions
+    };
+    assert_eq!(reward_txs.len(), 1);
+
+    assert_eq!(hist_tx_after.len(), hist_tx_pre.len() + reward_txs.len());
+
+    let mut i = hist_tx_pre.len();
+    for reward_tx in reward_txs {
+        assert_eq!(
+            &RewardEvent {
+                validator_address: reward_tx.validator_address,
+                reward_address: reward_tx.recipient,
+                value: reward_tx.value
+            },
+            hist_tx_after[i].unwrap_reward()
+        );
+        i += 1;
+    }
 }
