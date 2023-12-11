@@ -197,6 +197,7 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
                 }
                 LiveSyncEvent::PeerEvent(peer_event) => match peer_event {
                     LiveSyncPeerEvent::Behind(peer_id) => {
+                        self.outdated_timeouts.insert(peer_id, Instant::now());
                         self.outdated_peers.insert(peer_id);
                     }
                     LiveSyncPeerEvent::Ahead(peer_id) => {
