@@ -371,7 +371,7 @@ async fn send_invalid_block() {
         Block::Micro(block)
     };
 
-    let mock_id = MockId::new(mock_node.network.get_local_peer_id());
+    let mock_id = MockId::new(hub.new_address().into());
 
     // Send block2 first
     block_tx
