@@ -57,7 +57,7 @@ nimiq-validator-network = { workspace = true }
 
 # For now we need to use a fork
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", branch = "libp2p_0.53.1", default-features = false, features = [
+libp2p = { version = "0.53.2", default-features = false, features = [
     "gossipsub",
     "identify",
     "kad",
@@ -72,7 +72,7 @@ libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", branch = "libp2
 
 # For now we need to use a fork
 [target.'cfg(target_family = "wasm")'.dependencies]
-libp2p = { git = "https://github.com/jsdanielh/rust-libp2p.git", branch = "libp2p_0.53.1", default-features = false, features = [
+libp2p = { version = "0.53.2", default-features = false, features = [
     "gossipsub",
     "identify",
     "kad",

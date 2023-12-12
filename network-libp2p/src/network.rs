@@ -331,8 +331,7 @@ impl Network {
             let transport = MemoryTransport::default();
             // Fixme: Handle wasm compatible transport
 
-            let mut yamux = yamux::Config::default();
-            yamux.set_window_update_mode(yamux::WindowUpdateMode::on_read());
+            let yamux = yamux::Config::default();
 
             Ok(transport
                 .upgrade(core::upgrade::Version::V1)
@@ -366,8 +365,7 @@ impl Network {
             #[cfg(all(not(feature = "tokio-websocket"), not(target_family = "wasm")))]
             let transport = MemoryTransport::default();
 
-            let mut yamux = yamux::Config::default();
-            yamux.set_window_update_mode(yamux::WindowUpdateMode::on_read());
+            let yamux = yamux::Config::default();
 
             Ok(transport
                 .upgrade(core::upgrade::Version::V1)
