@@ -1,16 +1,21 @@
 use std::num::NonZeroU8;
 
-use curve25519_dalek::EdwardsPoint;
-use itertools::Itertools;
 use nimiq_hash::Blake2bHasher;
 use nimiq_keys::{
-    multisig::{hash_public_keys, Commitment, CommitmentPair, PartialSignature, RandomSecret},
-    Address, KeyPair, PublicKey, SecureGenerate, SecureRng, Signature,
+    multisig::{
+        address::{combine_public_keys, compute_address},
+        commitment::{Commitment, CommitmentPair},
+        error::PartialSignatureError,
+        partial_signature::PartialSignature,
+        public_key::DelinearizedPublicKey,
+        CommitmentsData, MUSIG2_PARAMETER_V,
+    },
+    Address, KeyPair, PublicKey, SecureGenerate,
 };
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_serde::Serialize;
 use nimiq_transaction::{SignatureProof, Transaction};
-use nimiq_utils::merkle::{compute_root_from_content_slice, MerklePath};
+use nimiq_utils::merkle::Blake2bMerklePath;
 use thiserror::Error;
 
 /// A multi-signature account is an account that requires multiple signatures to authorize outgoing transactions.
@@ -48,11 +53,7 @@ impl MultiSigAccount {
         let mut sorted_public_keys = public_keys.to_vec();
         sorted_public_keys.sort();
 
-        let multi_sig_keys: Vec<PublicKey> = sorted_public_keys
-            .into_iter()
-            .combinations(min_signatures.get() as usize)
-            .map(|pk| MultiSigAccount::aggregate_public_keys(&pk))
-            .collect();
+        let multi_sig_keys = combine_public_keys(sorted_public_keys, min_signatures.get() as usize);
 
         Ok(Self::new(key_pair, min_signatures, &multi_sig_keys))
     }
@@ -67,9 +68,7 @@ impl MultiSigAccount {
     /// * `public_keys` - A list of all aggregated public keys.
     pub fn new(key_pair: &KeyPair, min_signatures: NonZeroU8, public_keys: &[PublicKey]) -> Self {
         Self {
-            address: Address::from(compute_root_from_content_slice::<Blake2bHasher, PublicKey>(
-                public_keys,
-            )),
+            address: compute_address(public_keys),
             key_pair: key_pair.clone(),
             min_signatures,
             public_keys: public_keys.to_vec(),
@@ -78,8 +77,12 @@ impl MultiSigAccount {
 
     /// Generates a new commitment pair containing a commitment and a random secret.
     #[inline]
-    pub fn create_commitment(&self) -> CommitmentPair {
-        CommitmentPair::generate(&mut SecureRng::default())
+    pub fn create_commitments(&self) -> [CommitmentPair; MUSIG2_PARAMETER_V] {
+        let mut own_commitments = Vec::with_capacity(MUSIG2_PARAMETER_V);
+        for _ in 0..MUSIG2_PARAMETER_V {
+            own_commitments.push(CommitmentPair::generate_default_csprng());
+        }
+        own_commitments.try_into().unwrap()
     }
 
     /// Creates an unsigned transaction.
@@ -103,39 +106,17 @@ impl MultiSigAccount {
 
     /// Utility method that delinearizes and aggregates the provided slice of public keys.
     pub fn aggregate_public_keys(public_keys: &[PublicKey]) -> PublicKey {
-        let mut sorted_public_keys = public_keys.to_vec();
-        sorted_public_keys.sort();
-
-        let public_keys_hash = hash_public_keys(&sorted_public_keys);
-        let delinearized_pk_sum: EdwardsPoint = public_keys
-            .iter()
-            .map(|public_key| public_key.delinearize(&public_keys_hash))
-            .sum();
-
-        let mut public_key_bytes: [u8; PublicKey::SIZE] = [0u8; PublicKey::SIZE];
-        public_key_bytes.copy_from_slice(delinearized_pk_sum.compress().as_bytes());
-        PublicKey::from(public_key_bytes)
+        DelinearizedPublicKey::sum_delinearized(public_keys)
     }
 
     /// Creates a partial signature of the provided transaction.
     pub fn partially_sign_transaction(
         &self,
         transaction: &Transaction,
-        public_keys: &[PublicKey],
-        commitments: &[Commitment],
-        secret: &RandomSecret,
-    ) -> PartialSignature {
-        let mut sorted_public_keys = public_keys.to_vec();
-        sorted_public_keys.sort();
-
+        commitments_data: &CommitmentsData,
+    ) -> Result<PartialSignature, PartialSignatureError> {
         self.key_pair
-            .partial_sign(
-                &sorted_public_keys,
-                secret,
-                commitments,
-                transaction.serialize_content().as_slice(),
-            )
-            .0
+            .partial_sign(commitments_data, transaction.serialize_content().as_slice())
     }
 
     /// Creates a signature proof.
@@ -143,24 +124,17 @@ impl MultiSigAccount {
         &self,
         aggregated_public_key: &PublicKey,
         aggregated_commitment: &Commitment,
-        signatures: &[PartialSignature],
+        partial_signatures: &[PartialSignature],
     ) -> Result<SignatureProof, MultiSigAccountError> {
-        if signatures.len() != self.min_signatures.get() as usize {
+        if partial_signatures.len() != self.min_signatures.get() as usize {
             return Err(MultiSigAccountError::InvalidSignaturesLength);
         }
 
-        let aggregated_signature: PartialSignature = signatures.iter().sum();
-        let raw_aggregated_signature = aggregated_signature.as_bytes();
-        let raw_aggregated_commitment = aggregated_commitment.to_bytes();
-
-        let mut combined =
-            Vec::with_capacity(raw_aggregated_signature.len() + raw_aggregated_commitment.len());
-        combined.extend_from_slice(&aggregated_commitment.to_bytes());
-        combined.extend_from_slice(aggregated_signature.as_bytes());
-        let signature = Signature::from_bytes(&combined)?;
+        let aggregated_signature: PartialSignature = partial_signatures.iter().sum();
+        let signature = aggregated_signature.to_signature(aggregated_commitment);
 
         Ok(SignatureProof {
-            merkle_path: MerklePath::new::<Blake2bHasher, PublicKey>(
+            merkle_path: Blake2bMerklePath::new::<Blake2bHasher, _>(
                 &self.public_keys,
                 aggregated_public_key,
             ),

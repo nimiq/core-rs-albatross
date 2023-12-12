@@ -1,7 +1,10 @@
 [package]
 name = "nimiq-keys"
 version.workspace = true
-authors = ["Pascal B <git@paberr.net>", "The Nimiq Core Development Team <info@nimiq.com>"]
+authors = [
+    "Pascal B <git@paberr.net>",
+    "The Nimiq Core Development Team <info@nimiq.com>",
+]
 license.workspace = true
 edition.workspace = true
 description = "Ed25519 cryptographic key handling and signatures for Nimiq"
@@ -20,7 +23,10 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-curve25519-dalek = { version = "4", features = ["digest", "legacy_compatibility"] }
+curve25519-dalek = { version = "4", features = [
+    "digest",
+    "legacy_compatibility",
+] }
 data-encoding = "2.5"
 ed25519-zebra = "4.0"
 hex = "0.4"
@@ -30,6 +36,8 @@ serde = { version = "1.0", optional = true }
 serde-big-array = { version = "0.5", optional = true }
 sha2 = "0.10"
 thiserror = "1.0"
+itertools = "0.10.3"
+zeroize = { version = "1.5", features = ["zeroize_derive"] }
 
 nimiq-database-value = { workspace = true }
 nimiq-hash = { workspace = true }

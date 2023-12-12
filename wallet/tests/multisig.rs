@@ -1,7 +1,10 @@
 use std::num::NonZeroU8;
 
 use hex::FromHex;
-use nimiq_keys::{multisig::Commitment, Address, KeyPair, PrivateKey, PublicKey};
+use nimiq_keys::{
+    multisig::{commitment::CommitmentPair, CommitmentsBuilder},
+    Address, KeyPair, PrivateKey,
+};
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_wallet::MultiSigAccount;
 
@@ -23,18 +26,8 @@ pub fn it_can_create_valid_transactions() {
     let multi_sig_2 =
         MultiSigAccount::from_public_keys(&kp2, NonZeroU8::new(2).unwrap(), &public_keys).unwrap();
 
-    let commitment_pair1 = multi_sig_1.create_commitment();
-    let commitment_pair2 = multi_sig_2.create_commitment();
-
-    let commitments = vec![
-        *commitment_pair1.commitment(),
-        *commitment_pair2.commitment(),
-    ];
-
-    let aggregated_commitment: Commitment = commitments.iter().sum();
-
-    let aggregated_public_key: PublicKey =
-        MultiSigAccount::aggregate_public_keys(&[kp1.public, kp2.public]);
+    let commitment_pairs1 = multi_sig_1.create_commitments();
+    let commitment_pairs2 = multi_sig_2.create_commitments();
 
     let transaction = multi_sig_1.create_transaction(
         Address::from_any_str("NQ68 D40E KU4Q V8JV E96E X1M1 5NL6 KUYC SQXS").unwrap(),
@@ -44,25 +37,31 @@ pub fn it_can_create_valid_transactions() {
         NetworkId::Dummy,
     );
 
-    let partial_signature1 = multi_sig_1.partially_sign_transaction(
-        &transaction,
-        &public_keys,
-        &commitments,
-        commitment_pair1.random_secret(),
-    );
+    let data1 = CommitmentsBuilder::with_private_commitments(kp1.public, commitment_pairs1)
+        .with_signer(
+            kp2.public,
+            CommitmentPair::to_commitments(&commitment_pairs2),
+        )
+        .build(&transaction.serialize_content());
+    let data2 = CommitmentsBuilder::with_private_commitments(kp2.public, commitment_pairs2)
+        .with_signer(
+            kp1.public,
+            CommitmentPair::to_commitments(&commitment_pairs1),
+        )
+        .build(&transaction.serialize_content());
 
-    let partial_signature2 = multi_sig_2.partially_sign_transaction(
-        &transaction,
-        &public_keys,
-        &commitments,
-        commitment_pair2.random_secret(),
-    );
+    let partial_signature1 = multi_sig_1
+        .partially_sign_transaction(&transaction, &data1)
+        .unwrap();
+    let partial_signature2 = multi_sig_2
+        .partially_sign_transaction(&transaction, &data2)
+        .unwrap();
 
     let tx = multi_sig_1
         .sign_transaction(
             &transaction,
-            &aggregated_public_key,
-            &aggregated_commitment,
+            &data1.aggregate_public_key,
+            &data1.aggregate_commitment,
             &[partial_signature1, partial_signature2],
         )
         .unwrap();
@@ -126,14 +125,16 @@ pub fn from_public_keys_order_does_not_matter() {
         &kp1,
         NonZeroU8::new(2).unwrap(),
         &[kp1.public, kp2.public],
-    );
+    )
+    .unwrap();
     let multi_sig_2 = MultiSigAccount::from_public_keys(
         &kp1,
         NonZeroU8::new(2).unwrap(),
-        &[kp1.public, kp2.public],
-    );
+        &[kp2.public, kp1.public],
+    )
+    .unwrap();
 
-    assert_eq!(multi_sig_1.unwrap().address, multi_sig_2.unwrap().address);
+    assert_eq!(multi_sig_1.address, multi_sig_2.address);
 }
 
 #[test]
