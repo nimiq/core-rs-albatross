@@ -427,7 +427,7 @@ fn can_converge_with_changes_in_staking_contract() {
                     &key_pair,
                     &KeyPair::generate(&mut rng),
                     None,
-                    100.try_into().unwrap(),
+                    Policy::MINIMUM_STAKE.try_into().unwrap(),
                     Coin::ZERO,
                     height,
                     NetworkId::UnitAlbatross,

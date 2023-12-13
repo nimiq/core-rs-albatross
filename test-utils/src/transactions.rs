@@ -219,10 +219,25 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             if fail_sender {
                 value += Coin::from_u64_unchecked(1);
             }
+        } else if matches!(sender, OutgoingType::RemoveStake) {
+            value = Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
+                .checked_sub(fee)
+                .expect("Fee should not be higher than staker stake");
+            if fail_sender {
+                value += Coin::from_u64_unchecked(1);
+            }
         }
-        // Ensure that the value is the validator deposit if we are creating a validator.
+
+        // Ensure that the value is the validator deposit if we are creating a validator or staker.
+        // Ensure that the value
         if matches!(recipient, IncomingType::CreateValidator) {
             value = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
+        } else if matches!(recipient, IncomingType::CreateStaker) {
+            value = Coin::from_u64_unchecked(Policy::MINIMUM_STAKE);
+        } else if matches!(recipient, IncomingType::AddStake) {
+            value = Coin::from_u64_unchecked(Policy::MINIMUM_STAKE);
+        } else if matches!(recipient, IncomingType::SetActiveStake) {
+            value = Coin::ZERO;
         }
 
         let sender_data = if matches!(sender, OutgoingType::RemoveStake) {
@@ -497,7 +512,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             }
             OutgoingType::DeleteValidator | OutgoingType::RemoveStake => {
                 let (validator_key_pair, _, staker_key_pair) =
-                    self.create_validator_and_staker(balance, ValidatorState::Retired, true);
+                    self.create_validator_and_staker(ValidatorState::Retired, true);
                 OutgoingAccountData::Staking {
                     validator_key_pair,
                     staker_key_pair,
@@ -545,7 +560,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             },
             IncomingType::CreateValidator => {
                 let (existing_validator_key_pair, _, staker_key_pair) =
-                    self.create_validator_and_staker(balance, ValidatorState::Active, false);
+                    self.create_validator_and_staker(ValidatorState::Active, false);
                 let mut validator_key_pair = KeyPair::generate(&mut self.rng);
                 let validator_voting_key_pair = BlsKeyPair::generate(&mut self.rng);
                 let validator_voting_key_compressed =
@@ -573,7 +588,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             }
             IncomingType::UpdateValidator => {
                 let (mut validator_key_pair, _, staker_key_pair) =
-                    self.create_validator_and_staker(balance, ValidatorState::Active, false);
+                    self.create_validator_and_staker(ValidatorState::Active, false);
 
                 let new_validator_key_pair = KeyPair::generate(&mut self.rng);
                 let new_validator_voting_key_pair = BlsKeyPair::generate(&mut self.rng);
@@ -604,7 +619,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             }
             IncomingType::DeactivateValidator => {
                 let (mut validator_key_pair, _, staker_key_pair) =
-                    self.create_validator_and_staker(balance, ValidatorState::Active, false);
+                    self.create_validator_and_staker(ValidatorState::Active, false);
 
                 // We can make the transaction fail by using a non-existing validator address.
                 if fail_recipient {
@@ -622,7 +637,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             }
             IncomingType::ReactivateValidator => {
                 let (mut validator_key_pair, _, staker_key_pair) =
-                    self.create_validator_and_staker(balance, ValidatorState::Inactive, false);
+                    self.create_validator_and_staker(ValidatorState::Inactive, false);
 
                 // We can make the transaction fail by using a non-existing validator address.
                 if fail_recipient {
@@ -640,7 +655,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             }
             IncomingType::RetireValidator => {
                 let (mut validator_key_pair, _, staker_key_pair) =
-                    self.create_validator_and_staker(balance, ValidatorState::Active, false);
+                    self.create_validator_and_staker(ValidatorState::Active, false);
 
                 // We can make the transaction fail by using a non-existing validator address.
                 if fail_recipient {
@@ -657,7 +672,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             }
             IncomingType::CreateStaker => {
                 let (validator_key_pair, _, existing_staker_key_pair) =
-                    self.create_validator_and_staker(balance, ValidatorState::Active, false);
+                    self.create_validator_and_staker(ValidatorState::Active, false);
 
                 let mut staker_key_pair = KeyPair::generate(&mut self.rng);
 
@@ -675,9 +690,9 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                     staker_key_pair,
                 }
             }
-            IncomingType::AddStake | IncomingType::SetActiveStake => {
+            IncomingType::AddStake => {
                 let (validator_key_pair, _, mut staker_key_pair) =
-                    self.create_validator_and_staker(balance, ValidatorState::Active, false);
+                    self.create_validator_and_staker(ValidatorState::Active, false);
 
                 // We can make the transaction fail by using a non-existing staker address.
                 if fail_recipient {
@@ -692,13 +707,31 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                     staker_key_pair,
                 }
             }
+            IncomingType::SetActiveStake => {
+                let (validator_key_pair, _, mut staker_key_pair) =
+                    self.create_validator_and_staker(ValidatorState::Active, false);
+
+                // We can make the transaction fail by using a non-existing staker address.
+                if fail_recipient {
+                    staker_key_pair = KeyPair::generate(&mut self.rng);
+                }
+
+                IncomingAccountData::Staking {
+                    parameters: IncomingStakingTransactionData::SetActiveStake {
+                        new_active_balance: balance,
+                        proof: SignatureProof::default(),
+                    },
+                    validator_key_pair,
+                    staker_key_pair,
+                }
+            }
             IncomingType::UpdateStaker => {
                 // Create a staker that stakes for a validator.
                 let (_, _, mut staker_key_pair) =
-                    self.create_validator_and_staker(balance, ValidatorState::Active, true);
+                    self.create_validator_and_staker(ValidatorState::Active, true);
                 // Then create another validator to switch to.
                 let (validator_key_pair, _, _) =
-                    self.create_validator_and_staker(balance, ValidatorState::Active, false);
+                    self.create_validator_and_staker(ValidatorState::Active, false);
 
                 // We can make the transaction fail by using a non-existing staker address.
                 if fail_recipient {
@@ -724,7 +757,6 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
     /// `validator_voting_key_pair` and `staker_key_pair`.
     pub fn create_validator_and_staker(
         &mut self,
-        balance: Coin,
         validator_state: ValidatorState,
         staker_inactive: bool,
     ) -> (KeyPair, BlsKeyPair, KeyPair) {
@@ -798,7 +830,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             .create_staker(
                 &mut store,
                 &Address::from(&staker_key_pair),
-                balance,
+                Coin::from_u64_unchecked(Policy::MINIMUM_STAKE),
                 Some(Address::from(&validator_key_pair)),
                 Coin::ZERO,
                 None,

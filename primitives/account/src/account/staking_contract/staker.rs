@@ -35,7 +35,7 @@ use crate::{
 ///                      This action is only possible if:
 ///                        (a) the stake was previously not delegated (i.e., delegated to `None`)
 ///                        (b) the active balance is zero and the inactive balance has been released (*).
-/// 4. Unstake:          Removes coins from a staker's balance to outside the staking contract.
+/// 4. RemoveStake:      Removes coins from a staker's balance to outside the staking contract.
 ///                      Only inactive stake that has been released can be withdrawn (*).
 ///
 /// (*) For inactive balance to be released, the maximum of the lock-up period for inactive stake
@@ -90,6 +90,9 @@ impl StakingContract {
         if let Some(validator_address) = &delegation {
             store.expect_validator(validator_address)?;
         }
+
+        // The minimum stake is already checked during intrinsic transaction verification.
+        // All checks passed, not allowed to fail from here on!
 
         // Create the staker struct.
         let staker = Staker {
@@ -167,6 +170,10 @@ impl StakingContract {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
 
+        // Fail if active stake will become lower than allowed minimum stake.
+        let new_active_balance = staker.balance + value;
+        self.can_change_active_stake(new_active_balance)?;
+
         // If we are delegating to a validator, we need to update it.
         if let Some(validator_address) = &staker.delegation {
             // Check that the delegation is still valid, i.e. the validator hasn't been deleted.
@@ -175,7 +182,7 @@ impl StakingContract {
         }
 
         // Update the staker's balance.
-        staker.balance += value;
+        staker.balance = new_active_balance;
 
         // Update our balance.
         self.balance += value;
@@ -411,6 +418,9 @@ impl StakingContract {
             });
         }
 
+        // Fail if active stake will become lower than allowed minimum stake.
+        self.can_change_active_stake(new_active_balance)?;
+
         // All checks passed, not allowed to fail from here on!
 
         // Store old values for receipt.
@@ -500,7 +510,7 @@ impl StakingContract {
         Ok(())
     }
 
-    pub(crate) fn can_remove_stake<S: StakingContractStoreReadOps>(
+    pub(crate) fn is_stake_released<S: StakingContractStoreReadOps>(
         &self,
         store: &S,
         staker: &Staker,
@@ -530,6 +540,7 @@ impl StakingContract {
                 }
             }
         }
+
         Ok(())
     }
 
@@ -546,11 +557,26 @@ impl StakingContract {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
 
-        // Compute the new balance of the staker. We can't update `staker` here yet as
-        // `unregister_staker_from_validator` needs the original balance intact.
-        let new_balance = staker.inactive_balance.safe_sub(value)?;
+        // Fail if the value is too high.
+        let new_inactive_balance = staker.inactive_balance.safe_sub(value)?;
 
-        self.can_remove_stake(store, &staker, block_number)?;
+        // Fail if this operation would leave a staker with a balance violating the minimum stake.
+        // However, if this operation will result in a removal of the staker, it is allowed.
+        if !(staker.balance.is_zero() && new_inactive_balance.is_zero())
+            && staker.balance + new_inactive_balance
+                < Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
+        {
+            debug!(
+                ?staker.balance,
+                ?staker.inactive_balance,
+                ?value,
+                "Tried to remove stake that would violate the minimum stake allowed"
+            );
+            return Err(AccountError::InvalidCoinValue);
+        }
+
+        // Fail if the stake if the stake is still in cool down or allocated to a jailed validator.
+        self.is_stake_released(store, &staker, block_number)?;
 
         // All checks passed, not allowed to fail from here on!
 
@@ -559,7 +585,7 @@ impl StakingContract {
         let old_delegation = staker.delegation.clone();
 
         // Update the staker's balance.
-        staker.inactive_balance = new_balance;
+        staker.inactive_balance -= value;
         if staker.inactive_balance.is_zero() {
             staker.inactive_from = None;
         }
@@ -574,7 +600,7 @@ impl StakingContract {
         });
 
         // Update or remove the staker entry, depending on remaining balance.
-        // We do not update the validator's stake balance because unstake
+        // We do not update the validator's stake balance because remove stake
         // is only referring to already inactivated and thus already removed stake
         // balance (from the validator).
         if staker.balance.is_zero() && staker.inactive_balance.is_zero() {
@@ -633,6 +659,18 @@ impl StakingContract {
 
         // Update the staker entry.
         store.put_staker(staker_address, staker);
+
+        Ok(())
+    }
+
+    fn can_change_active_stake(&self, new_active_balance: Coin) -> Result<(), AccountError> {
+        // Fail if active stake will become lower than allowed minimum stake.
+        if !new_active_balance.is_zero()
+            && new_active_balance < Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
+        {
+            debug!("Tried to set active balance to less than the minimum stake");
+            return Err(AccountError::InvalidCoinValue);
+        }
 
         Ok(())
     }

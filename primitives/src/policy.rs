@@ -105,6 +105,11 @@ impl Policy {
     /// in proof-of-work.
     pub const VALIDATOR_DEPOSIT: u64 = 10_000_000_000;
 
+    /// The stake necessary to create a staker in Lunas (1 NIM = 100,000 Lunas).
+    /// This is also the minimum amount of active stake a staker can have and the minimum amount of
+    /// total stake a staker can have.
+    pub const MINIMUM_STAKE: u64 = 10_000_000;
+
     /// The number of epochs a validator is put in jail for. The jailing only happens for severe offenses.
     pub const JAIL_EPOCHS: u32 = 8;
 

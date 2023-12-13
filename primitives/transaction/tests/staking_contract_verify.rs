@@ -474,12 +474,12 @@ fn create_staker() {
             delegation: Some(VALIDATOR_ADDRESS.parse().unwrap()),
             proof: SignatureProof::default(),
         },
-        100,
+        Policy::MINIMUM_STAKE,
         &keypair,
         None,
     );
 
-    let tx_hex = "018c551fabc6e6e00c609c3f0313257ad7e835643c000000000000000000000000000000000000000000010377050183fa05dbe31f85e719f4c4fd67ebdba2e444d9f8b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500e7148694ef5ccb6d774ef46d3a5f94f6075ecb526c50bb9a9b9ab4056cecfbc86d3672608b6736f41dbf155d1d0fe4b3f76c628ec7184400ddf8fe53b6ed2d040000000000000064000000000000006400000001040061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500fe297fbfa21f6aa595546a5cd50a5c7af3f95ef3d95e67167c35213baad5264e9548b570fff2cc75573ffe1d8c1acfc1858927ae985b1935b155c19d6f2d7b07";
+    let tx_hex = "018c551fabc6e6e00c609c3f0313257ad7e835643c000000000000000000000000000000000000000000010377050183fa05dbe31f85e719f4c4fd67ebdba2e444d9f8b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500878b7dab21a929553780f7f1d51ba217283d5d64f6770933244473c0cb006e3839422a826054ea5ef284b9d661b78fc80522e54d7cb4b75d95708454298cba090000000000989680000000000000006400000001040061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500b086829753f208175120affa60d4f5b27ed1a678adc02b1d6c5b99cb1e75127456e425da5d2057d76d428217a9b43a900acb8dcee5be0bed222dd4ddcfb6d900";
     let tx_size = 284;
 
     let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
@@ -494,11 +494,11 @@ fn create_staker() {
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
 
     // Deposit too small.
-    tx.value = Coin::ZERO;
+    tx.value = Coin::from_u64_unchecked(Policy::MINIMUM_STAKE - 1);
 
     assert_eq!(
         AccountType::verify_incoming_transaction(&tx),
-        Err(TransactionError::ZeroValue)
+        Err(TransactionError::InvalidValue)
     );
 
     // Invalid signature.
@@ -647,9 +647,9 @@ fn delete_validator() {
 }
 
 #[test]
-fn unstake() {
+fn remove_stake() {
     // Test serialization and deserialization.
-    let tx = make_unstake_tx(false);
+    let tx = make_remove_stake_tx(false);
 
     let tx_hex = "0100000000000000000000000000000000000000010301018c551fabc6e6e00c609c3f0313257ad7e835643c000000000000000003e80000000000000064000000010400617451b039e2f3fcafc3be7c6bd9e01fbc072c956a2b95a335cfb3cd3702335b5300008cddeff67b3d9703b5d5ec1a6fe5165b27135fa7f14151fb43dd9c4948a76528c417ec13871779df77d4373d237c04d09b705962b812817d5f97d8109cdf0a";
     let tx_size = 166;
@@ -666,7 +666,7 @@ fn unstake() {
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
 
     // Wrong signature.
-    let tx = make_unstake_tx(true);
+    let tx = make_remove_stake_tx(true);
 
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
@@ -776,7 +776,7 @@ fn make_delete_validator_tx(value: u64, wrong_sig: bool) -> Transaction {
     tx
 }
 
-fn make_unstake_tx(wrong_sig: bool) -> Transaction {
+fn make_remove_stake_tx(wrong_sig: bool) -> Transaction {
     let mut tx = Transaction::new_extended(
         Policy::STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,

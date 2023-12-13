@@ -1774,7 +1774,7 @@ async fn mempool_regular_and_control_tx() {
         &sender_accounts[0].keypair,
         &sender_accounts[0].keypair,
         None,
-        100.try_into().unwrap(),
+        Policy::MINIMUM_STAKE.try_into().unwrap(),
         1.try_into().unwrap(),
         1 + Policy::genesis_block_number(),
         NetworkId::UnitAlbatross,

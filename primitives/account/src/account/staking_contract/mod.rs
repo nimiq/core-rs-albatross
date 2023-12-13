@@ -47,10 +47,11 @@ mod validator;
 /// ```
 ///
 /// So, for example, if you want to get the validator with a given address then you just fetch the
-/// node with key STAKING_CONTRACT_ADDRESS||PATH_VALIDATORS_LIST||VALIDATOR_ADDRESS||PATH_VALIDATOR_MAIN
-/// from the AccountsTrie (|| means concatenation).
+/// node with key STAKING_CONTRACT_ADDRESS||PREFIX_VALIDATOR||VALIDATOR_ADDRESS from the AccountsTrie
+/// (|| means concatenation).
 /// At a high level, the Staking Contract subtrie contains:
-///     - The Staking contract main. A struct that contains general information about the Staking contract.
+///     - The Staking contract main. A struct that contains general information about the
+///       Staking contract (total balance, active validators and punished slots).
 ///     - A list of Validators. Each of them is a subtrie containing the Validator struct, with all
 ///       the information relative to the Validator.
 ///     - A list of Stakers, with each Staker struct containing all information about a staker.

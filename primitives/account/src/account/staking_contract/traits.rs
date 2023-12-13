@@ -71,15 +71,6 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
 
-                // XXX Already checked during intrinsic transaction verification.
-                // // Get the deposit value.
-                // let deposit = Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT);
-                //
-                // // Verify the transaction was formed properly
-                // if transaction.value != deposit {
-                //     return Err(AccountError::InvalidCoinValue);
-                // }
-
                 self.create_validator(
                     &mut store,
                     &validator_address,
@@ -604,9 +595,11 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
+                // Fetch the staker.
                 let staker = store.expect_staker(&staker_address)?;
 
-                self.can_remove_stake(&store, &staker, block_state.number)?;
+                // Verify that the stake can actually be removed.
+                self.is_stake_released(&store, &staker, block_state.number)?;
 
                 reserved_balance.reserve_for(
                     &staker_address,

@@ -1339,8 +1339,11 @@ fn unstake_works() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut staker_setup =
-        StakerSetup::setup_staker_with_inactive_balance(ValidatorState::Active, 0, 150_000_000);
+    let mut staker_setup = StakerSetup::setup_staker_with_inactive_balance(
+        ValidatorState::Active,
+        0,
+        Policy::MINIMUM_STAKE * 2,
+    );
     let data_store = staker_setup
         .accounts
         .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
@@ -1359,7 +1362,7 @@ fn unstake_works() {
         Policy::block_after_reporting_window(Policy::election_block_after(2)),
         2,
     );
-    let tx = make_unstake_transaction(200_000_000);
+    let tx = make_unstake_transaction(Policy::MINIMUM_STAKE * 2 + 1);
 
     assert_eq!(
         staker_setup.staking_contract.commit_outgoing_transaction(
@@ -1369,13 +1372,14 @@ fn unstake_works() {
             &mut TransactionLog::empty()
         ),
         Err(AccountError::InsufficientFunds {
-            needed: Coin::from_u64_unchecked(200_000_000),
-            balance: Coin::from_u64_unchecked(150_000_000)
+            needed: Coin::from_u64_unchecked(Policy::MINIMUM_STAKE * 2 + 1),
+            balance: Coin::from_u64_unchecked(Policy::MINIMUM_STAKE * 2)
         })
     );
 
+    // Partial unstake.
     // Works in the valid case.
-    let tx = make_unstake_transaction(100_000_000);
+    let tx = make_unstake_transaction(Policy::MINIMUM_STAKE);
 
     let mut tx_logger = TransactionLog::empty();
     let receipt = staker_setup
@@ -1410,7 +1414,7 @@ fn unstake_works() {
             Log::Unstake {
                 staker_address: staker_address.clone(),
                 validator_address: Some(validator_address.clone()),
-                value: Coin::from_u64_unchecked(100_000_000),
+                value: Coin::from_u64_unchecked(Policy::MINIMUM_STAKE),
             }
         ]
     );
@@ -1423,7 +1427,7 @@ fn unstake_works() {
     assert_eq!(staker.address, staker_address);
     assert_eq!(
         staker.inactive_balance,
-        Coin::from_u64_unchecked(50_000_000)
+        Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
     );
     assert_eq!(staker.balance, Coin::ZERO);
     assert_eq!(staker.delegation, Some(validator_address.clone()));
@@ -1441,7 +1445,7 @@ fn unstake_works() {
 
     assert_eq!(
         staker_setup.staking_contract.balance,
-        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 50_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + Policy::MINIMUM_STAKE)
     );
 
     assert_eq!(
@@ -1453,7 +1457,7 @@ fn unstake_works() {
     );
 
     // Works when removing the entire balance.
-    let tx = make_unstake_transaction(50_000_000);
+    let tx = make_unstake_transaction(Policy::MINIMUM_STAKE);
 
     let block_state = BlockState::new(
         Policy::block_after_reporting_window(Policy::election_block_after(2)),
@@ -1494,7 +1498,7 @@ fn unstake_works() {
             Log::Unstake {
                 staker_address: staker_address.clone(),
                 validator_address: Some(validator_address.clone()),
-                value: Coin::from_u64_unchecked(50_000_000),
+                value: Coin::from_u64_unchecked(Policy::MINIMUM_STAKE),
             }
         ]
     );
@@ -1549,7 +1553,7 @@ fn unstake_works() {
             Log::Unstake {
                 staker_address: staker_address.clone(),
                 validator_address: Some(validator_address.clone()),
-                value: Coin::from_u64_unchecked(50_000_000),
+                value: Coin::from_u64_unchecked(Policy::MINIMUM_STAKE),
             },
             Log::Transfer {
                 from: tx.sender.clone(),
@@ -1572,7 +1576,7 @@ fn unstake_works() {
     assert_eq!(staker.address, staker_address);
     assert_eq!(
         staker.inactive_balance,
-        Coin::from_u64_unchecked(50_000_000)
+        Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
     );
     assert_eq!(staker.balance, Coin::ZERO);
     assert_eq!(staker.delegation, Some(validator_address.clone()));
@@ -1590,7 +1594,7 @@ fn unstake_works() {
 
     assert_eq!(
         staker_setup.staking_contract.balance,
-        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 50_000_000)
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + Policy::MINIMUM_STAKE)
     );
 
     assert_eq!(
@@ -1599,6 +1603,44 @@ fn unstake_works() {
             .active_validators
             .get(&validator_address),
         Some(&Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT))
+    );
+}
+
+#[test]
+fn unstake_does_not_allow_nim_stake_to_be_violated() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let mut staker_setup = StakerSetup::setup_staker_with_inactive_balance(
+        ValidatorState::Active,
+        0,
+        Policy::MINIMUM_STAKE * 2,
+    );
+    let data_store = staker_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = staker_setup.env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+    _ = data_store.write(&mut db_txn);
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Doesn't work if the value is greater than the balance.
+    let block_state = BlockState::new(
+        Policy::block_after_reporting_window(Policy::election_block_after(2)),
+        2,
+    );
+    let tx = make_unstake_transaction(Policy::MINIMUM_STAKE + 1);
+
+    assert_eq!(
+        staker_setup.staking_contract.commit_outgoing_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty()
+        ),
+        Err(AccountError::InvalidCoinValue)
     );
 }
 

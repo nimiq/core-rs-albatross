@@ -1,6 +1,6 @@
 use std::{convert::TryFrom, time::Instant};
 
-use log::info;
+use log::{error, info};
 use nimiq_account::{
     Account, Accounts, BasicAccount, BlockLogger, BlockState, InherentOperationReceipt, Log,
     OperationReceipt, TransactionOperationReceipt, TransactionReceipt, VestingContract,
@@ -988,6 +988,16 @@ fn can_revert_transactions() {
 
                     let receipts = accounts.test(&[tx], &[], &block_state);
                     if fail_sender || fail_recipient {
+                        for aa in receipts.transactions.iter() {
+                            match aa {
+                                OperationReceipt::Ok(tx) => {
+                                    error!("Ok {:?}", tx);
+                                }
+                                OperationReceipt::Err(tx, reason) => {
+                                    error!("Ok {:?} - {:?}", tx, reason);
+                                }
+                            }
+                        }
                         assert!(matches!(
                             receipts.transactions[..],
                             [OperationReceipt::Err(..)]
@@ -1031,11 +1041,8 @@ fn can_revert_inherents() {
     let receipts = accounts.test(&[], &[inherent], &block_state);
     assert!(matches!(receipts.inherents[..], [OperationReceipt::Ok(_)]));
 
-    let (validator_key_pair, _, _) = generator.create_validator_and_staker(
-        Coin::from_u64_unchecked(10),
-        ValidatorState::Active,
-        false,
-    );
+    let (validator_key_pair, _, _) =
+        generator.create_validator_and_staker(ValidatorState::Active, false);
 
     info!("Testing inherent Penalize");
     let inherent = Inherent::Penalize {

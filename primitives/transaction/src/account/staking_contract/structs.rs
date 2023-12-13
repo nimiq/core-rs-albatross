@@ -1,4 +1,3 @@
-use log::error;
 use nimiq_bls::{CompressedPublicKey as BlsPublicKey, CompressedSignature as BlsSignature};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
@@ -110,7 +109,7 @@ impl IncomingStakingTransactionData {
             } => {
                 // Validators must be created with exactly the validator deposit amount.
                 if transaction.value != Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT) {
-                    error!("Validator stake value different from VALIDATOR_DEPOSIT. The offending transaction is the following:\n{:?}", transaction);
+                    warn!("Validator stake value different from VALIDATOR_DEPOSIT. The offending transaction is the following:\n{:?}", transaction);
                     return Err(TransactionError::InvalidValue);
                 }
 
@@ -134,7 +133,7 @@ impl IncomingStakingTransactionData {
                     && new_reward_address.is_none()
                     && new_signal_data.is_none()
                 {
-                    error!("Signaling update transactions must actually update something. The offending transaction is the following:\n{:?}", transaction);
+                    warn!("Signaling update transactions must actually update something. The offending transaction is the following:\n{:?}", transaction);
                     return Err(TransactionError::InvalidData);
                 }
 
@@ -161,23 +160,35 @@ impl IncomingStakingTransactionData {
                 verify_transaction_signature(transaction, proof, true)?
             }
             IncomingStakingTransactionData::CreateStaker { proof, .. } => {
-                // Check that stake is bigger than zero.
-                if transaction.value.is_zero() {
-                    warn!("Can't create a staker with zero balance. The offending transaction is the following:\n{:?}", transaction);
-                    return Err(TransactionError::ZeroValue);
+                // Check that stake is bigger than the minimum stake.
+                if transaction.value < Coin::from_u64_unchecked(Policy::MINIMUM_STAKE) {
+                    warn!("Can't create a staker with less than balance. The offending transaction is the following:\n{:?}", transaction);
+                    return Err(TransactionError::InvalidValue);
                 }
 
                 // Check that the signature is correct.
                 verify_transaction_signature(transaction, proof, true)?
             }
             IncomingStakingTransactionData::AddStake { .. } => {
-                // No checks needed.
+                if transaction.value.is_zero() {
+                    warn!("Add stake transactions must actually have higher than 0 value. The offending transaction is the following:\n{:?}", transaction);
+                    return Err(TransactionError::ZeroValue);
+                }
+
+                // No more checks needed.
             }
             IncomingStakingTransactionData::UpdateStaker { proof, .. } => {
                 // Check that the signature is correct.
                 verify_transaction_signature(transaction, proof, true)?
             }
             IncomingStakingTransactionData::SetActiveStake { proof, .. } => {
+                if !transaction.value.is_zero()
+                    && transaction.value < Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
+                {
+                    error!("Active stake must be at least {} or zero. The offending transaction is the following:\n{:?}", Policy::MINIMUM_STAKE,transaction);
+                    return Err(TransactionError::ZeroValue);
+                }
+
                 // Check that the signature is correct.
                 verify_transaction_signature(transaction, proof, true)?
             }
@@ -271,7 +282,7 @@ pub fn verify_transaction_signature(
     };
 
     if !sig_proof.verify(&tx) {
-        error!(
+        warn!(
             "Invalid proof. The offending transaction is the following:\n{:?}",
             transaction
         );
@@ -300,7 +311,7 @@ pub fn verify_proof_of_knowledge(
                 .map_err(|_| TransactionError::InvalidData)?,
         )
     {
-        error!("Verification of the proof of knowledge for a BLS key failed! For the following BLS public key:\n{:?}",
+        warn!("Verification of the proof of knowledge for a BLS key failed! For the following BLS public key:\n{:?}",
             voting_key);
         return Err(TransactionError::InvalidData);
     }

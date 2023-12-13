@@ -1,4 +1,3 @@
-use log::error;
 use nimiq_primitives::account::AccountType;
 use nimiq_serde::Deserialize;
 
@@ -20,7 +19,7 @@ impl AccountTransactionVerification for StakingContractVerifier {
             .flags
             .contains(TransactionFlags::CONTRACT_CREATION)
         {
-            error!(
+            warn!(
                 "Contract creation not allowed for this transaction:\n{:?}",
                 transaction
             );
@@ -32,12 +31,12 @@ impl AccountTransactionVerification for StakingContractVerifier {
         let data = IncomingStakingTransactionData::parse(transaction)?;
 
         if data.is_signaling() != transaction.flags.contains(TransactionFlags::SIGNALING) {
-            error!("Signaling must be set for signaling transactions. The offending transaction is the following:\n{:?}", transaction);
+            warn!("Signaling must be set for signaling transactions. The offending transaction is the following:\n{:?}", transaction);
             return Err(TransactionError::InvalidForRecipient);
         }
 
         if data.is_signaling() && !transaction.value.is_zero() {
-            error!("Signaling transactions must have a value of zero. The offending transaction is the following:\n{:?}", transaction);
+            warn!("Signaling transactions must have a value of zero. The offending transaction is the following:\n{:?}", transaction);
             return Err(TransactionError::InvalidValue);
         }
 
@@ -51,7 +50,6 @@ impl AccountTransactionVerification for StakingContractVerifier {
 
         // Verify signature.
         let proof: SignatureProof = Deserialize::deserialize_from_vec(&transaction.proof[..])?;
-
         if !proof.verify(transaction.serialize_content().as_slice()) {
             warn!("Invalid signature for this transaction:\n{:?}", transaction);
             return Err(TransactionError::InvalidProof);
