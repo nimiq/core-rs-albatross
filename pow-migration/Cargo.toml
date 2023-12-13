@@ -25,7 +25,7 @@ convert_case = "0.6"
 hex = "0.4"
 humantime = "2.1"
 indicatif = "0.17"
-jsonrpsee = { version = "0.20", features = ["client-core"] }
+jsonrpsee = { version = "0.21", features = ["client-core"] }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 nimiq-blockchain = { workspace = true }
 nimiq-bls = { workspace = true }
