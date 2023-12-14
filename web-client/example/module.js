@@ -86,7 +86,7 @@ init().then(async () => {
             transaction.sign(keyPair);
         }
 
-        return client.sendTransaction(transaction.toHex());
+        return client.sendTransaction(transaction);
     }
 
     /**
@@ -113,7 +113,7 @@ init().then(async () => {
         );
         transaction.sign(keyPair);
 
-        return client.sendTransaction(transaction.toHex());
+        return client.sendTransaction(transaction);
     }
 
     /**
@@ -139,7 +139,7 @@ init().then(async () => {
         );
         transaction.sign(keyPair);
 
-        return client.sendTransaction(transaction.toHex());
+        return client.sendTransaction(transaction);
     }
 
     /**
@@ -164,6 +164,6 @@ init().then(async () => {
         );
         transaction.sign(keyPair);
 
-        return client.sendTransaction(transaction.toHex());
+        return client.sendTransaction(transaction);
     }
 });
