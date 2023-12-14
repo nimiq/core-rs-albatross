@@ -148,12 +148,13 @@ impl StakingRecipientBuilder {
         self
     }
 
-    /// This method allows to change the inactive stake balance of the staker.
+    /// This method allows to change the active stake balance of the staker and
+    /// consequentially its inactive balance. Changing the amount of inactive stake
+    /// resets the release time.
     /// It needs to be signed by the key pair corresponding to the staker address.
-    /// Changing the amount of inactive stake resets the release time.
-    pub fn set_inactive_stake(&mut self, new_inactive_balance: Coin) -> &mut Self {
-        self.data = Some(IncomingStakingTransactionData::SetInactiveStake {
-            new_inactive_balance,
+    pub fn set_active_stake(&mut self, new_active_balance: Coin) -> &mut Self {
+        self.data = Some(IncomingStakingTransactionData::SetActiveStake {
+            new_active_balance,
             proof: Default::default(),
         });
         self

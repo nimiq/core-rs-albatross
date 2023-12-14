@@ -1038,7 +1038,7 @@ impl TransactionBuilder {
         Ok(builder.generate().unwrap())
     }
 
-    /// Creates a set inactive stake transaction for a given staker.
+    /// Creates a set active stake transaction for a given staker.
     ///
     /// # Arguments
     ///
@@ -1047,8 +1047,10 @@ impl TransactionBuilder {
     ///                             belonging to this key pair.
     ///  - `staker_key_pair`:       The key pair used to sign the incoming transaction. The staker
     ///                             address will be derived from this key pair.
-    ///  - `value`:                 The value of the stake to be inactivated. This is moved from the
-    ///                             active balance of the staker.
+    ///  - `value`:                 The portion of the total stake to be set as the active stake. Can
+    ///                             be at most the total stake. The difference between this value and
+    ///                             the total stake is set as inactive stake. To inactivate all stake,
+    ///                             set to 0.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
     ///  - `network_id`:            ID of network for which the transaction is meant.
@@ -1061,7 +1063,7 @@ impl TransactionBuilder {
     ///
     /// This is a *signaling transaction*.
     ///
-    pub fn new_set_inactive_stake(
+    pub fn new_set_active_stake(
         key_pair: Option<&KeyPair>,
         staker_key_pair: &KeyPair,
         value: Coin,
@@ -1070,7 +1072,7 @@ impl TransactionBuilder {
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
-        recipient.set_inactive_stake(value);
+        recipient.set_active_stake(value);
 
         let mut builder = Self::new();
         builder

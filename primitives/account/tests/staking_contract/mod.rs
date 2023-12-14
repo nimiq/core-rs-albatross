@@ -456,10 +456,10 @@ impl StakerSetup {
         // Deactivate part of the stake.
         validator_setup
             .staking_contract
-            .set_inactive_stake(
+            .set_active_stake(
                 &mut staking_contract_store,
                 &staker_address,
-                inactive_stake,
+                active_stake,
                 deactivation_block,
                 &mut TransactionLog::empty(),
             )

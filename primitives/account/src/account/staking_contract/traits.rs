@@ -197,17 +197,17 @@ impl AccountTransactionInteraction for StakingContract {
                 )
                 .map(|receipt| Some(receipt.into()))
             }
-            IncomingStakingTransactionData::SetInactiveStake {
-                new_inactive_balance,
+            IncomingStakingTransactionData::SetActiveStake {
+                new_active_balance,
                 proof,
             } => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
-                self.set_inactive_stake(
+                self.set_active_stake(
                     &mut store,
                     &staker_address,
-                    new_inactive_balance,
+                    new_active_balance,
                     block_state.number,
                     tx_logger,
                 )
@@ -284,8 +284,8 @@ impl AccountTransactionInteraction for StakingContract {
 
                 self.revert_update_staker(&mut store, &staker_address, receipt, tx_logger)
             }
-            IncomingStakingTransactionData::SetInactiveStake {
-                new_inactive_balance,
+            IncomingStakingTransactionData::SetActiveStake {
+                new_active_balance,
                 proof,
             } => {
                 // Get the staker address from the proof.
@@ -293,10 +293,10 @@ impl AccountTransactionInteraction for StakingContract {
 
                 let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
-                self.revert_set_inactive_stake(
+                self.revert_set_active_stake(
                     &mut store,
                     &staker_address,
-                    new_inactive_balance,
+                    new_active_balance,
                     receipt,
                     tx_logger,
                 )

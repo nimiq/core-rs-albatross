@@ -80,7 +80,7 @@ pub enum IncomingType {
     CreateStaker,
     AddStake,
     UpdateStaker,
-    SetInactiveStake,
+    SetActiveStake,
 }
 
 impl IncomingType {
@@ -101,7 +101,7 @@ impl IncomingType {
             IncomingType::CreateStaker
                 | IncomingType::AddStake
                 | IncomingType::UpdateStaker
-                | IncomingType::SetInactiveStake
+                | IncomingType::SetActiveStake
         )
     }
 }
@@ -120,7 +120,7 @@ impl From<IncomingType> for AccountType {
             IncomingType::CreateStaker => AccountType::Staking,
             IncomingType::AddStake => AccountType::Staking,
             IncomingType::UpdateStaker => AccountType::Staking,
-            IncomingType::SetInactiveStake => AccountType::Staking,
+            IncomingType::SetActiveStake => AccountType::Staking,
         }
     }
 }
@@ -675,7 +675,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                     staker_key_pair,
                 }
             }
-            IncomingType::AddStake | IncomingType::SetInactiveStake => {
+            IncomingType::AddStake | IncomingType::SetActiveStake => {
                 let (validator_key_pair, _, mut staker_key_pair) =
                     self.create_validator_and_staker(balance, ValidatorState::Active, false);
 
@@ -808,10 +808,10 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
 
         if staker_inactive {
             staking_contract
-                .set_inactive_stake(
+                .set_active_stake(
                     &mut store,
                     &Address::from(&staker_key_pair),
-                    balance,
+                    Coin::ZERO,
                     0,
                     &mut TransactionLog::empty(),
                 )

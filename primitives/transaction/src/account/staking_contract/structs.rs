@@ -77,8 +77,8 @@ pub enum IncomingStakingTransactionData {
         reactivate_all_stake: bool,
         proof: SignatureProof,
     },
-    SetInactiveStake {
-        new_inactive_balance: Coin,
+    SetActiveStake {
+        new_active_balance: Coin,
         proof: SignatureProof,
     },
 }
@@ -92,7 +92,7 @@ impl IncomingStakingTransactionData {
                 | IncomingStakingTransactionData::ReactivateValidator { .. }
                 | IncomingStakingTransactionData::RetireValidator { .. }
                 | IncomingStakingTransactionData::UpdateStaker { .. }
-                | IncomingStakingTransactionData::SetInactiveStake { .. }
+                | IncomingStakingTransactionData::SetActiveStake { .. }
         )
     }
 
@@ -177,7 +177,7 @@ impl IncomingStakingTransactionData {
                 // Check that the signature is correct.
                 verify_transaction_signature(transaction, proof, true)?
             }
-            IncomingStakingTransactionData::SetInactiveStake { proof, .. } => {
+            IncomingStakingTransactionData::SetActiveStake { proof, .. } => {
                 // Check that the signature is correct.
                 verify_transaction_signature(transaction, proof, true)?
             }
@@ -209,7 +209,7 @@ impl IncomingStakingTransactionData {
             IncomingStakingTransactionData::UpdateStaker { proof, .. } => {
                 *proof = signature_proof;
             }
-            IncomingStakingTransactionData::SetInactiveStake { proof, .. } => {
+            IncomingStakingTransactionData::SetActiveStake { proof, .. } => {
                 *proof = signature_proof;
             }
             _ => {}

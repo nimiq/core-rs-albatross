@@ -109,12 +109,12 @@ pub enum TransactionCommand {
         tx_commons: TxCommon,
     },
 
-    /// Sends a `set_inactive_stake` transaction to the network. You can pay the transaction fee from a basic
+    /// Sends a `set_active_stake` transaction to the network. You can pay the transaction fee from a basic
     /// account (by providing the sender wallet) or from the staker account's balance (by not
     /// providing a sender wallet).
-    /// Note: If there already is an inactive balance, it will be modified and the lock-up period restarts.
-    /// The inactive balance is only released after the end of the lock-up period.
-    SetInactiveStake {
+    /// Note: As a side effect of this transaction if there already is some inactive balance, it will be
+    /// modified and the lock-up period restarts. The inactive balance is only released after the end of the lock-up period.
+    SetActiveStake {
         /// The fee will be payed by this wallet if any is provided. In such case the sender wallet must be unlocked prior to this action.
         /// If absent the fee is payed by the stakers account.
         #[clap(long)]
@@ -124,7 +124,7 @@ pub enum TransactionCommand {
         staker_wallet: Address,
 
         /// The new amount of inactive stake.
-        new_inactive_stake: Coin,
+        new_active_stake: Coin,
 
         #[clap(flatten)]
         tx_commons: TxCommon,
@@ -450,19 +450,19 @@ impl HandleSubcommand for TransactionCommand {
                     println!("{txid:#?}");
                 }
             }
-            TransactionCommand::SetInactiveStake {
+            TransactionCommand::SetActiveStake {
                 sender_wallet,
                 staker_wallet,
-                new_inactive_stake,
+                new_active_stake,
                 tx_commons,
             } => {
                 if tx_commons.dry {
                     let tx = client
                         .consensus
-                        .create_set_inactive_stake_transaction(
+                        .create_set_active_stake_transaction(
                             sender_wallet,
                             staker_wallet,
-                            new_inactive_stake,
+                            new_active_stake,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
                         )
@@ -471,10 +471,10 @@ impl HandleSubcommand for TransactionCommand {
                 } else {
                     let txid = client
                         .consensus
-                        .send_set_inactive_stake_transaction(
+                        .send_set_active_stake_transaction(
                             sender_wallet,
                             staker_wallet,
-                            new_inactive_stake,
+                            new_active_stake,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
                         )

@@ -10,14 +10,14 @@ use nimiq_transaction::{
 
 use super::*;
 
-fn make_deactivate_stake_transaction(value: u64) -> Transaction {
+fn make_activate_stake_transaction(value: u64) -> Transaction {
     let private_key =
         PrivateKey::deserialize_from_vec(&hex::decode(STAKER_PRIVATE_KEY).unwrap()).unwrap();
 
     let key_pair = KeyPair::from(private_key);
     make_signed_incoming_transaction(
-        IncomingStakingTransactionData::SetInactiveStake {
-            new_inactive_balance: Coin::try_from(value).unwrap(),
+        IncomingStakingTransactionData::SetActiveStake {
+            new_active_balance: Coin::try_from(value).unwrap(),
             proof: SignatureProof::default(),
         },
         0,
@@ -2102,7 +2102,7 @@ fn can_update_inactive_balance() {
     // Test execution:
     // -----------------------------------
     // Can update inactive stake.
-    let tx = make_deactivate_stake_transaction(100_000_000);
+    let tx = make_activate_stake_transaction(0);
 
     let mut tx_logs = TransactionLog::empty();
     let receipt = staker_setup
@@ -2118,7 +2118,7 @@ fn can_update_inactive_balance() {
     assert_eq!(
         receipt,
         Some(
-            SetInactiveStakeReceipt {
+            SetActiveStakeReceipt {
                 old_inactive_from: Some(staker_setup.effective_inactivation_block_state.number),
                 old_active_balance: staker_setup.active_stake,
             }
@@ -2128,10 +2128,11 @@ fn can_update_inactive_balance() {
 
     assert_eq!(
         tx_logs.logs,
-        vec![Log::SetInactiveStake {
+        vec![Log::SetActiveStake {
             staker_address: staker_setup.staker_address.clone(),
             validator_address: Some(staker_setup.validator_address.clone()),
-            value: Coin::from_u64_unchecked(100_000_000),
+            active_balance: Coin::ZERO,
+            inactive_balance: Coin::from_u64_unchecked(100_000_000),
             inactive_from: Some(Policy::election_block_after(
                 staker_setup.before_release_block_state.number
             ))
@@ -2201,7 +2202,7 @@ fn can_update_inactive_balance() {
     );
 
     // Can update inactive stake to 0.
-    let tx = make_deactivate_stake_transaction(0);
+    let tx = make_activate_stake_transaction(100_000_000);
 
     let receipt = staker_setup
         .staking_contract
@@ -2216,7 +2217,7 @@ fn can_update_inactive_balance() {
     assert_eq!(
         receipt,
         Some(
-            SetInactiveStakeReceipt {
+            SetActiveStakeReceipt {
                 old_inactive_from: Some(staker_setup.effective_inactivation_block_state.number),
                 old_active_balance: staker_setup.active_stake,
             }

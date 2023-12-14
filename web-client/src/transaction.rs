@@ -556,15 +556,15 @@ impl Transaction {
                                 raw: hex::encode(self.recipient_data()),
                             })
                         }
-                        IncomingStakingTransactionData::SetInactiveStake {
-                            new_inactive_balance,
+                        IncomingStakingTransactionData::SetActiveStake {
+                            new_active_balance,
                             proof: _proof,
-                        } => PlainTransactionRecipientData::SetInactiveStake(
-                            PlainSetInactiveStakeData {
+                        } => {
+                            PlainTransactionRecipientData::SetActiveStake(PlainSetActiveStakeData {
                                 raw: hex::encode(self.recipient_data()),
-                                new_inactive_balance: new_inactive_balance.into(),
-                            },
-                        ),
+                                new_active_balance: new_active_balance.into(),
+                            })
+                        }
                     }
                     // In the future we might add other staking notifications
                 } else if self.inner.recipient_type == AccountType::Vesting {
@@ -694,7 +694,7 @@ impl Transaction {
                 PlainTransactionRecipientData::CreateStaker(ref data) => &data.raw,
                 PlainTransactionRecipientData::AddStake(ref data) => &data.raw,
                 PlainTransactionRecipientData::UpdateStaker(ref data) => &data.raw,
-                PlainTransactionRecipientData::SetInactiveStake(ref data) => &data.raw,
+                PlainTransactionRecipientData::SetActiveStake(ref data) => &data.raw,
             })?),
             plain.value,
             plain.fee,
@@ -738,7 +738,7 @@ pub enum PlainTransactionRecipientData {
     CreateStaker(PlainCreateStakerData),
     AddStake(PlainAddStakeData),
     UpdateStaker(PlainUpdateStakerData),
-    SetInactiveStake(PlainSetInactiveStakeData),
+    SetActiveStake(PlainSetActiveStakeData),
 }
 
 /// Placeholder struct to serialize data of transactions as hex strings in the style of the Nimiq 1.0 library.
@@ -832,9 +832,9 @@ pub struct PlainUpdateStakerData {
 /// JSON-compatible and human-readable format of set inactive stake data.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub struct PlainSetInactiveStakeData {
+pub struct PlainSetActiveStakeData {
     pub raw: String,
-    pub new_inactive_balance: u64,
+    pub new_active_balance: u64,
 }
 
 /// Enum over all possible meanings of a transaction's proof.

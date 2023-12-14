@@ -228,22 +228,22 @@ impl TransactionBuilder {
         Ok(Transaction::from_native(tx))
     }
 
-    /// Sets the inactive stake balance of the staker. This is a
+    /// Sets the active stake balance of the staker. This is a
     /// signaling transaction and as such does not transfer any value.
     ///
     /// The returned transaction is not yet signed. You can sign it e.g. with `tx.sign(keyPair)`.
     ///
     /// Throws when the number given for fee does not fit within a u64 or the networkId is unknown.
-    #[wasm_bindgen(js_name = newSetInactiveStake)]
-    pub fn new_set_inactive_stake(
+    #[wasm_bindgen(js_name = newSetActiveStake)]
+    pub fn new_set_active_stake(
         sender: &Address,
-        new_inactive_balance: u64,
+        new_active_balance: u64,
         fee: Option<u64>,
         validity_start_height: u32,
         network_id: u8,
     ) -> Result<Transaction, JsError> {
         let mut recipient = Recipient::new_staking_builder();
-        recipient.set_inactive_stake(Coin::try_from(new_inactive_balance)?);
+        recipient.set_active_stake(Coin::try_from(new_active_balance)?);
 
         let mut builder = nimiq_transaction_builder::TransactionBuilder::new();
         builder

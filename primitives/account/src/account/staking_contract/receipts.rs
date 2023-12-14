@@ -124,16 +124,16 @@ pub struct StakerReceipt {
 }
 convert_receipt!(StakerReceipt);
 
-/// Receipt for set inactive stake transactions. This is necessary to be able to revert
+/// Receipt for set active stake transactions. This is necessary to be able to revert
 /// these transactions.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct SetInactiveStakeReceipt {
+pub struct SetActiveStakeReceipt {
     /// the inactivation block height before this transaction is applied
     pub old_inactive_from: Option<u32>,
     /// the active balance before this transaction is applied
     pub old_active_balance: Coin,
 }
-convert_receipt!(SetInactiveStakeReceipt);
+convert_receipt!(SetActiveStakeReceipt);
 
 /// Receipt for remove stake transactions. This is necessary to be able to revert
 /// these transactions.

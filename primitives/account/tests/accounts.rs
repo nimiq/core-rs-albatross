@@ -926,7 +926,7 @@ fn can_revert_transactions() {
             IncomingType::CreateStaker,
             IncomingType::AddStake,
             IncomingType::UpdateStaker,
-            IncomingType::SetInactiveStake,
+            IncomingType::SetActiveStake,
         ] {
             // Don't send from the staking contract to the staking contract.
             if matches!(
@@ -942,7 +942,7 @@ fn can_revert_transactions() {
                     | IncomingType::CreateStaker
                     | IncomingType::AddStake
                     | IncomingType::UpdateStaker
-                    | IncomingType::SetInactiveStake
+                    | IncomingType::SetActiveStake
             ) {
                 continue;
             }
@@ -963,7 +963,7 @@ fn can_revert_transactions() {
                             | IncomingType::DeactivateValidator
                             | IncomingType::ReactivateValidator
                             | IncomingType::UpdateStaker
-                            | IncomingType::SetInactiveStake
+                            | IncomingType::SetActiveStake
                     )
                 {
                     continue;

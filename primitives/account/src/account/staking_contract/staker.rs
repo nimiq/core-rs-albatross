@@ -17,7 +17,7 @@ use crate::{
         },
         StakerReceipt, StakingContract, Tombstone,
     },
-    Log, RemoveStakeReceipt, SetInactiveStakeReceipt, TransactionLog,
+    Log, RemoveStakeReceipt, SetActiveStakeReceipt, TransactionLog,
 };
 
 /// Struct representing a staker in the staking contract.
@@ -26,7 +26,7 @@ use crate::{
 /// Actions concerning a staker are:
 /// 1. Create:           Creates a staker.
 /// 2. Stake:            Adds coins from any outside address to a staker's active balance.
-/// 3. SetInactiveStake: Re-balances between active and inactive stake by setting the amount of inactive stake.
+/// 3. SetActiveStake:   Re-balances between active and inactive stake by setting the amount of active stake.
 ///                      This action restarts the lock-up period of the inactive stake.
 ///                      Inactive stake is locked up for other actions until the release block.
 ///                      If a delegation is defined and the corresponding validator is jailed,
@@ -41,7 +41,7 @@ use crate::{
 /// (*) For inactive balance to be released, the maximum of the lock-up period for inactive stake
 ///     and the validator's potential jail period must have passed.
 ///
-/// Create, Stake, SetInactiveStake, and Update are incoming transactions to the staking contract.
+/// Create, Stake, SetActiveStake, and Update are incoming transactions to the staking contract.
 /// Unstake is an outgoing transaction from the staking contract.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Staker {
@@ -384,28 +384,29 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Deactivates a portion of the coins from a staker's balance. The inactive balance
-    /// will be available to unstake after a lock up period and, if applicable,
+    /// Changes the active and consequentially the inactive balances of staker.
+    /// The active balance will be set immediately.
+    /// The inactive balance will be available to withdraw after a lock up period and, if applicable,
     /// until the jail period is finished.
-    /// If the staker has already inactive stake, the corresponding balance will be overwritten and
-    /// the lock up period will be reset. This corresponds to editing the inactive stake balance
-    /// and re-adjusting the active stake balance.
-    pub fn set_inactive_stake(
+    /// If the staker has already some inactive stake, the corresponding balance will be overwritten and
+    /// the lock up period will be reset. This corresponds to editing the active stake balance
+    /// and re-adjusting the inactive stake balance.
+    pub fn set_active_stake(
         &mut self,
         store: &mut StakingContractStoreWrite,
         staker_address: &Address,
-        new_inactive_balance: Coin,
+        new_active_balance: Coin,
         block_number: u32,
         tx_logger: &mut TransactionLog,
-    ) -> Result<SetInactiveStakeReceipt, AccountError> {
+    ) -> Result<SetActiveStakeReceipt, AccountError> {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
 
         // Fail if staker does not have sufficient funds.
         let total_balance = staker.balance + staker.inactive_balance;
-        if total_balance < new_inactive_balance {
+        if total_balance < new_active_balance {
             return Err(AccountError::InsufficientFunds {
-                needed: new_inactive_balance,
+                needed: new_active_balance,
                 balance: total_balance,
             });
         }
@@ -415,7 +416,7 @@ impl StakingContract {
         // Store old values for receipt.
         let old_inactive_from = staker.inactive_from;
         let old_active_balance = staker.balance;
-        let new_active_balance = total_balance - new_inactive_balance;
+        let new_inactive_balance = total_balance - new_active_balance;
 
         // If we are delegating to a validator, we update the active stake of the validator.
         // This function never changes the staker's delegation, so the validator counter should not be updated.
@@ -438,29 +439,30 @@ impl StakingContract {
             Some(Policy::election_block_after(block_number))
         };
 
-        tx_logger.push_log(Log::SetInactiveStake {
+        tx_logger.push_log(Log::SetActiveStake {
             staker_address: staker_address.clone(),
             validator_address: staker.delegation.clone(),
-            value: new_inactive_balance,
+            active_balance: new_active_balance,
+            inactive_balance: new_inactive_balance,
             inactive_from: staker.inactive_from,
         });
 
         // Update the staker entry.
         store.put_staker(staker_address, staker);
 
-        Ok(SetInactiveStakeReceipt {
+        Ok(SetActiveStakeReceipt {
             old_inactive_from,
             old_active_balance,
         })
     }
 
     /// Reverts a deactivate stake transaction.
-    pub fn revert_set_inactive_stake(
+    pub fn revert_set_active_stake(
         &mut self,
         store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         value: Coin,
-        receipt: SetInactiveStakeReceipt,
+        receipt: SetActiveStakeReceipt,
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Get the staker.
@@ -470,7 +472,7 @@ impl StakingContract {
 
         // Keep the old values.
         let old_inactive_from = staker.inactive_from;
-        let old_balance = staker.balance;
+        let old_inactive_balance = staker.inactive_balance;
 
         // Restore the previous inactive since and balances.
         staker.inactive_from = receipt.old_inactive_from;
@@ -480,14 +482,15 @@ impl StakingContract {
         // If we are delegating to a validator, we update the active stake of the validator.
         // This function never changes the staker's delegation, so the validator counter should not be updated.
         if let Some(validator_address) = &staker.delegation {
-            self.update_stake_for_validator(store, validator_address, old_balance, staker.balance);
+            self.update_stake_for_validator(store, validator_address, value, staker.balance);
         }
 
         // Create logs.
-        tx_logger.push_log(Log::SetInactiveStake {
+        tx_logger.push_log(Log::SetActiveStake {
             staker_address: staker_address.clone(),
             validator_address: staker.delegation.clone(),
-            value,
+            active_balance: value,
+            inactive_balance: old_inactive_balance,
             inactive_from: old_inactive_from,
         });
 
