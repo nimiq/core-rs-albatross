@@ -56,6 +56,7 @@ fn network_config(address: Multiaddr) -> Config {
         memory_transport: true,
         required_services: Services::all(),
         tls: None,
+        autonat_allow_non_global_ips: true,
     }
 }
 

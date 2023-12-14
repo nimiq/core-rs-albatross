@@ -101,7 +101,11 @@ impl Behaviour {
         );
 
         // Autonat behaviour
-        let autonat = autonat::Behaviour::new(peer_id, autonat::Config::default());
+        let mut autonat_config = autonat::Config::default();
+        if config.autonat_allow_non_global_ips {
+            autonat_config.only_global_ips = false;
+        }
+        let autonat = autonat::Behaviour::new(peer_id, autonat_config);
 
         // Connection limits behaviour
         let limits = connection_limits::ConnectionLimits::default()

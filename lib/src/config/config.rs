@@ -118,6 +118,10 @@ pub struct NetworkConfig {
     /// Optional TLS configuration for secure WebSocket
     #[builder(default)]
     pub tls: Option<TlsConfig>,
+
+    /// Optional setting to allow network autonat to use non global IPs
+    #[builder(default)]
+    pub autonat_allow_non_global_ips: bool,
 }
 
 /// Configuration for setting TLS for secure WebSocket
@@ -763,6 +767,7 @@ impl ClientConfigBuilder {
             seeds: config_file.network.seed_nodes.clone(),
 
             tls: config_file.network.tls.as_ref().map(|s| s.clone().into()),
+            autonat_allow_non_global_ips: config_file.network.autonat_allow_non_global_ips,
         });
 
         // Configure consensus

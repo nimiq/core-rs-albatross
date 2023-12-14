@@ -450,9 +450,13 @@ impl Network {
         rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
         mut update_scores: Interval,
         contacts: Arc<RwLock<PeerContactBook>>,
+        force_dht_server_mode: bool,
         #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
     ) {
-        let mut task_state = TaskState::default();
+        let mut task_state = TaskState {
+            dht_server_mode: force_dht_server_mode,
+            ..Default::default()
+        };
 
         let peer_id = Swarm::local_peer_id(&swarm);
         let task_span = trace_span!("swarm task", peer_id=?peer_id);
@@ -521,8 +525,10 @@ impl Network {
         force_dht_server_mode: bool,
         #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
     ) {
-        let mut task_state = TaskState::default();
-        task_state.dht_server_mode = force_dht_server_mode;
+        let mut task_state = TaskState {
+            dht_server_mode: force_dht_server_mode,
+            ..Default::default()
+        };
 
         let peer_id = Swarm::local_peer_id(&swarm);
         let task_span = trace_span!("swarm task", peer_id=?peer_id);

@@ -137,6 +137,8 @@ pub struct NetworkSettings {
 
     pub tls: Option<TlsSettings>,
     pub instant_inbound: Option<bool>,
+    #[serde(default)]
+    pub autonat_allow_non_global_ips: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]

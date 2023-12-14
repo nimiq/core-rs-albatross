@@ -10,8 +10,6 @@
 #
 ##############################################################################
 
-
-
 ##############################################################################
 #
 # Network specific configuration
@@ -21,11 +19,11 @@
 [network]
 
 listen_addresses = [
-        "/ip4/0.0.0.0/tcp/8443/ws",
+  "/ip4/0.0.0.0/tcp/8443/ws",
 ]
 
 seed_nodes = [
-        { address = "/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss" }
+  { address = "/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss" },
 ]
 
 # Optionally specify address(es) that will be advertised to peers instead of the ones in `listen_addresses`
@@ -33,7 +31,9 @@ seed_nodes = [
 # This can be used to advertise the public URL and port that peers should connect to, while
 # `listen_addresses` contains the loopback IP and port that this nodes listens on, which may
 # not be publicly reachable.
+# For validators it is strongly recommended to list a public reachable IPv4 IP.
 #advertised_addresses = [
+#        "/ip4/my.ip/tcp/8444/ws",
 #        "/dns4/my.public.domain.com/tcp/8443/wss",
 #]
 
@@ -44,7 +44,11 @@ seed_nodes = [
 # Default: Generated from version, operating system and processor architecture
 #user_agent = "core-rs/0.1.0 (native; linux x86_64)"
 
-
+# Optionally specify if the network should allow the autonat feature to use non global IPs
+# Recommended setting is to keep it in false.
+#
+# Default: false
+#autonat_allow_non_global_ips = false
 
 ##############################################################################
 #
@@ -58,8 +62,6 @@ seed_nodes = [
 #[network.tls]
 #private_key = "./my_private_key.pem"
 #certificates = "./my_certificate.pem"
-
-
 
 ##############################################################################
 #
@@ -127,7 +129,7 @@ sync_mode = "full"
 
 # Bind the RPC server to specified IP
 # Default: 127.0.0.1
-bind="127.0.0.1"
+bind = "127.0.0.1"
 
 # TCP-Port to use to create a listening socket for the JSON-RPC server.
 # Possible values: any valid port number
@@ -144,7 +146,6 @@ methods = []
 username = "super"
 # Default: none
 password = "secret"
-
 
 ##############################################################################
 #
@@ -170,7 +171,6 @@ username = "super"
 
 # Default: none
 password = "secret"
-
 
 ##############################################################################
 #
@@ -201,7 +201,6 @@ level = "debug"
 # Default: None
 #tokio_console_bind_address = "127.0.0.1:6669"
 
-
 # Loki target
 # [log.loki]
 
@@ -216,7 +215,6 @@ level = "debug"
 
 # Extra fields added to each log message (e.g. to distinguish runs)
 # extra_fields = { run = "e2f8e044-0067-4902-914f-261b7f500ba7" }
-
 
 ##############################################################################
 #

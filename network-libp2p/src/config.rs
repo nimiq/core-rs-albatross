@@ -30,6 +30,7 @@ pub struct Config {
     pub memory_transport: bool,
     pub required_services: Services,
     pub tls: Option<TlsConfig>,
+    pub autonat_allow_non_global_ips: bool,
 }
 
 impl Config {
@@ -41,6 +42,7 @@ impl Config {
         memory_transport: bool,
         required_services: Services,
         tls_settings: Option<TlsConfig>,
+        autonat_allow_non_global_ips: bool,
     ) -> Self {
         // Hardcoding the minimum number of peers in mesh network before adding more
         // TODO: Maybe change this to a mesh limits configuration argument of this function
@@ -80,6 +82,7 @@ impl Config {
             memory_transport,
             required_services,
             tls: tls_settings,
+            autonat_allow_non_global_ips,
         }
     }
 }

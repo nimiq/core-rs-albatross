@@ -70,6 +70,7 @@ impl TestNetwork for Network {
             true,
             Services::all(),
             None,
+            true,
         );
         let network = Arc::new(
             Network::new(

@@ -298,6 +298,7 @@ impl ClientInner {
             false,
             required_services,
             tls_config,
+            config.network.autonat_allow_non_global_ips,
         );
 
         log::debug!(
