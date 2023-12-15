@@ -6,6 +6,7 @@ use std::{
 
 use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt};
 use nimiq_block::Block;
+use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
@@ -17,12 +18,16 @@ use nimiq_zkp_component::{
     types::{Error, ZKPRequestEvent},
     zkp_component::ZKPComponentProxy,
 };
+use parking_lot::RwLock;
 
 #[cfg(feature = "full")]
 use crate::messages::{HistoryChunk, ValidityWindowStartResponse};
 use crate::{
-    messages::{BlockError, Checkpoint},
-    sync::syncer::MacroSync,
+    messages::{BlockError, Checkpoint, RequestHistoryChunk},
+    sync::{
+        history::cluster::HistoryChunkRequest, peer_list::PeerList, sync_queue::SyncQueue,
+        syncer::MacroSync,
+    },
 };
 
 #[derive(Clone)]
@@ -123,6 +128,8 @@ impl PeerMacroRequests {
     }
 }
 
+const PENDING_SIZE: usize = 5;
+
 /// The LightMacroSync is one type of MacroSync and it is essentially a stream,
 /// that operates on a per peer basis, emitting peers either as Outdated or Good.
 /// To do this, it will:
@@ -173,6 +180,14 @@ pub struct LightMacroSync<TNetwork: Network> {
     pub(crate) validity_window_chunks: FuturesUnordered<
         BoxFuture<'static, (Result<HistoryChunk, RequestError>, TNetwork::PeerId)>,
     >,
+    /// The validity (history chunks) queue
+    pub(crate) validity_queue: SyncQueue<
+        TNetwork,
+        RequestHistoryChunk,
+        (RequestHistoryChunk, HistoryChunk, TNetwork::PeerId),
+        (),
+    >,
+
     /// Used to track the validity chunks we have requested on a per peer basis
     pub(crate) validity_requests: HashMap<TNetwork::PeerId, ValidityChunkRequest>,
     /// The latest block number towards which the validity window was fully synced.
@@ -194,6 +209,30 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         full_sync_threshold: u32,
         executor: impl TaskExecutor + Send + 'static,
     ) -> Self {
+        let peers = Arc::new(RwLock::new(PeerList::default()));
+
+        let validity_queue = SyncQueue::new(
+            Arc::clone(&network),
+            Vec::<(RequestHistoryChunk, Option<_>)>::new(),
+            peers,
+            PENDING_SIZE,
+            move |request, network, peer_id| {
+                async move {
+                    Self::request_validity_window_chunk(
+                        network,
+                        peer_id,
+                        request.epoch_number,
+                        request.block_number,
+                        request.chunk_index,
+                    )
+                    .await
+                    .ok()
+                    .map(|chunk| (request, chunk, peer_id))
+                }
+                .boxed()
+            },
+        );
+
         Self {
             blockchain,
             network,
@@ -212,6 +251,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             validity_window_chunks: FuturesUnordered::new(),
             validity_requests: HashMap::new(),
             synced_validity_start: 0,
+            validity_queue,
         }
     }
 

@@ -267,24 +267,15 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         );
 
                         // Request the first chunk
-                        let network = Arc::clone(&self.network);
+                        self.validity_queue.add_peer(peer_id);
 
-                        self.validity_window_chunks.push(
-                            async move {
-                                (
-                                    Self::request_validity_window_chunk(
-                                        network,
-                                        peer_id,
-                                        epoch_number,
-                                        verifier_block_number,
-                                        first_chunk as u64,
-                                    )
-                                    .await,
-                                    peer_id,
-                                )
-                            }
-                            .boxed(),
-                        );
+                        let request = RequestHistoryChunk {
+                            epoch_number,
+                            block_number: verifier_block_number,
+                            chunk_index: first_chunk as u64,
+                        };
+
+                        self.validity_queue.add_ids(vec![(request, None)]);
                     } else {
                         // If no proof is provided, we need to check if the start of the validity window is the genesis
                         let macro_head = self.blockchain.read().macro_head();
@@ -297,7 +288,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                             // No inclusion proof, nor validity start for the genesis block
                             // So we just proceed to request the first history chunk.
                             let verifier_block_number = macro_head.block_number();
-                            let network = Arc::clone(&self.network);
+
                             self.validity_requests.insert(
                                 peer_id,
                                 ValidityChunkRequest {
@@ -309,22 +300,15 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                 },
                             );
 
-                            self.validity_window_chunks.push(
-                                async move {
-                                    (
-                                        Self::request_validity_window_chunk(
-                                            network,
-                                            peer_id,
-                                            Policy::epoch_at(macro_head.block_number()),
-                                            verifier_block_number,
-                                            0,
-                                        )
-                                        .await,
-                                        peer_id,
-                                    )
-                                }
-                                .boxed(),
-                            );
+                            self.validity_queue.add_peer(peer_id);
+
+                            let request = RequestHistoryChunk {
+                                epoch_number: Policy::epoch_at(macro_head.block_number()),
+                                block_number: verifier_block_number,
+                                chunk_index: 0 as u64,
+                            };
+
+                            self.validity_queue.add_ids(vec![(request, None)]);
                         } else {
                             log::error!(peer=?peer_id,"No validity start proof was provided for non genesis block");
                             self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
@@ -343,9 +327,10 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         &mut self,
         cx: &mut Context<'_>,
     ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
-        while let Poll::Ready(Some((chunk, peer_id))) =
-            self.validity_window_chunks.poll_next_unpin(cx)
+        while let Poll::Ready(Some(Ok((_request, chunk, peer_id)))) =
+            self.validity_queue.poll_next_unpin(cx)
         {
+            log::debug!(" Processing response from validity queue");
             let synced_validity_start = self.synced_validity_start;
 
             let macro_head = self.blockchain.read().macro_head().block_number();
@@ -357,98 +342,78 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
             }
 
-            match chunk {
-                Ok(history_chunk) => {
-                    if let Some(chunk) = history_chunk.chunk {
-                        let peer_request = self.validity_requests.get_mut(&peer_id).unwrap();
-                        let expected_root = &peer_request.root_hash;
-                        let verifier_block_number = peer_request.verifier_block_number;
+            if let Some(chunk) = chunk.chunk {
+                let peer_request = self.validity_requests.get_mut(&peer_id).unwrap();
+                let expected_root = &peer_request.root_hash;
+                let verifier_block_number = peer_request.verifier_block_number;
 
-                        let leaf_index = peer_request.chunk_index * (CHUNK_SIZE as u32);
+                let leaf_index = peer_request.chunk_index * (CHUNK_SIZE as u32);
 
-                        // Verify the history chunk
-                        let verification_result = chunk
-                            .verify(expected_root, leaf_index as usize)
-                            .map_or(false, |result| result);
+                // Verify the history chunk
+                let verification_result = chunk
+                    .verify(expected_root, leaf_index as usize)
+                    .map_or(false, |result| result);
 
-                        if verification_result {
-                            let leaf_count = match &self.blockchain {
-                                BlockchainProxy::Full(blockchain) => {
-                                    Blockchain::extend_validity_sync(
-                                        blockchain.upgradable_read(),
-                                        Policy::epoch_at(verifier_block_number),
-                                        &chunk.history,
-                                    );
-
-                                    blockchain
-                                        .read()
-                                        .history_store
-                                        .length_at(verifier_block_number, None)
-                                        as usize
-                                }
-                                BlockchainProxy::Light(_) => unreachable!(),
-                            };
-
-                            // We need to check if this is the last chunk:
-                            let prover_mmr_size = chunk.proof.proof.mmr_size;
-
-                            // Now we need to add the initial offseat
-                            let offset = leaf_number_to_index(
-                                peer_request.initial_offset as usize + leaf_count,
+                if verification_result {
+                    let leaf_count = match &self.blockchain {
+                        BlockchainProxy::Full(blockchain) => {
+                            Blockchain::extend_validity_sync(
+                                blockchain.upgradable_read(),
+                                Policy::epoch_at(verifier_block_number),
+                                &chunk.history,
                             );
 
-                            if prover_mmr_size == offset {
-                                log::debug!(perr=%peer_id, "Finished validity syncing with this peer");
-
-                                // Signal the validity start that we are synced with.
-                                self.synced_validity_start = peer_request.validity_start;
-
-                                // We are complete so we emit the peer
-                                self.remove_peer_requests(peer_id);
-
-                                return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
-                            }
-
-                            // Update the peer tracker structure
-                            let chunk_index = peer_request.chunk_index + 1;
-                            peer_request.chunk_index = chunk_index;
-
-                            let network = Arc::clone(&self.network);
-
-                            // Request the next chunk
-                            self.validity_window_chunks.push(
-                                async move {
-                                    (
-                                        Self::request_validity_window_chunk(
-                                            network,
-                                            peer_id,
-                                            Policy::epoch_at(verifier_block_number),
-                                            verifier_block_number,
-                                            chunk_index as u64,
-                                        )
-                                        .await,
-                                        peer_id,
-                                    )
-                                }
-                                .boxed(),
-                            );
-                        } else {
-                            // If the chunk doesnt verify we disconnect from the peer
-                            log::debug!("The chunk didn't verify, disconnecting from peer");
-                            self.disconnect_peer(peer_id, CloseReason::MaliciousPeer)
+                            blockchain
+                                .read()
+                                .history_store
+                                .length_at(verifier_block_number, None)
+                                as usize
                         }
-                    } else {
-                        // Treating this as the peer doesnt have anything to sync
-                        return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
+                        BlockchainProxy::Light(_) => unreachable!(),
+                    };
 
-                        //If the peer didnt provide any History Chunk, we disconnect from the peer.
-                        //log::debug!(" The peer didn't provide any chunk, disconnecting from peer");
-                        //self.disconnect_peer(peer_id, CloseReason::MaliciousPeer)
+                    // We need to check if this is the last chunk:
+                    let prover_mmr_size = chunk.proof.proof.mmr_size;
+
+                    // Now we need to add the initial offseat
+                    let total_size =
+                        leaf_number_to_index(peer_request.initial_offset as usize + leaf_count);
+
+                    if prover_mmr_size == total_size {
+                        log::debug!(perr=%peer_id, "Finished validity syncing with this peer");
+
+                        // Signal the validity start that we are synced with.
+                        self.synced_validity_start = peer_request.validity_start;
+
+                        // We are complete so we emit the peer
+                        self.remove_peer_requests(peer_id);
+
+                        return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
                     }
+
+                    // Update the peer tracker structure
+                    let chunk_index = peer_request.chunk_index + 1;
+                    peer_request.chunk_index = chunk_index;
+
+                    let request = RequestHistoryChunk {
+                        epoch_number: Policy::epoch_at(verifier_block_number),
+                        block_number: verifier_block_number,
+                        chunk_index: chunk_index as u64,
+                    };
+
+                    self.validity_queue.add_ids(vec![(request, None)]);
+                } else {
+                    // If the chunk doesnt verify we disconnect from the peer
+                    log::debug!("The chunk didn't verify, disconnecting from peer");
+                    self.disconnect_peer(peer_id, CloseReason::MaliciousPeer)
                 }
-                Err(err) => {
-                    log::error!( error=%err, peer=%peer_id, "There was a request error when trying to request a history chunk");
-                }
+            } else {
+                // Treating this as the peer doesnt have anything to sync
+                return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
+
+                //If the peer didnt provide any History Chunk, we disconnect from the peer.
+                //log::debug!(" The peer didn't provide any chunk, disconnecting from peer");
+                //self.disconnect_peer(peer_id, CloseReason::MaliciousPeer)
             }
         }
 
