@@ -83,7 +83,7 @@ jobs:
       run: sed -i 's/url = "[^"]*"/url = "<redacted>"/g' temp-logs/*/conf/*/*.toml
     - name: Archive test results
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: ${{ matrix.test }}-logs
           path: |
