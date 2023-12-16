@@ -22,7 +22,6 @@ use nimiq_network_libp2p::{
 };
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_test_log::test;
-use nimiq_utils::time::OffsetTime;
 use rand::{thread_rng, Rng};
 use tokio::time::Duration;
 #[cfg(feature = "tokio-time")]
@@ -138,7 +137,6 @@ impl TestNetwork {
         let addr2 = multiaddr![Memory(rng.gen::<u64>())];
 
         let net1 = Network::new(
-            Arc::new(OffsetTime::new()),
             network_config(addr1.clone()),
             Box::new(|fut| {
                 tokio::spawn(fut);
@@ -148,7 +146,6 @@ impl TestNetwork {
         net1.listen_on(vec![addr1.clone()]).await;
 
         let net2 = Network::new(
-            Arc::new(OffsetTime::new()),
             network_config(addr2.clone()),
             Box::new(|fut| {
                 tokio::spawn(fut);

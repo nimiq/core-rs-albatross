@@ -15,7 +15,7 @@ use libp2p::{
         },
         ConnectionHandler, ConnectionHandlerEvent, Stream, SubstreamProtocol,
     },
-    Multiaddr,
+    Multiaddr, PeerId,
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::peer_info::Services;
@@ -122,6 +122,9 @@ pub enum HandlerState {
 }
 
 pub struct Handler {
+    /// Peer ID of the peer connected to us in this connection
+    peer_id: PeerId,
+
     /// Configuration for peer discovery.
     config: Config,
 
@@ -167,11 +170,13 @@ pub struct Handler {
 
 impl Handler {
     pub fn new(
+        peer_id: PeerId,
         config: Config,
         keypair: Keypair,
         peer_contact_book: Arc<RwLock<PeerContactBook>>,
     ) -> Self {
         Self {
+            peer_id,
             config,
             keypair,
             peer_contact_book,
@@ -356,8 +361,6 @@ impl ConnectionHandler for Handler {
                         genesis_hash: self.config.genesis_hash.clone(),
                         limit: self.config.update_limit,
                         services: self.config.required_services,
-                        // TODO: If we really include this here, put this in `Config`
-                        user_agent: "TODO".to_string(),
                     };
 
                     if let Err(e) = self.send(&msg) {
@@ -380,7 +383,6 @@ impl ConnectionHandler for Handler {
                                     genesis_hash,
                                     limit,
                                     services,
-                                    user_agent: _,
                                 } => {
                                     // Check if the received genesis hash matches.
                                     if genesis_hash != self.config.genesis_hash {
@@ -489,9 +491,15 @@ impl ConnectionHandler for Handler {
                                         );
                                     }
 
-                                    // TODO: Do we need to check other stuff in the peer contact?
-
-                                    // TODO: Check that the public key is actually used for this connection
+                                    if self.peer_id != peer_contact.peer_id() {
+                                        return Poll::Ready(
+                                            ConnectionHandlerEvent::NotifyBehaviour(
+                                                HandlerOutEvent::Error(
+                                                    Error::ChallengeResponseFailed,
+                                                ),
+                                            ),
+                                        );
+                                    }
 
                                     // Check the challenge response.
                                     if !response_signature.tagged_verify(

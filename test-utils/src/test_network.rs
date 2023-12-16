@@ -8,7 +8,6 @@ use nimiq_network_libp2p::{
     Network,
 };
 use nimiq_network_mock::{MockHub, MockNetwork};
-use nimiq_utils::time::OffsetTime;
 
 #[async_trait]
 pub trait TestNetwork<N = Self>
@@ -54,7 +53,6 @@ impl TestNetwork for Network {
         genesis_hash: Blake2bHash,
         _hub: &mut Option<MockHub>,
     ) -> Arc<Network> {
-        let clock = Arc::new(OffsetTime::new());
         let peer_key = Keypair::generate_ed25519();
         let peer_address = multiaddr![Memory(peer_id)];
         let mut peer_contact = PeerContact::new(
@@ -75,7 +73,6 @@ impl TestNetwork for Network {
         );
         let network = Arc::new(
             Network::new(
-                clock,
                 config,
                 Box::new(|fut| {
                     tokio::spawn(fut);

@@ -22,7 +22,6 @@ use nimiq_network_libp2p::discovery::{
     peer_contacts::{PeerContact, PeerContactBook, SignedPeerContact},
 };
 use nimiq_test_log::test;
-use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
 use rand::{thread_rng, Rng};
 
@@ -71,13 +70,8 @@ impl TestNode {
 
         let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(peer_contact)));
 
-        let clock = Arc::new(OffsetTime::new());
-        let behaviour = discovery::Behaviour::new(
-            config,
-            keypair.clone(),
-            Arc::clone(&peer_contact_book),
-            clock,
-        );
+        let behaviour =
+            discovery::Behaviour::new(config, keypair.clone(), Arc::clone(&peer_contact_book));
 
         let mut swarm = SwarmBuilder::with_existing_identity(keypair)
             .with_tokio()

@@ -51,9 +51,6 @@ pub enum DiscoveryMessage {
 
         /// Service flags for which the sender needs peer contacts.
         services: Services,
-
-        /// User agent string of the sender.
-        user_agent: String,
     },
 
     HandshakeAck {

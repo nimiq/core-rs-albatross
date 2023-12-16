@@ -52,7 +52,6 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::task_executor::TaskExecutor;
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_utils::time::OffsetTime;
 use nimiq_validator_network::validator_record::SignedValidatorRecord;
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -231,15 +230,9 @@ impl Network {
     ///
     /// # Arguments
     ///
-    ///  - `clock`: The clock that is used to establish the network time. The discovery behavior will determine the
-    ///             offset by exchanging their wall-time with other peers.
     ///  - `config`: The network configuration, containing key pair, and other behavior-specific configuration.
     ///
-    pub async fn new(
-        clock: Arc<OffsetTime>,
-        config: Config,
-        executor: impl TaskExecutor + Send + Clone + 'static,
-    ) -> Self {
+    pub async fn new(config: Config, executor: impl TaskExecutor + Send + Clone + 'static) -> Self {
         let required_services = config.required_services;
         // TODO: persist to disk
         let own_peer_contact = config.peer_contact.clone();
@@ -250,7 +243,7 @@ impl Network {
             ip_colocation_factor_threshold: 20.0,
             ..Default::default()
         };
-        let swarm = Self::new_swarm(clock, config, Arc::clone(&contacts), params.clone());
+        let swarm = Self::new_swarm(config, Arc::clone(&contacts), params.clone());
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
         let connected_peers = Arc::new(RwLock::new(HashMap::new()));
@@ -377,7 +370,6 @@ impl Network {
     }
 
     fn new_swarm(
-        clock: Arc<OffsetTime>,
         config: Config,
         contacts: Arc<RwLock<PeerContactBook>>,
         peer_score_params: gossipsub::PeerScoreParams,
@@ -386,7 +378,7 @@ impl Network {
         let transport =
             Self::new_transport(&keypair, config.memory_transport, &config.tls).unwrap();
 
-        let behaviour = behaviour::Behaviour::new(config, clock, contacts, peer_score_params);
+        let behaviour = behaviour::Behaviour::new(config, contacts, peer_score_params);
 
         // TODO add proper config
         #[cfg(not(target_family = "wasm"))]

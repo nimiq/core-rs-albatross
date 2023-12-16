@@ -18,7 +18,6 @@ use libp2p::{
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::peer_info::Services;
-use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
 use wasm_timer::Interval;
 
@@ -104,9 +103,6 @@ pub struct Behaviour {
     /// Contains all known peer contacts.
     peer_contact_book: Arc<RwLock<PeerContactBook>>,
 
-    #[allow(dead_code)]
-    clock: Arc<OffsetTime>,
-
     /// Queue with events to emit.
     pub events: VecDeque<DiscoveryToSwarm>,
 
@@ -119,7 +115,6 @@ impl Behaviour {
         config: Config,
         keypair: Keypair,
         peer_contact_book: Arc<RwLock<PeerContactBook>>,
-        clock: Arc<OffsetTime>,
     ) -> Self {
         let house_keeping_timer = Interval::new(config.house_keeping_interval);
         peer_contact_book.write().update_own_contact(&keypair);
@@ -129,7 +124,6 @@ impl Behaviour {
             keypair,
             connected_peers: HashSet::new(),
             peer_contact_book,
-            clock,
             events: VecDeque::new(),
             house_keeping_timer,
         }
@@ -147,11 +141,12 @@ impl NetworkBehaviour for Behaviour {
     fn handle_established_inbound_connection(
         &mut self,
         _connection_id: ConnectionId,
-        _peer: PeerId,
+        peer: PeerId,
         _local_addr: &Multiaddr,
         _remote_addr: &Multiaddr,
     ) -> Result<Handler, ConnectionDenied> {
         Ok(Handler::new(
+            peer,
             self.config.clone(),
             self.keypair.clone(),
             self.peer_contact_book(),
@@ -161,11 +156,12 @@ impl NetworkBehaviour for Behaviour {
     fn handle_established_outbound_connection(
         &mut self,
         _connection_id: ConnectionId,
-        _peer: PeerId,
+        peer: PeerId,
         _addr: &Multiaddr,
         _role_override: Endpoint,
     ) -> Result<Handler, ConnectionDenied> {
         Ok(Handler::new(
+            peer,
             self.config.clone(),
             self.keypair.clone(),
             self.peer_contact_book(),

@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use futures::{Stream, StreamExt};
 use libp2p::{
@@ -15,7 +15,6 @@ use nimiq_network_libp2p::{
     Config, Network,
 };
 use nimiq_test_log::test;
-use nimiq_utils::time::OffsetTime;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use tokio::time::timeout;
@@ -78,9 +77,7 @@ impl TestNetwork {
         let address = multiaddr![Memory(self.next_address)];
         self.next_address += 1;
 
-        let clock = Arc::new(OffsetTime::new());
         let net = Network::new(
-            clock,
             network_config(address.clone()),
             Box::new(|fut| {
                 tokio::spawn(fut);
@@ -115,7 +112,6 @@ async fn create_connected_networks() -> (Network, Network) {
     let addr2 = multiaddr![Memory(rng.gen::<u64>())];
 
     let net1 = Network::new(
-        Arc::new(OffsetTime::new()),
         network_config(addr1.clone()),
         Box::new(|fut| {
             tokio::spawn(fut);
@@ -125,7 +121,6 @@ async fn create_connected_networks() -> (Network, Network) {
     net1.listen_on(vec![addr1.clone()]).await;
 
     let net2 = Network::new(
-        Arc::new(OffsetTime::new()),
         network_config(addr2.clone()),
         Box::new(|fut| {
             tokio::spawn(fut);
@@ -163,7 +158,6 @@ async fn create_double_connected_networks() -> (Network, Network) {
     let addr2 = multiaddr![Memory(rng.gen::<u64>())];
 
     let net1 = Network::new(
-        Arc::new(OffsetTime::new()),
         network_config(addr1.clone()),
         Box::new(|fut| {
             tokio::spawn(fut);
@@ -173,7 +167,6 @@ async fn create_double_connected_networks() -> (Network, Network) {
     net1.listen_on(vec![addr1.clone()]).await;
 
     let net2 = Network::new(
-        Arc::new(OffsetTime::new()),
         network_config(addr2.clone()),
         Box::new(|fut| {
             tokio::spawn(fut);
@@ -219,7 +212,6 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
         addresses.push(addr.clone());
 
         let network = Network::new(
-            Arc::new(OffsetTime::new()),
             network_config(addr.clone()),
             Box::new(|fut| {
                 tokio::spawn(fut);

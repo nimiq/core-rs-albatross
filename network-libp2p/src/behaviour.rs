@@ -7,7 +7,6 @@ use libp2p::{
     swarm::NetworkBehaviour,
     Multiaddr, PeerId, StreamProtocol,
 };
-use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
 
 use crate::{
@@ -43,7 +42,6 @@ pub struct Behaviour {
 impl Behaviour {
     pub fn new(
         config: Config,
-        clock: Arc<OffsetTime>,
         contacts: Arc<RwLock<PeerContactBook>>,
         peer_score_params: gossipsub::PeerScoreParams,
     ) -> Self {
@@ -62,7 +60,6 @@ impl Behaviour {
             config.discovery.clone(),
             config.keypair.clone(),
             Arc::clone(&contacts),
-            clock,
         );
 
         // Gossipsub behaviour

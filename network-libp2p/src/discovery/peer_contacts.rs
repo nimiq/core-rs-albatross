@@ -129,8 +129,14 @@ impl SignedPeerContact {
             .tagged_verify(&self.inner, &self.inner.public_key)
     }
 
+    /// Gets the public key of this peer contact.
     pub fn public_key(&self) -> &PublicKey {
         &self.inner.public_key
+    }
+
+    /// Gets the Peer ID that results from this peer contact's peer ID.
+    pub fn peer_id(&self) -> PeerId {
+        self.inner.peer_id()
     }
 }
 
@@ -233,6 +239,8 @@ impl PeerContactInfo {
 pub struct PeerContactBook {
     /// Contact information for our own.
     own_peer_contact: PeerContactInfo,
+    /// Own Peer ID (also present in `own_peer_contact`)
+    own_peer_id: PeerId,
     /// Contact information for other peers in the network indexed by their
     /// peer ID.
     peer_contacts: HashMap<PeerId, Arc<PeerContactInfo>>,
@@ -244,25 +252,47 @@ impl PeerContactBook {
 
     /// Creates a new `PeerContactBook` given our own peer contact information.
     pub fn new(own_peer_contact: SignedPeerContact) -> Self {
+        let own_peer_id = own_peer_contact.inner.peer_id();
         Self {
             own_peer_contact: own_peer_contact.into(),
+            own_peer_id,
             peer_contacts: HashMap::new(),
         }
     }
 
     /// Insert a peer contact or update an existing one
-    ///
-    /// # TODO
-    ///
-    ///  - Check if the peer is already known and update its information.
-    ///
     pub fn insert(&mut self, contact: SignedPeerContact) {
-        log::debug!(peer_id = %contact.inner.peer_id(), addresses = ?contact.inner.addresses, "Adding peer contact");
+        // Don't insert our own contact into our peer contacts
+        if contact.peer_id() == self.own_peer_id {
+            return;
+        }
+
+        log::debug!(peer_id = %contact.peer_id(), addresses = ?contact.inner.addresses, "Adding peer contact");
+        let current_ts = Some(
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        );
 
         let info = PeerContactInfo::from(contact);
         let peer_id = info.peer_id;
 
-        self.peer_contacts.insert(peer_id, Arc::new(info));
+        match self.peer_contacts.entry(peer_id) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                let entry_value = entry.get_mut();
+                // Only update the contact if the timestamp is greater than the entry we have for this peer
+                // and if the timestamp of the peer contact is not in the future
+                if entry_value.contact().timestamp < info.contact().timestamp
+                    && info.contact().timestamp <= current_ts
+                {
+                    *entry_value = Arc::new(info);
+                }
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(Arc::new(info));
+            }
+        }
     }
 
     /// Inserts a peer contact or update an existing using the service filtering.
@@ -280,7 +310,6 @@ impl PeerContactBook {
         {
             // If I'm configured as a validator, and the peer is also a validator, then that peer is interesting to me,
             // regardless of the services that are provided by that peer.
-
             log::trace!(
                 added_peer = %info.peer_id,
                 services = ?info.services(),
@@ -366,7 +395,7 @@ impl PeerContactBook {
         let addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
         trace!(?addresses, "Adding addresses observed for us");
         contact.add_addresses(addresses);
-        self.insert(contact.sign(keypair));
+        self.own_peer_contact = PeerContactInfo::from(contact.sign(keypair));
     }
 
     /// Removes a set of addresses from the list of addresses known for our own.
@@ -378,10 +407,10 @@ impl PeerContactBook {
         let mut contact = self.own_peer_contact.contact.inner.clone();
         let addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
         contact.remove_addresses(addresses);
-        self.insert(contact.sign(keypair));
+        self.own_peer_contact = PeerContactInfo::from(contact.sign(keypair));
     }
 
-    /// Updates the timestamp our own contact
+    /// Updates the timestamp of our own contact
     pub fn update_own_contact(&mut self, keypair: &Keypair) {
         // Not really optimal to clone here, but *shrugs*
         let mut contact = self.own_peer_contact.contact.inner.clone();
@@ -389,7 +418,7 @@ impl PeerContactBook {
         // Update timestamp
         contact.set_current_time();
 
-        self.insert(contact.sign(keypair));
+        self.own_peer_contact = PeerContactInfo::from(contact.sign(keypair));
     }
 
     /// Gets our own contact information
