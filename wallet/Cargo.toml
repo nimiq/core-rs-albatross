@@ -23,7 +23,7 @@ itertools = "0.12"
 serde = "1.0"
 thiserror = "1.0"
 
-nimiq-database = { workspace = true }
+nimiq-database = { workspace = true, optional = true }
 nimiq-database-value = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true }
@@ -35,3 +35,7 @@ nimiq-utils = { workspace = true, features = ["otp"] }
 [dev-dependencies]
 hex = "0.4"
 nimiq-test-log = { workspace = true }
+
+[features]
+default = ["store"]
+store = ["nimiq-database"]
