@@ -26,6 +26,8 @@ pub fn it_can_create_valid_transactions() {
     let multi_sig_2 =
         MultiSigAccount::from_public_keys(&kp2, NonZeroU8::new(2).unwrap(), &public_keys).unwrap();
 
+    assert_eq!(multi_sig_1.address, multi_sig_2.address);
+
     let commitment_pairs1 = multi_sig_1.create_commitments();
     let commitment_pairs2 = multi_sig_2.create_commitments();
 
@@ -49,6 +51,11 @@ pub fn it_can_create_valid_transactions() {
             CommitmentPair::to_commitments(&commitment_pairs1),
         )
         .build(&transaction.serialize_content());
+
+    assert_eq!(data1.aggregate_public_key, data2.aggregate_public_key);
+    assert_eq!(data1.aggregate_commitment, data2.aggregate_commitment);
+    assert_eq!(data1.all_public_keys, data2.all_public_keys);
+    assert_eq!(data1.b, data2.b);
 
     let partial_signature1 = multi_sig_1
         .partially_sign_transaction(&transaction, &data1)
