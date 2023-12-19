@@ -17,8 +17,8 @@ impl BlockInclusionProof {
     // Computes the interlink hops needed to proof `wanted_election_number` when starting from `latest_election_number`
     pub fn get_interlink_hops(target: u32, latest_election_number: u32) -> Vec<u32> {
         // For simplicity, refer to election blocks by the number of their epoch
-        let target_number = target / Policy::blocks_per_epoch();
-        let latest_number = latest_election_number / Policy::blocks_per_epoch();
+        let target_number = Policy::epoch_at(target);
+        let latest_number = Policy::epoch_at(latest_election_number);
 
         // Compute the hops
         let mut hops = vec![];
@@ -48,7 +48,7 @@ impl BlockInclusionProof {
 
         // Convert hops back from epoch to block numbers
         hops.into_iter()
-            .map(|i| i * Policy::blocks_per_epoch())
+            .map(|i| Policy::election_block_of(i).expect("Invalid epoch number"))
             .collect()
     }
 
