@@ -337,6 +337,12 @@ impl<N: Network> ConsensusProxy<N> {
                                     .verify(block.history_root().clone())
                                     .map_or(false, |result| result);
 
+                                if !verification_result {
+                                    // If the proof didn't verify, we continue with another peer
+                                    log::warn!(peer=%peer_id, "The transaction history proof from this peer did not verify");
+                                    continue;
+                                }
+
                                 // Verify that the transaction proof fits to the chain
                                 if block.block_number() <= election_head.block_number() {
                                     let block_hash = block.hash();
@@ -401,7 +407,7 @@ impl<N: Network> ConsensusProxy<N> {
                                     }
                                 } else {
                                     // The proof didn't verify so we continue with another peer
-                                    log::warn!(peer=%peer_id, "The transaction proof from this peer did not verify");
+                                    log::warn!(peer=%peer_id, "The transaction block proof from this peer did not verify");
                                 }
                             } else {
                                 // If we receive a proof but we do not receive a block, we disconnect from the peer
