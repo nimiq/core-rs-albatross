@@ -59,7 +59,6 @@ nimiq-validator-network = { workspace = true }
 libp2p = { version = "0.53.2", default-features = false, features = [
     "autonat",
     "gossipsub",
-    "identify",
     "kad",
     "macros",
     "noise",
@@ -74,7 +73,6 @@ libp2p = { version = "0.53.2", default-features = false, features = [
 libp2p = { version = "0.53.2", default-features = false, features = [
     "autonat",
     "gossipsub",
-    "identify",
     "kad",
     "macros",
     "noise",

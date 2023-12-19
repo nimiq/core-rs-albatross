@@ -8,6 +8,7 @@ use instant::SystemTime;
 use libp2p::{
     gossipsub,
     identity::{Keypair, PublicKey},
+    multiaddr::Protocol,
     Multiaddr, PeerId,
 };
 use nimiq_network_interface::peer_info::Services;
@@ -244,6 +245,14 @@ pub struct PeerContactBook {
     /// Contact information for other peers in the network indexed by their
     /// peer ID.
     peer_contacts: HashMap<PeerId, Arc<PeerContactInfo>>,
+    /// Only return secure websocket addresses.
+    /// With this flag non secure websocket addresses will be stored (to still have a valid signature of the peer contact)
+    /// but won't be returned when calling `get_addresses`
+    only_secure_addresses: bool,
+    /// Flag to indicate whether to return also loopback addresses
+    allow_loopback_addresses: bool,
+    /// Flag to indicate whether to support memory transport addresses
+    memory_transport: bool,
 }
 
 impl PeerContactBook {
@@ -251,12 +260,20 @@ impl PeerContactBook {
     pub const MAX_PEER_AGE: u64 = 30 * 60;
 
     /// Creates a new `PeerContactBook` given our own peer contact information.
-    pub fn new(own_peer_contact: SignedPeerContact) -> Self {
+    pub fn new(
+        own_peer_contact: SignedPeerContact,
+        only_secure_addresses: bool,
+        allow_loopback_addresses: bool,
+        memory_transport: bool,
+    ) -> Self {
         let own_peer_id = own_peer_contact.inner.peer_id();
         Self {
             own_peer_contact: own_peer_contact.into(),
             own_peer_id,
             peer_contacts: HashMap::new(),
+            only_secure_addresses,
+            allow_loopback_addresses,
+            memory_transport,
         }
     }
 
@@ -299,35 +316,43 @@ impl PeerContactBook {
     /// If the filter matches the services provided by the contact, it is added.
     /// Otherwise it is ignored.
     /// The services_filter argument to this function contains the services that are required.
-    pub fn insert_filtered(&mut self, contact: SignedPeerContact, services_filter: Services) {
+    pub fn insert_filtered(
+        &mut self,
+        contact: SignedPeerContact,
+        services_filter: Services,
+        only_secure_ws_connections: bool,
+    ) {
         let info = PeerContactInfo::from(contact);
 
-        if self
+        // A peer is interesting to us in two cases:
+        // - I'm configured as a validator, and the peer is also a validator, then that peer is interesting to me
+        //   regardless of the services that are provided by that peer.
+        // - The services provided by the peer are a superset of the requested services.
+        if (self
             .own_peer_contact
             .services()
             .contains(Services::VALIDATOR)
-            && info.services().contains(Services::VALIDATOR)
+            && info.services().contains(Services::VALIDATOR))
+            || info.matches(services_filter)
         {
-            // If I'm configured as a validator, and the peer is also a validator, then that peer is interesting to me,
-            // regardless of the services that are provided by that peer.
-            log::trace!(
-                added_peer = %info.peer_id,
-                services = ?info.services(),
-                addresses = ?info.contact.inner.addresses,
-                "Inserting into my peer contacts, because the peer is also a validator",
-            );
-            let peer_id = info.peer_id;
-            self.peer_contacts.insert(peer_id, Arc::new(info));
-        } else if info.matches(services_filter) {
-            log::trace!(
-                added_peer = %info.peer_id,
-                services = ?info.services(),
-                addresses = ?info.contact.inner.addresses,
-                "Inserting into my peer contacts, because is interesting to me",
-            );
+            let has_secure_ws_connections = info
+                .contact
+                .inner
+                .addresses
+                .iter()
+                .any(Self::is_address_ws_secure);
 
-            let peer_id = info.peer_id;
-            self.peer_contacts.insert(peer_id, Arc::new(info));
+            if !only_secure_ws_connections || has_secure_ws_connections {
+                log::trace!(
+                    added_peer = %info.peer_id,
+                    services = ?info.services(),
+                    addresses = ?info.contact.inner.addresses,
+                    only_secure_ws_connections,
+                    "Inserting into my peer contacts, because the peer is also a validator or because it is interesting to us",
+                );
+                let peer_id = info.peer_id;
+                self.peer_contacts.insert(peer_id, Arc::new(info));
+            }
         }
     }
 
@@ -345,9 +370,10 @@ impl PeerContactBook {
         &mut self,
         contacts: I,
         services_filter: Services,
+        only_secure_ws_connections: bool,
     ) {
         for contact in contacts {
-            self.insert_filtered(contact, services_filter)
+            self.insert_filtered(contact, services_filter, only_secure_ws_connections)
         }
     }
 
@@ -355,6 +381,19 @@ impl PeerContactBook {
     /// If the peer_id is not found, `None` is returned.
     pub fn get(&self, peer_id: &PeerId) -> Option<Arc<PeerContactInfo>> {
         self.peer_contacts.get(peer_id).map(Arc::clone)
+    }
+
+    /// Gets the peer contact's addresses if it exists given its peer_id.
+    /// If the peer_id is not found, `None` is returned.
+    pub fn get_addresses(&self, peer_id: &PeerId) -> Option<Vec<Multiaddr>> {
+        self.peer_contacts.get(peer_id).map(|e| {
+            e.contact()
+                .addresses
+                .iter()
+                .filter(|&address| self.is_address_dialable(address))
+                .cloned()
+                .collect()
+        })
     }
 
     /// Gets a set of peer contacts given a services filter.
@@ -449,6 +488,69 @@ impl PeerContactBook {
 
             for peer_id in delete_peers {
                 self.peer_contacts.remove(&peer_id);
+            }
+        }
+    }
+
+    /// Returns true if an address is a secure websocket connection.
+    /// If address doesn't have the websocket protocol, it will return `false`.
+    fn is_address_ws_secure(address: &Multiaddr) -> bool {
+        address.into_iter().any(|p| matches!(p, Protocol::Wss(_)))
+    }
+
+    /// Returns true if an address is valid for dialing.
+    /// It performs basic checks against unsupported addresses.
+    pub fn is_address_dialable(&self, address: &Multiaddr) -> bool {
+        // If we use a memory transport, we don't do any check
+        if self.memory_transport {
+            return true;
+        }
+        // Otherwise check for an appropriate WS address
+        let mut protocols = address.iter();
+        let mut ip = protocols.next();
+        let mut tcp = protocols.next();
+        // The encapsulating protocol must be based on TCP/IP, possibly via DNS.
+        let is_dns = loop {
+            match (ip, tcp) {
+                (Some(Protocol::Ip4(ip)), Some(Protocol::Tcp(_))) => {
+                    if !self.allow_loopback_addresses && ip.is_loopback() {
+                        return false;
+                    }
+                    break false;
+                }
+                (Some(Protocol::Ip6(ip)), Some(Protocol::Tcp(_))) => {
+                    if !self.allow_loopback_addresses && ip.is_loopback() {
+                        return false;
+                    }
+                    break false;
+                }
+                (Some(Protocol::Dns(_)), Some(Protocol::Tcp(_)))
+                | (Some(Protocol::Dns4(_)), Some(Protocol::Tcp(_)))
+                | (Some(Protocol::Dns6(_)), Some(Protocol::Tcp(_)))
+                | (Some(Protocol::Dnsaddr(_)), Some(Protocol::Tcp(_))) => break true,
+                (Some(_), Some(p)) => {
+                    ip = Some(p);
+                    tcp = protocols.next();
+                }
+                _ => return false,
+            }
+        };
+
+        // Now check the `Ws` / `Wss` protocol from the end of the address,
+        // that could also have a trailing `P2p` protocol that identifies the remote.
+        let mut protocols: Multiaddr = address.clone();
+        loop {
+            match protocols.pop() {
+                Some(Protocol::P2p(_)) => {}
+                Some(Protocol::Ws(_)) => return !self.only_secure_addresses,
+                Some(Protocol::Wss(_)) => {
+                    if !is_dns {
+                        trace!(address=%address, "Missing DNS name in WSS address");
+                        return false;
+                    }
+                    return true;
+                }
+                _ => return false,
             }
         }
     }

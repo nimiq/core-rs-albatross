@@ -158,6 +158,7 @@ impl Client {
             .collect::<Vec<Seed>>();
 
         config.network.seeds = seed_nodes;
+        config.network.only_secure_ws_connections = true;
         config.network_id = web_config.network_id;
 
         log::info!(?config, "Final configuration");

@@ -20,7 +20,7 @@ use libp2p::{
         muxing::StreamMuxerBox,
         transport::{Boxed, MemoryTransport},
     },
-    gossipsub, identify,
+    gossipsub,
     identity::Keypair,
     kad::{
         self, store::RecordStore, GetRecordOk, InboundRequest, QueryId, QueryResult, Quorum, Record,
@@ -260,6 +260,9 @@ impl Network {
         let own_peer_contact = config.peer_contact.clone();
         let contacts = Arc::new(RwLock::new(PeerContactBook::new(
             own_peer_contact.sign(&config.keypair),
+            config.only_secure_ws_connections,
+            config.allow_loopback_addresses,
+            config.memory_transport,
         )));
         let params = gossipsub::PeerScoreParams {
             ip_colocation_factor_threshold: 20.0,
@@ -626,19 +629,21 @@ impl Network {
                 if endpoint.is_dialer() {
                     let listen_addr = endpoint.get_remote_address();
 
-                    debug!(%peer_id, address = %listen_addr, "Saving peer");
+                    if swarm.behaviour().is_address_dialable(listen_addr) {
+                        debug!(%peer_id, address = %listen_addr, "Saving peer");
 
-                    swarm
-                        .behaviour_mut()
-                        .add_peer_address(peer_id, listen_addr.clone());
+                        swarm
+                            .behaviour_mut()
+                            .add_peer_address(peer_id, listen_addr.clone());
 
-                    // Bootstrap Kademlia if we're performing our first connection
-                    if state.dht_bootstrap_state == DhtBootStrapState::NotStarted {
-                        debug!("Bootstrapping DHT");
-                        if swarm.behaviour_mut().dht.bootstrap().is_err() {
-                            error!("Bootstrapping DHT error: No known peers");
+                        // Bootstrap Kademlia if we're performing our first connection
+                        if state.dht_bootstrap_state == DhtBootStrapState::NotStarted {
+                            debug!("Bootstrapping DHT");
+                            if swarm.behaviour_mut().dht.bootstrap().is_err() {
+                                error!("Bootstrapping DHT error: No known peers");
+                            }
+                            state.dht_bootstrap_state = DhtBootStrapState::Started;
                         }
-                        state.dht_bootstrap_state = DhtBootStrapState::Started;
                     }
                 }
             }
@@ -712,6 +717,17 @@ impl Network {
             } => {
                 // This event is only triggered if the network behaviour performs the dial
                 debug!(?peer_id, "Dialing peer");
+            }
+
+            SwarmEvent::NewListenAddr {
+                listener_id: _,
+                address,
+            } => {
+                debug!(%address, "New listen address");
+                swarm
+                    .behaviour_mut()
+                    .discovery
+                    .add_own_addresses([address].to_vec());
             }
 
             SwarmEvent::Behaviour(event) => {
@@ -871,7 +887,8 @@ impl Network {
                                 peer_address,
                                 peer_contact,
                             } => {
-                                let peer_info = PeerInfo::new(peer_address, peer_contact.services);
+                                let peer_info =
+                                    PeerInfo::new(peer_address.clone(), peer_contact.services);
                                 if connected_peers
                                     .write()
                                     .insert(peer_id, peer_info.clone())
@@ -880,6 +897,23 @@ impl Network {
                                     info!(%peer_id, peer_address = %peer_info.get_address(), "Peer joined");
                                     let _ = events_tx
                                         .send(NetworkEvent::PeerJoined(peer_id, peer_info));
+
+                                    if swarm.behaviour().is_address_dialable(&peer_address) {
+                                        swarm
+                                            .behaviour_mut()
+                                            .add_peer_address(peer_id, peer_address);
+
+                                        // Bootstrap Kademlia if we're adding our first address
+                                        if state.dht_bootstrap_state
+                                            == DhtBootStrapState::NotStarted
+                                        {
+                                            debug!("Bootstrapping DHT");
+                                            if swarm.behaviour_mut().dht.bootstrap().is_err() {
+                                                error!("Bootstrapping DHT error: No known peers");
+                                            }
+                                            state.dht_bootstrap_state = DhtBootStrapState::Started;
+                                        }
+                                    }
                                 } else {
                                     error!(%peer_id, "Peer joined but it already exists");
                                 }
@@ -935,45 +969,6 @@ impl Network {
                             debug!(%peer_id, "gossipsub not supported");
                         }
                     },
-                    behaviour::BehaviourEvent::Identify(event) => {
-                        match event {
-                            identify::Event::Received { peer_id, info } => {
-                                debug!(
-                                    %peer_id,
-                                    address = %info.observed_addr,
-                                    info = ?info,
-                                    "Received identity",
-                                );
-
-                                // Save identified peer listen addresses
-                                for listen_addr in info.listen_addrs {
-                                    swarm.behaviour_mut().add_peer_address(peer_id, listen_addr);
-
-                                    // Bootstrap Kademlia if we're adding our first address
-                                    if state.dht_bootstrap_state == DhtBootStrapState::NotStarted {
-                                        debug!("Bootstrapping DHT");
-                                        if swarm.behaviour_mut().dht.bootstrap().is_err() {
-                                            error!("Bootstrapping DHT error: No known peers");
-                                        }
-                                        state.dht_bootstrap_state = DhtBootStrapState::Started;
-                                    }
-                                }
-                            }
-                            identify::Event::Pushed { peer_id, info } => {
-                                trace!(%peer_id, ?info, "Pushed identity information to peer");
-                            }
-                            identify::Event::Sent { peer_id } => {
-                                trace!(%peer_id, "Sent identity information to peer");
-                            }
-                            identify::Event::Error { peer_id, error } => {
-                                error!(
-                                    %peer_id,
-                                    %error,
-                                    "Error while identifying remote peer",
-                                );
-                            }
-                        }
-                    }
                     behaviour::BehaviourEvent::Ping(event) => {
                         match event.result {
                             Err(error) => {
@@ -1464,7 +1459,14 @@ impl Network {
                 let mut successful_peers = vec![];
 
                 for peer_id in peers_candidates {
-                    if Swarm::dial(swarm, DialOpts::peer_id(peer_id).build()).is_ok() {
+                    if Swarm::dial(
+                        swarm,
+                        DialOpts::peer_id(peer_id)
+                            .condition(PeerCondition::Disconnected)
+                            .build(),
+                    )
+                    .is_ok()
+                    {
                         successful_peers.push(peer_id);
                     }
                 }

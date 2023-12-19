@@ -810,8 +810,7 @@ impl NetworkBehaviour for Behaviour {
         Ok(self
             .contacts
             .read()
-            .get(&peer_id)
-            .map(|e| e.contact().addresses.clone())
+            .get_addresses(&peer_id)
             .unwrap_or_default())
     }
 

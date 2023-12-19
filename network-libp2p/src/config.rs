@@ -31,6 +31,8 @@ pub struct Config {
     pub required_services: Services,
     pub tls: Option<TlsConfig>,
     pub autonat_allow_non_global_ips: bool,
+    pub only_secure_ws_connections: bool,
+    pub allow_loopback_addresses: bool,
 }
 
 impl Config {
@@ -43,6 +45,8 @@ impl Config {
         required_services: Services,
         tls_settings: Option<TlsConfig>,
         autonat_allow_non_global_ips: bool,
+        only_secure_ws_connections: bool,
+        allow_loopback_addresses: bool,
     ) -> Self {
         // Hardcoding the minimum number of peers in mesh network before adding more
         // TODO: Maybe change this to a mesh limits configuration argument of this function
@@ -58,7 +62,7 @@ impl Config {
                 let mut s = DefaultHasher::new();
                 message.topic.hash(&mut s);
                 message.data.hash(&mut s);
-                gossipsub::MessageId::from(s.finish().to_string())
+                gossipsub::MessageId::from(s.finish().to_be_bytes())
             })
             .build()
             .expect("Invalid Gossipsub config");
@@ -76,13 +80,19 @@ impl Config {
             keypair,
             peer_contact,
             seeds,
-            discovery: discovery::Config::new(genesis_hash, required_services),
+            discovery: discovery::Config::new(
+                genesis_hash,
+                required_services,
+                only_secure_ws_connections,
+            ),
             kademlia,
             gossipsub,
             memory_transport,
             required_services,
             tls: tls_settings,
             autonat_allow_non_global_ips,
+            only_secure_ws_connections,
+            allow_loopback_addresses,
         }
     }
 }

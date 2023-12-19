@@ -521,12 +521,14 @@ impl ConnectionHandler for Handler {
                                     peer_contact_book.insert_filtered(
                                         peer_contact.clone(),
                                         self.config.required_services,
+                                        self.config.only_secure_ws_connections,
                                     );
 
                                     // Insert the peer's contacts (filtered) into my contact book
                                     peer_contact_book.insert_all_filtered(
                                         peer_contacts,
                                         self.config.required_services,
+                                        self.config.only_secure_ws_connections,
                                     );
 
                                     drop(peer_contact_book);
@@ -622,6 +624,7 @@ impl ConnectionHandler for Handler {
                                     self.peer_contact_book.write().insert_all_filtered(
                                         peer_contacts,
                                         self.config.required_services,
+                                        self.config.only_secure_ws_connections,
                                     );
 
                                     return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(

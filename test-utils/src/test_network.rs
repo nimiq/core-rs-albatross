@@ -71,6 +71,8 @@ impl TestNetwork for Network {
             Services::all(),
             None,
             true,
+            false,
+            true,
         );
         let network = Arc::new(
             Network::new(

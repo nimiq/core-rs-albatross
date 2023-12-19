@@ -219,16 +219,14 @@ impl ClientInner {
         }
 
         // Generate my peer contact from identity keypair, our own addresses
-        // (which could be the advertised addresses from the configuration file
-        // if they were passed or the listen addresses if not) and my provided services
+        // (from the configured advertised addresses) and my provided services
         // Filter out unspecified IP addresses since those are not addresses suitable
         // for the contact book (for others to contact ourself).
         let mut peer_contact_addresses = config
             .network
             .advertised_addresses
-            .as_ref()
-            .unwrap_or(&config.network.listen_addresses)
-            .clone();
+            .clone()
+            .unwrap_or_default();
         peer_contact_addresses.retain(|address| {
             let mut protocols = address.iter();
             match protocols.next() {
@@ -299,6 +297,8 @@ impl ClientInner {
             required_services,
             tls_config,
             config.network.autonat_allow_non_global_ips,
+            config.network.only_secure_ws_connections,
+            config.network.allow_loopback_addresses,
         );
 
         log::debug!(

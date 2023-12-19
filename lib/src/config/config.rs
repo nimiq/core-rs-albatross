@@ -122,6 +122,14 @@ pub struct NetworkConfig {
     /// Optional setting to allow network autonat to use non global IPs
     #[builder(default)]
     pub autonat_allow_non_global_ips: bool,
+
+    /// Optional bool to only accept secure websocket connections
+    #[builder(default)]
+    pub only_secure_ws_connections: bool,
+
+    /// Optional bool to allow connections to loopback addresses
+    #[builder(default)]
+    pub allow_loopback_addresses: bool,
 }
 
 /// Configuration for setting TLS for secure WebSocket
@@ -689,13 +697,11 @@ impl ClientConfigBuilder {
     }
 
     /// Sets the network ID to the Albatross DevNet
-    ///
     pub fn dev(&mut self) -> &mut Self {
         self.network_id(NetworkId::DevAlbatross)
     }
 
     /// Sets the network ID to the Albatross TestNet
-    ///
     pub fn test(&mut self) -> &mut Self {
         self.network_id(NetworkId::TestAlbatross)
     }
@@ -768,6 +774,8 @@ impl ClientConfigBuilder {
 
             tls: config_file.network.tls.as_ref().map(|s| s.clone().into()),
             autonat_allow_non_global_ips: config_file.network.autonat_allow_non_global_ips,
+            only_secure_ws_connections: false,
+            allow_loopback_addresses: config_file.network.allow_loopback_addresses,
         });
 
         // Configure consensus

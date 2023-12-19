@@ -50,6 +50,7 @@ fn network_config(address: Multiaddr) -> Config {
             min_send_update_interval: Duration::from_secs(30),
             house_keeping_interval: Duration::from_secs(60),
             keep_alive: false,
+            only_secure_ws_connections: false,
         },
         kademlia: Default::default(),
         gossipsub,
@@ -57,6 +58,8 @@ fn network_config(address: Multiaddr) -> Config {
         required_services: Services::all(),
         tls: None,
         autonat_allow_non_global_ips: true,
+        only_secure_ws_connections: false,
+        allow_loopback_addresses: true,
     }
 }
 

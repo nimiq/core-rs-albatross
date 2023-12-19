@@ -139,6 +139,8 @@ pub struct NetworkSettings {
     pub instant_inbound: Option<bool>,
     #[serde(default)]
     pub autonat_allow_non_global_ips: bool,
+    #[serde(default)]
+    pub allow_loopback_addresses: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]

@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use futures::StreamExt;
+use futures::{stream::FlatMap, StreamExt};
 use libp2p::{
     core::{
         multiaddr::{multiaddr, Multiaddr},
@@ -58,6 +58,7 @@ impl TestNode {
             min_recv_update_interval: Duration::from_secs(1),
             house_keeping_interval: Duration::from_secs(1),
             keep_alive: true,
+            only_secure_ws_connections: false,
         };
 
         let peer_contact = PeerContact {
@@ -68,7 +69,12 @@ impl TestNode {
         }
         .sign(&keypair);
 
-        let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(peer_contact)));
+        let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(
+            peer_contact,
+            false,
+            true,
+            true,
+        )));
 
         let behaviour =
             discovery::Behaviour::new(config, keypair.clone(), Arc::clone(&peer_contact_book));
@@ -235,7 +241,12 @@ pub async fn test_dialing_peer_from_contacts() {
 
 #[test]
 fn test_housekeeping() {
-    let mut peer_contact_book = PeerContactBook::new(random_peer_contact(1, Services::FULL_BLOCKS));
+    let mut peer_contact_book = PeerContactBook::new(
+        random_peer_contact(1, Services::FULL_BLOCKS),
+        false,
+        true,
+        true,
+    );
 
     let fresh_contact = random_peer_contact(1, Services::FULL_BLOCKS);
 

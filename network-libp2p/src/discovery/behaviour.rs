@@ -52,10 +52,17 @@ pub struct Config {
 
     /// Whether to keep the connection alive, even if no other behaviour uses it.
     pub keep_alive: bool,
+
+    /// Only secure websocket connections
+    pub only_secure_ws_connections: bool,
 }
 
 impl Config {
-    pub fn new(genesis_hash: Blake2bHash, required_services: Services) -> Self {
+    pub fn new(
+        genesis_hash: Blake2bHash,
+        required_services: Services,
+        only_secure_ws_connections: bool,
+    ) -> Self {
         Self {
             genesis_hash,
             update_interval: Duration::from_secs(60),
@@ -65,6 +72,7 @@ impl Config {
             required_services,
             house_keeping_interval: Duration::from_secs(60),
             keep_alive: true,
+            only_secure_ws_connections,
         }
     }
 }
@@ -135,7 +143,20 @@ impl Behaviour {
         }
     }
 
-    pub fn peer_contact_book(&self) -> Arc<RwLock<PeerContactBook>> {
+    /// Adds our own addresses into our own contact within the peer contact book
+    pub fn add_own_addresses(&self, addresses: Vec<Multiaddr>) {
+        self.peer_contact_book
+            .write()
+            .add_own_addresses(addresses, &self.keypair)
+    }
+
+    /// Returns wether an address in `Multiaddr` format is a dialable websocket address
+    pub fn is_address_dialable(&self, address: &Multiaddr) -> bool {
+        self.peer_contact_book.read().is_address_dialable(address)
+    }
+
+    /// Returns a reference to the peer contact book
+    fn peer_contact_book(&self) -> Arc<RwLock<PeerContactBook>> {
         Arc::clone(&self.peer_contact_book)
     }
 }
@@ -189,8 +210,7 @@ impl NetworkBehaviour for Behaviour {
         Ok(self
             .peer_contact_book
             .read()
-            .get(&peer_id)
-            .map(|e| e.contact().addresses.clone())
+            .get_addresses(&peer_id)
             .unwrap_or_default())
     }
 

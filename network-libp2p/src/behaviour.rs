@@ -1,7 +1,7 @@
 use std::{iter, sync::Arc};
 
 use libp2p::{
-    autonat, connection_limits, gossipsub, identify,
+    autonat, connection_limits, gossipsub,
     kad::{self, store::MemoryStore},
     ping, request_response,
     swarm::NetworkBehaviour,
@@ -34,7 +34,6 @@ pub struct Behaviour {
     pub discovery: discovery::Behaviour,
     pub dht: kad::Behaviour<MemoryStore>,
     pub gossipsub: gossipsub::Behaviour,
-    pub identify: identify::Behaviour,
     pub autonat: autonat::Behaviour,
     pub ping: ping::Behaviour,
     pub request_response: request_response::Behaviour<MessageCodec>,
@@ -74,10 +73,6 @@ impl Behaviour {
         gossipsub
             .with_peer_score(peer_score_params, thresholds)
             .expect("Valid score params and thresholds");
-
-        // Identify behaviour
-        let identify_config = identify::Config::new("/albatross/2.0".to_string(), public_key);
-        let identify = identify::Behaviour::new(identify_config);
 
         // Ping behaviour:
         // - Send a ping every 15 seconds and timeout at 20 seconds.
@@ -120,7 +115,6 @@ impl Behaviour {
             dht,
             discovery,
             gossipsub,
-            identify,
             ping,
             pool,
             request_response,
@@ -144,6 +138,11 @@ impl Behaviour {
     pub fn remove_peer_address(&mut self, peer_id: PeerId, address: Multiaddr) {
         // Remove address from the DHT
         self.dht.remove_address(&peer_id, &address);
+    }
+
+    /// Returns wether an address in `Multiaddr` format is a dialable websocket address
+    pub fn is_address_dialable(&self, address: &Multiaddr) -> bool {
+        self.discovery.is_address_dialable(address)
     }
 
     /// Updates the scores of all peers in the peer contact book.
