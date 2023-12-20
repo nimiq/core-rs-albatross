@@ -1,12 +1,11 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     sync::Arc,
     task::Waker,
 };
 
 use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt};
 use nimiq_block::Block;
-use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
@@ -21,13 +20,10 @@ use nimiq_zkp_component::{
 use parking_lot::RwLock;
 
 #[cfg(feature = "full")]
-use crate::messages::{HistoryChunk, ValidityWindowStartResponse};
+use crate::messages::{HistoryChunk, RequestHistoryChunk, ValidityWindowStartResponse};
 use crate::{
-    messages::{BlockError, Checkpoint, RequestHistoryChunk},
-    sync::{
-        history::cluster::HistoryChunkRequest, peer_list::PeerList, sync_queue::SyncQueue,
-        syncer::MacroSync,
-    },
+    messages::{BlockError, Checkpoint},
+    sync::{peer_list::PeerList, sync_queue::SyncQueue, syncer::MacroSync},
 };
 
 #[derive(Clone)]
@@ -58,7 +54,7 @@ impl<T> EpochIds<T> {
     }
 }
 
-/// Struct used to track the history chunk requests that we have made on a per peer basis.
+/// Struct used to track the progress of the validity window chunk process.
 pub struct ValidityChunkRequest {
     /// This corresponds to the block that should be used to verify the proof.
     pub verifier_block_number: u32,
@@ -70,6 +66,8 @@ pub struct ValidityChunkRequest {
     pub initial_offset: u32,
     /// Validity start block number that we are syncing with this peer
     pub validity_start: u32,
+    /// Flag to indicate if there is an election block within the validity window
+    pub election_in_window: bool,
 }
 
 /// This struct is used to track all the macro requests sent to a particular peer
@@ -128,6 +126,7 @@ impl PeerMacroRequests {
     }
 }
 
+/// Validity sync queue pending size
 const PENDING_SIZE: usize = 5;
 
 /// The LightMacroSync is one type of MacroSync and it is essentially a stream,
@@ -176,10 +175,6 @@ pub struct LightMacroSync<TNetwork: Network> {
         >,
     >,
     #[cfg(feature = "full")]
-    /// The stream for validity window history chunk requests
-    pub(crate) validity_window_chunks: FuturesUnordered<
-        BoxFuture<'static, (Result<HistoryChunk, RequestError>, TNetwork::PeerId)>,
-    >,
     /// The validity (history chunks) queue
     pub(crate) validity_queue: SyncQueue<
         TNetwork,
@@ -188,10 +183,14 @@ pub struct LightMacroSync<TNetwork: Network> {
         (),
     >,
 
-    /// Used to track the validity chunks we have requested on a per peer basis
-    pub(crate) validity_requests: HashMap<TNetwork::PeerId, ValidityChunkRequest>,
+    /// Used to track the validity chunks we are requesting
+    pub(crate) validity_requests: Option<ValidityChunkRequest>,
+    /// The peers we are currently syncing with
+    pub(crate) syncing_peers: HashSet<TNetwork::PeerId>,
     /// The latest block number towards which the validity window was fully synced.
     pub(crate) synced_validity_start: u32,
+    /// A vec of all the peers that we succesfully synced with
+    pub(crate) synced_validity_peers: Vec<TNetwork::PeerId>,
     /// Minimum distance to light sync in #blocks from the peers head.
     pub(crate) full_sync_threshold: u32,
     /// Task executor to be compatible with wasm and not wasm environments,
@@ -209,8 +208,10 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         full_sync_threshold: u32,
         executor: impl TaskExecutor + Send + 'static,
     ) -> Self {
+        #[cfg(feature = "full")]
         let peers = Arc::new(RwLock::new(PeerList::default()));
 
+        #[cfg(feature = "full")]
         let validity_queue = SyncQueue::new(
             Arc::clone(&network),
             Vec::<(RequestHistoryChunk, Option<_>)>::new(),
@@ -247,11 +248,12 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             block_headers: Default::default(),
             #[cfg(feature = "full")]
             validity_window_start: FuturesUnordered::new(),
-            #[cfg(feature = "full")]
-            validity_window_chunks: FuturesUnordered::new(),
-            validity_requests: HashMap::new(),
+            validity_requests: None,
+            syncing_peers: HashSet::new(),
             synced_validity_start: 0,
+            #[cfg(feature = "full")]
             validity_queue,
+            synced_validity_peers: Vec::new(),
         }
     }
 

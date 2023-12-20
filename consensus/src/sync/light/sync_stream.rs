@@ -471,6 +471,10 @@ impl<TNetwork: Network> Stream for LightMacroSync<TNetwork> {
             if let Poll::Ready(o) = self.poll_validity_window_chunks(cx) {
                 return Poll::Ready(o);
             }
+
+            if let Some(peer_id) = self.synced_validity_peers.pop() {
+                return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
+            }
         }
 
         Poll::Pending

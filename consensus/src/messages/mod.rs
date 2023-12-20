@@ -19,7 +19,7 @@ use thiserror::Error;
 
 use crate::error::SubscribeToAddressesError;
 
-mod handlers;
+pub mod handlers;
 
 /*
 The consensus module uses the following messages:
@@ -51,8 +51,6 @@ pub const MAX_REQUEST_TRIE_PROOF: u32 = 1000;
 pub const MAX_REQUEST_BLOCKS_PROOF: u32 = 1000;
 /// The max number of ValidityWindow requests per peer.
 pub const MAX_REQUEST_VALIDITY_WINDOW_START: u32 = 1000;
-/// The max number of Validity Window chunk requests per peer.
-pub const MAX_REQUEST_VALIDITY_WINDOW_CHUNK: u32 = 1000;
 /// The max number of Subscribe to address requests per peer.
 pub const MAX_REQUEST_SUBSCRIBE_BY_ADDRESS: u32 = 10;
 /// The max number of Address notifications per peer.
@@ -521,8 +519,8 @@ impl RequestCommon for RequestValidityWindowStart {
     const MAX_REQUESTS: u32 = MAX_REQUEST_VALIDITY_WINDOW_START;
 }
 
-/// This is the responde to the Validity Window start request
-/// Is used to prove the start of the validity window
+/// This is the response to the Validity Window start request
+/// It is used to prove the start of the validity window,
 /// By providing the first transaction from the validity window
 /// And the transaction before it.
 #[derive(Serialize, Deserialize)]

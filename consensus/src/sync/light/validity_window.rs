@@ -3,7 +3,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::{FutureExt, StreamExt};
+use futures::StreamExt;
 #[cfg(feature = "full")]
 use nimiq_blockchain::{Blockchain, CHUNK_SIZE};
 use nimiq_blockchain_interface::AbstractBlockchain;
@@ -21,7 +21,10 @@ use super::LightMacroSync;
 use crate::messages::{
     HistoryChunk, RequestHistoryChunk, RequestValidityWindowStart, ValidityWindowStartResponse,
 };
-use crate::sync::{light::sync::ValidityChunkRequest, syncer::MacroSyncReturn};
+use crate::{
+    messages::handlers::compute_validity_start,
+    sync::{light::sync::ValidityChunkRequest, syncer::MacroSyncReturn},
+};
 
 #[cfg(feature = "full")]
 impl<TNetwork: Network> LightMacroSync<TNetwork> {
@@ -64,6 +67,54 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             .await
     }
 
+    fn start_validity_chunk_request(
+        &mut self,
+        peer_id: TNetwork::PeerId,
+        leaf_index: usize,
+        verifier_block_number: u32,
+        expected_root: Blake2bHash,
+        validity_window_start: u32,
+        election_in_window: bool,
+    ) {
+        if self.validity_requests.is_none() {
+            // In this case we are going to start a new request
+            let epoch_number = Policy::epoch_at(validity_window_start);
+            let chunk_index = (leaf_index as u32) / (CHUNK_SIZE as u32);
+
+            self.validity_requests = Some(ValidityChunkRequest {
+                verifier_block_number,
+                root_hash: expected_root,
+                chunk_index,
+                initial_offset: chunk_index * CHUNK_SIZE as u32,
+                validity_start: validity_window_start,
+                election_in_window,
+            });
+
+            // Add the peer
+            self.validity_queue.add_peer(peer_id);
+            self.syncing_peers.insert(peer_id);
+
+            let request = RequestHistoryChunk {
+                epoch_number,
+                block_number: verifier_block_number,
+                chunk_index: chunk_index as u64,
+            };
+
+            log::trace!(
+                verifier_bn = verifier_block_number,
+                chunk_index = chunk_index,
+                "Adding a new validity window chunk request"
+            );
+
+            // Request the chunk
+            self.validity_queue.add_ids(vec![(request, None)]);
+        } else {
+            // If we are already requesting chunks, then we only add the peer
+            self.validity_queue.add_peer(peer_id);
+            self.syncing_peers.insert(peer_id);
+        }
+    }
+
     pub fn poll_validity_window_discover_requests(
         &mut self,
         cx: &mut Context<'_>,
@@ -73,17 +124,19 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         {
             match request_result {
                 Ok(response) => {
-                    // We need to verify the validity window start proof
                     if let Some(proof) = response.proof {
                         let macro_head = self.blockchain.read().macro_head();
 
-                        // Calculate the current validity window bn
-                        let validity_window_bn = macro_head
-                            .block_number()
-                            .saturating_sub(Policy::transaction_validity_window_blocks());
+                        let validity_window_bn = compute_validity_start(macro_head.block_number());
 
                         // This must correspond to a macro block.
                         assert!(Policy::is_macro_block_at(validity_window_bn));
+
+                        log::trace!(
+                            macro_head = macro_head.block_number(),
+                            validity_start = validity_window_bn,
+                            "Processing new validity start response"
+                        );
 
                         // Now we analize and check the transactions that we obtained from the proof:
                         // We verify there are only two txns in the proof
@@ -105,34 +158,35 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                     return Poll::Ready(None);
                                 }
 
-                                self.validity_requests.insert(
-                                    peer_id,
-                                    ValidityChunkRequest {
-                                        verifier_block_number: macro_head.block_number(),
-                                        root_hash: macro_head.header.history_root.clone(),
-                                        chunk_index: 0,
-                                        initial_offset: 0,
-                                        validity_start: validity_window_bn,
-                                    },
-                                );
+                                let next_election =
+                                    Policy::election_block_after(validity_window_bn);
 
-                                let network = Arc::clone(&self.network);
-
-                                self.validity_window_chunks.push(
-                                    async move {
+                                // Now we determine which is the right root to verify the proof
+                                let (verifier_block_number, expected_root, election_in_window) =
+                                    if next_election < macro_head.block_number() {
+                                        // This is the case where we are crossing an election block
+                                        let election = self
+                                            .blockchain
+                                            .read()
+                                            .get_block_at(next_election, false)
+                                            .unwrap();
+                                        (next_election, election.history_root().clone(), true)
+                                    } else {
+                                        // We don't have any election in between so we use the macro head
                                         (
-                                            Self::request_validity_window_chunk(
-                                                network,
-                                                peer_id,
-                                                Policy::epoch_at(proof.history[0].block_number),
-                                                macro_head.block_number(),
-                                                0,
-                                            )
-                                            .await,
-                                            peer_id,
+                                            macro_head.block_number(),
+                                            macro_head.header.history_root.clone(),
+                                            false,
                                         )
-                                    }
-                                    .boxed(),
+                                    };
+
+                                self.start_validity_chunk_request(
+                                    peer_id,
+                                    1,
+                                    verifier_block_number,
+                                    expected_root,
+                                    validity_window_bn,
+                                    election_in_window,
                                 );
 
                                 return Poll::Pending;
@@ -210,15 +264,15 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         let next_election = Policy::election_block_after(validity_window_bn);
 
                         // Now we determine which is the right root to verify the proof
-                        let (verifier_block_number, expected_root) =
+                        let (verifier_block_number, expected_root, election_in_window) =
                             if Policy::is_election_block_at(validity_window_bn) {
-                                // If the validity window starts at an election we use the start itself.
+                                // If the validity window starts at an election we use the start itself
                                 let election = self
                                     .blockchain
                                     .read()
                                     .get_block_at(validity_window_bn, false)
                                     .unwrap();
-                                (validity_window_bn, election.history_root().clone())
+                                (validity_window_bn, election.history_root().clone(), false)
                             } else if next_election < macro_head.block_number() {
                                 // This is the case where we are crossing an election block
                                 let election = self
@@ -226,12 +280,13 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                     .read()
                                     .get_block_at(next_election, false)
                                     .unwrap();
-                                (next_election, election.history_root().clone())
+                                (next_election, election.history_root().clone(), true)
                             } else {
                                 // We don't have any election in between so we use the macro head
                                 (
                                     macro_head.block_number(),
                                     macro_head.header.history_root.clone(),
+                                    false,
                                 )
                             };
 
@@ -240,83 +295,52 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                             .map_or(false, |result| result);
 
                         if !verification_result {
-                            log::warn!(peer=%peer_id,"Validity start proof didnt verify, disconnecting peer");
+                            log::warn!(peer=%peer_id,validity_start=validity_window_bn, "Validity start proof didnt verify, disconnecting peer");
                             self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
                             return Poll::Ready(None);
                         }
 
-                        // If the proof verified, we proceed to request the first history chunk
-                        let epoch_number = Policy::epoch_at(validity_window_bn);
-
-                        // We use the second transaction from the proof as the starting point, which:
-                        // Corresponds to the validity start or the first transaction after the validity start
+                        // If the proof verified, we need to start requesting history chunks
                         let first_leaf_index = proof.positions[1];
 
-                        // Create a new chunk tracker structure for this peer
-                        let first_chunk = (first_leaf_index as u32) / (CHUNK_SIZE as u32);
-
-                        self.validity_requests.insert(
+                        self.start_validity_chunk_request(
                             peer_id,
-                            ValidityChunkRequest {
-                                verifier_block_number,
-                                root_hash: expected_root,
-                                chunk_index: first_chunk,
-                                initial_offset: first_chunk * CHUNK_SIZE as u32,
-                                validity_start: validity_window_bn,
-                            },
+                            first_leaf_index,
+                            verifier_block_number,
+                            expected_root,
+                            validity_window_bn,
+                            election_in_window,
                         );
-
-                        // Request the first chunk
-                        self.validity_queue.add_peer(peer_id);
-
-                        let request = RequestHistoryChunk {
-                            epoch_number,
-                            block_number: verifier_block_number,
-                            chunk_index: first_chunk as u64,
-                        };
-
-                        self.validity_queue.add_ids(vec![(request, None)]);
                     } else {
                         // If no proof is provided, we need to check if the start of the validity window is the genesis
                         let macro_head = self.blockchain.read().macro_head();
 
-                        let validity_window_bn = macro_head
-                            .block_number()
-                            .saturating_sub(Policy::transaction_validity_window_blocks());
+                        let validity_window_bn = compute_validity_start(macro_head.block_number());
 
                         if validity_window_bn <= Policy::genesis_block_number() {
                             // No inclusion proof, nor validity start for the genesis block
                             // So we just proceed to request the first history chunk.
                             let verifier_block_number = macro_head.block_number();
 
-                            self.validity_requests.insert(
+                            self.start_validity_chunk_request(
                                 peer_id,
-                                ValidityChunkRequest {
-                                    verifier_block_number,
-                                    root_hash: macro_head.header.history_root.clone(),
-                                    chunk_index: 0,
-                                    initial_offset: 0,
-                                    validity_start: validity_window_bn,
-                                },
+                                0,
+                                verifier_block_number,
+                                macro_head.header.history_root.clone(),
+                                validity_window_bn + 1,
+                                false,
                             );
-
-                            self.validity_queue.add_peer(peer_id);
-
-                            let request = RequestHistoryChunk {
-                                epoch_number: Policy::epoch_at(macro_head.block_number()),
-                                block_number: verifier_block_number,
-                                chunk_index: 0 as u64,
-                            };
-
-                            self.validity_queue.add_ids(vec![(request, None)]);
                         } else {
-                            log::error!(peer=?peer_id,"No validity start proof was provided for non genesis block");
+                            log::error!(peer=?peer_id,"Validity start proof is missing");
                             self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
                             return Poll::Ready(None);
                         }
                     }
                 }
-                Err(_) => todo!(),
+                Err(error) => {
+                    trace!(?error, "Failed validity window start request");
+                    self.disconnect_peer(peer_id, CloseReason::Error);
+                }
             }
         }
 
@@ -327,31 +351,41 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         &mut self,
         cx: &mut Context<'_>,
     ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
-        while let Poll::Ready(Some(Ok((_request, chunk, peer_id)))) =
+        while let Poll::Ready(Some(Ok((request, chunk, peer_id)))) =
             self.validity_queue.poll_next_unpin(cx)
         {
-            log::debug!(" Processing response from validity queue");
+            log::trace!(peer=%peer_id, chunk_index= request.chunk_index, block_number =request.block_number,  "Processing response from validity queue");
+
             let synced_validity_start = self.synced_validity_start;
 
-            let macro_head = self.blockchain.read().macro_head().block_number();
+            let macro_head = self.blockchain.read().macro_head();
+            let macro_head_number = macro_head.block_number();
             let current_validity_start =
-                macro_head.saturating_sub(Policy::transaction_validity_window_blocks());
+                macro_head_number.saturating_sub(Policy::transaction_validity_window_blocks());
 
-            if synced_validity_start == current_validity_start {
+            if synced_validity_start == current_validity_start && synced_validity_start != 0 {
                 // Already synced
+                log::trace!("We are already validity synced... ");
                 return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
             }
 
             if let Some(chunk) = chunk.chunk {
-                let peer_request = self.validity_requests.get_mut(&peer_id).unwrap();
-                let expected_root = &peer_request.root_hash;
-                let verifier_block_number = peer_request.verifier_block_number;
+                let peer_request = self.validity_requests.as_mut().unwrap();
+                let expected_root = peer_request.root_hash.clone();
+                let mut verifier_block_number = peer_request.verifier_block_number;
 
                 let leaf_index = peer_request.chunk_index * (CHUNK_SIZE as u32);
 
+                log::trace!(
+                    leaf_index = leaf_index,
+                    chunk_index = peer_request.chunk_index,
+                    verifier_bn = verifier_block_number,
+                    "Applying a new validity chunk"
+                );
+
                 // Verify the history chunk
                 let verification_result = chunk
-                    .verify(expected_root, leaf_index as usize)
+                    .verify(&expected_root, leaf_index as usize)
                     .map_or(false, |result| result);
 
                 if verification_result {
@@ -372,6 +406,9 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         BlockchainProxy::Light(_) => unreachable!(),
                     };
 
+                    // Get ready for requesting the next chunk
+                    let mut chunk_index = peer_request.chunk_index + 1;
+
                     // We need to check if this is the last chunk:
                     let prover_mmr_size = chunk.proof.proof.mmr_size;
 
@@ -380,19 +417,41 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         leaf_number_to_index(peer_request.initial_offset as usize + leaf_count);
 
                     if prover_mmr_size == total_size {
-                        log::debug!(perr=%peer_id, "Finished validity syncing with this peer");
+                        // We need to check if there was an election in between, if so, we need to proceed to the next epoch
+                        if peer_request.election_in_window {
+                            log::trace!("Moving to the next epoch to continue syncing ");
+                            // Move to the next epoch:
+                            verifier_block_number = macro_head_number;
+                            chunk_index = 0;
+                            peer_request.initial_offset = 0;
+                            peer_request.election_in_window = false;
+                            peer_request.root_hash = macro_head.header.history_root.clone();
+                            peer_request.verifier_block_number = verifier_block_number;
+                        } else {
+                            // No election in between, so we are done
+                            log::debug!("Validity window syncing is complete");
 
-                        // Signal the validity start that we are synced with.
-                        self.synced_validity_start = peer_request.validity_start;
+                            self.validity_queue.remove_peer(&peer_id);
+                            self.syncing_peers.remove(&peer_id);
 
-                        // We are complete so we emit the peer
-                        self.remove_peer_requests(peer_id);
+                            // We move all the peers from the sync queue to the synced peers.
+                            for peer_id in self.syncing_peers.iter() {
+                                self.synced_validity_peers.push(*peer_id);
+                                self.validity_queue.remove_peer(&peer_id);
+                            }
 
-                        return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
+                            // Signal the validity start that we are synced with.
+                            self.synced_validity_start = peer_request.validity_start;
+
+                            // We are complete so we emit the peer
+                            self.validity_requests = None;
+                            self.syncing_peers.clear();
+
+                            return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
+                        }
                     }
 
                     // Update the peer tracker structure
-                    let chunk_index = peer_request.chunk_index + 1;
                     peer_request.chunk_index = chunk_index;
 
                     let request = RequestHistoryChunk {
@@ -401,10 +460,21 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         chunk_index: chunk_index as u64,
                     };
 
+                    log::trace!(
+                        verifier_bn = verifier_block_number,
+                        chunk_index = chunk_index,
+                        "Adding a new validity window chunk request"
+                    );
+
                     self.validity_queue.add_ids(vec![(request, None)]);
                 } else {
                     // If the chunk doesnt verify we disconnect from the peer
-                    log::debug!("The chunk didn't verify, disconnecting from peer");
+                    log::error!(peer=?peer_id,
+                                chunk=request.chunk_index,
+                                verifier_block=request.block_number,
+                                epoch=request.epoch_number,
+                                "The validity history chunk didn't verify, disconnecting from peer");
+
                     self.disconnect_peer(peer_id, CloseReason::MaliciousPeer)
                 }
             } else {

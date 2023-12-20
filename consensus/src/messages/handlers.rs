@@ -651,19 +651,48 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBlocksProof {
     }
 }
 
+/// The validity start is defined as the current head - validity_window_blocks
+/// However, if the validity start is located in the current epoch
+/// we will move it to the beggining of the current epoch,
+/// in order to sync the full epoch.
+pub fn compute_validity_start(macro_head: u32) -> u32 {
+    // First we determine which is the validity window start block number
+    let mut validity_window_bn = cmp::max(
+        Policy::genesis_block_number(),
+        macro_head.saturating_sub(Policy::transaction_validity_window_blocks()),
+    );
+
+    // Now we need to check which is the election block after the validity start to determine
+    // if the full validity window is located in the current epoch.
+    let next_election = Policy::election_block_after(validity_window_bn);
+
+    // If this condition is true it means that the validity window is located within the current epoch
+    if next_election > macro_head && !Policy::is_election_block_at(validity_window_bn) {
+        // So we move the validity start to the beggining of the epoch, in order to be able to verify the history root
+        validity_window_bn = Policy::election_block_before(validity_window_bn)
+    };
+
+    validity_window_bn
+}
+
 #[cfg(feature = "full")]
 impl<N: Network> Handle<N, ValidityWindowStartResponse, Arc<RwLock<Blockchain>>>
     for RequestValidityWindowStart
 {
     fn handle(
         &self,
-        _peer_id: N::PeerId,
+        peer_id: N::PeerId,
         blockchain: &Arc<RwLock<Blockchain>>,
     ) -> ValidityWindowStartResponse {
-        log::debug!("Processing a new validity window start request");
         let req_head_number = self.macro_head_number;
         let req_head_hash = &self.macro_head_hash;
 
+        log::debug!(
+            req_head = req_head_number,
+            "Processing a new validity window start request"
+        );
+
+        let blockchain_arc = Arc::clone(blockchain);
         let blockchain = blockchain.read();
         let read_txn = blockchain.read_transaction();
 
@@ -677,9 +706,12 @@ impl<N: Network> Handle<N, ValidityWindowStartResponse, Arc<RwLock<Blockchain>>>
                     log::info!("The requested block number does not correspond to what we expect");
                     ValidityWindowStartResponse { proof: None }
                 } else {
-                    // First we determine which is the validity window start block number
-                    let validity_window_bn = req_head_number
-                        .saturating_sub(Policy::transaction_validity_window_blocks());
+                    let validity_window_bn = compute_validity_start(req_head_number);
+
+                    // This must correspond to a macro block:
+                    if !Policy::is_macro_block_at(validity_window_bn) {
+                        return ValidityWindowStartResponse { proof: None };
+                    }
 
                     if validity_window_bn <= Policy::genesis_block_number() {
                         // No proof needed for the genesis block
@@ -687,10 +719,7 @@ impl<N: Network> Handle<N, ValidityWindowStartResponse, Arc<RwLock<Blockchain>>>
                         return ValidityWindowStartResponse { proof: None };
                     }
 
-                    // This must correspond to a macro block:
-                    if !Policy::is_macro_block_at(validity_window_bn) {
-                        return ValidityWindowStartResponse { proof: None };
-                    }
+                    log::trace!(validity_start=validity_window_bn, peer=%peer_id,"Computing the validity start for peer");
 
                     let validity_window_start_indexes = blockchain
                         .history_store
@@ -804,22 +833,27 @@ impl<N: Network> Handle<N, ValidityWindowStartResponse, Arc<RwLock<Blockchain>>>
                     let prev_transaction_hash = prev_transaction.tx_hash();
                     let start_transaction_hash = start_transaction.tx_hash();
 
-                    let hashes = vec![&prev_transaction_hash, &start_transaction_hash];
+                    let hashes = vec![prev_transaction_hash, start_transaction_hash];
 
-                    // Create the proof
-                    let proof = blockchain
-                        .history_store
-                        .prove(
-                            Policy::epoch_at(validity_window_bn),
-                            hashes,
-                            None,
-                            Some(&read_txn),
-                        )
-                        .unwrap();
+                    let next_election = Policy::election_block_after(validity_window_bn);
 
-                    log::debug!("Returning a new validity window start response");
+                    let block_number = if Policy::is_election_block_at(validity_window_bn) {
+                        // If the validity start is an election, we use that election
+                        validity_window_bn
+                    } else if next_election <= req_head_number {
+                        // If the validity start is located in a finalized epoch, we use the election block
+                        next_election
+                    } else {
+                        // If the validity start is located in the current epoch, we use the macro head
+                        req_head_number
+                    };
 
-                    ValidityWindowStartResponse { proof: Some(proof) }
+                    let txn_proof =
+                        prove_txns_with_block_number(&blockchain_arc, &hashes[..], block_number);
+
+                    ValidityWindowStartResponse {
+                        proof: txn_proof.proof,
+                    }
                 }
             }
             Err(err) => {

@@ -106,7 +106,7 @@ pub async fn sync_two_peers(
 
     // Produce the blocks.
     let producer = BlockProducer::new(signing_key(), voting_key());
-    produce_macro_blocks_with_txns(&producer, &blockchain1, num_batches_macro_sync, 0, 2);
+    produce_macro_blocks_with_txns(&producer, &blockchain1, num_batches_macro_sync, 1, 2);
 
     let net1: Arc<Network> = TestNetwork::build_network(
         num_batches_macro_sync as u64 * 10,
