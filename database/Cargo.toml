@@ -21,7 +21,7 @@ workspace = true
 
 [dependencies]
 bitflags = "2.0"
-libmdbx = "0.4.1"
+libmdbx = "0.4.2"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 tempfile = "3"
 thiserror = "1.0"
