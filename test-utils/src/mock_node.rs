@@ -13,10 +13,7 @@ use nimiq_consensus::{
     sync::live::{diff_queue::RequestTrieDiff, state_queue::RequestChunk},
 };
 use nimiq_database::volatile::VolatileDatabase;
-use nimiq_network_interface::{
-    network::Network as NetworkInterface,
-    request::{Handle, Request},
-};
+use nimiq_network_interface::{network::Network as NetworkInterface, request::Handle};
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::{networks::NetworkId, trie::TrieItem};
 use nimiq_utils::time::OffsetTime;
@@ -24,11 +21,8 @@ use parking_lot::RwLock;
 
 use crate::test_network::TestNetwork;
 
-pub struct MockHandler<
-    N: NetworkInterface + TestNetwork,
-    Req: Request + Handle<N, Req::Response, T>,
-    T: Send + Sync + Unpin,
-> {
+pub struct MockHandler<N: NetworkInterface + TestNetwork, Req: Handle<N, T>, T: Send + Sync + Unpin>
+{
     network: Arc<N>,
     subscription: BoxStream<'static, (Req, N::RequestId, N::PeerId)>,
     paused: bool,
@@ -38,11 +32,8 @@ pub struct MockHandler<
     environment: T,
 }
 
-impl<
-        N: NetworkInterface + TestNetwork,
-        Req: Request + Handle<N, Req::Response, T>,
-        T: Send + Sync + Unpin,
-    > MockHandler<N, Req, T>
+impl<N: NetworkInterface + TestNetwork, Req: Handle<N, T>, T: Send + Sync + Unpin>
+    MockHandler<N, Req, T>
 {
     pub fn new(
         network: Arc<N>,
@@ -76,11 +67,8 @@ impl<
     }
 }
 
-impl<
-        N: NetworkInterface + TestNetwork,
-        Req: Request + Handle<N, Req::Response, T>,
-        T: Send + Sync + Unpin,
-    > Stream for MockHandler<N, Req, T>
+impl<N: NetworkInterface + TestNetwork, Req: Handle<N, T>, T: Send + Sync + Unpin> Stream
+    for MockHandler<N, Req, T>
 {
     type Item = u16;
 

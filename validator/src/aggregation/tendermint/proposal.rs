@@ -122,9 +122,7 @@ impl RequestCommon for RequestProposal {
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_PROPOSAL;
 }
 
-impl<N: Network> Handle<N, Option<SignedProposal>, Arc<RwLock<Option<MacroState>>>>
-    for RequestProposal
-{
+impl<N: Network> Handle<N, Arc<RwLock<Option<MacroState>>>> for RequestProposal {
     fn handle(
         &self,
         _peer_id: N::PeerId,
