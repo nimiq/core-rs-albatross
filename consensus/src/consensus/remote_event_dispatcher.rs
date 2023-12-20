@@ -32,7 +32,7 @@ pub const MAX_SUBSCRIBED_PEERS: usize = 50;
 /// The max number of addresses that can be subscribed, per peer.
 pub const MAX_SUBSCRIBED_PEERS_ADDRESSES: usize = 250;
 
-impl<N: Network> Handle<N, ResponseSubscribeToAddress, Arc<RwLock<RemoteEventDispatcherState<N>>>>
+impl<N: Network> Handle<N, Arc<RwLock<RemoteEventDispatcherState<N>>>>
     for RequestSubscribeToAddress
 {
     fn handle(

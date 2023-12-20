@@ -8,7 +8,7 @@ use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::{
-    messages::{RequestMissingBlocks, ResponseBlocks},
+    messages::RequestMissingBlocks,
     sync::{
         live::{
             block_queue::BlockQueue,
@@ -639,7 +639,6 @@ async fn can_reset_chain_of_chunks() {
                 .set(|peer_id, request, blockchain| {
                     let mut chunk = <RequestChunk as Handle<
                         MockNetwork,
-                        ResponseChunk,
                         Arc<RwLock<Blockchain>>,
                     >>::handle(request, peer_id, blockchain);
                     // Make chunk invalid.
@@ -729,11 +728,12 @@ async fn can_remove_chunks_related_to_invalid_blocks() {
     mock_node
         .request_missing_block_handler
         .set(|mock_id, request, blockchain_proxy| {
-            let mut response = <RequestMissingBlocks as Handle<
-                MockNetwork,
-                ResponseBlocks,
-                BlockchainProxy,
-            >>::handle(request, mock_id, blockchain_proxy);
+            let mut response =
+                <RequestMissingBlocks as Handle<MockNetwork, BlockchainProxy>>::handle(
+                    request,
+                    mock_id,
+                    blockchain_proxy,
+                );
             match response.blocks {
                 Some(ref mut blocks) => match blocks[0] {
                     Block::Micro(ref mut micro_block) => {
@@ -843,7 +843,6 @@ async fn clears_buffer_after_macro_block() {
         .set(|mock_id, request, blockchain| {
             let mut chunk = <RequestChunk as nimiq_network_interface::request::Handle<
                 MockNetwork,
-                ResponseChunk,
                 Arc<RwLock<Blockchain>>,
             >>::handle(request, mock_id, blockchain);
             match chunk {

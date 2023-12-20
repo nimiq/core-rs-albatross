@@ -260,7 +260,7 @@ impl<N: Network> From<&ZKPComponent<N>> for ZKPStateEnvironment {
     }
 }
 
-impl<N: Network> Handle<N, RequestZKPResponse, Arc<ZKPStateEnvironment>> for RequestZKP {
+impl<N: Network> Handle<N, Arc<ZKPStateEnvironment>> for RequestZKP {
     fn handle(&self, _peer_id: N::PeerId, env: &Arc<ZKPStateEnvironment>) -> RequestZKPResponse {
         // First retrieve the ZKP proof and release the lock again.
         let zkp_state = env.zkp_state.read();

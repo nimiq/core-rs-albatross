@@ -193,8 +193,8 @@ pub fn peek_type(buffer: &[u8]) -> Result<RequestType, DeserializeError> {
 }
 
 /// This trait defines the behaviour when receiving a message and how to generate the response.
-pub trait Handle<N: Network, Response, T> {
-    fn handle(&self, peer_id: N::PeerId, context: &T) -> Response;
+pub trait Handle<N: Network, T>: Request {
+    fn handle(&self, peer_id: N::PeerId, context: &T) -> <Self as RequestCommon>::Response;
 }
 
 /// This trait defines the behaviour when receiving a message
@@ -204,11 +204,7 @@ pub trait MessageHandle<N: Network, T> {
 
 const MAX_CONCURRENT_HANDLERS: usize = 64;
 
-pub fn request_handler<
-    T: Send + Sync + Clone + 'static,
-    Req: Handle<N, Req::Response, T> + Request,
-    N: Network,
->(
+pub fn request_handler<T: Send + Sync + Clone + 'static, Req: Handle<N, T>, N: Network>(
     network: &Arc<N>,
     stream: BoxStream<'static, (Req, N::RequestId, N::PeerId)>,
     req_environment: &T,
