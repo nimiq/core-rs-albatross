@@ -3,6 +3,8 @@ use curve25519_dalek::Scalar;
 use super::commitment::Commitment;
 use crate::Signature;
 
+/// A partial signature is a signature of one of the co-signers in a multisig.
+/// Combining all partial signatures then yields the full signature (combining is done through summation).
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct PartialSignature(pub Scalar);
 implement_simple_add_sum_traits!(PartialSignature, Scalar::ZERO);

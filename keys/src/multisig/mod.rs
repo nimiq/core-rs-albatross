@@ -25,7 +25,10 @@ pub mod error;
 pub mod partial_signature;
 pub mod public_key;
 
-pub const MUSIG2_PARAMETER_V: usize = 2; // Parameter used in Musig2
+/// Parameter used in Musig2
+/// This describes the number of commitments required by each co-signer.
+/// It must be greater than 1 for security reasons.
+pub const MUSIG2_PARAMETER_V: usize = 2;
 
 #[cfg(feature = "serde-derive")]
 fn deserialize_scalar<'de, D>(deserializer: D) -> Result<Scalar, D::Error>
@@ -44,7 +47,10 @@ where
     serde_big_array::BigArray::serialize(&value.to_bytes(), serializer)
 }
 
+/// This struct contains the data related to the commitments step of MuSig2.
+/// It can be passed into the signing/verification process.
 ///
+/// The `CommitmentsBuilder` can be used as a tool to generate the necessary data.
 #[derive(Clone)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct CommitmentsData {
@@ -124,6 +130,7 @@ impl CommitmentsBuilder {
         self.all_commitments[0]
     }
 
+    /// Adds another co-signer to the signing process.
     pub fn with_signer(
         mut self,
         signer_public_key: PublicKey,
@@ -133,6 +140,7 @@ impl CommitmentsBuilder {
         self
     }
 
+    /// Adds another co-signer to the signing process.
     pub fn push_signer(
         &mut self,
         signer_public_key: PublicKey,
@@ -237,7 +245,9 @@ impl KeyPair {
         Ok(partial_signature)
     }
 
-    pub fn delinearize_private_key(&self, public_keys_hash: &[u8; 64]) -> Scalar {
+    /// Delinearized the private key in the same way as the public key delinearization.
+    /// It multiplies it with a scalar derived from the hash and the public key itself.
+    pub(crate) fn delinearize_private_key(&self, public_keys_hash: &[u8; 64]) -> Scalar {
         // Compute H(C||P).
         let mut h: sha2::Sha512 = sha2::Sha512::default();
 
@@ -262,7 +272,9 @@ impl PublicKey {
         compressed.decompress()
     }
 
-    pub fn delinearize(&self, public_keys_hash: &[u8; 64]) -> EdwardsPoint {
+    /// Delinearizes a public key by multiplying it with a scalar derived from the hash and the public key itself.
+    /// Effective delinearization for multisigs should use the hash over all public keys as an input.
+    pub(crate) fn delinearize(&self, public_keys_hash: &[u8; 64]) -> EdwardsPoint {
         // Compute H(C||P).
         let mut h: sha2::Sha512 = sha2::Sha512::default();
 
@@ -315,8 +327,8 @@ impl PublicKey {
     }
 }
 
+/// Compute hash over public keys public_keys_hash = C = H(P_1 || ... || P_n).
 pub fn hash_public_keys(public_keys: &[PublicKey]) -> [u8; 64] {
-    // 1. Compute hash over public keys public_keys_hash = C = H(P_1 || ... || P_n).
     let mut h: sha2::Sha512 = sha2::Sha512::default();
     let mut public_keys_hash: [u8; 64] = [0u8; 64];
     for public_key in public_keys {
@@ -342,7 +354,7 @@ impl ToScalar for ::ed25519_zebra::SigningKey {
         scalar_bytes[31] &= 127;
         scalar_bytes[31] |= 64;
         // The above bit operations ensure that the integer represented by
-        // `scalar_bytes` is less than 2***255-19 as required by this function.
+        // `scalar_bytes` is less than 2^255-19 as required by this function.
         #[allow(deprecated)]
         Scalar::from_bits(scalar_bytes)
     }

@@ -9,12 +9,14 @@ use zeroize::Zeroize;
 
 use super::{error::InvalidScalarError, MUSIG2_PARAMETER_V};
 
+/// A nonce is a "number only used once" and it is supposed to be kept secret (similar to a private key).
 #[derive(PartialEq, Eq, Debug, Clone, Copy, Zeroize)]
 pub struct Nonce(pub Scalar);
 
 impl Nonce {
     pub const SIZE: usize = 32;
 
+    /// Returns the public commitment for this secret nonce.
     pub fn commit(&self) -> Commitment {
         // Compute the point [scalar]B.
         let commitment: EdwardsPoint = &self.0 * constants::ED25519_BASEPOINT_TABLE;
@@ -34,6 +36,8 @@ impl<'a> From<&'a [u8; Nonce::SIZE]> for Nonce {
     }
 }
 
+/// A cryptographic commitment to the nonce.
+/// The commitment is public, while the nonce is secret.
 #[derive(PartialEq, Eq, Debug, Clone, Copy, Default)]
 pub struct Commitment(pub EdwardsPoint);
 implement_simple_add_sum_traits!(Commitment, EdwardsPoint::identity());
@@ -41,11 +45,13 @@ implement_simple_add_sum_traits!(Commitment, EdwardsPoint::identity());
 impl Commitment {
     pub const SIZE: usize = 32;
 
+    /// Transforms the commitment into byte format.
     #[inline]
     pub fn to_bytes(&self) -> [u8; Commitment::SIZE] {
         self.0.compress().to_bytes()
     }
 
+    /// Reads a commitment from byte format.
     pub fn from_bytes(bytes: [u8; Commitment::SIZE]) -> Option<Self> {
         let compressed = CompressedEdwardsY(bytes);
         compressed.decompress().map(Commitment)
@@ -64,6 +70,8 @@ impl<'a> From<&'a [u8; Commitment::SIZE]> for Commitment {
     }
 }
 
+/// A structure holding both the secret nonce and the public commitment.
+/// This is similar to a `KeyPair`.
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct CommitmentPair {
@@ -79,6 +87,7 @@ impl CommitmentPair {
         }
     }
 
+    /// Returns as many commitments as required by the MuSig2 parameter v (`MUSIG2_PARAMETER_V`).
     pub fn generate_all<R: Rng + RngCore + CryptoRng>(
         rng: &mut R,
     ) -> [CommitmentPair; MUSIG2_PARAMETER_V] {
@@ -114,16 +123,19 @@ impl CommitmentPair {
         })
     }
 
+    /// Returns the secret nonce.
     #[inline]
     pub fn nonce(&self) -> Nonce {
         self.random_secret
     }
 
+    /// Returns the public commitment.
     #[inline]
     pub fn commitment(&self) -> Commitment {
         self.commitment
     }
 
+    /// Returns a list of the public commitments from a list of commitment pairs (containing the secret nonces).
     pub fn to_commitments(
         value: &[CommitmentPair; MUSIG2_PARAMETER_V],
     ) -> [Commitment; MUSIG2_PARAMETER_V] {

@@ -1,5 +1,8 @@
 use std::fmt;
 
+use thiserror::Error;
+
+/// Scalars of 0 or 1 are not allowed for nonces and this error is returned.
 #[derive(Debug, Clone, Copy)]
 pub struct InvalidScalarError;
 
@@ -19,8 +22,7 @@ impl std::error::Error for InvalidScalarError {
     }
 }
 
-use thiserror::Error;
-
+/// Errors that can occur during partial signature generation.
 #[derive(Debug, Error)]
 pub enum PartialSignatureError {
     #[error("Missing nonces")]
