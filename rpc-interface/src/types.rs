@@ -520,7 +520,9 @@ pub struct Transaction {
     pub confirmations: Option<u32>,
 
     pub from: Address,
+    pub from_type: u8,
     pub to: Address,
+    pub to_type: u8,
     pub value: Coin,
     pub fee: Coin,
     #[serde(with = "crate::serde_helpers::hex")]
@@ -531,6 +533,7 @@ pub struct Transaction {
     pub validity_start_height: u32,
     #[serde(with = "crate::serde_helpers::hex")]
     pub proof: Vec<u8>,
+    pub network_id: u8,
 }
 
 impl Transaction {
@@ -567,7 +570,9 @@ impl Transaction {
                 None => None,
             },
             from: transaction.sender,
+            from_type: transaction.sender_type as u8,
             to: transaction.recipient,
+            to_type: transaction.recipient_type as u8,
             value: transaction.value,
             fee: transaction.fee,
             flags: transaction.flags.bits(),
@@ -575,6 +580,7 @@ impl Transaction {
             recipient_data: transaction.recipient_data,
             validity_start_height: transaction.validity_start_height,
             proof: transaction.proof,
+            network_id: transaction.network_id as u8,
         }
     }
 
