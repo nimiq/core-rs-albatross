@@ -10,11 +10,11 @@ as its Javascript environments.
 To run the example, first build the web-client by running the following script from this directory:
 
 ```sh
-./scripts/build.sh
+./scripts/build.sh --only web
 ```
 
-This script builds the `web`, `bundler`, and `node` targets and generates the corresponding JS
-bindings required to run the client in a web browser.
+This script builds the `web` wasm-bindgen target and generates the corresponding JS bindings required
+to run the client in a web browser.
 
 After the client has been built, this directory can be served with a web server (e.g. `python3 -m http.server`)
 and then the `/example/index.html` file can be loaded from e.g. http://localhost:8000/example/index.html.
