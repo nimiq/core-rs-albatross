@@ -65,7 +65,7 @@ nimiq-zkp-circuits = { workspace = true }
 nimiq-zkp-primitives = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.8"
+tempfile = "3.9"
 
 nimiq-bls = { workspace = true }
 nimiq-genesis-builder = { workspace = true }
