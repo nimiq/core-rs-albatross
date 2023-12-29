@@ -182,18 +182,22 @@ pub fn initialize_logging(
     let tokio_console_layer =
         tokio_console_bind_address.and_then(|addr| initialize_tokio_console(&addr));
 
+    let mut formatting_layer = tracing_subscriber::fmt::layer().with_writer(out);
+    if settings.file.is_some() {
+        // Only disable ANSI colors when a log file is specified. Do not forcefully enable ANSI colors otherwise,
+        // as they might be disabled through other means (e.g. with the NO_COLOR environment variable).
+        formatting_layer = formatting_layer.with_ansi(false);
+    }
+    let formatting_layer = formatting_layer
+        .event_format(Formatting(MaybeSystemTime(settings.timestamps)))
+        .with_filter(filter);
+
     #[cfg(feature = "loki")]
     {
         tracing_subscriber::registry()
             .with(loki_layer)
             .with(tokio_console_layer)
-            .with(
-                tracing_subscriber::fmt::layer()
-                    .with_writer(out)
-                    .with_ansi(settings.file.is_none())
-                    .event_format(Formatting(MaybeSystemTime(settings.timestamps)))
-                    .with_filter(filter),
-            )
+            .with(formatting_layer)
             .init();
 
         if let Some(task) = loki_task {
@@ -203,13 +207,7 @@ pub fn initialize_logging(
     #[cfg(not(feature = "loki"))]
     tracing_subscriber::registry()
         .with(tokio_console_layer)
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_writer(out)
-                .with_ansi(settings.file.is_none())
-                .event_format(Formatting(MaybeSystemTime(settings.timestamps)))
-                .with_filter(filter),
-        )
+        .with(formatting_layer)
         .init();
     Ok(())
 }
