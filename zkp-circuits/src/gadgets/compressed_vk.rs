@@ -59,7 +59,7 @@ impl CompressedInput<VerifyingKey<MNT6_753>, BasePrimeField<MNT6_753>>
             let alpha_g1 = CompressedAffineVar::with_y_bit(
                 ark_relations::ns!(cs, "alpha_g1"),
                 || Ok(alpha_g1),
-                bits_var.get(0).ok_or(SynthesisError::AssignmentMissing)?,
+                bits_var.first().ok_or(SynthesisError::AssignmentMissing)?,
             )?;
             let beta_g2 = CompressedAffineVar::with_y_bit(
                 ark_relations::ns!(cs, "beta_g2"),
@@ -133,7 +133,7 @@ impl CompressedInput<VerifyingKey<MNT4_753>, BasePrimeField<MNT4_753>>
             let alpha_g1 = CompressedAffineVar::with_y_bit(
                 ark_relations::ns!(cs, "alpha_g1"),
                 || Ok(alpha_g1),
-                bits_var.get(0).ok_or(SynthesisError::AssignmentMissing)?,
+                bits_var.first().ok_or(SynthesisError::AssignmentMissing)?,
             )?;
             let beta_g2 = CompressedAffineVar::with_y_bit(
                 ark_relations::ns!(cs, "beta_g2"),
