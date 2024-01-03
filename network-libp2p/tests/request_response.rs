@@ -191,7 +191,6 @@ impl TestNetwork {
         let addr4 = multiaddr![Memory(rng.gen::<u64>())];
 
         let net1 = Network::new(
-            Arc::new(OffsetTime::new()),
             network_config(addr1.clone()),
             Box::new(|fut| {
                 tokio::spawn(fut);
@@ -201,7 +200,6 @@ impl TestNetwork {
         net1.listen_on(vec![addr1.clone()]).await;
 
         let net2 = Network::new(
-            Arc::new(OffsetTime::new()),
             network_config(addr2.clone()),
             Box::new(|fut| {
                 tokio::spawn(fut);
@@ -211,7 +209,6 @@ impl TestNetwork {
         net2.listen_on(vec![addr2.clone()]).await;
 
         let net3 = Network::new(
-            Arc::new(OffsetTime::new()),
             network_config(addr3.clone()),
             Box::new(|fut| {
                 tokio::spawn(fut);
@@ -221,7 +218,6 @@ impl TestNetwork {
         net3.listen_on(vec![addr3.clone()]).await;
 
         let net4 = Network::new(
-            Arc::new(OffsetTime::new()),
             network_config(addr4.clone()),
             Box::new(|fut| {
                 tokio::spawn(fut);
