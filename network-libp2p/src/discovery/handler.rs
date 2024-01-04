@@ -210,14 +210,18 @@ impl Handler {
 
     /// Get peer contacts from our contact book to send to this peer. The contacts are filtered according to the peer's
     /// protocols and service filters, they are limited to the number of peers specified by the peer.
-    fn get_peer_contacts(&self, peer_contact_book: &PeerContactBook) -> Vec<SignedPeerContact> {
-        let n = self.peer_list_limit.unwrap() as usize;
-
+    /// This list also includes our own contact which should be already filtered since we already have
+    /// connections to these peers.
+    fn get_peer_contacts(
+        &self,
+        peer_contact_book: &PeerContactBook,
+        limit: usize,
+    ) -> Vec<SignedPeerContact> {
         let mut rng = thread_rng();
 
         peer_contact_book
             .query(self.services_filter)
-            .choose_multiple(&mut rng, n)
+            .choose_multiple(&mut rng, limit)
             .into_iter()
             .map(|c| c.signed().clone())
             .collect()
@@ -423,7 +427,10 @@ impl ConnectionHandler for Handler {
                                         update_interval: Some(
                                             self.config.update_interval.as_secs(),
                                         ),
-                                        peer_contacts: self.get_peer_contacts(&peer_contact_book),
+                                        peer_contacts: self.get_peer_contacts(
+                                            &peer_contact_book,
+                                            self.peer_list_limit.unwrap() as usize,
+                                        ),
                                     };
 
                                     drop(peer_contact_book);
@@ -659,8 +666,17 @@ impl ConnectionHandler for Handler {
                     if let Some(timer) = self.periodic_update_interval.as_mut() {
                         match timer.poll_next_unpin(cx) {
                             Poll::Ready(Some(_instant)) => {
-                                let peer_contacts =
-                                    self.get_peer_contacts(&self.peer_contact_book.read());
+                                let peer_contacts = {
+                                    let peer_contact_book = &self.peer_contact_book.read();
+                                    let mut peer_contacts = self.get_peer_contacts(
+                                        peer_contact_book,
+                                        self.peer_list_limit.unwrap() as usize - 1,
+                                    );
+                                    // Always include our own contact for updates
+                                    peer_contacts
+                                        .push(peer_contact_book.get_own_contact().signed().clone());
+                                    peer_contacts
+                                };
 
                                 if !peer_contacts.is_empty() {
                                     let msg = DiscoveryMessage::PeerAddresses { peer_contacts };
