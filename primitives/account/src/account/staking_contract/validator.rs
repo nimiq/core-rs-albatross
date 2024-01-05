@@ -646,6 +646,23 @@ impl StakingContract {
     pub fn can_delete_validator(
         &self,
         validator: &Validator,
+        value: Coin,
+        block_number: u32,
+    ) -> Result<(), AccountError> {
+        // The transaction value + fee must be equal to the validator deposit
+        if value != validator.deposit {
+            return Err(AccountError::InvalidCoinValue);
+        }
+
+        self.enforce_retire_and_release(validator, block_number)?;
+
+        Ok(())
+    }
+
+    pub(crate) fn enforce_retire_and_release(
+        &self,
+        validator: &Validator,
+
         block_number: u32,
     ) -> Result<(), AccountError> {
         // Check that the validator is retired.
@@ -700,19 +717,13 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         validator_address: &Address,
         block_number: u32,
-        transaction_total_value: Coin,
+        value: Coin,
         tx_logger: &mut TransactionLog,
     ) -> Result<DeleteValidatorReceipt, AccountError> {
         // Get the validator.
         let validator = store.expect_validator(validator_address)?;
 
-        // Check that the validator can be deleted.
-        self.can_delete_validator(&validator, block_number)?;
-
-        // The transaction value + fee must be equal to the validator deposit
-        if transaction_total_value != validator.deposit {
-            return Err(AccountError::InvalidCoinValue);
-        }
+        self.can_delete_validator(&validator, value, block_number)?;
 
         // All checks passed, not allowed to fail from here on!
 

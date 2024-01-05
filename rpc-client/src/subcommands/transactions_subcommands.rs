@@ -130,16 +130,16 @@ pub enum TransactionCommand {
         tx_commons: TxCommon,
     },
 
-    /// Sends a `unstake` transaction to the network. The transaction fee will be paid from the funds
-    /// being unstaked.
-    Unstake {
+    /// Sends a `remove_stake` transaction to the network. The transaction fee will be paid from the funds
+    /// being removed.
+    RemoveStake {
         /// The stake will be sent from this wallet. The sender wallet must be unlocked prior to this action.
         sender_wallet: Address,
 
         /// The recipients of the previously staked coins.
         recipient: Address,
 
-        /// The amount of NIM to unstake.
+        /// The amount of NIM to remove.
         #[clap(flatten)]
         tx_commons: TxCommonWithValue,
     },
@@ -482,7 +482,7 @@ impl HandleSubcommand for TransactionCommand {
                     println!("{txid:#?}");
                 }
             }
-            TransactionCommand::Unstake {
+            TransactionCommand::RemoveStake {
                 sender_wallet,
                 recipient,
                 tx_commons,
@@ -490,7 +490,7 @@ impl HandleSubcommand for TransactionCommand {
                 if tx_commons.common_tx_fields.dry {
                     let tx = client
                         .consensus
-                        .create_unstake_transaction(
+                        .create_remove_stake_transaction(
                             sender_wallet,
                             recipient,
                             tx_commons.value,
@@ -502,7 +502,7 @@ impl HandleSubcommand for TransactionCommand {
                 } else {
                     let txid = client
                         .consensus
-                        .send_unstake_transaction(
+                        .send_remove_stake_transaction(
                             sender_wallet,
                             recipient,
                             tx_commons.value,

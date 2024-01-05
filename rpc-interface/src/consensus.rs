@@ -287,7 +287,25 @@ pub trait ConsensusInterface {
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
 
-    async fn create_unstake_transaction(
+    async fn create_retire_stake_transaction(
+        &mut self,
+        sender_wallet: Option<Address>,
+        staker_wallet: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error>;
+
+    async fn send_retire_stake_transaction(
+        &mut self,
+        sender_wallet: Option<Address>,
+        staker_wallet: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error>;
+
+    async fn create_remove_stake_transaction(
         &mut self,
         staker_wallet: Address,
         recipient: Address,
@@ -296,7 +314,7 @@ pub trait ConsensusInterface {
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error>;
 
-    async fn send_unstake_transaction(
+    async fn send_remove_stake_transaction(
         &mut self,
         staker_wallet: Address,
         recipient: Address,

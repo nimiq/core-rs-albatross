@@ -743,9 +743,59 @@ impl ConsensusInterface for ConsensusDispatcher {
         self.send_raw_transaction(raw_tx).await
     }
 
-    /// Returns a serialized `unstake` transaction. The transaction fee will be paid from the funds
-    /// being unstaked.
-    async fn create_unstake_transaction(
+    /// Returns a serialized `retire_stake` transaction. The transaction fee will be paid from the funds
+    /// being retired.
+    async fn create_retire_stake_transaction(
+        &mut self,
+        sender_wallet: Option<Address>,
+        staker_wallet: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<String, (), Self::Error> {
+        let sender_key = match sender_wallet {
+            None => None,
+            Some(address) => Some(self.get_wallet_keypair(&address)?),
+        };
+
+        let transaction = TransactionBuilder::new_retire_stake(
+            sender_key.as_ref(),
+            &self.get_wallet_keypair(&staker_wallet)?,
+            value,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        )?;
+
+        Ok(transaction_to_hex_string(&transaction).into())
+    }
+
+    /// Sends a `retire_stake` transaction to the network. The transaction fee will be paid from the funds
+    /// being retired.
+    async fn send_retire_stake_transaction(
+        &mut self,
+        sender_wallet: Option<Address>,
+        staker_wallet: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> RPCResult<Blake2bHash, (), Self::Error> {
+        let raw_tx = self
+            .create_retire_stake_transaction(
+                sender_wallet,
+                staker_wallet,
+                value,
+                fee,
+                validity_start_height,
+            )
+            .await?
+            .data;
+        self.send_raw_transaction(raw_tx).await
+    }
+
+    /// Returns a serialized `remove_stake` transaction. The transaction fee will be paid from the funds
+    /// being removed.
+    async fn create_remove_stake_transaction(
         &mut self,
         staker_wallet: Address,
         recipient: Address,
@@ -753,7 +803,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error> {
-        let transaction = TransactionBuilder::new_unstake(
+        let transaction = TransactionBuilder::new_remove_stake(
             &self.get_wallet_keypair(&staker_wallet)?,
             recipient,
             value,
@@ -765,9 +815,9 @@ impl ConsensusInterface for ConsensusDispatcher {
         Ok(transaction_to_hex_string(&transaction).into())
     }
 
-    /// Sends a `unstake` transaction to the network. The transaction fee will be paid from the funds
-    /// being unstaked.
-    async fn send_unstake_transaction(
+    /// Sends a `remove_stake` transaction to the network. The transaction fee will be paid from the funds
+    /// being removed.
+    async fn send_remove_stake_transaction(
         &mut self,
         staker_wallet: Address,
         recipient: Address,
@@ -776,7 +826,13 @@ impl ConsensusInterface for ConsensusDispatcher {
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let raw_tx = self
-            .create_unstake_transaction(staker_wallet, recipient, value, fee, validity_start_height)
+            .create_remove_stake_transaction(
+                staker_wallet,
+                recipient,
+                value,
+                fee,
+                validity_start_height,
+            )
             .await?
             .data;
         self.send_raw_transaction(raw_tx).await

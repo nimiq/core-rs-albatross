@@ -7,7 +7,7 @@
 3. Create or Import your Account
 4. Become a Validator
 5. Stake on Behalf of a Validator
-6. Inactivate and Unstake
+6. Inactivate and Remove Stake
 7. Send a Transaction
 8. RPC Methods
 
@@ -173,7 +173,7 @@ stake:start <staker_address> <validator_address> <value>
 
 Also note that the value must be provided in Lunas.
 
-## 5. Inactivate and Unstake
+## 5. Inactivate and Remove Stake
 
 ### 5.1 Inactivate your Validator
 
@@ -184,7 +184,7 @@ validator:inactivate <validator_address> <validator_address> <signing_private_ke
 ```
 
 
-### 5.2 Unstake delegated Stake
+### 5.2 Remove delegated Stake
 
 Removes stake from a staker’s address via RPC.
 
@@ -192,4 +192,4 @@ Removes stake from a staker’s address via RPC.
 stake:stop <staker_address> <value>
 ```
 
-Where `value` is the amount of NIM to unstake in lunas.
+Where `value` is the amount of NIM to remove stake in lunas.

@@ -10,7 +10,7 @@ use crate::{
     Account, AccountReceipt, InherentLogger, TransactionLog,
 };
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct BlockState {
     pub number: u32,
     pub time: u64,

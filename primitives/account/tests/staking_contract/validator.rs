@@ -2696,7 +2696,7 @@ fn can_reserve_and_release_balance() {
     assert_eq!(reserved_balance.balance(), Coin::ZERO);
     assert!(result.is_ok());
 
-    // Can reserve balance for delete validator tx after release.
+    // Can reserve balance for delete validator tx after released funds.
     let result = retired_setup.staking_contract.reserve_balance(
         &tx,
         &mut reserved_balance,
@@ -2708,4 +2708,158 @@ fn can_reserve_and_release_balance() {
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
     );
     assert!(result.is_ok());
+}
+
+#[test]
+fn cannot_reserve_balance_if_value_different_than_validator_deposit() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let retired_setup = ValidatorSetup::setup_retired_validator(None);
+    let data_store = retired_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = retired_setup.env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+    let _write = data_store.write(&mut db_txn);
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Cannot reserve with value < deposit.
+    let mut reserved_balance = ReservedBalance::new(retired_setup.validator_address.clone());
+
+    let mut tx = make_delete_validator_transaction();
+    tx.value -= Coin::from_u64_unchecked(1);
+
+    let result = retired_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &retired_setup.state_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+
+    assert_eq!(reserved_balance.balance(), Coin::ZERO);
+    assert_eq!(result, Err(AccountError::InvalidCoinValue));
+
+    // Works with correct total tx value.
+    tx.value += Coin::from_u64_unchecked(1);
+    let result = retired_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &retired_setup.state_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(
+        reserved_balance.balance(),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
+    );
+    assert_eq!(result, Ok(()));
+}
+
+#[test]
+fn cannot_reserve_balance_if_not_released() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let retired_setup = ValidatorSetup::setup_retired_validator(None);
+    let data_store = retired_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = retired_setup.env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+    let _write = data_store.write(&mut db_txn);
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Cannot reserve balance before cooldown.
+    let mut reserved_balance = ReservedBalance::new(retired_setup.validator_address.clone());
+
+    let tx = make_delete_validator_transaction();
+    let result = retired_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &retired_setup.before_state_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+
+    assert_eq!(reserved_balance.balance(), Coin::ZERO);
+    assert_eq!(result, Err(AccountError::InvalidForSender));
+
+    // Works after cooldown release.
+    let result = retired_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &retired_setup.state_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(
+        reserved_balance.balance(),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
+    );
+    assert_eq!(result, Ok(()));
+}
+
+#[test]
+fn cannot_reserve_balance_if_jailed() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let mut jailed_retired_setup = ValidatorSetup::setup_jailed_validator(None);
+    let data_store = jailed_retired_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = jailed_retired_setup.env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+    let _write = data_store.write(&mut db_txn);
+
+    // Retire jailed validator.
+    let retire_tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::RetireValidator {
+            proof: Default::default(),
+        },
+        0,
+        &ed25519_key_pair(VALIDATOR_PRIVATE_KEY),
+    );
+
+    _ = jailed_retired_setup
+        .staking_contract
+        .commit_incoming_transaction(
+            &retire_tx,
+            &jailed_retired_setup.before_state_release_block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
+        .expect("Failed to commit transaction");
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Cannot reserve balance while jailed.
+    let mut reserved_balance = ReservedBalance::new(jailed_retired_setup.validator_address.clone());
+
+    let tx = make_delete_validator_transaction();
+    let result = jailed_retired_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &jailed_retired_setup.before_state_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+
+    assert_eq!(reserved_balance.balance(), Coin::ZERO);
+    assert_eq!(result, Err(AccountError::InvalidForSender));
+
+    // Works after jail release.
+    let result = jailed_retired_setup.staking_contract.reserve_balance(
+        &tx,
+        &mut reserved_balance,
+        &jailed_retired_setup.state_release_block_state,
+        data_store.read(&mut db_txn),
+    );
+    assert_eq!(
+        reserved_balance.balance(),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
+    );
+    assert_eq!(result, Ok(()));
 }

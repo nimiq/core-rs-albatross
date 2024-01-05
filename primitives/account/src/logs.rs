@@ -146,7 +146,16 @@ pub enum Log {
     },
 
     #[serde(rename_all = "camelCase")]
-    Unstake {
+    RetireStake {
+        staker_address: Address,
+        validator_address: Option<Address>,
+        inactive_balance: Coin,
+        inactive_from: Option<u32>,
+        retired_balance: Coin,
+    },
+
+    #[serde(rename_all = "camelCase")]
+    RemoveStake {
         staker_address: Address,
         validator_address: Option<Address>,
         value: Coin,
@@ -295,7 +304,12 @@ impl Log {
                 validator_address,
                 ..
             }
-            | Log::Unstake {
+            | Log::RetireStake {
+                staker_address,
+                validator_address,
+                ..
+            }
+            | Log::RemoveStake {
                 staker_address,
                 validator_address,
                 ..

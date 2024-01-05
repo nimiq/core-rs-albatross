@@ -1042,7 +1042,7 @@ fn can_revert_inherents() {
     assert!(matches!(receipts.inherents[..], [OperationReceipt::Ok(_)]));
 
     let (validator_key_pair, _, _) =
-        generator.create_validator_and_staker(ValidatorState::Active, false);
+        generator.create_validator_and_staker(ValidatorState::Active, false, false);
 
     info!("Testing inherent Penalize");
     let inherent = Inherent::Penalize {

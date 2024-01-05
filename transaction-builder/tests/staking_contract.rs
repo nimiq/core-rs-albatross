@@ -104,10 +104,10 @@ fn it_can_create_staker_transactions() {
 
     assert_eq!(tx, tx2);
 
-    // Unstake
-    let tx = make_unstake_transaction(&key_pair, 150_000_000);
+    // Remove stake.
+    let tx = make_remove_stake_transaction(&key_pair, 150_000_000);
 
-    let tx2 = TransactionBuilder::new_unstake(
+    let tx2 = TransactionBuilder::new_remove_stake(
         &key_pair,
         Address::from_any_str(ADDRESS).unwrap(),
         150_000_000.try_into().unwrap(),
@@ -313,7 +313,7 @@ fn make_signed_incoming_transaction(
     tx
 }
 
-fn make_unstake_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
+fn make_remove_stake_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
     let mut tx = Transaction::new_extended(
         Policy::STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,

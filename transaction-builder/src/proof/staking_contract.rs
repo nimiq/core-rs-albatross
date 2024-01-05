@@ -63,7 +63,7 @@ impl StakingDataBuilder {
 ///     - Validator
 ///         * Delete
 ///     - Staker
-///         * Unstake
+///         * Remove stake
 #[derive(Clone, Debug)]
 pub struct StakingProofBuilder {
     pub transaction: Transaction,

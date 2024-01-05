@@ -565,6 +565,13 @@ impl Transaction {
                                 new_active_balance: new_active_balance.into(),
                             })
                         }
+                        IncomingStakingTransactionData::RetireStake {
+                            value,
+                            proof: _proof,
+                        } => PlainTransactionRecipientData::RetireStake(PlainRetireStakeData {
+                            raw: hex::encode(self.recipient_data()),
+                            value: value.into(),
+                        }),
                     }
                     // In the future we might add other staking notifications
                 } else if self.inner.recipient_type == AccountType::Vesting {
@@ -695,6 +702,7 @@ impl Transaction {
                 PlainTransactionRecipientData::AddStake(ref data) => &data.raw,
                 PlainTransactionRecipientData::UpdateStaker(ref data) => &data.raw,
                 PlainTransactionRecipientData::SetActiveStake(ref data) => &data.raw,
+                PlainTransactionRecipientData::RetireStake(ref data) => &data.raw,
             })?),
             plain.value,
             plain.fee,
@@ -739,6 +747,7 @@ pub enum PlainTransactionRecipientData {
     AddStake(PlainAddStakeData),
     UpdateStaker(PlainUpdateStakerData),
     SetActiveStake(PlainSetActiveStakeData),
+    RetireStake(PlainRetireStakeData),
 }
 
 /// Placeholder struct to serialize data of transactions as hex strings in the style of the Nimiq 1.0 library.
@@ -835,6 +844,14 @@ pub struct PlainUpdateStakerData {
 pub struct PlainSetActiveStakeData {
     pub raw: String,
     pub new_active_balance: u64,
+}
+
+/// JSON-compatible and human-readable format of set inactive stake data.
+#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PlainRetireStakeData {
+    pub raw: String,
+    pub value: u64,
 }
 
 /// Enum over all possible meanings of a transaction's proof.

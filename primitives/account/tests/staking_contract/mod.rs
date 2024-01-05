@@ -1,4 +1,4 @@
-use std::vec;
+use std::{cmp::max, vec};
 
 use nimiq_account::{
     AccountTransactionInteraction, Accounts, BlockState, DataStoreWrite, StakingContract,
@@ -281,7 +281,7 @@ impl ValidatorSetup {
             &ed25519_key_pair(VALIDATOR_PRIVATE_KEY),
         );
 
-        let block_state = BlockState::new(3, 3);
+        let block_state = BlockState::new(Policy::genesis_block_number() + 3, 3);
         validator_setup
             .staking_contract
             .commit_incoming_transaction(
@@ -294,9 +294,8 @@ impl ValidatorSetup {
 
         let effective_state_block_state =
             BlockState::new(Policy::election_block_after(block_state.number), 2);
-        let after_cooldown = Policy::block_after_reporting_window(Policy::election_block_after(
-            effective_state_block_state.number,
-        ));
+        let after_cooldown =
+            Policy::block_after_reporting_window(effective_state_block_state.number);
         let after_cooldown = BlockState::new(after_cooldown, 1000);
         let before_cooldown = BlockState::new(after_cooldown.number - 1, 9000);
 
@@ -339,7 +338,7 @@ impl ValidatorSetup {
     }
 
     fn setup_jailed_validator(staker_active_balance: Option<u64>) -> ValidatorSetup {
-        let jailing_inherent_block_state = BlockState::new(2, 2);
+        let jailing_inherent_block_state = BlockState::new(Policy::genesis_block_number() + 2, 2);
 
         let mut validator_setup = ValidatorSetup::new(staker_active_balance);
         let data_store = validator_setup
@@ -394,13 +393,15 @@ struct StakerSetup {
     env: DatabaseProxy,
     accounts: Accounts,
     staking_contract: StakingContract,
-    effective_inactivation_block_state: BlockState,
+    effective_block_state: BlockState,
     before_release_block_state: BlockState,
-    inactive_release_block_state: BlockState,
+    release_block_state: BlockState,
+    retire_stake_block_state: BlockState,
     validator_address: Address,
     staker_address: Address,
     active_stake: Coin,
     inactive_stake: Coin,
+    retired_stake: Coin,
     validator_state_release: Option<u32>,
 }
 
@@ -410,25 +411,43 @@ impl StakerSetup {
         active_stake: u64,
         inactive_stake: u64,
     ) -> Self {
+        Self::setup_staker_with_inactive_retired_balance(
+            validator_state,
+            active_stake,
+            inactive_stake,
+            0,
+        )
+    }
+
+    fn setup_staker_with_inactive_retired_balance(
+        validator_state: ValidatorState,
+        active_stake: u64,
+        inactive_stake: u64,
+        retired_stake: u64,
+    ) -> Self {
         // Setup jailed validator
         let mut validator_state_release = None;
         let mut validator_setup = match validator_state {
-            ValidatorState::Active => ValidatorSetup::new(Some(active_stake + inactive_stake)),
+            ValidatorState::Active => {
+                ValidatorSetup::new(Some(active_stake + inactive_stake + retired_stake))
+            }
             ValidatorState::Jailed => {
-                let validator_setup =
-                    ValidatorSetup::setup_jailed_validator(Some(active_stake + inactive_stake));
+                let validator_setup = ValidatorSetup::setup_jailed_validator(Some(
+                    active_stake + inactive_stake + retired_stake,
+                ));
                 validator_state_release = Some(validator_setup.state_release_block_state.number);
                 validator_setup
             }
             ValidatorState::Retired => {
-                let validator_setup =
-                    ValidatorSetup::setup_retired_validator(Some(active_stake + inactive_stake));
+                let validator_setup = ValidatorSetup::setup_retired_validator(Some(
+                    active_stake + inactive_stake + retired_stake,
+                ));
                 validator_state_release = Some(validator_setup.state_release_block_state.number);
                 validator_setup
             }
-            ValidatorState::Deleted => {
-                ValidatorSetup::setup_deleted_validator(Some(active_stake + inactive_stake))
-            }
+            ValidatorState::Deleted => ValidatorSetup::setup_deleted_validator(Some(
+                active_stake + inactive_stake + retired_stake,
+            )),
         };
 
         let data_store = validator_setup
@@ -441,17 +460,18 @@ impl StakerSetup {
 
         let active_stake = Coin::from_u64_unchecked(active_stake);
         let inactive_stake = Coin::from_u64_unchecked(inactive_stake);
+        let retired_stake = Coin::from_u64_unchecked(retired_stake);
         let staker_address = validator_setup.staker_address.unwrap();
-        let deactivation_block = 2;
+        let deactivation_block = Policy::genesis_block_number() + 2;
 
-        let effective_inactivation_block_state =
+        let effective_block_state =
             BlockState::new(Policy::election_block_after(deactivation_block), 2);
-        let inactive_release_block_state = BlockState::new(
-            Policy::block_after_reporting_window(effective_inactivation_block_state.number),
+        let release_block_state = BlockState::new(
+            Policy::block_after_reporting_window(effective_block_state.number),
             2,
         );
-        let before_release_block_state =
-            BlockState::new(inactive_release_block_state.number - 1, 2);
+        let before_release_block_state = BlockState::new(release_block_state.number - 1, 2);
+        let mut retire_stake_block_state = BlockState::default();
 
         // Deactivate part of the stake.
         validator_setup
@@ -465,20 +485,43 @@ impl StakerSetup {
             )
             .expect("Failed to set inactive stake");
 
+        if !retired_stake.is_zero() {
+            let retire_block = if matches!(validator_state, ValidatorState::Jailed) {
+                max(validator_state_release.unwrap(), release_block_state.number)
+            } else {
+                release_block_state.number
+            };
+            retire_stake_block_state = BlockState::new(retire_block, 3);
+
+            // Retire part of the stake.
+            validator_setup
+                .staking_contract
+                .retire_stake(
+                    &mut staking_contract_store,
+                    &staker_address,
+                    retired_stake,
+                    retire_block,
+                    &mut TransactionLog::empty(),
+                )
+                .expect("Failed to set inactive stake");
+        }
+
         db_txn_og.commit();
 
         StakerSetup {
             env: validator_setup.env,
             accounts: validator_setup.accounts,
             staking_contract: validator_setup.staking_contract,
-            effective_inactivation_block_state,
+            effective_block_state,
             before_release_block_state,
-            inactive_release_block_state,
+            release_block_state,
             validator_address: validator_setup.validator_address,
             staker_address,
             active_stake,
             inactive_stake,
+            retired_stake,
             validator_state_release,
+            retire_stake_block_state,
         }
     }
 }

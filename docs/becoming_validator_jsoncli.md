@@ -4,7 +4,7 @@
 
 1. Become a Validator
 2. Stake on Behalf of a Validator
-3. Inactivate and Unstake
+3. Inactivate and Remove stake
 4. Other useful commands
 
 **Note**
@@ -73,7 +73,7 @@ To stake on behalf of a validator, use the following command to send a new stake
 ./jsonrpc-cli 127.0.0.1:9100 sendNewStakerTransaction '{"sender_wallet": "<address>", "staker_wallet":"<address>", "delegation": "<address>", "value": Coin, "fee": Coin, "validity_start_height": "u32"}'
 ```
 
-## 3. Inactivate and Unstake
+## 3. Inactivate and Remove stake
 
 ### 3.1 Inactivate your Validator
 
@@ -83,12 +83,12 @@ Inactivates the validator via RPC.
 ./jsonrpc-cli 127.0.0.1:9100 sendInactivateValidatorTransaction '{"sender_wallet": "<address>", "validator_address":"<address>", "signing_secret_key": "<SchnorrPublicKey>", "fee": 2, "validity_start_height": "6789"}’
 ```
 
-### 3.2 Unstake delegated Stake
+### 3.2 Remove delegated Stake
 
 Removes stake from a staker’s address via RPC.
 
 ```
-./jsonrpc-cli 127.0.0.1:9100 sendUnstakeTransaction '{"staker_wallet": "<address>", "recipient": "<address>", "value": Coin, "fee": Coin, "validity_start_height": "u32"}’
+./jsonrpc-cli 127.0.0.1:9100 sendRemoveStakeTransaction '{"staker_wallet": "<address>", "recipient": "<address>", "value": Coin, "fee": Coin, "validity_start_height": "u32"}’
 ```
 
 ## 4. Other useful commands

@@ -160,6 +160,18 @@ impl StakingRecipientBuilder {
         self
     }
 
+    /// This method allows to retire the stakers balance. Funds are first drained from the inactive
+    /// stake and have the same release time, if the active stake funds also need to be drained the
+    /// retire release time will be reset.
+    /// It needs to be signed by the key pair corresponding to the staker address.
+    pub fn retire_stake(&mut self, value: Coin) -> &mut Self {
+        self.data = Some(IncomingStakingTransactionData::RetireStake {
+            value,
+            proof: Default::default(),
+        });
+        self
+    }
+
     /// A method to generate a proof of knowledge of the secret key by signing the public key.
     pub fn generate_proof_of_knowledge(key_pair: &BlsKeyPair) -> CompressedSignature {
         key_pair.sign(&key_pair.public_key).compress()

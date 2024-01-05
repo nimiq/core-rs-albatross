@@ -1077,7 +1077,65 @@ impl TransactionBuilder {
         let mut builder = Self::new();
         builder
             .with_recipient(recipient.generate().unwrap())
-            .with_value(Coin::ZERO)
+            .with_value(value)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        match key_pair {
+            None => {
+                builder.with_sender(Sender::new_basic(Address::from(staker_key_pair)));
+            }
+            Some(key) => {
+                builder.with_sender(Sender::new_basic(Address::from(key)));
+            }
+        }
+
+        let proof_builder = builder.generate()?;
+        let mut staking_data_builder = proof_builder.unwrap_in_staking();
+        staking_data_builder.sign_with_key_pair(staker_key_pair);
+        let mut builder = staking_data_builder.generate().unwrap().unwrap_basic();
+        match key_pair {
+            None => builder.sign_with_key_pair(staker_key_pair),
+            Some(key) => builder.sign_with_key_pair(key),
+        };
+        Ok(builder.generate().unwrap())
+    }
+
+    /// Creates a transaction to retire stake of a given staker.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The optional key pair used to sign the outgoing transaction. If
+    ///                             it is given, the fee will be paid from the basic account
+    ///                             belonging to this key pair.
+    ///  - `staker_key_pair`:       The key pair used to sign the incoming transaction. The staker
+    ///                             address will be derived from this key pair.
+    ///  - `value`:                 The portion of the total stake to be retired. Can be at most the total
+    ///                             stake.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    pub fn new_retire_stake(
+        key_pair: Option<&KeyPair>,
+        staker_key_pair: &KeyPair,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Result<Transaction, TransactionBuilderError> {
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.retire_stake(value);
+
+        let mut builder = Self::new();
+        builder
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(value)
             .with_fee(fee)
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
@@ -1109,7 +1167,7 @@ impl TransactionBuilder {
     ///
     ///  - `key_pair`:              The key pair used to sign the outgoing transaction. The staker
     ///                             address will be derived from this key pair.
-    ///  - `recipient`:             The basic address that will receive the unstaked funds.
+    ///  - `recipient`:             The basic address that will receive the removed funds.
     ///  - `value`:                 The value to be moved from the staker.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
@@ -1119,7 +1177,7 @@ impl TransactionBuilder {
     ///
     /// The finalized transaction.
     ///
-    pub fn new_unstake(
+    pub fn new_remove_stake(
         key_pair: &KeyPair,
         recipient: Address,
         value: Coin,

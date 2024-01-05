@@ -80,6 +80,10 @@ pub enum IncomingStakingTransactionData {
         new_active_balance: Coin,
         proof: SignatureProof,
     },
+    RetireStake {
+        value: Coin,
+        proof: SignatureProof,
+    },
 }
 
 impl IncomingStakingTransactionData {
@@ -92,6 +96,7 @@ impl IncomingStakingTransactionData {
                 | IncomingStakingTransactionData::RetireValidator { .. }
                 | IncomingStakingTransactionData::UpdateStaker { .. }
                 | IncomingStakingTransactionData::SetActiveStake { .. }
+                | IncomingStakingTransactionData::RetireStake { .. }
         )
     }
 
@@ -162,7 +167,7 @@ impl IncomingStakingTransactionData {
             IncomingStakingTransactionData::CreateStaker { proof, .. } => {
                 // Check that stake is bigger than the minimum stake.
                 if transaction.value < Coin::from_u64_unchecked(Policy::MINIMUM_STAKE) {
-                    warn!("Can't create a staker with less than balance. The offending transaction is the following:\n{:?}", transaction);
+                    warn!("Can't create a staker with less than minimum stake. The offending transaction is the following:\n{:?}", transaction);
                     return Err(TransactionError::InvalidValue);
                 }
 
@@ -170,6 +175,7 @@ impl IncomingStakingTransactionData {
                 verify_transaction_signature(transaction, proof, true)?
             }
             IncomingStakingTransactionData::AddStake { .. } => {
+                // Adding stake should be at least greater than 0.
                 if transaction.value.is_zero() {
                     warn!("Add stake transactions must actually have higher than 0 value. The offending transaction is the following:\n{:?}", transaction);
                     return Err(TransactionError::ZeroValue);
@@ -182,10 +188,13 @@ impl IncomingStakingTransactionData {
                 verify_transaction_signature(transaction, proof, true)?
             }
             IncomingStakingTransactionData::SetActiveStake { proof, .. } => {
-                if !transaction.value.is_zero()
-                    && transaction.value < Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
-                {
-                    error!("Active stake must be at least {} or zero. The offending transaction is the following:\n{:?}", Policy::MINIMUM_STAKE,transaction);
+                // Check that the signature is correct.
+                verify_transaction_signature(transaction, proof, true)?
+            }
+            IncomingStakingTransactionData::RetireStake { proof, value } => {
+                // Check that retire is greater than 0.
+                if value.is_zero() {
+                    warn!("Retire stake transactions must actually have higher than 0 value. The offending transaction is the following:\n{:?}", transaction);
                     return Err(TransactionError::ZeroValue);
                 }
 
@@ -199,31 +208,18 @@ impl IncomingStakingTransactionData {
 
     pub fn set_signature(&mut self, signature_proof: SignatureProof) {
         match self {
-            IncomingStakingTransactionData::CreateValidator { proof, .. } => {
+            IncomingStakingTransactionData::CreateValidator { proof, .. }
+            | IncomingStakingTransactionData::UpdateValidator { proof, .. }
+            | IncomingStakingTransactionData::DeactivateValidator { proof, .. }
+            | IncomingStakingTransactionData::ReactivateValidator { proof, .. }
+            | IncomingStakingTransactionData::RetireValidator { proof, .. }
+            | IncomingStakingTransactionData::CreateStaker { proof, .. }
+            | IncomingStakingTransactionData::UpdateStaker { proof, .. }
+            | IncomingStakingTransactionData::SetActiveStake { proof, .. }
+            | IncomingStakingTransactionData::RetireStake { proof, .. } => {
                 *proof = signature_proof;
             }
-            IncomingStakingTransactionData::UpdateValidator { proof, .. } => {
-                *proof = signature_proof;
-            }
-            IncomingStakingTransactionData::DeactivateValidator { proof, .. } => {
-                *proof = signature_proof;
-            }
-            IncomingStakingTransactionData::ReactivateValidator { proof, .. } => {
-                *proof = signature_proof;
-            }
-            IncomingStakingTransactionData::RetireValidator { proof, .. } => {
-                *proof = signature_proof;
-            }
-            IncomingStakingTransactionData::CreateStaker { proof, .. } => {
-                *proof = signature_proof;
-            }
-            IncomingStakingTransactionData::UpdateStaker { proof, .. } => {
-                *proof = signature_proof;
-            }
-            IncomingStakingTransactionData::SetActiveStake { proof, .. } => {
-                *proof = signature_proof;
-            }
-            _ => {}
+            IncomingStakingTransactionData::AddStake { .. } => {}
         }
     }
 
