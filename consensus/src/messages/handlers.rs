@@ -88,12 +88,16 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMacroChain {
 
 #[cfg(feature = "full")]
 impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
-    fn handle(&self, _peer_id: N::PeerId, blockchain: &Arc<RwLock<Blockchain>>) -> BatchSetInfo {
+    fn handle(
+        &self,
+        _peer_id: N::PeerId,
+        blockchain: &Arc<RwLock<Blockchain>>,
+    ) -> Result<BatchSetInfo, BatchSetError> {
         let blockchain = blockchain.read();
 
         let block = match blockchain.get_block(&self.hash, true, None) {
             Ok(Block::Macro(block)) => block,
-            _ => return BatchSetInfo::default(),
+            _ => return Err(BatchSetError::TargetHashNotFound),
         };
 
         let batch_sets = if let Ok(macro_hashes) = blockchain
@@ -138,10 +142,10 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
             None
         };
 
-        BatchSetInfo {
+        Ok(BatchSetInfo {
             election_macro_block,
             batch_sets,
-        }
+        })
     }
 }
 

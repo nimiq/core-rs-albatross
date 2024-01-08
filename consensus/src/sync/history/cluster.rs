@@ -21,7 +21,7 @@ use parking_lot::RwLock;
 use thiserror::Error;
 
 use crate::{
-    messages::{BatchSetInfo, RequestBatchSet, RequestHistoryChunk},
+    messages::{BatchSetError, BatchSetInfo, RequestBatchSet, RequestHistoryChunk},
     sync::{
         peer_list::PeerList,
         sync_queue::{Error, SyncQueue},
@@ -29,11 +29,14 @@ use crate::{
 };
 
 /// Error enumeration for history sync request
-#[derive(Clone, Debug, Error, Eq, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum HistoryRequestError {
     /// Outbound request error
     #[error("Outbound error: {0}")]
     RequestError(#[from] RequestError),
+    /// Remote error
+    #[error("Remote error: {0}")]
+    RemoteError(#[from] BatchSetError),
     /// Batch set info obtained doesn't match the requested hash
     #[error("Batch set info mismatch")]
     BatchSetInfoMismatch,
@@ -577,7 +580,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
     ) -> Result<BatchSetInfo, HistoryRequestError> {
         let batch_set_info = network
             .request(RequestBatchSet { hash: hash.clone() }, peer_id)
-            .await?;
+            .await??;
 
         // Check that BatchSetInfo is not empty.
         if batch_set_info.election_macro_block.is_none() && batch_set_info.batch_sets.is_empty() {

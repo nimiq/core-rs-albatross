@@ -111,7 +111,7 @@ pub struct RequestBatchSet {
 impl RequestCommon for RequestBatchSet {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 202;
-    type Response = BatchSetInfo;
+    type Response = Result<BatchSetInfo, BatchSetError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_BATCH_SET;
 }
 
@@ -119,6 +119,15 @@ impl RequestCommon for RequestBatchSet {
 pub struct BatchSet {
     pub macro_block: MacroBlock,
     pub history_len: SizeProof<Blake2bHash, HistoricTransaction>,
+}
+
+#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+pub enum BatchSetError {
+    #[error("target hash not found")]
+    TargetHashNotFound,
+    #[error("unknown error")]
+    #[serde(other)]
+    Other,
 }
 
 /// This message contains a macro block and the number of historic transactions (transitions)
