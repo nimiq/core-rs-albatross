@@ -31,5 +31,6 @@ pub enum SubscribeToAddressesError {
     InvalidOperation = 3,
     /// Another type of error not covered by the previous error types
     #[error("Other")]
+    #[serde(other)]
     Other = 4,
 }

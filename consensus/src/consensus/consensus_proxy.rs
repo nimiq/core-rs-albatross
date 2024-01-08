@@ -534,18 +534,16 @@ impl<N: Network> ConsensusProxy<N> {
                 .await;
 
             match response {
-                Ok(response) => match response.result {
-                    Ok(_) => {
-                        // Done, we are subscribed at least to one peer, continue with the next one
-                        success = true;
-                        continue;
-                    }
-                    Err(_) => {
-                        // If there was en error subscribing to a peer, we just continue with the next one
-                        // Here we could do something with the specific error conditions of the failed subscription
-                        continue;
-                    }
-                },
+                Ok(Ok(())) => {
+                    // Done, we are subscribed at least to one peer, continue with the next one
+                    success = true;
+                    continue;
+                }
+                Ok(Err(_)) => {
+                    // If there was en error subscribing to a peer, we just continue with the next one
+                    // Here we could do something with the specific error conditions of the failed subscription
+                    continue;
+                }
                 Err(_) => {
                     // Try with the next peer
                     continue;

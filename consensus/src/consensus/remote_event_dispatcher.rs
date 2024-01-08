@@ -22,8 +22,9 @@ use parking_lot::RwLock;
 use crate::{
     messages::{
         AddressNotification, AddressSubscriptionOperation, AddressSubscriptionTopic,
-        NotificationEvent, RequestSubscribeToAddress, ResponseSubscribeToAddress,
+        NotificationEvent, RequestSubscribeToAddress,
     },
+    SubscribeToAddressesError,
     SubscribeToAddressesError::*,
 };
 
@@ -39,22 +40,18 @@ impl<N: Network> Handle<N, Arc<RwLock<RemoteEventDispatcherState<N>>>>
         &self,
         peer_id: N::PeerId,
         state: &Arc<RwLock<RemoteEventDispatcherState<N>>>,
-    ) -> ResponseSubscribeToAddress {
+    ) -> Result<(), SubscribeToAddressesError> {
         match self.operation {
             AddressSubscriptionOperation::Subscribe => {
                 if let Some(peer_addresses) = state.read().subscribed_peers.get(&peer_id) {
                     // We need to check if this peer already has too many addresses subscribed to us
                     if peer_addresses.len() > MAX_SUBSCRIBED_PEERS_ADDRESSES {
-                        return ResponseSubscribeToAddress {
-                            result: Err(TooManyAddresses),
-                        };
+                        return Err(TooManyAddresses);
                     }
                 } else {
                     // If this is a new peer, we need to check if we can attend it
                     if state.read().number_of_peers() > MAX_SUBSCRIBED_PEERS {
-                        return ResponseSubscribeToAddress {
-                            result: Err(TooManyPeers),
-                        };
+                        return Err(TooManyPeers);
                     }
                 }
 
@@ -66,9 +63,7 @@ impl<N: Network> Handle<N, Arc<RwLock<RemoteEventDispatcherState<N>>>>
             AddressSubscriptionOperation::Unsubscribe => {
                 // If we don't know this peer, we don't do anything
                 if !state.read().contains_peer(&peer_id) {
-                    return ResponseSubscribeToAddress {
-                        result: Err(InvalidOperation),
-                    };
+                    return Err(InvalidOperation);
                 }
 
                 state
@@ -76,7 +71,7 @@ impl<N: Network> Handle<N, Arc<RwLock<RemoteEventDispatcherState<N>>>>
                     .remove_addresses(&peer_id, self.addresses.clone());
             }
         }
-        ResponseSubscribeToAddress { result: Ok(()) }
+        Ok(())
     }
 }
 

@@ -424,15 +424,8 @@ pub struct RequestSubscribeToAddress {
 impl RequestCommon for RequestSubscribeToAddress {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 217;
-    type Response = ResponseSubscribeToAddress;
+    type Response = Result<(), SubscribeToAddressesError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_SUBSCRIBE_BY_ADDRESS;
-}
-
-/// The response when a peer tries to subscribe to some specific address.
-#[derive(Serialize, Deserialize)]
-pub struct ResponseSubscribeToAddress {
-    /// Response used to specify if the request can be fulfilled or not
-    pub result: Result<(), SubscribeToAddressesError>,
 }
 
 /// Different kind of events that could generate notifications
