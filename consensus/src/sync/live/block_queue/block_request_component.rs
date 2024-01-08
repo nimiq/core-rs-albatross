@@ -17,7 +17,10 @@ use parking_lot::RwLock;
 
 use crate::{
     messages::RequestMissingBlocks,
-    sync::{peer_list::PeerList, sync_queue::SyncQueue},
+    sync::{
+        peer_list::PeerList,
+        sync_queue::{Error, SyncQueue},
+    },
 };
 
 #[derive(Debug)]
@@ -56,7 +59,7 @@ pub struct MissingBlockResponse {
 /// The public interface allows to request blocks, which are not immediately returned.
 /// The blocks instead are returned by polling the component.
 pub struct BlockRequestComponent<N: Network> {
-    sync_queue: SyncQueue<N, MissingBlockRequest, MissingBlockResponse, ()>, // requesting missing blocks from peers
+    sync_queue: SyncQueue<N, MissingBlockRequest, MissingBlockResponse, Error, ()>, // requesting missing blocks from peers
     peers: Arc<RwLock<PeerList<N>>>,
     network_event_rx: SubscribeEvents<N::PeerId>,
     include_micro_bodies: bool,
@@ -87,14 +90,14 @@ impl<N: Network> BlockRequestComponent<N> {
                         )
                         .await;
                         if let Ok(Some(missing_blocks)) = res {
-                            Some(MissingBlockResponse {
+                            Ok(MissingBlockResponse {
                                 target_block_number: request.target_block_number,
                                 target_block_hash: request.target_block_hash,
                                 epoch_validators: request.epoch_validators,
                                 blocks: missing_blocks,
                             })
                         } else {
-                            None
+                            Err(Error)
                         }
                     }
                     .boxed()

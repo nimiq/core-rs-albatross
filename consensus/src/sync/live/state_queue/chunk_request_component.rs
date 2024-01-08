@@ -10,7 +10,10 @@ use nimiq_primitives::key_nibbles::KeyNibbles;
 use parking_lot::RwLock;
 
 use super::{RequestChunk, ResponseChunk};
-use crate::sync::{peer_list::PeerList, sync_queue::SyncQueue};
+use crate::sync::{
+    peer_list::PeerList,
+    sync_queue::{Error, SyncQueue},
+};
 
 /// Peer Tracking & Chunk Request Component.
 /// This component returns only the responses that respect the size limit specified on
@@ -25,7 +28,7 @@ use crate::sync::{peer_list::PeerList, sync_queue::SyncQueue};
 /// The public interface allows to request chunks, which are not immediately returned.
 /// The chunks instead are returned by polling the component.
 pub struct ChunkRequestComponent<N: Network> {
-    sync_queue: SyncQueue<N, RequestChunk, (ResponseChunk, RequestChunk, N::PeerId), ()>,
+    sync_queue: SyncQueue<N, RequestChunk, (ResponseChunk, RequestChunk, N::PeerId), Error, ()>,
     // These peers will be shared across the block request component and this component.
     peers: Arc<RwLock<PeerList<N>>>,
 }
@@ -43,7 +46,7 @@ impl<N: Network> ChunkRequestComponent<N> {
                 async move {
                     Self::request_missing_chunks_from_peer(network, peer_id, request_chunk.clone())
                         .await
-                        .ok()
+                        .map_err(|_| Error)
                         .map(|res| (res, request_chunk, peer_id))
                 }
                 .boxed()
