@@ -14,7 +14,7 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_network_interface::{
-    network::{CloseReason, Network},
+    network::Network,
     peer_info::Services,
     request::{OutboundRequestError, RequestError},
 };
@@ -328,101 +328,91 @@ impl<N: Network> ConsensusProxy<N> {
                     )
                     .await;
                 match response {
-                    Ok(proof_response) => {
+                    Ok(Ok(response)) => {
                         // We verify the transaction using the proof
-                        if let Some(proof) = proof_response.proof {
-                            if let Some(block) = proof_response.block {
-                                log::debug!(peer=%peer_id,"New txns proof and block from peer");
-                                let mut verification_result =
-                                    proof.verify(block.history_root().clone()).unwrap_or(false);
+                        log::debug!(peer = %peer_id, block = %response.block, "New txns proof and block from peer");
+                        let mut verification_result = response
+                            .proof
+                            .verify(response.block.history_root().clone())
+                            .unwrap_or(false);
 
-                                if !verification_result {
-                                    // If the proof didn't verify, we continue with another peer
-                                    log::warn!(peer=%peer_id, "The transaction history proof from this peer did not verify");
-                                    continue;
-                                }
+                        if !verification_result {
+                            // If the proof didn't verify, we continue with another peer
+                            log::warn!(peer = %peer_id, "The transaction history proof from this peer did not verify");
+                            continue;
+                        }
 
-                                // Verify that the transaction proof fits to the chain
-                                if block.block_number() <= election_head.block_number() {
-                                    let block_hash = block.hash();
-                                    let mut already_proven = false;
-                                    if election_head.hash() == block_hash
-                                        || election_head.header.parent_election_hash == block_hash
+                        // Verify that the transaction proof fits to the chain
+                        if response.block.block_number() <= election_head.block_number() {
+                            let block_hash = response.block.hash();
+                            let mut already_proven = false;
+                            if election_head.hash() == block_hash
+                                || election_head.header.parent_election_hash == block_hash
+                            {
+                                already_proven = true;
+                            } else if let Some(ref interlink) = election_head.header.interlink {
+                                already_proven = interlink.contains(&block_hash);
+                            }
+
+                            if !already_proven {
+                                // Request block inclusion proofs for txs of previous epochs
+                                let block_proof = {
+                                    if let Ok(ResponseBlocksProof {
+                                        proof: Some(block_proof),
+                                    }) = self
+                                        .network
+                                        .request::<RequestBlocksProof>(
+                                            RequestBlocksProof {
+                                                election_head: election_head.block_number(),
+                                                blocks: vec![response.block.block_number()],
+                                            },
+                                            peer_id,
+                                        )
+                                        .await
                                     {
-                                        already_proven = true;
-                                    } else if let Some(ref interlink) =
-                                        election_head.header.interlink
-                                    {
-                                        already_proven = interlink.contains(&block_hash);
-                                    }
-
-                                    if !already_proven {
-                                        // Request block inclusion proofs for txs of previous epochs
-                                        let block_proof = {
-                                            if let Ok(ResponseBlocksProof {
-                                                proof: Some(block_proof),
-                                            }) = self
-                                                .network
-                                                .request::<RequestBlocksProof>(
-                                                    RequestBlocksProof {
-                                                        election_head: election_head.block_number(),
-                                                        blocks: vec![block.block_number()],
-                                                    },
-                                                    peer_id,
-                                                )
-                                                .await
-                                            {
-                                                block_proof
-                                            } else {
-                                                log::debug!(peer=%peer_id, "Error requesting block proof");
-                                                continue;
-                                            }
-                                        };
-
-                                        // Verify that the block is part of the chain using the block inclusion proof
-                                        if let Block::Macro(macro_block) = block {
-                                            verification_result = verification_result
-                                                && block_proof
-                                                    .is_block_proven(&election_head, &macro_block);
-                                        } else {
-                                            log::debug!(peer=%peer_id, "Macro block expected in tx proof response");
-                                            continue;
-                                        }
-                                    }
-                                } else if block.block_number() <= checkpoint_head.block_number() {
-                                    // Check that the transaction inclusion proof actually proofs inclusion in the block we know
-                                    if block.hash() != checkpoint_head.hash() {
-                                        log::debug!(peer=%peer_id, "BlockProof does not correspond to expected checkpoint block");
+                                        block_proof
+                                    } else {
+                                        log::debug!(peer = %peer_id, "Error requesting block proof");
                                         continue;
                                     }
-                                } else if block.hash() != current_head.hash() {
-                                    log::debug!(block_number=%block.block_number(), peer=%peer_id, "BlockProof does not correspond to expected block");
+                                };
+
+                                // Verify that the block is part of the chain using the block inclusion proof
+                                if let Block::Macro(macro_block) = response.block {
+                                    verification_result = verification_result
+                                        && block_proof
+                                            .is_block_proven(&election_head, &macro_block);
+                                } else {
+                                    log::debug!(peer = %peer_id, "Macro block expected in tx proof response");
                                     continue;
                                 }
+                            }
+                        } else if response.block.block_number() <= checkpoint_head.block_number() {
+                            // Check that the transaction inclusion proof actually proofs inclusion in the block we know
+                            if response.block.hash() != checkpoint_head.hash() {
+                                log::debug!(peer = %peer_id, "BlockProof does not correspond to expected checkpoint block");
+                                continue;
+                            }
+                        } else if response.block.hash() != current_head.hash() {
+                            log::debug!(block_number = %response.block.block_number(), peer=%peer_id, "BlockProof does not correspond to expected block");
+                            continue;
+                        }
 
-                                if verification_result {
-                                    for tx in proof.history {
-                                        verified_transactions.insert(tx.tx_hash(), tx);
-                                    }
-                                } else {
-                                    // The proof didn't verify so we continue with another peer
-                                    log::warn!(peer=%peer_id, "The transaction block proof from this peer did not verify");
-                                }
-                            } else {
-                                // If we receive a proof but we do not receive a block, we disconnect from the peer
-                                log::debug!(peer=%peer_id, "Disconnecting from peer due to an inconsistency in the transaction proof response");
-                                self.network
-                                    .disconnect_peer(peer_id, CloseReason::Other)
-                                    .await;
-                                break;
+                        if verification_result {
+                            for tx in response.proof.history {
+                                verified_transactions.insert(tx.tx_hash(), tx);
                             }
                         } else {
-                            log::debug!(peer=%peer_id, "We requested a transaction proof but the peer didn't provide any");
+                            // The proof didn't verify so we continue with another peer
+                            log::warn!(peer = %peer_id, "The transaction block proof from this peer did not verify");
                         }
+                    }
+                    Ok(Err(error)) => {
+                        log::debug!(peer = %peer_id, %error, "We requested a transaction proof but the peer couldn't provide any");
                     }
                     Err(error) => {
                         // If there was a request error with this peer we don't request anymore proofs from it
-                        log::error!(peer=%peer_id, err=%error, "There was an error requesting transaction proof from peer");
+                        log::error!(peer = %peer_id, %error, "There was an error requesting transaction proof from peer");
                         break;
                     }
                 }

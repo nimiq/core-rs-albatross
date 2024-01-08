@@ -347,7 +347,7 @@ fn prove_txns_with_block_number(
     blockchain: &Arc<RwLock<Blockchain>>,
     transactions: &[Blake2bHash],
     block_number: u32,
-) -> ResponseTransactionsProof {
+) -> Result<ResponseTransactionsProof, ResponseTransactionProofError> {
     let blockchain = blockchain.read();
     let hashes: Vec<&Blake2bHash> = transactions.iter().collect();
 
@@ -371,10 +371,10 @@ fn prove_txns_with_block_number(
             requested_block_number = block_number,
             "Requested txn proof from the future",
         );
-        return ResponseTransactionsProof {
-            proof: None,
-            block: None,
-        };
+        return Err(ResponseTransactionProofError::RequestedTxnProofFromFuture(
+            block_number,
+            current_head,
+        ));
     }
 
     let proving_block_number = if Policy::is_election_block_at(block_number) {
@@ -395,13 +395,12 @@ fn prove_txns_with_block_number(
         // Otherwise, the requester should use the latest epoch number.
         if block_number < election_head {
             log::info!(
-                block_number = block_number,
+                block_number,
                 "Requested txn proof that corresponds to a finalized epoch, should use the election block instead",
             );
-            return ResponseTransactionsProof {
-                proof: None,
-                block: None,
-            };
+            return Err(
+                ResponseTransactionProofError::RequestedTxnProofFromFinalizedEpoch(block_number),
+            );
         }
         block_number
     } else {
@@ -418,13 +417,12 @@ fn prove_txns_with_block_number(
         // should use the latest checkpoint block number instead.
         if block_number < macro_head - Policy::blocks_per_batch() {
             log::info!(
-                block_number = block_number,
+                block_number,
                 "Requested txn proof from finalized batch, should use a checkpoint block instead",
             );
-            return ResponseTransactionsProof {
-                proof: None,
-                block: None,
-            };
+            return Err(
+                ResponseTransactionProofError::RequestedTxnProofFromFinalizedBatch(block_number),
+            );
         }
         block_number
     };
@@ -434,45 +432,40 @@ fn prove_txns_with_block_number(
         .get_block_at(proving_block_number, false, None)
         .ok();
 
-    if let Some(ref block) = block {
+    let block = if let Some(block) = block {
         // We have some extra work in the current epoch, if the block we are proving is not our current head
         if block.block_number() > election_head && block.block_number() < current_head {
             let chain_info = blockchain.get_chain_info(&block.hash(), false, None);
             let history_tree_len = chain_info.unwrap().history_tree_len;
             verifier_state = Some(history_tree_len as usize);
         }
+        block
     } else {
         log::info!("Could not find the desired block to create the txn proof");
-        return ResponseTransactionsProof {
-            proof: None,
-            block: None,
-        };
-    }
+        return Err(ResponseTransactionProofError::BlockNotFound);
+    };
 
-    let proof = blockchain.history_store.prove(
+    let proof = match blockchain.history_store.prove(
         Policy::epoch_at(proving_block_number),
         hashes,
         verifier_state,
         None,
-    );
+    ) {
+        Some(proof) => proof,
+        None => {
+            log::info!("Could not generate the txn inclusion proof");
+            return Err(ResponseTransactionProofError::CouldntProveInclusion);
+        }
+    };
 
-    // If we couldn't obtain a proof we return None
-    if proof.is_none() {
-        log::info!("Could not generate the txn inclusion proof");
-        return ResponseTransactionsProof {
-            proof: None,
-            block: None,
-        };
-    }
-
-    ResponseTransactionsProof { proof, block }
+    Ok(ResponseTransactionsProof { proof, block })
 }
 
 #[cfg(feature = "full")]
 fn prove_transaction(
     blockchain: &Arc<RwLock<Blockchain>>,
     transaction: &Blake2bHash,
-) -> ResponseTransactionsProof {
+) -> Result<ResponseTransactionsProof, ResponseTransactionProofError> {
     let blockchain = blockchain.read();
 
     let mut verifier_state = None;
@@ -500,52 +493,43 @@ fn prove_transaction(
             hist_txn.block_number
         };
 
-        let block = blockchain
-            .chain_store
-            .get_block_at(proving_block_number, false, None)
-            .ok();
-
-        if let Some(ref block) = block {
-            // If it is a checkpoint block, we have some extra work to do
-            if Policy::is_macro_block_at(proving_block_number)
-                && !Policy::is_election_block_at(proving_block_number)
-            {
-                let chain_info = blockchain.get_chain_info(&block.hash(), false, None);
-                let history_tree_len = chain_info.unwrap().history_tree_len;
-                verifier_state = Some(history_tree_len as usize);
-            }
+        let block = if let Ok(block) =
+            blockchain
+                .chain_store
+                .get_block_at(proving_block_number, false, None)
+        {
+            block
         } else {
-            // If we couldn't find the block, then we cannot prove the transaction
-            return ResponseTransactionsProof {
-                proof: None,
-                block: None,
-            };
+            return Err(ResponseTransactionProofError::BlockNotFound);
+        };
+
+        // If it is a checkpoint block, we have some extra work to do
+        if Policy::is_macro_block_at(proving_block_number)
+            && !Policy::is_election_block_at(proving_block_number)
+        {
+            let chain_info = blockchain.get_chain_info(&block.hash(), false, None);
+            let history_tree_len = chain_info.unwrap().history_tree_len;
+            verifier_state = Some(history_tree_len as usize);
         }
 
         // Prove the transaction
-        let proof = blockchain.history_store.prove(
+        let proof = match blockchain.history_store.prove(
             Policy::epoch_at(proving_block_number),
             vec![transaction],
             verifier_state,
             None,
-        );
+        ) {
+            Some(proof) => proof,
+            None => {
+                log::info!("Could not generate the txn inclusion proof");
+                return Err(ResponseTransactionProofError::CouldntProveInclusion);
+            }
+        };
 
-        // If we couldn't obtain a proof we return None
-        if proof.is_none() {
-            log::info!("Could not generate the txn inclusion proof");
-            return ResponseTransactionsProof {
-                proof: None,
-                block: None,
-            };
-        }
-
-        ResponseTransactionsProof { proof, block }
+        Ok(ResponseTransactionsProof { proof, block })
     } else {
         // If we couldn't find the transaction in our history store, then we cannot prove it.
-        ResponseTransactionsProof {
-            proof: None,
-            block: None,
-        }
+        Err(ResponseTransactionProofError::TransactionNotFound)
     }
 }
 
@@ -555,13 +539,10 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestTransactionsProof
         &self,
         _peer_id: N::PeerId,
         blockchain: &Arc<RwLock<Blockchain>>,
-    ) -> ResponseTransactionsProof {
+    ) -> Result<ResponseTransactionsProof, ResponseTransactionProofError> {
         if self.hashes.is_empty() {
             // If we are not given a list of transactions then there is nothing to do
-            return ResponseTransactionsProof {
-                proof: None,
-                block: None,
-            };
+            return Err(ResponseTransactionProofError::NoTransactionsProvided);
         }
 
         // Handle the different cases: if we are provided a block number (to generate the proof) or not

@@ -288,8 +288,29 @@ impl RequestCommon for RequestHead {
 
 #[derive(Serialize, Deserialize)]
 pub struct ResponseTransactionsProof {
-    pub proof: Option<HistoryTreeProof>,
-    pub block: Option<Block>,
+    pub proof: HistoryTreeProof,
+    pub block: Block,
+}
+
+#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+pub enum ResponseTransactionProofError {
+    #[error("empty list of transactions given")]
+    NoTransactionsProvided,
+    #[error("requested txn proof from future block {0}, current head is {1}")]
+    RequestedTxnProofFromFuture(u32, u32),
+    #[error("requested txn proof that corresponds to a finalized epoch (block number {0}), should use the election block instead")]
+    RequestedTxnProofFromFinalizedEpoch(u32),
+    #[error("requested txn proof from finalized batch (block number {0}), should use a checkpoint block instead")]
+    RequestedTxnProofFromFinalizedBatch(u32),
+    #[error("block not found")]
+    BlockNotFound,
+    #[error("couldn't prove inclusion")]
+    CouldntProveInclusion,
+    #[error("transaction not found")]
+    TransactionNotFound,
+    #[error("unknown error")]
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -301,7 +322,7 @@ pub struct RequestTransactionsProof {
 impl RequestCommon for RequestTransactionsProof {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 213;
-    type Response = ResponseTransactionsProof;
+    type Response = Result<ResponseTransactionsProof, ResponseTransactionProofError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_TRANSACTIONS_PROOF;
 }
 
