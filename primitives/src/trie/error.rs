@@ -1,3 +1,5 @@
+use std::fmt;
+
 use thiserror::Error;
 
 /// An enum containing possible errors that can happen in the Merkle Radix Trie.
@@ -26,3 +28,14 @@ pub enum MerkleRadixTrieError {
     #[error("Serialization error")]
     Serialization(#[from] nimiq_serde::DeserializeError),
 }
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct IncompleteTrie;
+
+impl fmt::Display for IncompleteTrie {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        "the operation affects the incomplete part of the trie".fmt(f)
+    }
+}
+
+impl std::error::Error for IncompleteTrie {}

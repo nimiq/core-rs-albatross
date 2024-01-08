@@ -1,8 +1,6 @@
 use std::{
     cmp,
     collections::{BTreeMap, BTreeSet},
-    error::Error,
-    fmt,
     marker::PhantomData,
     mem, ops,
 };
@@ -16,7 +14,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{
     key_nibbles::KeyNibbles,
     trie::{
-        error::MerkleRadixTrieError,
+        error::{IncompleteTrie, MerkleRadixTrieError},
         trie_chunk::{TrieChunk, TrieChunkPushResult, TrieItem},
         trie_diff::TrieDiff,
         trie_node::{RootData, TrieNode, TrieNodeKind},
@@ -94,17 +92,6 @@ impl CountUpdates {
         apply_difference(&mut root_data.num_leaves, self.leaves);
     }
 }
-
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct IncompleteTrie;
-
-impl fmt::Display for IncompleteTrie {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        "the operation affects the incomplete part of the trie".fmt(f)
-    }
-}
-
-impl Error for IncompleteTrie {}
 
 impl MerkleRadixTrie {
     /// Start a new Merkle Radix Trie with the given Environment and the given name.

@@ -45,7 +45,7 @@ nimiq-light-blockchain = { workspace = true }
 nimiq-macros = { workspace = true }
 nimiq-mmr = { workspace = true }
 nimiq-network-interface = { workspace = true }
-nimiq-primitives = { workspace = true, features = ["policy"] }
+nimiq-primitives = { workspace = true, features = ["policy", "trie"] }
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
 nimiq-utils = { workspace = true, features = [

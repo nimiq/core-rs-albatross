@@ -7,7 +7,7 @@ use nimiq_database::{traits::Database, TransactionProxy};
 use nimiq_keys::Address;
 use nimiq_primitives::{
     key_nibbles::KeyNibbles,
-    trie::{trie_diff::TrieDiff, trie_proof::TrieProof},
+    trie::{error::IncompleteTrie, trie_diff::TrieDiff, trie_proof::TrieProof},
 };
 use nimiq_serde::Deserialize;
 use nimiq_transaction::historic_transaction::HistoricTransaction;
@@ -248,10 +248,10 @@ impl Blockchain {
 
     /// Produces a Merkle proof of the inclusion of the given keys in the
     /// Merkle Radix Trie.
-    pub fn get_accounts_proof(&self, keys: Vec<&KeyNibbles>) -> Option<TrieProof> {
+    pub fn get_accounts_proof(&self, keys: Vec<&KeyNibbles>) -> Result<TrieProof, IncompleteTrie> {
         let txn = self.env.read_transaction();
 
-        self.state().accounts.get_proof(Some(&txn), keys).ok()
+        self.state().accounts.get_proof(Some(&txn), keys)
     }
 
     /// Gets an accounts chunk given a start key and a limit

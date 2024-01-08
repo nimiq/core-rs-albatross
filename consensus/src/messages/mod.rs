@@ -354,16 +354,25 @@ pub struct RequestTrieProof {
 impl RequestCommon for RequestTrieProof {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 215;
-    type Response = ResponseTrieProof;
+    type Response = Result<ResponseTrieProof, ResponseTrieProofError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_TRIE_PROOF;
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ResponseTrieProof {
     // The accounts proof
-    pub proof: Option<TrieProof>,
+    pub proof: TrieProof,
     // The hash of the block that was used to create the proof
-    pub block_hash: Option<Blake2bHash>,
+    pub block_hash: Blake2bHash,
+}
+
+#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+pub enum ResponseTrieProofError {
+    #[error("incomplete trie")]
+    IncompleteTrie,
+    #[error("unknown error")]
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

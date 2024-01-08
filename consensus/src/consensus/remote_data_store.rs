@@ -84,55 +84,44 @@ impl<N: Network> RemoteDataStore<N> {
                 .await;
 
             match response {
-                Ok(response) => {
-                    if let Some(proof) = response.proof {
-                        if let Some(block_hash) = response.block_hash {
-                            let blockchain = blockchain.read();
-                            // First try to obtain, from our chain store, the block that was used to generate the proof
-                            let block = blockchain.get_block(&block_hash, false).ok();
+                Ok(Ok(response)) => {
+                    let blockchain = blockchain.read();
+                    // First try to obtain, from our chain store, the block that was used to generate the proof
+                    let block = blockchain.get_block(&response.block_hash, false).ok();
 
-                            if let Some(block) = block {
-                                // Now we need to verify the proof
-                                if let Ok(values) = proof.verify_values(
-                                    block.state_root(),
-                                    &keys.iter().collect::<Vec<_>>(),
-                                ) {
-                                    return Ok(values
-                                        .into_iter()
-                                        .map(|(key, value)| {
-                                            (
-                                                key,
-                                                value.map(|v| T::deserialize_from_vec(&v).unwrap()),
-                                            )
-                                        })
-                                        .collect());
-                                } else {
-                                    // If the proof does not verify, we disconnect from the peer
-                                    log::debug!(peer=%peer_id, "Disconnecting from peer because the accounts proof didn't verify");
-                                    network
-                                        .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
-                                        .await;
-                                    break;
-                                }
-                            } else {
-                                // If we couldn't find the block, then we cannot verify the proof
-                                log::debug!(block_hash=%block_hash, "Received an accounts proof, but we could not find the block that was used to generate the proof");
-                            }
+                    if let Some(block) = block {
+                        // Now we need to verify the proof
+                        if let Ok(values) = response
+                            .proof
+                            .verify_values(block.state_root(), &keys.iter().collect::<Vec<_>>())
+                        {
+                            return Ok(values
+                                .into_iter()
+                                .map(|(key, value)| {
+                                    (key, value.map(|v| T::deserialize_from_vec(&v).unwrap()))
+                                })
+                                .collect());
                         } else {
-                            // The peer provided a proof but did not provide the block hash, this is considered malicious
-                            log::debug!(peer=%peer_id, "Disconnecting from peer because of malicious behaviour during accounts proof");
+                            // If the proof does not verify, we disconnect from the peer
+                            log::debug!(peer = %peer_id, "Disconnecting from peer because the accounts proof didn't verify");
                             network
                                 .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
                                 .await;
+                            break;
                         }
                     } else {
-                        // If there is no proof, then we just continue with the next peer
-                        log::debug!(peer=%peer_id, "We requested an accounts proof but the peer didn't provide any");
+                        // TODO: A malicious peer could just send random hashes.
+                        // If we couldn't find the block, then we cannot verify the proof
+                        log::debug!(block_hash = %response.block_hash, "Received an accounts proof, but we could not find the block that was used to generate the proof");
                     }
+                }
+                Ok(Err(error)) => {
+                    // If there is no proof, then we just continue with the next peer
+                    log::debug!(peer = %peer_id, %error, "We requested an accounts proof but the peer didn't provide any");
                 }
                 Err(error) => {
                     // If there was a request error with this peer we log an error
-                    log::error!(peer=%peer_id, err=%error, "There was an error requesting accounts proof from peer");
+                    log::error!(peer = %peer_id, %error, "There was an error requesting accounts proof from peer");
                 }
             }
         }

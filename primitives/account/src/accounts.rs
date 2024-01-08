@@ -8,6 +8,7 @@ use nimiq_primitives::{
     account::{AccountError, AccountType, FailReason},
     key_nibbles::KeyNibbles,
     trie::{
+        error::IncompleteTrie,
         trie_chunk::{TrieChunk, TrieChunkPushResult},
         trie_diff::TrieDiff,
         trie_proof::TrieProof,
@@ -16,10 +17,7 @@ use nimiq_primitives::{
     TreeProof,
 };
 use nimiq_transaction::{inherent::Inherent, ExecutedTransaction, Transaction, TransactionFlags};
-use nimiq_trie::{
-    trie::{IncompleteTrie, MerkleRadixTrie},
-    WriteTransactionProxy,
-};
+use nimiq_trie::{trie::MerkleRadixTrie, WriteTransactionProxy};
 
 use crate::{
     Account, AccountInherentInteraction, AccountPruningInteraction, AccountReceipt,

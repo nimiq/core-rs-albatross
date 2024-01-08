@@ -12,6 +12,8 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_network_interface::{network::Network, request::Handle};
 use nimiq_primitives::policy::Policy;
 #[cfg(feature = "full")]
+use nimiq_primitives::trie::error::IncompleteTrie;
+#[cfg(feature = "full")]
 use parking_lot::RwLock;
 
 use crate::messages::*;
@@ -593,25 +595,16 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestTrieProof {
         &self,
         _peer_id: N::PeerId,
         blockchain: &Arc<RwLock<Blockchain>>,
-    ) -> ResponseTrieProof {
+    ) -> Result<ResponseTrieProof, ResponseTrieProofError> {
         let blockchain = blockchain.read();
 
         // We only prove accounts that exist in our current state
-        let proof = blockchain.get_accounts_proof(self.keys.iter().collect());
-
-        if proof.is_none() {
-            // If we could not generate a proof we respond with an empty result
-            return ResponseTrieProof {
-                proof: None,
-                block_hash: None,
-            };
-        }
-
-        let block_hash = blockchain.head_hash();
-
-        ResponseTrieProof {
-            proof,
-            block_hash: Some(block_hash),
+        match blockchain.get_accounts_proof(self.keys.iter().collect()) {
+            Err(IncompleteTrie) => Err(ResponseTrieProofError::IncompleteTrie),
+            Ok(proof) => Ok(ResponseTrieProof {
+                proof,
+                block_hash: blockchain.head_hash(),
+            }),
         }
     }
 }
