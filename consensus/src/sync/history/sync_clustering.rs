@@ -11,7 +11,7 @@ use nimiq_primitives::policy::Policy;
 use parking_lot::RwLock;
 
 use crate::{
-    messages::{MacroChain, RequestMacroChain},
+    messages::{MacroChain, MacroChainError, RequestMacroChain},
     sync::{
         history::{
             cluster::{SyncCluster, SyncClusterResult},
@@ -57,22 +57,20 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
         .await;
 
         match result {
-            Ok(mut macro_chain) => {
-                if macro_chain.epochs.is_none() {
-                    return Some(EpochIds {
-                        locator_found: false,
-                        ids: Vec::new(),
-                        checkpoint: None,
-                        first_epoch_number: 0,
-                        sender: peer_id,
-                    });
-                }
-
-                let epoch_ids = macro_chain.epochs.unwrap();
-
+            Ok(Err(error)) => {
+                debug!(%error, "Error requesting macro chain");
+                Some(EpochIds {
+                    locator_found: false,
+                    ids: Vec::new(),
+                    checkpoint: None,
+                    first_epoch_number: 0,
+                    sender: peer_id,
+                })
+            }
+            Ok(Ok(mut macro_chain)) => {
                 // Clear checkpoint if epochs were returned. This avoids processing checkpoints that
                 // become outdated while the epochs preceding it are being downloaded and applied.
-                if !epoch_ids.is_empty() {
+                if !macro_chain.epochs.is_empty() {
                     macro_chain.checkpoint = None;
                 }
 
@@ -81,7 +79,8 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
                 //  * is a non-election macro block
                 if let Some(checkpoint) = &macro_chain.checkpoint {
                     let given_checkpoint_epoch = Policy::epoch_at(checkpoint.block_number);
-                    let expected_checkpoint_epoch = epoch_number + epoch_ids.len() as u32 + 1;
+                    let expected_checkpoint_epoch =
+                        epoch_number + macro_chain.epochs.len() as u32 + 1;
                     if given_checkpoint_epoch != expected_checkpoint_epoch
                         || !Policy::is_macro_block_at(checkpoint.block_number)
                         || Policy::is_election_block_at(checkpoint.block_number)
@@ -102,7 +101,7 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
 
                 log::debug!(
                     "Received {} epoch_ids starting at #{} (checkpoint={}) from {:?}",
-                    epoch_ids.len(),
+                    macro_chain.epochs.len(),
                     epoch_number + 1,
                     macro_chain.checkpoint.is_some(),
                     peer_id,
@@ -110,7 +109,7 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
 
                 Some(EpochIds {
                     locator_found: true,
-                    ids: epoch_ids,
+                    ids: macro_chain.epochs,
                     checkpoint: macro_chain.checkpoint,
                     first_epoch_number: epoch_number as usize + 1,
                     sender: peer_id,
@@ -559,7 +558,7 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
         peer_id: TNetwork::PeerId,
         locators: Vec<Blake2bHash>,
         max_epochs: u16,
-    ) -> Result<MacroChain, RequestError> {
+    ) -> Result<Result<MacroChain, MacroChainError>, RequestError> {
         network
             .request::<RequestMacroChain>(
                 RequestMacroChain {

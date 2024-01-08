@@ -22,7 +22,11 @@ use crate::sync::live::{
 };
 
 impl<N: Network> Handle<N, BlockchainProxy> for RequestMacroChain {
-    fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> MacroChain {
+    fn handle(
+        &self,
+        _peer_id: N::PeerId,
+        blockchain: &BlockchainProxy,
+    ) -> Result<MacroChain, MacroChainError> {
         let blockchain = blockchain.read();
 
         // A peer has the macro chain. Check all block locator hashes in the given order and pick
@@ -40,10 +44,7 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMacroChain {
             }
         }
         if start_block_hash.is_none() {
-            return MacroChain {
-                epochs: None,
-                checkpoint: None,
-            };
+            return Err(MacroChainError::UnknownLocators);
         }
         let start_block_hash = start_block_hash.unwrap();
 
@@ -81,10 +82,7 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMacroChain {
             None
         };
 
-        MacroChain {
-            epochs: Some(epochs),
-            checkpoint,
-        }
+        Ok(MacroChain { epochs, checkpoint })
     }
 }
 

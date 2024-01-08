@@ -286,21 +286,22 @@ async fn sync_ingredients() {
         3,
     )
     .await
-    .expect("Should yield macro chain");
+    .expect("Should yield macro chain")
+    .expect("Should yield macro chain 2");
 
-    let epochs = macro_chain.epochs.expect("Should contain epochs");
     assert!(
         macro_chain.checkpoint.is_some(),
         "Should contain checkpoint"
     );
     let blockchain = consensus1.blockchain.read();
-    assert_eq!(epochs.len(), 1);
-    assert_eq!(epochs[0], blockchain.election_head_hash());
+    assert_eq!(macro_chain.epochs.len(), 1);
+    assert_eq!(macro_chain.epochs[0], blockchain.election_head_hash());
 
     // Request epoch 1 using the single epochs election block returned by request_macro_chain
-    let epoch = SyncCluster::request_epoch(Arc::clone(&net2), peer_id, epochs[0].clone())
-        .await
-        .expect("Should yield epoch");
+    let epoch =
+        SyncCluster::request_epoch(Arc::clone(&net2), peer_id, macro_chain.epochs[0].clone())
+            .await
+            .expect("Should yield epoch");
     let block1 = epoch
         .election_macro_block
         .as_ref()
@@ -343,12 +344,10 @@ async fn sync_ingredients() {
         3,
     )
     .await
-    .expect("Should yield macro chain");
+    .expect("Should yield macro chain")
+    .expect("Should yield macro chain 2");
     let checkpoint = macro_chain.checkpoint.expect("Should contain checkpoint");
-    assert!(
-        macro_chain.epochs.is_none() || macro_chain.epochs.unwrap().is_empty(),
-        "Should not contain epochs"
-    );
+    assert!(macro_chain.epochs.is_empty(), "Should not contain epochs");
     let blockchain = consensus1.blockchain.read();
     assert_eq!(checkpoint.hash, blockchain.macro_head_hash());
 
@@ -400,11 +399,9 @@ async fn sync_ingredients() {
         3,
     )
     .await
-    .expect("Should yield macro chain");
-    assert!(
-        macro_chain.epochs.is_none() || macro_chain.epochs.unwrap().is_empty(),
-        "Must not contain epochs"
-    );
+    .expect("Should yield macro chain")
+    .expect("Should yield macro chain 2");
+    assert!(macro_chain.epochs.is_empty(), "Must not contain epochs");
     assert!(
         macro_chain.checkpoint.is_none(),
         "Must not contain a checkpoint"

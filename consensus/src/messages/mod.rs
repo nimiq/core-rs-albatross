@@ -62,22 +62,28 @@ pub struct Checkpoint {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct MacroChain {
-    pub epochs: Option<Vec<Blake2bHash>>,
+    pub epochs: Vec<Blake2bHash>,
     pub checkpoint: Option<Checkpoint>,
+}
+
+#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+pub enum MacroChainError {
+    #[error("unknown locators")]
+    UnknownLocators,
+    #[error("unknown error")]
+    #[serde(other)]
+    Other,
 }
 
 impl Debug for MacroChain {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut dbg = f.debug_struct("MacroChain");
-        if let Some(epochs) = &self.epochs {
-            let len = epochs.len();
-            dbg.field("num_epochs", &len);
-            if !epochs.is_empty() {
-                let first = epochs.first().unwrap();
-                let last = epochs.last().unwrap();
-                dbg.field("first_epoch", &first);
-                dbg.field("last_epoch", &last);
-            }
+        dbg.field("num_epochs", &self.epochs.len());
+        if !self.epochs.is_empty() {
+            let first = self.epochs.first().unwrap();
+            let last = self.epochs.last().unwrap();
+            dbg.field("first_epoch", &first);
+            dbg.field("last_epoch", &last);
         }
         dbg.field("checkpoint", &self.checkpoint);
         dbg.finish()
@@ -93,7 +99,7 @@ pub struct RequestMacroChain {
 impl RequestCommon for RequestMacroChain {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 200;
-    type Response = MacroChain;
+    type Response = Result<MacroChain, MacroChainError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_MACRO_CHAIN;
 }
 

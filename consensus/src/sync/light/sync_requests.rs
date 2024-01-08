@@ -18,7 +18,7 @@ use nimiq_zkp_component::{
 };
 
 use crate::{
-    messages::{MacroChain, RequestBlock, RequestMacroChain},
+    messages::{MacroChain, MacroChainError, RequestBlock, RequestMacroChain},
     sync::light::{
         sync::{EpochIds, PeerMacroRequests},
         LightMacroSync,
@@ -79,24 +79,22 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         .await;
 
         match result {
-            Ok(macro_chain) => {
-                if macro_chain.epochs.is_none() {
-                    return Some(EpochIds {
-                        locator_found: false,
-                        ids: Vec::new(),
-                        checkpoint: None,
-                        first_epoch_number: 0,
-                        sender: peer_id,
-                    });
-                }
-
-                let epoch_ids = macro_chain.epochs.unwrap();
-
+            Ok(Err(error)) => {
+                debug!(%error, "Error requesting macro chain");
+                Some(EpochIds {
+                    locator_found: false,
+                    ids: Vec::new(),
+                    checkpoint: None,
+                    first_epoch_number: 0,
+                    sender: peer_id,
+                })
+            }
+            Ok(Ok(macro_chain)) => {
                 // Sanity-check checkpoint block number:
                 //  * is in checkpoint epoch
                 //  * is a non-election macro block
                 if let Some(checkpoint) = &macro_chain.checkpoint {
-                    let checkpoint_epoch = epoch_number + epoch_ids.len() as u32 + 1;
+                    let checkpoint_epoch = epoch_number + macro_chain.epochs.len() as u32 + 1;
                     if Policy::epoch_at(checkpoint.block_number) != checkpoint_epoch
                         || !Policy::is_macro_block_at(checkpoint.block_number)
                         || Policy::is_election_block_at(checkpoint.block_number)
@@ -115,7 +113,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 }
 
                 log::debug!(
-                    received_epochs =  epoch_ids.len(),
+                    received_epochs = macro_chain.epochs.len(),
                     start_epoch = epoch_number + 1,
                     checkpoint = macro_chain.checkpoint.is_some(),
                     sender = %peer_id,
@@ -124,7 +122,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
                 Some(EpochIds {
                     locator_found: true,
-                    ids: epoch_ids,
+                    ids: macro_chain.epochs,
                     checkpoint: macro_chain.checkpoint,
                     first_epoch_number: epoch_number as usize + 1,
                     sender: peer_id,
@@ -293,7 +291,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         peer_id: TNetwork::PeerId,
         locators: Vec<Blake2bHash>,
         max_epochs: u16,
-    ) -> Result<MacroChain, RequestError> {
+    ) -> Result<Result<MacroChain, MacroChainError>, RequestError> {
         network
             .request::<RequestMacroChain>(
                 RequestMacroChain {
