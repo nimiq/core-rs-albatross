@@ -151,15 +151,22 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
 
 #[cfg(feature = "full")]
 impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
-    fn handle(&self, _peer_id: N::PeerId, blockchain: &Arc<RwLock<Blockchain>>) -> HistoryChunk {
-        let chunk = blockchain.read().history_store.prove_chunk(
+    fn handle(
+        &self,
+        _peer_id: N::PeerId,
+        blockchain: &Arc<RwLock<Blockchain>>,
+    ) -> Result<HistoryChunk, HistoryChunkError> {
+        if let Some(chunk) = blockchain.read().history_store.prove_chunk(
             self.epoch_number,
             self.block_number,
             CHUNK_SIZE,
             self.chunk_index as usize,
             None,
-        );
-        HistoryChunk { chunk }
+        ) {
+            Ok(HistoryChunk { chunk })
+        } else {
+            Err(HistoryChunkError::CouldntProduceProof)
+        }
     }
 }
 

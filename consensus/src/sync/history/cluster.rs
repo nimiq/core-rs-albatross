@@ -21,7 +21,9 @@ use parking_lot::RwLock;
 use thiserror::Error;
 
 use crate::{
-    messages::{BatchSetError, BatchSetInfo, RequestBatchSet, RequestHistoryChunk},
+    messages::{
+        BatchSetError, BatchSetInfo, HistoryChunkError, RequestBatchSet, RequestHistoryChunk,
+    },
     sync::{
         peer_list::PeerList,
         sync_queue::{Error, SyncQueue},
@@ -34,9 +36,12 @@ pub enum HistoryRequestError {
     /// Outbound request error
     #[error("Outbound error: {0}")]
     RequestError(#[from] RequestError),
-    /// Remote error
-    #[error("Remote error: {0}")]
-    RemoteError(#[from] BatchSetError),
+    /// Remote batch set error
+    #[error("Remote batch set error: {0}")]
+    RemoteBatchSetError(#[from] BatchSetError),
+    /// Remote batch set error
+    #[error("Remote history chunk error: {0}")]
+    RemoteHistoryChunkError(#[from] HistoryChunkError),
     /// Batch set info obtained doesn't match the requested hash
     #[error("Batch set info mismatch")]
     BatchSetInfoMismatch,
@@ -607,13 +612,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             block_number: request.block_number,
             chunk_index: request.chunk_index,
         };
-        let chunk = network.request(req, peer_id).await?;
-
-        // Check that a chunk was supplied.
-        let chunk = match chunk.chunk {
-            Some(chunk) => chunk,
-            None => return Err(HistoryRequestError::InvalidHistoryChunk),
-        };
+        let chunk = network.request(req, peer_id).await??.chunk;
 
         // Verify that the chunk is valid.
         let leaf_index = request.chunk_index as usize * CHUNK_SIZE;

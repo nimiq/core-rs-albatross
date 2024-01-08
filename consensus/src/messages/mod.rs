@@ -184,7 +184,7 @@ pub struct RequestHistoryChunk {
 impl RequestCommon for RequestHistoryChunk {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 204;
-    type Response = HistoryChunk;
+    type Response = Result<HistoryChunk, HistoryChunkError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_HISTORY_CHUNK;
 }
 
@@ -192,7 +192,17 @@ impl RequestCommon for RequestHistoryChunk {
 /// This message contains a chunk of the history.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HistoryChunk {
-    pub chunk: Option<HistoryTreeChunk>,
+    pub chunk: HistoryTreeChunk,
+}
+
+#[cfg(feature = "full")]
+#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+pub enum HistoryChunkError {
+    #[error("couldn't produce proof")]
+    CouldntProduceProof,
+    #[error("unknown error")]
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
