@@ -18,7 +18,10 @@ use nimiq_zkp_component::{
     zkp_component::ZKPComponentProxy,
 };
 
-use crate::{messages::Checkpoint, sync::syncer::MacroSync};
+use crate::{
+    messages::{BlockError, Checkpoint},
+    sync::syncer::MacroSync,
+};
 
 #[derive(Clone)]
 /// This struct is used to request Epochs IDs (hashes) from other peers
@@ -130,7 +133,13 @@ pub struct LightMacroSync<TNetwork: Network> {
         FuturesUnordered<BoxFuture<'static, (Result<ZKPRequestEvent, Error>, TNetwork::PeerId)>>,
     /// Block requests
     pub(crate) block_headers: FuturesUnordered<
-        BoxFuture<'static, (Result<Option<Block>, RequestError>, TNetwork::PeerId)>,
+        BoxFuture<
+            'static,
+            (
+                Result<Result<Block, BlockError>, RequestError>,
+                TNetwork::PeerId,
+            ),
+        >,
     >,
     /// Minimum distance to light sync in #blocks from the peers head.
     pub(crate) full_sync_threshold: u32,

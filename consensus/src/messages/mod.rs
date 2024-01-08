@@ -211,10 +211,19 @@ pub struct RequestBlock {
     pub include_micro_bodies: bool,
 }
 
+#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+pub enum BlockError {
+    #[error("target hash not found")]
+    TargetHashNotFound,
+    #[error("unknown error")]
+    #[serde(other)]
+    Other,
+}
+
 impl RequestCommon for RequestBlock {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 207;
-    type Response = Option<Block>;
+    type Response = Result<Block, BlockError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_BLOCK;
 }
 

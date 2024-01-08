@@ -14,7 +14,7 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestError};
 
-use crate::messages::{RequestBlock, RequestHead};
+use crate::messages::{BlockError, RequestBlock, RequestHead};
 
 /// Requests the head blocks for a set of peers.
 /// Calculates the number of known/unknown blocks and a vector of unknown blocks.
@@ -22,7 +22,13 @@ pub struct HeadRequests<TNetwork: Network + 'static> {
     peers: Vec<TNetwork::PeerId>,
     head_hashes: FuturesUnordered<BoxFuture<'static, (usize, Result<Blake2bHash, RequestError>)>>,
     head_blocks: FuturesUnordered<
-        BoxFuture<'static, (Result<Option<Block>, RequestError>, TNetwork::PeerId)>,
+        BoxFuture<
+            'static,
+            (
+                Result<Result<Block, BlockError>, RequestError>,
+                TNetwork::PeerId,
+            ),
+        >,
     >,
     requested_hashes: HashSet<Blake2bHash>,
     blockchain: BlockchainProxy,
@@ -92,7 +98,7 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
         peer_id: TNetwork::PeerId,
         hash: Blake2bHash,
         include_micro_bodies: bool,
-    ) -> Result<Option<Block>, RequestError> {
+    ) -> Result<Result<Block, BlockError>, RequestError> {
         network
             .request::<RequestBlock>(
                 RequestBlock {
@@ -151,12 +157,16 @@ impl<TNetwork: Network + 'static> Future for HeadRequests<TNetwork> {
         // Then poll blocks.
         while let Poll::Ready(Some(result)) = self.head_blocks.poll_next_unpin(cx) {
             match result {
-                (Ok(Some(block)), peer_id) => {
+                (Ok(Ok(block)), peer_id) => {
                     self.unknown_blocks.push((block, peer_id));
                 }
-                _ => {
-                    trace!("Failed block request");
-                } // We don't do anything with failed requests.
+                // We don't do anything with failed requests.
+                (Ok(Err(error)), peer_id) => {
+                    trace!(%error, %peer_id, "Block request failed on remote side");
+                }
+                (Err(error), peer_id) => {
+                    trace!(%error, %peer_id, "Failed block request");
+                }
             }
         }
 

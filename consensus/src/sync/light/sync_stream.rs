@@ -254,7 +254,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
     ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
         while let Poll::Ready(Some(result)) = self.block_headers.poll_next_unpin(cx) {
             match result {
-                (Ok(Some(block)), peer_id) => {
+                (Ok(Ok(block)), peer_id) => {
                     if let Some(peer_requests) = self.peer_requests.get_mut(&peer_id) {
                         if !peer_requests.update_request(block) {
                             // We received a block we were not expecting from this peer
@@ -383,13 +383,13 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         }
                     }
                 }
-                (Ok(None), peer_id) => {
-                    trace!("Received a request with None");
+                (Ok(Err(error)), peer_id) => {
+                    trace!(%error, %peer_id, "Received a response for a failed request on the remote side");
                     // If a block request fails, we disconnect from this peer
                     self.disconnect_peer(peer_id, CloseReason::Error);
                 }
                 (Err(error), peer_id) => {
-                    trace!(?error, "Failed block request");
+                    trace!(?error, %peer_id, "Failed block request");
                     // If a block request fails, we disconnect from this peer
                     self.disconnect_peer(peer_id, CloseReason::Error);
                 }

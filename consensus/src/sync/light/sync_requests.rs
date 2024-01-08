@@ -18,7 +18,7 @@ use nimiq_zkp_component::{
 };
 
 use crate::{
-    messages::{MacroChain, MacroChainError, RequestBlock, RequestMacroChain},
+    messages::{BlockError, MacroChain, MacroChainError, RequestBlock, RequestMacroChain},
     sync::light::{
         sync::{EpochIds, PeerMacroRequests},
         LightMacroSync,
@@ -273,7 +273,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         network: Arc<TNetwork>,
         peer_id: TNetwork::PeerId,
         hash: Blake2bHash,
-    ) -> Result<Option<Block>, RequestError> {
+    ) -> Result<Result<Block, BlockError>, RequestError> {
         // We will only request macro blocks, so we always need the body
         network
             .request::<RequestBlock>(

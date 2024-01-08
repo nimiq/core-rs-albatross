@@ -171,30 +171,25 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
 }
 
 impl<N: Network> Handle<N, BlockchainProxy> for RequestBlock {
-    fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> Option<Block> {
+    fn handle(
+        &self,
+        _peer_id: N::PeerId,
+        blockchain: &BlockchainProxy,
+    ) -> Result<Block, BlockError> {
         let blockchain = blockchain.read();
-        if let Ok(block) = blockchain.get_block(&self.hash, false) {
-            let block = match block {
-                // Macro bodies are always needed
-                Block::Macro(_) => match blockchain.get_block(&self.hash, true) {
+        if let Ok(block) = blockchain.get_block(&self.hash, self.include_micro_bodies) {
+            // Macro bodies are always needed, do we have it already?
+            let block = if block.is_macro() && !self.include_micro_bodies {
+                match blockchain.get_block(&self.hash, true) {
                     Ok(block) => block,
-                    Err(_) => return None,
-                },
-                // Micro bodies are requested based on `include_micro_bodies`
-                Block::Micro(_) => {
-                    if self.include_micro_bodies {
-                        match blockchain.get_block(&self.hash, true) {
-                            Ok(block) => block,
-                            Err(_) => return None,
-                        }
-                    } else {
-                        block
-                    }
+                    Err(_) => return Err(BlockError::TargetHashNotFound),
                 }
+            } else {
+                block
             };
-            Some(block)
+            Ok(block)
         } else {
-            None
+            Err(BlockError::TargetHashNotFound)
         }
     }
 }
