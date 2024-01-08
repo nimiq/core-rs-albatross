@@ -615,7 +615,7 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBlocksProof {
         &self,
         _peer_id: N::PeerId,
         blockchain: &Arc<RwLock<Blockchain>>,
-    ) -> ResponseBlocksProof {
+    ) -> Result<ResponseBlocksProof, ResponseBlocksProofError> {
         let blockchain = blockchain.read();
 
         // Check if the request is sane and we can answer it
@@ -624,7 +624,7 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBlocksProof {
                 || block_number > self.election_head
                 || self.election_head > blockchain.election_head().block_number()
             {
-                return ResponseBlocksProof { proof: None };
+                return Err(ResponseBlocksProofError::BadBlockNumber(block_number));
             }
         }
 
@@ -647,8 +647,8 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBlocksProof {
             block_proof.append(&mut hop_blocks);
         }
 
-        ResponseBlocksProof {
-            proof: Some(BlockInclusionProof { proof: block_proof }),
-        }
+        Ok(ResponseBlocksProof {
+            proof: BlockInclusionProof { proof: block_proof },
+        })
     }
 }

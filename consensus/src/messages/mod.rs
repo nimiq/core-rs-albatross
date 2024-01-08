@@ -383,13 +383,22 @@ pub struct RequestBlocksProof {
 
 #[derive(Serialize, Deserialize)]
 pub struct ResponseBlocksProof {
-    pub proof: Option<BlockInclusionProof>,
+    pub proof: BlockInclusionProof,
+}
+
+#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+pub enum ResponseBlocksProofError {
+    #[error("bad block number {0}")]
+    BadBlockNumber(u32),
+    #[error("unknown error")]
+    #[serde(other)]
+    Other,
 }
 
 impl RequestCommon for RequestBlocksProof {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 216;
-    type Response = ResponseBlocksProof;
+    type Response = Result<ResponseBlocksProof, ResponseBlocksProofError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_BLOCKS_PROOF;
 }
 

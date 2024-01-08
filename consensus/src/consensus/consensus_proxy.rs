@@ -355,24 +355,25 @@ impl<N: Network> ConsensusProxy<N> {
                             }
 
                             if !already_proven {
-                                // Request block inclusion proofs for txs of previous epochs
-                                let block_proof = {
-                                    if let Ok(ResponseBlocksProof {
-                                        proof: Some(block_proof),
-                                    }) = self
-                                        .network
-                                        .request::<RequestBlocksProof>(
-                                            RequestBlocksProof {
-                                                election_head: election_head.block_number(),
-                                                blocks: vec![response.block.block_number()],
-                                            },
-                                            peer_id,
-                                        )
-                                        .await
-                                    {
-                                        block_proof
-                                    } else {
-                                        log::debug!(peer = %peer_id, "Error requesting block proof");
+                                // Request block inclusion proofs for txns of previous epochs
+                                let block_proof = match self
+                                    .network
+                                    .request::<RequestBlocksProof>(
+                                        RequestBlocksProof {
+                                            election_head: election_head.block_number(),
+                                            blocks: vec![response.block.block_number()],
+                                        },
+                                        peer_id,
+                                    )
+                                    .await
+                                {
+                                    Ok(Ok(ResponseBlocksProof { proof })) => proof,
+                                    Ok(Err(error)) => {
+                                        log::debug!(%error, peer = %peer_id, "Error on remote side while requesting block proof");
+                                        continue;
+                                    }
+                                    Err(error) => {
+                                        log::debug!(%error, peer = %peer_id, "Error requesting block proof");
                                         continue;
                                     }
                                 };
