@@ -214,7 +214,7 @@ impl<N: Network> BlockRequestComponent<N> {
                 peer_id,
             )
             .await
-            .map(|response| response.blocks)
+            .map(|response| response.ok().map(|r| r.blocks))
     }
 
     pub fn request_missing_blocks(

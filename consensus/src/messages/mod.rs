@@ -15,6 +15,7 @@ use nimiq_transaction::{
     historic_transaction::HistoricTransaction, history_proof::HistoryTreeProof,
 };
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::error::SubscribeToAddressesError;
 
@@ -192,24 +193,36 @@ impl RequestCommon for RequestBlock {
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_BLOCK;
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct ResponseBlocks {
     // TODO: Set to sensible limit (2 * BATCH_SIZE for example).
-    pub blocks: Option<Vec<Block>>,
+    pub blocks: Vec<Block>,
+}
+
+#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+pub enum ResponseBlocksError {
+    #[error("target block not on main chain")]
+    TargetBlockNotOnMainChain,
+    #[error("target hash not found")]
+    TargetHashNotFound,
+    #[error("unknown locators")]
+    UnknownLocators,
+    #[error("failed to get blocks")]
+    FailedToGetBlocks,
+    #[error("unknown error")]
+    #[serde(other)]
+    Other,
 }
 
 impl Debug for ResponseBlocks {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut dbg = f.debug_struct("ResponseBlocks");
-        if let Some(blocks) = &self.blocks {
-            let len = blocks.len();
-            dbg.field("length", &len);
-            if !blocks.is_empty() {
-                let first = blocks.first().unwrap();
-                let last = blocks.last().unwrap();
-                dbg.field("first_block", &first.block_number());
-                dbg.field("last_block", &last.block_number());
-            }
+        dbg.field("length", &self.blocks.len());
+        if !self.blocks.is_empty() {
+            let first = self.blocks.first().unwrap();
+            let last = self.blocks.last().unwrap();
+            dbg.field("first_block", &first.block_number());
+            dbg.field("last_block", &last.block_number());
         }
         dbg.finish()
     }
@@ -225,7 +238,7 @@ pub struct RequestMissingBlocks {
 impl RequestCommon for RequestMissingBlocks {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 209;
-    type Response = ResponseBlocks;
+    type Response = Result<ResponseBlocks, ResponseBlocksError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_MISSING_BLOCKS;
 }
 

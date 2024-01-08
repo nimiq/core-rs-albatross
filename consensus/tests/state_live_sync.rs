@@ -734,9 +734,9 @@ async fn can_remove_chunks_related_to_invalid_blocks() {
                     mock_id,
                     blockchain_proxy,
                 );
-            match response.blocks {
-                Some(ref mut blocks) => match blocks[0] {
-                    Block::Micro(ref mut micro_block) => {
+            match &mut response {
+                Ok(blocks) => match &mut blocks.blocks[0] {
+                    Block::Micro(micro_block) => {
                         micro_block.body = None;
                     }
                     _ => unreachable!(),

@@ -191,7 +191,11 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestBlock {
 }
 
 impl<N: Network> Handle<N, BlockchainProxy> for RequestMissingBlocks {
-    fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> ResponseBlocks {
+    fn handle(
+        &self,
+        _peer_id: N::PeerId,
+        blockchain: &BlockchainProxy,
+    ) -> Result<ResponseBlocks, ResponseBlocksError> {
         let blockchain = blockchain.read();
 
         // Check that we know the target hash and that it is located on our main chain.
@@ -202,7 +206,7 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMissingBlocks {
                         target_hash = %self.target_hash,
                         "ResponseBlocks - target block not on main chain",
                     );
-                    return ResponseBlocks { blocks: None };
+                    return Err(ResponseBlocksError::TargetBlockNotOnMainChain);
                 }
                 target_block
             }
@@ -212,7 +216,7 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMissingBlocks {
                     target_hash = %self.target_hash,
                     "ResponseBlocks - target hash not found",
                 );
-                return ResponseBlocks { blocks: None };
+                return Err(ResponseBlocksError::TargetHashNotFound);
             }
         };
 
@@ -233,7 +237,7 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMissingBlocks {
         // If there is no match, reject the request.
         if start_hash.is_none() {
             debug!("ResponseBlocks - unknown locators",);
-            return ResponseBlocks { blocks: None };
+            return Err(ResponseBlocksError::UnknownLocators);
         }
         let start_block_number = start_block_number.unwrap();
         let start_hash = start_hash.unwrap();
@@ -250,9 +254,7 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMissingBlocks {
 
         // If the number of blocks to return is 0, we return early.
         if num_blocks == 0 {
-            return ResponseBlocks {
-                blocks: Some(vec![]),
-            };
+            return Ok(ResponseBlocks { blocks: vec![] });
         }
 
         // Request `num_blocks - 1` micro blocks first and add the following macro block separately.
@@ -270,7 +272,7 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMissingBlocks {
                     start_hash = %start_hash,
                     "ResponseBlocks - Failed to get blocks",
                 );
-                return ResponseBlocks { blocks: None };
+                return Err(ResponseBlocksError::FailedToGetBlocks);
             }
         };
 
@@ -281,9 +283,7 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMissingBlocks {
             blocks.push(block);
         }
 
-        ResponseBlocks {
-            blocks: Some(blocks),
-        }
+        Ok(ResponseBlocks { blocks })
     }
 }
 

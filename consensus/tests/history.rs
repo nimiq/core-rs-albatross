@@ -597,9 +597,7 @@ async fn request_missing_blocks_across_macro_block() {
                 )
                 .unwrap();
 
-            ResponseBlocks {
-                blocks: Some(blocks),
-            }
+            Ok(ResponseBlocks { blocks })
         });
     let req = mock_node.next().await.unwrap();
     mock_node.request_missing_block_handler.unset();
