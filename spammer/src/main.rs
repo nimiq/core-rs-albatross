@@ -507,7 +507,7 @@ fn generate_basic_transactions(
         let recipient = Address::from(&new_kp);
         let amount = Coin::from_u64_unchecked(100);
 
-        //We only need to mantain state when we use many to many distributions
+        //We only need to maintain state when we use many to many distributions
         if config.many_to_many > 0.0 {
             state.balances.push(SpammerAccounts {
                 key_pair: new_kp,

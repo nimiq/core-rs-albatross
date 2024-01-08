@@ -91,7 +91,7 @@ impl Ord for WorstTxOrder {
 
 // This is a container where all mempool transactions are stored.
 // It provides simple functions to insert/delete/get transactions
-// And mantains internal structures to keep track of the best/worst transactions
+// And maintains internal structures to keep track of the best/worst transactions
 pub(crate) struct MempoolTransactions {
     // A hashmap containing the transactions indexed by their hash.
     pub(crate) transactions: HashMap<Blake2bHash, Transaction>,

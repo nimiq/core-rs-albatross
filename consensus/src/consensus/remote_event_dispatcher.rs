@@ -42,9 +42,9 @@ impl<N: Network> Handle<N, ResponseSubscribeToAddress, Arc<RwLock<RemoteEventDis
     ) -> ResponseSubscribeToAddress {
         match self.operation {
             AddressSubscriptionOperation::Subscribe => {
-                if let Some(peer_addreses) = state.read().subscribed_peers.get(&peer_id) {
+                if let Some(peer_addresses) = state.read().subscribed_peers.get(&peer_id) {
                     // We need to check if this peer already has too many addresses subscribed to us
-                    if peer_addreses.len() > MAX_SUBSCRIBED_PEERS_ADDRESSES {
+                    if peer_addresses.len() > MAX_SUBSCRIBED_PEERS_ADDRESSES {
                         return ResponseSubscribeToAddress {
                             result: Err(TooManyAddresses),
                         };
@@ -80,13 +80,13 @@ impl<N: Network> Handle<N, ResponseSubscribeToAddress, Arc<RwLock<RemoteEventDis
     }
 }
 
-/// The state that is mantained by the remote event dispatcher:
+/// The state that is maintained by the remote event dispatcher:
 /// essentially the addresses and peers that are subscribed to us.
 pub struct RemoteEventDispatcherState<N: Network> {
     /// HashMap containing a mapping from peers to their interesting addresses
     pub subscribed_peers: HashMap<N::PeerId, HashSet<Address>>,
 
-    /// Mantains the current list of interesting addresses and the peers that are interested in those addresses
+    /// Maintains the current list of interesting addresses and the peers that are interested in those addresses
     pub subscriptions: HashMap<Address, HashSet<N::PeerId>>,
 }
 
