@@ -23,7 +23,7 @@ workspace = true
 blake2-rfc = "0.2"
 byteorder = "1.5"
 hex = "0.4"
-rust-argon2 = "2.0"
+rust-argon2 = "2.1"
 serde = "1.0"
 sha2 = "0.10"
 
