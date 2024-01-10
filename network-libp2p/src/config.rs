@@ -1,12 +1,9 @@
-use std::{
-    collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher},
-    time::Duration,
-};
+use std::time::Duration;
 
 use libp2p::{gossipsub, identity::Keypair, kad, Multiaddr};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::peer_info::Services;
+use sha2::{Digest, Sha256};
 
 use crate::discovery::{self, peer_contacts::PeerContact};
 
@@ -59,10 +56,10 @@ impl Config {
             // Use the message hash as the message ID instead of the default PeerId + sequence_number
             // to avoid duplicated messages
             .message_id_fn(|message| {
-                let mut s = DefaultHasher::new();
-                message.topic.hash(&mut s);
-                message.data.hash(&mut s);
-                gossipsub::MessageId::from(s.finish().to_be_bytes())
+                let mut s = Sha256::new();
+                s.update(message.topic.as_str());
+                s.update(&message.data);
+                gossipsub::MessageId::from(s.finalize().to_vec())
             })
             .build()
             .expect("Invalid Gossipsub config");
