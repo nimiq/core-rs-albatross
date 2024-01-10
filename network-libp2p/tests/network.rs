@@ -457,7 +457,7 @@ async fn ban_peer() {
         .await;
     log::debug!("Closed peer");
 
-    let event2 = events2.next().await.unwrap().unwrap();
+    let event2 = helper::get_next_peer_event(&mut events2).await;
     helper::assert_peer_left(&event2, &net1_peer_id);
     log::trace!(event = ?event2, "Event 2");
 
