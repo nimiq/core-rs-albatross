@@ -19,6 +19,7 @@ pub fn combine_public_keys(public_keys: Vec<PublicKey>, num_signers: usize) -> V
 /// Given a list of possible public keys, generates an address for which each of the public keys is a possible signer.
 /// Our multisig scheme only allows n-of-n signatures. To achieve a k-of-n signature, we generate all possible combinations
 /// for k-of-k signatures and compute the joint address using this method (see `combine_public_keys`).
+#[cfg(feature = "serde-derive")]
 pub fn compute_address(combined_public_keys: &[PublicKey]) -> Address {
     // Calculate address.
     let merkle_root = compute_root_from_content::<Blake2bHasher, _>(combined_public_keys);

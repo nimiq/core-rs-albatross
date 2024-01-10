@@ -44,7 +44,7 @@ nimiq-hash = { workspace = true }
 nimiq-hash_derive = { workspace = true }
 nimiq-macros = { workspace = true }
 nimiq-serde = { workspace = true, optional = true }
-nimiq-utils = { workspace = true, features = ["key-rng"] }
+nimiq-utils = { workspace = true, features = ["key-rng", "merkle"] }
 
 [dev-dependencies]
 nimiq-test-log = { workspace = true }

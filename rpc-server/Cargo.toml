@@ -63,5 +63,5 @@ nimiq-utils = { workspace = true, features = ["otp"] }
 nimiq-validator = { workspace = true }
 nimiq-validator-network = { workspace = true }
 nimiq-vrf = { workspace = true, features = ["serde-derive"] }
-nimiq-wallet = { workspace = true }
+nimiq-wallet = { workspace = true, features = ["store"] }
 nimiq-zkp-component = { workspace = true }

@@ -68,7 +68,7 @@ nimiq-serde = { workspace = true }
 nimiq-utils = { workspace = true, features = ["time", "key-store"] }
 nimiq-validator = { workspace = true, optional = true, features = ["trusted_push"] }
 nimiq-validator-network = { workspace = true, optional = true }
-nimiq-wallet = { workspace = true, optional = true }
+nimiq-wallet = { workspace = true, optional = true, features = ["store"] }
 nimiq-zkp = { workspace = true }
 nimiq-zkp-circuits = { workspace = true }
 nimiq-zkp-component = { workspace = true }

@@ -67,8 +67,11 @@ pub struct CommitmentsData {
     /// All public keys (including our own, need to be sorted).
     pub all_public_keys: Vec<PublicKey>,
     /// b = H(aggregate_public_key || (R_1, ..., R_v) || m)
-    #[serde(serialize_with = "serialize_scalar")]
-    #[serde(deserialize_with = "deserialize_scalar")]
+    #[cfg_attr(feature = "serde-derive", serde(serialize_with = "serialize_scalar"))]
+    #[cfg_attr(
+        feature = "serde-derive",
+        serde(deserialize_with = "deserialize_scalar")
+    )]
     pub b: Scalar,
 }
 
