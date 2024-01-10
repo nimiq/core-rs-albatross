@@ -74,8 +74,8 @@ pub enum LiveSyncPushEvent {
     AcceptedAnnouncedBlock(Blake2bHash),
     /// A buffered block has been accepted
     AcceptedBufferedBlock(Blake2bHash, usize),
-    /// Missing blocks were received
-    ReceivedMissingBlocks(Blake2bHash, usize),
+    /// Missing blocks were received. The vec of all adopted blocks hashes is given here.
+    ReceivedMissingBlocks(Vec<Blake2bHash>),
     /// Block was rejected
     /// (this is only returned in *some* cases blocks were rejected)
     RejectedBlock(Blake2bHash),

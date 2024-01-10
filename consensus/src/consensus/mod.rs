@@ -377,7 +377,7 @@ impl<N: Network> Future for Consensus<N> {
                         }
                     }
                 }
-                LiveSyncPushEvent::ReceivedMissingBlocks(_, _) => {
+                LiveSyncPushEvent::ReceivedMissingBlocks(_) => {
                     if !self.is_established() {
                         // When syncing a stopped chain, we want to immediately start a new head request
                         // after receiving blocks for the current epoch.
