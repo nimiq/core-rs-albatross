@@ -23,9 +23,10 @@ use nimiq_transaction::{
     historic_transaction::HistoricTransaction, ControlTransactionTopic, Transaction,
     TransactionTopic,
 };
-use tokio::sync::broadcast::Sender as BroadcastSender;
+use tokio::sync::{broadcast::Sender as BroadcastSender, mpsc::Sender as MpscSender};
 use tokio_stream::wrappers::BroadcastStream;
 
+use super::ConsensusRequest;
 use crate::{
     consensus::remote_data_store::RemoteDataStore,
     messages::{
@@ -41,6 +42,7 @@ pub struct ConsensusProxy<N: Network> {
     pub network: Arc<N>,
     pub(crate) established_flag: Arc<AtomicBool>,
     pub(crate) events: BroadcastSender<ConsensusEvent>,
+    pub(crate) request: MpscSender<ConsensusRequest>,
 }
 
 impl<N: Network> Clone for ConsensusProxy<N> {
@@ -50,6 +52,7 @@ impl<N: Network> Clone for ConsensusProxy<N> {
             network: Arc::clone(&self.network),
             established_flag: Arc::clone(&self.established_flag),
             events: self.events.clone(),
+            request: self.request.clone(),
         }
     }
 }

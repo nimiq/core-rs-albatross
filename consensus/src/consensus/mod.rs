@@ -17,7 +17,10 @@ use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::request_handler};
 use nimiq_primitives::task_executor::TaskExecutor;
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
-use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
+use tokio::sync::{
+    broadcast::{channel as broadcast, Sender as BroadcastSender},
+    mpsc::{channel as mpsc_channel, Receiver as MpscReceiver, Sender as MpscSender},
+};
 #[cfg(not(target_family = "wasm"))]
 use tokio::time::{sleep, Sleep};
 use tokio_stream::wrappers::BroadcastStream;
@@ -67,6 +70,9 @@ pub enum RemoteEvent {
     Placeholder,
 }
 
+/// Enumeration of all ConsensusRequests available.
+pub enum ConsensusRequest {}
+
 pub struct Consensus<N: Network> {
     pub blockchain: BlockchainProxy,
     pub network: Arc<N>,
@@ -83,6 +89,18 @@ pub struct Consensus<N: Network> {
     head_requests_time: Option<Instant>,
 
     min_peers: usize,
+
+    /// Sender and Receiver of a consensus request channel used to relay requests from any source
+    /// to the Consensus instance. Currently the only source is a ConsensusProxy instance, but
+    /// the Consensus is not limited to it.
+    ///
+    /// Both the sender and receiver are stored such that the sender can be cloned as required,
+    /// while the receiver is actually polled within the Consensus poll function.
+    ///
+    /// The consensus itself is chosen, even though for the initial single request a structure
+    /// somewhere deeper down the call stack would be adequate, as other requests may require different
+    /// structures. Putting it here seemed to be the most flexible.
+    requests: (MpscSender<ConsensusRequest>, MpscReceiver<ConsensusRequest>),
 
     zkp_proxy: ZKPComponentProxy<N>,
 }
@@ -154,6 +172,8 @@ impl<N: Network> Consensus<N> {
             head_requests: None,
             head_requests_time: None,
             min_peers,
+            // Choose a small buffer as having a lot of items buffered here indicates a bigger problem.
+            requests: mpsc_channel(10),
             zkp_proxy,
         }
     }
@@ -241,6 +261,7 @@ impl<N: Network> Consensus<N> {
             network: Arc::clone(&self.network),
             established_flag: Arc::clone(&self.established_flag),
             events: self.events.clone(),
+            request: self.requests.0.clone(),
         }
     }
 
@@ -414,7 +435,10 @@ impl<N: Network> Future for Consensus<N> {
             }
         }
 
-        // 3. Update timer and poll it so the task gets woken when the timer runs out (at the latest)
+        // 3. Check if a ConsensusRequest was received
+        while let Poll::Ready(Some(_request)) = self.requests.1.poll_recv(cx) {}
+
+        // 4. Update timer and poll it so the task gets woken when the timer runs out (at the latest)
         // The timer itself running out (producing an Instant) is of no interest to the execution. This poll method
         // was potentially awoken by the delays waker, but even then all there is to do is set up a new timer such
         // that it will wake this task again after another time frame has elapsed. No interval was used as that
@@ -427,7 +451,7 @@ impl<N: Network> Future for Consensus<N> {
             self.next_execution_timer = Some(timer);
         }
 
-        // 4. Advance consensus and catch-up through head requests.
+        // 5. Advance consensus and catch-up through head requests.
         self.request_heads();
 
         Poll::Pending
