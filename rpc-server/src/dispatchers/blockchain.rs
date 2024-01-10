@@ -657,7 +657,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                     &rpc_result.data, //The data contains the hash
                     include_body,
                 )
-                .map_or_else(|_| None, Some);
+                .ok();
                 future::ready(result)
             })
             .boxed())
@@ -698,8 +698,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                 let result = match event {
                     BlockchainEvent::EpochFinalized(..) => {
                         let blockchain_rg = blockchain.read();
-                        get_validator_by_address(&blockchain_rg, &address)
-                            .map_or_else(|_| None, Some)
+                        get_validator_by_address(&blockchain_rg, &address).ok()
                     }
                     _ => None,
                 };

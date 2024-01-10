@@ -333,9 +333,8 @@ impl<N: Network> ConsensusProxy<N> {
                         if let Some(proof) = proof_response.proof {
                             if let Some(block) = proof_response.block {
                                 log::debug!(peer=%peer_id,"New txns proof and block from peer");
-                                let mut verification_result = proof
-                                    .verify(block.history_root().clone())
-                                    .map_or(false, |result| result);
+                                let mut verification_result =
+                                    proof.verify(block.history_root().clone()).unwrap_or(false);
 
                                 if !verification_result {
                                     // If the proof didn't verify, we continue with another peer
