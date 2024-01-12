@@ -20,7 +20,7 @@ use libp2p::{
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::peer_info::Services;
 use nimiq_serde::DeserializeError;
-use nimiq_utils::tagged_signing::TaggedKeypair;
+use nimiq_utils::tagged_signing::TaggedKeyPair;
 use parking_lot::RwLock;
 use rand::{seq::IteratorRandom, thread_rng};
 use thiserror::Error;

@@ -54,3 +54,4 @@ mod key_pair;
 mod private_key;
 mod public_key;
 mod signature;
+mod tagged_signing;

@@ -14,3 +14,6 @@ pub type SigHash = Blake2sHash;
 // A simple cache implementation for the (un)compressed keys.
 #[cfg(feature = "cache")]
 pub mod cache;
+
+// Implements the tagged-signing traits
+mod tagged_signing;

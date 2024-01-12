@@ -46,7 +46,7 @@ pub trait TaggedSignable: Serialize {
 pub struct TaggedSignature<TSignable, TScheme>
 where
     TSignable: TaggedSignable,
-    TScheme: TaggedKeypair,
+    TScheme: TaggedKeyPair,
 {
     data: Vec<u8>,
 
@@ -57,7 +57,7 @@ where
 impl<TSignable, TScheme> PartialEq for TaggedSignature<TSignable, TScheme>
 where
     TSignable: TaggedSignable,
-    TScheme: TaggedKeypair,
+    TScheme: TaggedKeyPair,
 {
     fn eq(&self, other: &Self) -> bool {
         self.data == other.data
@@ -67,14 +67,14 @@ where
 impl<TSignable, TScheme> Eq for TaggedSignature<TSignable, TScheme>
 where
     TSignable: TaggedSignable,
-    TScheme: TaggedKeypair,
+    TScheme: TaggedKeyPair,
 {
 }
 
 impl<TSignable, TScheme> TaggedSignature<TSignable, TScheme>
 where
     TSignable: TaggedSignable,
-    TScheme: TaggedKeypair,
+    TScheme: TaggedKeyPair,
 {
     pub fn from_bytes(data: Vec<u8>) -> Self {
         Self {
@@ -96,7 +96,7 @@ where
 impl<TSignable, TScheme> std::fmt::Debug for TaggedSignature<TSignable, TScheme>
 where
     TSignable: TaggedSignable,
-    TScheme: TaggedKeypair,
+    TScheme: TaggedKeyPair,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         self.data.fmt(f)
@@ -106,14 +106,14 @@ where
 impl<TSignable, TScheme> AsRef<[u8]> for TaggedSignature<TSignable, TScheme>
 where
     TSignable: TaggedSignable,
-    TScheme: TaggedKeypair,
+    TScheme: TaggedKeyPair,
 {
     fn as_ref(&self) -> &[u8] {
         &self.data
     }
 }
 
-pub trait TaggedKeypair: Sized {
+pub trait TaggedKeyPair: Sized {
     type PublicKey: TaggedPublicKey;
 
     fn sign(&self, message: &[u8]) -> Vec<u8>;
@@ -139,7 +139,7 @@ mod tests {
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng::test_rng;
 
-    use super::{TaggedKeypair, TaggedPublicKey, TaggedSignable, TaggedSignature};
+    use super::{TaggedKeyPair, TaggedPublicKey, TaggedSignable, TaggedSignature};
 
     struct TestKeypair(KeyPair);
     struct TestPublicKey(PublicKey);
@@ -154,7 +154,7 @@ mod tests {
         }
     }
 
-    impl TaggedKeypair for TestKeypair {
+    impl TaggedKeyPair for TestKeypair {
         type PublicKey = TestPublicKey;
 
         fn sign(&self, message: &[u8]) -> Vec<u8> {
@@ -239,9 +239,9 @@ mod tests {
 mod impl_for_libp2p {
     use libp2p_identity::{Keypair, PublicKey};
 
-    use super::{TaggedKeypair, TaggedPublicKey};
+    use super::{TaggedKeyPair, TaggedPublicKey};
 
-    impl TaggedKeypair for Keypair {
+    impl TaggedKeyPair for Keypair {
         type PublicKey = PublicKey;
 
         fn sign(&self, message: &[u8]) -> Vec<u8> {
@@ -252,25 +252,6 @@ mod impl_for_libp2p {
     impl TaggedPublicKey for PublicKey {
         fn verify(&self, msg: &[u8], sig: &[u8]) -> bool {
             PublicKey::verify(self, msg, sig)
-        }
-    }
-}
-
-#[cfg(feature = "nimiq-keys")]
-mod impl_for_keys {
-    use nimiq_keys::{KeyPair, PublicKey, Signature};
-
-    impl TaggedKeypair for KeyPair {
-        type PublicKey = PublicKey;
-
-        fn sign(&self, message: &[u8]) -> Vec<u8> {
-            self.0.sign(message).as_bytes().to_owned()
-        }
-    }
-
-    impl TaggedPublicKey for PublicKey {
-        fn verify(&self, msg: &[u8], sig: &[u8]) -> bool {
-            self.verify(&Signature::from_bytes(sig).unwrap(), msg)
         }
     }
 }

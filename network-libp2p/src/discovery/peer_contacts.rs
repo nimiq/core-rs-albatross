@@ -12,7 +12,7 @@ use libp2p::{
     Multiaddr, PeerId,
 };
 use nimiq_network_interface::peer_info::Services;
-use nimiq_utils::tagged_signing::{TaggedKeypair, TaggedSignable, TaggedSignature};
+use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSignature};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 

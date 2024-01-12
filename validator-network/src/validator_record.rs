@@ -10,14 +10,13 @@ where
     const TAG: u8 = 0x03;
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(bound = "TPeerId: Serialize + Deserialize")]
 pub struct ValidatorRecord<TPeerId>
 where
     TPeerId: Serialize + Deserialize,
 {
     pub peer_id: TPeerId,
-    // TODO: other info, like public key?
 }
 
 impl<TPeerId> ValidatorRecord<TPeerId>
