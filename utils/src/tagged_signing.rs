@@ -48,7 +48,7 @@ where
     TSignable: TaggedSignable,
     TScheme: TaggedKeyPair,
 {
-    data: Vec<u8>,
+    signature: Vec<u8>,
 
     _tagged: PhantomData<TSignable>,
     _scheme: PhantomData<TScheme>,
@@ -60,7 +60,7 @@ where
     TScheme: TaggedKeyPair,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.data == other.data
+        self.signature == other.signature
     }
 }
 
@@ -76,20 +76,20 @@ where
     TSignable: TaggedSignable,
     TScheme: TaggedKeyPair,
 {
-    pub fn from_bytes(data: Vec<u8>) -> Self {
+    pub fn from_bytes(signature: Vec<u8>) -> Self {
         Self {
-            data,
+            signature,
             _tagged: PhantomData,
             _scheme: PhantomData,
         }
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        &self.data
+        &self.signature
     }
 
     pub fn tagged_verify(&self, message: &TSignable, public_key: &TScheme::PublicKey) -> bool {
-        public_key.verify(&message.message_data(), &self.data)
+        public_key.verify(&message.message_data(), &self.signature)
     }
 }
 
@@ -99,7 +99,7 @@ where
     TScheme: TaggedKeyPair,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.data.fmt(f)
+        self.signature.fmt(f)
     }
 }
 
@@ -109,7 +109,7 @@ where
     TScheme: TaggedKeyPair,
 {
     fn as_ref(&self) -> &[u8] {
-        &self.data
+        &self.signature
     }
 }
 
@@ -221,12 +221,13 @@ mod tests {
 
         // First of all the signatures should be different. But the would anyway for non-deterministic signature
         // schemes.
-        assert_ne!(sig1.data, sig2.data);
+        assert_ne!(sig1.signature, sig2.signature);
 
         // To even simulate a replay attack, we need to first craft new `TaggedSignature`s with correct types.
         // Otherwise otherwise the compiler will already prevent this ;)
-        let sig1_replayed = TaggedSignature::<AnotherMessage, TestKeypair>::from_bytes(sig1.data);
-        let sig2_replayed = TaggedSignature::<Message, TestKeypair>::from_bytes(sig2.data);
+        let sig1_replayed =
+            TaggedSignature::<AnotherMessage, TestKeypair>::from_bytes(sig1.signature);
+        let sig2_replayed = TaggedSignature::<Message, TestKeypair>::from_bytes(sig2.signature);
 
         // But even though we signed messages that serialize to the same data, the signature of one message must not
         // verify the other message.
