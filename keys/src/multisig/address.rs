@@ -1,9 +1,13 @@
 use itertools::Itertools;
+#[cfg(feature = "serde-derive")]
 use nimiq_hash::Blake2bHasher;
+#[cfg(feature = "serde-derive")]
 use nimiq_utils::merkle::compute_root_from_content;
 
 use super::public_key::DelinearizedPublicKey;
-use crate::{Address, PublicKey};
+#[cfg(feature = "serde-derive")]
+use crate::Address;
+use crate::PublicKey;
 
 /// Generates all possible k-of-k multisig addresses (k = `num_signers`) from the list of `public_keys`.
 pub fn combine_public_keys(public_keys: Vec<PublicKey>, num_signers: usize) -> Vec<PublicKey> {
