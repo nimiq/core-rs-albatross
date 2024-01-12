@@ -6,11 +6,18 @@
 //!
 
 use std::{
+    fmt,
     io::{Cursor, Write},
     marker::PhantomData,
 };
 
 use nimiq_serde::{Deserialize, Serialize};
+use serde::{
+    de::{Error, SeqAccess, Visitor},
+    ser::SerializeStruct,
+};
+
+const FIELDS: &[&str] = &["tag", "record", "signature"];
 
 /// A trait for objects that can be signed. You have to choose an unique `TAG` that is used as prefix for
 /// the message that will be signed. This is used to avoid replay attacks.
@@ -122,14 +129,121 @@ pub trait TaggedKeyPair: Sized {
     where
         TSignable: TaggedSignable,
     {
-        let data = self.sign(&message.message_data());
+        let signature = self.sign(&message.message_data());
 
-        TaggedSignature::from_bytes(data)
+        TaggedSignature::from_bytes(signature)
     }
 }
 
 pub trait TaggedPublicKey {
     fn verify(&self, msg: &[u8], sig: &[u8]) -> bool;
+}
+
+#[derive(Clone)]
+pub struct TaggedSigned<TSignable, TScheme>
+where
+    TSignable: TaggedSignable,
+    TScheme: TaggedKeyPair,
+{
+    pub record: TSignable,
+    pub signature: TaggedSignature<TSignable, TScheme>,
+}
+
+impl<TSignable, TScheme> TaggedSigned<TSignable, TScheme>
+where
+    TSignable: TaggedSignable,
+    TScheme: TaggedKeyPair,
+{
+    /// Verifies the signature
+    pub fn verify(&self, public_key: &TScheme::PublicKey) -> bool {
+        public_key.verify(&self.record.message_data(), self.signature.as_bytes())
+    }
+
+    /// Gets the inner record tag
+    pub fn get_tag(&self) -> u8 {
+        TSignable::TAG
+    }
+
+    /// Peeks the tag from a buffer
+    pub fn peek_tag(buffer: &[u8]) -> Option<u8> {
+        // Since the record is the first element, we can assume the tag is the first thing
+        u8::deserialize_from_vec(buffer).ok()
+    }
+}
+
+impl<TSignable, TScheme> serde::Serialize for TaggedSigned<TSignable, TScheme>
+where
+    TSignable: TaggedSignable,
+    TScheme: TaggedKeyPair,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state: <S as serde::Serializer>::SerializeStruct =
+            serializer.serialize_struct("TaggedSigned", FIELDS.len())?;
+        state.serialize_field(FIELDS[0], &self.get_tag())?;
+        state.serialize_field(FIELDS[1], &self.record)?;
+        state.serialize_field(FIELDS[2], &self.signature)?;
+        state.end()
+    }
+}
+
+struct TaggedSignedVisitor<TSignable, TScheme>
+where
+    TSignable: TaggedSignable,
+    TScheme: TaggedKeyPair,
+{
+    keypair: PhantomData<TScheme>,
+    record: PhantomData<TSignable>,
+}
+
+impl<'de, TSignable, TScheme> Visitor<'de> for TaggedSignedVisitor<TSignable, TScheme>
+where
+    TSignable: TaggedSignable + Deserialize,
+    TScheme: TaggedKeyPair,
+{
+    type Value = TaggedSigned<TSignable, TScheme>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("struct TaggedSigned")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let _tag: u8 = seq
+            .next_element()?
+            .ok_or_else(|| A::Error::invalid_length(0, &self))?;
+        let record: TSignable = seq
+            .next_element()?
+            .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+        let signature: TaggedSignature<TSignable, TScheme> = seq
+            .next_element()?
+            .ok_or_else(|| A::Error::invalid_length(2, &self))?;
+        Ok(TaggedSigned { record, signature })
+    }
+}
+
+impl<'de, TSignable, TScheme> serde::Deserialize<'de> for TaggedSigned<TSignable, TScheme>
+where
+    TSignable: TaggedSignable + Deserialize,
+    TScheme: TaggedKeyPair,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_struct(
+            "TaggedSigned",
+            FIELDS,
+            TaggedSignedVisitor {
+                keypair: PhantomData,
+                record: PhantomData,
+            },
+        )
+    }
 }
 
 #[cfg(test)]

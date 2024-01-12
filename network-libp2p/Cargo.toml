@@ -90,6 +90,7 @@ libp2p = { version = "0.53.2", default-features = false, features = [
 tokio = { version = "1.35", features = ["macros", "rt", "rt-multi-thread", "test-util", "time", "tracing"] }
 
 nimiq-test-log = { workspace = true }
+nimiq-test-utils = { workspace = true }
 
 [features]
 default = ["tokio-time"]

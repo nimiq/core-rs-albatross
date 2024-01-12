@@ -31,3 +31,4 @@ tokio = { version = "1.35", features = ["rt"] }
 tokio-stream = { version = "0.1", features = ["default", "sync"] }
 
 nimiq-serde = { workspace = true }
+nimiq-utils = { workspace = true, features = ["tagged-signing"] }

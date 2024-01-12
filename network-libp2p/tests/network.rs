@@ -6,6 +6,7 @@ use libp2p::{
     identity::Keypair,
     multiaddr::{multiaddr, Multiaddr},
 };
+use nimiq_bls::KeyPair;
 use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, Topic},
     peer_info::Services,
@@ -15,6 +16,8 @@ use nimiq_network_libp2p::{
     Config, Network,
 };
 use nimiq_test_log::test;
+use nimiq_test_utils::test_rng::test_rng;
+use nimiq_utils::{key_rng::SecureGenerate, tagged_signing::TaggedSignable};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use tokio::time::timeout;
@@ -426,6 +429,10 @@ pub struct TestRecord {
     x: i32,
 }
 
+impl TaggedSignable for TestRecord {
+    const TAG: u8 = 0x54;
+}
+
 #[test(tokio::test)]
 async fn dht_put_and_get() {
     let (net1, net2) = create_connected_networks().await;
@@ -435,9 +442,15 @@ async fn dht_put_and_get() {
 
     let put_record = TestRecord { x: 420 };
 
-    net1.dht_put(b"foo", &put_record).await.unwrap();
+    let mut rng = test_rng(false);
+    let keypair = KeyPair::generate(&mut rng);
 
-    let fetched_record = net2.dht_get::<_, TestRecord>(b"foo").await.unwrap();
+    net1.dht_put(b"foo", &put_record, &keypair).await.unwrap();
+
+    let fetched_record = net2
+        .dht_get::<_, TestRecord, KeyPair>(b"foo")
+        .await
+        .unwrap();
 
     assert_eq!(fetched_record, Some(put_record));
 }

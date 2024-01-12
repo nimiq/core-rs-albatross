@@ -71,8 +71,11 @@ pub async fn create_mock_validator_network(n: usize, dial: bool) -> Vec<MockNetw
 #[cfg(test)]
 pub mod tests {
     use futures::{Stream, StreamExt};
+    use nimiq_keys::{KeyPair, SecureGenerate};
     use nimiq_network_interface::network::{Network, NetworkEvent, SubscribeEvents, Topic};
     use nimiq_test_log::test;
+    use nimiq_test_utils::test_rng::test_rng;
+    use nimiq_utils::tagged_signing::TaggedSignable;
     use serde::{Deserialize, Serialize};
 
     use super::{network::MockNetworkError, MockHub, MockPeerId};
@@ -144,18 +147,27 @@ pub mod tests {
         x: i32,
     }
 
+    impl TaggedSignable for TestRecord {
+        const TAG: u8 = 0x22;
+    }
+
     #[test(tokio::test)]
     async fn dht_put_and_get() {
         let mut hub = MockHub::new();
+        let mut rng = test_rng(false);
         let net1 = hub.new_network();
         let net2 = hub.new_network();
         net1.dial_mock(&net2);
 
         let put_record = TestRecord { x: 420 };
+        let keypair = KeyPair::generate(&mut rng);
 
-        net1.dht_put(b"foo", &put_record).await.unwrap();
+        net1.dht_put(b"foo", &put_record, &keypair).await.unwrap();
 
-        let fetched_record = net2.dht_get::<_, TestRecord>(b"foo").await.unwrap();
+        let fetched_record = net2
+            .dht_get::<_, TestRecord, KeyPair>(b"foo")
+            .await
+            .unwrap();
 
         assert_eq!(fetched_record, Some(put_record));
     }

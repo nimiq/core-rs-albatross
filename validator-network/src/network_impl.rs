@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, error::Error, sync::Arc};
 use async_trait::async_trait;
 use futures::{stream::BoxStream, StreamExt, TryFutureExt};
 use log::warn;
-use nimiq_bls::{lazy::LazyPublicKey, CompressedPublicKey, SecretKey};
+use nimiq_bls::{lazy::LazyPublicKey, CompressedPublicKey, KeyPair, SecretKey};
 use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, Network, SubscribeEvents, Topic},
     request::{Message, Request, RequestCommon},
@@ -12,7 +12,7 @@ use nimiq_serde::{Deserialize, Serialize};
 use parking_lot::RwLock;
 
 use super::{MessageStream, NetworkError, ValidatorNetwork};
-use crate::validator_record::{SignedValidatorRecord, ValidatorRecord};
+use crate::validator_record::ValidatorRecord;
 
 /// Validator Network state
 #[derive(Clone, Debug)]
@@ -77,14 +77,10 @@ where
         public_key: &LazyPublicKey,
     ) -> Result<Option<N::PeerId>, NetworkError<N::Error>> {
         if let Some(record) = network
-            .dht_get::<_, SignedValidatorRecord<N::PeerId>>(public_key.compressed())
+            .dht_get::<_, ValidatorRecord<N::PeerId>, KeyPair>(public_key.compressed())
             .await?
         {
-            if record.verify(&public_key.uncompress().expect("Invalid public key")) {
-                Ok(Some(record.record.peer_id))
-            } else {
-                Ok(None)
-            }
+            Ok(Some(record.peer_id))
         } else {
             Ok(None)
         }
@@ -307,7 +303,7 @@ where
         let peer_id = self.network.get_local_peer_id();
         let record = ValidatorRecord::new(peer_id);
         self.network
-            .dht_put(public_key, &record.sign(secret_key))
+            .dht_put(public_key, &record, &KeyPair::from(*secret_key))
             .await?;
 
         Ok(())

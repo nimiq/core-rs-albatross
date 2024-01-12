@@ -19,6 +19,7 @@ use nimiq_network_interface::{
     },
 };
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
+use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable};
 use parking_lot::{Mutex, RwLock};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -532,10 +533,11 @@ impl Network for MockNetwork {
         // TODO implement
     }
 
-    async fn dht_get<K, V>(&self, k: &K) -> Result<Option<V>, Self::Error>
+    async fn dht_get<K, V, T>(&self, k: &K) -> Result<Option<V>, Self::Error>
     where
         K: AsRef<[u8]> + Send + Sync,
-        V: Deserialize + Send + Sync,
+        V: Deserialize + Send + Sync + TaggedSignable,
+        T: TaggedKeyPair + Send + Sync + Serialize,
     {
         if self.is_connected.load(Ordering::SeqCst) {
             let hub = self.hub.lock();
@@ -550,10 +552,11 @@ impl Network for MockNetwork {
         }
     }
 
-    async fn dht_put<K, V>(&self, k: &K, v: &V) -> Result<(), Self::Error>
+    async fn dht_put<K, V, T>(&self, k: &K, v: &V, _keypair: &T) -> Result<(), Self::Error>
     where
         K: AsRef<[u8]> + Send + Sync,
-        V: Serialize + Send + Sync,
+        V: Serialize + Send + Sync + TaggedSignable + Clone,
+        T: TaggedKeyPair + Send + Sync + Serialize,
     {
         if self.is_connected.load(Ordering::SeqCst) {
             let mut hub = self.hub.lock();

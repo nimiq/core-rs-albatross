@@ -6,6 +6,7 @@ use std::{
 use async_trait::async_trait;
 use futures::stream::BoxStream;
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
+use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable};
 use thiserror::Error;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
@@ -157,16 +158,18 @@ pub trait Network: Send + Sync + Unpin + 'static {
         T: Topic + Sync;
 
     /// Gets a value from the distributed hash table
-    async fn dht_get<K, V>(&self, k: &K) -> Result<Option<V>, Self::Error>
+    async fn dht_get<K, V, T>(&self, k: &K) -> Result<Option<V>, Self::Error>
     where
         K: AsRef<[u8]> + Send + Sync,
-        V: Deserialize + Send + Sync;
+        V: Deserialize + Send + Sync + TaggedSignable,
+        T: TaggedKeyPair + Send + Sync + Serialize;
 
     /// Puts a value to the distributed hash table
-    async fn dht_put<K, V>(&self, k: &K, v: &V) -> Result<(), Self::Error>
+    async fn dht_put<K, V, T>(&self, k: &K, v: &V, keypair: &T) -> Result<(), Self::Error>
     where
         K: AsRef<[u8]> + Send + Sync,
-        V: Serialize + Send + Sync;
+        V: Serialize + Send + Sync + TaggedSignable + Clone,
+        T: TaggedKeyPair + Send + Sync + Serialize;
 
     /// Dials a peer
     async fn dial_peer(&self, peer_id: Self::PeerId) -> Result<(), Self::Error>;

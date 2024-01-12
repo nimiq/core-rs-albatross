@@ -38,7 +38,7 @@ use libp2p::{
 #[cfg(feature = "tokio-websocket")]
 use libp2p::{dns, tcp, websocket};
 use log::Instrument;
-use nimiq_bls::CompressedPublicKey;
+use nimiq_bls::{CompressedPublicKey, KeyPair};
 use nimiq_network_interface::{
     network::{
         CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, PubsubId,
@@ -52,7 +52,8 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::task_executor::TaskExecutor;
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_validator_network::validator_record::SignedValidatorRecord;
+use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned};
+use nimiq_validator_network::validator_record::ValidatorRecord;
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, oneshot};
 #[cfg(feature = "tokio-time")]
@@ -760,22 +761,28 @@ impl Network {
                                     QueryResult::GetRecord(Ok(GetRecordOk::FoundRecord(
                                         record,
                                     ))) => {
-                                        if let Some(output) = state.dht_gets.remove(&id) {
-                                            // Finish the query. We are only interested in the first result.
-                                            // TODO: Revisit this since we are using a Quorum of 1 to report the
-                                            // record to the application. We may want more but also need a way
-                                            // to verify and select the bests record.
-                                            swarm
-                                                .behaviour_mut()
-                                                .dht
-                                                .query_mut(&id)
-                                                .unwrap()
-                                                .finish();
-                                            if output.send(Ok(record.record.value)).is_err() {
-                                                error!(query_id = ?id, error = "receiver hung up", "could not send get record query result to channel");
+                                        if Self::verify_record(&record.record) {
+                                            if let Some(output) = state.dht_gets.remove(&id) {
+                                                // Finish the query. We are only interested in the first result.
+                                                // TODO: Revisit this since we are using a Quorum of 1 to report the
+                                                // record to the application. We may want more but also need a way
+                                                // to verify and select the bests record.
+                                                swarm
+                                                    .behaviour_mut()
+                                                    .dht
+                                                    .query_mut(&id)
+                                                    .unwrap()
+                                                    .finish();
+                                                if output.send(Ok(record.record.value)).is_err() {
+                                                    error!(query_id = ?id, error = "receiver hung up", "could not send get record query result to channel");
+                                                }
+                                            } else {
+                                                warn!(query_id = ?id, ?step, "GetRecord query result for unknown query ID");
                                             }
                                         } else {
-                                            warn!(query_id = ?id, ?step, "GetRecord query result for unknown query ID");
+                                            warn!(
+                                                "DHT record verification failed: Invalid public key received"
+                                            );
                                         }
                                     }
                                     QueryResult::GetRecord(Ok(
@@ -829,43 +836,15 @@ impl Network {
                                         record: Some(record),
                                     },
                             } => {
-                                if let Ok(compressed_pk) =
-                                    <[u8; 285]>::try_from(record.key.as_ref())
-                                {
-                                    if let Ok(pk) = (CompressedPublicKey {
-                                        public_key: compressed_pk,
-                                    })
-                                    .uncompress()
-                                    // TODO: Move uncompress to caller side
-                                    {
-                                        if let Ok(signed_record) =
-                                            SignedValidatorRecord::<PeerId>::deserialize_from_vec(
-                                                &record.value,
-                                            )
-                                        {
-                                            if signed_record.verify(&pk) {
-                                                if swarm
-                                                    .behaviour_mut()
-                                                    .dht
-                                                    .store_mut()
-                                                    .put(record)
-                                                    .is_ok()
-                                                {
-                                                    return;
-                                                } else {
-                                                    error!("Could not store record in DHT record store");
-                                                    return;
-                                                };
-                                            } else {
-                                                warn!(public_key = %pk, "DHT record signature verification failed. Record public key");
-                                                return;
-                                            }
-                                        }
+                                if Self::verify_record(&record) {
+                                    if swarm.behaviour_mut().dht.store_mut().put(record).is_err() {
+                                        error!("Could not store record in DHT record store");
                                     }
+                                } else {
+                                    warn!(
+                                        "DHT record verification failed: Invalid public key received"
+                                    );
                                 }
-                                warn!(
-                                    "DHT record verification failed: Invalid public key received"
-                                );
                             }
                             kad::Event::ModeChanged { new_mode } => {
                                 debug!(%new_mode, "DHT mode changed");
@@ -1728,6 +1707,36 @@ impl Network {
         }
     }
 
+    fn verify_record(record: &Record) -> bool {
+        if let Some(tag) = TaggedSigned::<ValidatorRecord<PeerId>, KeyPair>::peek_tag(&record.value)
+        {
+            match tag {
+                ValidatorRecord::<PeerId>::TAG => {
+                    if let Ok(validator_record) =
+                        TaggedSigned::<ValidatorRecord<PeerId>, KeyPair>::deserialize_from_vec(
+                            &record.value,
+                        )
+                    {
+                        // In this type of messages we assume the record key is also the public key used to verify these records
+                        if let Ok(compressed_pk) =
+                            CompressedPublicKey::deserialize_from_vec(record.key.as_ref())
+                        {
+                            if let Ok(pk) = compressed_pk.uncompress() {
+                                return validator_record.verify(&pk);
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    log::error!(tag, "DHT invalid record tag received");
+                }
+            }
+        }
+
+        // If we arrived here, it's because something failed in the record verification
+        false
+    }
+
     /// Gets the number of connected peers
     pub fn peer_count(&self) -> usize {
         self.connected_peers.read().len()
@@ -2124,10 +2133,11 @@ impl NetworkInterface for Network {
             .expect("Failed to send reported message validation result: receiver hung up");
     }
 
-    async fn dht_get<K, V>(&self, k: &K) -> Result<Option<V>, Self::Error>
+    async fn dht_get<K, V, T>(&self, k: &K) -> Result<Option<V>, Self::Error>
     where
         K: AsRef<[u8]> + Send + Sync,
-        V: Deserialize + Send + Sync,
+        V: Deserialize + Send + Sync + TaggedSignable,
+        T: TaggedKeyPair + Send + Sync + Serialize,
     {
         let (output_tx, output_rx) = oneshot::channel();
         self.action_tx
@@ -2139,21 +2149,30 @@ impl NetworkInterface for Network {
             .await?;
 
         let data = output_rx.await??;
-        Ok(Some(Deserialize::deserialize_from_vec(&data)?))
+        // Now decode the signed record and returned the tagged signable record
+        let signed_record: TaggedSigned<V, T> = Deserialize::deserialize_from_vec(&data)?;
+        Ok(Some(signed_record.record))
     }
 
-    async fn dht_put<K, V>(&self, k: &K, v: &V) -> Result<(), Self::Error>
+    async fn dht_put<K, V, T>(&self, k: &K, v: &V, keypair: &T) -> Result<(), Self::Error>
     where
         K: AsRef<[u8]> + Send + Sync,
-        V: Serialize + Send + Sync,
+        V: Serialize + Send + Sync + TaggedSignable + Clone,
+        T: TaggedKeyPair + Send + Sync + Serialize,
     {
+        // Sign the record before transmitting it to the swarm
+        let signature = keypair.tagged_sign(v);
+        let signed_record = TaggedSigned {
+            record: v.clone(),
+            signature,
+        };
         let (output_tx, output_rx) = oneshot::channel();
 
         self.action_tx
             .clone()
             .send(NetworkAction::DhtPut {
                 key: k.as_ref().to_owned(),
-                value: v.serialize_to_vec(),
+                value: signed_record.serialize_to_vec(),
                 output: output_tx,
             })
             .await?;
