@@ -325,7 +325,7 @@ impl Network {
     fn new_transport(
         keypair: &Keypair,
         memory_transport: bool,
-        tls: &Option<TlsConfig>,
+        tls: Option<&TlsConfig>,
     ) -> std::io::Result<Boxed<(PeerId, StreamMuxerBox)>> {
         if memory_transport {
             // Memory transport primary for testing
@@ -349,6 +349,8 @@ impl Network {
                 transport
                     .set_tls_config(websocket::tls::Config::new(priv_key, certificates).unwrap());
             }
+            #[cfg(not(feature = "tokio-websocket"))]
+            let _ = tls; // silence unused variable warning
 
             #[cfg(feature = "tokio-websocket")]
             let transport = transport.or_transport(MemoryTransport::default());
@@ -410,7 +412,7 @@ impl Network {
     ) -> Swarm<behaviour::Behaviour> {
         let keypair = config.keypair.clone();
         let transport =
-            Self::new_transport(&keypair, config.memory_transport, &config.tls).unwrap();
+            Self::new_transport(&keypair, config.memory_transport, config.tls.as_ref()).unwrap();
 
         let behaviour =
             behaviour::Behaviour::new(config, contacts, peer_score_params, force_dht_server_mode);
