@@ -1,6 +1,5 @@
 use std::ops::RangeInclusive;
 
-use nimiq_utils::math::log2;
 use thiserror::Error;
 
 use crate::contribution::AggregatableContribution;
@@ -50,7 +49,7 @@ impl BinomialPartitioner {
         let num_levels = match num_ids {
             0 => panic!("num_ids must be greater than 0"),
             1 => 1,
-            n => log2(n - 1) + 2,
+            n => (n - 1).ilog2() as usize + 2,
         };
         assert!(node_id < num_ids);
         Self {
@@ -306,7 +305,7 @@ mod tests {
         let partitioner = BinomialPartitioner::new(node_id, num_ids);
         let second_partitioner = BinomialPartitioner::new(second_node_id, num_ids);
 
-        assert_eq!(partitioner.levels(), log2(num_ids - 1) + 2);
+        assert_eq!(partitioner.levels(), (num_ids - 1).ilog2() as usize + 2);
         let mut total_peers = 1; // In the for loop below we skip level 0 (that always have a peer)
 
         for level in 1..partitioner.levels() {

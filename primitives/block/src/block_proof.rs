@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use nimiq_primitives::policy::Policy;
-use nimiq_utils::math::log2;
 use serde::{Deserialize, Serialize};
 
 use crate::MacroBlock;
@@ -29,7 +28,7 @@ impl BlockInclusionProof {
         // We're done if the election parent is the target or if the block contains an interlink to the target
         while current_hop - 1 > target_number && !hop_contains_target_interlink {
             let previous_block_no = current_hop - 1;
-            let interlink_count = (log2(previous_block_no as usize) as f32).floor() as u32;
+            let interlink_count = previous_block_no.ilog2();
             for i in (1..interlink_count + 1).rev() {
                 let interlink_divider = 2_u32.pow(i);
                 let ith_interlink = ((previous_block_no / interlink_divider) as f32).floor()
