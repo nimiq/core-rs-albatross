@@ -3,8 +3,6 @@ use std::{io::Write, ops::Range};
 use nimiq_hash::{Blake2bHash, HashOutput, Hasher, SerializeContent};
 use nimiq_serde::{Deserialize, Serialize};
 
-use crate::math::CeilingDiv;
-
 /// A PartialMerkleProofBuilder can construct sequentially verifiable merkle proofs for a large list of data.
 /// The data can then be split into chunks and each chunk has its own (small) proof.
 /// Each proof can be verified by taking the previous proof's result into account (to minimize the amount of work required).
@@ -20,7 +18,7 @@ impl PartialMerkleProofBuilder {
         if chunk_size == 0 {
             return Err(PartialMerkleProofError::InvalidChunkSize);
         }
-        let num_chunks = hashes.len().ceiling_div(chunk_size);
+        let num_chunks = hashes.len().div_ceil(chunk_size);
         let mut proofs = vec![PartialMerkleProof::empty(hashes.len()); num_chunks];
         PartialMerkleProofBuilder::compute::<H>(hashes, chunk_size, 0..hashes.len(), &mut proofs);
         Ok(proofs)
@@ -55,7 +53,7 @@ impl PartialMerkleProofBuilder {
                 hashes[index].clone()
             }
             len => {
-                let mid = current_range.start + len.ceiling_div(2);
+                let mid = current_range.start + len.div_ceil(2);
                 let left_hash = PartialMerkleProofBuilder::compute::<H>(
                     hashes,
                     chunk_size,
@@ -226,7 +224,7 @@ impl<H: HashOutput> PartialMerkleProof<H> {
                 Ok((false, hashes[current_range.start - index_offset].clone()))
             }
             len => {
-                let mid = current_range.start + len.ceiling_div(2);
+                let mid = current_range.start + len.div_ceil(2);
                 let (proof_node_left, left_hash) = self.compute(
                     hashes,
                     current_range.start..mid,

@@ -17,7 +17,6 @@ use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestError};
 use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
 use nimiq_transaction::historic_transaction::HistoricTransaction;
-use nimiq_utils::math::CeilingDiv;
 use parking_lot::RwLock;
 use thiserror::Error;
 
@@ -401,7 +400,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
 
             // Queue history chunks for the given batch set for download.
             let history_chunk_ids: Vec<(HistoryChunkRequest, Option<_>)> = (start_txn / CHUNK_SIZE
-                ..((batch_set.history_len.size() as usize).ceiling_div(CHUNK_SIZE)))
+                ..((batch_set.history_len.size() as usize).div_ceil(CHUNK_SIZE)))
                 .map(|i| {
                     let chunk_index = (previous_history_size / CHUNK_SIZE + i) as u64;
                     (

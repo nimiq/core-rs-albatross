@@ -4,8 +4,6 @@ use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, HashOutput, Hasher, SerializeContent};
 use nimiq_serde::{Deserialize, Serialize};
 
-use crate::math::CeilingDiv;
-
 /// An IncrementalMerkleProofBuilder can construct sequentially verifiable merkle proofs for a large list of data.
 /// The main difference to the PartialMerkleProofBuilder is that a different tree generation algorithm is used
 /// that is optimized to incrementally add items to the tree.
@@ -119,7 +117,7 @@ impl<H: HashOutput> IncrementalMerkleProofBuilder<H> {
     }
 
     pub fn chunks(&self) -> Vec<IncrementalMerkleProof<H>> {
-        let num_chunks = self.len().ceiling_div(self.chunk_size);
+        let num_chunks = self.len().div_ceil(self.chunk_size);
         let mut chunks = Vec::with_capacity(num_chunks);
         for i in 0..num_chunks {
             chunks.push(self.chunk(i).unwrap());
@@ -345,7 +343,7 @@ impl<H: HashOutput> IncrementalMerkleProof<H> {
 
             level_leftmost /= 2;
             level_rightmost /= 2;
-            level_len = level_len.ceiling_div(2);
+            level_len = level_len.div_ceil(2);
             current_position = (level_leftmost / 2) * 2;
             level_offset = current_position;
         }

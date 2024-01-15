@@ -24,7 +24,7 @@ use nimiq_test_utils::{
 };
 use nimiq_transaction::ExecutedTransaction;
 use nimiq_transaction_builder::TransactionBuilder;
-use nimiq_utils::{math::CeilingDiv, time::OffsetTime};
+use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
 use tempfile::tempdir;
 
@@ -992,7 +992,7 @@ fn it_can_consume_all_validator_deposit() {
     produce_macro_blocks(
         &producer,
         &blockchain,
-        macro_blocks_to_produce.ceiling_div(Policy::blocks_per_batch()) as usize,
+        macro_blocks_to_produce.div_ceil(Policy::blocks_per_batch()) as usize,
     );
 
     // This is an invalid tx since the recipient type doesn't match.
@@ -1205,7 +1205,7 @@ fn it_can_revert_failed_delete_validator() {
     produce_macro_blocks(
         &producer,
         &blockchain,
-        macro_blocks_to_produce.ceiling_div(Policy::blocks_per_batch()) as usize,
+        macro_blocks_to_produce.div_ceil(Policy::blocks_per_batch()) as usize,
     );
 
     // This is an invalid tx since the recipient type doesn't match.

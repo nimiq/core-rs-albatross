@@ -7,8 +7,6 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
-use crate::math::CeilingDiv;
-
 pub mod incremental;
 pub mod partial;
 
@@ -40,7 +38,7 @@ pub fn compute_root_from_slice<T: HashOutput>(values: &[T]) -> Cow<T> {
             return Cow::Borrowed(&values[0]);
         }
         len => {
-            let mid = len.ceiling_div(2);
+            let mid = len.div_ceil(2);
             let left_hash = compute_root_from_slice::<T>(&values[..mid]);
             let right_hash = compute_root_from_slice::<T>(&values[mid..]);
             hasher.hash(left_hash.deref());
@@ -87,7 +85,7 @@ impl<H: HashOutput> MerklePath<H> {
                 return (hash.eq(leaf_hash), hash);
             }
             len => {
-                let mid = len.ceiling_div(2);
+                let mid = len.div_ceil(2);
                 let (contains_left, left_hash) =
                     MerklePath::<H>::compute::<D, T>(&values[..mid], leaf_hash, path);
                 let (contains_right, right_hash) =
@@ -146,7 +144,7 @@ impl<H: HashOutput> MerklePath<H> {
     /// Compress "left" field of every node in the MerklePath to a bit vector.
     fn compress(&self) -> Vec<u8> {
         // There are 3 items in the MerkleProofOperation enum, so we need 2 bits to encode them.
-        let num_bytes = self.nodes.len().ceiling_div(8);
+        let num_bytes = self.nodes.len().div_ceil(8);
         let mut left_bits: Vec<u8> = vec![0; num_bytes];
         for (i, node) in self.nodes.iter().enumerate() {
             if node.left {
@@ -212,7 +210,7 @@ impl<'de, H: HashOutput> Visitor<'de> for MerklePathVisitor<H> {
             return Ok(MerklePath::empty());
         }
         let count = count as usize;
-        let left_bits_size = count.ceiling_div(8);
+        let left_bits_size = count.div_ceil(8);
         let left_bits: Vec<u8> = seq
             .next_element()?
             .ok_or_else(|| A::Error::invalid_length(1, &self))?;
@@ -399,7 +397,7 @@ impl<H: HashOutput> MerkleProof<H> {
                 let mut sub_path: Vec<H> = Vec::new();
                 let mut sub_operations: Vec<MerkleProofOperation> = Vec::new();
 
-                let mid = len.ceiling_div(2);
+                let mid = len.div_ceil(2);
                 let (contains_left, left_hash) = MerkleProof::<H>::compute(
                     &hashes[..mid],
                     hashes_to_proof,
@@ -516,7 +514,7 @@ impl<H: HashOutput> MerkleProof<H> {
     /// Compress vector of MerkleProofOperations in the MerkleProof to a bit vector.
     fn compress(&self) -> Vec<u8> {
         // There are 3 items in the MerkleProofOperation enum, so we need 2 bits to encode them.
-        let num_bytes = self.operations.len().ceiling_div(4);
+        let num_bytes = self.operations.len().div_ceil(4);
         let mut operation_bits: Vec<u8> = vec![0; num_bytes];
         for (i, operation) in self.operations.iter().enumerate() {
             let op = *operation as u8; // By definition, this can only take up to two bits.
@@ -574,7 +572,7 @@ impl<'de, H: HashOutput> Visitor<'de> for MerkleProofVisitor<H> {
             .next_element()?
             .ok_or_else(|| A::Error::invalid_length(0, &self))?;
         let count = count as usize;
-        let operations_size = count.ceiling_div(4);
+        let operations_size = count.div_ceil(4);
         let operation_bits: Vec<u8> = seq
             .next_element()?
             .ok_or_else(|| A::Error::invalid_length(1, &self))?;

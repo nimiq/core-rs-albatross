@@ -39,7 +39,7 @@ use nimiq_test_utils::{
     mock_node::MockNode,
     node::TESTING_BLS_CACHE_MAX_CAPACITY,
 };
-use nimiq_utils::{math::CeilingDiv, time::OffsetTime};
+use nimiq_utils::time::OffsetTime;
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::mpsc::{self, Sender};
 use tokio_stream::wrappers::ReceiverStream;
@@ -327,7 +327,7 @@ async fn can_sync_state() {
     assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
     let size = mock_node.blockchain.read().state.accounts.size();
-    let num_chunks = size.ceiling_div(Policy::state_chunks_max_size() as u64);
+    let num_chunks = size.div_ceil(Policy::state_chunks_max_size() as u64);
     for i in 0..num_chunks {
         info!("Applying chunk #{}", i);
         assert!(
