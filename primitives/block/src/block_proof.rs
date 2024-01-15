@@ -31,14 +31,13 @@ impl BlockInclusionProof {
             let interlink_count = previous_block_no.ilog2();
             for i in (1..interlink_count + 1).rev() {
                 let interlink_divider = 2_u32.pow(i);
-                let ith_interlink = ((previous_block_no / interlink_divider) as f32).floor()
-                    * interlink_divider as f32;
-                if ith_interlink == target_number as f32 {
+                let ith_interlink = (previous_block_no / interlink_divider) * interlink_divider;
+                if ith_interlink == target_number {
                     hop_contains_target_interlink = true;
                     break;
                 }
-                if ith_interlink > target_number as f32 {
-                    current_hop = ith_interlink as u32;
+                if ith_interlink > target_number {
+                    current_hop = ith_interlink;
                     hops.push(current_hop);
                     break;
                 }
