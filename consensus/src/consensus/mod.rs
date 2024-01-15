@@ -27,10 +27,7 @@ use self::consensus_proxy::ConsensusProxy;
 use self::remote_event_dispatcher::RemoteEventDispatcher;
 use crate::{
     consensus::head_requests::{HeadRequests, HeadRequestsResult},
-    messages::{
-        RequestBlock, RequestHead, RequestMacroChain, RequestMissingBlocks,
-        RequestValidityWindowStart,
-    },
+    messages::{RequestBlock, RequestHead, RequestMacroChain, RequestMissingBlocks},
     sync::{syncer::LiveSyncPushEvent, syncer_proxy::SyncerProxy},
 };
 #[cfg(feature = "full")]
@@ -220,9 +217,6 @@ impl<N: Network> Consensus<N> {
                 executor.exec(Box::pin(request_handler(network, stream, blockchain)));
 
                 let stream = network.receive_requests::<RequestBlocksProof>();
-                executor.exec(Box::pin(request_handler(network, stream, blockchain)));
-
-                let stream = network.receive_requests::<RequestValidityWindowStart>();
                 executor.exec(Box::pin(request_handler(network, stream, blockchain)));
             }
             BlockchainProxy::Light(_) => {}

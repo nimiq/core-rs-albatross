@@ -19,7 +19,7 @@ use nimiq_consensus::{
 };
 use nimiq_database::volatile::VolatileDatabase;
 use nimiq_network_interface::{network::Network, request::RequestCommon};
-use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
+use nimiq_network_mock::{MockHub, MockId, MockPeerId};
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
@@ -103,7 +103,6 @@ async fn send_single_micro_block_to_block_queue() {
         block_queue,
         bls_cache(),
     );
-
     let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
     let mock_node =
@@ -261,7 +260,6 @@ async fn send_micro_blocks_out_of_order() {
         block_queue,
         bls_cache(),
     );
-
     let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
     let mock_node =
@@ -356,7 +354,6 @@ async fn send_invalid_block() {
     );
 
     let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
-
     let mut mock_node =
         MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());
     network.dial_mock(&mock_node.network);
@@ -461,7 +458,6 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
         block_queue,
         bls_cache(),
     );
-
     let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
     let mut mock_node =
@@ -548,7 +544,6 @@ async fn request_missing_blocks_across_macro_block() {
         block_queue,
         bls_cache(),
     );
-
     let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
 
     let mut mock_node =
@@ -691,7 +686,6 @@ async fn put_peer_back_into_sync_mode() {
         block_queue,
         bls_cache(),
     );
-
     let mut syncer = Syncer::new(live_sync, history_sync);
 
     let mock_node =

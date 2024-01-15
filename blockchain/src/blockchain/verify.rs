@@ -166,30 +166,28 @@ impl Blockchain {
         }
 
         // Verify the history root when we have the full transaction history of the epoch.
-        if state.can_verify_history {
-            let real_history_root = self
-                .history_store
-                .get_history_tree_root(block.epoch_number(), Some(txn))
-                .ok_or_else(|| {
-                    error!(
-                        %block,
-                        epoch_number = block.epoch_number(),
-                        reason = "failed to fetch history tree root for epoch from store",
-                        "Rejecting block"
-                    );
-                    PushError::InvalidBlock(BlockError::InvalidHistoryRoot)
-                })?;
-
-            if *block.history_root() != real_history_root {
-                warn!(
+        let real_history_root = self
+            .history_store
+            .get_history_tree_root(block.epoch_number(), Some(txn))
+            .ok_or_else(|| {
+                error!(
                     %block,
-                    block_root = %block.history_root(),
-                    history_root = %real_history_root,
-                    reason = "History root doesn't match real history root",
+                    epoch_number = block.epoch_number(),
+                    reason = "failed to fetch history tree root for epoch from store",
                     "Rejecting block"
                 );
-                return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
-            }
+                PushError::InvalidBlock(BlockError::InvalidHistoryRoot)
+            })?;
+
+        if *block.history_root() != real_history_root {
+            warn!(
+                %block,
+                block_root = %block.history_root(),
+                history_root = %real_history_root,
+                reason = "History root doesn't match real history root",
+                "Rejecting block"
+            );
+            return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
         }
 
         Ok(())

@@ -60,22 +60,19 @@ impl Blockchain {
                 self.chain_store.clear_revert_infos(txn.raw());
 
                 // Store the transactions and the inherents into the History tree.
-                let mut total_tx_size = 0;
-                if state.can_verify_history {
-                    let hist_txs = HistoricTransaction::from(
-                        self.network_id,
-                        macro_block.header.block_number,
-                        macro_block.header.timestamp,
-                        vec![],
-                        inherents,
-                        vec![],
-                    );
-                    total_tx_size = self
-                        .history_store
-                        .add_to_history(txn.raw(), macro_block.epoch_number(), &hist_txs)
-                        .expect("Failed to store history")
-                        .1
-                };
+                let hist_txs = HistoricTransaction::from(
+                    self.network_id,
+                    macro_block.header.block_number,
+                    macro_block.header.timestamp,
+                    vec![],
+                    inherents,
+                    vec![],
+                );
+                let total_tx_size = self
+                    .history_store
+                    .add_to_history(txn.raw(), macro_block.epoch_number(), &hist_txs)
+                    .expect("Failed to store history")
+                    .1;
 
                 Ok(total_tx_size)
             }
@@ -141,25 +138,22 @@ impl Blockchain {
                 );
 
                 // Store the transactions and the inherents into the History tree.
-                let mut total_tx_size = 0;
-                if state.can_verify_history {
-                    let hist_txs = HistoricTransaction::from(
-                        self.network_id,
-                        micro_block.header.block_number,
-                        micro_block.header.timestamp,
-                        body.transactions.clone(),
-                        inherents,
-                        body.equivocation_proofs
-                            .iter()
-                            .map(|proof| proof.locator())
-                            .collect(),
-                    );
-                    total_tx_size = self
-                        .history_store
-                        .add_to_history(txn.raw(), micro_block.epoch_number(), &hist_txs)
-                        .expect("Failed to store history")
-                        .1
-                };
+                let hist_txs = HistoricTransaction::from(
+                    self.network_id,
+                    micro_block.header.block_number,
+                    micro_block.header.timestamp,
+                    body.transactions.clone(),
+                    inherents,
+                    body.equivocation_proofs
+                        .iter()
+                        .map(|proof| proof.locator())
+                        .collect(),
+                );
+                let total_tx_size = self
+                    .history_store
+                    .add_to_history(txn.raw(), micro_block.epoch_number(), &hist_txs)
+                    .expect("Failed to store history")
+                    .1;
 
                 Ok(total_tx_size)
             }

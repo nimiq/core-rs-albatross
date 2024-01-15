@@ -20,7 +20,7 @@ use nimiq_zkp_component::{
 use parking_lot::RwLock;
 
 #[cfg(feature = "full")]
-use crate::messages::{HistoryChunk, RequestHistoryChunk, ValidityWindowStartResponse};
+use crate::messages::{HistoryChunk, HistoryChunkError, RequestHistoryChunk};
 use crate::{
     messages::{BlockError, Checkpoint},
     sync::{peer_list::PeerList, sync_queue::SyncQueue, syncer::MacroSync},
@@ -163,23 +163,18 @@ pub struct LightMacroSync<TNetwork: Network> {
             ),
         >,
     >,
-    #[cfg(feature = "full")]
-    /// The stream for validity window start proofs
-    pub(crate) validity_window_start: FuturesUnordered<
-        BoxFuture<
-            'static,
-            (
-                Result<ValidityWindowStartResponse, RequestError>,
-                TNetwork::PeerId,
-            ),
-        >,
-    >,
+
     #[cfg(feature = "full")]
     /// The validity (history chunks) queue
     pub(crate) validity_queue: SyncQueue<
         TNetwork,
         RequestHistoryChunk,
-        (RequestHistoryChunk, HistoryChunk, TNetwork::PeerId),
+        (
+            RequestHistoryChunk,
+            Result<HistoryChunk, HistoryChunkError>,
+            TNetwork::PeerId,
+        ),
+        RequestError,
         (),
     >,
 
@@ -187,8 +182,6 @@ pub struct LightMacroSync<TNetwork: Network> {
     pub(crate) validity_requests: Option<ValidityChunkRequest>,
     /// The peers we are currently syncing with
     pub(crate) syncing_peers: HashSet<TNetwork::PeerId>,
-    /// The latest block number towards which the validity window was fully synced.
-    pub(crate) synced_validity_start: u32,
     /// A vec of all the peers that we succesfully synced with
     pub(crate) synced_validity_peers: Vec<TNetwork::PeerId>,
     /// Minimum distance to light sync in #blocks from the peers head.
@@ -219,16 +212,15 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             PENDING_SIZE,
             move |request, network, peer_id| {
                 async move {
-                    Self::request_validity_window_chunk(
+                    let res = Self::request_validity_window_chunk(
                         network,
                         peer_id,
                         request.epoch_number,
                         request.block_number,
                         request.chunk_index,
                     )
-                    .await
-                    .ok()
-                    .map(|chunk| (request, chunk, peer_id))
+                    .await?;
+                    Ok((request, res, peer_id))
                 }
                 .boxed()
             },
@@ -246,11 +238,8 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             executor: Box::new(executor),
             full_sync_threshold,
             block_headers: Default::default(),
-            #[cfg(feature = "full")]
-            validity_window_start: FuturesUnordered::new(),
             validity_requests: None,
             syncing_peers: HashSet::new(),
-            synced_validity_start: 0,
             #[cfg(feature = "full")]
             validity_queue,
             synced_validity_peers: Vec::new(),

@@ -25,7 +25,4 @@ pub struct BlockchainState {
     pub current_slots: Option<Validators>,
     /// The validator slots for the previous epoch.
     pub previous_slots: Option<Validators>,
-    /// During syncing it can happen that we don't have the full transaction history for the full epoch;
-    /// thus we cannot verify the history root.
-    pub can_verify_history: bool,
 }

@@ -22,14 +22,6 @@ pub trait MacroSync<TPeerId>: Stream<Item = MacroSyncReturn<TPeerId>> + Unpin + 
     fn add_peer(&self, peer_id: TPeerId);
 }
 
-/// Trait that defines how a node synchronizes the transactions from the current validity window
-pub trait ValidityWindowSync<TPeerId>:
-    Stream<Item = ValidityWindowSyncReturn<TPeerId>> + Unpin + Send
-{
-    /// Adds a peer to synchronize the validity window transactions
-    fn add_peer(&mut self, peer_id: TPeerId);
-}
-
 /// Trait that defines how a node synchronizes receiving the blocks the peers are currently
 /// processing.
 /// The expected functionality is that there could be different methods of syncing but they
@@ -63,15 +55,6 @@ pub enum MacroSyncReturn<T> {
     /// Macro Sync returned a good type
     Good(T),
     /// Macro Sync returned an outdated type
-    Outdated(T),
-}
-
-#[derive(Debug, PartialEq, Eq)]
-/// Return type for a `ValidityWindowSync`
-pub enum ValidityWindowSyncReturn<T> {
-    /// Validity Window Sync returned a good type
-    Good(T),
-    /// Validity Window Sync returned an outdated type
     Outdated(T),
 }
 

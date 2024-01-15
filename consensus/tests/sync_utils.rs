@@ -215,8 +215,6 @@ pub async fn sync_two_peers(
         Some(MacroSyncReturn::Good(net1.get_local_peer_id()))
     );
 
-    // TODO check the size of the history store after the validity window sync and verify it has everything we need
-
     let consensus2 = Consensus::new(
         blockchain2_proxy.clone(),
         Arc::clone(&net2),

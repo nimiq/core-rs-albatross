@@ -5,7 +5,7 @@ use std::sync::Arc;
 use nimiq_account::{Account, BlockState, DataStore, ReservedBalance, StakingContract};
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError, ChainInfo, Direction};
-use nimiq_database::TransactionProxy as DBTransaction;
+use nimiq_database::{traits::WriteTransaction, TransactionProxy as DBTransaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::{
@@ -258,34 +258,27 @@ impl Blockchain {
         self.state().accounts.tree.get_missing_range(txn)
     }
 
-    /// Check if all blockchain conditions to run a validator are met.
-    /// These are:
-    /// - can verify/extend history tree
-    /// - can enforce transaction validity window
-    /// The second subsumes the first.
-    /// All conditions are checked against the next block (which potentially hasn't been produced yet).
+    /// Check if we have enough state to check for duplicates during the validity window
     pub fn can_enforce_validity_window(&self) -> bool {
-        if self.state.can_verify_history {
-            // If we are at the genesis block or in the first epoch and we can verify the history,
-            // we can also enforce the validity window.
-            if Policy::epoch_at(self.block_number() + 1) <= 1 {
-                return true;
-            }
-
-            // Since the transaction validity window is smaller than an epoch and we're in epoch 2 or greater,
-            // the subtraction cannot fail.
-            // We then calculate the election block greater or equal to the first validity window block
-            // to be used in `length_at`. Using micro blocks in `length_at` can be tricky as they might be empty
-            // and not occur in the history store at all. Using the election block of the epoch will guarantee
-            // to return the length at the most recent existing block in this epoch.
-            let first_validity_window_block =
-                self.block_number() + 1 - Policy::transaction_validity_window_blocks();
-            let election_block = Policy::election_block_after(first_validity_window_block - 1);
-
-            // Check whether we do have a history tree for the epoch of the first validity window block.
-            // Length at will use the election block or the most recent existing block (in the same epoch).
-            return self.history_store.length_at(election_block, None) > 0;
+        // If we are at the genesis block, we can enforce the validity window
+        if self.block_number() == Policy::genesis_block_number() {
+            true
+        } else {
+            // We can enforce the validity window when our history store root equals our head one.
+            *self.head().history_root()
+                == self
+                    .history_store
+                    .get_history_tree_root(Policy::epoch_at(self.block_number()), None)
+                    .unwrap()
         }
-        false
+    }
+
+    /// Removes the history of a given epoch
+    pub fn remove_epoch_history(&mut self, epoch_number: u32) {
+        let mut txn = self.write_transaction();
+
+        self.history_store.remove_history(&mut txn, epoch_number);
+
+        txn.commit();
     }
 }

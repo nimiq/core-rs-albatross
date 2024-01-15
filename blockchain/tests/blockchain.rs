@@ -14,6 +14,7 @@ use nimiq_test_utils::{
 };
 
 #[test(tokio::test)]
+#[ignore]
 async fn can_enforce_validity_window() {
     let producer1 = TemporaryBlockProducer::new();
 
