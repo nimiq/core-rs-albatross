@@ -11,6 +11,7 @@ use std::{
 
 use futures::{FutureExt, StreamExt};
 use instant::Instant;
+use nimiq_block::Block;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
@@ -19,7 +20,10 @@ use nimiq_primitives::task_executor::TaskExecutor;
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 use tokio::sync::{
     broadcast::{channel as broadcast, Sender as BroadcastSender},
-    mpsc::{channel as mpsc_channel, Receiver as MpscReceiver, Sender as MpscSender},
+    mpsc::{
+        channel as mpsc_channel, error::SendError, Receiver as MpscReceiver, Sender as MpscSender,
+    },
+    oneshot::{error::RecvError, Sender as OneshotSender},
 };
 #[cfg(not(target_family = "wasm"))]
 use tokio::time::{sleep, Sleep};
@@ -70,8 +74,35 @@ pub enum RemoteEvent {
     Placeholder,
 }
 
+/// Different Errors for a failed ResolveBlockRequest.
+#[derive(Debug)]
+pub enum ResolveBlockError<N: Network> {
+    ReceiveError(RecvError),
+    SendError(SendError<ConsensusRequest<N>>),
+}
+
+/// Requests the consensus to resolve a given `block_hash` at a specific `block_height`.
+/// Additionally the sender of a response channel is presented and a number of peers who are
+/// well suited to provide the required data.
+pub struct ResolveBlockRequest<N: Network> {
+    /// Block number of the to be resolved block.
+    block_number: u32,
+
+    /// Block hash of the to be resolved block.
+    block_hash: Blake2bHash,
+
+    /// The id of the message referencing the block being requested here. These do include peers
+    /// which should have knowledge of the block. They will be used to resolve the block.
+    pubsub_id: N::PubsubId,
+
+    /// Sender to a oneshot channel where the response to the request is being awaited.
+    response_sender: OneshotSender<Result<Block, ResolveBlockError<N>>>,
+}
+
 /// Enumeration of all ConsensusRequests available.
-pub enum ConsensusRequest {}
+pub enum ConsensusRequest<N: Network> {
+    ResolveBlock(ResolveBlockRequest<N>),
+}
 
 pub struct Consensus<N: Network> {
     pub blockchain: BlockchainProxy,
@@ -100,7 +131,10 @@ pub struct Consensus<N: Network> {
     /// The consensus itself is chosen, even though for the initial single request a structure
     /// somewhere deeper down the call stack would be adequate, as other requests may require different
     /// structures. Putting it here seemed to be the most flexible.
-    requests: (MpscSender<ConsensusRequest>, MpscReceiver<ConsensusRequest>),
+    requests: (
+        MpscSender<ConsensusRequest<N>>,
+        MpscReceiver<ConsensusRequest<N>>,
+    ),
 
     zkp_proxy: ZKPComponentProxy<N>,
 }
@@ -436,7 +470,11 @@ impl<N: Network> Future for Consensus<N> {
         }
 
         // 3. Check if a ConsensusRequest was received
-        while let Poll::Ready(Some(_request)) = self.requests.1.poll_recv(cx) {}
+        while let Poll::Ready(Some(request)) = self.requests.1.poll_recv(cx) {
+            match request {
+                ConsensusRequest::ResolveBlock(_resolve_block) => {}
+            }
+        }
 
         // 4. Update timer and poll it so the task gets woken when the timer runs out (at the latest)
         // The timer itself running out (producing an Instant) is of no interest to the execution. This poll method
