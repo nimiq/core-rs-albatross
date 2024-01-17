@@ -10,6 +10,7 @@ use nimiq_network_interface::{
 };
 use nimiq_serde::{Deserialize, Serialize};
 use parking_lot::RwLock;
+use time::OffsetDateTime;
 
 use super::{MessageStream, NetworkError, ValidatorNetwork};
 use crate::validator_record::ValidatorRecord;
@@ -301,7 +302,10 @@ where
         secret_key: &SecretKey,
     ) -> Result<(), Self::Error> {
         let peer_id = self.network.get_local_peer_id();
-        let record = ValidatorRecord::new(peer_id);
+        let record = ValidatorRecord::new(
+            peer_id,
+            (OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000) as u64,
+        );
         self.network
             .dht_put(public_key, &record, &KeyPair::from(*secret_key))
             .await?;

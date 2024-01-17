@@ -5,6 +5,7 @@ use libp2p::{
     gossipsub,
     identity::Keypair,
     multiaddr::{multiaddr, Multiaddr},
+    PeerId,
 };
 use nimiq_bls::KeyPair;
 use nimiq_network_interface::{
@@ -18,6 +19,7 @@ use nimiq_network_libp2p::{
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng::test_rng;
 use nimiq_utils::{key_rng::SecureGenerate, tagged_signing::TaggedSignable};
+use nimiq_validator_network::validator_record::ValidatorRecord;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use tokio::time::timeout;
@@ -424,7 +426,7 @@ async fn connections_are_properly_closed_peers() {
     assert_eq!(net2.get_peers(), &[]);
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, PartialOrd)]
 pub struct TestRecord {
     x: i32,
 }
@@ -435,20 +437,28 @@ impl TaggedSignable for TestRecord {
 
 #[test(tokio::test)]
 async fn dht_put_and_get() {
-    let (net1, net2) = create_connected_networks().await;
+    // We have a quorum of 3 for getting DHT records, so we need at least 3 peers
+    let networks = create_network_with_n_peers(3).await;
+    let net1 = &networks[0];
+    let net2 = &networks[1];
 
     // FIXME: Add delay while networks share their addresses
     tokio::time::sleep(Duration::from_secs(2)).await;
 
-    let put_record = TestRecord { x: 420 };
+    let put_record = ValidatorRecord {
+        peer_id: net1.get_local_peer_id(),
+        timestamp: 0x42u64,
+    };
 
     let mut rng = test_rng(false);
     let keypair = KeyPair::generate(&mut rng);
 
-    net1.dht_put(b"foo", &put_record, &keypair).await.unwrap();
+    let key = keypair.public_key.compress();
+
+    net1.dht_put(&key, &put_record, &keypair).await.unwrap();
 
     let fetched_record = net2
-        .dht_get::<_, TestRecord, KeyPair>(b"foo")
+        .dht_get::<_, ValidatorRecord<PeerId>, KeyPair>(&key)
         .await
         .unwrap();
 

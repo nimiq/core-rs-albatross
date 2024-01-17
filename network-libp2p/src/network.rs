@@ -51,10 +51,11 @@ use nimiq_network_interface::{
     },
 };
 use nimiq_primitives::task_executor::TaskExecutor;
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned};
 use nimiq_validator_network::validator_record::ValidatorRecord;
 use parking_lot::{Mutex, RwLock};
+use thiserror::Error;
 use tokio::sync::{broadcast, mpsc, oneshot};
 #[cfg(feature = "tokio-time")]
 use tokio::time::{Instant, Interval};
@@ -173,6 +174,7 @@ impl<P: Clone> ValidateMessage<P> {
     }
 }
 
+/// DHT bootstrap state
 #[derive(Default, PartialEq)]
 enum DhtBootStrapState {
     /// DHT bootstrap has been started
@@ -184,12 +186,96 @@ enum DhtBootStrapState {
     Completed,
 }
 
+/// Enum over all of the possible DHT records values
+#[derive(Clone, PartialEq)]
+enum DhtRecord {
+    /// Validator record with its publisher Peer ID,
+    /// the decoded validator record and the original serialized record.
+    Validator(PeerId, ValidatorRecord<PeerId>, Record),
+}
+
+impl DhtRecord {
+    fn get_signed_record(self) -> Record {
+        match self {
+            Self::Validator(_, _, signed_record) => signed_record,
+        }
+    }
+
+    fn get_peer_id(&self) -> PeerId {
+        match self {
+            Self::Validator(peer_id, _, _) => *peer_id,
+        }
+    }
+
+    fn get_timestamp(&self) -> u64 {
+        match self {
+            Self::Validator(_, record, _) => record.timestamp,
+        }
+    }
+}
+
+impl PartialOrd for DhtRecord {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.get_timestamp().partial_cmp(&other.get_timestamp())
+    }
+}
+
+/// DHT record decoding errors
+#[derive(Debug, Error)]
+enum DhtRecordError {
+    /// Tag is unknown
+    #[error("Unknown record tag")]
+    UnknownTag,
+    /// Deserialization error
+    #[error("Deserialization error: {0}")]
+    DeserializeError(#[from] DeserializeError),
+}
+
+impl TryFrom<&Record> for DhtRecord {
+    type Error = DhtRecordError;
+    fn try_from(record: &Record) -> Result<Self, Self::Error> {
+        if let Some(tag) = TaggedSigned::<ValidatorRecord<PeerId>, KeyPair>::peek_tag(&record.value)
+        {
+            match tag {
+                ValidatorRecord::<PeerId>::TAG => {
+                    let validator_record =
+                        TaggedSigned::<ValidatorRecord<PeerId>, KeyPair>::deserialize_from_vec(
+                            &record.value,
+                        )?;
+                    {
+                        Ok(DhtRecord::Validator(
+                            record.publisher.unwrap(),
+                            validator_record.record,
+                            record.clone(),
+                        ))
+                    }
+                }
+                _ => Err(DhtRecordError::UnknownTag),
+            }
+        } else {
+            Err(DhtRecordError::UnknownTag)
+        }
+    }
+}
+
+/// DHT results obtained for a specific query ID
+struct DhtResults {
+    /// Number of records obtained
+    count: u8,
+    /// Best value obtained so far
+    best_value: DhtRecord,
+    /// Other (outdated) values obtained
+    outdated_values: Vec<DhtRecord>,
+}
+
 #[derive(Default)]
 struct TaskState {
     /// Senders for DHT (kad) put operations
     dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
     /// Senders for DHT (kad) get operations
     dht_gets: HashMap<QueryId, oneshot::Sender<Result<Vec<u8>, NetworkError>>>,
+    /// Get results for DHT (kad) get operation
+    dht_get_results: HashMap<QueryId, DhtResults>,
     /// Senders per Gossibsub topic
     gossip_topics: HashMap<
         gossipsub::TopicHash,
@@ -249,6 +335,7 @@ pub struct Network {
 }
 
 impl Network {
+    const DHT_QUORUM: u8 = 3;
     /// Create a new libp2p network instance.
     ///
     /// # Arguments
@@ -761,23 +848,73 @@ impl Network {
                                     QueryResult::GetRecord(Ok(GetRecordOk::FoundRecord(
                                         record,
                                     ))) => {
-                                        if Self::verify_record(&record.record) {
-                                            if let Some(output) = state.dht_gets.remove(&id) {
-                                                // Finish the query. We are only interested in the first result.
-                                                // TODO: Revisit this since we are using a Quorum of 1 to report the
-                                                // record to the application. We may want more but also need a way
-                                                // to verify and select the bests record.
-                                                swarm
-                                                    .behaviour_mut()
-                                                    .dht
-                                                    .query_mut(&id)
-                                                    .unwrap()
-                                                    .finish();
-                                                if output.send(Ok(record.record.value)).is_err() {
-                                                    error!(query_id = ?id, error = "receiver hung up", "could not send get record query result to channel");
+                                        if let Some(dht_record) =
+                                            Self::verify_record(&record.record)
+                                        {
+                                            if let Some(results) =
+                                                state.dht_get_results.get_mut(&id)
+                                            {
+                                                results.count += 1;
+                                                // Replace best value if needed and update the outdated values
+                                                if dht_record > results.best_value {
+                                                    results
+                                                        .outdated_values
+                                                        .push(results.best_value.clone());
+                                                    results.best_value = dht_record;
+                                                } else if dht_record < results.best_value {
+                                                    results.outdated_values.push(dht_record)
                                                 }
+                                                // Check if we already have a quorum
+                                                if results.count == Self::DHT_QUORUM {
+                                                    swarm
+                                                        .behaviour_mut()
+                                                        .dht
+                                                        .query_mut(&id)
+                                                        .unwrap()
+                                                        .finish();
+                                                    let signed_best_record = results
+                                                        .best_value
+                                                        .clone()
+                                                        .get_signed_record();
+                                                    // Send the best result to the application layer ASAP since we already know it
+                                                    if let Some(output) = state.dht_gets.remove(&id)
+                                                    {
+                                                        if output
+                                                            .send(Ok(signed_best_record
+                                                                .clone()
+                                                                .value))
+                                                            .is_err()
+                                                        {
+                                                            error!(query_id = ?id, error = "receiver hung up", "could not send get record query result to channel");
+                                                        }
+                                                    } else {
+                                                        warn!(query_id = ?id, ?step, "GetRecord query result for unknown query ID");
+                                                    }
+                                                    if !results.outdated_values.is_empty() {
+                                                        // Now push the best value to the outdated peers
+                                                        let outdated_peers = results
+                                                            .outdated_values
+                                                            .iter()
+                                                            .map(|dht_record| {
+                                                                dht_record.get_peer_id()
+                                                            });
+                                                        swarm.behaviour_mut().dht.put_record_to(
+                                                            signed_best_record,
+                                                            outdated_peers,
+                                                            kad::Quorum::One,
+                                                        );
+                                                    }
+                                                }
+                                            } else if step.count.get() == 1_usize {
+                                                // This is our first record
+                                                let results = DhtResults {
+                                                    count: 1,
+                                                    best_value: dht_record,
+                                                    outdated_values: vec![],
+                                                };
+                                                state.dht_get_results.insert(id, results);
                                             } else {
-                                                warn!(query_id = ?id, ?step, "GetRecord query result for unknown query ID");
+                                                log::error!(query_id = ?id, "DHT inconsistent state");
                                             }
                                         } else {
                                             warn!(
@@ -787,9 +924,25 @@ impl Network {
                                     }
                                     QueryResult::GetRecord(Ok(
                                         GetRecordOk::FinishedWithNoAdditionalRecord {
-                                            cache_candidates: _,
+                                            cache_candidates,
                                         },
-                                    )) => {}
+                                    )) => {
+                                        // Remove the query and push the best result to the cache candidates
+                                        if let Some(results) = state.dht_get_results.remove(&id) {
+                                            if !cache_candidates.is_empty() {
+                                                let signed_best_record =
+                                                    results.best_value.get_signed_record();
+                                                let peers = cache_candidates
+                                                    .iter()
+                                                    .map(|(_, &peer_id)| peer_id);
+                                                swarm.behaviour_mut().dht.put_record_to(
+                                                    signed_best_record,
+                                                    peers,
+                                                    kad::Quorum::One,
+                                                );
+                                            }
+                                        }
+                                    }
                                     QueryResult::GetRecord(Err(error)) => {
                                         if let Some(output) = state.dht_gets.remove(&id) {
                                             if output.send(Err(error.clone().into())).is_err() {
@@ -836,8 +989,21 @@ impl Network {
                                         record: Some(record),
                                     },
                             } => {
-                                if Self::verify_record(&record) {
-                                    if swarm.behaviour_mut().dht.store_mut().put(record).is_err() {
+                                // Verify incoming record
+                                if let Some(dht_record) = Self::verify_record(&record) {
+                                    // Now verify that we should overwrite it because it's better than the one we have
+                                    let mut overwrite = true;
+                                    let store = swarm.behaviour_mut().dht.store_mut();
+                                    if let Some(current_record) = store.get(&record.key) {
+                                        if let Ok(current_dht_record) =
+                                            DhtRecord::try_from(&current_record.into_owned())
+                                        {
+                                            if current_dht_record > dht_record {
+                                                overwrite = false;
+                                            }
+                                        }
+                                    }
+                                    if overwrite && store.put(record).is_err() {
                                         error!("Could not store record in DHT record store");
                                     }
                                 } else {
@@ -1707,7 +1873,8 @@ impl Network {
         }
     }
 
-    fn verify_record(record: &Record) -> bool {
+    /// Returns a DHT record if the record decoding and verification was successful, None otherwise
+    fn verify_record(record: &Record) -> Option<DhtRecord> {
         if let Some(tag) = TaggedSigned::<ValidatorRecord<PeerId>, KeyPair>::peek_tag(&record.value)
         {
             match tag {
@@ -1722,7 +1889,13 @@ impl Network {
                             CompressedPublicKey::deserialize_from_vec(record.key.as_ref())
                         {
                             if let Ok(pk) = compressed_pk.uncompress() {
-                                return validator_record.verify(&pk);
+                                if validator_record.verify(&pk) {
+                                    return Some(DhtRecord::Validator(
+                                        record.publisher.unwrap(),
+                                        validator_record.record,
+                                        record.clone(),
+                                    ));
+                                }
                             }
                         }
                     }
@@ -1734,7 +1907,7 @@ impl Network {
         }
 
         // If we arrived here, it's because something failed in the record verification
-        false
+        None
     }
 
     /// Gets the number of connected peers
@@ -2136,8 +2309,8 @@ impl NetworkInterface for Network {
     async fn dht_get<K, V, T>(&self, k: &K) -> Result<Option<V>, Self::Error>
     where
         K: AsRef<[u8]> + Send + Sync,
-        V: Deserialize + Send + Sync + TaggedSignable,
-        T: TaggedKeyPair + Send + Sync + Serialize,
+        V: Deserialize + Send + Sync + TaggedSignable + Ord,
+        T: TaggedKeyPair + Send + Sync + Serialize + Deserialize,
     {
         let (output_tx, output_rx) = oneshot::channel();
         self.action_tx
@@ -2157,15 +2330,12 @@ impl NetworkInterface for Network {
     async fn dht_put<K, V, T>(&self, k: &K, v: &V, keypair: &T) -> Result<(), Self::Error>
     where
         K: AsRef<[u8]> + Send + Sync,
-        V: Serialize + Send + Sync + TaggedSignable + Clone,
-        T: TaggedKeyPair + Send + Sync + Serialize,
+        V: Serialize + Send + Sync + TaggedSignable + Clone + Ord,
+        T: TaggedKeyPair + Send + Sync + Serialize + Deserialize,
     {
         // Sign the record before transmitting it to the swarm
         let signature = keypair.tagged_sign(v);
-        let signed_record = TaggedSigned {
-            record: v.clone(),
-            signature,
-        };
+        let signed_record = TaggedSigned::new(v.clone(), signature);
         let (output_tx, output_rx) = oneshot::channel();
 
         self.action_tx

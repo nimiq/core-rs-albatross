@@ -79,7 +79,7 @@ pub trait RequestResponse {
 
 #[async_trait]
 pub trait Network: Send + Sync + Unpin + 'static {
-    type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + Unpin + 'static;
+    type PeerId: Copy + Debug + Display + Ord + Hash + Send + Sync + Unpin + 'static;
     type AddressType: Debug + Display + 'static;
     type Error: std::error::Error;
     type PubsubId: PubsubId<Self::PeerId> + Send + Sync + Unpin;
@@ -161,15 +161,15 @@ pub trait Network: Send + Sync + Unpin + 'static {
     async fn dht_get<K, V, T>(&self, k: &K) -> Result<Option<V>, Self::Error>
     where
         K: AsRef<[u8]> + Send + Sync,
-        V: Deserialize + Send + Sync + TaggedSignable,
-        T: TaggedKeyPair + Send + Sync + Serialize;
+        V: Deserialize + Send + Sync + TaggedSignable + Ord,
+        T: TaggedKeyPair + Send + Sync + Serialize + Deserialize;
 
     /// Puts a value to the distributed hash table
     async fn dht_put<K, V, T>(&self, k: &K, v: &V, keypair: &T) -> Result<(), Self::Error>
     where
         K: AsRef<[u8]> + Send + Sync,
-        V: Serialize + Send + Sync + TaggedSignable + Clone,
-        T: TaggedKeyPair + Send + Sync + Serialize;
+        V: Serialize + Send + Sync + TaggedSignable + Clone + Ord,
+        T: TaggedKeyPair + Send + Sync + Serialize + Deserialize;
 
     /// Dials a peer
     async fn dial_peer(&self, peer_id: Self::PeerId) -> Result<(), Self::Error>;

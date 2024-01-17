@@ -142,7 +142,7 @@ pub mod tests {
 
     // Copied straight from nimiq_network_libp2p::network
 
-    #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+    #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
     pub struct TestRecord {
         x: i32,
     }

@@ -536,8 +536,8 @@ impl Network for MockNetwork {
     async fn dht_get<K, V, T>(&self, k: &K) -> Result<Option<V>, Self::Error>
     where
         K: AsRef<[u8]> + Send + Sync,
-        V: Deserialize + Send + Sync + TaggedSignable,
-        T: TaggedKeyPair + Send + Sync + Serialize,
+        V: Deserialize + Send + Sync + TaggedSignable + Ord,
+        T: TaggedKeyPair + Send + Sync + Serialize + Deserialize,
     {
         if self.is_connected.load(Ordering::SeqCst) {
             let hub = self.hub.lock();
@@ -555,8 +555,8 @@ impl Network for MockNetwork {
     async fn dht_put<K, V, T>(&self, k: &K, v: &V, _keypair: &T) -> Result<(), Self::Error>
     where
         K: AsRef<[u8]> + Send + Sync,
-        V: Serialize + Send + Sync + TaggedSignable + Clone,
-        T: TaggedKeyPair + Send + Sync + Serialize,
+        V: Serialize + Send + Sync + TaggedSignable + Clone + Ord,
+        T: TaggedKeyPair + Send + Sync + Serialize + Deserialize,
     {
         if self.is_connected.load(Ordering::SeqCst) {
             let mut hub = self.hub.lock();
