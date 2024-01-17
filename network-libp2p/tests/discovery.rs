@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use futures::{stream::FlatMap, StreamExt};
+use futures::StreamExt;
 use libp2p::{
     core::{
         multiaddr::{multiaddr, Multiaddr},
