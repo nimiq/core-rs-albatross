@@ -17,7 +17,7 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 workspace = true
 
 [dependencies]
-bitflags = { version = "2.0", features = ["serde"] }
+bitflags = { version = "2.4", features = ["serde"] }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 serde = "1.0"
 strum_macros = "0.25"
