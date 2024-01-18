@@ -42,12 +42,12 @@ use crate::{
 #[derive(Clone)]
 pub struct PKTreeLeafCircuit {
     // Witnesses (private)
-    pks: Vec<G2Projective>,
+    pub pks: Vec<G2Projective>,
 
     // Inputs (public)
-    pk_node_hash: [u8; 32],
-    agg_pk_commitment: [u8; 95],
-    signer_bitmap_chunk: Vec<bool>,
+    pub pk_node_hash: [u8; 32],
+    pub agg_pk_commitment: [u8; 95],
+    pub signer_bitmap_chunk: Vec<bool>,
 }
 
 impl PKTreeLeafCircuit {
