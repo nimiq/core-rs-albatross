@@ -51,7 +51,7 @@ jobs:
         python-version: '3.8'
     - name: Install python dependencies
       run: pip install scripts/devnet
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path:
           ~/.cargo/registry
