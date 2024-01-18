@@ -5,8 +5,12 @@ use ark_r1cs_std::{
     uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use ark_std::Zero;
+use nimiq_hash::{Blake2sHash, Hash};
 use nimiq_primitives::{policy::Policy, slots_allocation::PK_TREE_BREADTH};
-use nimiq_zkp_primitives::pedersen_parameters_mnt6;
+use nimiq_zkp_primitives::{
+    pedersen::default_pedersen_hash, pedersen_parameters_mnt6, serialize_g1_mnt6, serialize_g2_mnt6,
+};
 use rand::{distributions::Standard, prelude::Distribution};
 
 use crate::{
@@ -65,11 +69,64 @@ impl PKTreeLeafCircuit {
             signer_bitmap_chunk: signer_bitmap,
         }
     }
+
+    fn sample_with_len<R: rand::Rng + ?Sized>(rng: &mut R, len: usize) -> PKTreeLeafCircuit {
+        let pks = vec![G2Projective::rand(rng); len];
+
+        let mut pk_tree_root = [0u8; 32];
+        rng.fill_bytes(&mut pk_tree_root);
+
+        let mut agg_pk_commitment = [0u8; 95];
+        rng.fill_bytes(&mut agg_pk_commitment);
+
+        let mut signer_bitmap = Vec::with_capacity(len);
+        for _ in 0..len {
+            signer_bitmap.push(rng.gen());
+        }
+
+        // Create parameters for our circuit
+        PKTreeLeafCircuit::new(pks, pk_tree_root, agg_pk_commitment, signer_bitmap)
+    }
+
+    pub fn random_with_len<R: rand::Rng + ?Sized>(rng: &mut R, len: usize) -> PKTreeLeafCircuit {
+        let pks = vec![G2Projective::rand(rng); len];
+
+        let mut signer_bitmap = Vec::with_capacity(len);
+        for _ in 0..len {
+            signer_bitmap.push(rng.gen());
+        }
+
+        let mut agg_pk = G2Projective::zero();
+        let mut pk_node_hash = vec![];
+
+        for (i, pk) in pks.iter().enumerate() {
+            pk_node_hash.extend(serialize_g2_mnt6(pk));
+            if signer_bitmap[i] {
+                agg_pk += pk;
+            }
+        }
+        let pk_node_hash = pk_node_hash.hash::<Blake2sHash>().0;
+
+        let agg_pk_bytes = serialize_g2_mnt6(&agg_pk);
+
+        let hash = default_pedersen_hash::<MNT6_753>(&agg_pk_bytes);
+        let agg_pk_commitment = serialize_g1_mnt6(&hash);
+
+        // Create parameters for our circuit
+        PKTreeLeafCircuit::new(
+            pks.to_vec(),
+            pk_node_hash,
+            agg_pk_commitment,
+            signer_bitmap.to_vec(),
+        )
+    }
 }
 
 impl ConstraintSynthesizer<MNT6Fq> for PKTreeLeafCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT6Fq>) -> Result<(), SynthesisError> {
+        assert_eq!(self.pks.len(), self.signer_bitmap_chunk.len());
+
         // Allocate all the constants.
         let pedersen_generators_var =
             DefaultPedersenParametersVar::new_constant(cs.clone(), pedersen_parameters_mnt6())?;
@@ -87,7 +144,7 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeLeafCircuit {
         let signer_bitmap_chunk_bits =
             BitVec::<MNT6Fq>::new_input_vec(cs.clone(), &self.signer_bitmap_chunk)?;
         let signer_bitmap_chunk_bits =
-            signer_bitmap_chunk_bits.0[..Policy::SLOTS as usize / PK_TREE_BREADTH].to_vec();
+            signer_bitmap_chunk_bits.0[..self.signer_bitmap_chunk.len()].to_vec();
 
         // Calculate the leaf hash and match it against the expected output.
         let mut bytes = vec![];
@@ -129,20 +186,6 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeLeafCircuit {
 
 impl Distribution<PKTreeLeafCircuit> for Standard {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> PKTreeLeafCircuit {
-        let pks = vec![G2Projective::rand(rng); Policy::SLOTS as usize / PK_TREE_BREADTH];
-
-        let mut pk_tree_root = [0u8; 32];
-        rng.fill_bytes(&mut pk_tree_root);
-
-        let mut agg_pk_commitment = [0u8; 95];
-        rng.fill_bytes(&mut agg_pk_commitment);
-
-        let mut signer_bitmap = Vec::with_capacity(Policy::SLOTS as usize / PK_TREE_BREADTH);
-        for _ in 0..Policy::SLOTS as usize / PK_TREE_BREADTH {
-            signer_bitmap.push(rng.gen());
-        }
-
-        // Create parameters for our circuit
-        PKTreeLeafCircuit::new(pks, pk_tree_root, agg_pk_commitment, signer_bitmap)
+        PKTreeLeafCircuit::sample_with_len(rng, Policy::SLOTS as usize / PK_TREE_BREADTH)
     }
 }
