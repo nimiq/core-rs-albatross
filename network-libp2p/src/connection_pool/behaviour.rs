@@ -108,10 +108,13 @@ struct ConnectionState<T> {
     max_failures: usize,
     /// Time after which a connection ID would be removed from IDs marked as down.
     retry_down_after: Duration,
+    /// Desired number of connections. When the number of connections is below this number,
+    /// the `housekeeping` will retry the down nodes after 1s instead of `retry_down_after`.
+    desired_connections: usize,
 }
 
 impl<T: Ord> ConnectionState<T> {
-    fn new(max_failures: usize, retry_down_after: Duration) -> Self {
+    fn new(max_failures: usize, retry_down_after: Duration, desired_connections: usize) -> Self {
         Self {
             dialing: BTreeSet::new(),
             connected: BTreeSet::new(),
@@ -120,6 +123,7 @@ impl<T: Ord> ConnectionState<T> {
             down: BTreeMap::new(),
             max_failures,
             retry_down_after,
+            desired_connections,
         }
     }
 
@@ -220,17 +224,17 @@ impl<T: Ord> ConnectionState<T> {
     }
 
     /// Remove all down peers that haven't been dialed in a while from the `down`
-    /// map to dial them again.
+    /// map to dial them again. If the number of connections is less than the desired number
+    /// of connections, this happens for every connection marked as down after 1s, if not then
+    /// `self.retry_after_down is used`.
     fn housekeeping(&mut self) {
-        let retry_down_after = self.retry_down_after;
+        let retry_down_after = if self.num_connected() < self.desired_connections {
+            Duration::from_secs(1)
+        } else {
+            self.retry_down_after
+        };
         self.down
             .retain(|_, down_since| down_since.elapsed() < retry_down_after);
-    }
-
-    /// Remove all connection IDs marked as down.
-    /// This will make an ID dial-able again.
-    fn reset_down(&mut self) {
-        self.down.clear()
     }
 }
 
@@ -328,8 +332,8 @@ impl Behaviour {
             own_peer_id,
             seeds,
             required_services,
-            peer_ids: ConnectionState::new(2, config.retry_down_after),
-            addresses: ConnectionState::new(4, config.retry_down_after),
+            peer_ids: ConnectionState::new(2, config.retry_down_after, desired_peer_count),
+            addresses: ConnectionState::new(4, config.retry_down_after, desired_peer_count),
             actions: VecDeque::new(),
             active: false,
             limits,
@@ -376,14 +380,16 @@ impl Behaviour {
         // If we are active and have less connections than the desired amount
         // and we are not dialing anyone, it is most likely because we went down
         // (i.e. we are or were offline).
-        // Make sure seeds and peers are dial-able again to reach desired peers.
-        // Otherwise we might be stuck in this state forever.
+        // Make sure seeds and peers are dial-able again ASAP by just calling
+        // the addresses and peer IDs housekeeping since it has a mechanism to
+        // reset the connections marked as down after 1s if the number of connections
+        // is less than the desired peer count
         if self.active
             && self.peer_ids.num_connected() < self.config.desired_peer_count
             && self.peer_ids.num_dialing() + self.addresses.num_dialing() == 0
         {
-            self.addresses.reset_down();
-            self.peer_ids.reset_down();
+            self.addresses.housekeeping();
+            self.peer_ids.housekeeping();
         }
 
         // Try to maintain at least `desired_peer_count` connections.
