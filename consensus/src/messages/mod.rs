@@ -54,22 +54,33 @@ pub const MAX_REQUEST_SUBSCRIBE_BY_ADDRESS: u32 = 10;
 /// The max number of Address notifications per peer.
 pub const MAX_ADDRESS_NOTIFICATIONS: u32 = 100;
 
+/// Part of [`MacroChain`].
+///
+/// Metadata of the last checkpoint block in the response.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Checkpoint {
+    /// Block height of the checkpoint block.
     pub block_number: u32,
+    /// Hash of the checkpoint block.
     pub hash: Blake2bHash,
 }
 
+/// Response to [`RequestMacroChain`].
 #[derive(Clone, Serialize, Deserialize)]
 pub struct MacroChain {
+    /// The hashes of the macro blocks starting at one of the locators of the request.
     pub epochs: Vec<Blake2bHash>,
+    /// Under certain circumstances, the metadata about the last checkpoint block.
     pub checkpoint: Option<Checkpoint>,
 }
 
+/// Error response to [`RequestMacroChain`]
 #[derive(Clone, Debug, Deserialize, Error, Serialize)]
 pub enum MacroChainError {
+    /// The locators of the request could not be found.
     #[error("unknown locators")]
     UnknownLocators,
+    /// Error not understood by the recipient, is never sent explicitly.
     #[error("unknown error")]
     #[serde(other)]
     Other,
@@ -90,9 +101,12 @@ impl Debug for MacroChain {
     }
 }
 
+/// Request macro block hashes starting from a set of locators.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestMacroChain {
+    /// Blocks known by the requester.
     pub locators: Vec<Blake2bHash>,
+    /// Limit of epochs to send in response.
     pub max_epochs: u16,
 }
 
@@ -205,16 +219,27 @@ pub enum HistoryChunkError {
     Other,
 }
 
+/// Request a specific block by hash.
+///
+/// Can optionally omit the body if it's a micro block.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestBlock {
+    /// The hash of the block that is requested.
     pub hash: Blake2bHash,
+    /// Whether to include the body if the requested block is a micro block.
+    ///
+    /// If the requested block is a macro block, this flag has no effect and
+    /// the response will always contain the body.
     pub include_micro_bodies: bool,
 }
 
+/// Error response for [`RequestBlock`].
 #[derive(Clone, Debug, Deserialize, Error, Serialize)]
 pub enum BlockError {
+    /// Block hash unknown to the responder.
     #[error("target hash not found")]
     TargetHashNotFound,
+    /// Error not understood by the recipient, is never sent explicitly.
     #[error("unknown error")]
     #[serde(other)]
     Other,
@@ -227,22 +252,31 @@ impl RequestCommon for RequestBlock {
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_BLOCK;
 }
 
+/// Response to [`RequestMissingBlocks`].
 #[derive(Clone, Deserialize, Serialize)]
 pub struct ResponseBlocks {
     // TODO: Set to sensible limit (2 * BATCH_SIZE for example).
     pub blocks: Vec<Block>,
 }
 
+/// Error response to [`RequestMissingBlocks`].
 #[derive(Clone, Debug, Deserialize, Error, Serialize)]
 pub enum ResponseBlocksError {
+    /// The target block is not on the responder's main chain, it cannot
+    /// fulfill the request.
     #[error("target block not on main chain")]
     TargetBlockNotOnMainChain,
+    /// The target block is unknown to the responder.
     #[error("target hash not found")]
     TargetHashNotFound,
+    /// The locators are unknown to the responder.
     #[error("unknown locators")]
     UnknownLocators,
+    /// The responder couldn't get the intermediate blocks due to another
+    /// error.
     #[error("failed to get blocks")]
     FailedToGetBlocks,
+    /// Error not understood by the recipient, is never sent explicitly.
     #[error("unknown error")]
     #[serde(other)]
     Other,
@@ -262,10 +296,17 @@ impl Debug for ResponseBlocks {
     }
 }
 
+/// Request "missing" blocks, from a set of locators to a target hash.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestMissingBlocks {
+    /// Target block hash.
     pub target_hash: Blake2bHash,
+    /// Whether to include bodies for micro blocks.
+    ///
+    /// Bodies of macro blocks are always included.
     pub include_micro_bodies: bool,
+    /// Set of hashes of blocks known to the requester, possible starts of the
+    /// answer chain.
     pub locators: Vec<Blake2bHash>,
 }
 
@@ -276,6 +317,7 @@ impl RequestCommon for RequestMissingBlocks {
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_MISSING_BLOCKS;
 }
 
+/// Request the current blockchain head block hash.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestHead {}
 

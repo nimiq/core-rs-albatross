@@ -45,11 +45,9 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMacroChain {
                 }
             }
         }
-        if start_block_hash.is_none() {
+        let Some(start_block_hash) = start_block_hash else {
             return Err(MacroChainError::UnknownLocators);
-        }
-        let start_block_hash = start_block_hash.unwrap();
-
+        };
         // Get up to `self.max_blocks` macro blocks from our chain starting at `start_block_hash`.
         // TODO We don't need the actual macro block headers here, the hash of each block would suffice.
         let election_blocks = blockchain
