@@ -11,17 +11,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: cargo-${{ hashFiles('**/Cargo.toml') }}
     - name: Set up Rust toolchain
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
+    - uses: Swatinem/rust-cache@v2
     - name: Install Protoc
       run: sudo apt-get install protobuf-compiler
     - name: Set up python

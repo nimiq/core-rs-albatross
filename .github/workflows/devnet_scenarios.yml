@@ -51,17 +51,11 @@ jobs:
         python-version: '3.8'
     - name: Install python dependencies
       run: pip install scripts/devnet
-    - uses: actions/cache@v4
-      with:
-        path:
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: cargo-${{ hashFiles('**/Cargo.toml') }}
     - name: Set up Rust toolchain
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
+    - uses: Swatinem/rust-cache@v2
     - name: Optionally patch the source
       run: ${{ matrix.pre }}
     - name: Install Protoc
