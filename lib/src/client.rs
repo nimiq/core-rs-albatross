@@ -9,6 +9,7 @@ use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::{
     sync::{light::full_sync_threshold, syncer_proxy::SyncerProxy},
     Consensus as AbstractConsensus, ConsensusProxy as AbstractConsensusProxy,
+    Error::BlockchainError,
 };
 #[cfg(feature = "zkp-prover")]
 use nimiq_genesis::NetworkId;
@@ -350,15 +351,18 @@ impl ClientInner {
             #[cfg(feature = "full-consensus")]
             SyncMode::History => {
                 blockchain_config.keep_history = true;
-                let blockchain = Arc::new(RwLock::new(
-                    Blockchain::new(
-                        environment.clone(),
-                        blockchain_config,
-                        config.network_id,
-                        time,
-                    )
-                    .unwrap(),
-                ));
+                let blockchain = match Blockchain::new(
+                    environment.clone(),
+                    blockchain_config,
+                    config.network_id,
+                    time,
+                ) {
+                    Ok(blockchain) => Arc::new(RwLock::new(blockchain)),
+                    Err(err) => {
+                        return Err(Error::Consensus(BlockchainError(err)));
+                    }
+                };
+
                 let blockchain_proxy = BlockchainProxy::from(&blockchain);
                 #[cfg(feature = "zkp-prover")]
                 let zkp_component = if config.zkp.prover_active {
@@ -401,16 +405,18 @@ impl ClientInner {
             #[cfg(feature = "full-consensus")]
             SyncMode::Full => {
                 blockchain_config.keep_history = false;
+                let blockchain = match Blockchain::new(
+                    environment.clone(),
+                    blockchain_config,
+                    config.network_id,
+                    time,
+                ) {
+                    Ok(blockchain) => Arc::new(RwLock::new(blockchain)),
+                    Err(err) => {
+                        return Err(Error::Consensus(BlockchainError(err)));
+                    }
+                };
 
-                let blockchain = Arc::new(RwLock::new(
-                    Blockchain::new(
-                        environment.clone(),
-                        blockchain_config,
-                        config.network_id,
-                        time,
-                    )
-                    .unwrap(),
-                ));
                 let blockchain_proxy = BlockchainProxy::from(&blockchain);
                 #[cfg(feature = "zkp-prover")]
                 let zkp_component = if config.zkp.prover_active {

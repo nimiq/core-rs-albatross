@@ -21,7 +21,7 @@ pub enum BlockchainEvent {
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum BlockchainError {
-    #[error("Invalid genesis block stored. Are you on the right network?")]
+    #[error("Invalid genesis block stored. Verify you are on the correct network or reset your consensus database.")]
     InvalidGenesisBlock,
     #[error("Failed to load the main chain. Reset your consensus database.")]
     FailedLoadingMainChain,
