@@ -22,7 +22,7 @@ workspace = true
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
 console-subscriber = { version = "0.2", features = ["parking_lot"], optional = true }
-derive_builder = "0.12"
+derive_builder = "0.13"
 directories = "5.0"
 hex = "0.4"
 # human-panic = { version = "1.0", optional = true } currently unused, might be used in the future
