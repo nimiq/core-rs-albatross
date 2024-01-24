@@ -1065,7 +1065,9 @@ impl ConsensusInterface for ConsensusDispatcher {
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         // If the node is in the position of having a full state, it can check upfront if this transaction makes sense
         if let BlockchainReadProxy::Full(blockchain) = self.consensus.blockchain.read() {
-            let staking_contract = blockchain.get_staking_contract();
+            let staking_contract = blockchain
+                .get_staking_contract_if_complete(None)
+                .ok_or(Error::NoConsensus)?;
             let data_store = blockchain.get_staking_contract_store();
             let db_txn = blockchain.read_transaction();
             let validator =
@@ -1129,7 +1131,9 @@ impl ConsensusInterface for ConsensusDispatcher {
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         // If the node is in the position of having a full state, it can check upfront if this transaction makes sense
         if let BlockchainReadProxy::Full(blockchain) = self.consensus.blockchain.read() {
-            let staking_contract = blockchain.get_staking_contract();
+            let staking_contract = blockchain
+                .get_staking_contract_if_complete(None)
+                .ok_or(Error::NoConsensus)?;
             let data_store = blockchain.get_staking_contract_store();
             let db_txn = blockchain.read_transaction();
             let validator =
