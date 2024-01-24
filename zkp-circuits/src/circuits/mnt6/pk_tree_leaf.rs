@@ -70,24 +70,6 @@ impl PKTreeLeafCircuit {
         }
     }
 
-    fn sample_with_len<R: rand::Rng + ?Sized>(rng: &mut R, len: usize) -> PKTreeLeafCircuit {
-        let pks = vec![G2Projective::rand(rng); len];
-
-        let mut pk_tree_root = [0u8; 32];
-        rng.fill_bytes(&mut pk_tree_root);
-
-        let mut agg_pk_commitment = [0u8; 95];
-        rng.fill_bytes(&mut agg_pk_commitment);
-
-        let mut signer_bitmap = Vec::with_capacity(len);
-        for _ in 0..len {
-            signer_bitmap.push(rng.gen());
-        }
-
-        // Create parameters for our circuit
-        PKTreeLeafCircuit::new(pks, pk_tree_root, agg_pk_commitment, signer_bitmap)
-    }
-
     pub fn random_with_len<R: rand::Rng + ?Sized>(rng: &mut R, len: usize) -> PKTreeLeafCircuit {
         let pks = vec![G2Projective::rand(rng); len];
 
@@ -186,6 +168,6 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeLeafCircuit {
 
 impl Distribution<PKTreeLeafCircuit> for Standard {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> PKTreeLeafCircuit {
-        PKTreeLeafCircuit::sample_with_len(rng, Policy::SLOTS as usize / PK_TREE_BREADTH)
+        PKTreeLeafCircuit::random_with_len(rng, Policy::SLOTS as usize / PK_TREE_BREADTH)
     }
 }
