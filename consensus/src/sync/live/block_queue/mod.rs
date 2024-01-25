@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet},
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -13,10 +13,14 @@ use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId};
 use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
 use parking_lot::RwLock;
+use tokio::sync::oneshot::Sender as OneshotSender;
 
 use self::block_request_component::BlockRequestComponent;
 use super::{block_queue::block_request_component::BlockRequestComponentEvent, queue::QueueConfig};
-use crate::sync::{live::LiveSyncQueue, peer_list::PeerList};
+use crate::{
+    consensus::{ResolveBlockError, ResolveBlockRequest},
+    sync::{live::LiveSyncQueue, peer_list::PeerList},
+};
 
 pub mod block_request_component;
 pub mod live_sync;
@@ -32,6 +36,8 @@ pub type BlockStream<N> = BoxStream<
 pub type GossipSubBlockStream<N> = BoxStream<'static, (Block, <N as Network>::PubsubId)>;
 
 pub type BlockAndId<N> = (Block, Option<<N as Network>::PubsubId>);
+
+pub type ResolveBlockSender<N> = OneshotSender<Result<Block, ResolveBlockError<N>>>;
 
 pub enum QueuedBlock<N: Network> {
     Head(BlockAndId<N>),
@@ -73,6 +79,18 @@ pub struct BlockQueue<N: Network> {
 
     /// The block number of the latest macro block. We prune the block buffer when it changes.
     current_macro_height: u32,
+
+    /// A list of all pending missing block requests which have someplace waiting for it to resolve.
+    ///
+    /// `block_height` -> `block_hash` -> `OneshotSender` to resolve them.
+    ///
+    /// Generally this would be empty as most missing block requests do not have another party waiting
+    /// for them to resolve. Currently the only other part waiting for a resolution of such a request is the
+    /// ProposalBuffer in the validator crate. It uses it to request predecessors of proposals if they
+    /// are unknown.
+    ///
+    pending_requests:
+        BTreeMap<u32, HashMap<Blake2bHash, OneshotSender<Result<Block, ResolveBlockError<N>>>>>,
 }
 
 impl<N: Network> BlockQueue<N> {
@@ -125,6 +143,7 @@ impl<N: Network> BlockQueue<N> {
             buffer: BTreeMap::new(),
             blocks_pending_push: BTreeSet::new(),
             current_macro_height,
+            pending_requests: BTreeMap::default(),
         }
     }
 
@@ -152,10 +171,12 @@ impl<N: Network> BlockQueue<N> {
         let parent_known = blockchain.contains(block.parent_hash(), true);
         drop(blockchain);
 
-        // Check if a macro block boundary was passed. If so prune the block buffer.
+        // Check if a macro block boundary was passed.
+        // If so prune the block buffer as well as pending requests.
         let macro_height = Policy::last_macro_block(head_height);
         if macro_height > self.current_macro_height {
             self.current_macro_height = macro_height;
+            self.prune_pending_requests();
             self.prune_buffer();
         }
 
@@ -555,6 +576,34 @@ impl<N: Network> BlockQueue<N> {
         });
     }
 
+    /// Cleans up pending requests and removes requests for blocks that precede the current macro block.
+    ///
+    /// All removed requests will resolve with an Outdated error.
+    fn prune_pending_requests(&mut self) {
+        self.pending_requests.retain(|&block_number, senders| {
+            // Blocks which are after the current macro height are retained as they retain relevance.
+            if block_number > self.current_macro_height {
+                return true;
+            }
+
+            // Resolve all of the pending requests which were removed as outdated.
+            // Obviously the requests themselves do not terminate, but they resolve on the caller side. The request
+            // yielding a result becomes inconsequential, as the block it would yield can no longer be pushed.
+            // This would not be strictly necessary as dropping the sender will resolve the receiving side with a
+            // RecvError, but Outdated is more verbose.
+            for (_hash, sender) in senders.drain() {
+                if let Err(error) = sender.send(Err(ResolveBlockError::Outdated)) {
+                    log::warn!(
+                        ?error,
+                        "Failed to send outdated event for a missing block request"
+                    );
+                }
+            }
+            // Remove all entries from the block buffer that precede `current_macro_height`.
+            false
+        });
+    }
+
     #[inline]
     fn report_validation_result(
         &self,
@@ -569,6 +618,69 @@ impl<N: Network> BlockQueue<N> {
                     .validate_message::<BlockHeaderTopic>(id, acceptance);
             }
         }
+    }
+
+    fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
+        // Deconstruct the request as the parts are needed in different places and for the sender
+        // specifically ownership is needed.
+        let ResolveBlockRequest::<N> {
+            block_number,
+            block_hash,
+            pubsub_id,
+            response_sender,
+        } = request;
+
+        // Add the request to pending requests if it does not exists yet.
+        // If it already exists, resolve this one with a Duplicate Error.
+        match self
+            .pending_requests
+            .entry(block_number)
+            .or_default()
+            .entry(block_hash.clone())
+        {
+            Entry::Occupied(_entry) => {
+                // Already existing request, send the Duplicate Error to resolve this request as
+                // the previous one should still do the trick.
+                if let Err(error) = response_sender.send(Err(ResolveBlockError::Duplicate)) {
+                    log::warn!(
+                        ?error,
+                        "Failed to send on Oneshot, receiver already dropped"
+                    );
+                }
+                // Do not return as even though the request might not be awaited it should still be executed to
+                // try and retrieve the block using the pubsub_id given. It could be the same as in the previous request,
+                // but they should be reasonably deduplicated by the network layer. Otherwise it would be a different
+                // pubsub_id thus giving more options to actually resolve the block in terms of peers ot ask.
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(response_sender);
+            }
+        };
+
+        // Check if the block in question is already buffered or pending a push.
+        if self
+            .buffer
+            .get(&block_number)
+            .map_or(false, |blocks| blocks.contains_key(&block_hash))
+        {
+            // Block is already buffered and wil be pushed sometime soon. No need to request it.
+            return;
+        }
+
+        if self.blocks_pending_push.contains(&block_hash) {
+            // Block is already pending a push. No need to request it.
+            return;
+        }
+
+        // The block is relevant and unknown and not requested yet and neither is pending a push. Request the block.
+        self.request_missing_blocks(
+            block_number,
+            block_hash,
+            None,
+            None,
+            Some(pubsub_id),
+            Direction::Backward,
+        );
     }
 
     /// Returns an iterator over the buffered blocks

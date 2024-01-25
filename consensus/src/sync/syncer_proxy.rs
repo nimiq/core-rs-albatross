@@ -21,10 +21,13 @@ use crate::sync::{
     history::HistoryMacroSync,
     live::{diff_queue::DiffQueue, state_queue::StateQueue, StateLiveSync},
 };
-use crate::sync::{
-    light::LightMacroSync,
-    live::{block_queue::BlockQueue, queue::QueueConfig, BlockLiveSync},
-    syncer::{LiveSyncPushEvent, Syncer},
+use crate::{
+    consensus::ResolveBlockRequest,
+    sync::{
+        light::LightMacroSync,
+        live::{block_queue::BlockQueue, queue::QueueConfig, BlockLiveSync},
+        syncer::{LiveSyncPushEvent, Syncer},
+    },
 };
 
 macro_rules! gen_syncer_match {
@@ -213,6 +216,10 @@ impl<N: Network> SyncerProxy<N> {
     /// Returns whether the state sync has finished (or `true` if there is no state sync required)
     pub fn state_complete(&self) -> bool {
         gen_syncer_match!(self, state_complete)
+    }
+
+    pub fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
+        gen_syncer_match!(self, resolve_block, request)
     }
 }
 

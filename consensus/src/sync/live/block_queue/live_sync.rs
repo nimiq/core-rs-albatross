@@ -177,4 +177,8 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
     fn include_micro_bodies(&self) -> bool {
         self.config.include_micro_bodies
     }
+
+    fn resolve_block(&mut self, request: crate::consensus::ResolveBlockRequest<N>) {
+        self.resolve_block(request)
+    }
 }

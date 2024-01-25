@@ -16,12 +16,15 @@ use nimiq_network_interface::network::Network;
 use parking_lot::Mutex;
 
 use super::{ChunkAndId, QueuedStateChunks, StateQueue};
-use crate::sync::{
-    live::{
-        block_queue::live_sync::PushOpResult as BlockPushOpResult,
-        queue::{self, LiveSyncQueue},
+use crate::{
+    consensus::ResolveBlockRequest,
+    sync::{
+        live::{
+            block_queue::live_sync::PushOpResult as BlockPushOpResult,
+            queue::{self, LiveSyncQueue},
+        },
+        syncer::{LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
     },
-    syncer::{LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
 };
 
 pub enum PushOpResult<N: Network> {
@@ -258,5 +261,9 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
 
     fn state_complete(&self) -> bool {
         self.start_key.is_complete()
+    }
+
+    fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
+        self.diff_queue.resolve_block(request)
     }
 }

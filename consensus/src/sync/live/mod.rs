@@ -25,6 +25,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use self::state_queue::StateQueue;
 use self::{block_queue::BlockQueue, queue::LiveSyncQueue};
 use super::syncer::{LiveSync, LiveSyncEvent};
+use crate::consensus::ResolveBlockRequest;
 
 pub type BlockLiveSync<N> = LiveSyncer<N, BlockQueue<N>>;
 #[cfg(feature = "full")]
@@ -97,6 +98,10 @@ impl<N: Network, Q: LiveSyncQueue<N>> LiveSync<N> for LiveSyncer<N, Q> {
 
     fn state_complete(&self) -> bool {
         self.queue.state_complete()
+    }
+
+    fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
+        self.queue.resolve_block(request)
     }
 }
 

@@ -75,10 +75,28 @@ pub enum RemoteEvent {
 }
 
 /// Different Errors for a failed ResolveBlockRequest.
-#[derive(Debug)]
 pub enum ResolveBlockError<N: Network> {
+    Outdated,
+    Duplicate,
     ReceiveError(RecvError),
     SendError(SendError<ConsensusRequest<N>>),
+}
+
+impl<N: Network> std::fmt::Debug for ResolveBlockError<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResolveBlockError::Outdated => f.debug_tuple("ResolveBlockError::Outdated").finish(),
+            ResolveBlockError::Duplicate => f.debug_tuple("ResolveBlockError::Duplicate").finish(),
+            ResolveBlockError::ReceiveError(e) => f
+                .debug_tuple("ResolveBlockError::ReceiveError")
+                .field(e)
+                .finish(),
+            ResolveBlockError::SendError(e) => f
+                .debug_tuple("ResolveBlockError::SendError")
+                .field(e)
+                .finish(),
+        }
+    }
 }
 
 /// Requests the consensus to resolve a given `block_hash` at a specific `block_height`.
@@ -86,17 +104,17 @@ pub enum ResolveBlockError<N: Network> {
 /// well suited to provide the required data.
 pub struct ResolveBlockRequest<N: Network> {
     /// Block number of the to be resolved block.
-    block_number: u32,
+    pub(crate) block_number: u32,
 
     /// Block hash of the to be resolved block.
-    block_hash: Blake2bHash,
+    pub(crate) block_hash: Blake2bHash,
 
     /// The id of the message referencing the block being requested here. These do include peers
     /// which should have knowledge of the block. They will be used to resolve the block.
-    pubsub_id: N::PubsubId,
+    pub(crate) pubsub_id: N::PubsubId,
 
     /// Sender to a oneshot channel where the response to the request is being awaited.
-    response_sender: OneshotSender<Result<Block, ResolveBlockError<N>>>,
+    pub(crate) response_sender: OneshotSender<Result<Block, ResolveBlockError<N>>>,
 }
 
 /// Enumeration of all ConsensusRequests available.
@@ -400,6 +418,10 @@ impl<N: Network> Consensus<N> {
             }
         }
     }
+
+    fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
+        self.sync.resolve_block(request)
+    }
 }
 
 impl<N: Network> Future for Consensus<N> {
@@ -472,7 +494,7 @@ impl<N: Network> Future for Consensus<N> {
         // 3. Check if a ConsensusRequest was received
         while let Poll::Ready(Some(request)) = self.requests.1.poll_recv(cx) {
             match request {
-                ConsensusRequest::ResolveBlock(_resolve_block) => {}
+                ConsensusRequest::ResolveBlock(request) => self.resolve_block(request),
             }
         }
 

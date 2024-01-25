@@ -23,10 +23,13 @@ use parking_lot::RwLock;
 
 use self::diff_request_component::DiffRequestComponent;
 use super::block_queue::{BlockAndId, BlockQueue, QueuedBlock};
-use crate::sync::{
-    live::{block_queue::live_sync::PushOpResult, queue::LiveSyncQueue},
-    peer_list::PeerList,
-    syncer::LiveSyncEvent,
+use crate::{
+    consensus::ResolveBlockRequest,
+    sync::{
+        live::{block_queue::live_sync::PushOpResult, queue::LiveSyncQueue},
+        peer_list::PeerList,
+        syncer::LiveSyncEvent,
+    },
 };
 
 pub mod diff_request_component;
@@ -208,6 +211,10 @@ impl<N: Network> DiffQueue<N> {
 
     pub(crate) fn set_diff_needed(&mut self, diff_needed: bool) {
         self.diff_needed = diff_needed;
+    }
+
+    pub(crate) fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
+        self.block_queue.resolve_block(request)
     }
 }
 

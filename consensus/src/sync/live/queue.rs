@@ -26,7 +26,7 @@ use nimiq_primitives::{
 };
 use parking_lot::Mutex;
 
-use crate::sync::syncer::LiveSyncEvent;
+use crate::{consensus::ResolveBlockRequest, sync::syncer::LiveSyncEvent};
 
 async fn spawn_blocking<R: Send + 'static, F: FnOnce() -> R + Send + 'static>(f: F) -> R {
     #[cfg(not(target_family = "wasm"))]
@@ -106,6 +106,9 @@ pub trait LiveSyncQueue<N: Network>: Stream<Item = Self::QueueResult> + Send + U
     fn state_complete(&self) -> bool {
         true
     }
+
+    /// Initiates an attempt to resolve a ResolveBlockRequest.
+    fn resolve_block(&mut self, request: ResolveBlockRequest<N>);
 }
 
 #[derive(Clone, Debug)]
