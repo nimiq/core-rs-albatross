@@ -14,13 +14,11 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
 use parking_lot::RwLock;
+use thiserror::Error;
 
 use crate::{
-    messages::RequestMissingBlocks,
-    sync::{
-        peer_list::PeerList,
-        sync_queue::{Error, SyncQueue},
-    },
+    messages::{RequestMissingBlocks, ResponseBlocksError},
+    sync::{peer_list::PeerList, sync_queue::SyncQueue},
 };
 
 #[derive(Debug)]
@@ -46,6 +44,14 @@ pub struct MissingBlockResponse {
     pub blocks: Vec<Block>,
 }
 
+#[derive(Clone, Debug, Error)]
+pub enum MissingBlockError {
+    #[error("request: {0}")]
+    Request(RequestError),
+    #[error("response: {0}")]
+    Response(ResponseBlocksError),
+}
+
 /// Peer Tracking & Block Request Component.
 /// We use this component to request missing blocks from peers.
 ///
@@ -59,7 +65,7 @@ pub struct MissingBlockResponse {
 /// The public interface allows to request blocks, which are not immediately returned.
 /// The blocks instead are returned by polling the component.
 pub struct BlockRequestComponent<N: Network> {
-    sync_queue: SyncQueue<N, MissingBlockRequest, MissingBlockResponse, Error, ()>, // requesting missing blocks from peers
+    sync_queue: SyncQueue<N, MissingBlockRequest, MissingBlockResponse, MissingBlockError, ()>, // requesting missing blocks from peers
     peers: Arc<RwLock<PeerList<N>>>,
     network_event_rx: SubscribeEvents<N::PeerId>,
     include_micro_bodies: bool,
@@ -81,23 +87,23 @@ impl<N: Network> BlockRequestComponent<N> {
                 Self::NUM_PENDING_BLOCKS,
                 |request, network, peer_id| {
                     async move {
-                        let res = Self::request_missing_blocks_from_peer(
+                        match Self::request_missing_blocks_from_peer(
                             network,
                             peer_id,
                             request.target_block_hash.clone(),
                             request.locators,
                             request.include_micro_bodies,
                         )
-                        .await;
-                        if let Ok(Some(missing_blocks)) = res {
-                            Ok(MissingBlockResponse {
+                        .await
+                        {
+                            Ok(Ok(missing_blocks)) => Ok(MissingBlockResponse {
                                 target_block_number: request.target_block_number,
                                 target_block_hash: request.target_block_hash,
                                 epoch_validators: request.epoch_validators,
                                 blocks: missing_blocks,
-                            })
-                        } else {
-                            Err(Error)
+                            }),
+                            Ok(Err(error)) => Err(MissingBlockError::Response(error)),
+                            Err(error) => Err(MissingBlockError::Request(error)),
                         }
                     }
                     .boxed()
@@ -203,7 +209,7 @@ impl<N: Network> BlockRequestComponent<N> {
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
         include_micro_bodies: bool,
-    ) -> Result<Option<Vec<Block>>, RequestError> {
+    ) -> Result<Result<Vec<Block>, ResponseBlocksError>, RequestError> {
         network
             .request::<RequestMissingBlocks>(
                 RequestMissingBlocks {
@@ -214,7 +220,7 @@ impl<N: Network> BlockRequestComponent<N> {
                 peer_id,
             )
             .await
-            .map(|response| response.ok().map(|r| r.blocks))
+            .map(|response| response.map(|r| r.blocks))
     }
 
     pub fn request_missing_blocks(

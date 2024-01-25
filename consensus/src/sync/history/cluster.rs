@@ -24,10 +24,7 @@ use crate::{
     messages::{
         BatchSetError, BatchSetInfo, HistoryChunkError, RequestBatchSet, RequestHistoryChunk,
     },
-    sync::{
-        peer_list::PeerList,
-        sync_queue::{Error, SyncQueue},
-    },
+    sync::{peer_list::PeerList, sync_queue::SyncQueue},
 };
 
 /// Error enumeration for history sync request
@@ -137,12 +134,12 @@ pub struct SyncCluster<TNetwork: Network> {
 
     // Both batch_set_queue and the history_queue share the same peers.
     pub(crate) batch_set_queue:
-        SyncQueue<TNetwork, Blake2bHash, BatchSetInfo, Error, BatchSetVerifyState>,
+        SyncQueue<TNetwork, Blake2bHash, BatchSetInfo, HistoryRequestError, BatchSetVerifyState>,
     history_queue: SyncQueue<
         TNetwork,
         HistoryChunkRequest,
         (HistoryChunkRequest, HistoryTreeChunk),
-        Error,
+        HistoryRequestError,
         (),
     >,
 
@@ -220,12 +217,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             peers.clone(),
             Self::NUM_PENDING_BATCH_SETS,
             |id, network, peer_id| {
-                async move {
-                    Self::request_epoch(network, peer_id, id)
-                        .await
-                        .map_err(|_| Error)
-                }
-                .boxed()
+                async move { Self::request_epoch(network, peer_id, id).await }.boxed()
             },
             |_, batch_set_info, verify_state| {
                 if let Err(e) = Self::verify_batch_set_info(
@@ -265,7 +257,6 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
                 async move {
                     Self::request_history_chunk(network, peer_id, request.clone())
                         .await
-                        .map_err(|_| Error)
                         .map(|chunk| (request, chunk))
                 }
                 .boxed()

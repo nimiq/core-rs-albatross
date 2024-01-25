@@ -451,11 +451,16 @@ mod tests {
 
     use futures::{future, task::noop_waker_ref, FutureExt, StreamExt};
     use nimiq_network_mock::MockHub;
+    use thiserror::Error;
 
-    use crate::sync::sync_queue::{Error, SyncQueue};
+    use crate::sync::sync_queue::SyncQueue;
 
     #[test]
     fn it_can_handle_no_peers() {
+        #[derive(Debug, Error)]
+        #[error("error")]
+        struct Error;
+
         let mut hub = MockHub::new();
         let network = Arc::new(hub.new_network());
 
