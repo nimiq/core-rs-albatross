@@ -33,8 +33,7 @@ pub trait TaggedSignable: Serialize {
 
         let mut buf = Cursor::new(Vec::with_capacity(n + 1));
 
-        let tag = [Self::TAG; 1];
-        buf.write_all(&tag).expect("Failed to write tag");
+        buf.write_all(&[Self::TAG]).expect("Failed to write tag");
         self.serialize_to_writer(&mut buf)
             .expect("Failed to serialize message");
 
@@ -132,13 +131,50 @@ pub trait TaggedPublicKey {
     fn verify(&self, msg: &[u8], sig: &[u8]) -> bool;
 }
 
+pub struct Tag<TSignable: TaggedSignable> {
+    phantom: PhantomData<TSignable>,
+}
+
+impl<TSignable: TaggedSignable> Default for Tag<TSignable> {
+    fn default() -> Tag<TSignable> {
+        Tag {
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<TSignable: TaggedSignable> Clone for Tag<TSignable> {
+    fn clone(&self) -> Tag<TSignable> {
+        Tag::default()
+    }
+}
+
+impl<TSignable: TaggedSignable> serde::Serialize for Tag<TSignable> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serde::Serialize::serialize(&TSignable::TAG, serializer)
+    }
+}
+
+impl<'de, TSignable: TaggedSignable> serde::Deserialize<'de> for Tag<TSignable> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let tag = u8::deserialize(deserializer)?;
+        if tag != TSignable::TAG {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Unsigned(tag.into()),
+                &"correct tag",
+            ));
+        }
+        Ok(Tag::default())
+    }
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 pub struct TaggedSigned<TSignable, TScheme>
 where
     TSignable: TaggedSignable,
     TScheme: TaggedKeyPair,
 {
-    pub tag: u8,
+    pub tag: Tag<TSignable>,
     pub record: TSignable,
     pub signature: TaggedSignature<TSignable, TScheme>,
 }
@@ -150,7 +186,7 @@ where
 {
     pub fn new(record: TSignable, signature: TaggedSignature<TSignable, TScheme>) -> Self {
         Self {
-            tag: TSignable::TAG,
+            tag: Tag::default(),
             record,
             signature,
         }
