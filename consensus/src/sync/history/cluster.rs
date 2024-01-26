@@ -486,7 +486,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
 
     /// Returns the shared list of peers of both queues (history and batch set).
     pub(crate) fn peers(&self) -> Vec<<TNetwork as Network>::PeerId> {
-        self.batch_set_queue.peers.read().peers().clone()
+        self.batch_set_queue.peers.read().peers().to_vec()
     }
 
     pub(crate) fn split_off(&mut self, at: usize) -> Self {

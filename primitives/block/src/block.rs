@@ -133,7 +133,7 @@ impl Block {
     }
 
     /// Returns the extra data of the block.
-    pub fn extra_data(&self) -> &Vec<u8> {
+    pub fn extra_data(&self) -> &[u8] {
         match self {
             Block::Macro(ref block) => &block.header.extra_data,
             Block::Micro(ref block) => &block.header.extra_data,
@@ -232,10 +232,10 @@ impl Block {
 
     /// Returns a reference to the transactions of the block. If the block is a Macro block it just
     /// returns None, since Macro blocks don't contain any transactions.
-    pub fn transactions(&self) -> Option<&Vec<ExecutedTransaction>> {
+    pub fn transactions(&self) -> Option<&[ExecutedTransaction]> {
         match self {
             Block::Macro(_) => None,
-            Block::Micro(ref block) => block.body.as_ref().map(|ex| &ex.transactions),
+            Block::Micro(ref block) => block.body.as_ref().map(|ex| &ex.transactions[..]),
         }
     }
 
@@ -669,7 +669,7 @@ impl BlockHeader {
     }
 
     /// Returns the extra data of the block.
-    pub fn extra_data(&self) -> &Vec<u8> {
+    pub fn extra_data(&self) -> &[u8] {
         match self {
             BlockHeader::Macro(ref header) => &header.extra_data,
             BlockHeader::Micro(ref header) => &header.extra_data,

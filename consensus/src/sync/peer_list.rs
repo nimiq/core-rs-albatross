@@ -92,7 +92,7 @@ impl<N: Network> PeerList<N> {
         self.peers_set.contains(peer_id)
     }
 
-    pub fn peers(&self) -> &Vec<N::PeerId> {
+    pub fn peers(&self) -> &[N::PeerId] {
         &self.peers
     }
 

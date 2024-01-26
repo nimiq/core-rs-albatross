@@ -264,7 +264,7 @@ impl<N: Network> BlockRequestComponent<N> {
     }
 
     pub fn peers(&self) -> Vec<N::PeerId> {
-        self.peers.read().peers().clone()
+        self.peers.read().peers().to_vec()
     }
 
     pub fn peer_list(&self) -> Arc<RwLock<PeerList<N>>> {

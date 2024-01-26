@@ -98,8 +98,8 @@ impl BlockchainMetrics {
     #[inline]
     pub fn note_rebranch(
         &self,
-        reverted_blocks: &Vec<(Blake2bHash, Block)>,
-        adopted_blocks: &Vec<(Blake2bHash, Block)>,
+        reverted_blocks: &[(Blake2bHash, Block)],
+        adopted_blocks: &[(Blake2bHash, Block)],
     ) {
         for (_, micro_block) in reverted_blocks {
             if let Some(Micro(micro_body)) = micro_block.body() {

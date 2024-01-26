@@ -80,7 +80,7 @@ impl MacroBlockGadget {
     pub fn hash(
         &mut self,
         _cs: ConstraintSystemRef<MNT6Fq>,
-    ) -> Result<&Vec<UInt8<MNT6Fq>>, SynthesisError> {
+    ) -> Result<&[UInt8<MNT6Fq>], SynthesisError> {
         if let Some(ref header_hash) = self.header_hash {
             return Ok(header_hash);
         }
@@ -101,8 +101,7 @@ impl MacroBlockGadget {
         let header_hash = evaluate_blake2s(&header_bytes)?;
 
         // Cache calculated hash.
-        self.header_hash = Some(header_hash);
-        Ok(self.header_hash.as_ref().unwrap())
+        Ok(self.header_hash.insert(header_hash))
     }
 
     /// A function that calculates the hash point for the block. This should match exactly the hash

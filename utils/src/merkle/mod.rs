@@ -1,4 +1,4 @@
-use std::{borrow::Cow, cmp::Ordering, error, fmt, io::Write, marker::PhantomData, ops::Deref};
+use std::{borrow::Cow, cmp::Ordering, error, fmt, io::Write, marker::PhantomData};
 
 use nimiq_hash::{Blake2bHash, HashOutput, Hasher, SerializeContent};
 use serde::{
@@ -11,24 +11,16 @@ pub mod incremental;
 pub mod partial;
 
 pub fn compute_root_from_content<D: Hasher, T: SerializeContent>(values: &[T]) -> D::Output {
-    compute_root_from_content_slice::<D, T>(values)
-}
-
-pub fn compute_root_from_content_slice<D: Hasher, T: SerializeContent>(values: &[T]) -> D::Output {
     let mut v: Vec<D::Output> = Vec::with_capacity(values.len());
     for h in values {
         let mut hasher = D::default();
         h.serialize_content::<_, D::Output>(&mut hasher).unwrap();
         v.push(hasher.finish());
     }
-    compute_root_from_hashes::<D::Output>(&v)
+    compute_root_from_hashes::<D::Output>(&v).into_owned()
 }
 
-pub fn compute_root_from_hashes<T: HashOutput>(values: &[T]) -> T {
-    compute_root_from_slice::<T>(values).into_owned()
-}
-
-pub fn compute_root_from_slice<T: HashOutput>(values: &[T]) -> Cow<T> {
+pub fn compute_root_from_hashes<T: HashOutput>(values: &[T]) -> Cow<T> {
     let mut hasher = T::Builder::default();
     match values.len() {
         0 => {
@@ -39,10 +31,10 @@ pub fn compute_root_from_slice<T: HashOutput>(values: &[T]) -> Cow<T> {
         }
         len => {
             let mid = len.div_ceil(2);
-            let left_hash = compute_root_from_slice::<T>(&values[..mid]);
-            let right_hash = compute_root_from_slice::<T>(&values[mid..]);
-            hasher.hash(left_hash.deref());
-            hasher.hash(right_hash.deref());
+            let left_hash = compute_root_from_hashes::<T>(&values[..mid]);
+            let right_hash = compute_root_from_hashes::<T>(&values[mid..]);
+            hasher.hash(&*left_hash);
+            hasher.hash(&*right_hash);
         }
     };
     Cow::Owned(hasher.finish())

@@ -172,7 +172,7 @@ fn create_skip_block_update(
     skip_block_info: SkipBlockInfo,
     key_pair: BlsKeyPair,
     validator_id: u16,
-    slots: &Vec<u16>,
+    slots: &[u16],
 ) -> LevelUpdate<SignedSkipBlockMessage> {
     // get a single signature for this skip block data
     let signed_skip_block_info =
@@ -185,8 +185,8 @@ fn create_skip_block_update(
 
     // compute the signers bitset (which is just all the slots)
     let mut signers = BitSet::new();
-    for slot in slots {
-        signers.insert(*slot as usize);
+    for &slot in slots {
+        signers.insert(slot as usize);
     }
 
     // the contribution is composed of the signers bitset with the signature already multiplied by the number of slots.
@@ -268,7 +268,7 @@ async fn validator_can_catch_up() {
     // Listen for blockchain events from the block producer (after two skip blocks).
     let mut events = blockchain.read().notifier_as_stream();
 
-    let slots = blockchain.read().current_validators().unwrap().validators
+    let slots: Vec<_> = blockchain.read().current_validators().unwrap().validators
         [validator.validator_slot_band() as usize]
         .slots
         .clone()

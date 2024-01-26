@@ -4,14 +4,11 @@ use nimiq_primitives::policy::Policy;
 
 #[test]
 fn test_next_interlink() {
-    fn create_interlink_macro_block(
-        election_number: u32,
-        interlink: &Vec<Blake2bHash>,
-    ) -> MacroBlock {
+    fn create_interlink_macro_block(election_number: u32, interlink: &[Blake2bHash]) -> MacroBlock {
         MacroBlock {
             header: MacroHeader {
                 block_number: Policy::blocks_per_epoch() * election_number,
-                interlink: Some(interlink.clone()),
+                interlink: Some(interlink.to_vec()),
                 ..Default::default()
             },
             ..Default::default()

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops};
 
 use nimiq_block::{Block, MacroHeader};
 use nimiq_blockchain_interface::{BlockchainError, ChainInfo, Direction};
@@ -36,8 +36,8 @@ impl ChainStore {
     /// Gets all the stored block hashes for a given block number (you can have several micro blocks
     /// with the same block number because of forks). Returns None if there are no block hashes for
     /// that block number.
-    pub fn get_block_hashes(&self, block_number: &u32) -> Option<&Vec<Blake2bHash>> {
-        self.height_idx.get(block_number)
+    pub fn get_block_hashes(&self, block_number: &u32) -> Option<&[Blake2bHash]> {
+        self.height_idx.get(block_number).map(ops::Deref::deref)
     }
 
     /// Gets a chain info by its block number. Returns None if the chain info doesn't exist.

@@ -40,7 +40,7 @@ fn get_hist_tx(temp_producer: &TemporaryBlockProducer) -> Vec<HistoricTransactio
 }
 
 // Revert block and assert that history store is reverted as well.
-fn revert_block(temp_producer: &TemporaryBlockProducer, hist_tx_pre: &Vec<HistoricTransaction>) {
+fn revert_block(temp_producer: &TemporaryBlockProducer, hist_tx_pre: &[HistoricTransaction]) {
     let blockchain = temp_producer.blockchain.read();
     let mut txn = blockchain.write_transaction();
     blockchain.revert_blocks(1, &mut txn).unwrap();
