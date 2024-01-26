@@ -205,19 +205,23 @@ where
             validator_id: self.local_validator_id()?,
             inner: msg,
         };
-        if let Ok(peer_id) = self.get_validator_peer_id(validator_id).await {
-            self.network
-                .message(msg, peer_id)
-                .map_err(|e| {
-                    // The validator peer id might have changed and thus caused a connection failure.
-                    self.clear_validator_peer_id_cache(validator_id);
+        let peer_id = self
+            .get_validator_peer_id(validator_id)
+            .await
+            .map_err(|error| {
+                log::error!(?error, "Error getting validator peer ID");
+                error
+            })?;
 
-                    NetworkError::Request(e)
-                })
-                .await
-        } else {
-            Err(NetworkError::Unreachable)
-        }
+        self.network
+            .message(msg, peer_id)
+            .map_err(|e| {
+                // The validator peer id might have changed and thus caused a connection failure.
+                self.clear_validator_peer_id_cache(validator_id);
+
+                NetworkError::Request(e)
+            })
+            .await
     }
 
     async fn request<TRequest: Request>(
