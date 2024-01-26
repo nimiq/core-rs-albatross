@@ -272,6 +272,10 @@ impl<N: Network> BlockQueue<N> {
     /// Requests missing blocks.
     /// If a block locator is given, it is inserted at the beginning of the full block locator list.
     /// The list contains all blocks from the head until the last macro block.
+    ///
+    /// `pubsub_id` specifies the gossipsub peer ID of the gossip message that
+    /// led to this request, if any. It'll be used as the first peer to request
+    /// the missing blocks from.
     fn request_missing_blocks(
         &mut self,
         block_number: u32,
