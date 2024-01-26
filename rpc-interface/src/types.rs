@@ -988,7 +988,7 @@ pub enum BlockLog {
 }
 
 impl LogType {
-    pub fn with_log(log: &Log) -> Self {
+    pub fn from_log(log: &Log) -> Self {
         match log {
             Log::PayFee { .. } => Self::PayFee,
             Log::Transfer { .. } => Self::Transfer,
@@ -1026,34 +1026,15 @@ impl LogType {
 /// the log is related to), and vice_versa.
 pub fn is_of_log_type_and_related_to_addresses(
     log: &Log,
-    addresses: &Vec<Address>,
-    log_types: &Vec<LogType>,
+    addresses: &[Address],
+    log_types: &[LogType],
 ) -> bool {
-    // If addresses are empty, it tries to find a matching log_types and early return. Otherwise, it will finish and return false.
-    if addresses.is_empty() {
-        for log_type in log_types {
-            if log_type.eq(&LogType::with_log(log)) {
-                return true;
-            }
-        }
-    } else {
-        // Iterates over the addresses (and the log_types if those exist).
-        for address in addresses {
-            if log.is_related_to_address(address) {
-                if log_types.is_empty() {
-                    return true;
-                }
-                // If there are log_types to compare with, it tries to find a match and early return.
-                for log_type in log_types {
-                    if log_type.eq(&LogType::with_log(log)) {
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-    // It iterated over all the existing vecs and found no match.
-    false
+    let log_type = LogType::from_log(log);
+    let matches_log_types =
+        log_types.is_empty() || log_types.iter().any(|other| log_type == *other);
+    let matches_addresses =
+        addresses.is_empty() || addresses.iter().any(|addr| log.is_related_to_address(addr));
+    matches_log_types && matches_addresses
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
