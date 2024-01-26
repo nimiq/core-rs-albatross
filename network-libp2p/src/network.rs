@@ -951,6 +951,7 @@ impl Network {
                                         } else {
                                             warn!(query_id = ?id, ?step, query_error=?error, "GetRecord query result error for unknown query ID");
                                         }
+                                        state.dht_get_results.remove(&id);
                                     }
                                     QueryResult::PutRecord(result) => {
                                         // dht_put resolved
