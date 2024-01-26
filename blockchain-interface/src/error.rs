@@ -15,6 +15,9 @@ pub enum BlockchainEvent {
     Extended(Blake2bHash),
     HistoryAdopted(Blake2bHash),
     Rebranched(Vec<(Blake2bHash, Block)>, Vec<(Blake2bHash, Block)>),
+    /// Given Block was stored in the chain store but was not adopted as new head block.
+    /// I.e. forked blocks and inferior chain blocks.
+    Stored(Block),
     Finalized(Blake2bHash),
     EpochFinalized(Blake2bHash),
 }

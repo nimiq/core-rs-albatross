@@ -151,9 +151,13 @@ impl Blockchain {
         );
 
         // We shouldn't log errors if there are no listeners.
-        _ = this
-            .notifier
-            .send(BlockchainEvent::EpochFinalized(block_hash_blake2b));
+        this.notifier
+            .send(BlockchainEvent::Extended(block_hash_blake2b.clone()))
+            .ok();
+
+        this.notifier
+            .send(BlockchainEvent::EpochFinalized(block_hash_blake2b))
+            .ok();
 
         // We don't have any block logs, so we do not notify the block log stream.
 
@@ -336,12 +340,18 @@ impl Blockchain {
         );
 
         // We shouldn't log errors if there are no listeners.
+        this.notifier
+            .send(BlockchainEvent::Extended(block_hash.clone()))
+            .ok();
+
         if is_election_block {
-            _ = this
-                .notifier
-                .send(BlockchainEvent::EpochFinalized(block_hash));
+            this.notifier
+                .send(BlockchainEvent::EpochFinalized(block_hash))
+                .ok();
         } else {
-            _ = this.notifier.send(BlockchainEvent::Finalized(block_hash));
+            this.notifier
+                .send(BlockchainEvent::Finalized(block_hash))
+                .ok();
         }
 
         // We don't have any block logs, so we do not notify the block log stream.

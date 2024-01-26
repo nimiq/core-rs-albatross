@@ -428,6 +428,9 @@ impl<N: Network> BlockQueue<N> {
                     block_infos.push((block.block_number(), block_hash));
                 }
             }
+            BlockchainEvent::Stored(block) => {
+                block_infos.push((block.block_number(), block.hash()));
+            }
         }
         block_infos
     }

@@ -161,6 +161,12 @@ impl Blockchain {
         }
         txn.commit();
 
+        // Fork and inferior chain block fire a Stored Event.
+        // They can never fire a Finalized or EpochFinalized as then they would not be inferior/forked.
+        this.notifier
+            .send(BlockchainEvent::Stored(chain_info.head))
+            .ok();
+
         Ok((result, Ok(ChunksPushResult::EmptyChunks)))
     }
 

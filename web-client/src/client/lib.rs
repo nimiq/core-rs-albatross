@@ -866,6 +866,9 @@ impl Client {
                                 adopted_blocks,
                             )
                         }
+                        Some(BlockchainEvent::Stored(block)) => {
+                            (block.hash(), "stored", Array::new(), Array::new())
+                        }
                         None => {
                             break;
                         }

@@ -678,6 +678,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                     BlockchainEvent::Rebranched(_, new_branch) => {
                         Some(new_branch.into_iter().last().unwrap().0.into())
                     }
+                    BlockchainEvent::Stored(_block) => None,
                 };
                 future::ready(result)
             })

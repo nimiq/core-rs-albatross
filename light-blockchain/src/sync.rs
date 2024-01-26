@@ -92,9 +92,13 @@ impl LightBlockchain {
         this.current_validators = block.validators();
 
         // We shouldn't log errors if there are no listeners.
-        _ = this
-            .notifier
-            .send(BlockchainEvent::EpochFinalized(block_hash_blake2b));
+        this.notifier
+            .send(BlockchainEvent::Extended(block_hash_blake2b.clone()))
+            .ok();
+
+        this.notifier
+            .send(BlockchainEvent::EpochFinalized(block_hash_blake2b))
+            .ok();
 
         Ok(PushResult::Extended)
     }
@@ -153,6 +157,10 @@ impl LightBlockchain {
 
         this.macro_head = block.clone().unwrap_macro();
 
+        this.notifier
+            .send(BlockchainEvent::Extended(block_hash.clone()))
+            .ok();
+
         // If it's an election block, you have more steps.
         if block.is_election() {
             this.election_head = block.unwrap_macro_ref().clone();
@@ -163,12 +171,14 @@ impl LightBlockchain {
             this.chain_store.put_election(block.unwrap_macro().header);
 
             // We shouldn't log errors if there are no listeners.
-            _ = this
-                .notifier
-                .send(BlockchainEvent::EpochFinalized(block_hash));
+            this.notifier
+                .send(BlockchainEvent::EpochFinalized(block_hash))
+                .ok();
         } else {
             // We shouldn't log errors if there are no listeners.
-            _ = this.notifier.send(BlockchainEvent::Finalized(block_hash));
+            this.notifier
+                .send(BlockchainEvent::Finalized(block_hash))
+                .ok();
         }
 
         Ok(PushResult::Extended)

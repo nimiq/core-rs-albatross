@@ -253,11 +253,16 @@ impl<N: Network> Future for RemoteEventDispatcher<N> {
                     new_blocks.push(block);
                 }
                 BlockchainEvent::Rebranched(_reverted_blocks, adopted_blocks) => {
-                    // We dont't notify about reverted block, only adopted blocks
+                    // We don't notify about reverted block, only adopted blocks
                     new_blocks.extend(adopted_blocks.into_iter().map(|(_, block)| block));
                 }
                 BlockchainEvent::HistoryAdopted(_) => {
                     // In the future we might be interested in other events
+                }
+                BlockchainEvent::Stored(_block) => {
+                    // Stored events are not reported as they are not on the main chain.
+                    // If they ever become main chain blocks, they will be reported then with the respective
+                    // BlockchainEvent::Rebranched(..)
                 }
             }
             // This hash map is used to collect all the notifications for a given peer.

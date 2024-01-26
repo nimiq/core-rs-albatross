@@ -510,7 +510,12 @@ impl<N: Network> Stream for StateQueue<N> {
                         self.diff_queue.set_diff_needed(true);
                     }
                 }
-                _ => {}
+                BlockchainEvent::HistoryAdopted(_) => {
+                    // Nothing to do for adopted history
+                }
+                BlockchainEvent::Stored(_block) => {
+                    // Block has not been applied so nothing to do here.
+                }
             }
         }
 

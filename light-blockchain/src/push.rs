@@ -7,7 +7,7 @@ use nimiq_blockchain_interface::{
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::policy::Policy;
-use parking_lot::RwLockUpgradableReadGuard;
+use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 use crate::blockchain::LightBlockchain;
 
@@ -137,9 +137,19 @@ impl LightBlockchain {
                 PushResult::Forked
             }
         };
+
+        // Upgrade for the store
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
+
         // Otherwise, we are creating/extending a fork. Store ChainInfo.
-        this.chain_store.put_chain_info(chain_info);
+        this.chain_store.put_chain_info(chain_info.clone());
+
+        // Downgrade asap
+        let this = RwLockWriteGuard::downgrade_to_upgradable(this);
+
+        this.notifier
+            .send(BlockchainEvent::Stored(chain_info.head))
+            .ok();
 
         Ok(result)
     }
@@ -197,14 +207,18 @@ impl LightBlockchain {
         );
 
         // We shouldn't log errors if there are no listeners.
+        this.notifier
+            .send(BlockchainEvent::Extended(block_hash.clone()))
+            .ok();
+
         if is_election_block {
-            _ = this
-                .notifier
-                .send(BlockchainEvent::EpochFinalized(block_hash));
+            this.notifier
+                .send(BlockchainEvent::EpochFinalized(block_hash))
+                .ok();
         } else if is_macro_block {
-            _ = this.notifier.send(BlockchainEvent::Finalized(block_hash));
-        } else {
-            _ = this.notifier.send(BlockchainEvent::Extended(block_hash));
+            this.notifier
+                .send(BlockchainEvent::Finalized(block_hash))
+                .ok();
         }
 
         Ok(PushResult::Extended)
@@ -347,9 +361,19 @@ impl LightBlockchain {
         );
 
         // We do not log errors if there are no listeners
-        _ = this
-            .notifier
-            .send(BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks));
+        this.notifier
+            .send(BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks))
+            .ok();
+
+        if this.head.is_election() {
+            this.notifier
+                .send(BlockchainEvent::EpochFinalized(this.head_hash()))
+                .ok();
+        } else if this.head.is_macro() {
+            this.notifier
+                .send(BlockchainEvent::Finalized(this.head_hash()))
+                .ok();
+        }
 
         Ok(PushResult::Rebranched)
     }

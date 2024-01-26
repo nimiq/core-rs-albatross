@@ -454,16 +454,22 @@ where
             BlockchainEvent::Extended(ref hash) => self.on_blockchain_extended(hash),
             BlockchainEvent::HistoryAdopted(ref hash) => self.on_blockchain_history_adopted(hash),
             BlockchainEvent::Finalized(ref hash) => {
+                // The on_blockchain_extended is necessary for the order of events to not matter.
                 self.on_blockchain_extended(hash);
                 self.update_consensus_state(Some(hash));
             }
             BlockchainEvent::EpochFinalized(ref hash) => {
                 self.init_epoch();
+                // The on_blockchain_extended is necessary for the order of events to not matter.
                 self.on_blockchain_extended(hash);
                 self.update_consensus_state(Some(hash));
             }
             BlockchainEvent::Rebranched(ref old_chain, ref new_chain) => {
                 self.on_blockchain_rebranched(old_chain, new_chain)
+            }
+            BlockchainEvent::Stored(ref _block) => {
+                // Nothing to do here for now. Forks are already reported on `fork_event_rx`
+                // and inferior chain blocks are irrelevant here.
             }
         }
     }
