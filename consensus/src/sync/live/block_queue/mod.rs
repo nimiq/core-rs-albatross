@@ -250,7 +250,14 @@ impl<N: Network> BlockQueue<N> {
         }
 
         // We don't know the predecessor of this block, request it.
-        self.request_missing_blocks(parent_block_number, parent_hash, None, None, pubsub_id);
+        self.request_missing_blocks(
+            parent_block_number,
+            parent_hash,
+            None,
+            None,
+            pubsub_id,
+            Direction::Forward,
+        );
     }
 
     fn insert_block_into_buffer(&mut self, block: Block, pubsub_id: Option<N::PubsubId>) -> bool {
@@ -283,6 +290,7 @@ impl<N: Network> BlockQueue<N> {
         block_locator: Option<Blake2bHash>,
         epoch_validators: Option<Validators>,
         pubsub_id: Option<N::PubsubId>,
+        direction: Direction,
     ) {
         let (head_hash, head_height, macro_height, blocks, epoch_validators) = {
             let blockchain = self.blockchain.read();
@@ -341,6 +349,7 @@ impl<N: Network> BlockQueue<N> {
                 block_number,
                 block_hash,
                 block_locators,
+                direction,
                 epoch_validators,
                 pubsub_id,
             );
@@ -375,6 +384,7 @@ impl<N: Network> BlockQueue<N> {
                 Some(block_hash),
                 Some(epoch_validators),
                 None,
+                Direction::Forward,
             );
         }
 

@@ -2,6 +2,7 @@ use nimiq_block::{Block, BlockError, EquivocationProofError, ForkProof};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{account::AccountError, networks::NetworkId};
 use nimiq_transaction::EquivocationLocator;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// An enum used when a fork is detected.
@@ -85,7 +86,8 @@ pub enum PushError {
     IncompleteAccountsTrie,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Deserialize, Serialize)]
+#[repr(u8)]
 pub enum Direction {
     Forward,
     Backward,
