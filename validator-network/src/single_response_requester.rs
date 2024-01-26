@@ -20,14 +20,14 @@ where
     TContext: Clone + Send + Unpin,
 {
     network: Arc<TValidatorNetwork>,
-    remaining_peers: Vec<usize>,
+    remaining_peers: Vec<u16>,
     request: TRequest,
     context: TContext,
     desired_pending_requests: usize,
     verification_fn: fn(<TRequest as RequestCommon>::Response, TContext) -> Option<TOutput>,
 
     pending_futures:
-        FuturesUnordered<BoxFuture<'a, Result<<TRequest as RequestCommon>::Response, usize>>>,
+        FuturesUnordered<BoxFuture<'a, Result<<TRequest as RequestCommon>::Response, u16>>>,
 }
 
 impl<'a, TValidatorNetwork, TRequest, TContext, TOutput>
@@ -39,7 +39,7 @@ where
 {
     pub fn new(
         network: Arc<TValidatorNetwork>,
-        remaining_peers: Vec<usize>,
+        remaining_peers: Vec<u16>,
         request: TRequest,
         context: TContext,
         desired_pending_requests: usize,
@@ -72,7 +72,7 @@ where
         let validator_id = self
             .remaining_peers
             .pop()
-            .expect("Create_request needs a non empty list of remaining peers.");
+            .expect("create_request needs a non empty list of remaining peers.");
 
         let network = Arc::clone(&self.network);
         let request = self.request.clone();

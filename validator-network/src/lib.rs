@@ -25,7 +25,7 @@ pub trait ValidatorNetwork: Send + Sync {
 
     /// Tells the validator network its own validator ID in case it is an active validator, or
     /// `None`, otherwise.
-    fn set_validator_id(&self, validator_id: Option<usize>);
+    fn set_validator_id(&self, validator_id: Option<u16>);
 
     /// Tells the validator network the validator keys for the current set of active validators.
     /// The keys must be ordered, such that the k-th entry is the validator with ID k.
@@ -34,13 +34,13 @@ pub trait ValidatorNetwork: Send + Sync {
     /// Sends a message to a validator identified by its ID (position) in the `validator keys`.
     /// It must make a reasonable effort to establish a connection to the peer denoted with `validator_id`
     /// before returning a connection not established error.
-    async fn send_to<M: Message>(&self, validator_id: usize, msg: M) -> Result<(), Self::Error>;
+    async fn send_to<M: Message>(&self, validator_id: u16, msg: M) -> Result<(), Self::Error>;
 
     /// Performs a request to a validator identified by its ID.
     async fn request<TRequest: Request>(
         &self,
         request: TRequest,
-        validator_id: usize,
+        validator_id: u16,
     ) -> Result<
         <TRequest as RequestCommon>::Response,
         NetworkError<<Self::NetworkType as Network>::Error>,

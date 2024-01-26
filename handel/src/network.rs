@@ -18,7 +18,7 @@ pub trait Network: Unpin + Send + 'static {
     type Contribution: AggregatableContribution;
     /// Sends message `msg.0` to validator identified by index `msg.1`. The mapping for the identifier is the
     /// same as the one given by the identity register
-    fn send_to(&self, msg: (LevelUpdate<Self::Contribution>, usize)) -> BoxFuture<'static, ()>;
+    fn send_to(&self, msg: (LevelUpdate<Self::Contribution>, u16)) -> BoxFuture<'static, ()>;
 }
 
 /// Struct to facilitate sending multiple messages.
@@ -29,11 +29,11 @@ pub struct LevelUpdateSender<TNetwork: Network> {
     /// be sent after this one. In case there is none it will be set to the len of the Vec, which is an OOB index.
     message_buffer: Vec<Option<(LevelUpdate<TNetwork::Contribution>, usize)>>,
 
-    /// Index of the first message in this buffer that should be send. If there is no message buffered it will point to
+    /// Index of the first message in this buffer that should be sent. If there is no message buffered it will point to
     /// `message_buffer.len()` which is the first OOB index.
     first: usize,
 
-    /// Index of the last message in this buffer that should be send. It is used to quickly append messages.
+    /// Index of the last message in this buffer that should be sent. It is used to quickly append messages.
     /// If there is no message buffered it will point to `message_buffer.len()` which is the first OOB index.
     last: usize,
 
@@ -123,7 +123,7 @@ impl<TNetwork: Network + Unpin> Stream for LevelUpdateSender<TNetwork> {
                     .expect("First must point to a valid buffered message");
 
                 // Create the future sending the message
-                let mut fut = self.network.send_to((msg, self.first));
+                let mut fut = self.network.send_to((msg, self.first.try_into().unwrap()));
                 // Poll it, and only add it to the pending futures if it is in fact pending.
                 if fut.poll_unpin(cx).is_pending() {
                     // If the Future does not resolve immediately add it to the pending futures.
@@ -190,12 +190,12 @@ mod test {
 
     /// Actual values are irrelevant and only used for testing
     #[derive(Debug)]
-    struct Net(pub Arc<Mutex<Vec<(LevelUpdate<<Self as Network>::Contribution>, usize)>>>);
+    struct Net(pub Arc<Mutex<Vec<(LevelUpdate<<Self as Network>::Contribution>, u16)>>>);
     impl Network for Net {
         type Contribution = Contribution;
         fn send_to(
             &self,
-            msg: (LevelUpdate<Self::Contribution>, usize),
+            msg: (LevelUpdate<Self::Contribution>, u16),
         ) -> futures::future::BoxFuture<'static, ()> {
             self.0.lock().push(msg);
 

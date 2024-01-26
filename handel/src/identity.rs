@@ -41,8 +41,8 @@ impl Identity {
     }
 
     /// Returns the identity as a vector of signers.
-    pub fn as_vec(&self) -> Vec<usize> {
-        self.signers.iter().collect()
+    pub fn as_vec(&self) -> Vec<u16> {
+        self.signers.iter().map(|i| i.try_into().unwrap()).collect()
     }
 
     /// Returns the intersection size with another identity.

@@ -181,7 +181,7 @@ impl<N: NetworkInterface> Network for NetworkWrapper<N> {
 
     fn send_to(
         &self,
-        (msg, recipient): (LevelUpdate<Self::Contribution>, usize),
+        (msg, recipient): (LevelUpdate<Self::Contribution>, u16),
     ) -> BoxFuture<'static, ()> {
         let update = Update(msg);
         let nw = Arc::clone(&self.0);

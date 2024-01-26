@@ -70,7 +70,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
 
     fn send_to(
         &self,
-        (msg, recipient): (nimiq_handel::update::LevelUpdate<Self::Contribution>, usize),
+        (msg, recipient): (nimiq_handel::update::LevelUpdate<Self::Contribution>, u16),
     ) -> futures::future::BoxFuture<'static, ()> {
         // wrap the level update in the AggregateMessage
         let aggregation = AggregateMessage(msg);

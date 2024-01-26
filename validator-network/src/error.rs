@@ -22,7 +22,7 @@ where
 
     /// The public key for that validator is not known.
     #[error("Unknown validator: {0}")]
-    UnknownValidator(usize),
+    UnknownValidator(u16),
 
     #[error("Network error: {0}")]
     Network(#[from] TNetworkError),

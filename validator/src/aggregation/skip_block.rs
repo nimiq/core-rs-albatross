@@ -102,7 +102,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
 
     fn send_to(
         &self,
-        (msg, recipient): (nimiq_handel::update::LevelUpdate<Self::Contribution>, usize),
+        (msg, recipient): (nimiq_handel::update::LevelUpdate<Self::Contribution>, u16),
     ) -> futures::future::BoxFuture<'static, ()> {
         // Create the update.
         let update_message = SkipBlockUpdate(msg, self.tag.clone());

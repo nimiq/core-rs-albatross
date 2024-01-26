@@ -292,8 +292,7 @@ where
         }
 
         // Inform the network about the current validator ID.
-        self.network
-            .set_validator_id(self.slot_band.map(|id| id as usize));
+        self.network.set_validator_id(self.slot_band);
 
         let voting_keys: Vec<LazyPublicKey> = validators
             .iter()

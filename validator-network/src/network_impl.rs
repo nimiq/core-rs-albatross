@@ -19,7 +19,7 @@ use crate::validator_record::ValidatorRecord;
 #[derive(Clone, Debug)]
 pub struct State<TPeerId> {
     /// Own validator ID if active, `None` otherwise.
-    own_validator_id: Option<usize>,
+    own_validator_id: Option<u16>,
     /// Set of public keys for each of the validators
     validator_keys: Vec<LazyPublicKey>,
     /// Cache for mapping validator public keys to peer IDs
@@ -68,7 +68,6 @@ where
         self.state
             .read()
             .own_validator_id
-            .map(|id| id.try_into().unwrap())
             .ok_or(NetworkError::NotElected)
     }
 
@@ -90,14 +89,14 @@ where
     /// Look up the peer ID for a validator ID.
     async fn get_validator_peer_id(
         &self,
-        validator_id: usize,
+        validator_id: u16,
     ) -> Result<N::PeerId, NetworkError<N::Error>> {
         let (peer_id, public_key) = {
             let state = self.state.read();
 
             let public_key = state
                 .validator_keys
-                .get(validator_id)
+                .get(usize::from(validator_id))
                 .ok_or(NetworkError::UnknownValidator(validator_id))?
                 .clone();
 
@@ -127,9 +126,9 @@ where
 
     /// Clears the validator->peer_id cache.
     /// The cached entry should be cleared when the peer id might have changed.
-    fn clear_validator_peer_id_cache(&self, validator_id: usize) {
+    fn clear_validator_peer_id_cache(&self, validator_id: u16) {
         let state = &mut *self.state.write();
-        let validator_key = state.validator_keys.get(validator_id);
+        let validator_key = state.validator_keys.get(usize::from(validator_id));
         if let Some(validator_key) = validator_key {
             state
                 .validator_peer_id_cache
@@ -172,7 +171,7 @@ where
     type NetworkType = N;
     type PubsubId = N::PubsubId;
 
-    fn set_validator_id(&self, validator_id: Option<usize>) {
+    fn set_validator_id(&self, validator_id: Option<u16>) {
         self.state.write().own_validator_id = validator_id;
     }
 
@@ -200,7 +199,7 @@ where
         state.validator_peer_id_cache = keep_cached;
     }
 
-    async fn send_to<M: Message>(&self, validator_id: usize, msg: M) -> Result<(), Self::Error> {
+    async fn send_to<M: Message>(&self, validator_id: u16, msg: M) -> Result<(), Self::Error> {
         let msg = ValidatorMessage {
             validator_id: self.local_validator_id()?,
             inner: msg,
@@ -227,7 +226,7 @@ where
     async fn request<TRequest: Request>(
         &self,
         request: TRequest,
-        validator_id: usize,
+        validator_id: u16,
     ) -> Result<
         <TRequest as RequestCommon>::Response,
         NetworkError<<Self::NetworkType as Network>::Error>,
@@ -262,7 +261,7 @@ where
                 .filter_map(move |(message, peer_id)| {
                     let self_ = self_.arc_clone();
                     async move {
-                        let validator_peer_id = self_.get_validator_peer_id(message.validator_id as usize).await.ok();
+                        let validator_peer_id = self_.get_validator_peer_id(message.validator_id).await.ok();
                         // Check that each message actually comes from the peer that it
                         // claims it comes from. Reject it otherwise.
                         if validator_peer_id
