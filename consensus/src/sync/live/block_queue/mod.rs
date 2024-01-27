@@ -1,5 +1,9 @@
 use std::{
-    collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{
+        btree_map::{BTreeMap, Entry as BTreeMapEntry},
+        hash_map::{Entry as HashMapEntry, HashMap},
+        BTreeSet, HashSet,
+    },
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -437,11 +441,8 @@ impl<N: Network> BlockQueue<N> {
         Some(QueuedBlock::Missing(blocks))
     }
 
-    /// Fetches the block information for the new blocks.
-    fn get_new_blocks_from_blockchain_event(
-        &self,
-        event: BlockchainEvent,
-    ) -> Vec<(u32, Blake2bHash)> {
+    /// Fetches the relevant blocks for any given `BlockchainEvent`
+    fn get_new_blocks_from_blockchain_event(&self, event: BlockchainEvent) -> Vec<Block> {
         // Collect block numbers and hashes of newly added blocks first.
         let mut block_infos = vec![];
 
@@ -451,16 +452,16 @@ impl<N: Network> BlockQueue<N> {
             | BlockchainEvent::Finalized(block_hash)
             | BlockchainEvent::EpochFinalized(block_hash) => {
                 if let Ok(block) = self.blockchain.read().get_block(&block_hash, false) {
-                    block_infos.push((block.block_number(), block_hash));
+                    block_infos.push(block);
                 }
             }
             BlockchainEvent::Rebranched(_, new_blocks) => {
-                for (block_hash, block) in new_blocks {
-                    block_infos.push((block.block_number(), block_hash));
+                for (_block_hash, block) in new_blocks {
+                    block_infos.push(block);
                 }
             }
             BlockchainEvent::Stored(block) => {
-                block_infos.push((block.block_number(), block.hash()));
+                block_infos.push(block);
             }
         }
         block_infos
@@ -604,6 +605,24 @@ impl<N: Network> BlockQueue<N> {
         });
     }
 
+    /// For a given collection of blocks check if they resolve a currently pending resolve block request
+    fn resolve_pending_requests(&mut self, new_blocks: &Vec<Block>) {
+        for new_block in new_blocks {
+            if let BTreeMapEntry::Occupied(mut requested_hashes) =
+                self.pending_requests.entry(new_block.block_number())
+            {
+                if let Some(sender) = requested_hashes.get_mut().remove(&new_block.hash()) {
+                    if let Err(error) = sender.send(Ok(new_block.clone())) {
+                        log::warn!(?error, "Failed to send block for a missing block request");
+                    }
+                    if requested_hashes.get().is_empty() {
+                        requested_hashes.remove();
+                    }
+                }
+            }
+        }
+    }
+
     #[inline]
     fn report_validation_result(
         &self,
@@ -638,7 +657,7 @@ impl<N: Network> BlockQueue<N> {
             .or_default()
             .entry(block_hash.clone())
         {
-            Entry::Occupied(_entry) => {
+            HashMapEntry::Occupied(_entry) => {
                 // Already existing request, send the Duplicate Error to resolve this request as
                 // the previous one should still do the trick.
                 if let Err(error) = response_sender.send(Err(ResolveBlockError::Duplicate)) {
@@ -652,7 +671,7 @@ impl<N: Network> BlockQueue<N> {
                 // but they should be reasonably deduplicated by the network layer. Otherwise it would be a different
                 // pubsub_id thus giving more options to actually resolve the block in terms of peers ot ask.
             }
-            Entry::Vacant(entry) => {
+            HashMapEntry::Vacant(entry) => {
                 entry.insert(response_sender);
             }
         };
@@ -710,7 +729,13 @@ impl<N: Network> Stream for BlockQueue<N> {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         // Poll the blockchain stream and return blocks that can now possibly be pushed by the blockchain.
         while let Poll::Ready(Some(event)) = self.blockchain_rx.poll_next_unpin(cx) {
-            let block_infos = self.get_new_blocks_from_blockchain_event(event);
+            let blocks = self.get_new_blocks_from_blockchain_event(event);
+            self.resolve_pending_requests(&blocks);
+            let block_infos = blocks
+                .into_iter()
+                .map(|block| (block.block_number(), block.hash()))
+                .collect();
+
             let buffered_blocks = self.remove_applicable_blocks(block_infos);
             if !buffered_blocks.is_empty() {
                 return Poll::Ready(Some(QueuedBlock::Buffered(buffered_blocks)));
