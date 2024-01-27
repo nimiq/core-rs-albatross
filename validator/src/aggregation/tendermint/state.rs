@@ -6,7 +6,7 @@ use nimiq_hash::Blake2sHash;
 use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_tendermint::{State as TendermintState, Step};
-use nimiq_validator_network::ValidatorNetwork;
+use nimiq_validator_network::{PubsubId, ValidatorNetwork};
 
 use super::{
     contribution::TendermintContribution,
@@ -49,7 +49,7 @@ impl MacroState {
     ) -> Self
     where
         TValidatorNetwork: ValidatorNetwork + 'static,
-        <TValidatorNetwork as ValidatorNetwork>::PubsubId: Unpin,
+        PubsubId<TValidatorNetwork>: Unpin,
     {
         let mut known_proposals = BTreeMap::default();
         for (proposal_hash, Header(proposal, _)) in state.known_proposals.into_iter() {
@@ -80,7 +80,7 @@ impl MacroState {
     ) -> Option<TendermintState<TendermintProtocol<TValidatorNetwork>>>
     where
         TValidatorNetwork: ValidatorNetwork + 'static,
-        <TValidatorNetwork as ValidatorNetwork>::PubsubId: Unpin,
+        PubsubId<TValidatorNetwork>: Unpin,
     {
         if self.block_number != reference_height {
             return None;
@@ -90,7 +90,7 @@ impl MacroState {
         for (proposal_hash, proposal) in self.known_proposals.iter() {
             known_proposals.insert(
                 proposal_hash.clone(),
-                Header::<<TValidatorNetwork as ValidatorNetwork>::PubsubId>(proposal.clone(), None),
+                Header::<PubsubId<TValidatorNetwork>>(proposal.clone(), None),
             );
         }
         let mut inherents = BTreeMap::default();
@@ -147,11 +147,11 @@ struct State<TValidatorNetwork: ValidatorNetwork + 'static>(
     pub TendermintState<TendermintProtocol<TValidatorNetwork>>,
 )
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin;
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin;
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> Clone for State<TValidatorNetwork>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     fn clone(&self) -> Self {
         Self(self.0, self.1.clone())

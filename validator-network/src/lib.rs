@@ -7,13 +7,15 @@ use async_trait::async_trait;
 use futures::stream::BoxStream;
 use nimiq_bls::{lazy::LazyPublicKey, CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
-    network::{CloseReason, MsgAcceptance, Network, PubsubId, SubscribeEvents, Topic},
+    network::{CloseReason, MsgAcceptance, Network, SubscribeEvents, Topic},
     request::{Message, Request, RequestCommon},
 };
 
 pub use crate::error::NetworkError;
 
 pub type MessageStream<TMessage> = BoxStream<'static, (TMessage, usize)>;
+pub type PubsubId<TValidatorNetwork> =
+    <<TValidatorNetwork as ValidatorNetwork>::NetworkType as Network>::PubsubId;
 
 /// Fixed upper bound network.
 /// Peers are denoted by a usize identifier which deterministically identifies them.
@@ -21,7 +23,6 @@ pub type MessageStream<TMessage> = BoxStream<'static, (TMessage, usize)>;
 pub trait ValidatorNetwork: Send + Sync {
     type Error: std::error::Error + Send + 'static;
     type NetworkType: Network;
-    type PubsubId: PubsubId<<Self::NetworkType as Network>::PeerId> + Send;
 
     /// Tells the validator network its own validator ID in case it is an active validator, or
     /// `None`, otherwise.
@@ -57,7 +58,7 @@ pub trait ValidatorNetwork: Send + Sync {
     /// Subscribes to a specific Gossipsub topic.
     async fn subscribe<'a, TTopic: Topic + Sync>(
         &self,
-    ) -> Result<BoxStream<'a, (TTopic::Item, Self::PubsubId)>, Self::Error>;
+    ) -> Result<BoxStream<'a, (TTopic::Item, PubsubId<Self>)>, Self::Error>;
 
     /// Subscribes to network events
     fn subscribe_events(&self) -> SubscribeEvents<<Self::NetworkType as Network>::PeerId>;
@@ -77,7 +78,7 @@ pub trait ValidatorNetwork: Send + Sync {
     );
 
     /// Signals that a Gossipsub'd message with `id` was verified successfully and can be relayed.
-    fn validate_message<TTopic>(&self, id: Self::PubsubId, acceptance: MsgAcceptance)
+    fn validate_message<TTopic>(&self, id: PubsubId<Self>, acceptance: MsgAcceptance)
     where
         TTopic: Topic + Sync;
 }

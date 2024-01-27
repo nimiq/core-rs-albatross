@@ -15,7 +15,7 @@ use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_network_interface::network::Topic;
 use nimiq_primitives::slots_allocation::Validators;
 use nimiq_tendermint::{Return as TendermintReturn, SignedProposalMessage, Tendermint};
-use nimiq_validator_network::ValidatorNetwork;
+use nimiq_validator_network::{PubsubId, ValidatorNetwork};
 use parking_lot::RwLock;
 
 use crate::{
@@ -29,18 +29,18 @@ use crate::{
 
 pub(crate) enum MappedReturn<TValidatorNetwork: ValidatorNetwork + 'static>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     Update(MacroState),
     Decision(MacroBlock),
     ProposalAccepted(
-        SignedProposalMessage<Header<TValidatorNetwork::PubsubId>, (SchnorrSignature, u16)>,
+        SignedProposalMessage<Header<PubsubId<TValidatorNetwork>>, (SchnorrSignature, u16)>,
     ),
     ProposalIgnored(
-        SignedProposalMessage<Header<TValidatorNetwork::PubsubId>, (SchnorrSignature, u16)>,
+        SignedProposalMessage<Header<PubsubId<TValidatorNetwork>>, (SchnorrSignature, u16)>,
     ),
     ProposalRejected(
-        SignedProposalMessage<Header<TValidatorNetwork::PubsubId>, (SchnorrSignature, u16)>,
+        SignedProposalMessage<Header<PubsubId<TValidatorNetwork>>, (SchnorrSignature, u16)>,
     ),
 }
 
@@ -50,7 +50,7 @@ pub struct ProposalTopic<TValidatorNetwork> {
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> Topic for ProposalTopic<TValidatorNetwork>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     type Item = SignedProposal;
 
@@ -62,14 +62,14 @@ where
 /// Pretty much just a wrapper for tendermint, doing some type conversions.
 pub(crate) struct ProduceMacroBlock<TValidatorNetwork: ValidatorNetwork + 'static>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     tendermint: BoxStream<'static, MappedReturn<TValidatorNetwork>>,
 }
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMacroBlock<TValidatorNetwork>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     pub fn new(
         blockchain: Arc<RwLock<Blockchain>>,
@@ -81,10 +81,7 @@ where
         state_opt: Option<MacroState>,
         proposal_stream: BoxStream<
             'static,
-            SignedProposalMessage<
-                Header<<TValidatorNetwork as ValidatorNetwork>::PubsubId>,
-                (SchnorrSignature, u16),
-            >,
+            SignedProposalMessage<Header<PubsubId<TValidatorNetwork>>, (SchnorrSignature, u16)>,
         >,
     ) -> Self {
         let input = network
@@ -142,7 +139,7 @@ where
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProduceMacroBlock<TValidatorNetwork>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     type Item = MappedReturn<TValidatorNetwork>;
 

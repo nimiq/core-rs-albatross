@@ -12,7 +12,7 @@ use nimiq_serde::{Deserialize, Serialize};
 use parking_lot::RwLock;
 use time::OffsetDateTime;
 
-use super::{MessageStream, NetworkError, ValidatorNetwork};
+use super::{MessageStream, NetworkError, PubsubId, ValidatorNetwork};
 use crate::validator_record::ValidatorRecord;
 
 /// Validator Network state
@@ -169,7 +169,6 @@ where
 {
     type Error = NetworkError<N::Error>;
     type NetworkType = N;
-    type PubsubId = N::PubsubId;
 
     fn set_validator_id(&self, validator_id: Option<u16>) {
         self.state.write().own_validator_id = validator_id;
@@ -288,7 +287,7 @@ where
 
     async fn subscribe<'a, TTopic>(
         &self,
-    ) -> Result<BoxStream<'a, (TTopic::Item, Self::PubsubId)>, Self::Error>
+    ) -> Result<BoxStream<'a, (TTopic::Item, PubsubId<Self>)>, Self::Error>
     where
         TTopic: Topic + Sync,
     {
@@ -320,7 +319,7 @@ where
         self.network.disconnect_peer(peer_id, close_reason).await
     }
 
-    fn validate_message<TTopic>(&self, id: Self::PubsubId, acceptance: MsgAcceptance)
+    fn validate_message<TTopic>(&self, id: PubsubId<Self>, acceptance: MsgAcceptance)
     where
         TTopic: Topic + Sync,
     {

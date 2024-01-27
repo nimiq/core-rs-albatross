@@ -29,7 +29,7 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_transaction_builder::TransactionBuilder;
-use nimiq_validator_network::ValidatorNetwork;
+use nimiq_validator_network::{PubsubId, ValidatorNetwork};
 use parking_lot::RwLock;
 #[cfg(feature = "metrics")]
 use tokio_metrics::TaskMonitor;
@@ -85,7 +85,7 @@ impl Clone for ValidatorProxy {
 
 pub struct Validator<TValidatorNetwork: ValidatorNetwork + 'static>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     pub consensus: ConsensusProxy<TValidatorNetwork::NetworkType>,
     pub blockchain: Arc<RwLock<Blockchain>>,
@@ -126,7 +126,7 @@ where
 
 impl<TValidatorNetwork: ValidatorNetwork> Validator<TValidatorNetwork>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     const MACRO_STATE_DB_NAME: &'static str = "ValidatorState";
     const MACRO_STATE_KEY: &'static str = "validatorState";
@@ -814,7 +814,7 @@ where
 
 impl<TValidatorNetwork: ValidatorNetwork> Future for Validator<TValidatorNetwork>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     type Output = ();
 

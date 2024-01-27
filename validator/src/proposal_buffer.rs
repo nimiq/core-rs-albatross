@@ -11,10 +11,10 @@ use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_macros::store_waker;
-use nimiq_network_interface::network::{CloseReason, MsgAcceptance, Network, PubsubId, Topic};
+use nimiq_network_interface::network::{CloseReason, MsgAcceptance, Network, PubsubId as _, Topic};
 use nimiq_serde::Serialize;
 use nimiq_tendermint::SignedProposalMessage;
-use nimiq_validator_network::ValidatorNetwork;
+use nimiq_validator_network::{PubsubId, ValidatorNetwork};
 use parking_lot::{Mutex, RwLock};
 
 use super::{
@@ -24,7 +24,7 @@ use super::{
 
 type ProposalAndPubsubId<TValidatorNetwork> = (
     <ProposalTopic<TValidatorNetwork> as Topic>::Item,
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId,
+    PubsubId<TValidatorNetwork>,
 );
 
 /// The buffer holding all proposals, which have been received, but were not yet needed. Any peer can at most have
@@ -44,7 +44,7 @@ type ProposalAndPubsubId<TValidatorNetwork> = (
 /// the proposal) they both could be banned as they failed to produce proper data upon being asked to do so.
 pub(crate) struct ProposalBuffer<TValidatorNetwork: ValidatorNetwork + 'static>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     /// A LinkedHashMap containing a proposal per peer_id.
     /// A single proposal could thus be in the buffer multiple times, but a single peer cannot have
@@ -75,7 +75,7 @@ where
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalBuffer<TValidatorNetwork>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     /// Creates a new ProposalBuffer, returning the [ProposalSender] and [ProposalReceiver] that share the buffer.
     /// Blockchain and Network are necessary to do basic verification and punishments.
@@ -121,7 +121,7 @@ where
 /// side as chances are higher to already have received the blocks predecessor later in the process.
 pub(crate) struct ProposalSender<TValidatorNetwork: ValidatorNetwork + 'static>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     /// The buffer holding all buffered proposals shared with the [ProposalReceiver]
     shared: Arc<Mutex<ProposalBuffer<TValidatorNetwork>>>,
@@ -138,7 +138,7 @@ where
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalSender<TValidatorNetwork>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     /// Sends the proposal and PubsubId into the buffer.
     ///
@@ -244,7 +244,7 @@ where
 
 pub(crate) struct ProposalReceiver<TValidatorNetwork: ValidatorNetwork + 'static>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     /// The buffer holding all buffered proposals shared with the [ProposalSender]
     shared: Arc<Mutex<ProposalBuffer<TValidatorNetwork>>>,
@@ -260,12 +260,9 @@ where
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProposalReceiver<TValidatorNetwork>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
-    type Item = SignedProposalMessage<
-        Header<<TValidatorNetwork as ValidatorNetwork>::PubsubId>,
-        (SchnorrSignature, u16),
-    >;
+    type Item = SignedProposalMessage<Header<PubsubId<TValidatorNetwork>>, (SchnorrSignature, u16)>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // Acquire the shared buffer lock.
@@ -414,7 +411,7 @@ where
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> Clone for ProposalReceiver<TValidatorNetwork>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     fn clone(&self) -> Self {
         Self {

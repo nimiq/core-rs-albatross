@@ -24,7 +24,7 @@ use nimiq_tendermint::{
     TaggedAggregationMessage,
 };
 use nimiq_validator_network::{
-    single_response_requester::SingleResponseRequester, ValidatorNetwork,
+    single_response_requester::SingleResponseRequester, PubsubId, ValidatorNetwork,
 };
 use parking_lot::RwLock;
 
@@ -131,7 +131,7 @@ impl<TValidatorNetwork: ValidatorNetwork> Clone for TendermintProtocol<TValidato
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintProtocol<TValidatorNetwork>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     pub fn new(
         blockchain: Arc<RwLock<Blockchain>>,
@@ -156,10 +156,10 @@ where
 impl<TValidatorNetwork: ValidatorNetwork + 'static> Protocol
     for TendermintProtocol<TValidatorNetwork>
 where
-    <TValidatorNetwork as ValidatorNetwork>::PubsubId: std::fmt::Debug + Unpin,
+    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
     type Decision = MacroBlock;
-    type Proposal = Header<<TValidatorNetwork as ValidatorNetwork>::PubsubId>;
+    type Proposal = Header<PubsubId<TValidatorNetwork>>;
     type ProposalHash = Blake2sHash;
     type Inherent = Body;
     type InherentHash = Blake2sHash;
