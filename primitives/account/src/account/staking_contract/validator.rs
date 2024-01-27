@@ -99,6 +99,62 @@ impl Validator {
         }
         false
     }
+
+    /// Checks if a validator can be deleted.
+    /// To be able to be deleted the validator must be retired, have enough funds and be
+    /// released from jail.
+    pub(crate) fn can_delete_validator(
+        &self,
+        value: Coin,
+        block_number: u32,
+    ) -> Result<(), AccountError> {
+        // The value to be withdrawn must be equal to the validator deposit.
+        if value != self.deposit {
+            return Err(AccountError::InvalidCoinValue);
+        }
+
+        self.enforce_retire_and_release(block_number)?;
+
+        Ok(())
+    }
+
+    /// Checks if a validator is retired and released in order to have a fee or a deposit deduction.
+    pub(crate) fn enforce_retire_and_release(&self, block_number: u32) -> Result<(), AccountError> {
+        // Check that the validator is retired.
+        if !self.retired {
+            debug!(?self.address, "Tried to delete a non-retired validator");
+            return Err(AccountError::InvalidForSender);
+        }
+
+        // Check that the validator is not currently jailed.
+        if self.is_jailed(block_number) {
+            debug!(
+                ?self.address,
+                jailed_from = self.jailed_from.unwrap(),
+                "Validator is jailed"
+            );
+            return Err(AccountError::InvalidForSender);
+        }
+
+        // Check that the validator has been inactive for long enough.
+        // We must wait until all potential offenses of this validator could have been reported.
+        // This includes the time it takes for the deactivation to take effect (end of the epoch)
+        // and the reporting window from there.
+        let inactive_from = self
+            .inactive_from
+            .expect("Validator is retired so it must be inactive");
+        let wait_until = Policy::last_block_of_reporting_window(inactive_from);
+        if block_number <= wait_until {
+            debug!(
+                ?self.address,
+                current_block = block_number,
+                wait_until, "Tried to delete validator too soon"
+            );
+            return Err(AccountError::InvalidForSender);
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -642,65 +698,6 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Checks if a validator can be deleted.
-    pub fn can_delete_validator(
-        &self,
-        validator: &Validator,
-        value: Coin,
-        block_number: u32,
-    ) -> Result<(), AccountError> {
-        // The transaction value + fee must be equal to the validator deposit
-        if value != validator.deposit {
-            return Err(AccountError::InvalidCoinValue);
-        }
-
-        self.enforce_retire_and_release(validator, block_number)?;
-
-        Ok(())
-    }
-
-    pub(crate) fn enforce_retire_and_release(
-        &self,
-        validator: &Validator,
-
-        block_number: u32,
-    ) -> Result<(), AccountError> {
-        // Check that the validator is retired.
-        if !validator.retired {
-            debug!(?validator.address, "Tried to delete active validator");
-            return Err(AccountError::InvalidForSender);
-        }
-
-        // Check that the validator is not currently jailed.
-        if validator.is_jailed(block_number) {
-            debug!(
-                ?validator.address,
-                jailed_from = validator.jailed_from.unwrap(),
-                "Validator is jailed"
-            );
-            return Err(AccountError::InvalidForSender);
-        }
-
-        // Check that the validator has been inactive for long enough.
-        // We must wait until all potential offenses of this validator could have been reported.
-        // This includes the time it takes for the deactivation to take effect (end of the epoch)
-        // and the reporting window from there.
-        let inactive_from = validator
-            .inactive_from
-            .expect("Validator is retired so it must be inactive");
-        let wait_until = Policy::last_block_of_reporting_window(inactive_from);
-        if block_number <= wait_until {
-            debug!(
-                ?validator.address,
-                current_block = block_number,
-                wait_until, "Tried to delete validator too soon"
-            );
-            return Err(AccountError::InvalidForSender);
-        }
-
-        Ok(())
-    }
-
     /// Deletes a validator and returns its deposit. This can only be used on retired validators!
     /// After the validator gets deactivated, it needs to wait until the second batch of the next
     /// epoch in order to be able to be deleted. This is necessary because if the validator was an
@@ -723,7 +720,7 @@ impl StakingContract {
         // Get the validator.
         let validator = store.expect_validator(validator_address)?;
 
-        self.can_delete_validator(&validator, value, block_number)?;
+        validator.can_delete_validator(value, block_number)?;
 
         // All checks passed, not allowed to fail from here on!
 

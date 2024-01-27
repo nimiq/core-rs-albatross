@@ -2863,3 +2863,446 @@ fn cannot_reserve_balance_if_jailed() {
     );
     assert_eq!(result, Ok(()));
 }
+
+#[test]
+fn commit_failed_delete_validator_works() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let mut validator_setup = ValidatorSetup::new(Some(150_000_000));
+    let data_store = validator_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = validator_setup.env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+    let block_state = BlockState::new(Policy::genesis_block_number() + 2, 2);
+
+    let validator_address = validator_setup.validator_address;
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Doesn't work when the validator is still active.
+    let tx = make_delete_validator_transaction();
+
+    assert_eq!(
+        validator_setup.staking_contract.commit_failed_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty()
+        ),
+        Err(AccountError::InvalidForSender)
+    );
+
+    // Deactivate validator.
+    let deactivate_tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::DeactivateValidator {
+            validator_address: validator_address.clone(),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY),
+    );
+
+    validator_setup
+        .staking_contract
+        .commit_incoming_transaction(
+            &deactivate_tx,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
+        .expect("Failed to commit transaction");
+    let effective_deactivation_block = Policy::election_block_after(block_state.number);
+
+    // Doesn't work with a deactivated but not retired validator.
+    let block_state = BlockState::new(effective_deactivation_block + 1, 1000);
+
+    assert_eq!(
+        validator_setup.staking_contract.commit_failed_transaction(
+            &tx,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty()
+        ),
+        Err(AccountError::InvalidForSender)
+    );
+
+    // Retire the validator.
+    let retire_tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::RetireValidator {
+            proof: SignatureProof::default(),
+        },
+        0,
+        &ed25519_key_pair(VALIDATOR_PRIVATE_KEY),
+    );
+
+    validator_setup
+        .staking_contract
+        .commit_incoming_transaction(
+            &retire_tx,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
+        .expect("Failed to commit transaction");
+    let inactive_release = Policy::block_after_reporting_window(effective_deactivation_block);
+
+    // Doesn't work if the cooldown hasn't expired.
+    assert_eq!(
+        validator_setup.staking_contract.commit_failed_transaction(
+            &tx,
+            &BlockState::new(inactive_release - 1, 999),
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty()
+        ),
+        Err(AccountError::InvalidForSender)
+    );
+
+    // Works in the valid case with partial deduction.
+    let signing_key = ed25519_public_key(VALIDATOR_SIGNING_KEY);
+    let voting_key = bls_public_key(VALIDATOR_VOTING_KEY);
+    let reward_address = validator_address.clone();
+    let staker_address = staker_address();
+
+    let block_state = BlockState::new(inactive_release, 1000);
+
+    let mut tx_1 = tx.clone();
+    tx_1.value = Coin::ZERO;
+    tx_1.fee = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 1);
+
+    let mut tx_logger = TransactionLog::empty();
+    let receipt_1 = validator_setup
+        .staking_contract
+        .commit_failed_transaction(
+            &tx_1,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut tx_logger,
+        )
+        .expect("Failed to commit transaction");
+
+    assert_eq!(receipt_1, None);
+
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::pay_fee_log(&tx_1),
+            Log::ValidatorFeeDeduction {
+                validator_address: validator_address.clone(),
+                fee: tx_1.fee
+            }
+        ]
+    );
+
+    let validator = validator_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .expect("Validator should exist");
+
+    assert_eq!(validator.address, validator_address);
+    assert_eq!(validator.num_stakers, 1);
+    assert_eq!(validator.deposit, Coin::from_u64_unchecked(1));
+    assert_eq!(
+        validator.total_stake,
+        Coin::from_u64_unchecked(1 + 150_000_000)
+    );
+
+    let staker = validator_setup
+        .staking_contract
+        .get_staker(&data_store.read(&db_txn), &staker_address)
+        .expect("Staker should exist");
+
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+
+    assert_eq!(
+        validator_setup.staking_contract.balance,
+        Coin::from_u64_unchecked(150_000_000 + 1)
+    );
+
+    // Works in the valid case with total deposit deduction.
+    let mut tx_2 = tx_1.clone();
+    tx_2.fee = Coin::from_u64_unchecked(1);
+    let mut tx_logger = TransactionLog::empty();
+    let receipt_2 = validator_setup
+        .staking_contract
+        .commit_failed_transaction(
+            &tx_2,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut tx_logger,
+        )
+        .expect("Failed to commit transaction");
+
+    let expected_receipt = DeleteValidatorReceipt {
+        signing_key,
+        voting_key: voting_key.clone(),
+        reward_address: reward_address.clone(),
+        signal_data: None,
+        inactive_from: effective_deactivation_block,
+        jailed_from: None,
+    };
+    assert_eq!(receipt_2, Some(expected_receipt.into()));
+
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::pay_fee_log(&tx_2),
+            Log::ValidatorFeeDeduction {
+                validator_address: validator_address.clone(),
+                fee: tx_2.fee
+            },
+            Log::DeleteValidator {
+                validator_address: validator_address.clone(),
+                reward_address: reward_address.clone()
+            },
+        ]
+    );
+
+    assert_eq!(
+        validator_setup
+            .staking_contract
+            .get_validator(&data_store.read(&db_txn), &validator_address),
+        None
+    );
+
+    assert_eq!(
+        validator_setup
+            .staking_contract
+            .get_tombstone(&data_store.read(&db_txn), &validator_address),
+        Some(Tombstone {
+            remaining_stake: Coin::from_u64_unchecked(150_000_000),
+            num_remaining_stakers: 1,
+        })
+    );
+
+    let staker = validator_setup
+        .staking_contract
+        .get_staker(&data_store.read(&db_txn), &staker_address)
+        .expect("Staker should exist");
+
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+
+    assert_eq!(
+        validator_setup.staking_contract.balance,
+        Coin::from_u64_unchecked(150_000_000)
+    );
+
+    // Revert the last delete transaction.
+    let mut tx_logger = TransactionLog::empty();
+    validator_setup
+        .staking_contract
+        .revert_failed_transaction(
+            &tx_2,
+            &block_state,
+            receipt_2,
+            data_store.write(&mut db_txn),
+            &mut tx_logger,
+        )
+        .expect("Failed to revert transaction");
+
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::ValidatorFeeDeduction {
+                validator_address: validator_address.clone(),
+                fee: tx_2.fee
+            },
+            Log::DeleteValidator {
+                validator_address: validator_address.clone(),
+                reward_address: reward_address.clone()
+            },
+            Log::pay_fee_log(&tx_2),
+        ]
+    );
+
+    let validator = validator_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .expect("Validator should exist");
+
+    assert_eq!(validator.address, validator_address);
+    assert_eq!(validator.signing_key, signing_key);
+    assert_eq!(validator.voting_key, voting_key);
+    assert_eq!(validator.reward_address, reward_address);
+    assert_eq!(validator.signal_data, None);
+    assert_eq!(validator.deposit, Coin::from_u64_unchecked(1));
+    assert_eq!(
+        validator.total_stake,
+        Coin::from_u64_unchecked(1 + 150_000_000)
+    );
+    assert_eq!(validator.num_stakers, 1);
+    assert_eq!(validator.inactive_from, Some(effective_deactivation_block));
+    assert!(validator.retired);
+
+    assert_eq!(
+        validator_setup
+            .staking_contract
+            .get_tombstone(&data_store.read(&db_txn), &validator_address),
+        None
+    );
+
+    assert_eq!(
+        validator_setup.staking_contract.balance,
+        Coin::from_u64_unchecked(1 + 150_000_000)
+    );
+
+    // Revert the first delete transaction.
+    let mut tx_logger = TransactionLog::empty();
+    validator_setup
+        .staking_contract
+        .revert_failed_transaction(
+            &tx_1,
+            &block_state,
+            receipt_1,
+            data_store.write(&mut db_txn),
+            &mut tx_logger,
+        )
+        .expect("Failed to revert transaction");
+
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::ValidatorFeeDeduction {
+                validator_address: validator_address.clone(),
+                fee: tx_1.fee
+            },
+            Log::pay_fee_log(&tx_1),
+        ]
+    );
+
+    let validator = validator_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .expect("Validator should exist");
+
+    assert_eq!(validator.address, validator_address);
+    assert_eq!(validator.signing_key, signing_key);
+    assert_eq!(validator.voting_key, voting_key);
+    assert_eq!(validator.reward_address, reward_address);
+    assert_eq!(validator.signal_data, None);
+    assert_eq!(
+        validator.deposit,
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
+    );
+    assert_eq!(
+        validator.total_stake,
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
+    );
+    assert_eq!(validator.num_stakers, 1);
+    assert_eq!(validator.inactive_from, Some(effective_deactivation_block));
+    assert!(validator.retired);
+
+    assert_eq!(
+        validator_setup
+            .staking_contract
+            .get_tombstone(&data_store.read(&db_txn), &validator_address),
+        None
+    );
+
+    assert_eq!(
+        validator_setup.staking_contract.balance,
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT + 150_000_000)
+    );
+}
+
+#[test]
+fn commit_failed_delete_validator_does_not_work_if_jailed() {
+    // -----------------------------------
+    // Test setup:
+    // -----------------------------------
+    let mut jailed_retired_setup = ValidatorSetup::setup_jailed_validator(None);
+    let data_store = jailed_retired_setup
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut db_txn = jailed_retired_setup.env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+    let _write = data_store.write(&mut db_txn);
+
+    // Retire jailed validator.
+    let retire_tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::RetireValidator {
+            proof: Default::default(),
+        },
+        0,
+        &ed25519_key_pair(VALIDATOR_PRIVATE_KEY),
+    );
+
+    _ = jailed_retired_setup
+        .staking_contract
+        .commit_incoming_transaction(
+            &retire_tx,
+            &jailed_retired_setup.before_state_release_block_state,
+            data_store.write(&mut db_txn),
+            &mut TransactionLog::empty(),
+        )
+        .expect("Failed to commit transaction");
+
+    // -----------------------------------
+    // Test execution:
+    // -----------------------------------
+    // Cannot commit if jailed.
+    let tx = make_delete_validator_transaction();
+
+    assert_eq!(
+        jailed_retired_setup
+            .staking_contract
+            .commit_failed_transaction(
+                &tx,
+                &jailed_retired_setup.before_state_release_block_state,
+                data_store.write(&mut db_txn),
+                &mut TransactionLog::empty()
+            ),
+        Err(AccountError::InvalidForSender)
+    );
+
+    // Can commit after jail.
+    let mut tx = make_delete_validator_transaction();
+    tx.fee = Coin::from_u64_unchecked(100);
+    let mut tx_logger = TransactionLog::empty();
+
+    jailed_retired_setup
+        .staking_contract
+        .commit_failed_transaction(
+            &tx,
+            &jailed_retired_setup.state_release_block_state,
+            data_store.write(&mut db_txn),
+            &mut tx_logger,
+        )
+        .expect("Failed to commit transaction");
+
+    let validator_address = jailed_retired_setup.validator_address;
+
+    assert_eq!(
+        tx_logger.logs,
+        vec![
+            Log::pay_fee_log(&tx),
+            Log::ValidatorFeeDeduction {
+                validator_address: validator_address.clone(),
+                fee: tx.fee
+            }
+        ]
+    );
+
+    let validator = jailed_retired_setup
+        .staking_contract
+        .get_validator(&data_store.read(&db_txn), &validator_address)
+        .expect("Validator should exist");
+
+    assert_eq!(validator.address, validator_address);
+    assert_eq!(validator.num_stakers, 0);
+    assert_eq!(
+        validator.deposit,
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT) - tx.fee
+    );
+    assert_eq!(
+        validator.total_stake,
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT) - tx.fee
+    );
+
+    assert_eq!(
+        jailed_retired_setup.staking_contract.balance,
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT) - tx.fee
+    );
+}

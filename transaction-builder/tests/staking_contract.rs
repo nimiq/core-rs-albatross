@@ -55,7 +55,7 @@ fn it_can_create_staker_transactions() {
         &key_pair,
     );
 
-    let tx2 = TransactionBuilder::new_stake(
+    let tx2 = TransactionBuilder::new_add_stake(
         &key_pair,
         address,
         100_000_000.try_into().unwrap(),
@@ -126,7 +126,7 @@ fn it_can_fail_creating_staker_transactions() {
     let address = Address::from_any_str(ADDRESS).unwrap();
 
     // Invalid stake
-    let err3 = TransactionBuilder::new_stake(
+    let err3 = TransactionBuilder::new_add_stake(
         &key_pair,
         address,
         0.try_into().unwrap(), // InvalidValue

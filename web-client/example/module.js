@@ -148,14 +148,14 @@ init().then(async () => {
      * @param {number} [fee]
      * @returns {Promise<string>}
      */
-    window.sendUnstakeTransaction = async (privateKey, amount, fee = 0) => {
+    window.sendRemoveStakeTransaction = async (privateKey, amount, fee = 0) => {
         if (!await client.isConsensusEstablished()) {
             throw new Error('Consensus not yet established');
         }
 
         const keyPair = Nimiq.KeyPair.derive(Nimiq.PrivateKey.fromHex(privateKey));
 
-        const transaction = Nimiq.TransactionBuilder.newUnstake(
+        const transaction = Nimiq.TransactionBuilder.newRemoveStake(
             keyPair.toAddress(),
             BigInt(amount),
             BigInt(fee),

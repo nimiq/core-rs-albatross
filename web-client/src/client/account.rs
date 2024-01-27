@@ -162,7 +162,7 @@ impl PlainStaker {
                 .delegation
                 .as_ref()
                 .map(|address| address.to_user_friendly_address()),
-            balance: staker.balance.into(),
+            balance: staker.active_balance.into(),
             inactive_balance: staker.inactive_balance.into(),
             inactive_from: staker.inactive_from,
             inactive_release: staker

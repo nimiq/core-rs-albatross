@@ -39,7 +39,7 @@ pub enum ValidatorCommand {
     /// "" = None
     /// "0x29a4b..." = Some(hash)
     CreateNewValidator {
-        /// The fee will be payed from this address. This address must be already unlocked.
+        /// The fee will be paid from this address. This address must be already unlocked.
         sender_wallet: Address,
 
         /// The new validator address. This wallet must be already unlocked.
@@ -69,7 +69,7 @@ pub enum ValidatorCommand {
     /// "" = Change the signal data field to None.
     /// "0x29a4b..." = Change the signal data field to Some(0x29a4b...).
     UpdateValidator {
-        /// The fee will be payed from this address. This wallet must be already unlocked.
+        /// The fee will be paid from this address. This wallet must be already unlocked.
         sender_wallet: Address,
 
         /// The new Schnorr signing key used by the validator.
@@ -97,7 +97,7 @@ pub enum ValidatorCommand {
     /// configuration is turned off.
     /// The sender wallet must be unlocked prior to this command.
     DeactivateValidator {
-        /// The fee will be payed from this address. This wallet must be already unlocked.
+        /// The fee will be paid from this address. This wallet must be already unlocked.
         sender_wallet: Address,
 
         #[clap(flatten)]
@@ -108,7 +108,7 @@ pub enum ValidatorCommand {
     /// account (the sender wallet) to pay the transaction fee.
     /// The sender wallet must be unlocked prior to this command.
     ReactivateValidator {
-        /// The fee will be payed from this address. This wallet must be already unlocked.
+        /// The fee will be paid from this address. This wallet must be already unlocked.
         sender_wallet: Address,
 
         #[clap(flatten)]

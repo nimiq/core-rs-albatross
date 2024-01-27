@@ -1,6 +1,6 @@
 use std::{convert::TryFrom, time::Instant};
 
-use log::{error, info};
+use log::info;
 use nimiq_account::{
     Account, Accounts, BasicAccount, BlockLogger, BlockState, InherentOperationReceipt, Log,
     OperationReceipt, TransactionOperationReceipt, TransactionReceipt, VestingContract,
@@ -988,16 +988,6 @@ fn can_revert_transactions() {
 
                     let receipts = accounts.test(&[tx], &[], &block_state);
                     if fail_sender || fail_recipient {
-                        for aa in receipts.transactions.iter() {
-                            match aa {
-                                OperationReceipt::Ok(tx) => {
-                                    error!("Ok {:?}", tx);
-                                }
-                                OperationReceipt::Err(tx, reason) => {
-                                    error!("Ok {:?} - {:?}", tx, reason);
-                                }
-                            }
-                        }
                         assert!(matches!(
                             receipts.transactions[..],
                             [OperationReceipt::Err(..)]

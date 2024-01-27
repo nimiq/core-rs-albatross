@@ -81,7 +81,7 @@ pub enum IncomingStakingTransactionData {
         proof: SignatureProof,
     },
     RetireStake {
-        value: Coin,
+        retire_stake: Coin,
         proof: SignatureProof,
     },
 }
@@ -165,7 +165,7 @@ impl IncomingStakingTransactionData {
                 verify_transaction_signature(transaction, proof, true)?
             }
             IncomingStakingTransactionData::CreateStaker { proof, .. } => {
-                // Check that stake is bigger than the minimum stake.
+                // Check that stake is at least minimum stake.
                 if transaction.value < Coin::from_u64_unchecked(Policy::MINIMUM_STAKE) {
                     warn!("Can't create a staker with less than minimum stake. The offending transaction is the following:\n{:?}", transaction);
                     return Err(TransactionError::InvalidValue);
@@ -177,7 +177,7 @@ impl IncomingStakingTransactionData {
             IncomingStakingTransactionData::AddStake { .. } => {
                 // Adding stake should be at least greater than 0.
                 if transaction.value.is_zero() {
-                    warn!("Add stake transactions must actually have higher than 0 value. The offending transaction is the following:\n{:?}", transaction);
+                    warn!("Add stake transactions must have positive value. The offending transaction is the following:\n{:?}", transaction);
                     return Err(TransactionError::ZeroValue);
                 }
 
@@ -191,10 +191,13 @@ impl IncomingStakingTransactionData {
                 // Check that the signature is correct.
                 verify_transaction_signature(transaction, proof, true)?
             }
-            IncomingStakingTransactionData::RetireStake { proof, value } => {
+            IncomingStakingTransactionData::RetireStake {
+                proof,
+                retire_stake,
+            } => {
                 // Check that retire is greater than 0.
-                if value.is_zero() {
-                    warn!("Retire stake transactions must actually have higher than 0 value. The offending transaction is the following:\n{:?}", transaction);
+                if retire_stake.is_zero() {
+                    warn!("Retire stake transactions retire a non-zero amount of stake. The offending transaction is the following:\n{:?}", transaction);
                     return Err(TransactionError::ZeroValue);
                 }
 

@@ -165,7 +165,7 @@ is the private key of the BLS keypair generated for `voting_key`.
 
 ## 4. Stake on Behalf of a Validator
 
-You can stake your NIM on behalf of an online validator. Your staked NIM then count towards the validator’s stake, increasing their likelihood of producing a block. Note that all block rewards are received by the validator's reward address, not yours. The arrangement of distributing rewards among stakers is made off-chain and usually this is handled by a pool operator or the person who is operating the validator itself.
+You can stake your NIM on behalf of an online validator. Your staked NIM then counts towards the validator’s stake, increasing their likelihood of producing a block. Note that all block rewards are received by the validator's reward address, not yours. The arrangement of distributing rewards among stakers is made off-chain and usually this is handled by a pool operator or the person who is operating the validator itself.
 
 ```
 stake:start <staker_address> <validator_address> <value>
@@ -184,7 +184,7 @@ validator:inactivate <validator_address> <validator_address> <signing_private_ke
 ```
 
 
-### 5.2 Remove delegated Stake
+### 5.2 Remove Stake
 
 Removes stake from a staker’s address via RPC.
 

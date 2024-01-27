@@ -139,18 +139,16 @@ convert_receipt!(SetActiveStakeReceipt);
 /// these transactions.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct RetireStakeReceipt {
-    /// the inactive balance before this transaction is applied
-    pub old_inactive_balance: Coin,
     /// the retire block height before this transaction is applied
     pub old_inactive_from: Option<u32>,
 }
 convert_receipt!(RetireStakeReceipt);
 
 /// Receipt for remove stake transactions. This is necessary to be able to revert
-/// these transactions.
+/// the staker removal in case all funds were withdrawn.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct RemoveStakeReceipt {
+pub struct DeleteStakerReceipt {
     /// the delegation before this transaction is applied
     pub delegation: Option<Address>,
 }
-convert_receipt!(RemoveStakeReceipt);
+convert_receipt!(DeleteStakerReceipt);

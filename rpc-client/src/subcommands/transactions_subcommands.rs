@@ -16,7 +16,7 @@ use crate::Client;
 
 #[derive(Debug, Args)]
 pub struct TxCommon {
-    /// The associated transaction fee to be payed. If absent it defaults to 0 NIM.
+    /// The associated transaction fee to be paid. If absent it defaults to 0 NIM.
     #[clap(short, long, default_value = "0")]
     pub fee: Coin,
 
@@ -72,8 +72,9 @@ pub enum TransactionCommand {
         tx_commons: TxCommonWithValue,
     },
 
-    /// Sends a staking transaction from the address of a given `wallet` to a given `staker_address`.
-    Stake {
+    /// Sends a `add_stake` transaction from the address of a given `wallet` to a given `staker_address`.
+    /// This transaction result must result in the sum of active and inactive stake to be >= minimum stake, otherwise it fails.
+    AddStake {
         /// The stake will be sent from this wallet. The sender wallet must be unlocked prior to this action.
         sender_wallet: Address,
 
@@ -89,8 +90,8 @@ pub enum TransactionCommand {
     /// providing a sender wallet).
     /// Note: If no new delegation is provided, the transaction will set the delegation to none.
     UpdateStaker {
-        /// The fee will be payed by this wallet if any is provided. In such case the sender wallet must be unlocked prior to this action.
-        /// If absent the fee is payed by the stakers account.
+        /// The fee will be paid by this wallet if any is provided. In such case the sender wallet must be unlocked prior to this action.
+        /// If absent the fee is paid by the stakers account.
         #[clap(long)]
         sender_wallet: Option<Address>,
 
@@ -113,18 +114,39 @@ pub enum TransactionCommand {
     /// account (by providing the sender wallet) or from the staker account's balance (by not
     /// providing a sender wallet).
     /// Note: As a side effect of this transaction if there already is some inactive balance, it will be
-    /// modified and the lock-up period restarts. The inactive balance is only released after the end of the lock-up period.
+    /// modified accordingly and the lock-up period restarts. The inactive balance is only released after the end of the lock-up period.
     SetActiveStake {
-        /// The fee will be payed by this wallet if any is provided. In such case the sender wallet must be unlocked prior to this action.
-        /// If absent the fee is payed by the stakers account.
+        /// The fee will be paid by this wallet if any is provided. In such case the sender wallet must be unlocked prior to this action.
+        /// If absent the fee is paid by the stakers account.
         #[clap(long)]
         sender_wallet: Option<Address>,
 
         /// Destination address for the update. This wallet must be already unlocked.
         staker_wallet: Address,
 
-        /// The new amount of inactive stake.
-        new_active_stake: Coin,
+        /// The new amount of active stake.
+        new_active_balance: Coin,
+
+        #[clap(flatten)]
+        tx_commons: TxCommon,
+    },
+
+    /// Sends a `retire_stake` transaction to the network. You can pay the transaction fee from a basic
+    /// account (by providing the sender wallet) or from the staker account's balance (by not providing a sender wallet).
+    /// Only already inactivated and released funds can be retired.
+    /// This transaction can only result in all funds being retired or the sum of active and new inactive
+    /// balances being >= minimum stake. Otherwise it fails.
+    RetireStake {
+        /// The fee will be paid by this wallet if any is provided. In such case the sender wallet must be unlocked prior to this action.
+        /// If absent the fee is paid by the staker's account.
+        #[clap(long)]
+        sender_wallet: Option<Address>,
+
+        /// Destination address for the update. This wallet must be already unlocked.
+        staker_wallet: Address,
+
+        /// The amount of inactive funds to be retired.
+        retire_stake: Coin,
 
         #[clap(flatten)]
         tx_commons: TxCommon,
@@ -132,11 +154,14 @@ pub enum TransactionCommand {
 
     /// Sends a `remove_stake` transaction to the network. The transaction fee will be paid from the funds
     /// being removed.
+    /// This transaction must withdraw the full retired balance, Otherwise it fails.
+    /// If it results in total stake (active + inactive + retired balances) = 0 the staker is removed from
+    /// the staking contract.
     RemoveStake {
-        /// The stake will be sent from this wallet. The sender wallet must be unlocked prior to this action.
-        sender_wallet: Address,
+        /// The staker to withdraw funds from. This wallet must be unlocked prior to this action.
+        staker_wallet: Address,
 
-        /// The recipients of the previously staked coins.
+        /// The recipient of the coins.
         recipient: Address,
 
         /// The amount of NIM to remove.
@@ -293,7 +318,7 @@ pub enum TransactionCommand {
         /// The amount of NIM to be used by the transaction.
         value: Coin,
 
-        /// The associated transaction fee to be payed. If absent it defaults to 0 NIM.
+        /// The associated transaction fee to be paid. If absent it defaults to 0 NIM.
         #[clap(short, long, default_value = "0")]
         fee: Coin,
 
@@ -384,7 +409,7 @@ impl HandleSubcommand for TransactionCommand {
                     println!("{txid:#?}");
                 }
             }
-            TransactionCommand::Stake {
+            TransactionCommand::AddStake {
                 sender_wallet,
                 staker_address,
                 tx_commons,
@@ -453,7 +478,7 @@ impl HandleSubcommand for TransactionCommand {
             TransactionCommand::SetActiveStake {
                 sender_wallet,
                 staker_wallet,
-                new_active_stake,
+                new_active_balance,
                 tx_commons,
             } => {
                 if tx_commons.dry {
@@ -462,7 +487,7 @@ impl HandleSubcommand for TransactionCommand {
                         .create_set_active_stake_transaction(
                             sender_wallet,
                             staker_wallet,
-                            new_active_stake,
+                            new_active_balance,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
                         )
@@ -474,7 +499,40 @@ impl HandleSubcommand for TransactionCommand {
                         .send_set_active_stake_transaction(
                             sender_wallet,
                             staker_wallet,
-                            new_active_stake,
+                            new_active_balance,
+                            tx_commons.fee,
+                            tx_commons.validity_start_height,
+                        )
+                        .await?;
+                    println!("{txid:#?}");
+                }
+            }
+            TransactionCommand::RetireStake {
+                sender_wallet,
+                staker_wallet,
+                retire_stake,
+                tx_commons,
+            } => {
+                eprintln! {"a {:?}\n{:?}\n{:?}\n{:?}",sender_wallet,staker_wallet,retire_stake,tx_commons};
+                if tx_commons.dry {
+                    let tx = client
+                        .consensus
+                        .create_retire_stake_transaction(
+                            sender_wallet,
+                            staker_wallet,
+                            retire_stake,
+                            tx_commons.fee,
+                            tx_commons.validity_start_height,
+                        )
+                        .await?;
+                    println!("{tx:#?}");
+                } else {
+                    let txid = client
+                        .consensus
+                        .send_retire_stake_transaction(
+                            sender_wallet,
+                            staker_wallet,
+                            retire_stake,
                             tx_commons.fee,
                             tx_commons.validity_start_height,
                         )
@@ -483,7 +541,7 @@ impl HandleSubcommand for TransactionCommand {
                 }
             }
             TransactionCommand::RemoveStake {
-                sender_wallet,
+                staker_wallet,
                 recipient,
                 tx_commons,
             } => {
@@ -491,7 +549,7 @@ impl HandleSubcommand for TransactionCommand {
                     let tx = client
                         .consensus
                         .create_remove_stake_transaction(
-                            sender_wallet,
+                            staker_wallet,
                             recipient,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,
@@ -503,7 +561,7 @@ impl HandleSubcommand for TransactionCommand {
                     let txid = client
                         .consensus
                         .send_remove_stake_transaction(
-                            sender_wallet,
+                            staker_wallet,
                             recipient,
                             tx_commons.value,
                             tx_commons.common_tx_fields.fee,

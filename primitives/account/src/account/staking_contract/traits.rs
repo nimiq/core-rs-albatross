@@ -22,8 +22,8 @@ use crate::{
     data_store::{DataStoreRead, DataStoreWrite},
     interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction},
     reserved_balance::ReservedBalance,
-    Account, AccountPruningInteraction, AccountReceipt, BlockState, InherentLogger, JailReceipt,
-    JailValidatorReceipt, Log, RemoveStakeReceipt, TransactionLog,
+    Account, AccountPruningInteraction, AccountReceipt, BlockState, DeleteStakerReceipt,
+    InherentLogger, JailReceipt, JailValidatorReceipt, Log, Staker, TransactionLog,
 };
 
 impl AccountTransactionInteraction for StakingContract {
@@ -204,14 +204,17 @@ impl AccountTransactionInteraction for StakingContract {
                 )
                 .map(|receipt| Some(receipt.into()))
             }
-            IncomingStakingTransactionData::RetireStake { value, proof } => {
+            IncomingStakingTransactionData::RetireStake {
+                retire_stake,
+                proof,
+            } => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
                 self.retire_stake(
                     &mut store,
                     &staker_address,
-                    value,
+                    retire_stake,
                     block_state.number,
                     tx_logger,
                 )
@@ -305,13 +308,22 @@ impl AccountTransactionInteraction for StakingContract {
                     tx_logger,
                 )
             }
-            IncomingStakingTransactionData::RetireStake { proof, value } => {
+            IncomingStakingTransactionData::RetireStake {
+                proof,
+                retire_stake,
+            } => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
                 let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
 
-                self.revert_retire_stake(&mut store, &staker_address, value, receipt, tx_logger)
+                self.revert_retire_stake(
+                    &mut store,
+                    &staker_address,
+                    retire_stake,
+                    receipt,
+                    tx_logger,
+                )
             }
         }
     }
@@ -349,14 +361,17 @@ impl AccountTransactionInteraction for StakingContract {
             OutgoingStakingTransactionData::RemoveStake => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
+                let staker = store.expect_staker(&staker_address)?;
 
+                // Enforce total retired stake removal.
+                staker.can_remove_stake(transaction.total_value())?;
                 self.remove_stake(
                     &mut store,
                     &staker_address,
                     transaction.total_value(),
                     tx_logger,
                 )
-                .map(|receipt| Some(receipt.into()))
+                .map(|receipt| receipt.map(|receipt| receipt.into()))
             }
         }
     }
@@ -381,7 +396,6 @@ impl AccountTransactionInteraction for StakingContract {
                 let validator_address = proof.compute_signer();
 
                 let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
-
                 self.revert_delete_validator(
                     &mut store,
                     &validator_address,
@@ -394,7 +408,11 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
-                let receipt = receipt.ok_or(AccountError::InvalidReceipt)?.try_into()?;
+                let receipt: Option<DeleteStakerReceipt> = if let Some(receipt) = receipt {
+                    Some(receipt.try_into()?)
+                } else {
+                    None
+                };
 
                 self.revert_remove_stake(
                     &mut store,
@@ -427,111 +445,85 @@ impl AccountTransactionInteraction for StakingContract {
 
         tx_logger.push_log(Log::pay_fee_log(transaction));
 
-        let receipt = match data {
+        match data {
             // In the case of a failed Delete Validator we will:
-            // 1. Pay the fee from the validator deposit
-            // 2. If the deposit reaches 0, we delete the validator
+            // 1. Fail if funds are not released yet.
+            // 2. Pay the fee from the validator deposit.
+            // 3. If the deposit reaches 0, we delete the validator.
             OutgoingStakingTransactionData::DeleteValidator => {
                 let validator_address = proof.compute_signer();
-
                 let mut validator = store.expect_validator(&validator_address)?;
 
                 // Fail if there are not enough funds to deduct the fee or the validator is not released.
                 let new_deposit = validator.deposit.safe_sub(transaction.fee)?;
-                self.enforce_retire_and_release(&validator, block_state.number)?;
+                validator.enforce_retire_and_release(block_state.number)?;
+
+                tx_logger.push_log(Log::ValidatorFeeDeduction {
+                    validator_address: validator_address.clone(),
+                    fee: transaction.fee,
+                });
 
                 // Delete the validator if the deposit reaches zero.
                 let receipt = if new_deposit.is_zero() {
-                    let receipt = self.delete_validator(
-                        &mut store,
-                        &validator_address,
-                        block_state.number,
-                        validator.deposit,
-                        tx_logger,
-                    )?;
-
-                    Some(receipt.into())
+                    Some(
+                        self.delete_validator(
+                            &mut store,
+                            &validator_address,
+                            block_state.number,
+                            transaction.fee,
+                            tx_logger,
+                        )?
+                        .into(),
+                    )
                 } else {
-                    // Update the validator deposit and total_stake.
+                    // Update the balances of the validator and staking contract.
                     validator.deposit = new_deposit;
                     validator.total_stake -= transaction.fee;
+                    self.balance -= transaction.fee;
 
                     // Update the validator entry.
                     store.put_validator(&validator_address, validator);
 
-                    // Update our balance.
-                    self.balance -= transaction.fee;
-
                     None
                 };
 
-                tx_logger.push_log(Log::ValidatorFeeDeduction {
-                    validator_address,
-                    fee: transaction.fee,
-                });
-
-                receipt
+                Ok(receipt)
             }
             OutgoingStakingTransactionData::RemoveStake => {
                 // In the case of a failed Remove Stake we will:
-                // 1. Pay the fee from the retired stake
-                // 2. If the total of all staker's balances reaches 0, we delete it
+                // 1. Fail if fee deduction would violate the minimum stake.
+                // 2. Pay the fee from the retired stake deposit.
+                // 3. If the staker's total balance reaches 0, we delete the staker.
 
-                // Get the staker address from the proof.
+                // Get the staker address from the proof and fetch the staker.
                 let staker_address = proof.compute_signer();
 
-                // Fetch the staker.
-                let mut staker = store.expect_staker(&staker_address)?;
+                // We do not want the fee payment to be displayed as a successful remove in the block logs,
+                // which is why we pass an empty logger.
+                let receipt = self.remove_stake(
+                    &mut store,
+                    &staker_address,
+                    transaction.fee,
+                    &mut TransactionLog::empty(),
+                )?;
 
-                // Fail if there are not enough retired funds or the retired funds are not released.
-                let new_retired_balance = staker.retired_balance.safe_sub(transaction.fee)?;
-
-                // Update staking contract's balance.
-                self.balance -= transaction.fee;
-
-                let receipt = if !new_retired_balance.is_zero() {
-                    // If there's still retired balance remaining we only have to deduct the fee.
-                    staker.retired_balance = new_retired_balance;
-                    store.put_staker(&staker_address, staker);
-
-                    None
-                } else {
-                    // Otherwise, we need to check and delete the staker if appropriate.
-
-                    // Store the old values.
-                    let old_delegation = staker.delegation.clone();
-
-                    staker.retired_balance = Coin::ZERO;
-
-                    // Update or remove the staker entry, depending on remaining balance.
-                    if staker.balance.is_zero() && staker.inactive_balance.is_zero() {
-                        // If staker is to be removed and it had delegation, we update the validator.
-                        if let Some(validator_address) = &staker.delegation {
-                            self.unregister_staker_from_validator(&mut store, validator_address);
-                        }
-                        store.remove_staker(&staker_address);
-                    } else {
-                        store.put_staker(&staker_address, staker);
-                    }
-
-                    Some(
-                        RemoveStakeReceipt {
-                            delegation: old_delegation,
-                        }
-                        .into(),
-                    )
-                };
-
+                // Log the fee deduction.
                 tx_logger.push_log(Log::StakerFeeDeduction {
-                    staker_address,
+                    staker_address: staker_address.clone(),
                     fee: transaction.fee,
                 });
 
-                receipt
-            }
-        };
+                // Log a Delete Staker if delete staker receipt exists.
+                if let Some(receipt) = receipt.as_ref() {
+                    tx_logger.push_log(Log::DeleteStaker {
+                        staker_address,
+                        validator_address: receipt.delegation.clone(),
+                    });
+                }
 
-        Ok(receipt)
+                Ok(receipt.map(|r| r.into()))
+            }
+        }
     }
 
     fn revert_failed_transaction(
@@ -548,9 +540,10 @@ impl AccountTransactionInteraction for StakingContract {
         let data = OutgoingStakingTransactionData::parse(transaction)?;
         let proof: SignatureProof = Deserialize::deserialize_from_vec(&transaction.proof[..])?;
 
-        let result = match data {
+        match data {
             OutgoingStakingTransactionData::DeleteValidator => {
                 let validator_address = proof.compute_signer();
+
                 tx_logger.push_log(Log::ValidatorFeeDeduction {
                     validator_address: validator_address.clone(),
                     fee: transaction.fee,
@@ -577,55 +570,51 @@ impl AccountTransactionInteraction for StakingContract {
                     }
                 };
 
-                // Update the validator's deposit and total_stake.
+                // Update the balances of the validator and staking contract.
                 validator.deposit += transaction.fee;
                 validator.total_stake += transaction.fee;
+                self.balance += transaction.fee;
 
                 // Update the validator entry.
                 store.put_validator(&validator_address, validator);
-
-                // Update our balance.
-                self.balance += transaction.fee;
-
-                Ok(())
             }
             OutgoingStakingTransactionData::RemoveStake => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
+
+                // If there is a delete staker receipt we log it.
+                let receipt = if let Some(r) = receipt {
+                    let receipt: DeleteStakerReceipt = r.try_into()?;
+
+                    tx_logger.push_log(Log::DeleteStaker {
+                        staker_address: staker_address.clone(),
+                        validator_address: receipt.delegation.clone(),
+                    });
+
+                    Some(receipt)
+                } else {
+                    None
+                };
+
+                // Reverts remove stake.
+                self.revert_remove_stake(
+                    &mut store,
+                    &staker_address,
+                    transaction.fee,
+                    receipt,
+                    &mut TransactionLog::empty(),
+                )?;
+
                 tx_logger.push_log(Log::StakerFeeDeduction {
                     staker_address: staker_address.clone(),
                     fee: transaction.fee,
                 });
-
-                // Get or restore validator.
-
-                if let Some(mut staker) = store.get_staker(&staker_address) {
-                    // Update the staking contract and staker's deposits.
-                    staker.retired_balance += transaction.fee;
-                    self.balance += transaction.fee;
-
-                    // Update the validator entry.
-                    store.put_staker(&staker_address, staker);
-                } else if let Some(receipt) = receipt {
-                    // Revert the staker deletion.
-                    self.revert_remove_stake(
-                        &mut store,
-                        &staker_address,
-                        transaction.fee,
-                        receipt.try_into()?,
-                        &mut TransactionLog::empty(),
-                    )?;
-                } else {
-                    return Err(AccountError::InvalidReceipt);
-                }
-
-                Ok(())
             }
         };
 
         tx_logger.push_log(Log::pay_fee_log(transaction));
 
-        result
+        Ok(())
     }
 
     fn reserve_balance(
@@ -650,11 +639,7 @@ impl AccountTransactionInteraction for StakingContract {
                 let validator = store.expect_validator(&validator_address)?;
 
                 // Verify that the validator can actually be deleted.
-                self.can_delete_validator(
-                    &validator,
-                    transaction.total_value(),
-                    block_state.number,
-                )?;
+                validator.can_delete_validator(transaction.total_value(), block_state.number)?;
 
                 reserved_balance.reserve_for(
                     &validator_address,
@@ -670,7 +655,13 @@ impl AccountTransactionInteraction for StakingContract {
                 let staker = store.expect_staker(&staker_address)?;
 
                 // Verify that the stake can actually be removed.
-                self.can_remove_stake(&staker, transaction.total_value())?;
+                staker.can_remove_stake(transaction.total_value())?;
+                // Verify that the fee by itself can be removed without violating the minimum stake.
+                Staker::enforce_min_stake(
+                    staker.active_balance,
+                    staker.inactive_balance,
+                    staker.retired_balance - transaction.fee,
+                )?;
 
                 reserved_balance.reserve_for(
                     &staker_address,

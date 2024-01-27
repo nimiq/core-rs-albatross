@@ -83,7 +83,7 @@ Inactivates the validator via RPC.
 ./jsonrpc-cli 127.0.0.1:9100 sendInactivateValidatorTransaction '{"sender_wallet": "<address>", "validator_address":"<address>", "signing_secret_key": "<SchnorrPublicKey>", "fee": 2, "validity_start_height": "6789"}’
 ```
 
-### 3.2 Remove delegated Stake
+### 3.2 Remove Stake
 
 Removes stake from a staker’s address via RPC.
 

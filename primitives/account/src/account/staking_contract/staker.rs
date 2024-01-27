@@ -9,7 +9,6 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy::Policy;
 use serde::{Deserialize, Serialize};
 
-use crate::RetireStakeReceipt;
 #[cfg(feature = "interaction-traits")]
 use crate::{
     account::staking_contract::{
@@ -18,15 +17,17 @@ use crate::{
         },
         StakerReceipt, StakingContract, Tombstone,
     },
-    Log, RemoveStakeReceipt, SetActiveStakeReceipt, TransactionLog,
+    DeleteStakerReceipt, Log, RetireStakeReceipt, SetActiveStakeReceipt, TransactionLog,
 };
 
 /// Struct representing a staker in the staking contract.
-/// The staker's balance is divided into active and inactive stake.
+/// The staker's balance is divided into active, inactive and retired stake.
 ///
 /// Actions concerning a staker are:
 /// 1. Create:           Creates a staker.
-/// 2. Stake:            Adds coins from any outside address to a staker's active balance.
+/// 2. AddStake:         Adds coins from any outside address to the staker's active balance.
+///                      This action is only possible if:
+///                        (a) the resulting non-retired funds respect the invariant 1 - minimum stake for non-retired funds.
 /// 3. SetActiveStake:   Re-balances between active and inactive stake by setting the amount of active stake.
 ///                      This action restarts the lock-up period of the inactive stake.
 ///                      Inactive stake is locked up for other actions until the release block.
@@ -37,40 +38,148 @@ use crate::{
 ///                        (a) the stake was previously not delegated (i.e., delegated to `None`)
 ///                        (b) the active balance is zero and the inactive balance has been released (*).
 /// 4. RetireStake:      Permanently marks the given balance for future withdrawal. Only inactive funds can be retired.
-///                      This action can only take effect if the inactive funds are already released (cooldown
-///                      and potential jail have passed).
-/// 5. RemoveStake:      Removes coins from a staker's balance to outside the staking contract.
-///                      The retired balance can always be withdrawn as long as the staker has still minimum stake or
-///                      no more funds. On the latter case, this action will result in the deletion of the staker.
+///                      This action is only possible if:
+///                        (a) the resulting non-retired funds respect the invariant 1 - minimum stake for non-retired funds.
+///                        (b) the inactive funds are released (*).
+/// 5. RemoveStake:      Removes the retired balance from a staker to outside of the staking contract.
+///                      The retired balance can always be withdrawn as long as it removes all retired stake.
+///                      If the staker's total balance drops to 0, the staker is deleted.
 ///
-/// Create, Stake, SetActiveStake, Update and RetireStake are incoming transactions to the staking contract.
-/// Remove stake is an outgoing transaction from the staking contract.
+/// (*)     For inactive balance to be released, the maximum of the lock-up period for inactive stake and the validator's
+///         potential jail period must have passed.
+/// (**)    The staker has a set of invariants:
+///             (invariant 1) Min stake for non-retired balances:
+///                           active + inactive balance must be == 0 or >= minimum stake
+///             (invariant 2) Min stake for total staker balances:
+///                           active + inactive + retired balance must be == 0 or >= minimum stake
+///             (invariant 3) Inactivation block height is always associated with some inactive balance:
+///                          `inactive_from` is Some(_) && `inactive_balance` > 0
+///             (invariant 4) When there are no inactive funds, there is no inactivation block height:
+///                          `inactive_from` is None && `inactive_balance` == 0
+///
+/// Create, AddStake, SetActiveStake, Update and RetireStake are incoming transactions to the staking contract.
+/// RemoveStake is an outgoing transaction from the staking contract.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Staker {
-    /// The address of the staker. The corresponding key is used for all transactions (except Stake
+    /// The address of the staker. The corresponding key is used for all transactions (except AddStake
     /// which is open to any address).
     pub address: Address,
     /// The staker's active balance.
-    pub balance: Coin,
+    pub active_balance: Coin,
     /// The staker's inactive balance. Only released inactive balance can be withdrawn from the staking contract.
     /// Stake can only be re-delegated if the whole balance of the staker is inactive and released
     /// (or if there was no prior delegation). For inactive balance to be released, the maximum of
     /// the inactive and the validator's jailed periods must have passed.
     pub inactive_balance: Coin,
-    /// The block number at which the inactive balance was last inactivated
+    /// The block number at which the inactive balance was last inactivated.
     /// If the stake is currently delegated to a jailed validator, the maximum of its jail release
     /// and the inactive release is taken. Re-delegation requires the whole balance of the staker to be inactive.
     /// The stake can only effectively become inactive on the next election block. Thus, this may contain a
     /// future block height.
     pub inactive_from: Option<u32>,
-    /// The staker's retired balance. Retired balance can only be withdrawn, it is irreversible.
-    /// Only released retired balance can be withdrawn from the staking contract.
-    /// For retired balance to be available for withdrawal, the maximum of the inactive and the validator's jailed
+    /// The staker's retired balance. Retired balance can only be withdrawn, thus retiring is irreversible.
+    /// Only released inactive balance can be retired, so the maximum of the inactive and the validator's jailed
     /// periods must have passed.
+    /// Once retired, the funds are immediately available to be withdrawn (removed).
     pub retired_balance: Coin,
     /// The address of the validator for which the staker is delegating its stake for. If it is not
     /// delegating to any validator, this will be set to None.
     pub delegation: Option<Address>,
+}
+
+#[cfg(feature = "interaction-traits")]
+impl Staker {
+    /// Returns the current total balance of the staker.
+    pub fn total_balance(&self) -> Coin {
+        self.active_balance + self.inactive_balance + self.retired_balance
+    }
+
+    /// Returns the current non-retired balance of the staker.
+    pub fn none_retired_balance(&self) -> Coin {
+        self.active_balance + self.inactive_balance
+    }
+
+    /// Checks that the given value can be withdrawn from the retired balance.
+    /// Fails if we are trying to withdraw less than total retired balance.
+    pub(crate) fn can_remove_stake(&self, value: Coin) -> Result<(), AccountError> {
+        // The value to be withdrawn must be equal to the retired balance.
+        if value != self.retired_balance {
+            return Err(AccountError::InvalidCoinValue);
+        }
+
+        Ok(())
+    }
+
+    /*  Helpers for checking release block heights and invariants */
+
+    /// Returns true if the inactive funds are released both from the lockup period and any potential jail
+    /// of the current validator delegation.
+    fn is_inactive_stake_released(
+        &self,
+        store: &StakingContractStoreWrite,
+        block_number: u32,
+    ) -> bool {
+        // If stake is currently delegated we check if funds are released.
+        // We only need to check the release of inactive funds if there is a delegation.
+        // This is because the purpose of the locked period is to ensure that we wait for the reporting window
+        // to finish and thus that the validator will not be jailed due to misbehavior.
+        if let Some(validator_address) = &self.delegation {
+            // Funds are not released if release block height has not passed yet.
+            if let Some(inactive_from) = self.inactive_from {
+                if block_number < Policy::block_after_reporting_window(inactive_from) {
+                    return false;
+                }
+            }
+
+            // Funds are only released if the validator is not jailed.
+            if let Some(validator) = store.get_validator(validator_address) {
+                return !validator.is_jailed(block_number);
+            }
+        }
+
+        true
+    }
+
+    /// Checks if the minimum stake invariants are respected.
+    /// This function expects as input the final balances of a given operation.
+    /// Invariants:
+    ///         (1) active + inactive balances must be == 0 or >= minimum stake
+    ///         (2) active + inactive + retired balances must be == 0 or >= minimum stake
+    pub(crate) fn enforce_min_stake(
+        active_balance: Coin,
+        inactive_balance: Coin,
+        retired_balance: Coin,
+    ) -> Result<(), AccountError> {
+        // Check invariant 1: that total non-retired balances (active+inactive) do not violate the minimum stake.
+        let non_retired_balance = active_balance + inactive_balance;
+        if non_retired_balance > Coin::ZERO
+            && non_retired_balance < Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
+        {
+            debug!(
+                ?active_balance,
+                ?inactive_balance,
+                "Transaction would violate the minimum non-retired stake"
+            );
+            return Err(AccountError::InvalidCoinValue);
+        }
+
+        // Check invariant 2: total stake does not violate minimum stake.
+        // If all funds are retired, then retired funds must be 0 or at least minimum stake.
+        if non_retired_balance.is_zero()
+            && retired_balance > Coin::ZERO
+            && retired_balance < Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
+        {
+            debug!(
+                ?active_balance,
+                ?inactive_balance,
+                ?retired_balance,
+                "Transaction would violate the minimum total stake"
+            );
+            return Err(AccountError::InvalidCoinValue);
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(feature = "interaction-traits")]
@@ -84,30 +193,6 @@ impl StakingContract {
         delegation: Option<Address>,
         inactive_balance: Coin,
         inactive_from: Option<u32>,
-        tx_logger: &mut TransactionLog,
-    ) -> Result<(), AccountError> {
-        self.create_staker_with_retired(
-            store,
-            staker_address,
-            value,
-            delegation,
-            inactive_balance,
-            inactive_from,
-            Coin::ZERO,
-            tx_logger,
-        )
-    }
-
-    /// Creates a new staker with retired funds.
-    fn create_staker_with_retired(
-        &mut self,
-        store: &mut StakingContractStoreWrite,
-        staker_address: &Address,
-        value: Coin,
-        delegation: Option<Address>,
-        inactive_balance: Coin,
-        inactive_from: Option<u32>,
-        retired_balance: Coin,
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // See if the staker already exists.
@@ -128,9 +213,9 @@ impl StakingContract {
         // Create the staker struct.
         let staker = Staker {
             address: staker_address.clone(),
-            balance: value,
+            active_balance: value,
             inactive_balance,
-            retired_balance,
+            retired_balance: Coin::ZERO,
             inactive_from,
             delegation,
         };
@@ -138,7 +223,7 @@ impl StakingContract {
         // If we are delegating to a validator, we need to update it.
         if let Some(validator_address) = &staker.delegation {
             self.register_staker_on_validator(store, validator_address, false);
-            self.increase_stake_to_validator(store, validator_address, staker.balance);
+            self.increase_stake_to_validator(store, validator_address, staker.active_balance);
         }
 
         // Update balance.
@@ -169,12 +254,12 @@ impl StakingContract {
         let staker = store.expect_staker(staker_address)?;
 
         // Update our balance.
-        assert_eq!(value, staker.balance);
+        assert_eq!(value, staker.active_balance);
         self.balance -= value;
 
         // If we are delegating to a validator, we need to update it.
         if let Some(validator_address) = &staker.delegation {
-            self.decrease_stake_from_validator(store, validator_address, staker.balance);
+            self.decrease_stake_from_validator(store, validator_address, staker.active_balance);
             self.unregister_staker_from_validator(store, validator_address);
         }
 
@@ -202,6 +287,15 @@ impl StakingContract {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
 
+        // Fail if the minimum stake would be violated for the non-retired funds (invariant 1).
+        Staker::enforce_min_stake(
+            staker.active_balance + value,
+            staker.inactive_balance,
+            staker.retired_balance,
+        )?;
+
+        // All checks passed, not allowed to fail from here on!
+
         // If we are delegating to a validator, we need to update it.
         if let Some(validator_address) = &staker.delegation {
             // Check that the delegation is still valid, i.e. the validator hasn't been deleted.
@@ -210,8 +304,7 @@ impl StakingContract {
         }
 
         // Update the staker's and staking contract's balances.
-        // Update our balance.
-        staker.balance += value;
+        staker.active_balance += value;
         self.balance += value;
 
         // Build the return logs
@@ -243,10 +336,8 @@ impl StakingContract {
             self.decrease_stake_from_validator(store, validator_address, value);
         }
 
-        // Update the staker's balance.
-        staker.balance -= value;
-
-        // Update our balance.
+        // Update the staker's and staking contract's balances.
+        staker.active_balance -= value;
         self.balance -= value;
 
         tx_logger.push_log(Log::Stake {
@@ -281,11 +372,11 @@ impl StakingContract {
             store.expect_validator(new_validator_address)?;
         }
 
-        // If stake is currently delegated, than the active balance should be 0.
+        // If stake is currently delegated, the active balance must be 0.
         if staker.delegation.is_some() {
             // Fail if there is active stake.
-            // All stake must be moved to being inactive before re-delegating.
-            if !staker.balance.is_zero() {
+            // All stake must be inactivated or retired before re-delegating.
+            if !staker.active_balance.is_zero() {
                 debug!(
                     ?staker_address,
                     "Tried to update staker with active balance"
@@ -293,11 +384,11 @@ impl StakingContract {
                 return Err(AccountError::InvalidForRecipient);
             }
 
-            // Fail if the the funds are in cooldown or jailed.
-            if !self.is_inactive_stake_released(store, &staker, block_number) {
+            // Fail if the the funds are in locked or jailed.
+            if !staker.is_inactive_stake_released(store, block_number) {
                 debug!(
                     ?staker_address,
-                    "Tried to update staker with inactive balance locked (cooldown or jail)"
+                    "Tried to update staker with inactive balance locked or jailed"
                 );
                 return Err(AccountError::InvalidForRecipient);
             };
@@ -308,7 +399,7 @@ impl StakingContract {
         // Create the receipt.
         let receipt = StakerReceipt {
             delegation: staker.delegation.clone(),
-            active_balance: staker.balance,
+            active_balance: staker.active_balance,
             inactive_from: staker.inactive_from,
         };
 
@@ -327,7 +418,7 @@ impl StakingContract {
 
         if reactivate_all_stake {
             // Update the staker's balance.
-            staker.balance += staker.inactive_balance;
+            staker.active_balance += staker.inactive_balance;
             staker.inactive_balance = Coin::ZERO;
             staker.inactive_from = None;
         }
@@ -335,8 +426,8 @@ impl StakingContract {
         // If we are now delegating to a validator we add ourselves to it.
         if let Some(validator_address) = &staker.delegation {
             self.register_staker_on_validator(store, validator_address, false);
-            if !staker.balance.is_zero() {
-                self.increase_stake_to_validator(store, validator_address, staker.balance);
+            if !staker.active_balance.is_zero() {
+                self.increase_stake_to_validator(store, validator_address, staker.active_balance);
             }
         }
 
@@ -345,7 +436,7 @@ impl StakingContract {
             staker_address: staker_address.clone(),
             old_validator_address,
             new_validator_address: staker.delegation.clone(),
-            active_balance: staker.balance,
+            active_balance: staker.active_balance,
             inactive_from: staker.inactive_from,
         });
 
@@ -365,12 +456,11 @@ impl StakingContract {
     ) -> Result<(), AccountError> {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
-        let total_balance = staker.balance + staker.inactive_balance;
 
         // Remove ourselves from the current delegation, if it exists.
         if let Some(validator_address) = &staker.delegation {
-            if !staker.balance.is_zero() {
-                self.decrease_stake_from_validator(store, validator_address, staker.balance)
+            if !staker.active_balance.is_zero() {
+                self.decrease_stake_from_validator(store, validator_address, staker.active_balance)
             }
             self.unregister_staker_from_validator(store, validator_address);
         }
@@ -380,7 +470,7 @@ impl StakingContract {
             staker_address: staker_address.clone(),
             old_validator_address: receipt.delegation.clone(),
             new_validator_address: staker.delegation.clone(),
-            active_balance: staker.balance,
+            active_balance: staker.active_balance,
             inactive_from: staker.inactive_from,
         });
 
@@ -394,8 +484,9 @@ impl StakingContract {
         }
 
         // Restore the previous balances and values.
-        staker.balance = receipt.active_balance;
-        staker.inactive_balance = total_balance - staker.balance;
+        let total_balance = staker.total_balance();
+        staker.active_balance = receipt.active_balance;
+        staker.inactive_balance = total_balance - staker.active_balance;
         staker.inactive_from = receipt.inactive_from;
 
         // Update the staker entry.
@@ -404,12 +495,12 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Changes the active and consequentially the inactive balances of staker.
+    /// Changes the active and consequentially the inactive balances of the staker.
     /// The active balance will be set immediately.
-    /// The inactive balance will be available to withdraw after a lock up period and, if applicable,
-    /// until the jail period is finished.
-    /// If the staker has already some inactive stake, the corresponding balance will be overwritten and
-    /// the lock up period will be reset. This corresponds to editing the active stake balance
+    /// The inactive balance will be available to retire after a lock-up period and, if applicable,
+    /// after the validator's jail period has finished.
+    /// If the staker already has some inactive stake, the corresponding balance will be overwritten and
+    /// the lock-up period will be reset. This corresponds to editing the active stake balance
     /// and re-adjusting the inactive stake balance.
     pub fn set_active_stake(
         &mut self,
@@ -423,7 +514,7 @@ impl StakingContract {
         let mut staker = store.expect_staker(staker_address)?;
 
         // Fail if staker does not have sufficient funds.
-        let total_balance = staker.balance + staker.inactive_balance;
+        let total_balance = staker.total_balance();
         if total_balance < new_active_balance {
             return Err(AccountError::InsufficientFunds {
                 needed: new_active_balance,
@@ -435,11 +526,11 @@ impl StakingContract {
 
         // Store old values for receipt.
         let old_inactive_from = staker.inactive_from;
-        let old_active_balance = staker.balance;
+        let old_active_balance = staker.active_balance;
         let new_inactive_balance = total_balance - new_active_balance;
 
-        // Update the staker's balance.
-        staker.balance = new_active_balance;
+        // Update the staker's balances.
+        staker.active_balance = new_active_balance;
         staker.inactive_balance = new_inactive_balance;
         staker.inactive_from = if new_inactive_balance.is_zero() {
             None
@@ -488,21 +579,20 @@ impl StakingContract {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
 
-        let total_balance = staker.balance + staker.inactive_balance;
-
         // Keep the old values.
+        let total_balance = staker.total_balance();
         let old_inactive_from = staker.inactive_from;
         let old_inactive_balance = staker.inactive_balance;
 
         // Restore the previous inactive since and balances.
         staker.inactive_from = receipt.old_inactive_from;
-        staker.balance = receipt.old_active_balance;
-        staker.inactive_balance = total_balance - staker.balance;
+        staker.active_balance = receipt.old_active_balance;
+        staker.inactive_balance = total_balance - staker.active_balance;
 
         // If we are delegating to a validator, we update the active stake of the validator.
         // This function never changes the staker's delegation, so the validator counter should not be updated.
         if let Some(validator_address) = &staker.delegation {
-            self.update_stake_for_validator(store, validator_address, value, staker.balance);
+            self.update_stake_for_validator(store, validator_address, value, staker.active_balance);
         }
 
         // Create logs.
@@ -521,13 +611,14 @@ impl StakingContract {
     }
 
     /// Adds to the retired balance and consequentially changes the inactive balance of the staker.
-    /// The balance can only be retired if the lock up period and associated validator's jail period has passed.
-    /// Once retired the funds can be withdrawn immediately as long as the min stake is ensured.
+    /// The balance can only be retired if the lock-up period and associated validator's jail period have passed.
+    /// The retire fails if the invariant 1 for the non-retired stake is violated.
+    /// Once retired the funds can be withdrawn immediately.
     pub fn retire_stake(
         &mut self,
         store: &mut StakingContractStoreWrite,
         staker_address: &Address,
-        value: Coin,
+        retire_stake: Coin,
         block_number: u32,
         tx_logger: &mut TransactionLog,
     ) -> Result<RetireStakeReceipt, AccountError> {
@@ -535,17 +626,26 @@ impl StakingContract {
         let mut staker = store.expect_staker(staker_address)?;
 
         // Fail if staker does not have sufficient funds to retire.
-        if staker.inactive_balance < value {
+        if staker.inactive_balance < retire_stake {
             return Err(AccountError::InsufficientFunds {
-                needed: value,
+                needed: retire_stake,
                 balance: staker.inactive_balance,
             });
         }
 
-        if !self.is_inactive_stake_released(store, &staker, block_number) {
+        // Fail if the minimum stake would be violated for non-retired funds (invariant 1).
+        let new_inactive_balance = staker.inactive_balance - retire_stake;
+        Staker::enforce_min_stake(
+            staker.active_balance,
+            new_inactive_balance,
+            staker.retired_balance + retire_stake,
+        )?;
+
+        // Fail if the the funds are locked or jailed.
+        if !staker.is_inactive_stake_released(store, block_number) {
             debug!(
                 ?staker_address,
-                "Tried to retire stake with inactive balance locked (cooldown or jail)"
+                "Tried to retire stake with inactive balance locked or jailed"
             );
             return Err(AccountError::InvalidForRecipient);
         }
@@ -553,12 +653,11 @@ impl StakingContract {
         // All checks passed, not allowed to fail from here on!
 
         // Store old values for receipt.
-        let old_inactive_balance = staker.inactive_balance;
         let old_inactive_from = staker.inactive_from;
 
         // Update the staker's balances.
-        staker.inactive_balance -= value;
-        staker.retired_balance += value;
+        staker.inactive_balance = new_inactive_balance;
+        staker.retired_balance += retire_stake;
 
         if staker.inactive_balance.is_zero() {
             staker.inactive_from = None;
@@ -575,10 +674,7 @@ impl StakingContract {
         // Update the staker entry.
         store.put_staker(staker_address, staker);
 
-        Ok(RetireStakeReceipt {
-            old_inactive_balance,
-            old_inactive_from,
-        })
+        Ok(RetireStakeReceipt { old_inactive_from })
     }
 
     /// Reverts a retire stake transaction.
@@ -586,7 +682,7 @@ impl StakingContract {
         &mut self,
         store: &mut StakingContractStoreWrite,
         staker_address: &Address,
-        value: Coin,
+        retire_stake: Coin,
         receipt: RetireStakeReceipt,
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
@@ -599,8 +695,8 @@ impl StakingContract {
         let old_inactive_from = staker.inactive_from;
 
         // Restore the previous values.
-        staker.retired_balance -= value;
-        staker.inactive_balance = receipt.old_inactive_balance;
+        staker.retired_balance -= retire_stake;
+        staker.inactive_balance += retire_stake;
         staker.inactive_from = receipt.old_inactive_from;
 
         // Create logs.
@@ -618,110 +714,78 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Removes coins from the retire staker's balance. If the entire staker's balance is removed then the
-    /// staker is deleted.
+    /// Removes balance from the retired stake of the staker.
+    /// The stake removal fails if the invariant 2 for minimum stake for total balance is violated.
+    /// If the staker's total balance is 0 then the staker is deleted and a receipt is returned.
+    /// IMPORTANT: The remove stake should always remove the total stake. This is not enforced on
+    /// this level to allow for the fee deduction in case of commit failed transactions. Thus, upon
+    /// committing a regular remove stake transaction, the `can_remove_stake` must be called prior
+    /// the stake removal.
     pub fn remove_stake(
         &mut self,
         store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         value: Coin,
         tx_logger: &mut TransactionLog,
-    ) -> Result<RemoveStakeReceipt, AccountError> {
+    ) -> Result<Option<DeleteStakerReceipt>, AccountError> {
         // Get the staker.
         let mut staker = store.expect_staker(staker_address)?;
 
-        self.can_remove_stake(&staker, value)?;
+        // Fails if there are not enough retired funds for withdrawal.
+        if value > staker.retired_balance {
+            return Err(AccountError::InsufficientFunds {
+                needed: value,
+                balance: staker.retired_balance,
+            });
+        }
+
+        // Fails if the minimum total stake is violated (invariant 2).
+        let new_retired_balance = staker.retired_balance - value;
+        Staker::enforce_min_stake(
+            staker.active_balance,
+            staker.inactive_balance,
+            new_retired_balance,
+        )?;
 
         // All checks passed, not allowed to fail from here on!
 
-        // Keep the old values.
-        let old_delegation = staker.delegation.clone();
-
         // Update balances.
-        staker.retired_balance -= value;
+        staker.retired_balance = new_retired_balance;
         self.balance -= value;
 
         tx_logger.push_log(Log::RemoveStake {
             staker_address: staker_address.clone(),
-            validator_address: old_delegation.clone(),
+            validator_address: staker.delegation.clone(),
             value,
         });
 
-        // Update or remove the staker entry, depending on remaining balance.
+        // Update or remove the staker entry, depending on remaining total balance.
         // We do not update the validator's stake balance because remove stake
-        // is only referring to already inactivated or retired stake. Thus this stake
-        // has already been removed stake balance (from the validator).
-        if staker.balance.is_zero()
-            && staker.inactive_balance.is_zero()
-            && staker.retired_balance.is_zero()
-        {
+        // is only referring to already retired stake. Thus this stake
+        // has already been removed from the validator.
+        let receipt = if staker.total_balance().is_zero() {
             // If staker is to be removed and it had delegation, we update the validator.
             if let Some(validator_address) = &staker.delegation {
                 self.unregister_staker_from_validator(store, validator_address);
             }
             store.remove_staker(staker_address);
+
+            tx_logger.push_log(Log::DeleteStaker {
+                staker_address: staker_address.clone(),
+                validator_address: staker.delegation.clone(),
+            });
+
+            Some(DeleteStakerReceipt {
+                delegation: staker.delegation,
+            })
         } else {
             store.put_staker(staker_address, staker);
-        }
 
-        Ok(RemoveStakeReceipt {
-            delegation: old_delegation,
-        })
+            None
+        };
+
+        Ok(receipt)
     }
-
-    pub(crate) fn can_remove_stake(
-        &self,
-        staker: &Staker,
-        value: Coin,
-    ) -> Result<(), AccountError> {
-        // Fail if the value is too high.
-        let new_retired_balance = staker.retired_balance.safe_sub(value)?;
-
-        // Fail if this operation would leave a staker with a total balance violating the minimum stake.
-        // However, if this operation will result in a removal of the staker, it is allowed.
-        let non_retired_balances = staker.balance + staker.inactive_balance;
-        if non_retired_balances + new_retired_balance
-            < Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
-            && non_retired_balances + new_retired_balance > Coin::ZERO
-        {
-            debug!(
-                active_balance=?staker.balance,
-                inactive_balance=?staker.inactive_balance,
-                retired_balance=?staker.retired_balance,
-                ?value,
-                "Tried to remove stake that would violate the minimum total stake"
-            );
-            return Err(AccountError::InvalidCoinValue);
-        }
-
-        Ok(())
-    }
-
-    fn is_inactive_stake_released(
-        &self,
-        store: &StakingContractStoreWrite,
-        staker: &Staker,
-        block_number: u32,
-    ) -> bool {
-        // If stake is currently delegated we check if funds are released.
-        if let Some(validator_address) = &staker.delegation {
-            // Funds are not released if release block height has not passed yet.
-            if let Some(inactive_from) = staker.inactive_from {
-                if block_number < Policy::block_after_reporting_window(inactive_from) {
-                    return false;
-                }
-            }
-
-            // Funds are only released if the validator is not jailed.
-            if let Some(validator) = store.get_validator(validator_address) {
-                return !validator.is_jailed(block_number);
-            }
-        }
-
-        true
-    }
-
-    /*  Private functions */
 
     /// Reverts a remove_stake transaction.
     pub fn revert_remove_stake(
@@ -729,27 +793,36 @@ impl StakingContract {
         store: &mut StakingContractStoreWrite,
         staker_address: &Address,
         value: Coin,
-        receipt: RemoveStakeReceipt,
+        receipt: Option<DeleteStakerReceipt>,
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
-        let mut staker = store.get_staker(staker_address).unwrap_or_else(|| {
-            // If staker had been removed and it had delegation, we update the validator.
+        let staker = if let Some(receipt) = receipt {
             if let Some(validator_address) = &receipt.delegation {
                 self.register_staker_on_validator(store, validator_address, true);
             }
-            // Set the retired balance to zero here, it is updated later.
+
+            tx_logger.push_log(Log::DeleteStaker {
+                staker_address: staker_address.clone(),
+                validator_address: receipt.delegation.clone(),
+            });
+
             Staker {
                 address: staker_address.clone(),
-                balance: Coin::ZERO,
+                active_balance: Coin::ZERO,
                 inactive_balance: Coin::ZERO,
                 inactive_from: None,
-                retired_balance: Coin::ZERO,
+                retired_balance: value,
                 delegation: receipt.delegation,
             }
-        });
+        } else {
+            // If there is no receipt the staker must exist and thus we only need to update the balance.
+            let mut staker = store.expect_staker(staker_address)?;
+            staker.retired_balance += value;
 
-        // Update the staking contract's and staker's balances.
-        staker.retired_balance += value;
+            staker
+        };
+
+        // Update the staking contract's balance.
         self.balance += value;
 
         tx_logger.push_log(Log::RemoveStake {
@@ -763,6 +836,8 @@ impl StakingContract {
 
         Ok(())
     }
+
+    /* Helpers for delegation counter and balance update */
 
     /// Registers/links a new staker on the validator.
     /// This only increases the counter of the validators' stakers, the balance is set with
@@ -812,7 +887,7 @@ impl StakingContract {
     /// `increase_stake_to_validator`, `decrease_stake_to_validator` or `update_increase_stake_to_validator`.
     /// In case of a deleted validator, this function removes the tombstone if there are no more stakers registered.
     /// Panics if staker.delegation is None.
-    pub(crate) fn unregister_staker_from_validator(
+    fn unregister_staker_from_validator(
         &mut self,
         store: &mut StakingContractStoreWrite,
         validator_address: &Address,
@@ -845,6 +920,7 @@ impl StakingContract {
         panic!("inconsistent contract state");
     }
 
+    /// Wrapper for decreasing or increasing the validator's balance.
     fn update_stake_for_validator(
         &mut self,
         store: &mut StakingContractStoreWrite,

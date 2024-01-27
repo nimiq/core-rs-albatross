@@ -883,7 +883,7 @@ impl TransactionBuilder {
     ///                             address will be derived from this key pair.
     ///  - `delegation`:            The (optional) delegation to a validator.
     ///  - `value`:                 The value for the initial stake. This is sent from the account
-    ///                             belonging to `key_pair`.
+    ///                             belonging to `key_pair`. Value must be >= minimum stake.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
     ///  - `network_id`:            ID of network for which the transaction is meant.
@@ -925,7 +925,7 @@ impl TransactionBuilder {
         }
     }
 
-    /// Creates a staking transaction from the address of a given `key_pair` to a specified
+    /// Creates a transaction to add stake from the address of a given `key_pair` to a specified
     /// `staker_address`.
     ///
     /// # Arguments
@@ -934,7 +934,8 @@ impl TransactionBuilder {
     ///                             stake is sent from the basic account belonging to this key pair.
     ///  - `staker_address`:        The address of the staker that we are sending the stake to.
     ///  - `value`:                 The value of the stake. This is sent from the account
-    ///                             belonging to `key_pair`.
+    ///                             belonging to `key_pair`. This transaction can fail if the resulting staker
+    ///                             violates the minimum non-retired stake.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
     ///  - `network_id`:            ID of network for which the transaction is meant.
@@ -943,7 +944,7 @@ impl TransactionBuilder {
     ///
     /// The finalized transaction.
     ///
-    pub fn new_stake(
+    pub fn new_add_stake(
         key_pair: &KeyPair,
         staker_address: Address,
         value: Coin,
@@ -1047,7 +1048,7 @@ impl TransactionBuilder {
     ///                             belonging to this key pair.
     ///  - `staker_key_pair`:       The key pair used to sign the incoming transaction. The staker
     ///                             address will be derived from this key pair.
-    ///  - `value`:                 The portion of the total stake to be set as the active stake. Can
+    ///  - `new_active_balance`:    The portion of the total stake to be set as the active stake. Can
     ///                             be at most the total stake. The difference between this value and
     ///                             the total stake is set as inactive stake. To inactivate all stake,
     ///                             set to 0.
@@ -1066,18 +1067,18 @@ impl TransactionBuilder {
     pub fn new_set_active_stake(
         key_pair: Option<&KeyPair>,
         staker_key_pair: &KeyPair,
-        value: Coin,
+        new_active_balance: Coin,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
-        recipient.set_active_stake(value);
+        recipient.set_active_stake(new_active_balance);
 
         let mut builder = Self::new();
         builder
             .with_recipient(recipient.generate().unwrap())
-            .with_value(value)
+            .with_value(Coin::ZERO)
             .with_fee(fee)
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
@@ -1111,8 +1112,7 @@ impl TransactionBuilder {
     ///                             belonging to this key pair.
     ///  - `staker_key_pair`:       The key pair used to sign the incoming transaction. The staker
     ///                             address will be derived from this key pair.
-    ///  - `value`:                 The portion of the total stake to be retired. Can be at most the total
-    ///                             stake.
+    ///  - `retire_stake`:          The portion of the inactive stake to be retired.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
     ///  - `network_id`:            ID of network for which the transaction is meant.
@@ -1121,21 +1121,25 @@ impl TransactionBuilder {
     ///
     /// The finalized transaction.
     ///
+    /// # Note
+    ///
+    /// This is a *signaling transaction*.
+    ///
     pub fn new_retire_stake(
         key_pair: Option<&KeyPair>,
         staker_key_pair: &KeyPair,
-        value: Coin,
+        retire_stake: Coin,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
-        recipient.retire_stake(value);
+        recipient.retire_stake(retire_stake);
 
         let mut builder = Self::new();
         builder
             .with_recipient(recipient.generate().unwrap())
-            .with_value(value)
+            .with_value(Coin::ZERO)
             .with_fee(fee)
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
@@ -1160,7 +1164,7 @@ impl TransactionBuilder {
         Ok(builder.generate().unwrap())
     }
 
-    /// Creates a transaction to move stake of a given staker from the staking contract to a
+    /// Creates a transaction to remove stake of a given staker (from the staking contract) to a
     /// basic `recipient` address.
     ///
     /// # Arguments
@@ -1168,7 +1172,7 @@ impl TransactionBuilder {
     ///  - `key_pair`:              The key pair used to sign the outgoing transaction. The staker
     ///                             address will be derived from this key pair.
     ///  - `recipient`:             The basic address that will receive the removed funds.
-    ///  - `value`:                 The value to be moved from the staker.
+    ///  - `value`:                 The value to be removed from the staker. Must be equal to retired balance.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
     ///  - `network_id`:            ID of network for which the transaction is meant.
@@ -1494,6 +1498,7 @@ impl TransactionBuilder {
     ///  - `recipient`:             The recipient of the staked funds.
     ///  - `cold_key_pair`:         The key pair that corresponds to the validator address. The
     ///                             transaction is signed using this key pair.
+    ///  - `value`:                 The value to be removed from the validator. Must be equal to the validator's deposit.
     ///  - `fee`:                   Transaction fee. The fee is subtracted from the staked funds.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
     ///  - `network_id`:            ID of network for which the transaction is valid.

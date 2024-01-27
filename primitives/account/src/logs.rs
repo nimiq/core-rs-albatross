@@ -162,6 +162,12 @@ pub enum Log {
     },
 
     #[serde(rename_all = "camelCase")]
+    DeleteStaker {
+        staker_address: Address,
+        validator_address: Option<Address>,
+    },
+
+    #[serde(rename_all = "camelCase")]
     PayoutReward { to: Address, value: Coin },
 
     #[serde(rename_all = "camelCase")]
@@ -256,6 +262,11 @@ impl Log {
                 validator_address, ..
             } => validator_address == address,
             Log::ReactivateValidator { validator_address } => validator_address == address,
+            Log::RetireValidator { validator_address } => validator_address == address,
+            Log::DeleteValidator {
+                validator_address,
+                reward_address,
+            } => validator_address == address || reward_address == address,
             Log::CreateStaker {
                 staker_address,
                 validator_address,
@@ -294,11 +305,6 @@ impl Log {
                         .map(|new_address| new_address == address)
                         .unwrap_or(false)
             }
-            Log::RetireValidator { validator_address } => validator_address == address,
-            Log::DeleteValidator {
-                validator_address,
-                reward_address,
-            } => validator_address == address || reward_address == address,
             Log::SetActiveStake {
                 staker_address,
                 validator_address,
@@ -313,6 +319,10 @@ impl Log {
                 staker_address,
                 validator_address,
                 ..
+            }
+            | Log::DeleteStaker {
+                staker_address,
+                validator_address,
             } => {
                 staker_address == address
                     || validator_address

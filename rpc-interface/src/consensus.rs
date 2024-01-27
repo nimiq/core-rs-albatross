@@ -273,7 +273,7 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Option<Address>,
         staker_wallet: Address,
-        value: Coin,
+        new_active_balance: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error>;
@@ -282,7 +282,7 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Option<Address>,
         staker_wallet: Address,
-        value: Coin,
+        new_active_balance: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;
@@ -291,7 +291,7 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Option<Address>,
         staker_wallet: Address,
-        value: Coin,
+        retire_stake: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error>;
@@ -300,7 +300,7 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Option<Address>,
         staker_wallet: Address,
-        value: Coin,
+        retire_stake: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error>;

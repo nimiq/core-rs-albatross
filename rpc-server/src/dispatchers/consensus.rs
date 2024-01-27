@@ -599,7 +599,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error> {
-        let transaction = TransactionBuilder::new_stake(
+        let transaction = TransactionBuilder::new_add_stake(
             &self.get_wallet_keypair(&sender_wallet)?,
             staker_address,
             value,
@@ -698,7 +698,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         sender_wallet: Option<Address>,
         staker_wallet: Address,
-        value: Coin,
+        new_active_balance: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error> {
@@ -710,7 +710,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         let transaction = TransactionBuilder::new_set_active_stake(
             sender_key.as_ref(),
             &self.get_wallet_keypair(&staker_wallet)?,
-            value,
+            new_active_balance,
             fee,
             self.validity_start_height(validity_start_height),
             self.get_network_id(),
@@ -726,7 +726,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         sender_wallet: Option<Address>,
         staker_wallet: Address,
-        value: Coin,
+        new_active_balance: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
@@ -734,7 +734,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             .create_set_active_stake_transaction(
                 sender_wallet,
                 staker_wallet,
-                value,
+                new_active_balance,
                 fee,
                 validity_start_height,
             )
@@ -743,13 +743,14 @@ impl ConsensusInterface for ConsensusDispatcher {
         self.send_raw_transaction(raw_tx).await
     }
 
-    /// Returns a serialized `retire_stake` transaction. The transaction fee will be paid from the funds
-    /// being retired.
+    /// Returns a serialized `retire_stake` transaction. You can pay the transaction fee from a basic
+    /// account (by providing the sender wallet) or from the staker account's balance (by not
+    /// providing a sender wallet).
     async fn create_retire_stake_transaction(
         &mut self,
         sender_wallet: Option<Address>,
         staker_wallet: Address,
-        value: Coin,
+        retire_stake: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<String, (), Self::Error> {
@@ -761,7 +762,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         let transaction = TransactionBuilder::new_retire_stake(
             sender_key.as_ref(),
             &self.get_wallet_keypair(&staker_wallet)?,
-            value,
+            retire_stake,
             fee,
             self.validity_start_height(validity_start_height),
             self.get_network_id(),
@@ -770,13 +771,14 @@ impl ConsensusInterface for ConsensusDispatcher {
         Ok(transaction_to_hex_string(&transaction).into())
     }
 
-    /// Sends a `retire_stake` transaction to the network. The transaction fee will be paid from the funds
-    /// being retired.
+    /// Sends a `retire_stake` transaction to the network. You can pay the transaction fee from a basic
+    /// account (by providing the sender wallet) or from the staker account's balance (by not
+    /// providing a sender wallet).
     async fn send_retire_stake_transaction(
         &mut self,
         sender_wallet: Option<Address>,
         staker_wallet: Address,
-        value: Coin,
+        retire_stake: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
@@ -784,7 +786,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             .create_retire_stake_transaction(
                 sender_wallet,
                 staker_wallet,
-                value,
+                retire_stake,
                 fee,
                 validity_start_height,
             )

@@ -566,11 +566,11 @@ impl Transaction {
                             })
                         }
                         IncomingStakingTransactionData::RetireStake {
-                            value,
+                            retire_stake,
                             proof: _proof,
                         } => PlainTransactionRecipientData::RetireStake(PlainRetireStakeData {
                             raw: hex::encode(self.recipient_data()),
-                            value: value.into(),
+                            retire_stake: retire_stake.into(),
                         }),
                     }
                     // In the future we might add other staking notifications
@@ -838,7 +838,7 @@ pub struct PlainUpdateStakerData {
     pub reactivate_all_stake: bool,
 }
 
-/// JSON-compatible and human-readable format of set inactive stake data.
+/// JSON-compatible and human-readable format of set active stake data.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainSetActiveStakeData {
@@ -846,12 +846,12 @@ pub struct PlainSetActiveStakeData {
     pub new_active_balance: u64,
 }
 
-/// JSON-compatible and human-readable format of set inactive stake data.
+/// JSON-compatible and human-readable format of retire stake data.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainRetireStakeData {
     pub raw: String,
-    pub value: u64,
+    pub retire_stake: u64,
 }
 
 /// Enum over all possible meanings of a transaction's proof.

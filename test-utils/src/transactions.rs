@@ -215,40 +215,51 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
 
         // Ensure that the value is the validator deposit if tx should succeed. Otherwise, makes value higher
         // than validator deposit.
-        if matches!(sender, OutgoingType::DeleteValidator) {
-            value = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
-                .checked_sub(fee)
-                .expect("Fee should not be higher than validator deposit");
-            if fail_sender {
-                value += Coin::from_u64_unchecked(1);
+        match sender {
+            OutgoingType::DeleteValidator => {
+                value = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
+                    .checked_sub(fee)
+                    .expect("Fee must not be higher than validator deposit");
+                if fail_sender {
+                    value += Coin::from_u64_unchecked(1);
+                }
             }
-        } else if matches!(sender, OutgoingType::RemoveStake) {
-            value = Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
-                .checked_sub(fee)
-                .expect("Fee should not be higher than staker stake");
-            if fail_sender {
-                value += Coin::from_u64_unchecked(1);
+            OutgoingType::RemoveStake => {
+                value = Coin::from_u64_unchecked(2 * Policy::MINIMUM_STAKE)
+                    .checked_sub(fee)
+                    .expect("Fee must not be higher than staker stake");
+                if fail_sender {
+                    value += Coin::from_u64_unchecked(1);
+                }
             }
+            _ => {}
         }
 
-        // Ensure that the value is the validator deposit if we are creating a validator or staker.
-        // Ensure that the value
-        if matches!(recipient, IncomingType::CreateValidator) {
-            value = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
-        } else if matches!(recipient, IncomingType::CreateStaker) {
-            value = Coin::from_u64_unchecked(Policy::MINIMUM_STAKE);
-        } else if matches!(recipient, IncomingType::SetActiveStake) {
-            value = Coin::ZERO;
-        } else if matches!(recipient, IncomingType::RetireStake) {
-            value = Coin::from_u64_unchecked(Policy::MINIMUM_STAKE);
+        // Ensure that the value is the validator deposit if we are creating a validator.
+        // Ensure that the minimum stake is respected in staker operations.
+        match recipient {
+            IncomingType::CreateValidator => {
+                value = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
+            }
+            IncomingType::SetActiveStake => {
+                value = Coin::ZERO;
+            }
+            IncomingType::CreateStaker | IncomingType::RetireStake => {
+                value = Coin::from_u64_unchecked(Policy::MINIMUM_STAKE);
+            }
+            _ => {}
         }
 
-        let sender_data = if matches!(sender, OutgoingType::RemoveStake) {
-            OutgoingStakingTransactionData::RemoveStake.serialize_to_vec()
-        } else if matches!(sender, OutgoingType::DeleteValidator) {
-            OutgoingStakingTransactionData::DeleteValidator.serialize_to_vec()
-        } else {
-            vec![]
+        let sender_data = match sender {
+            OutgoingType::RemoveStake => {
+                OutgoingStakingTransactionData::RemoveStake.serialize_to_vec()
+            }
+            OutgoingType::DeleteValidator => {
+                OutgoingStakingTransactionData::DeleteValidator.serialize_to_vec()
+            }
+            _ => {
+                vec![]
+            }
         };
 
         let sender_account =
@@ -770,7 +781,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
 
                 IncomingAccountData::Staking {
                     parameters: IncomingStakingTransactionData::RetireStake {
-                        value: balance,
+                        retire_stake: balance,
                         proof: SignatureProof::default(),
                     },
                     validator_key_pair,
@@ -860,7 +871,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             .create_staker(
                 &mut store,
                 &Address::from(&staker_key_pair),
-                Coin::from_u64_unchecked(Policy::MINIMUM_STAKE),
+                Coin::from_u64_unchecked(Policy::MINIMUM_STAKE * 2),
                 Some(Address::from(&validator_key_pair)),
                 Coin::ZERO,
                 None,
@@ -884,7 +895,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 .retire_stake(
                     &mut store,
                     &Address::from(&staker_key_pair),
-                    Coin::from_u64_unchecked(Policy::MINIMUM_STAKE),
+                    Coin::from_u64_unchecked(Policy::MINIMUM_STAKE * 2),
                     Policy::block_after_reporting_window(Policy::election_block_after(0)),
                     &mut TransactionLog::empty(),
                 )

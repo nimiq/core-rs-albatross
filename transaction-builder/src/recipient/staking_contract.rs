@@ -160,13 +160,14 @@ impl StakingRecipientBuilder {
         self
     }
 
-    /// This method allows to retire the stakers balance. Funds are first drained from the inactive
-    /// stake and have the same release time, if the active stake funds also need to be drained the
-    /// retire release time will be reset.
+    /// This method allows to retire the staker from the staker's inactive balance.
+    /// Retiring funds is only allowed after the inactive funds are released (i.e. lock-up and jail
+    /// periods have passed). Additionally, the minimum total stake for non-retired funds must still
+    /// be respected.
     /// It needs to be signed by the key pair corresponding to the staker address.
-    pub fn retire_stake(&mut self, value: Coin) -> &mut Self {
+    pub fn retire_stake(&mut self, retire_stake: Coin) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::RetireStake {
-            value,
+            retire_stake,
             proof: Default::default(),
         });
         self
