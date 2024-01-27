@@ -76,6 +76,7 @@ where
         network: &N,
         public_key: &LazyPublicKey,
     ) -> Result<Option<N::PeerId>, NetworkError<N::Error>> {
+        log::debug!(?public_key, "Resolving Peer ID");
         if let Some(record) = network
             .dht_get::<_, ValidatorRecord<N::PeerId>, KeyPair>(public_key.compressed())
             .await?
@@ -214,6 +215,7 @@ where
         self.network
             .message(msg, peer_id)
             .map_err(|e| {
+                log::error!(validator_id, "Validator network error. Clearing cache");
                 // The validator peer id might have changed and thus caused a connection failure.
                 self.clear_validator_peer_id_cache(validator_id);
 
