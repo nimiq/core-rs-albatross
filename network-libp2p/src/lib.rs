@@ -37,7 +37,7 @@ impl Serialize for Libp2pKeyPair {
         S: Serializer,
     {
         if let Ok(pk) = self.0.clone().try_into_ed25519() {
-            serde_big_array::BigArray::serialize(&pk.to_bytes(), serializer)
+            nimiq_serde::FixedSizeByteArray::from(pk.to_bytes()).serialize(serializer)
         } else {
             Err(S::Error::custom("Unsupported key type"))
         }
@@ -49,7 +49,8 @@ impl<'de> Deserialize<'de> for Libp2pKeyPair {
     where
         D: Deserializer<'de>,
     {
-        let mut hex_encoded: [u8; 64] = serde_big_array::BigArray::deserialize(deserializer)?;
+        let mut hex_encoded: [u8; 64] =
+            nimiq_serde::FixedSizeByteArray::deserialize(deserializer)?.into_inner();
 
         let keypair = libp2p::identity::ed25519::Keypair::try_from_bytes(&mut hex_encoded)
             .map_err(|_| D::Error::custom("Invalid value"))?;

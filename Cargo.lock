@@ -519,15 +519,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "atomic-polyfill"
-version = "0.1.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3ff7eb3f316534d83a8a2c3d1674ace8a5a71198eba31e2e2b597833f699b28"
-dependencies = [
- "critical-section",
-]
-
-[[package]]
 name = "attohttpc"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1155,12 +1146,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "critical-section"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6548a0ad5d2549e111e1f6a11a6c2e2d00ce6a3dafe22948d67c2b443f775e52"
-
-[[package]]
 name = "crossbeam-channel"
 version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1605,6 +1590,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef1a6892d9eef45c8fa6b9e0086428a2cca8491aca8f787c534a3d6d0bcb3ced"
 
 [[package]]
+name = "embedded-io"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
+
+[[package]]
 name = "encode_unicode"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1957,9 +1948,9 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 
 [[package]]
 name = "hash32"
-version = "0.2.1"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67"
+checksum = "47d60b12902ba28e2730cd37e95b8c9223af2808df9e902d4df49588d1470606"
 dependencies = [
  "byteorder",
 ]
@@ -2029,15 +2020,13 @@ dependencies = [
 
 [[package]]
 name = "heapless"
-version = "0.7.16"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db04bc24a18b9ea980628ecf00e6c0264f3c1426dac36c00cb49b6fbad8b0743"
+checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
 dependencies = [
- "atomic-polyfill",
  "hash32",
- "rustc_version",
+ "portable-atomic",
  "serde",
- "spin 0.9.8",
  "stable_deref_trait",
 ]
 
@@ -3542,7 +3531,6 @@ dependencies = [
  "parking_lot 0.12.1",
  "rand",
  "serde",
- "serde-big-array",
  "thiserror",
  "tracing",
 ]
@@ -3830,7 +3818,6 @@ dependencies = [
  "rand",
  "rand_core",
  "serde",
- "serde-big-array",
  "sha2",
  "thiserror",
  "zeroize",
@@ -3939,7 +3926,6 @@ dependencies = [
  "hex",
  "nimiq-serde",
  "serde",
- "serde-big-array",
 ]
 
 [[package]]
@@ -4070,7 +4056,6 @@ dependencies = [
  "prometheus-client",
  "rand",
  "serde",
- "serde-big-array",
  "sha2",
  "thiserror",
  "tokio",
@@ -4180,6 +4165,7 @@ dependencies = [
  "postcard",
  "regex",
  "serde",
+ "serde_bytes",
  "serde_repr",
  "strum_macros",
  "thiserror",
@@ -4296,7 +4282,6 @@ dependencies = [
  "hex",
  "postcard",
  "serde",
- "serde-big-array",
  "serde_derive",
 ]
 
@@ -5343,12 +5328,11 @@ checksum = "f32154ba0af3a075eefa1eda8bb414ee928f62303a54ea85b8d6638ff1a6ee9e"
 
 [[package]]
 name = "postcard"
-version = "1.0.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a55c51ee6c0db07e68448e336cf8ea4131a620edefebf9893e759b2d793420f8"
+version = "1.0.9"
 dependencies = [
  "cobs",
- "embedded-io",
+ "embedded-io 0.4.0",
+ "embedded-io 0.6.1",
  "heapless",
  "serde",
 ]
@@ -6036,15 +6020,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde-big-array"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "serde-wasm-bindgen"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6064,6 +6039,15 @@ dependencies = [
  "js-sys",
  "serde",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "serde_bytes"
+version = "0.11.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b8497c313fd43ab992087548117643f6fcd935cbf36f176ffda0aacf9591734"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -6320,9 +6304,6 @@ name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
-dependencies = [
- "lock_api",
-]
 
 [[package]]
 name = "spki"

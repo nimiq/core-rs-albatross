@@ -13,7 +13,7 @@ fn serialize_hash(c: &mut Criterion) {
     });
     group.bench_function("plain", |b| {
         b.iter(|| {
-            let _ = black_box(hash.serialize(&mut buf.as_mut_slice()).unwrap());
+            let _ = black_box(black_box(&hash).serialize(&mut buf.as_mut_slice()).unwrap());
         })
     });
     group.finish();

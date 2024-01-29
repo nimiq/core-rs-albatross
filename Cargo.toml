@@ -148,6 +148,7 @@ opt-level = 2
 ark-ec = { git = "https://github.com/paberr/algebra", branch = "pb/0.4" }
 ark-ff = { git = "https://github.com/paberr/algebra", branch = "pb/0.4" }
 ark-r1cs-std = { git = "https://github.com/paberr/r1cs-std", branch = "pb/fix-pedersen" }
+postcard = { path = "../postcard" }
 wasm-timer = { git = "https://github.com/sisou/wasm-timer.git" }
 
 [workspace.package]

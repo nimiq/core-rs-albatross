@@ -93,7 +93,7 @@ mod serde_derive {
             if serializer.is_human_readable() {
                 serializer.serialize_str(&self.to_hex())
             } else {
-                serde_big_array::BigArray::serialize(&self.to_bytes(), serializer)
+                nimiq_serde::FixedSizeByteArray::from(self.to_bytes()).serialize(serializer)
             }
         }
     }
@@ -108,7 +108,7 @@ mod serde_derive {
                 data.parse().map_err(Error::custom)
             } else {
                 let buf: [u8; Signature::SIZE] =
-                    serde_big_array::BigArray::deserialize(deserializer)?;
+                    nimiq_serde::FixedSizeByteArray::deserialize(deserializer)?.into_inner();
                 Self::from_bytes(&buf).map_err(|_| D::Error::custom("Invalid signature"))
             }
         }
