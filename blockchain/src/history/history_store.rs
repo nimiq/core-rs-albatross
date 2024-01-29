@@ -1026,7 +1026,7 @@ impl HistoryStore {
     }
 
     /// Returns the range of leaf indexes corresponding to the given block number.
-    pub fn get_indexes_for_block(
+    fn get_indexes_for_block(
         &self,
         block_number: u32,
         txn_option: Option<&TransactionProxy>,

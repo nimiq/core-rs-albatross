@@ -62,8 +62,6 @@ pub struct ValidityChunkRequest {
     pub root_hash: Blake2bHash,
     /// The chunk index that was requested.
     pub chunk_index: u32,
-    /// Initial leaf index offset
-    pub initial_offset: u32,
     /// Validity start block number that we are syncing with this peer
     pub validity_start: u32,
     /// Flag to indicate if there is an election block within the validity window

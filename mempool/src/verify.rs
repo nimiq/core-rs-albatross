@@ -61,7 +61,7 @@ pub(crate) async fn verify_tx(
     }
 
     if blockchain.contains_tx_in_validity_window(&transaction.hash(), None) {
-        log::debug!("Transaction has already been mined");
+        log::trace!("Transaction has already been included");
         return Err(VerifyErr::AlreadyIncluded);
     }
 

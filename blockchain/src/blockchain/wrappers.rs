@@ -258,7 +258,7 @@ impl Blockchain {
         self.state().accounts.tree.get_missing_range(txn)
     }
 
-    /// Check if we have enough state to check for duplicates during the validity window
+    /// Check if we have enough state to check for duplicate transactions during the validity window
     pub fn can_enforce_validity_window(&self) -> bool {
         // If we are at the genesis block, we can enforce the validity window
         if self.block_number() == Policy::genesis_block_number() {

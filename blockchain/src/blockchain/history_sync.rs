@@ -6,6 +6,7 @@ use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
 };
 use nimiq_database::{traits::WriteTransaction, WriteTransactionProxy};
+use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{
     coin::Coin,
     policy::Policy,
@@ -97,18 +98,22 @@ impl Blockchain {
         this: RwLockUpgradableReadGuard<Blockchain>,
         epoch: u32,
         history: &[HistoricTransaction],
-    ) {
+    ) -> Option<Blake2bHash> {
         let mut txn = this.write_transaction();
 
         // Store the new historic transactions into the History tree.
-        this.history_store.add_to_history(&mut txn, epoch, history);
+        if let Some((root, _)) = this.history_store.add_to_history(&mut txn, epoch, history) {
+            txn.commit();
 
-        txn.commit();
-
-        debug!(
-            num_transactions = history.len(),
-            "Pushed txns to the history store during validity sync"
-        );
+            debug!(
+                num_transactions = history.len(),
+                "Pushed txns to the history store during validity sync"
+            );
+            Some(root)
+        } else {
+            txn.abort();
+            None
+        }
     }
 
     /// Extends the current chain with a macro block (election or checkpoint) during history sync.

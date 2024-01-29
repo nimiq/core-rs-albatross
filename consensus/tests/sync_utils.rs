@@ -208,7 +208,6 @@ pub async fn sync_two_peers(
             macro_sync_result
         }
     };
-
     log::debug!("Macro sync result {:?}", macro_sync_result);
     assert_eq!(
         macro_sync_result,

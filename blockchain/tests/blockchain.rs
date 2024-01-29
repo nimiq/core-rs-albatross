@@ -15,6 +15,7 @@ use nimiq_test_utils::{
 
 #[test(tokio::test)]
 #[ignore]
+// TODO: This test needs to be updated to take into consideration the new validity syncing mechanism.
 async fn can_enforce_validity_window() {
     let producer1 = TemporaryBlockProducer::new();
 

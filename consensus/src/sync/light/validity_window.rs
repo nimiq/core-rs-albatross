@@ -1,5 +1,4 @@
 use std::{
-    cmp,
     sync::Arc,
     task::{Context, Poll},
 };
@@ -10,7 +9,6 @@ use nimiq_blockchain::{Blockchain, CHUNK_SIZE};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
-use nimiq_mmr::mmr::position::leaf_number_to_index;
 use nimiq_network_interface::{
     network::{CloseReason, Network},
     request::RequestError,
@@ -21,30 +19,6 @@ use super::LightMacroSync;
 #[cfg(feature = "full")]
 use crate::messages::{HistoryChunk, HistoryChunkError, RequestHistoryChunk};
 use crate::sync::{light::sync::ValidityChunkRequest, syncer::MacroSyncReturn};
-
-/// The validity start is defined as the current head - validity_window_blocks
-/// However, if the validity start is located in the current epoch
-/// we will move it to the beggining of the current epoch,
-/// in order to sync the full epoch and being able to verify the history root.
-pub fn compute_validity_start(macro_head: u32) -> u32 {
-    // First we determine which is the validity window start block number
-    let mut validity_window_bn = cmp::max(
-        Policy::genesis_block_number(),
-        macro_head.saturating_sub(Policy::transaction_validity_window_blocks()),
-    );
-
-    // Now we need to check which is the election block after the validity start to determine
-    // if the full validity window is located in the current epoch.
-    let next_election = Policy::election_block_after(validity_window_bn);
-
-    // If this condition is true it means that the validity window is located within the current epoch
-    if next_election > macro_head && !Policy::is_election_block_at(validity_window_bn) {
-        // So we move the validity start to the beggining of the epoch, in order to be able to verify the history root
-        validity_window_bn = Policy::election_block_before(validity_window_bn)
-    };
-
-    validity_window_bn
-}
 
 #[cfg(feature = "full")]
 impl<TNetwork: Network> LightMacroSync<TNetwork> {
@@ -85,7 +59,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 verifier_block_number,
                 root_hash: expected_root,
                 chunk_index,
-                initial_offset: chunk_index * CHUNK_SIZE as u32,
                 validity_start: validity_window_start,
                 election_in_window,
             });
@@ -139,7 +112,16 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
     pub fn start_validity_synchronization(&mut self, peer_id: TNetwork::PeerId) {
         let macro_head = self.blockchain.read().macro_head();
-        let validity_window_bn = compute_validity_start(macro_head.block_number());
+
+        let validity_start = macro_head
+            .block_number()
+            .saturating_sub(Policy::transaction_validity_window_blocks());
+
+        let validity_window_bn = if validity_start <= Policy::genesis_block_number() {
+            Policy::genesis_block_number()
+        } else {
+            Policy::election_block_before(validity_start)
+        };
 
         // This must correspond to a macro block.
         assert!(Policy::is_macro_block_at(validity_window_bn));
@@ -181,6 +163,8 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         );
     }
 
+    /// Process the history chunks that are received as part of the validity window syncrhonization process
+    /// Each time a history chunk is received, it is verified and the history store is updated.
     pub fn poll_validity_window_chunks(
         &mut self,
         cx: &mut Context<'_>,
@@ -188,7 +172,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         while let Poll::Ready(Some(Ok((request, result, peer_id)))) =
             self.validity_queue.poll_next_unpin(cx)
         {
-            log::trace!(peer=%peer_id, chunk_index= request.chunk_index, block_number =request.block_number,  "Processing response from validity queue");
+            log::trace!(peer=%peer_id, chunk_index=request.chunk_index, block_number=request.block_number,  "Processing response from validity queue");
 
             let macro_head = self.blockchain.read().macro_head();
             let macro_head_number = macro_head.block_number();
@@ -216,19 +200,16 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         .map_or(false, |result| result);
 
                     if verification_result {
-                        let leaf_count = match &self.blockchain {
+                        let epoch_complete = match &self.blockchain {
                             BlockchainProxy::Full(blockchain) => {
-                                Blockchain::extend_validity_sync(
+                                let history_root = Blockchain::extend_validity_sync(
                                     blockchain.upgradable_read(),
                                     Policy::epoch_at(verifier_block_number),
                                     &chunk.history,
-                                );
+                                )
+                                .unwrap();
 
-                                blockchain
-                                    .read()
-                                    .history_store
-                                    .length_at(verifier_block_number, None)
-                                    as usize
+                                history_root == expected_root
                             }
                             BlockchainProxy::Light(_) => unreachable!(),
                         };
@@ -236,62 +217,23 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         // Get ready for requesting the next chunk
                         let mut chunk_index = peer_request.chunk_index + 1;
 
-                        // We need to check if this is the last chunk:
-                        let prover_mmr_size = chunk.proof.proof.mmr_size;
-
-                        // Now we need to add the initial offseat
-                        let total_size =
-                            leaf_number_to_index(peer_request.initial_offset as usize + leaf_count);
-
-                        if prover_mmr_size == total_size {
+                        if epoch_complete {
                             // We need to check if there was an election in between, if so, we need to proceed to the next epoch
                             if peer_request.election_in_window {
                                 log::trace!(
-                                    "Moving to the next epoch to continue syncing, current epoch {} ",
-                                    Policy::epoch_at(verifier_block_number)
+                                    current_epoch = Policy::epoch_at(verifier_block_number),
+                                    "Moving to the next epoch to continue syncing, current epoch",
                                 );
-
-                                match &self.blockchain {
-                                    BlockchainProxy::Full(blockchain) => {
-                                        let root = blockchain
-                                            .read()
-                                            .history_store
-                                            .get_history_tree_root(
-                                                Policy::epoch_at(verifier_block_number),
-                                                None,
-                                            )
-                                            .unwrap();
-                                        assert_eq!(root, expected_root,"The final history root and the expected one, are not the same");
-                                    }
-                                    BlockchainProxy::Light(_) => todo!(),
-                                }
 
                                 // Move to the next epoch:
                                 verifier_block_number = macro_head_number;
                                 chunk_index = 0;
-                                peer_request.initial_offset = 0;
                                 peer_request.election_in_window = false;
                                 peer_request.root_hash = macro_history_root.clone();
                                 peer_request.verifier_block_number = verifier_block_number;
                             } else {
                                 // No election in between, so we are done
                                 log::debug!("Validity window syncing is complete");
-
-                                match &self.blockchain {
-                                    BlockchainProxy::Full(blockchain) => {
-                                        let root = blockchain
-                                            .read()
-                                            .history_store
-                                            .get_history_tree_root(
-                                                Policy::epoch_at(macro_head_number),
-                                                None,
-                                            )
-                                            .unwrap();
-
-                                        assert_eq!(root, macro_history_root,"The final history root and the macro history root, are not the same");
-                                    }
-                                    BlockchainProxy::Light(_) => todo!(),
-                                }
 
                                 self.validity_queue.remove_peer(&peer_id);
                                 self.syncing_peers.remove(&peer_id);
@@ -327,14 +269,22 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
                         self.validity_queue.add_ids(vec![(request, None)]);
                     } else {
-                        // If the chunk doesnt verify we disconnect from the peer
+                        // If the chunk doesn't verify we disconnect from the peer
                         log::error!(peer=?peer_id,
                                     chunk=request.chunk_index,
                                     verifier_block=request.block_number,
                                     epoch=request.epoch_number,
                                     "The validity history chunk didn't verify, disconnecting from peer");
 
-                        self.disconnect_peer(peer_id, CloseReason::MaliciousPeer)
+                        // Remove the peer from the syncing process
+                        self.validity_queue.remove_peer(&peer_id);
+                        self.syncing_peers.remove(&peer_id);
+
+                        // Disconnect and ban the peer
+                        self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
+
+                        // Re add the request to the sync queue
+                        self.validity_queue.add_ids(vec![(request, None)]);
                     }
                 }
                 Err(_err) => {

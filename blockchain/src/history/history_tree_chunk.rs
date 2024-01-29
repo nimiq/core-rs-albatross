@@ -11,7 +11,7 @@ pub const CHUNK_SIZE: usize = 1024;
 
 #[derive(Serialize, Deserialize)]
 pub struct HistoryTreeChunk {
-    pub proof: RangeProof<Blake2bHash>,
+    pub(crate) proof: RangeProof<Blake2bHash>,
     pub history: Vec<HistoricTransaction>,
 }
 

@@ -19,7 +19,7 @@ use thiserror::Error;
 
 use crate::error::SubscribeToAddressesError;
 
-pub mod handlers;
+mod handlers;
 
 /*
 The consensus module uses the following messages:
@@ -49,8 +49,6 @@ pub const MAX_REQUEST_TRANSACTIONS_BY_ADDRESS: u32 = 1000;
 pub const MAX_REQUEST_TRIE_PROOF: u32 = 1000;
 /// The max number of Block proof requests per peer.
 pub const MAX_REQUEST_BLOCKS_PROOF: u32 = 1000;
-/// The max number of ValidityWindow requests per peer.
-pub const MAX_REQUEST_VALIDITY_WINDOW_START: u32 = 1000;
 /// The max number of Subscribe to address requests per peer.
 pub const MAX_REQUEST_SUBSCRIBE_BY_ADDRESS: u32 = 10;
 /// The max number of Address notifications per peer.

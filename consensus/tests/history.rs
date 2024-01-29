@@ -352,8 +352,8 @@ async fn send_invalid_block() {
         block_queue,
         bls_cache(),
     );
-
     let mut syncer = Syncer::new(live_sync, MockHistorySyncStream::new());
+
     let mut mock_node =
         MockNode::with_network_and_blockchain(Arc::new(hub.new_network()), blockchain());
     network.dial_mock(&mock_node.network);
