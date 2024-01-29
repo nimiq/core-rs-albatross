@@ -93,7 +93,7 @@ where
 {
     pub consensus: ConsensusProxy<TValidatorNetwork::NetworkType>,
     pub blockchain: Arc<RwLock<Blockchain>>,
-    network: Arc<TValidatorNetwork>,
+    pub network: Arc<TValidatorNetwork>,
 
     database: TableProxy,
     env: DatabaseProxy,
@@ -173,8 +173,11 @@ where
         };
         let macro_state = Arc::new(RwLock::new(macro_state));
 
-        let (proposal_sender, proposal_receiver) =
-            ProposalBuffer::new(Arc::clone(&blockchain), Arc::clone(&network));
+        let (proposal_sender, proposal_receiver) = ProposalBuffer::new(
+            Arc::clone(&blockchain),
+            Arc::clone(&network),
+            consensus.proxy(),
+        );
 
         let mempool = Arc::new(Mempool::new(Arc::clone(&blockchain), mempool_config));
         let mempool_active = false;

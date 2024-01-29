@@ -63,6 +63,7 @@ tokio = { version = "1.36", features = ["rt", "test-util", "time", "tracing"] }
 tracing-core = "0.1"
 tracing-subscriber = "0.3"
 
+nimiq-blockchain-proxy = { workspace = true }
 nimiq-genesis-builder = { workspace = true }
 nimiq-network-libp2p = { workspace = true }
 nimiq-network-mock = { workspace = true }
@@ -70,6 +71,7 @@ nimiq-test-log = { workspace = true }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/14167
 nimiq-test-utils = { workspace = true }
+nimiq-zkp-component = { workspace = true }
 
 [features]
 expensive-tests = []
