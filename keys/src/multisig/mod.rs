@@ -35,7 +35,9 @@ fn deserialize_scalar<'de, D>(deserializer: D) -> Result<Scalar, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    let buf: [u8; commitment::Nonce::SIZE] = serde_big_array::BigArray::deserialize(deserializer)?;
+    use serde::Deserialize as _;
+    let buf: [u8; commitment::Nonce::SIZE] =
+        nimiq_serde::FixedSizeByteArray::deserialize(deserializer)?.into_inner();
     Ok(Scalar::from_bytes_mod_order(buf))
 }
 
@@ -44,7 +46,8 @@ fn serialize_scalar<S>(value: &Scalar, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
-    serde_big_array::BigArray::serialize(&value.to_bytes(), serializer)
+    use serde::Serialize as _;
+    nimiq_serde::FixedSizeByteArray::from(value.to_bytes()).serialize(serializer)
 }
 
 /// This struct contains the data related to the commitments step of MuSig2.

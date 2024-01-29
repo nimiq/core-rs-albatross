@@ -3657,7 +3657,6 @@ dependencies = [
  "parking_lot 0.12.1",
  "rand",
  "serde",
- "serde-big-array",
  "thiserror",
  "tracing",
 ]
@@ -3944,7 +3943,6 @@ dependencies = [
  "rand",
  "rand_core",
  "serde",
- "serde-big-array",
  "sha2",
  "thiserror",
  "zeroize",
@@ -4049,10 +4047,10 @@ dependencies = [
 name = "nimiq-macros"
 version = "0.1.1"
 dependencies = [
+ "byteorder",
  "hex",
  "nimiq-serde",
  "serde",
- "serde-big-array",
 ]
 
 [[package]]
@@ -4183,7 +4181,6 @@ dependencies = [
  "prometheus-client",
  "rand",
  "serde",
- "serde-big-array",
  "sha2",
  "thiserror",
  "tokio",
@@ -4291,6 +4288,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "regex",
  "serde",
+ "serde_bytes",
  "serde_repr",
  "strum_macros",
  "thiserror",
@@ -4407,7 +4405,6 @@ dependencies = [
  "hex",
  "postcard",
  "serde",
- "serde-big-array",
  "serde_derive",
 ]
 

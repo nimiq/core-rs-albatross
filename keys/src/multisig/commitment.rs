@@ -167,7 +167,7 @@ mod serde_derive {
         where
             S: Serializer,
         {
-            serde_big_array::BigArray::serialize(&self.to_bytes(), serializer)
+            nimiq_serde::FixedSizeByteArray::from(self.to_bytes()).serialize(serializer)
         }
     }
 
@@ -176,7 +176,8 @@ mod serde_derive {
         where
             D: Deserializer<'de>,
         {
-            let buf: [u8; Commitment::SIZE] = serde_big_array::BigArray::deserialize(deserializer)?;
+            let buf: [u8; Commitment::SIZE] =
+                nimiq_serde::FixedSizeByteArray::deserialize(deserializer)?.into_inner();
             Self::from_bytes(buf).ok_or_else(|| D::Error::custom("Invalid commitment"))
         }
     }
@@ -186,7 +187,7 @@ mod serde_derive {
         where
             S: Serializer,
         {
-            serde_big_array::BigArray::serialize(&self.0.to_bytes(), serializer)
+            nimiq_serde::FixedSizeByteArray::from(self.0.to_bytes()).serialize(serializer)
         }
     }
 
@@ -195,7 +196,8 @@ mod serde_derive {
         where
             D: Deserializer<'de>,
         {
-            let buf: [u8; Nonce::SIZE] = serde_big_array::BigArray::deserialize(deserializer)?;
+            let buf: [u8; Nonce::SIZE] =
+                nimiq_serde::FixedSizeByteArray::deserialize(deserializer)?.into_inner();
             Ok(Self::from(&buf))
         }
     }

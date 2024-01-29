@@ -69,7 +69,6 @@ mod serde_derive {
         de::{Deserialize, Deserializer, Error as SerializationError},
         ser::{Error as DeSerializationError, Serialize, Serializer},
     };
-    use serde_big_array::BigArray;
 
     use super::SecretKey;
 
@@ -94,7 +93,10 @@ mod serde_derive {
             self.secret_key
                 .serialize_uncompressed(&mut compressed[..])
                 .map_err(|_| S::Error::custom("Couldn't compress secret key"))?;
-            BigArray::serialize(&compressed, serializer)
+            serde::Serialize::serialize(
+                &nimiq_serde::FixedSizeByteArray::from(compressed),
+                serializer,
+            )
         }
     }
 
@@ -103,7 +105,8 @@ mod serde_derive {
         where
             D: Deserializer<'de>,
         {
-            let compressed: [u8; Self::SIZE] = BigArray::deserialize(deserializer)?;
+            let compressed: [u8; Self::SIZE] =
+                nimiq_serde::FixedSizeByteArray::deserialize(deserializer)?.into_inner();
             Ok(SecretKey {
                 secret_key: Fr::deserialize_uncompressed(&*compressed.to_vec())
                     .map_err(|_| D::Error::custom("Couldn't uncompress secret key"))?,

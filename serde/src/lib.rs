@@ -1,11 +1,10 @@
 use std::{error::Error, fmt, io, io::Write};
 
-pub use postcard::fixint;
+pub use postcard::{fixint, FixedSizeByteArray};
 use serde::{
     de::{Deserializer, Error as _},
     ser::Serializer,
 };
-use serde_big_array::BigArray;
 pub use serde_derive::{Deserialize, Serialize};
 
 /// Deserialization Error. This error is a wrapper over `postcard::Error`.
@@ -113,7 +112,7 @@ impl<'de, const N: usize> HexArray<'de> for [u8; N] {
         if serializer.is_human_readable() {
             serializer.serialize_str(&hex::encode(self))
         } else {
-            BigArray::serialize(self, serializer)
+            serde::Serialize::serialize(&FixedSizeByteArray::from(*self), serializer)
         }
     }
 
@@ -128,7 +127,10 @@ impl<'de, const N: usize> HexArray<'de> for [u8; N] {
                 .map_err(|_| D::Error::custom("Couldn't decode hex string"))?;
             Ok(out)
         } else {
-            BigArray::deserialize(deserializer)
+            Ok(
+                <FixedSizeByteArray<N> as serde::Deserialize>::deserialize(deserializer)?
+                    .into_inner(),
+            )
         }
     }
 }
