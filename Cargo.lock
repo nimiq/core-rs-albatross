@@ -2200,7 +2200,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.9",
+ "socket2 0.5.5",
  "tokio",
  "tower-service",
  "tracing",
@@ -3566,7 +3566,6 @@ dependencies = [
  "parking_lot 0.12.2",
  "rand",
  "serde",
- "serde-big-array",
  "thiserror",
  "tracing",
 ]
@@ -3856,7 +3855,6 @@ dependencies = [
  "rand",
  "rand_core",
  "serde",
- "serde-big-array",
  "sha2",
  "thiserror",
  "zeroize",
@@ -3966,7 +3964,6 @@ dependencies = [
  "hex",
  "nimiq-serde",
  "serde",
- "serde-big-array",
  "subtle",
 ]
 
@@ -4101,7 +4098,6 @@ dependencies = [
  "prometheus-client",
  "rand",
  "serde",
- "serde-big-array",
  "sha2",
  "thiserror",
  "tokio",
@@ -4207,6 +4203,7 @@ dependencies = [
  "parking_lot 0.12.2",
  "regex",
  "serde",
+ "serde_bytes",
  "serde_repr",
  "strum_macros",
  "thiserror",
@@ -4323,7 +4320,6 @@ dependencies = [
  "hex",
  "postcard",
  "serde",
- "serde-big-array",
  "serde_derive",
 ]
 
@@ -6143,15 +6139,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde-big-array"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "serde-wasm-bindgen"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6171,6 +6158,15 @@ dependencies = [
  "js-sys",
  "serde",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "serde_bytes"
+version = "0.11.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b8497c313fd43ab992087548117643f6fcd935cbf36f176ffda0aacf9591734"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

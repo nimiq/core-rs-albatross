@@ -479,7 +479,10 @@ mod serde_derive {
             let mut state = serializer.serialize_struct("TrieNode", FIELDS.len())?;
             state.serialize_field(FIELDS[0], &flags)?;
             state.serialize_field(FIELDS[1], &self.root_data)?;
-            state.serialize_field(FIELDS[2], &self.value)?;
+            state.serialize_field(
+                FIELDS[2],
+                &self.value.as_ref().map(|v| serde_bytes::Bytes::new(v)),
+            )?;
             state.serialize_field(FIELDS[3], &child_count)?;
             state.serialize_field(FIELDS[4], &self.children)?;
             state.end()

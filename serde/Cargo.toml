@@ -18,4 +18,3 @@ hex = "0.4"
 postcard = { git = "https://github.com/nimiq/postcard-bytes", features = ["alloc"] }
 serde = "1.0"
 serde_derive = "1.0"
-serde-big-array = "0.5"

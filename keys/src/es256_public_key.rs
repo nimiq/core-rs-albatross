@@ -108,7 +108,7 @@ mod serde_derive {
             if serializer.is_human_readable() {
                 serializer.serialize_str(&self.to_hex())
             } else {
-                serde_big_array::BigArray::serialize(self.as_bytes(), serializer)
+                nimiq_serde::FixedSizeByteArray::from(*self.as_bytes()).serialize(serializer)
             }
         }
     }
@@ -123,7 +123,7 @@ mod serde_derive {
                 data.parse().map_err(Error::custom)
             } else {
                 let buf: [u8; ES256PublicKey::SIZE] =
-                    serde_big_array::BigArray::deserialize(deserializer)?;
+                    nimiq_serde::FixedSizeByteArray::deserialize(deserializer)?.into_inner();
                 ES256PublicKey::from_bytes(&buf).map_err(|_| D::Error::custom("Invalid public key"))
             }
         }

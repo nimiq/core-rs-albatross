@@ -5,9 +5,6 @@ pub extern crate hex;
 pub extern crate serde;
 
 #[doc(hidden)]
-pub extern crate serde_big_array;
-
-#[doc(hidden)]
 pub extern crate subtle;
 
 #[doc(hidden)]
@@ -90,7 +87,10 @@ macro_rules! add_serialization_fns_typed_arr {
                         serializer,
                     )
                 } else {
-                    ::nimiq_macros::serde_big_array::BigArray::serialize(&self.0, serializer)
+                    ::nimiq_macros::serde::Serialize::serialize(
+                        &::nimiq_macros::nimiq_serde::FixedSizeByteArray::from(self.0),
+                        serializer,
+                    )
                 }
             }
         }
@@ -116,7 +116,8 @@ macro_rules! add_serialization_fns_typed_arr {
                             )
                         })?
                 } else {
-                    ::nimiq_macros::serde_big_array::BigArray::deserialize(deserializer)?
+                    ::nimiq_macros::nimiq_serde::FixedSizeByteArray::deserialize(deserializer)?
+                        .into_inner()
                 };
                 Ok($name(data))
             }
