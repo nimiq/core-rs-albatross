@@ -67,6 +67,7 @@ nimiq-transaction = { workspace = true }
 
 [features]
 cli = ["tracing-subscriber", "nimiq-log"]
+expensive-tests = []
 zkp-prover = [
     "ark-crypto-primitives/r1cs",
     "ark-mnt4-753/r1cs",

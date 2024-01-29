@@ -423,6 +423,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(not(feature = "expensive-tests"), ignore)]
     fn vks_mnt6() {
         // Initialize the constraint system.
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
@@ -503,6 +504,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(not(feature = "expensive-tests"), ignore)]
     fn vks_mnt4() {
         // Initialize the constraint system.
         let cs = ConstraintSystem::<MNT4Fq>::new_ref();
