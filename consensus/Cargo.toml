@@ -73,5 +73,6 @@ nimiq-trie = { workspace = true }
 nimiq-zkp-component = { workspace = true, features = ["zkp-prover", "parallel"] }
 
 [features]
+expensive-tests = []
 full = ["nimiq-blockchain", "nimiq-blockchain-proxy/full"]
 default = ["full"]

@@ -81,8 +81,8 @@ fn revert_penalize_inherent(
 }
 
 // The following code is kept as a reference on how to generate the constants.
-#[ignore]
 #[test]
+#[ignore]
 fn generate_contract_2() {
     let mut active_validators = BTreeMap::new();
     active_validators.insert(

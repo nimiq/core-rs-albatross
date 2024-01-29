@@ -202,8 +202,8 @@ fn create_skip_block_update(
     )
 }
 
-#[ignore]
 #[test(tokio::test)]
+#[ignore]
 async fn validator_can_catch_up() {
     // remove first block producer in order to trigger a skip block. Never connect him again
     // remove the second block producer to trigger another skip block after the first one (which we want someone to catch up to). Never connect him again

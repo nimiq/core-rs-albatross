@@ -94,7 +94,7 @@ impl ConstraintSynthesizer<FqMNT6> for OuterCircuit {
 
 // This test takes a very long time to finish, so run it only when necessary.
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "expensive-tests"), ignore)]
 fn recursive_input_works() {
     // Create random number generator.
     let rng = &mut test_rng(false);

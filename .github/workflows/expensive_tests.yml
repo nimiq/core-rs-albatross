@@ -1,0 +1,27 @@
+name: Expensive tests
+
+on:
+  schedule:
+    - cron: '57 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  expensive-tests:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Free Disk Space (Ubuntu)
+      uses: jlumbroso/free-disk-space@main
+      with:
+        tool-cache: true
+        large-packages: false
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+        components: llvm-tools-preview
+    - uses: Swatinem/rust-cache@v2
+    - name: Install cargo-nextest
+      run: curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+    - name: Run tests
+      run: cargo nextest run --features=expensive-tests,nimiq-zkp-component/test-prover

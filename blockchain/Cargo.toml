@@ -63,4 +63,5 @@ nimiq-test-utils = { workspace = true }
 nimiq-zkp-primitives = { workspace = true }
 
 [features]
+expensive-tests = []
 metrics = ["prometheus-client"]

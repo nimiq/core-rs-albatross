@@ -15,8 +15,8 @@ use nimiq_test_utils::{
     validator::seeded_rng,
 };
 
-#[ignore]
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 4))]
+#[ignore]
 async fn test_request_component() {
     let mut hub = Some(MockHub::default());
     let env = VolatileDatabase::new(20).expect("Could not open a volatile database");

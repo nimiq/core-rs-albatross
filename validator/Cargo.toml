@@ -72,5 +72,6 @@ nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }
 
 [features]
+expensive-tests = []
 metrics = ["nimiq-mempool/metrics"]
 trusted_push = []

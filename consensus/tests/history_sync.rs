@@ -96,7 +96,6 @@ async fn two_peers_can_sync_two_epochs() {
 }
 
 #[test(tokio::test)]
-#[ignore]
 async fn three_peers_can_sync() {
     // FIXME: Add more tests
     //    // Setup third peer (not synced yet).
