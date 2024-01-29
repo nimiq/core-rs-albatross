@@ -1,7 +1,0 @@
-*
-!/client.toml
-!/target/release/nimiq-client
-!/target/release/nimiq-bls
-!/target/release/nimiq-address
-!/target/release/nimiq-rpc
-!/genesis/src/genesis/*
