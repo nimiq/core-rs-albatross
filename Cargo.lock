@@ -1239,12 +1239,12 @@ dependencies = [
 
 [[package]]
 name = "darling"
-version = "0.20.3"
+version = "0.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0209d94da627ab5605dcccf08bb18afa5009cfbef48d8a8b7d7bdbc79be25c5e"
+checksum = "da01daa5f6d41c91358398e8db4dde38e292378da1f28300b59ef4732b879454"
 dependencies = [
- "darling_core 0.20.3",
- "darling_macro 0.20.3",
+ "darling_core 0.20.4",
+ "darling_macro 0.20.4",
 ]
 
 [[package]]
@@ -1263,9 +1263,9 @@ dependencies = [
 
 [[package]]
 name = "darling_core"
-version = "0.20.3"
+version = "0.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "177e3443818124b357d8e76f53be906d60937f0d3a90773a664fa63fa253e621"
+checksum = "f44f6238b948a3c6c3073cdf53bb0c2d5e024ee27e0f35bfe9d556a12395808a"
 dependencies = [
  "fnv",
  "ident_case",
@@ -1288,11 +1288,11 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
-version = "0.20.3"
+version = "0.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "836a9bbc7ad63342d6d6e7b815ccab164bc77a2d95d84bc3117a8c0d5c98e2d5"
+checksum = "0d2d88bd93979b1feb760a6b5c531ac5ba06bd63e74894c377af02faee07b9cd"
 dependencies = [
- "darling_core 0.20.3",
+ "darling_core 0.20.4",
  "quote",
  "syn 2.0.48",
 ]
@@ -3668,7 +3668,7 @@ name = "nimiq-jsonrpc-derive"
 version = "0.1.0"
 source = "git+https://github.com/nimiq/jsonrpc.git#f1360ec4877c1bd00d4631c7af010b59d10e8502"
 dependencies = [
- "darling 0.20.3",
+ "darling 0.20.4",
  "heck",
  "nimiq-jsonrpc-client",
  "nimiq-jsonrpc-core",
@@ -4271,7 +4271,7 @@ dependencies = [
 name = "nimiq-test-log-proc-macro"
 version = "0.1.0"
 dependencies = [
- "darling 0.20.3",
+ "darling 0.20.4",
  "nimiq-test-log",
  "quote",
  "syn 2.0.48",
@@ -6010,7 +6010,7 @@ version = "3.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dbff351eb4b33600a2e138dfa0b10b65a238ea8ff8fb2387c422c5022a3e8298"
 dependencies = [
- "darling 0.20.3",
+ "darling 0.20.4",
  "proc-macro2",
  "quote",
  "syn 2.0.48",
