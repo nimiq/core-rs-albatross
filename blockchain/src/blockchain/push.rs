@@ -290,6 +290,7 @@ impl Blockchain {
         diff: Option<TrieDiff>,
         chunks: Vec<TrieChunkWithStart>,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
         let mut txn = this.write_transaction();
 
         let block_number = this.block_number() + 1;
@@ -340,9 +341,6 @@ impl Blockchain {
         }
 
         txn.commit();
-
-        // Upgrade the lock as late as possible.
-        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         if let Block::Macro(ref macro_block) = chain_info.head {
             this.state.macro_info = chain_info.clone();
@@ -412,7 +410,7 @@ impl Blockchain {
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         let target_block = chain_info.head.header();
         debug!(block = %target_block, "Rebranching");
-
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
         let read_txn = this.read_transaction();
         // Find the common ancestor between our current main chain and the fork chain.
         let (mut ancestor, mut fork_chain) =
@@ -457,9 +455,6 @@ impl Blockchain {
         let new_head_info = &fork_chain[0].1;
         this.chain_store.set_head(&mut write_txn, new_head_hash);
         write_txn.commit();
-
-        // Upgrade the lock as late as possible.
-        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         if let Block::Macro(ref macro_block) = new_head_info.head {
             this.state.macro_info = new_head_info.clone();
