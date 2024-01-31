@@ -1,4 +1,3 @@
-#[cfg(feature = "serde-derive")]
 use nimiq_serde::Deserialize;
 use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedPublicKey};
 
@@ -12,7 +11,6 @@ impl TaggedKeyPair for KeyPair {
     }
 }
 
-#[cfg(feature = "serde-derive")]
 impl TaggedPublicKey for PublicKey {
     fn verify(&self, msg: &[u8], sig: &[u8]) -> bool {
         let signature = match CompressedSignature::deserialize_from_vec(sig) {

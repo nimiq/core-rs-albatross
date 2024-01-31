@@ -16,4 +16,5 @@ pub type SigHash = Blake2sHash;
 pub mod cache;
 
 // Implements the tagged-signing traits
+#[cfg(feature = "serde-derive")]
 mod tagged_signing;
