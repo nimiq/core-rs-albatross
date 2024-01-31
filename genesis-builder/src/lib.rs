@@ -66,8 +66,6 @@ pub struct GenesisInfo {
 
 /// Auxiliary struct for generating `GenesisInfo`.
 pub struct GenesisBuilder {
-    /// The genesis seed message.
-    pub seed_message: Option<String>,
     /// The genesis block timestamp.
     pub timestamp: Option<OffsetDateTime>,
     /// The genesis block number.
@@ -103,7 +101,6 @@ impl Default for GenesisBuilder {
 impl GenesisBuilder {
     fn new_without_defaults() -> Self {
         GenesisBuilder {
-            seed_message: None,
             timestamp: None,
             vrf_seed: None,
             parent_election_hash: None,
@@ -126,11 +123,6 @@ impl GenesisBuilder {
 
     fn with_defaults(&mut self) -> &mut Self {
         self.vrf_seed = Some(VrfSeed::default());
-        self
-    }
-
-    pub fn with_seed_message<S: AsRef<str>>(&mut self, seed_message: S) -> &mut Self {
-        self.seed_message = Some(seed_message.as_ref().to_string());
         self
     }
 
@@ -210,7 +202,6 @@ impl GenesisBuilder {
         path: P,
     ) -> Result<&mut Self, GenesisBuilderError> {
         let config::GenesisConfig {
-            seed_message,
             timestamp,
             vrf_seed,
             parent_election_hash,
@@ -224,7 +215,6 @@ impl GenesisBuilder {
             mut htlc_accounts,
         } = toml::from_str(&read_to_string(path)?)?;
         vrf_seed.map(|vrf_seed| self.with_vrf_seed(vrf_seed));
-        seed_message.map(|msg| self.with_seed_message(msg));
         timestamp.map(|t| self.with_timestamp(t));
         parent_election_hash.map(|hash| self.with_parent_election_hash(hash));
         parent_hash.map(|hash| self.with_parent_hash(hash));

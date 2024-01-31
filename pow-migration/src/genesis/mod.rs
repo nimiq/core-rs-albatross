@@ -29,14 +29,14 @@ pub async fn get_pos_genesis(
     env: DatabaseProxy,
     pos_registered_agents: Option<PoSRegisteredAgents>,
 ) -> Result<GenesisConfig, Error> {
-    let seed_message = match network_id {
-        NetworkId::TestAlbatross => Some("Albatross TestNet".to_string()),
-        NetworkId::MainAlbatross => Some("Albatross MainNet".to_string()),
+    match network_id {
+        NetworkId::TestAlbatross => {}
+        NetworkId::MainAlbatross => {}
         _ => {
             log::error!(%network_id, "Unsupported network ID as a target for the migration process");
             return Err(Error::InvalidNetworkId(network_id));
         }
-    };
+    }
 
     // Get block according to arguments and check if it exists
     let final_block = client
@@ -111,7 +111,6 @@ pub async fn get_pos_genesis(
         };
 
     Ok(GenesisConfig {
-        seed_message,
         vrf_seed: Some(vrf_seed),
         parent_election_hash: Some(parent_election_hash),
         parent_hash: Some(parent_hash),

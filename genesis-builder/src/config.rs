@@ -11,10 +11,6 @@ use time::OffsetDateTime;
 /// from the genesis TOML files.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GenesisConfig {
-    /// Seed message.
-    #[serde(default)]
-    pub seed_message: Option<String>,
-
     /// Timestamp for the genesis block.
     #[serde(with = "time::serde::rfc3339::option")]
     pub timestamp: Option<OffsetDateTime>,
