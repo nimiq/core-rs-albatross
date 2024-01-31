@@ -15,17 +15,6 @@ use time::OffsetDateTime;
 use super::{MessageStream, NetworkError, PubsubId, ValidatorNetwork};
 use crate::validator_record::ValidatorRecord;
 
-/// Validator Network state
-#[derive(Clone, Debug)]
-pub struct State<TPeerId> {
-    /// Own validator ID if active, `None` otherwise.
-    own_validator_id: Option<u16>,
-    /// Set of public keys for each of the validators
-    validator_keys: Vec<LazyPublicKey>,
-    /// Cache for mapping validator public keys to peer IDs
-    validator_peer_id_cache: BTreeMap<CompressedPublicKey, TPeerId>,
-}
-
 /// Validator Network implementation
 #[derive(Debug)]
 pub struct ValidatorNetworkImpl<N>
@@ -35,8 +24,12 @@ where
 {
     /// A reference to the network containing all peers
     network: Arc<N>,
-    /// Internal state
-    state: Arc<RwLock<State<N::PeerId>>>,
+    /// Own validator ID if active, `None` otherwise.
+    own_validator_id: Arc<RwLock<Option<u16>>>,
+    /// Set of public keys for each of the validators
+    validator_keys: Arc<RwLock<Vec<LazyPublicKey>>>,
+    /// Cache for mapping validator public keys to peer IDs
+    validator_peer_id_cache: Arc<RwLock<BTreeMap<CompressedPublicKey, N::PeerId>>>,
 }
 
 impl<N> ValidatorNetworkImpl<N>
@@ -47,11 +40,9 @@ where
     pub fn new(network: Arc<N>) -> Self {
         Self {
             network,
-            state: Arc::new(RwLock::new(State {
-                own_validator_id: None,
-                validator_keys: vec![],
-                validator_peer_id_cache: BTreeMap::new(),
-            })),
+            own_validator_id: Arc::new(RwLock::new(None)),
+            validator_keys: Arc::new(RwLock::new(vec![])),
+            validator_peer_id_cache: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
 
@@ -59,16 +50,15 @@ where
     fn arc_clone(&self) -> ValidatorNetworkImpl<N> {
         ValidatorNetworkImpl {
             network: Arc::clone(&self.network),
-            state: Arc::clone(&self.state),
+            own_validator_id: Arc::clone(&self.own_validator_id),
+            validator_keys: Arc::clone(&self.validator_keys),
+            validator_peer_id_cache: Arc::clone(&self.validator_peer_id_cache),
         }
     }
 
     /// Returns the local validator ID, if elected, `Err(NotElected)` otherwise.
     fn local_validator_id<T: Error + 'static>(&self) -> Result<u16, NetworkError<T>> {
-        self.state
-            .read()
-            .own_validator_id
-            .ok_or(NetworkError::NotElected)
+        self.own_validator_id.read().ok_or(NetworkError::NotElected)
     }
 
     /// Looks up the peer ID for a validator public key in the DHT.
@@ -92,16 +82,16 @@ where
         validator_id: u16,
     ) -> Result<N::PeerId, NetworkError<N::Error>> {
         let (peer_id, public_key) = {
-            let state = self.state.read();
-
-            let public_key = state
+            let public_key = self
                 .validator_keys
+                .read()
                 .get(usize::from(validator_id))
                 .ok_or(NetworkError::UnknownValidator(validator_id))?
                 .clone();
 
-            let peer_id = state
+            let peer_id = self
                 .validator_peer_id_cache
+                .read()
                 .get(&public_key.compressed().clone())
                 .cloned();
             (peer_id, public_key)
@@ -110,9 +100,8 @@ where
         if let Some(peer_id) = peer_id {
             Ok(peer_id)
         } else if let Some(peer_id) = Self::resolve_peer_id(&self.network, &public_key).await? {
-            let mut state = self.state.write();
-            state
-                .validator_peer_id_cache
+            self.validator_peer_id_cache
+                .write()
                 .insert(public_key.compressed().clone(), peer_id);
             Ok(peer_id)
         } else {
@@ -127,11 +116,9 @@ where
     /// Clears the validator->peer_id cache.
     /// The cached entry should be cleared when the peer id might have changed.
     fn clear_validator_peer_id_cache(&self, validator_id: u16) {
-        let state = &mut *self.state.write();
-        let validator_key = state.validator_keys.get(usize::from(validator_id));
-        if let Some(validator_key) = validator_key {
-            state
-                .validator_peer_id_cache
+        if let Some(validator_key) = self.validator_keys.read().get(usize::from(validator_id)) {
+            self.validator_peer_id_cache
+                .write()
                 .remove(validator_key.compressed());
         }
     }
@@ -171,7 +158,7 @@ where
     type NetworkType = N;
 
     fn set_validator_id(&self, validator_id: Option<u16>) {
-        self.state.write().own_validator_id = validator_id;
+        *self.own_validator_id.write() = validator_id;
     }
 
     /// Tells the validator network the validator keys for the current set of active validators. The keys must be
@@ -182,20 +169,16 @@ where
             &validator_keys
         );
         // Create new peer ID cache, but keep validators that are still active.
-        let mut state = self.state.write();
-
+        let mut validator_peer_id_cache = self.validator_peer_id_cache.write();
         let mut keep_cached = BTreeMap::new();
         for validator_key in &validator_keys {
-            if let Some(peer_id) = state
-                .validator_peer_id_cache
-                .remove(validator_key.compressed())
-            {
+            if let Some(peer_id) = validator_peer_id_cache.remove(validator_key.compressed()) {
                 keep_cached.insert(validator_key.compressed().clone(), peer_id);
             }
         }
 
-        state.validator_keys = validator_keys;
-        state.validator_peer_id_cache = keep_cached;
+        *self.validator_keys.write() = validator_keys;
+        *validator_peer_id_cache = keep_cached;
     }
 
     async fn send_to<M: Message>(&self, validator_id: u16, msg: M) -> Result<(), Self::Error> {
