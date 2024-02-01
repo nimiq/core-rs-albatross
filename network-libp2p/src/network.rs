@@ -360,7 +360,7 @@ impl Network {
         // Otherwise expect the regular flow: DHT will get in server mode once a confirmed address is obtained using Autonat.
         // In memory transport we don't have a mechanism that sets the DHT in server mode such as confirming an address
         // with Autonat. This is because Autonat v1 only works with IP addresses.
-        let force_dht_server_mode = config.memory_transport;
+        let force_dht_server_mode = true;
         let swarm = Self::new_swarm(
             config,
             Arc::clone(&contacts),
