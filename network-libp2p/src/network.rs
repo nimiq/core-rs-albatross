@@ -335,7 +335,7 @@ pub struct Network {
 }
 
 impl Network {
-    const DHT_QUORUM: u8 = 3;
+    const DHT_QUORUM: u8 = 1;
     /// Create a new libp2p network instance.
     ///
     /// # Arguments
@@ -851,6 +851,15 @@ impl Network {
                                         if let Some(dht_record) =
                                             Self::verify_record(&record.record)
                                         {
+                                            if Self::DHT_QUORUM == 1 {
+                                                // This is our first record
+                                                let results = DhtResults {
+                                                    count: 0,
+                                                    best_value: dht_record.clone(),
+                                                    outdated_values: vec![],
+                                                };
+                                                state.dht_get_results.insert(id, results);
+                                            }
                                             if let Some(results) =
                                                 state.dht_get_results.get_mut(&id)
                                             {
