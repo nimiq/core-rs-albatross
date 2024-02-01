@@ -34,7 +34,7 @@ use super::{
 use crate::sync::live::diff_queue::{DiffQueue, QueuedDiff};
 
 /// The max number of chunk requests per peer.
-pub const MAX_REQUEST_RESPONSE_CHUNKS: u32 = 100;
+pub const MAX_REQUEST_RESPONSE_CHUNKS: u32 = 5000;
 
 /// The request of a trie chunk.
 /// The request specifies a limit on the number of nodes in the chunk.
