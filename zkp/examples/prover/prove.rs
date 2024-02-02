@@ -33,7 +33,7 @@ fn initialize() {
     let genesis_block = network_info.genesis_block();
 
     // Run tests with different policy values:
-    let mut policy_config = TEST_POLICY;
+    let mut policy_config = Policy::default();
     // The genesis block number must be set accordingly
     policy_config.genesis_block_number = genesis_block.block_number();
 
