@@ -193,7 +193,7 @@ impl HandleSubcommand for PolicyCommand {
             PolicyCommand::IsElectionBlockAt { block_number } => {
                 println!(
                     "{:#?}",
-                    client.policy.get_is_election_block_at(block_number).await?
+                    client.policy.is_election_block_at(block_number).await?
                 );
             }
             PolicyCommand::MacroBlockAfter { block_number } => {
@@ -217,13 +217,13 @@ impl HandleSubcommand for PolicyCommand {
             PolicyCommand::IsMacroBlockAt { block_number } => {
                 println!(
                     "{:#?}",
-                    client.policy.get_is_macro_block_at(block_number).await?
+                    client.policy.is_macro_block_at(block_number).await?
                 );
             }
             PolicyCommand::IsMicroBlockAt { block_number } => {
                 println!(
                     "{:#?}",
-                    client.policy.get_is_micro_block_at(block_number).await?
+                    client.policy.is_micro_block_at(block_number).await?
                 );
             }
             PolicyCommand::FirstBlockOf { epoch } => {

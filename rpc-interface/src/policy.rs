@@ -32,10 +32,8 @@ pub trait PolicyInterface {
         block_number: u32,
     ) -> RPCResult<u32, (), Self::Error>;
 
-    async fn get_is_election_block_at(
-        &mut self,
-        block_number: u32,
-    ) -> RPCResult<bool, (), Self::Error>;
+    async fn is_election_block_at(&mut self, block_number: u32)
+        -> RPCResult<bool, (), Self::Error>;
 
     async fn get_macro_block_after(&mut self, block_number: u32)
         -> RPCResult<u32, (), Self::Error>;
@@ -47,15 +45,9 @@ pub trait PolicyInterface {
 
     async fn get_last_macro_block(&mut self, block_number: u32) -> RPCResult<u32, (), Self::Error>;
 
-    async fn get_is_macro_block_at(
-        &mut self,
-        block_number: u32,
-    ) -> RPCResult<bool, (), Self::Error>;
+    async fn is_macro_block_at(&mut self, block_number: u32) -> RPCResult<bool, (), Self::Error>;
 
-    async fn get_is_micro_block_at(
-        &mut self,
-        block_number: u32,
-    ) -> RPCResult<bool, (), Self::Error>;
+    async fn is_micro_block_at(&mut self, block_number: u32) -> RPCResult<bool, (), Self::Error>;
 
     async fn get_first_block_of(&mut self, epoch: u32) -> RPCResult<u32, (), Self::Error>;
 

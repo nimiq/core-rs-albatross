@@ -86,7 +86,7 @@ impl PolicyInterface for PolicyDispatcher {
     }
 
     /// Returns a boolean expressing if the block at a given block number (height) is an election macro block.
-    async fn get_is_election_block_at(
+    async fn is_election_block_at(
         &mut self,
         block_number: u32,
     ) -> RPCResult<bool, (), Self::Error> {
@@ -121,18 +121,12 @@ impl PolicyInterface for PolicyDispatcher {
     }
 
     /// Returns a boolean expressing if the block at a given block number (height) is a macro block.
-    async fn get_is_macro_block_at(
-        &mut self,
-        block_number: u32,
-    ) -> RPCResult<bool, (), Self::Error> {
+    async fn is_macro_block_at(&mut self, block_number: u32) -> RPCResult<bool, (), Self::Error> {
         Ok(Policy::is_macro_block_at(block_number).into())
     }
 
     /// Returns a boolean expressing if the block at a given block number (height) is a micro block.
-    async fn get_is_micro_block_at(
-        &mut self,
-        block_number: u32,
-    ) -> RPCResult<bool, (), Self::Error> {
+    async fn is_micro_block_at(&mut self, block_number: u32) -> RPCResult<bool, (), Self::Error> {
         Ok(Policy::is_micro_block_at(block_number).into())
     }
 
