@@ -227,6 +227,7 @@ impl TemporaryBlockProducer {
         let vote = TendermintVote {
             proposal_hash: Some(block_hash),
             id: TendermintIdentifier {
+                network: proposal.proposal.network,
                 block_number: proposal.proposal.block_number,
                 step: TendermintStep::PreCommit,
                 round_number: 0,

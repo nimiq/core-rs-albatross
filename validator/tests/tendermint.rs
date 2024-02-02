@@ -3,7 +3,7 @@ use std::sync::Arc;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::MockHub;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_tendermint::{ProposalMessage, Protocol, SignedProposalMessage};
 use nimiq_test_log::test;
 use nimiq_test_utils::{block_production::TemporaryBlockProducer, test_network::TestNetwork};
@@ -123,6 +123,7 @@ async fn it_verifies_inferior_chain_proposals() {
         temp_producer2.producer.clone(),
         current_validators,
         0,
+        NetworkId::UnitAlbatross,
         blockchain2.read().head().block_number() + 1,
     );
 

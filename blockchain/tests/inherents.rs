@@ -43,6 +43,7 @@ fn it_can_create_batch_finalization_inherents() {
     );
 
     let macro_header = MacroHeader {
+        network: NetworkId::UnitAlbatross,
         version: 1,
         block_number: Policy::macro_block_of(2).unwrap(),
         round: 0,
@@ -224,6 +225,7 @@ fn it_can_penalize_delayed_batch() {
     );
 
     let macro_header = MacroHeader {
+        network: NetworkId::UnitAlbatross,
         version: 1,
         block_number: 42 + genesis_block_number,
         round: 0,
@@ -576,6 +578,7 @@ fn it_correctly_creates_inherents_from_double_vote_proof() {
         .unwrap();
     let validator = validators.validators[0].clone();
     let tendermint_id = TendermintIdentifier {
+        network: header.network,
         block_number: header.block_number,
         round_number: header.round,
         step: TendermintStep::PreVote,

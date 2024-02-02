@@ -20,8 +20,8 @@ use nimiq_database::{
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{
-    account::AccountError, coin::Coin, key_nibbles::KeyNibbles, policy::Policy, trie::TrieItem,
-    TreeProof,
+    account::AccountError, coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId,
+    policy::Policy, trie::TrieItem, TreeProof,
 };
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_trie::WriteTransactionProxy;
@@ -66,6 +66,8 @@ pub struct GenesisInfo {
 
 /// Auxiliary struct for generating `GenesisInfo`.
 pub struct GenesisBuilder {
+    /// The network identification.
+    pub network: NetworkId,
     /// The genesis block timestamp.
     pub timestamp: Option<OffsetDateTime>,
     /// The genesis block number.
@@ -101,6 +103,7 @@ impl Default for GenesisBuilder {
 impl GenesisBuilder {
     fn new_without_defaults() -> Self {
         GenesisBuilder {
+            network: NetworkId::Dummy,
             timestamp: None,
             vrf_seed: None,
             parent_election_hash: None,
@@ -123,6 +126,11 @@ impl GenesisBuilder {
 
     fn with_defaults(&mut self) -> &mut Self {
         self.vrf_seed = Some(VrfSeed::default());
+        self
+    }
+
+    pub fn with_network(&mut self, network: NetworkId) -> &mut Self {
+        self.network = network;
         self
     }
 
@@ -202,6 +210,7 @@ impl GenesisBuilder {
         path: P,
     ) -> Result<&mut Self, GenesisBuilderError> {
         let config::GenesisConfig {
+            network,
             timestamp,
             vrf_seed,
             parent_election_hash,
@@ -214,8 +223,9 @@ impl GenesisBuilder {
             mut vesting_accounts,
             mut htlc_accounts,
         } = toml::from_str(&read_to_string(path)?)?;
-        vrf_seed.map(|vrf_seed| self.with_vrf_seed(vrf_seed));
+        self.with_network(network);
         timestamp.map(|t| self.with_timestamp(t));
+        vrf_seed.map(|vrf_seed| self.with_vrf_seed(vrf_seed));
         parent_election_hash.map(|hash| self.with_parent_election_hash(hash));
         parent_hash.map(|hash| self.with_parent_hash(hash));
         history_root.map(|history_root| self.with_history_root(history_root));
@@ -350,6 +360,7 @@ impl GenesisBuilder {
 
         // The header
         let header = MacroHeader {
+            network: self.network,
             version: 1,
             block_number: self.block_number,
             round: 0,

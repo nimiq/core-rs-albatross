@@ -253,6 +253,7 @@ async fn multiple_start_stop_send(
 fn create_dummy_micro_block(transactions: Option<Vec<Transaction>>) -> Block {
     // Build a dummy MicroHeader
     let micro_header = MicroHeader {
+        network: NetworkId::UnitAlbatross,
         version: 0,
         block_number: 0,
         timestamp: 0,
@@ -292,6 +293,7 @@ async fn push_same_tx_twice() {
     let sender_balances = vec![10000; 1];
     let recipient_balances = vec![0; 1];
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
 
     // Generate recipient accounts
     let recipient_accounts =
@@ -365,6 +367,7 @@ async fn valid_tx_not_in_blockchain() {
     let sender_balances = vec![balance + 3; 1];
     let recipient_balances = vec![0; num_txns as usize];
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
 
     // Generate recipient accounts
     let mut rng = test_rng(false);
@@ -414,6 +417,7 @@ async fn push_tx_with_wrong_signature() {
     let sender_balances = vec![10000; 1];
     let recipient_balances = vec![0; 1];
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
 
     // Generate recipient accounts
     let recipient_accounts =
@@ -487,6 +491,7 @@ async fn mempool_get_txn_max_size() {
     let sender_balances = vec![balance + 3; 1];
     let recipient_balances = vec![0; num_txns as usize];
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
 
     // Generate recipient accounts
     let recipient_accounts =
@@ -571,6 +576,7 @@ async fn mempool_get_txn_ordered() {
     let sender_balances = vec![balance + num_txns * 3; 1];
     let recipient_balances = vec![0; num_txns as usize];
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
 
     // Generate recipient accounts
     let recipient_accounts =
@@ -656,6 +662,7 @@ async fn push_tx_with_insufficient_balance() {
     let sender_balances = vec![balance; 1];
     let recipient_balances = vec![0; num_txns as usize];
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
 
     // Generate recipient accounts
     let recipient_accounts =
@@ -731,6 +738,7 @@ async fn multiple_transactions_multiple_senders() {
     let sender_balances = vec![balance + num_txns * num_txns / num_txns; num_txns as usize];
     let recipient_balances = vec![0; num_txns as usize];
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
 
     // Generate recipient accounts
     let recipient_accounts =
@@ -812,6 +820,7 @@ async fn mempool_tps() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileDatabase::new(20).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
 
     // Generate and sign transaction from address_a using a balance that will be used to create the account later
     let balance = 100;
@@ -902,6 +911,7 @@ async fn multiple_start_stop() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileDatabase::new(20).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
 
     log::debug!("Generating transactions and accounts");
 
@@ -976,6 +986,7 @@ async fn mempool_update() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileDatabase::new(20).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
 
     // Generate and sign transactions
     let balance = 100;
@@ -1171,6 +1182,7 @@ async fn mempool_update_aged_transaction() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileDatabase::new(20).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
 
     // Generate and sign transactions
     let balance = 100;
@@ -1298,6 +1310,7 @@ async fn mempool_update_not_enough_balance() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileDatabase::new(20).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
 
     // Generate and sign transactions
     let balance = 100;
@@ -1456,6 +1469,7 @@ async fn mempool_update_pruned_account() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileDatabase::new(20).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
 
     // Generate and sign transactions
     let balance = 100;
@@ -1702,6 +1716,7 @@ async fn mempool_regular_and_control_tx() {
     let sender_balances = vec![balance + num_txns * 3; 1];
     let recipient_balances = vec![0; num_txns as usize];
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
 
     // Generate recipient accounts
     let recipient_accounts =
@@ -1840,6 +1855,7 @@ async fn mempool_regular_and_control_tx() {
 async fn applies_total_tx_size_limits() {
     let env = VolatileDatabase::new(20).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
 
     // Generate transactions
     let balance = 1;

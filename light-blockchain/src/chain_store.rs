@@ -351,6 +351,7 @@ impl ChainStore {
 mod tests {
     use nimiq_block::{MicroBlock, MicroHeader, MicroJustification};
     use nimiq_hash::Blake2sHash;
+    use nimiq_primitives::networks::NetworkId;
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng::test_rng;
     use rand::{Rng, RngCore};
@@ -367,6 +368,7 @@ mod tests {
 
         let block_1 = Block::Micro(MicroBlock {
             header: MicroHeader {
+                network: NetworkId::UnitAlbatross,
                 version: rng.gen(),
                 block_number: 0,
                 timestamp: rng.gen(),
@@ -388,6 +390,7 @@ mod tests {
 
         let block_2 = Block::Micro(MicroBlock {
             header: MicroHeader {
+                network: NetworkId::UnitAlbatross,
                 version: rng.gen(),
                 block_number: 0,
                 timestamp: rng.gen(),

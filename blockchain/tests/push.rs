@@ -524,6 +524,7 @@ fn it_validates_double_vote_proofs() {
         BlockConfig {
             equivocation_proofs: vec![DoubleVoteProof::new(
                 TendermintIdentifier {
+                    network: macro_header.network,
                     block_number: macro_header.block_number,
                     round_number: 0,
                     step: TendermintStep::PreVote,

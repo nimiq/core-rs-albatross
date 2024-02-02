@@ -15,7 +15,7 @@ use nimiq_blockchain::{Blockchain, HistoryTreeChunk, CHUNK_SIZE};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestError};
-use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
+use nimiq_primitives::{networks::NetworkId, policy::Policy, slots_allocation::Validators};
 use nimiq_transaction::historic_transaction::HistoricTransaction;
 use parking_lot::RwLock;
 use thiserror::Error;
@@ -101,6 +101,7 @@ impl From<PendingBatchSet> for BatchSet {
 }
 
 pub struct BatchSetVerifyState {
+    network: NetworkId,
     predecessor: Block,
     validators: Validators,
 }
@@ -203,6 +204,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         let batch_verify_state = {
             let blockchain = blockchain.read();
             BatchSetVerifyState {
+                network: blockchain.network_id,
                 predecessor: Block::Macro(blockchain.macro_head()),
                 validators: blockchain.current_validators().unwrap(),
             }
@@ -221,6 +223,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             },
             |_, batch_set_info, verify_state| {
                 if let Err(e) = Self::verify_batch_set_info(
+                    verify_state.network,
                     batch_set_info,
                     &verify_state.predecessor,
                     &verify_state.validators,
@@ -278,10 +281,11 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
 
     fn verify_macro_block(
         block: &Block,
+        network: NetworkId,
         macro_predecessor: &Block,
         validators: &Validators,
     ) -> Result<(), HistoryRequestError> {
-        if let Err(error) = block.verify() {
+        if let Err(error) = block.verify(network) {
             warn!(%block, %error, reason = "Block intrinsic checks failed", "Invalid macro block");
             return Err(HistoryRequestError::InvalidMacroBlock);
         }
@@ -300,6 +304,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
     }
 
     fn verify_batch_set_info(
+        network: NetworkId,
         batch_set_info: &BatchSetInfo,
         predecessor_macro_block: &Block,
         validators: &Validators,
@@ -312,7 +317,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
                 return Err(HistoryRequestError::InvalidBatchSetInfo);
             }
 
-            Self::verify_macro_block(&block, predecessor_macro_block, validators)?;
+            Self::verify_macro_block(&block, network, predecessor_macro_block, validators)?;
         }
 
         let mut last_seen_macro_block = predecessor_macro_block.clone();
@@ -329,7 +334,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             }
 
             // Check the macro block of the batch set.
-            Self::verify_macro_block(&block, &last_seen_macro_block, validators)?;
+            Self::verify_macro_block(&block, network, &last_seen_macro_block, validators)?;
 
             // Check the history size proof.
             if !batch_set.history_len.verify(block.history_root()) {
@@ -563,6 +568,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
     pub(crate) fn reset_verify_state(&mut self) {
         let blockchain = self.blockchain.read();
         let verify_state = BatchSetVerifyState {
+            network: blockchain.network_id,
             predecessor: Block::Macro(blockchain.macro_head()),
             validators: blockchain.current_validators().unwrap(),
         };

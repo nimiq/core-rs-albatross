@@ -15,7 +15,7 @@ use nimiq_network_interface::{
 };
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     test_network::TestNetwork,
@@ -48,6 +48,7 @@ async fn one_validator_can_create_micro_blocks() {
     let fee_key = KeyPair::generate(&mut seeded_rng(0));
     let signing_key = KeyPair::generate(&mut seeded_rng(0));
     let genesis = GenesisBuilder::default()
+        .with_network(NetworkId::UnitAlbatross)
         .with_genesis_validator(
             Address::from(&validator_key),
             signing_key.public,

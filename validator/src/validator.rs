@@ -332,6 +332,7 @@ where
 
         let head = blockchain.head();
         let next_block_number = head.block_number() + 1;
+        let network_id = head.network();
         let block_producer = BlockProducer::new(self.signing_key(), self.voting_key());
 
         debug!(
@@ -352,6 +353,7 @@ where
                     block_producer,
                     self.validator_slot_band(),
                     active_validators,
+                    network_id,
                     next_block_number,
                     self.macro_state.read().clone(),
                     proposal_stream,

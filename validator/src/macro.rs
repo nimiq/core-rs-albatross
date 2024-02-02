@@ -13,7 +13,7 @@ use nimiq_block::MacroBlock;
 use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_network_interface::network::Topic;
-use nimiq_primitives::slots_allocation::Validators;
+use nimiq_primitives::{networks::NetworkId, slots_allocation::Validators};
 use nimiq_tendermint::{Return as TendermintReturn, SignedProposalMessage, Tendermint};
 use nimiq_validator_network::{PubsubId, ValidatorNetwork};
 use parking_lot::RwLock;
@@ -77,6 +77,7 @@ where
         block_producer: BlockProducer,
         validator_slot_band: u16,
         current_validators: Validators,
+        network_id: NetworkId,
         block_height: u32,
         state_opt: Option<MacroState>,
         proposal_stream: BoxStream<
@@ -105,6 +106,7 @@ where
             block_producer,
             current_validators,
             validator_slot_band,
+            network_id,
             block_height,
         );
 

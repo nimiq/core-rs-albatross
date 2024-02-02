@@ -24,6 +24,8 @@ mod tendermint;
 /// Enum containing a variety of block error types.
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum BlockError {
+    #[error("Block is from the wrong network")]
+    NetworkMismatch,
     #[error("Invalid block type for this block number")]
     InvalidBlockType,
     #[error("Unsupported version")]

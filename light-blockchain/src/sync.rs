@@ -47,7 +47,7 @@ impl LightBlockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify()?;
+        block.verify(this.network_id)?;
 
         // Verify the zk proof.
         if !trusted_proof {
@@ -130,7 +130,7 @@ impl LightBlockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify()?;
+        block.verify(this.network_id)?;
 
         // Verify that the block is a valid macro successor to our current macro head.
         block.verify_macro_successor(&this.macro_head)?;

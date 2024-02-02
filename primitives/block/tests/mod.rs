@@ -6,7 +6,7 @@ use nimiq_collections::bitset::BitSet;
 use nimiq_handel::update::LevelUpdate;
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Blake2sHash, Hasher};
 use nimiq_keys::{Address, PublicKey};
-use nimiq_primitives::slots_allocation::ValidatorsBuilder;
+use nimiq_primitives::{networks::NetworkId, slots_allocation::ValidatorsBuilder};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_vrf::VrfSeed;
@@ -88,6 +88,7 @@ fn it_can_convert_macro_block_into_slots() {
 
     let macro_block = MacroBlock {
         header: MacroHeader {
+            network: NetworkId::UnitAlbatross,
             version: 1,
             block_number: 42,
             round: 0,

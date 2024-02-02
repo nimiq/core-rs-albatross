@@ -15,8 +15,8 @@ use nimiq_handel::{
 use nimiq_hash::{Blake2sHash, Hash};
 use nimiq_keys::Signature as SchnorrSignature;
 use nimiq_primitives::{
-    policy::Policy, slots_allocation::Validators, TendermintIdentifier, TendermintStep,
-    TendermintVote,
+    networks::NetworkId, policy::Policy, slots_allocation::Validators, TendermintIdentifier,
+    TendermintStep, TendermintVote,
 };
 use nimiq_serde::Serialize;
 use nimiq_tendermint::{
@@ -103,6 +103,8 @@ pub struct TendermintProtocol<TValidatorNetwork: ValidatorNetwork> {
     pub network: Arc<TValidatorNetwork>,
     // The slot band for our validator.
     pub validator_slot_band: u16,
+    // The network ID of the network.
+    pub network_id: NetworkId,
     // The block number of the macro block to produce.
     pub block_height: u32,
     // Information relative to our validator that is necessary to produce blocks.
@@ -120,6 +122,7 @@ impl<TValidatorNetwork: ValidatorNetwork> Clone for TendermintProtocol<TValidato
         Self {
             network: Arc::clone(&self.network),
             validator_slot_band: self.validator_slot_band,
+            network_id: self.network_id,
             block_height: self.block_height,
             block_producer: self.block_producer.clone(),
             current_validators: self.current_validators.clone(),
@@ -139,11 +142,13 @@ where
         block_producer: BlockProducer,
         current_validators: Validators,
         validator_slot_band: u16,
+        network_id: NetworkId,
         block_height: u32,
     ) -> Self {
         Self {
             block_producer,
             blockchain,
+            network_id,
             block_height,
             validator_slot_band,
             validator_registry: Arc::new(ValidatorRegistry::new(current_validators.clone())),
@@ -376,6 +381,7 @@ where
         };
 
         let id = TendermintIdentifier {
+            network: self.network_id,
             block_number: self.block_height,
             round_number: round,
             step,
@@ -422,6 +428,7 @@ where
         };
 
         let id = TendermintIdentifier {
+            network: self.network_id,
             block_number: self.block_height,
             round_number: round,
             step,

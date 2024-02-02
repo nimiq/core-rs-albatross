@@ -802,7 +802,9 @@ impl ClientConfigBuilder {
         self.consensus(consensus);
 
         // Configure network
-        self.network_id(config_file.consensus.network);
+        if let Some(network) = config_file.consensus.network {
+            self.network_id(network);
+        }
 
         // Configure storage config.
         let mut file_storage = FileStorageConfig::default();

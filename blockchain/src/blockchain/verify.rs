@@ -27,7 +27,7 @@ impl Blockchain {
             .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
 
         // Perform block intrinsic checks.
-        block.verify()?;
+        block.verify(self.network_id)?;
 
         // Fetch predecessor block. Fail if it doesn't exist.
         let predecessor = self
@@ -227,7 +227,7 @@ impl Blockchain {
                     Some(txn),
                 )
                 .expect("Couldn't calculate validators");
-            equivocation_proof.verify(&validators)?;
+            equivocation_proof.verify(block.network(), &validators)?;
         }
         Ok(())
     }
@@ -240,7 +240,7 @@ impl Blockchain {
         block: &Block,
         txn: &DBTransaction,
     ) -> Result<(), PushError> {
-        // We don't need to perform any checks if the given block is not a macro block.
+        // We don't need to perform any more checks if the given block is not a macro block.
         let macro_block = match block {
             Block::Macro(macro_block) => macro_block,
             _ => return Ok(()),
@@ -378,7 +378,7 @@ impl Blockchain {
         let mut block = Block::Macro(proposed_block);
 
         // Make sure the header verifies
-        if let Err(error) = block.header().verify(false) {
+        if let Err(error) = block.header().verify(self.network_id, false) {
             debug!(%error, %block, "Tendermint - await_proposal: Invalid block header");
             return Err(PushError::InvalidBlock(error));
         }

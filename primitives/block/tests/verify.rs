@@ -15,8 +15,50 @@ use nimiq_transaction::ExecutedTransaction;
 use nimiq_vrf::VrfSeed;
 
 #[test]
+fn test_verify_header_network() {
+    let mut micro_header = MicroHeader {
+        network: NetworkId::DevAlbatross,
+        version: Policy::VERSION,
+        block_number: 1,
+        timestamp: 0,
+        parent_hash: Blake2bHash::default(),
+        seed: VrfSeed::default(),
+        extra_data: [].to_vec(),
+        state_root: Blake2bHash::default(),
+        body_root: Blake2sHash::default(),
+        diff_root: Blake2bHash::default(),
+        history_root: Blake2bHash::default(),
+    };
+    let header = BlockHeader::Micro(micro_header.clone());
+
+    // Check version at header level
+    assert_eq!(
+        header.verify(NetworkId::UnitAlbatross, false),
+        Err(BlockError::NetworkMismatch)
+    );
+
+    let block = Block::Micro(MicroBlock {
+        header: micro_header.clone(),
+        justification: None,
+        body: None,
+    });
+
+    // Error should remain at block level
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross),
+        Err(BlockError::NetworkMismatch)
+    );
+
+    // Fix the version and check that it passes
+    micro_header.network = NetworkId::UnitAlbatross;
+    let header = BlockHeader::Micro(micro_header);
+    assert_eq!(header.verify(NetworkId::UnitAlbatross, false), Ok(()));
+}
+
+#[test]
 fn test_verify_header_version() {
     let mut micro_header = MicroHeader {
+        network: NetworkId::UnitAlbatross,
         version: Policy::VERSION - 1,
         block_number: 1,
         timestamp: 0,
@@ -31,7 +73,10 @@ fn test_verify_header_version() {
     let header = BlockHeader::Micro(micro_header.clone());
 
     // Check version at header level
-    assert_eq!(header.verify(false), Err(BlockError::UnsupportedVersion));
+    assert_eq!(
+        header.verify(NetworkId::UnitAlbatross, false),
+        Err(BlockError::UnsupportedVersion)
+    );
 
     let block = Block::Micro(MicroBlock {
         header: micro_header.clone(),
@@ -40,17 +85,21 @@ fn test_verify_header_version() {
     });
 
     // Error should remain at block level
-    assert_eq!(block.verify(), Err(BlockError::UnsupportedVersion));
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross),
+        Err(BlockError::UnsupportedVersion)
+    );
 
     // Fix the version and check that it passes
     micro_header.version = Policy::VERSION;
     let header = BlockHeader::Micro(micro_header);
-    assert_eq!(header.verify(false), Ok(()));
+    assert_eq!(header.verify(NetworkId::UnitAlbatross, false), Ok(()));
 }
 
 #[test]
 fn test_verify_header_extra_data() {
     let mut micro_header = MicroHeader {
+        network: NetworkId::UnitAlbatross,
         version: Policy::VERSION,
         block_number: 1,
         timestamp: 0,
@@ -65,9 +114,15 @@ fn test_verify_header_extra_data() {
     let header = BlockHeader::Micro(micro_header.clone());
 
     // Check extra data field at header level
-    assert_eq!(header.verify(false), Err(BlockError::ExtraDataTooLarge));
+    assert_eq!(
+        header.verify(NetworkId::UnitAlbatross, false),
+        Err(BlockError::ExtraDataTooLarge)
+    );
     // Error should remain for a skip block
-    assert_eq!(header.verify(true), Err(BlockError::ExtraDataTooLarge));
+    assert_eq!(
+        header.verify(NetworkId::UnitAlbatross, true),
+        Err(BlockError::ExtraDataTooLarge)
+    );
 
     let block = Block::Micro(MicroBlock {
         header: micro_header.clone(),
@@ -76,24 +131,31 @@ fn test_verify_header_extra_data() {
     });
 
     // Error should remain at block level
-    assert_eq!(block.verify(), Err(BlockError::ExtraDataTooLarge));
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross),
+        Err(BlockError::ExtraDataTooLarge)
+    );
 
     // Fix the extra data field and check that it passes
     micro_header.extra_data = vec![0; 32];
     let header = BlockHeader::Micro(micro_header.clone());
-    assert_eq!(header.verify(false), Ok(()));
+    assert_eq!(header.verify(NetworkId::UnitAlbatross, false), Ok(()));
     // Error should remain for a skip block
-    assert_eq!(header.verify(true), Err(BlockError::ExtraDataTooLarge));
+    assert_eq!(
+        header.verify(NetworkId::UnitAlbatross, true),
+        Err(BlockError::ExtraDataTooLarge)
+    );
 
     // Fix the extra data field for a skip block and check that it passes
     micro_header.extra_data = [].to_vec();
     let header = BlockHeader::Micro(micro_header);
-    assert_eq!(header.verify(true), Ok(()));
+    assert_eq!(header.verify(NetworkId::UnitAlbatross, true), Ok(()));
 }
 
 #[test]
 fn test_verify_body_root() {
     let mut micro_header = MicroHeader {
+        network: NetworkId::UnitAlbatross,
         version: Policy::VERSION,
         block_number: 1,
         timestamp: 0,
@@ -121,7 +183,10 @@ fn test_verify_body_root() {
     });
 
     // The body root check must fail
-    assert_eq!(block.verify(), Err(BlockError::BodyHashMismatch));
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross),
+        Err(BlockError::BodyHashMismatch)
+    );
 
     // Fix the body root and check that it passes
     micro_header.body_root = micro_body.hash();
@@ -131,12 +196,13 @@ fn test_verify_body_root() {
         body: Some(micro_body),
     });
 
-    assert_eq!(block.verify(), Ok(()));
+    assert_eq!(block.verify(NetworkId::UnitAlbatross), Ok(()));
 }
 
 #[test]
 fn test_verify_skip_block() {
     let mut micro_header = MicroHeader {
+        network: NetworkId::UnitAlbatross,
         version: Policy::VERSION,
         block_number: 1,
         timestamp: 0,
@@ -176,7 +242,10 @@ fn test_verify_skip_block() {
     });
 
     // The skip block body should fail
-    assert_eq!(block.verify(), Err(BlockError::InvalidSkipBlockBody));
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross),
+        Err(BlockError::InvalidSkipBlockBody)
+    );
 
     // Fix the body with empty transactions and check that it passes
     micro_body.transactions = vec![];
@@ -187,12 +256,13 @@ fn test_verify_skip_block() {
         body: Some(micro_body),
     });
 
-    assert_eq!(block.verify(), Ok(()));
+    assert_eq!(block.verify(NetworkId::UnitAlbatross), Ok(()));
 }
 
 #[test]
 fn test_verify_micro_block_body_txns() {
     let mut micro_header = MicroHeader {
+        network: NetworkId::UnitAlbatross,
         version: Policy::VERSION,
         block_number: 1,
         timestamp: 0,
@@ -231,7 +301,10 @@ fn test_verify_micro_block_body_txns() {
     });
 
     // The body check should fail
-    assert_eq!(block.verify(), Err(BlockError::DuplicateTransaction));
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross),
+        Err(BlockError::DuplicateTransaction)
+    );
 
     // Fix the body with empty transactions and check that it passes
     txns_dup.pop();
@@ -243,7 +316,7 @@ fn test_verify_micro_block_body_txns() {
         body: Some(micro_body),
     });
 
-    assert_eq!(block.verify(), Ok(()));
+    assert_eq!(block.verify(NetworkId::UnitAlbatross), Ok(()));
 
     // Now modify the validity start height
     let txns: Vec<ExecutedTransaction> = generate_transactions(
@@ -271,13 +344,17 @@ fn test_verify_micro_block_body_txns() {
     });
 
     // The body check should fail
-    assert_eq!(block.verify(), Err(BlockError::ExpiredTransaction));
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross),
+        Err(BlockError::ExpiredTransaction)
+    );
 }
 
 #[test]
 fn test_verify_micro_block_body_fork_proofs() {
     let genesis_block_number = Policy::genesis_block_number();
     let mut micro_header = MicroHeader {
+        network: NetworkId::UnitAlbatross,
         version: Policy::VERSION,
         block_number: 1 + genesis_block_number,
         timestamp: 0,
@@ -343,7 +420,10 @@ fn test_verify_micro_block_body_fork_proofs() {
     });
 
     // The body check should fail
-    assert_eq!(block.verify(), Err(BlockError::ForkProofsNotOrdered));
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross),
+        Err(BlockError::ForkProofsNotOrdered)
+    );
 
     // Sort fork proofs and re-build block
     fork_proofs.sort_by_key(|p| EquivocationProof::from(p.clone()).sort_key());
@@ -359,7 +439,7 @@ fn test_verify_micro_block_body_fork_proofs() {
         body: Some(micro_body),
     });
 
-    assert_eq!(block.verify(), Ok(()));
+    assert_eq!(block.verify(NetworkId::UnitAlbatross), Ok(()));
 
     // Lets have a duplicate fork proof
     fork_proofs.push(fork_proofs.last().unwrap().clone());
@@ -375,7 +455,10 @@ fn test_verify_micro_block_body_fork_proofs() {
         body: Some(micro_body),
     });
 
-    assert_eq!(block.verify(), Err(BlockError::DuplicateForkProof));
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross),
+        Err(BlockError::DuplicateForkProof)
+    );
 
     // Now modify the block height of the first header of the first fork proof
     let mut micro_header_large_block_number_1 = micro_header.clone();
@@ -406,12 +489,16 @@ fn test_verify_micro_block_body_fork_proofs() {
     });
 
     // The first fork proof should no longer be valid
-    assert_eq!(block.verify(), Err(BlockError::InvalidForkProof));
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross),
+        Err(BlockError::InvalidForkProof)
+    );
 }
 
 #[test]
 fn test_verify_election_macro_body() {
     let mut macro_header = MacroHeader {
+        network: NetworkId::UnitAlbatross,
         version: Policy::VERSION,
         block_number: Policy::genesis_block_number() + Policy::blocks_per_epoch(),
         round: 0,
@@ -442,7 +529,10 @@ fn test_verify_election_macro_body() {
     });
 
     // The validators check should fail
-    assert_eq!(block.verify(), Err(BlockError::InvalidValidators));
+    assert_eq!(
+        block.verify(NetworkId::UnitAlbatross),
+        Err(BlockError::InvalidValidators)
+    );
 
     // Fix the validators set
     let mut validators = ValidatorsBuilder::new();
@@ -463,5 +553,7 @@ fn test_verify_election_macro_body() {
     });
 
     // Skipping the verification of the PK tree root should make the verify function to pass
-    assert_eq!(block.verify(), Ok(()));
+    assert_eq!(block.verify(NetworkId::UnitAlbatross), Ok(()));
 }
+
+// TODO: network ID test

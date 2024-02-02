@@ -168,6 +168,7 @@ fn do_double_vote(temp_producer1: &TemporaryBlockProducer) -> EquivocationProof 
     let slots = validator.slots;
 
     let tendermint_id = TendermintIdentifier {
+        network: header.network,
         block_number: header.block_number,
         round_number: header.round,
         step: TendermintStep::PreVote,

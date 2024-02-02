@@ -7,7 +7,7 @@ use nimiq_database::volatile::VolatileDatabase;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_network_mock::{MockHub, MockNetwork};
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     blockchain::{produce_macro_blocks, signing_key, voting_key},
@@ -27,6 +27,7 @@ async fn test_request_component() {
     let vtn_key = BLSKeyPair::generate(&mut seeded_rng(0));
 
     let genesis = GenesisBuilder::default()
+        .with_network(NetworkId::UnitAlbatross)
         .with_genesis_validator(
             Address::from(&key),
             sgn_key.public,

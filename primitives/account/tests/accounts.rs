@@ -419,6 +419,7 @@ fn accounts_performance() {
     let sender_balances = vec![num_txns as u64 * 10; num_txns];
     let recipient_balances = vec![0; num_txns];
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
     let address_validator = Address::from([1u8; Address::SIZE]);
     let reward = Inherent::Reward {
         validator_address: Address::burn_address(),
@@ -536,6 +537,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
     let sender_balances = vec![100_000_000_000; 1];
     let recipient_balances = vec![0; total_txns as usize];
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
     let rewards = vec![];
 
     // Generate accounts
@@ -664,6 +666,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
     let sender_balances = vec![100_000_000_000; total_txns as usize];
     let recipient_balances = vec![10; total_txns as usize];
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
     let rewards = vec![];
 
     // Generate accounts

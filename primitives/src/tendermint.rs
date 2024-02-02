@@ -4,7 +4,10 @@ use nimiq_hash::{Blake2sHash, SerializeContent};
 use nimiq_serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::{PREFIX_TENDERMINT_COMMIT, PREFIX_TENDERMINT_PREPARE, PREFIX_TENDERMINT_PROPOSAL};
+use crate::{
+    networks::NetworkId, PREFIX_TENDERMINT_COMMIT, PREFIX_TENDERMINT_PREPARE,
+    PREFIX_TENDERMINT_PROPOSAL,
+};
 
 /// Internal representation of nimiq_tendermint::Step struct. It needs to be Serializable and must not contain Proposal
 /// thus the additional type.
@@ -26,6 +29,8 @@ impl TendermintStep {
 /// Unique identifier for a single instance of TendermintAggregation
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct TendermintIdentifier {
+    /// Network ID this tendermint vote is meant for.
+    pub network: NetworkId,
     /// block_number of the to-be-decided-upon macro block.
     pub block_number: u32,
     /// The round number this aggregation accepts contributions for
@@ -36,7 +41,7 @@ pub struct TendermintIdentifier {
 
 impl TendermintIdentifier {
     /// Maximum size in bytes for a `TendermintIdentifier` in binary serialization.
-    pub const MAX_SIZE: usize = 2 * nimiq_serde::U32_MAX_SIZE + TendermintStep::SIZE;
+    pub const MAX_SIZE: usize = nimiq_serde::U8_SIZE + 2 * 4 + TendermintStep::SIZE;
 }
 
 // Multiple things this needs to take care of when it comes to what needs signing here:
@@ -48,6 +53,7 @@ impl TendermintIdentifier {
 //
 // In addition to that the correct assignment of specific contributions to their aggregations also needs part of this information.
 // Additionally replay of any given contribution for a different aggregation must not be possible.
+// * network
 // * block_height
 // * round_number
 // * step
@@ -80,6 +86,9 @@ impl SerializeContent for TendermintVote {
     fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
         // First of all serialize step as this also serves as the unique prefix for this message type.
         self.id.step.serialize_to_writer(writer)?;
+
+        // serialize the network ID
+        self.id.network.serialize_to_writer(writer)?;
 
         // serialize the round number
         self.id

@@ -1,7 +1,7 @@
 use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
-use nimiq_primitives::coin::Coin;
+use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::account::htlc_contract::AnyHash;
 use nimiq_vrf::VrfSeed;
@@ -11,6 +11,9 @@ use time::OffsetDateTime;
 /// from the genesis TOML files.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GenesisConfig {
+    /// Network ID used in blocks, transactions, etc.
+    pub network: NetworkId,
+
     /// Timestamp for the genesis block.
     #[serde(with = "time::serde::rfc3339::option")]
     pub timestamp: Option<OffsetDateTime>,

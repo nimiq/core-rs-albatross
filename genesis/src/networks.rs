@@ -82,6 +82,15 @@ fn read_genesis_config(config: &Path) -> Result<GenesisData, GenesisBuilderError
 }
 
 fn network(network_id: NetworkId) -> Option<&'static NetworkInfo> {
+    let result = network_impl(network_id);
+    if let Some(info) = result {
+        assert_eq!(network_id, info.network_id);
+        assert_eq!(network_id, info.genesis_block().network());
+    }
+    result
+}
+
+fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
     Some(match network_id {
         NetworkId::DevAlbatross => {
             #[cfg(feature = "genesis-override")]

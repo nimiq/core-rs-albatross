@@ -15,7 +15,9 @@ use nimiq_bls::CompressedPublicKey;
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::{Address, PublicKey};
-use nimiq_primitives::{coin::Coin, policy::Policy, slots_allocation::Validators};
+use nimiq_primitives::{
+    coin::Coin, networks::NetworkId, policy::Policy, slots_allocation::Validators,
+};
 use nimiq_serde::Serialize as NimiqSerialize;
 use nimiq_transaction::{
     account::htlc_contract::AnyHash,
@@ -106,6 +108,7 @@ pub struct Block {
     pub batch: u32,
     pub epoch: u32,
 
+    pub network: NetworkId,
     pub version: u16,
     pub number: u32,
     pub timestamp: u64,
@@ -190,6 +193,7 @@ impl Block {
             size: macro_block.serialized_size() as u32,
             batch: Policy::batch_at(block_number),
             epoch: Policy::epoch_at(block_number),
+            network: macro_block.header.network,
             version: macro_block.header.version,
             number: block_number,
             timestamp: macro_block.header.timestamp,
@@ -258,6 +262,7 @@ impl Block {
             size: micro_block.serialized_size() as u32,
             batch: Policy::batch_at(block_number),
             epoch: Policy::epoch_at(block_number),
+            network: micro_block.header.network,
             version: micro_block.header.version,
             number: micro_block.header.block_number,
             timestamp: micro_block.header.timestamp,

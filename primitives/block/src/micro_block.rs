@@ -4,7 +4,7 @@ use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::{PublicKey, Signature};
-use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
+use nimiq_primitives::{networks::NetworkId, policy::Policy, slots_allocation::Validators};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{ExecutedTransaction, Transaction};
 use nimiq_vrf::VrfSeed;
@@ -26,6 +26,11 @@ pub struct MicroBlock {
 }
 
 impl MicroBlock {
+    /// Returns the network ID of this micro block.
+    pub fn network(&self) -> NetworkId {
+        self.header.network
+    }
+
     /// Returns the hash of the block header.
     pub fn hash(&self) -> Blake2bHash {
         self.header.hash()
@@ -159,6 +164,8 @@ impl MicroJustification {
 /// The struct representing the header of a Micro block.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
 pub struct MicroHeader {
+    /// Network of the block.
+    pub network: NetworkId,
     /// The version number of the block. Changing this always results in a hard fork.
     pub version: u16,
     /// The number of the block.
@@ -189,6 +196,7 @@ impl MicroHeader {
     /// size since we assume that the extra_data field is completely filled.
     #[allow(clippy::identity_op)]
     pub const MAX_SIZE: usize = 0
+        + /*network*/ nimiq_serde::U8_SIZE
         + /*version*/ nimiq_serde::U16_MAX_SIZE
         + /*block_number*/ nimiq_serde::U32_MAX_SIZE
         + /*timestamp*/ nimiq_serde::U64_MAX_SIZE

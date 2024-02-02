@@ -82,6 +82,9 @@ impl BlockProducer {
         // The rng seed. We need this parameterized in order to have determinism when running unit tests.
         rng: &mut R,
     ) -> MicroBlock {
+        // The network ID stays unchanged for the whole blockchain.
+        let network = blockchain.head().network();
+
         // Calculate the block number. It is simply the previous block number incremented by one.
         let block_number = blockchain.block_number() + 1;
 
@@ -163,6 +166,7 @@ impl BlockProducer {
 
         // Create the micro block header.
         let header = MicroHeader {
+            network,
             version: Policy::VERSION,
             block_number,
             timestamp,
@@ -233,6 +237,9 @@ impl BlockProducer {
         // The rng seed. We need this parameterized in order to have determinism when running unit tests.
         rng: &mut R,
     ) -> MacroBlock {
+        // The network ID stays unchanged for the whole blockchain.
+        let network = blockchain.head().network();
+
         // Calculate the block number. It is simply the previous block number incremented by one.
         let block_number = blockchain.block_number() + 1;
 
@@ -263,6 +270,7 @@ impl BlockProducer {
         // We need several fields of this header in order to calculate the transactions and the
         // state.
         let mut header = MacroHeader {
+            network,
             version: Policy::VERSION,
             block_number,
             round,
