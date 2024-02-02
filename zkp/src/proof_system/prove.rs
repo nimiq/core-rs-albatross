@@ -10,7 +10,13 @@ use ark_ff::{ToConstraintField, Zero};
 use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey};
 use ark_mnt4_753::{Fq as MNT4Fq, MNT4_753};
 use ark_mnt6_753::{Fq as MNT6Fq, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
-use ark_relations::r1cs::SynthesisError;
+use ark_relations::{
+    lc,
+    r1cs::{
+        ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, SynthesisError,
+        SynthesisMode, Variable,
+    },
+};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
 use nimiq_block::MacroBlock;
@@ -653,6 +659,71 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
     Ok(pk_node_hash)
 }
 
+use ark_relations::r1cs::{ConstraintMatrices, Matrix};
+
+// For serialization of the constraint system
+#[derive(Debug, PartialEq, CanonicalDeserialize, CanonicalSerialize, Clone)]
+pub struct Matrices<E: Pairing> {
+    /// The number of variables that are "public instances" to the constraint
+    /// system.
+    pub num_instance_variables: usize,
+    /// The number of variables that are "private witnesses" to the constraint
+    /// system.
+    pub num_witness_variables: usize,
+    /// The number of constraints in the constraint system.
+    pub num_constraints: usize,
+    /// The number of non_zero entries in the A matrix.
+    pub a_num_non_zero: usize,
+    /// The number of non_zero entries in the B matrix.
+    pub b_num_non_zero: usize,
+    /// The number of non_zero entries in the C matrix.
+    pub c_num_non_zero: usize,
+    /// The A constraint matrix. This is empty when
+    /// `self.mode == SynthesisMode::Prove { construct_matrices = false }`.
+    pub a: Matrix<E::ScalarField>,
+    /// The B constraint matrix. This is empty when
+    /// `self.mode == SynthesisMode::Prove { construct_matrices = false }`.
+    pub b: Matrix<E::ScalarField>,
+    /// The C constraint matrix. This is empty when
+    /// `self.mode == SynthesisMode::Prove { construct_matrices = false }`.
+    pub c: Matrix<E::ScalarField>,
+}
+
+impl<E: Pairing> From<ConstraintMatrices<E::ScalarField>> for Matrices<E> {
+    fn from(value: ConstraintMatrices<E::ScalarField>) -> Self {
+        Self {
+            num_instance_variables: value.num_instance_variables,
+            num_witness_variables: value.num_witness_variables,
+            num_constraints: value.num_constraints,
+            a_num_non_zero: value.a_num_non_zero,
+            b_num_non_zero: value.b_num_non_zero,
+            c_num_non_zero: value.c_num_non_zero,
+            a: value.a,
+            b: value.b,
+            c: value.c,
+        }
+    }
+}
+
+pub fn circuit_to_qap<Zexe: Pairing, C: ConstraintSynthesizer<Zexe::ScalarField>>(
+    circuit: C,
+) -> Result<ConstraintSystemRef<Zexe::ScalarField>, NanoZKPError> {
+    // This is a Groth16 keypair assembly
+    let cs = ConstraintSystem::new_ref();
+    cs.set_mode(SynthesisMode::Setup);
+    // Synthesize the circuit.
+    circuit
+        .generate_constraints(cs.clone())
+        .expect("constraint generation should not fail");
+    // Input constraints to ensure full density of IC query
+    // x * 0 = 0
+    for i in 0..cs.num_instance_variables() {
+        cs.enforce_constraint(lc!() + Variable::Instance(i), lc!(), lc!())?;
+    }
+    cs.inline_all_lcs();
+    Ok(cs)
+}
+
 fn prove_macro_block<R: CryptoRng + Rng>(
     rng: &mut R,
     keys: &VerifyingKeys,
@@ -733,6 +804,17 @@ fn prove_macro_block<R: CryptoRng + Rng>(
     );
     let prev_header_hash = circuit.prev_header_hash;
     let final_header_hash = circuit.final_header_hash;
+
+    let cs =
+        circuit_to_qap::<MNT4_753, _>(circuit.clone()).expect("Could not prepare circuit for QAP");
+
+    let matrices = cs.to_matrices().expect("Could not generate matrices");
+    let matrices = Matrices::<MNT4_753>::from(matrices);
+
+    let mut file = File::create("macro_block_circuit").unwrap();
+    matrices
+        .serialize_uncompressed(&mut file)
+        .expect("Could not serialize matrices");
 
     // Create the proof.
     let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng)?;
