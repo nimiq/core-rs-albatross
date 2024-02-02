@@ -1166,9 +1166,6 @@ async fn mempool_update() {
 // The purpose of this test is to verify that aged transactions, that is,
 // transactions that are stored in the mempool for which the validity
 // window is already expired, are properly pruned from the mempool.
-// The test is marked as ignored because it takes some time to build a chain
-// that produces more than TRANSACTION_VALIDITY_WINDOW blocks, however, one
-// can easily change this parameter to some low number for testing purposes.
 async fn mempool_update_aged_transaction() {
     let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
