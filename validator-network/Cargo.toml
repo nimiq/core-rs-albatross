@@ -27,7 +27,7 @@ parking_lot = "0.12"
 serde = "1.0"
 thiserror = "1.0"
 time = { version = "0.3" }
-tokio = { version = "1.35", features = ["rt"] }
+tokio = { version = "1.36", features = ["rt"] }
 
 nimiq-bls = { workspace = true, features = ["lazy", "serde-derive"] }
 nimiq-network-interface = { workspace = true }
