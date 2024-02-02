@@ -189,7 +189,6 @@ impl Blockchain {
 
             // Push the block
             match self.check_and_commit(
-                &self.state,
                 &block.1.head,
                 block.2.clone(),
                 write_txn,

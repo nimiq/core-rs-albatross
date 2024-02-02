@@ -111,7 +111,7 @@ pub fn next_micro_block(
     let block_state = BlockState::new(block_number, timestamp);
 
     let (state_root, diff_root, executed_txns) = blockchain
-        .state()
+        .state
         .accounts
         .exercise_transactions(&transactions, &inherents, &block_state)
         .expect("Failed to compute accounts hash during block production");
@@ -206,7 +206,7 @@ pub fn next_skip_block(
     let block_state = BlockState::new(block_number, timestamp);
 
     let (real_state_root, real_diff_root, _) = blockchain
-        .state()
+        .state
         .accounts
         .exercise_transactions(&[], &inherents, &block_state)
         .expect("Failed to compute accounts hash during block production");
@@ -314,7 +314,6 @@ pub fn next_macro_block_proposal(
         history_root: Blake2bHash::default(),
     };
 
-    let state = blockchain.state();
     // Get the staking contract PRIOR to any state changes.
     let staking_contract = blockchain.get_staking_contract();
 
@@ -322,8 +321,7 @@ pub fn next_macro_block_proposal(
         .punished_slots
         .next_batch_initial_punished_set(header.block_number, &staking_contract.active_validators);
 
-    let reward_transactions =
-        blockchain.create_reward_transactions(state, &header, &staking_contract);
+    let reward_transactions = blockchain.create_reward_transactions(&header, &staking_contract);
 
     let validators = if Policy::is_election_block_at(blockchain.block_number() + 1) {
         Some(blockchain.next_validators(&header.seed))
@@ -349,7 +347,8 @@ pub fn next_macro_block_proposal(
 
     let block_state = BlockState::new(block_number, timestamp);
 
-    let (state_root, diff_root, _) = state
+    let (state_root, diff_root, _) = blockchain
+        .state
         .accounts
         .exercise_transactions(&[], &inherents, &block_state)
         .expect("Failed to compute accounts hash during block production.");

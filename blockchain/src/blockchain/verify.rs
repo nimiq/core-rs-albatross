@@ -8,7 +8,7 @@ use nimiq_database::{
 use nimiq_hash::Hash;
 use nimiq_primitives::policy::Policy;
 
-use crate::{blockchain_state::BlockchainState, BlockProducer, Blockchain};
+use crate::{BlockProducer, Blockchain};
 
 /// Implements methods to verify the validity of blocks.
 impl Blockchain {
@@ -119,11 +119,10 @@ impl Blockchain {
     /// justification are optional, we don't need them).
     pub fn verify_block_state_post_commit(
         &self,
-        state: &BlockchainState,
         block: &Block,
         txn: &DBTransaction,
     ) -> Result<(), PushError> {
-        let accounts = &state.accounts;
+        let accounts = &self.state.accounts;
 
         // Verify accounts hash if the tree is complete or changes only happened in the complete part.
         if let Some(accounts_hash) = accounts.get_root_hash(Some(txn)) {
@@ -238,7 +237,6 @@ impl Blockchain {
     /// Thus, we need to compare the respective fields in the block before clearing the staking contract.
     pub fn verify_block_state_pre_commit(
         &self,
-        state: &BlockchainState,
         block: &Block,
         txn: &DBTransaction,
     ) -> Result<(), PushError> {
@@ -277,12 +275,12 @@ impl Blockchain {
 
         // Verify reward transactions only if we have the complete accounts state as
         // `create_reward_transactions` expects the full state to be present.
-        if !state.accounts.is_complete(Some(txn)) {
+        if !self.state.accounts.is_complete(Some(txn)) {
             return Ok(());
         }
 
         let reward_transactions =
-            self.create_reward_transactions(state, &macro_block.header, &staking_contract);
+            self.create_reward_transactions(&macro_block.header, &staking_contract);
 
         if body.transactions != reward_transactions {
             warn!(
@@ -432,24 +430,17 @@ impl Blockchain {
                 .clone()
         };
 
-        // Get the blockchain state.
-        let state = self.state();
-
         // Verify macro block state before committing accounts.
-        if let Err(error) = self.verify_block_state_pre_commit(state, block, txn) {
+        if let Err(error) = self.verify_block_state_pre_commit(block, txn) {
             debug!(%error, %block, "Tendermint - await_proposal: Invalid macro block state");
             return Err(error);
         }
 
         // Update our blockchain state using the received proposal. If we can't update the state, we
         // return a proposal timeout.
-        if let Err(error) = self.commit_accounts(
-            state,
-            block,
-            None,
-            &mut txn.into(),
-            &mut BlockLogger::empty(),
-        ) {
+        if let Err(error) =
+            self.commit_accounts(block, None, &mut txn.into(), &mut BlockLogger::empty())
+        {
             debug!(%error, %block, "Tendermint - await_proposal: Failed to commit accounts");
             return Err(error);
         }
@@ -457,7 +448,7 @@ impl Blockchain {
         // Check the validity of the block against our state. If it is invalid, we return a proposal
         // timeout. This also returns the block body that matches the block header
         // (assuming that the block is valid).
-        if let Err(error) = self.verify_block_state_post_commit(state, block, txn) {
+        if let Err(error) = self.verify_block_state_post_commit(block, txn) {
             log::debug!(%error, %block, "Tendermint - await_proposal: Invalid block state");
             return Err(error);
         }

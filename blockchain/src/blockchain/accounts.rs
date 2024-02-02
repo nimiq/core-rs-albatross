@@ -13,7 +13,7 @@ use nimiq_serde::Deserialize;
 use nimiq_transaction::historic_transaction::HistoricTransaction;
 use nimiq_trie::WriteTransactionProxy;
 
-use crate::{blockchain_state::BlockchainState, Blockchain};
+use crate::Blockchain;
 
 /// Subset of the accounts in the accounts tree
 pub struct AccountsChunk {
@@ -30,14 +30,13 @@ impl Blockchain {
     /// Expects a full block with body.
     pub fn commit_accounts(
         &self,
-        state: &BlockchainState,
         block: &Block,
         diff: Option<TrieDiff>,
         txn: &mut WriteTransactionProxy,
         block_logger: &mut BlockLogger,
     ) -> Result<u64, PushError> {
         // Get the accounts from the state.
-        let accounts = &state.accounts;
+        let accounts = &self.state.accounts;
         let block_state = BlockState::new(block.block_number(), block.timestamp());
 
         // Check the type of the block.
@@ -245,7 +244,7 @@ impl Blockchain {
     pub fn get_accounts_proof(&self, keys: Vec<&KeyNibbles>) -> Result<TrieProof, IncompleteTrie> {
         let txn = self.env.read_transaction();
 
-        self.state().accounts.get_proof(Some(&txn), keys)
+        self.state.accounts.get_proof(Some(&txn), keys)
     }
 
     /// Gets an accounts chunk given a start key and a limit
@@ -255,7 +254,7 @@ impl Blockchain {
         start: KeyNibbles,
         limit: usize,
     ) -> AccountsChunk {
-        let trie_chunk = self.state().accounts.get_chunk(start, limit, txn_option);
+        let trie_chunk = self.state.accounts.get_chunk(start, limit, txn_option);
         let end_key = trie_chunk.end_key;
         let accounts = trie_chunk
             .items

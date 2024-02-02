@@ -255,7 +255,7 @@ impl Blockchain {
             }
         };
 
-        self.state().accounts.tree.get_missing_range(txn)
+        self.state.accounts.tree.get_missing_range(txn)
     }
 
     /// Check if we have enough state to check for duplicate transactions during the validity window
