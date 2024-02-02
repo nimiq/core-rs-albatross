@@ -138,6 +138,8 @@ pub struct NetworkSettings {
     pub tls: Option<TlsSettings>,
     pub instant_inbound: Option<bool>,
     #[serde(default)]
+    pub desired_peer_count: Option<usize>,
+    #[serde(default)]
     pub autonat_allow_non_global_ips: bool,
     #[serde(default)]
     pub allow_loopback_addresses: bool,

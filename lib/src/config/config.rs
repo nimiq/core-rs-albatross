@@ -119,6 +119,11 @@ pub struct NetworkConfig {
     #[builder(default)]
     pub tls: Option<TlsConfig>,
 
+    /// Optional desired number of peers for the network to connect to.
+    /// The network will always try to maintain this number of connections.
+    #[builder(default)]
+    pub desired_peer_count: Option<usize>,
+
     /// Optional setting to allow network autonat to use non global IPs
     #[builder(default)]
     pub autonat_allow_non_global_ips: bool,
@@ -771,6 +776,8 @@ impl ClientConfigBuilder {
                 .unwrap_or_default(),
 
             seeds: config_file.network.seed_nodes.clone(),
+
+            desired_peer_count: config_file.network.desired_peer_count,
 
             tls: config_file.network.tls.as_ref().map(|s| s.clone().into()),
             autonat_allow_non_global_ips: config_file.network.autonat_allow_non_global_ips,

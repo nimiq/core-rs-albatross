@@ -297,7 +297,10 @@ impl ClientInner {
             false,
             required_services,
             tls_config,
-            config.consensus.min_peers,
+            config
+                .network
+                .desired_peer_count
+                .unwrap_or(config.consensus.min_peers),
             config.network.autonat_allow_non_global_ips,
             config.network.only_secure_ws_connections,
             config.network.allow_loopback_addresses,
