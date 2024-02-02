@@ -37,6 +37,7 @@ pub async fn build_validator<N: TestNetwork + NetworkInterface>(
 where
     N::Error: Send,
     N::PeerId: Deserialize + Serialize,
+    N::Error: Sync,
 {
     let node =
         Node::<N>::history_with_genesis_info(peer_id, genesis_info, hub, is_prover_active).await;
@@ -66,7 +67,7 @@ pub async fn build_validators<N: TestNetwork + NetworkInterface>(
     is_prover_active: bool,
 ) -> Vec<Validator<ValidatorNetworkImpl<N>>>
 where
-    N::Error: Send,
+    N::Error: Send + Sync,
     N::PeerId: Deserialize + Serialize,
 {
     let num_validators = peer_ids.len();
@@ -149,6 +150,7 @@ pub fn validator_for_slot<N: TestNetwork + NetworkInterface>(
 where
     N::Error: Send,
     N::PeerId: Deserialize + Serialize,
+    N::Error: Sync,
 {
     let consensus = &validators.first().unwrap().consensus;
 
@@ -174,6 +176,7 @@ pub fn pop_validator_for_slot<N: TestNetwork + NetworkInterface>(
 where
     N::Error: Send,
     N::PeerId: Deserialize + Serialize,
+    N::Error: Sync,
 {
     let consensus = &validators.first().unwrap().consensus;
 
