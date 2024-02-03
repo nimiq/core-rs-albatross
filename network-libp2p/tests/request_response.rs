@@ -448,6 +448,54 @@ async fn test_valid_request_no_response() {
     };
 }
 
+// Test that we can send a request and receive a timeout response if no response is
+// provided because the connection to a peer is closed in the middle of the request
+#[test(tokio::test)]
+async fn test_valid_request_no_response_close_connection() {
+    let (net1, net2) = TestNetwork::create_connected_networks().await;
+
+    let test_request = TestRequest { request: 42 };
+
+    let net1 = Arc::new(net1);
+    let net2_peer_id = net2.get_local_peer_id();
+
+    // Subscribe for receiving requests and don't let the function to respond to the request
+    // (pass `None` to the response parameter)
+    tokio::spawn({
+        let net1 = Arc::clone(&net1);
+        let test_request = test_request.clone();
+        async move { respond_requests::<TestRequest, TestRequest>(net1, None, test_request).await }
+    });
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    log::info!("Sending request");
+
+    // Send the request and get future for the response
+    let response = net2.request::<TestRequest>(test_request.clone(), net1.get_local_peer_id());
+
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let net1 = Arc::clone(&net1);
+        net1.disconnect_peer(net2_peer_id, CloseReason::MaliciousPeer)
+            .await;
+    });
+
+    // Since the request wasn't responded, it should timeout and send the error to the request
+    let received_response = response.await;
+    log::info!(response = ?received_response, "Received response");
+
+    match received_response {
+        Ok(response) => {
+            assert!(false, "Received unexpected valid response: {:?}", response)
+        }
+        Err(e) => assert_eq!(
+            e,
+            RequestError::OutboundRequest(OutboundRequestError::ConnectionClosed)
+        ),
+    };
+}
+
 // Test that we can send a request and receive a timeout response if no response is sent
 // given that no receiver is registered for the requests being sent
 #[test(tokio::test)]
