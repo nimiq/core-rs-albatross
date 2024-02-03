@@ -77,6 +77,8 @@ impl MacroBlockGadget {
     }
 
     /// Calculates the header hash of the block.
+    //
+    // Needs to be kept in sync with `MacroHeader::serialize_content`.
     pub fn hash(
         &mut self,
         _cs: ConstraintSystemRef<MNT6Fq>,
@@ -116,6 +118,8 @@ impl MacroBlockGadget {
     ///     4. Finally, we take the second hash and map it to an elliptic curve point using the
     ///        "try-and-increment" method.
     /// The function || means concatenation.
+    //
+    // Needs to be kept in sync with `TendermintVote::serialize_content`.
     pub fn tendermint_hash(
         &mut self,
         cs: ConstraintSystemRef<MNT6Fq>,

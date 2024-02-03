@@ -72,6 +72,10 @@ pub struct TendermintVote {
 /// Custom Serialize Content, to make sure that
 /// * step byte, which is also the message prefix always comes first
 /// * options have the same byte length when they are None as when they are Some(x) to prevent overflowing one option into the other.
+//
+// This needs to be kept in sync with `MacroBlockGadget::tendermint_hash` of
+// `nimiq-zkp-circuits`. Whenever this is changed,
+// `MacroBlockGadget::tendermint_hash` also needs to be adjusted.
 impl SerializeContent for TendermintVote {
     fn serialize_content<W: io::Write, H>(&self, writer: &mut W) -> io::Result<()> {
         // First of all serialize step as this also serves as the unique prefix for this message type.

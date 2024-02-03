@@ -227,6 +227,9 @@ impl fmt::Display for MacroHeader {
     }
 }
 
+// This needs to be kept in sync with `MacroBlockGadget::hash` of
+// `nimiq-zkp-circuits`. Whenever this is changed, `MacroBlockGadget::hash`
+// also needs to be adjusted.
 impl SerializeContent for MacroHeader {
     fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
         self.version.to_be_bytes().serialize_to_writer(writer)?;
