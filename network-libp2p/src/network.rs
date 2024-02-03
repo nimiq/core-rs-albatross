@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     future::Future,
+    num::NonZeroUsize,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -1376,7 +1377,10 @@ impl Network {
                     expires: None, // TODO: Records should expire at some point in time
                 };
 
-                match swarm.behaviour_mut().dht.put_record(record, Quorum::One) {
+                match swarm.behaviour_mut().dht.put_record(
+                    record,
+                    Quorum::N(NonZeroUsize::new(Self::DHT_QUORUM as usize).unwrap()),
+                ) {
                     Ok(query_id) => {
                         // Remember put operation to resolve when we receive a `QueryResult::PutRecord`
                         state.dht_puts.insert(query_id, output);
