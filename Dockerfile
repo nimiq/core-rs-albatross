@@ -1,3 +1,18 @@
+# syntax = docker/dockerfile:1.2
+
+FROM rust:slim-bookworm AS builder
+
+# Fetch dependencies.
+RUN apt-get update \
+    && apt-get --no-install-recommends -y install libssl-dev pkg-config clang protobuf-compiler
+
+# Copy sources.
+COPY . /build
+WORKDIR /build
+
+# Build.
+RUN cargo build --release
+
 FROM ubuntu:22.04
 
 # Install dependencies.
@@ -19,10 +34,11 @@ RUN mkdir -p /home/nimiq/.nimiq
 # Set default config can be overwritten by mounting
 COPY ./client.toml /home/nimiq/.nimiq
 
-COPY ./target/release/nimiq-client /usr/local/bin/nimiq-client
-COPY ./target/release/nimiq-bls /usr/local/bin/nimiq-bls
-COPY ./target/release/nimiq-address /usr/local/bin/nimiq-address
-COPY ./target/release/nimiq-rpc /usr/local/bin/nimiq-rpc
+# Copy binaries from the builder image stage
+COPY --from=builder /build/target/release/nimiq-client /usr/local/bin/nimiq-client
+COPY --from=builder /build/target/release/nimiq-bls /usr/local/bin/nimiq-bls
+COPY --from=builder /build/target/release/nimiq-address /usr/local/bin/nimiq-address
+COPY --from=builder /build/target/release/nimiq-rpc /usr/local/bin/nimiq-rpc
 
 # Expose the incoming connections port
 EXPOSE 8443
