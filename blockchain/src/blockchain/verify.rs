@@ -5,6 +5,7 @@ use nimiq_database::{
     traits::{ReadTransaction, WriteTransaction},
     TransactionProxy as DBTransaction, WriteTransactionProxy,
 };
+use nimiq_hash::Hash;
 use nimiq_primitives::policy::Policy;
 
 use crate::{blockchain_state::BlockchainState, BlockProducer, Blockchain};
@@ -102,8 +103,9 @@ impl Blockchain {
     fn verify_transactions(&self, block: &Block) -> Result<(), BlockError> {
         if let Some(transactions) = block.transactions() {
             for transaction in transactions {
+                let transaction = transaction.get_raw_transaction();
                 if !self.tx_verification_cache.is_known(&transaction.hash()) {
-                    transaction.get_raw_transaction().verify(self.network_id)?;
+                    transaction.verify(self.network_id)?;
                 }
             }
         }

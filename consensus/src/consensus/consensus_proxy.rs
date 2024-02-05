@@ -264,7 +264,7 @@ impl<N: Network> ConsensusProxy<N> {
 
             for (hash, block_number) in &receipts {
                 // If the transaction was already verified, then we don't need to verify it again
-                if verified_transactions.contains_key(hash) {
+                if verified_transactions.contains_key(&hash.clone().into()) {
                     continue;
                 }
 
@@ -288,7 +288,7 @@ impl<N: Network> ConsensusProxy<N> {
                             .or_insert(vec![])
                             .push(hash.clone());
                     } else {
-                        // Third Case: Transanctions from the current batch
+                        // Third Case: Transactions from the current batch
                         hashes_by_block
                             .entry(Some(current_head.block_number()))
                             .or_insert(vec![])

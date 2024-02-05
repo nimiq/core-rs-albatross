@@ -564,7 +564,7 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestTransactionReceip
         let blockchain = blockchain.read();
 
         // Get the transaction hashes for this address.
-        let tx_hashes = blockchain.history_store.get_tx_hashes_by_address(
+        let raw_tx_hashes = blockchain.history_store.get_tx_hashes_by_address(
             &self.address,
             self.max.unwrap_or(500).min(500),
             None,
@@ -572,14 +572,14 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestTransactionReceip
 
         let mut receipts = vec![];
 
-        for hash in tx_hashes {
+        for hash in raw_tx_hashes {
             // Get all the historic transactions that correspond to this hash.
             receipts.extend(
                 blockchain
                     .history_store
                     .get_hist_tx_by_hash(&hash, None)
                     .iter()
-                    .map(|hist_tx| (hist_tx.tx_hash(), hist_tx.block_number)),
+                    .map(|hist_tx| (hist_tx.tx_hash().into(), hist_tx.block_number)),
             );
         }
 

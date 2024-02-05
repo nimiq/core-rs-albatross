@@ -44,12 +44,13 @@ pub struct HistoryStore {
     /// A database of all historic transactions indexed by their hash (= leaf hash in the history
     /// tree).
     hist_tx_table: TableProxy,
-    /// A database of all leaf hashes and indexes indexed by the hash of the transaction. This way we
-    /// can start with a transaction hash and find it in the MMR.
+    /// A database of all leaf hashes and indexes indexed by the hash of the (raw) transaction. This way we
+    /// can start with a raw transaction hash and find it in the MMR.
+    /// Mapping of raw tx to leaf hash  (= executed tx hash + index).
     tx_hash_table: TableProxy,
     /// A database of the last leaf index for each block number.
     last_leaf_table: TableProxy,
-    /// A database of all transaction (and reward inherent) hashes indexed by their sender and
+    /// A database of all raw transaction (and reward inherent) hashes indexed by their sender and
     /// recipient addresses.
     address_table: TableProxy,
 }
@@ -223,7 +224,6 @@ impl HistoryStore {
 
             // Remove it from the transaction hash database.
             let tx_hash = hist_tx.tx_hash();
-
             txn.remove_item(
                 &self.tx_hash_table,
                 &tx_hash,
@@ -277,7 +277,7 @@ impl HistoryStore {
             let mut duplicate = cursor.first_duplicate::<OrderedHash>();
 
             while let Some(v) = duplicate {
-                if !removed_txs.contains(&v.hash) {
+                if !removed_txs.contains(&v.hash.into()) {
                     break;
                 }
                 cursor.remove();
@@ -396,7 +396,7 @@ impl HistoryStore {
     /// Gets an historic transaction given its transaction hash.
     pub fn get_hist_tx_by_hash(
         &self,
-        tx_hash: &Blake2bHash,
+        raw_tx_hash: &Blake2bHash,
         txn_option: Option<&TransactionProxy>,
     ) -> Vec<HistoricTransaction> {
         let read_txn: TransactionProxy;
@@ -409,7 +409,7 @@ impl HistoryStore {
         };
 
         // Get leaf hash(es).
-        let leaves = self.get_leaves_by_tx_hash(tx_hash, Some(txn));
+        let leaves = self.get_leaves_by_tx_hash(raw_tx_hash, Some(txn));
 
         // Get historic transactions.
         let mut hist_txs = vec![];
@@ -689,7 +689,6 @@ impl HistoryStore {
 
         // Seek to the first transaction hash at the given address. If there's none, stop here.
         let mut cursor = txn.cursor(&self.address_table);
-
         if cursor.seek_key::<Address, OrderedHash>(address).is_none() {
             return tx_hashes;
         }
@@ -716,16 +715,16 @@ impl HistoryStore {
     pub fn prove(
         &self,
         epoch_number: u32,
-        hashes: Vec<&Blake2bHash>,
+        raw_tx_hashes: Vec<&Blake2bHash>,
         verifier_state: Option<usize>,
         txn_option: Option<&TransactionProxy>,
     ) -> Option<HistoryTreeProof> {
         // Get the leaf indexes.
         let mut positions = vec![];
 
-        for hash in hashes {
+        for raw_tx_hash in raw_tx_hashes {
             let mut indices = self
-                .get_leaves_by_tx_hash(hash, txn_option)
+                .get_leaves_by_tx_hash(raw_tx_hash, txn_option)
                 .iter()
                 .map(|i| i.index as usize)
                 .collect();
@@ -934,24 +933,24 @@ impl HistoryStore {
     ) -> usize {
         txn.put_reserve(&self.hist_tx_table, leaf_hash, hist_tx);
 
-        let tx_hash = hist_tx.tx_hash();
+        // The raw tx hash corresponds to the hash without the execution result.
+        // Thus for basic historic transactions we want discoverability for the raw transaction.
+        let raw_tx_hash = hist_tx.tx_hash();
 
-        txn.put(
-            &self.tx_hash_table,
-            &tx_hash,
-            &OrderedHash {
-                index: leaf_index,
-                hash: leaf_hash.clone(),
-            },
-        );
-
-        // We need to convert the block number to big-endian since that's how the LMDB database
-        // orders the keys.
         txn.put(&self.last_leaf_table, &hist_tx.block_number, &leaf_index);
 
         match &hist_tx.data {
             HistoricTransactionData::Basic(tx) => {
                 let tx = tx.get_raw_transaction();
+
+                txn.put(
+                    &self.tx_hash_table,
+                    &raw_tx_hash,
+                    &OrderedHash {
+                        index: leaf_index,
+                        hash: leaf_hash.clone(),
+                    },
+                );
 
                 let index_tx_sender = self.get_last_tx_index_for_address(&tx.sender, Some(txn)) + 1;
 
@@ -960,7 +959,7 @@ impl HistoryStore {
                     &tx.sender,
                     &OrderedHash {
                         index: index_tx_sender,
-                        hash: tx_hash.clone(),
+                        hash: raw_tx_hash.clone().into(),
                     },
                 );
 
@@ -972,7 +971,7 @@ impl HistoryStore {
                     &tx.recipient,
                     &OrderedHash {
                         index: index_tx_recipient,
-                        hash: tx_hash,
+                        hash: raw_tx_hash.into(),
                     },
                 );
             }
@@ -982,20 +981,37 @@ impl HistoryStore {
                     self.get_last_tx_index_for_address(&ev.reward_address, Some(txn)) + 1;
 
                 txn.put(
+                    &self.tx_hash_table,
+                    &raw_tx_hash,
+                    &OrderedHash {
+                        index: leaf_index,
+                        hash: leaf_hash.clone(),
+                    },
+                );
+
+                txn.put(
                     &self.address_table,
                     &ev.reward_address,
                     &OrderedHash {
                         index: index_tx_recipient,
-                        hash: tx_hash,
+                        hash: raw_tx_hash.into(),
                     },
                 );
             }
-            // Do not index equivocation events, since I do not see a use case
+            // Do not index equivocation or punishments events, since I do not see a use case
             // for this at the time.
-            HistoricTransactionData::Equivocation(_) => {}
-            // Do not index punishment events, since I do not see a use case
-            // for this at the time.
-            HistoricTransactionData::Penalize(_) | HistoricTransactionData::Jail(_) => {}
+            HistoricTransactionData::Equivocation(_)
+            | HistoricTransactionData::Penalize(_)
+            | HistoricTransactionData::Jail(_) => {
+                txn.put(
+                    &self.tx_hash_table,
+                    &raw_tx_hash,
+                    &OrderedHash {
+                        index: leaf_index,
+                        hash: leaf_hash.clone(),
+                    },
+                );
+            }
         }
         hist_tx.serialized_size()
     }
@@ -1004,7 +1020,7 @@ impl HistoryStore {
     /// transaction hash.
     fn get_leaves_by_tx_hash(
         &self,
-        tx_hash: &Blake2bHash,
+        raw_tx_hash: &Blake2bHash,
         txn_option: Option<&TransactionProxy>,
     ) -> Vec<OrderedHash> {
         let read_txn: TransactionProxy;
@@ -1020,7 +1036,7 @@ impl HistoryStore {
         let cursor = txn.cursor(&self.tx_hash_table);
 
         cursor
-            .into_iter_dup_of::<Blake2bHash, OrderedHash>(tx_hash)
+            .into_iter_dup_of::<Blake2bHash, OrderedHash>(raw_tx_hash)
             .map(|(_, leaf_hash)| leaf_hash)
             .collect()
     }
@@ -1300,9 +1316,11 @@ mod tests {
         history_store.add_to_history(&mut txn, 0, &hist_txs[..3]);
         history_store.add_to_history(&mut txn, 1, &hist_txs[3..]);
 
+        let hashes: Vec<_> = hist_txs.iter().map(|hist_tx| hist_tx.tx_hash()).collect();
+
         // Verify method works.
         assert_eq!(
-            history_store.get_hist_tx_by_hash(&hist_txs[0].tx_hash(), Some(&txn))[0]
+            history_store.get_hist_tx_by_hash(&hashes[0], Some(&txn))[0]
                 .unwrap_basic()
                 .get_raw_transaction()
                 .value,
@@ -1310,14 +1328,14 @@ mod tests {
         );
 
         assert_eq!(
-            history_store.get_hist_tx_by_hash(&hist_txs[2].tx_hash(), Some(&txn))[0]
+            history_store.get_hist_tx_by_hash(&hashes[2], Some(&txn))[0]
                 .unwrap_reward()
                 .value,
             Coin::from_u64_unchecked(2),
         );
 
         assert_eq!(
-            history_store.get_hist_tx_by_hash(&hist_txs[3].tx_hash(), Some(&txn))[0]
+            history_store.get_hist_tx_by_hash(&hashes[3], Some(&txn))[0]
                 .unwrap_basic()
                 .get_raw_transaction()
                 .value,
@@ -1640,19 +1658,21 @@ mod tests {
             Some(&txn),
         );
 
+        let hashes: Vec<_> = hist_txs.iter().map(|hist_tx| hist_tx.tx_hash()).collect();
+
         assert_eq!(query_1.len(), 5);
-        assert_eq!(query_1[0], hist_txs[6].tx_hash());
-        assert_eq!(query_1[1], hist_txs[5].tx_hash());
-        assert_eq!(query_1[2], hist_txs[3].tx_hash());
-        assert_eq!(query_1[3], hist_txs[1].tx_hash());
-        assert_eq!(query_1[4], hist_txs[0].tx_hash());
+        assert_eq!(query_1[0], *hashes[6]);
+        assert_eq!(query_1[1], *hashes[5]);
+        assert_eq!(query_1[2], *hashes[3]);
+        assert_eq!(query_1[3], *hashes[1]);
+        assert_eq!(query_1[4], *hashes[0]);
 
         let query_2 =
             history_store.get_tx_hashes_by_address(&Address::burn_address(), 2, Some(&txn));
 
         assert_eq!(query_2.len(), 2);
-        assert_eq!(query_2[0], hist_txs[6].tx_hash());
-        assert_eq!(query_2[1], hist_txs[5].tx_hash());
+        assert_eq!(query_2[0], *hashes[6]);
+        assert_eq!(query_2[1], *hashes[5]);
 
         let query_3 = history_store.get_tx_hashes_by_address(
             &Address::from_user_friendly_address("NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T")
@@ -1662,9 +1682,9 @@ mod tests {
         );
 
         assert_eq!(query_3.len(), 3);
-        assert_eq!(query_3[0], hist_txs[7].tx_hash());
-        assert_eq!(query_3[1], hist_txs[4].tx_hash());
-        assert_eq!(query_3[2], hist_txs[2].tx_hash());
+        assert_eq!(query_3[0], *hashes[7]);
+        assert_eq!(query_3[1], *hashes[4]);
+        assert_eq!(query_3[2], *hashes[2]);
 
         let query_4 = history_store.get_tx_hashes_by_address(
             &Address::from_user_friendly_address("NQ28 1U7R M38P GN5A 7J8R GE62 8QS7 PK2S 4S31")
@@ -1690,25 +1710,28 @@ mod tests {
         history_store.add_to_history(&mut txn, 0, &hist_txs[..3]);
         history_store.add_to_history(&mut txn, 1, &hist_txs[3..]);
 
+        let hashes: Vec<_> = hist_txs.iter().map(|hist_tx| hist_tx.tx_hash()).collect();
+
         // Verify method works.
         let root = history_store.get_history_tree_root(0, Some(&txn)).unwrap();
 
         let proof = history_store
-            .prove(
-                0,
-                vec![&hist_txs[0].tx_hash(), &hist_txs[2].tx_hash()],
-                None,
-                Some(&txn),
-            )
+            .prove(0, vec![&hashes[0], &hashes[2]], None, Some(&txn))
             .unwrap();
+
+        let proof_hashes: Vec<_> = proof
+            .history
+            .iter()
+            .map(|hist_tx| hist_tx.tx_hash())
+            .collect();
 
         assert_eq!(proof.positions.len(), 2);
         assert_eq!(proof.positions[0], 0);
         assert_eq!(proof.positions[1], 2);
 
-        assert_eq!(proof.history.len(), 2);
-        assert_eq!(proof.history[0].tx_hash(), hist_txs[0].tx_hash());
-        assert_eq!(proof.history[1].tx_hash(), hist_txs[2].tx_hash());
+        assert_eq!(proof_hashes.len(), 2);
+        assert_eq!(proof_hashes[0], hashes[0]);
+        assert_eq!(proof_hashes[1], hashes[2]);
 
         assert!(proof.verify(root).unwrap());
 
@@ -1717,25 +1740,26 @@ mod tests {
         let proof = history_store
             .prove(
                 1,
-                vec![
-                    &hist_txs[3].tx_hash(),
-                    &hist_txs[4].tx_hash(),
-                    &hist_txs[6].tx_hash(),
-                ],
+                vec![&hashes[3], &hashes[4], &hashes[6]],
                 None,
                 Some(&txn),
             )
             .unwrap();
+        let proof_hashes: Vec<_> = proof
+            .history
+            .iter()
+            .map(|hist_tx| hist_tx.tx_hash())
+            .collect();
 
         assert_eq!(proof.positions.len(), 3);
         assert_eq!(proof.positions[0], 0);
         assert_eq!(proof.positions[1], 1);
         assert_eq!(proof.positions[2], 3);
 
-        assert_eq!(proof.history.len(), 3);
-        assert_eq!(proof.history[0].tx_hash(), hist_txs[3].tx_hash());
-        assert_eq!(proof.history[1].tx_hash(), hist_txs[4].tx_hash());
-        assert_eq!(proof.history[2].tx_hash(), hist_txs[6].tx_hash());
+        assert_eq!(proof_hashes.len(), 3);
+        assert_eq!(proof_hashes[0], hashes[3]);
+        assert_eq!(proof_hashes[1], hashes[4]);
+        assert_eq!(proof_hashes[2], hashes[6]);
 
         assert!(proof.verify(root).unwrap());
     }

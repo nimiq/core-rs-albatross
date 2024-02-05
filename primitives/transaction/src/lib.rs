@@ -10,6 +10,7 @@ use std::{
 };
 
 use bitflags::bitflags;
+use historic_transaction::RawTransactionHash;
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_keys::{Address, PublicKey, Signature};
 use nimiq_network_interface::network::Topic;
@@ -183,11 +184,29 @@ impl ExecutedTransaction {
         }
     }
 
-    pub fn hash(&self) -> Blake2bHash {
+    pub fn serialize_content(&self) -> Vec<u8> {
+        let mut result = Vec::new();
+        SerializeContent::serialize_content::<_, Blake2bHash>(self, &mut result).unwrap();
+        result
+    }
+
+    /// Gets the inner transaction hash without the execution result.
+    /// This hash is the only hash the mempool and users know.
+    pub fn raw_tx_hash(&self) -> RawTransactionHash {
+        self.get_raw_transaction().hash::<Blake2bHash>().into()
+    }
+}
+
+impl SerializeContent for ExecutedTransaction {
+    fn serialize_content<W: Write, H>(&self, writer: &mut W) -> io::Result<()> {
+        matches!(self, ExecutedTransaction::Ok(_)).serialize_to_writer(writer)?;
+
         match self {
-            ExecutedTransaction::Ok(txn) => txn.hash(),
-            ExecutedTransaction::Err(txn) => txn.hash(),
+            ExecutedTransaction::Ok(txn) | ExecutedTransaction::Err(txn) => {
+                txn.serialize_to_writer(writer)?;
+            }
         }
+        Ok(())
     }
 }
 
