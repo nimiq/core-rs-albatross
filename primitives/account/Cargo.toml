@@ -38,7 +38,7 @@ nimiq-vrf = { workspace = true }
 
 [dev-dependencies]
 hex = "0.4"
-tempfile = "3.9"
+tempfile = "3.10"
 
 nimiq-genesis-builder = { workspace = true }
 nimiq-test-log = { workspace = true }
