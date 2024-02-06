@@ -408,7 +408,9 @@ impl ClientInner {
             }
             #[cfg(feature = "full-consensus")]
             SyncMode::Full => {
-                blockchain_config.keep_history = false;
+                // TODO this is a temporary fix for the issue of full nodes taking forever pruning the epoch history.
+                // should be set to false when the light history store is implemented.
+                blockchain_config.keep_history = true;
                 let blockchain = match Blockchain::new(
                     environment.clone(),
                     blockchain_config,
