@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{num::NonZeroU8, sync::Arc};
 
 use futures::{future::join_all, StreamExt};
 use libp2p::{
@@ -286,6 +286,7 @@ fn network_config(address: Multiaddr) -> Config {
         autonat_allow_non_global_ips: true,
         only_secure_ws_connections: false,
         allow_loopback_addresses: true,
+        dht_quorum: NonZeroU8::new(1).unwrap(),
     }
 }
 

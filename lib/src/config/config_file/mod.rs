@@ -1,4 +1,6 @@
-use std::{collections::HashMap, fmt::Debug, fs::read_to_string, path::Path, str::FromStr};
+use std::{
+    collections::HashMap, fmt::Debug, fs::read_to_string, num::NonZeroU8, path::Path, str::FromStr,
+};
 
 use log::level_filters::LevelFilter;
 #[cfg(feature = "nimiq-mempool")]
@@ -143,6 +145,8 @@ pub struct NetworkSettings {
     pub autonat_allow_non_global_ips: bool,
     #[serde(default)]
     pub allow_loopback_addresses: bool,
+    #[serde(default)]
+    pub dht_quorum: Option<NonZeroU8>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

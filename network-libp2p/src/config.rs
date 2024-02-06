@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{num::NonZeroU8, time::Duration};
 
 use libp2p::{gossipsub, identity::Keypair, kad, Multiaddr};
 use nimiq_hash::Blake2bHash;
@@ -31,6 +31,7 @@ pub struct Config {
     pub autonat_allow_non_global_ips: bool,
     pub only_secure_ws_connections: bool,
     pub allow_loopback_addresses: bool,
+    pub dht_quorum: NonZeroU8,
 }
 
 impl Config {
@@ -46,6 +47,7 @@ impl Config {
         autonat_allow_non_global_ips: bool,
         only_secure_ws_connections: bool,
         allow_loopback_addresses: bool,
+        dht_quorum: NonZeroU8,
     ) -> Self {
         // Hardcoding the minimum number of peers in mesh network before adding more
         // TODO: Maybe change this to a mesh limits configuration argument of this function
@@ -94,6 +96,7 @@ impl Config {
             autonat_allow_non_global_ips,
             only_secure_ws_connections,
             allow_loopback_addresses,
+            dht_quorum,
         }
     }
 }

@@ -4,6 +4,7 @@ use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::{
     fmt::Debug,
+    num::NonZeroU8,
     path::{Path, PathBuf},
     string::ToString,
 };
@@ -135,6 +136,10 @@ pub struct NetworkConfig {
     /// Optional bool to allow connections to loopback addresses
     #[builder(default)]
     pub allow_loopback_addresses: bool,
+
+    /// Optional quorum value for the network DHT
+    #[builder(default)]
+    pub dht_quorum: Option<NonZeroU8>,
 }
 
 /// Configuration for setting TLS for secure WebSocket
@@ -783,6 +788,7 @@ impl ClientConfigBuilder {
             autonat_allow_non_global_ips: config_file.network.autonat_allow_non_global_ips,
             only_secure_ws_connections: false,
             allow_loopback_addresses: config_file.network.allow_loopback_addresses,
+            dht_quorum: config_file.network.dht_quorum,
         });
 
         // Configure consensus

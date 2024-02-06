@@ -1,4 +1,4 @@
-use std::{fs, sync::Arc};
+use std::{fs, num::NonZeroU8, sync::Arc};
 
 use nimiq_block::Block;
 #[cfg(feature = "full-consensus")]
@@ -304,6 +304,10 @@ impl ClientInner {
             config.network.autonat_allow_non_global_ips,
             config.network.only_secure_ws_connections,
             config.network.allow_loopback_addresses,
+            config
+                .network
+                .dht_quorum
+                .unwrap_or(NonZeroU8::new(1).unwrap()),
         );
 
         log::debug!(

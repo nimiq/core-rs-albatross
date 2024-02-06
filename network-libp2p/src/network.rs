@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     future::Future,
+    num::NonZeroU8,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -297,6 +298,8 @@ struct TaskState {
     response_channels: HashMap<InboundRequestId, ResponseChannel<Option<OutgoingResponse>>>,
     /// Senders for replying to requests per `RequestType` for request-response
     receive_requests: HashMap<RequestType, mpsc::Sender<(Bytes, InboundRequestId, PeerId)>>,
+    /// DHT quorum value
+    dht_quorum: u8,
 }
 
 #[derive(Clone, Debug)]
@@ -335,7 +338,6 @@ pub struct Network {
 }
 
 impl Network {
-    const DHT_QUORUM: u8 = 3;
     /// Create a new libp2p network instance.
     ///
     /// # Arguments
@@ -356,6 +358,7 @@ impl Network {
             ip_colocation_factor_threshold: 20.0,
             ..Default::default()
         };
+        let dht_quorum = config.dht_quorum;
         // Only force the server mode if we are doing a memory transport.
         // Otherwise expect the regular flow: DHT will get in server mode once a confirmed address is obtained using Autonat.
         // In memory transport we don't have a mechanism that sets the DHT in server mode such as confirming an address
@@ -396,6 +399,7 @@ impl Network {
             update_scores,
             contacts,
             force_dht_server_mode,
+            dht_quorum,
             #[cfg(feature = "metrics")]
             metrics.clone(),
         )));
@@ -544,10 +548,12 @@ impl Network {
         mut update_scores: Interval,
         contacts: Arc<RwLock<PeerContactBook>>,
         force_dht_server_mode: bool,
+        dht_quorum: NonZeroU8,
         #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
     ) {
         let mut task_state = TaskState {
             dht_server_mode: force_dht_server_mode,
+            dht_quorum: dht_quorum.into(),
             ..Default::default()
         };
 
@@ -616,10 +622,12 @@ impl Network {
         mut update_scores: Interval,
         contacts: Arc<RwLock<PeerContactBook>>,
         force_dht_server_mode: bool,
+        dht_quorum: NonZeroU8,
         #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
     ) {
         let mut task_state = TaskState {
             dht_server_mode: force_dht_server_mode,
+            dht_quorum: dht_quorum.into(),
             ..Default::default()
         };
 
@@ -851,6 +859,16 @@ impl Network {
                                         if let Some(dht_record) =
                                             Self::verify_record(&record.record)
                                         {
+                                            if step.count.get() == 1_usize {
+                                                // This is our first record
+                                                let results = DhtResults {
+                                                    count: 0, // Will be increased in the next step
+                                                    best_value: dht_record.clone(),
+                                                    outdated_values: vec![],
+                                                };
+                                                state.dht_get_results.insert(id, results);
+                                            }
+                                            // We should always have a stored result
                                             if let Some(results) =
                                                 state.dht_get_results.get_mut(&id)
                                             {
@@ -865,7 +883,7 @@ impl Network {
                                                     results.outdated_values.push(dht_record)
                                                 }
                                                 // Check if we already have a quorum
-                                                if results.count == Self::DHT_QUORUM {
+                                                if results.count == state.dht_quorum {
                                                     swarm
                                                         .behaviour_mut()
                                                         .dht
@@ -905,14 +923,6 @@ impl Network {
                                                         );
                                                     }
                                                 }
-                                            } else if step.count.get() == 1_usize {
-                                                // This is our first record
-                                                let results = DhtResults {
-                                                    count: 1,
-                                                    best_value: dht_record,
-                                                    outdated_values: vec![],
-                                                };
-                                                state.dht_get_results.insert(id, results);
                                             } else {
                                                 log::error!(query_id = ?id, "DHT inconsistent state");
                                             }

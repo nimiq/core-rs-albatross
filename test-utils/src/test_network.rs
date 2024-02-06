@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{num::NonZeroU8, sync::Arc};
 
 use async_trait::async_trait;
 use nimiq_hash::Blake2bHash;
@@ -74,6 +74,7 @@ impl TestNetwork for Network {
             true,
             false,
             true,
+            NonZeroU8::new(1).unwrap(),
         );
         let network = Arc::new(
             Network::new(
