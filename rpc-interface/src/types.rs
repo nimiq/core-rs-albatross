@@ -791,6 +791,7 @@ pub struct Staker {
     pub delegation: Option<Address>,
     pub inactive_balance: Coin,
     pub inactive_from: Option<u32>,
+    pub retired_balance: Coin,
 }
 
 impl Staker {
@@ -801,6 +802,7 @@ impl Staker {
             delegation: staker.delegation.clone(),
             inactive_balance: staker.inactive_balance,
             inactive_from: staker.inactive_from,
+            retired_balance: staker.retired_balance,
         }
     }
 }

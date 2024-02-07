@@ -143,16 +143,21 @@ pub struct PlainStaker {
     /// (or if there was no prior delegation). For inactive balance to be released, the maximum of
     /// the inactive and the validator's jailed periods must have passed.
     inactive_balance: u64,
-    /// The block number from which the staker's `inactive_balance` becomes inactive.
-    /// Stake can only effectively become inactive on the next election block. Thus, this may contain a
+    /// The block number at which the inactive balance was last inactivated.
+    /// If the stake is currently delegated to a jailed validator, the maximum of its jail release
+    /// and the inactive release is taken. Re-delegation requires the whole balance of the staker to be inactive.
+    /// The stake can only effectively become inactive on the next election block. Thus, this may contain a
     /// future block height.
-    /// Re-delegation requires the whole balance of the staker to be inactive and released, as well as
-    /// its delegated validator to not currently be jailed.
     inactive_from: Option<u32>,
-    /// The block number from which the staker's `inactive_balance` gets released, e.g. for unstaking.
+    /// The block number from which the staker's `inactive_balance` gets released, e.g. for retirement.
     /// Re-delegation requires the whole balance of the staker to be inactive and released, as well as
     /// its delegated validator to not currently be jailed.
     inactive_release: Option<u32>,
+    /// The staker's retired balance. Retired balance can only be withdrawn, thus retiring is irreversible.
+    /// Only released inactive balance can be retired, so the maximum of the inactive and the validator's jailed
+    /// periods must have passed.
+    /// Once retired, the funds are immediately available to be withdrawn (removed).
+    retired_balance: u64,
 }
 
 impl PlainStaker {
@@ -168,6 +173,7 @@ impl PlainStaker {
             inactive_release: staker
                 .inactive_from
                 .map(Policy::block_after_reporting_window),
+            retired_balance: staker.retired_balance.into(),
         }
     }
 }
