@@ -6,7 +6,11 @@ use nimiq_hash::Blake2bHash;
 use nimiq_mmr::mmr::PeaksMerkleMountainRange;
 use nimiq_transaction::historic_transaction::HistoricTransaction;
 
-use super::{interface::HistoryInterface, mmr_store::LightMMRStore, validity_store::ValidityStore};
+use super::{
+    interface::HistoryInterface,
+    mmr_store::LightMMRStore,
+    validity_store::{self, ValidityStore},
+};
 
 /// The LightHistoryStore is a simplified version of the history store.
 /// Internally it uses a Peaks-only MMR
@@ -18,18 +22,19 @@ pub struct LightHistoryStore {
     /// A database of all history trees indexed by their epoch number.
     hist_tree_table: TableProxy,
     /// The container of all the validity window transaction hashes.
-    _validity_store: ValidityStore,
+    validity_store: ValidityStore,
 }
 
 impl LightHistoryStore {
     /// Creates a new LightHistoryStore.
     pub fn _new(db: DatabaseProxy) -> Self {
         let hist_tree_table = db.open_table("LightHistoryTrees".to_string());
+        let validity_store = ValidityStore::new(db.clone());
 
         LightHistoryStore {
             db,
             hist_tree_table,
-            _validity_store: ValidityStore {},
+            validity_store,
         }
     }
 }
