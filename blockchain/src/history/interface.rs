@@ -1,5 +1,5 @@
 use nimiq_block::Block;
-use nimiq_database::TransactionProxy;
+use nimiq_database::{TransactionProxy, WriteTransactionProxy};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_mmr::{
@@ -9,9 +9,7 @@ use nimiq_mmr::{
 use nimiq_transaction::{
     historic_transaction::HistoricTransaction, history_proof::HistoryTreeProof, EquivocationLocator,
 };
-use nimiq_trie::WriteTransactionProxy;
 
-use super::ordered_hash::OrderedHash;
 use crate::HistoryTreeChunk;
 
 /// Defines several methods to interact with a history store.
@@ -58,12 +56,6 @@ pub trait HistoryInterface {
         epoch_number: u32,
         hist_txs: &[HistoricTransaction],
     ) -> Option<(Blake2bHash, u64)>;
-
-    fn remove_txns_from_history(
-        &self,
-        txn: &mut WriteTransactionProxy,
-        hashes: Vec<(usize, Blake2bHash)>,
-    ) -> u64;
 
     /// Removes a number of historic transactions from an existing history tree. It returns the root
     /// of the resulting tree and the total size of of the transactions removed.
@@ -152,16 +144,6 @@ pub trait HistoryInterface {
         txn_option: Option<&TransactionProxy>,
     ) -> Option<HistoryTreeProof>;
 
-    /// Returns a proof for all the historic transactions at the given positions (leaf indexes). The
-    /// proof also includes the historic transactions.
-    fn prove_with_position(
-        &self,
-        epoch_number: u32,
-        positions: Vec<usize>,
-        verifier_state: Option<usize>,
-        txn_option: Option<&TransactionProxy>,
-    ) -> Option<HistoryTreeProof>;
-
     /// Returns the `chunk_index`th chunk of size `chunk_size` for a given epoch.
     /// The return value consists of a vector of all the historic transactions in that chunk
     /// and a proof for these in the MMR.
@@ -195,38 +177,6 @@ pub trait HistoryInterface {
         locator: EquivocationLocator,
         txn_option: Option<&TransactionProxy>,
     ) -> bool;
-
-    /// Inserts a historic transaction into the History Store's transaction databases.
-    /// Returns the size of the serialized transaction
-    fn put_historic_tx(
-        &self,
-        txn: &mut WriteTransactionProxy,
-        leaf_hash: &Blake2bHash,
-        leaf_index: u32,
-        hist_tx: &HistoricTransaction,
-    ) -> usize;
-
-    /// Returns a vector containing all leaf hashes and indexes corresponding to the given
-    /// transaction hash.
-    fn get_leaves_by_tx_hash(
-        &self,
-        tx_hash: &Blake2bHash,
-        txn_option: Option<&TransactionProxy>,
-    ) -> Vec<OrderedHash>;
-
-    /// Returns the range of leaf indexes corresponding to the given block number.
-    fn get_indexes_for_block(
-        &self,
-        block_number: u32,
-        txn_option: Option<&TransactionProxy>,
-    ) -> (u32, u32);
-
-    /// Returns the index of the last transaction (or reward inherent) associated to the given address.
-    fn get_last_tx_index_for_address(
-        &self,
-        address: &Address,
-        txn_option: Option<&TransactionProxy>,
-    ) -> u32;
 
     /// Proves the number of leaves in the history store for the given block.
     fn prove_num_leaves(

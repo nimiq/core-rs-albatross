@@ -1,7 +1,7 @@
 use std::fmt::Write;
 
 use indicatif::{HumanDuration, ProgressBar, ProgressState, ProgressStyle};
-use nimiq_blockchain::HistoryStore;
+use nimiq_blockchain::{interface::HistoryInterface, HistoryStore};
 use nimiq_database::{
     traits::{Database, WriteTransaction},
     DatabaseProxy,

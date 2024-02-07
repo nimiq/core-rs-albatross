@@ -23,7 +23,7 @@ use nimiq_trie::WriteTransactionProxy as TrieWriteTransactionProxy;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 use tokio::sync::broadcast::Sender as BroadcastSender;
 
-use crate::Blockchain;
+use crate::{interface::HistoryInterface,Blockchain};
 
 fn send_vec(log_notifier: &BroadcastSender<BlockLog>, logs: Vec<BlockLog>) {
     for log in logs {

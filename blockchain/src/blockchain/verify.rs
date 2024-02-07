@@ -8,7 +8,7 @@ use nimiq_database::{
 use nimiq_hash::Hash;
 use nimiq_primitives::policy::Policy;
 
-use crate::{BlockProducer, Blockchain};
+use crate::{interface::HistoryInterface,BlockProducer, Blockchain};
 
 /// Implements methods to verify the validity of blocks.
 impl Blockchain {

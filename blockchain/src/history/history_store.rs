@@ -28,6 +28,7 @@ use nimiq_transaction::{
     EquivocationLocator,
 };
 
+use super::interface::HistoryInterface;
 use crate::history::{mmr_store::MMRStore, ordered_hash::OrderedHash, HistoryTreeChunk};
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
@@ -87,58 +88,13 @@ impl HistoryStore {
         }
     }
 
-    pub fn clear(&self, txn: &mut WriteTransactionProxy) {
-        txn.clear_database(&self.hist_tree_table);
-        txn.clear_database(&self.hist_tx_table);
-        txn.clear_database(&self.tx_hash_table);
-        txn.clear_database(&self.last_leaf_table);
-        txn.clear_database(&self.address_table);
-    }
-
-    /// Returns the length (i.e. the number of leaves) of the History Tree at a given block height.
-    /// Note that this returns the number of leaves for only the epoch of the given block height,
-    /// this is because we have separate History Trees for separate epochs.
-    pub fn length_at(&self, block_number: u32, txn_option: Option<&TransactionProxy>) -> u32 {
-        let read_txn: TransactionProxy;
-        let txn = match txn_option {
-            Some(txn) => txn,
-            None => {
-                read_txn = self.db.read_transaction();
-                &read_txn
-            }
-        };
-
-        let mut cursor = txn.cursor(&self.last_leaf_table);
-
-        // Seek to the last leaf index of the block, if it exists.
-        match cursor.seek_range_key::<u32, u32>(&block_number) {
-            // If it exists, we simply get the last leaf index for the block. We increment by 1
-            // because the leaf index is 0-based and we want the number of leaves.
-            Some((n, i)) if n == block_number => i + 1,
-            // Otherwise, seek to the previous block, if it exists.
-            _ => match cursor.prev::<u32, u32>() {
-                // If it exists, we also need to check if the previous block is in the same epoch.
-                Some((n, i)) => {
-                    if Policy::epoch_at(n) == Policy::epoch_at(block_number) {
-                        i + 1
-                    } else {
-                        0
-                    }
-                }
-                // If it doesn't exist, then the HistoryStore is empty at this block height.
-                None => 0,
-            },
-        }
-    }
-
-    /// Returns the total length of the History Tree at a given epoch number.
-    /// The size of the history length is useful for getting a proof for a previous state
-    /// of the history tree.
-    pub fn total_len_at_epoch(
+    /// Gets an historic transaction by its hash. Note that this hash is the leaf hash (see MMRHash)
+    /// of the transaction, not a simple Blake2b hash of the transaction.
+    fn get_historic_tx(
         &self,
-        epoch_number: u32,
+        leaf_hash: &Blake2bHash,
         txn_option: Option<&TransactionProxy>,
-    ) -> usize {
+    ) -> Option<HistoricTransaction> {
         let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -147,56 +103,8 @@ impl HistoryStore {
                 &read_txn
             }
         };
-        // Get history tree for given epoch.
-        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
-            &self.hist_tree_table,
-            txn,
-            epoch_number,
-        ));
 
-        // Get the Merkle tree length
-        tree.len()
-    }
-
-    /// Add a list of historic transactions to an existing history tree. It returns the root of the
-    /// resulting tree and the total size of the transactions added.
-    /// This function assumes that:
-    ///     1. The transactions are pushed in increasing block number order.
-    ///     2. All the blocks are consecutive.
-    ///     3. We only push transactions for one epoch at a time.
-    pub fn add_to_history(
-        &self,
-        txn: &mut WriteTransactionProxy,
-        epoch_number: u32,
-        hist_txs: &[HistoricTransaction],
-    ) -> Option<(Blake2bHash, u64)> {
-        // Get the history tree.
-        let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
-            &self.hist_tree_table,
-            txn,
-            epoch_number,
-        ));
-
-        // Append the historic transactions to the history tree and keep the respective leaf indexes.
-        let mut leaf_idx = vec![];
-
-        for tx in hist_txs {
-            let i = tree.push(tx).ok()?;
-            leaf_idx.push(i as u32);
-        }
-
-        let root = tree.get_root().ok()?;
-        let mut txns_size = 0u64;
-
-        // Add the historic transactions into the respective database.
-        // We need to do this separately due to the borrowing rules of Rust.
-        for (tx, i) in hist_txs.iter().zip(leaf_idx.iter()) {
-            // The prefix is one because it is a leaf.
-            txns_size += self.put_historic_tx(txn, &tx.hash(1), *i, tx) as u64;
-        }
-
-        // Return the history root.
-        Some((root, txns_size))
+        txn.get(&self.hist_tx_table, leaf_hash)
     }
 
     fn remove_txns_from_history(
@@ -778,150 +686,6 @@ impl HistoryStore {
         })
     }
 
-    /// Returns the `chunk_index`th chunk of size `chunk_size` for a given epoch.
-    /// The return value consists of a vector of all the historic transactions in that chunk
-    /// and a proof for these in the MMR.
-    /// The `verifier_block_number` is the block the chunk proof should be verified against.
-    /// That means that no leaf beyond this block is returned and that the proof should be
-    /// verified with the history root from this block.
-    pub fn prove_chunk(
-        &self,
-        epoch_number: u32,
-        verifier_block_number: u32,
-        chunk_size: usize,
-        chunk_index: usize,
-        txn_option: Option<&TransactionProxy>,
-    ) -> Option<HistoryTreeChunk> {
-        let read_txn: TransactionProxy;
-        let txn = match txn_option {
-            Some(txn) => txn,
-            None => {
-                read_txn = self.db.read_transaction();
-                &read_txn
-            }
-        };
-
-        // Get history tree for given epoch.
-        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
-            &self.hist_tree_table,
-            txn,
-            epoch_number,
-        ));
-
-        // Calculate number of nodes in the verifier's history tree.
-        let leaf_count = self.length_at(verifier_block_number, Some(txn)) as usize;
-        let number_of_nodes = leaf_number_to_index(leaf_count);
-
-        // Calculate chunk boundaries.
-        let start = cmp::min(chunk_size * chunk_index, leaf_count);
-        // Do not go beyond the verifier's block.
-        let end = cmp::min(start + chunk_size, leaf_count);
-
-        // TODO: Setting `assume_previous` to false allows the proofs to be verified independently.
-        //  This, however, increases the size of the proof. We might change this in the future.
-        let proof = tree
-            .prove_range(start..end, Some(number_of_nodes), false)
-            .ok()?;
-
-        // Get each historic transaction from the tree.
-        let mut hist_txs = vec![];
-
-        for i in start..end {
-            let leaf_hash = tree.get_leaf(i).unwrap();
-            hist_txs.push(self.get_historic_tx(&leaf_hash, Some(txn)).unwrap());
-        }
-
-        Some(HistoryTreeChunk {
-            proof,
-            history: hist_txs,
-        })
-    }
-
-    /// Creates a new history tree from chunks and returns the root hash.
-    pub fn tree_from_chunks(
-        &self,
-        epoch_number: u32,
-        chunks: Vec<(Vec<HistoricTransaction>, RangeProof<Blake2bHash>)>,
-        txn: &mut WriteTransactionProxy,
-    ) -> Result<Blake2bHash, MMRError> {
-        // Get partial history tree for given epoch.
-        let mut tree = PartialMerkleMountainRange::new(MMRStore::with_write_transaction(
-            &self.hist_tree_table,
-            txn,
-            epoch_number,
-        ));
-
-        // Push all proofs into the history tree and remember all leaves.
-        let mut all_leaves = Vec::with_capacity(
-            chunks.len() * chunks.first().map(|(leaves, _)| leaves.len()).unwrap_or(0),
-        );
-        for (mut leaves, proof) in chunks {
-            tree.push_proof(proof, &leaves)?;
-            all_leaves.append(&mut leaves);
-        }
-
-        // Calculate the root once the tree is complete.
-        if !tree.is_finished() {
-            return Err(MMRError::IncompleteProof);
-        }
-
-        let root = tree.get_root()?;
-
-        // Then add all transactions to the database as the tree is finished.
-        for (i, leaf) in all_leaves.iter().enumerate() {
-            // The prefix is one because it is a leaf.
-            self.put_historic_tx(txn, &leaf.hash(1), i as u32, leaf);
-        }
-
-        Ok(root)
-    }
-
-    /// Returns the block number of the last leaf in the history store
-    pub fn get_last_leaf_block_number(&self, txn_option: Option<&TransactionProxy>) -> Option<u32> {
-        let read_txn: TransactionProxy;
-        let txn = match txn_option {
-            Some(txn) => txn,
-            None => {
-                read_txn = self.db.read_transaction();
-                &read_txn
-            }
-        };
-
-        // Seek to the last leaf index of the block, if it exists.
-        let mut cursor = txn.cursor(&self.last_leaf_table);
-        cursor.last::<u32, u32>().map(|(key, _)| key)
-    }
-
-    /// Check whether an equivocation proof at a given equivocation locator has
-    /// already been included.
-    pub fn has_equivocation_proof(
-        &self,
-        locator: EquivocationLocator,
-        txn_option: Option<&TransactionProxy>,
-    ) -> bool {
-        let hash = HistoricTransactionData::Equivocation(EquivocationEvent { locator }).hash();
-        !self.get_hist_tx_by_hash(&hash, txn_option).is_empty()
-    }
-
-    /// Gets an historic transaction by its hash. Note that this hash is the leaf hash (see MMRHash)
-    /// of the transaction, not a simple Blake2b hash of the transaction.
-    fn get_historic_tx(
-        &self,
-        leaf_hash: &Blake2bHash,
-        txn_option: Option<&TransactionProxy>,
-    ) -> Option<HistoricTransaction> {
-        let read_txn: TransactionProxy;
-        let txn = match txn_option {
-            Some(txn) => txn,
-            None => {
-                read_txn = self.db.read_transaction();
-                &read_txn
-            }
-        };
-
-        txn.get(&self.hist_tx_table, leaf_hash)
-    }
-
     /// Inserts a historic transaction into the History Store's transaction databases.
     /// Returns the size of the serialized transaction
     fn put_historic_tx(
@@ -1040,7 +804,6 @@ impl HistoryStore {
             .map(|(_, leaf_hash)| leaf_hash)
             .collect()
     }
-
     /// Returns the range of leaf indexes corresponding to the given block number.
     fn get_indexes_for_block(
         &self,
@@ -1118,8 +881,692 @@ impl HistoryStore {
             Some(v) => v.index,
         }
     }
+}
 
-    pub fn prove_num_leaves(
+impl HistoryInterface for HistoryStore {
+    fn clear(&self, txn: &mut WriteTransactionProxy) {
+        txn.clear_database(&self.hist_tree_table);
+        txn.clear_database(&self.hist_tx_table);
+        txn.clear_database(&self.tx_hash_table);
+        txn.clear_database(&self.last_leaf_table);
+        txn.clear_database(&self.address_table);
+    }
+
+    /// Returns the length (i.e. the number of leaves) of the History Tree at a given block height.
+    /// Note that this returns the number of leaves for only the epoch of the given block height,
+    /// this is because we have separate History Trees for separate epochs.
+    fn length_at(&self, block_number: u32, txn_option: Option<&TransactionProxy>) -> u32 {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        let mut cursor = txn.cursor(&self.last_leaf_table);
+
+        // Seek to the last leaf index of the block, if it exists.
+        match cursor.seek_range_key::<u32, u32>(&block_number) {
+            // If it exists, we simply get the last leaf index for the block. We increment by 1
+            // because the leaf index is 0-based and we want the number of leaves.
+            Some((n, i)) if n == block_number => i + 1,
+            // Otherwise, seek to the previous block, if it exists.
+            _ => match cursor.prev::<u32, u32>() {
+                // If it exists, we also need to check if the previous block is in the same epoch.
+                Some((n, i)) => {
+                    if Policy::epoch_at(n) == Policy::epoch_at(block_number) {
+                        i + 1
+                    } else {
+                        0
+                    }
+                }
+                // If it doesn't exist, then the HistoryStore is empty at this block height.
+                None => 0,
+            },
+        }
+    }
+
+    /// Returns the total length of the History Tree at a given epoch number.
+    /// The size of the history length is useful for getting a proof for a previous state
+    /// of the history tree.
+    fn total_len_at_epoch(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&TransactionProxy>,
+    ) -> usize {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+        // Get history tree for given epoch.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_table,
+            txn,
+            epoch_number,
+        ));
+
+        // Get the Merkle tree length
+        tree.len()
+    }
+
+    /// Add a list of historic transactions to an existing history tree. It returns the root of the
+    /// resulting tree and the total size of the transactions added.
+    /// This function assumes that:
+    ///     1. The transactions are pushed in increasing block number order.
+    ///     2. All the blocks are consecutive.
+    ///     3. We only push transactions for one epoch at a time.
+    fn add_to_history(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        epoch_number: u32,
+        hist_txs: &[HistoricTransaction],
+    ) -> Option<(Blake2bHash, u64)> {
+        // Get the history tree.
+        let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
+            &self.hist_tree_table,
+            txn,
+            epoch_number,
+        ));
+
+        // Append the historic transactions to the history tree and keep the respective leaf indexes.
+        let mut leaf_idx = vec![];
+
+        for tx in hist_txs {
+            let i = tree.push(tx).ok()?;
+            leaf_idx.push(i as u32);
+        }
+
+        let root = tree.get_root().ok()?;
+        let mut txns_size = 0u64;
+
+        // Add the historic transactions into the respective database.
+        // We need to do this separately due to the borrowing rules of Rust.
+        for (tx, i) in hist_txs.iter().zip(leaf_idx.iter()) {
+            // The prefix is one because it is a leaf.
+            txns_size += self.put_historic_tx(txn, &tx.hash(1), *i, tx) as u64;
+        }
+
+        // Return the history root.
+        Some((root, txns_size))
+    }
+
+    /// Removes a number of historic transactions from an existing history tree. It returns the root
+    /// of the resulting tree and the total size of of the transactions removed.
+    fn remove_partial_history(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        epoch_number: u32,
+        num_hist_txs: usize,
+    ) -> Option<(Blake2bHash, u64)> {
+        // Get the history tree.
+        let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
+            &self.hist_tree_table,
+            txn,
+            epoch_number,
+        ));
+
+        // Get the history root. We need to get it here because of Rust's borrowing rules.
+        let root = tree.get_root().ok()?;
+
+        // Remove all leaves from the history tree and remember the respective hashes and indexes.
+        let mut hashes = Vec::with_capacity(num_hist_txs);
+
+        let num_leaves = tree.num_leaves();
+
+        for i in 0..cmp::min(num_hist_txs, num_leaves) {
+            let leaf_hash = tree.get_leaf(num_leaves - i - 1).unwrap();
+            tree.remove_back().ok()?;
+            hashes.push((num_leaves - i - 1, leaf_hash));
+        }
+
+        // Remove each of the historic transactions in the history tree from the extended
+        // transaction database.
+        let txns_size = self.remove_txns_from_history(txn, hashes);
+
+        // Return the history root.
+        Some((root, txns_size))
+    }
+
+    /// Removes an existing history tree and all the historic transactions that were part of it.
+    /// Returns None if there's no history tree corresponding to the given epoch number.
+    fn remove_history(&self, txn: &mut WriteTransactionProxy, epoch_number: u32) -> Option<()> {
+        // Get the history tree.
+        let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
+            &self.hist_tree_table,
+            txn,
+            epoch_number,
+        ));
+
+        // Remove all leaves from the history tree and remember the respective hashes.
+        let mut hashes = Vec::with_capacity(tree.num_leaves());
+
+        for i in (0..tree.num_leaves()).rev() {
+            let leaf_hash = tree.get_leaf(i).unwrap();
+            tree.remove_back().ok()?;
+            hashes.push((i, leaf_hash));
+        }
+
+        self.remove_txns_from_history(txn, hashes);
+
+        Some(())
+    }
+
+    /// Gets the history tree root for a given epoch.
+    fn get_history_tree_root(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Option<Blake2bHash> {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        // Get the history tree.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_table,
+            txn,
+            epoch_number,
+        ));
+
+        // Return the history root.
+        tree.get_root().ok()
+    }
+
+    /// Calculates the history tree root from a vector of historic transactions. It doesn't use the
+    /// database, it is just used to check the correctness of the history root when syncing.
+    fn root_from_hist_txs(hist_txs: &[HistoricTransaction]) -> Option<Blake2bHash> {
+        // Create a new history tree.
+        let mut tree = MerkleMountainRange::new(MemoryStore::new());
+
+        // Append the historic transactions to the history tree.
+        for tx in hist_txs {
+            tree.push(tx).ok()?;
+        }
+
+        // Return the history root.
+        tree.get_root().ok()
+    }
+
+    /// Gets an historic transaction given its transaction hash.
+    fn get_hist_tx_by_hash(
+        &self,
+        tx_hash: &Blake2bHash,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Vec<HistoricTransaction> {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        // Get leaf hash(es).
+        let leaves = self.get_leaves_by_tx_hash(tx_hash, Some(txn));
+
+        // Get historic transactions.
+        let mut hist_txs = vec![];
+
+        for leaf in leaves {
+            hist_txs.push(self.get_historic_tx(&leaf.hash, Some(txn)).unwrap());
+        }
+
+        hist_txs
+    }
+
+    /// Gets all historic transactions for a given block number.
+    /// This method returns the transactions in the same order that they appear in the block.
+    fn get_block_transactions(
+        &self,
+        block_number: u32,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Vec<HistoricTransaction> {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        // Get the history tree.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_table,
+            txn,
+            Policy::epoch_at(block_number),
+        ));
+
+        // Get the range of leaf indexes at this height.
+        let (start, end) = self.get_indexes_for_block(block_number, Some(txn));
+
+        // Get each historic transaction.
+        let mut hist_txs = vec![];
+
+        for i in start..end {
+            let leaf_hash = tree.get_leaf(i as usize).unwrap();
+            let hist_tx = self.get_historic_tx(&leaf_hash, Some(txn)).unwrap();
+            hist_txs.push(hist_tx);
+        }
+
+        hist_txs
+    }
+
+    /// Gets all historic transactions for a given epoch.
+    fn get_epoch_transactions(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Vec<HistoricTransaction> {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        // Get history tree for given epoch.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_table,
+            txn,
+            epoch_number,
+        ));
+
+        // Get each historic transaction from the tree.
+        let mut hist_txs = vec![];
+
+        for i in 0..tree.num_leaves() {
+            let leaf_hash = tree.get_leaf(i).unwrap();
+            hist_txs.push(self.get_historic_tx(&leaf_hash, Some(txn)).unwrap());
+        }
+
+        hist_txs
+    }
+
+    /// Returns the number of historic transactions for a given epoch.
+    fn num_epoch_transactions(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&TransactionProxy>,
+    ) -> usize {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        // Get history tree for given epoch.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_table,
+            txn,
+            epoch_number,
+        ));
+
+        tree.num_leaves()
+    }
+
+    /// Gets all finalized historic transactions for a given epoch.
+    fn get_final_epoch_transactions(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Vec<HistoricTransaction> {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        // Get history tree for given epoch.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_table,
+            txn,
+            epoch_number,
+        ));
+
+        // Return early if there are no leaves in the HistoryTree for the given epoch.
+        let num_leaves = tree.num_leaves();
+        if num_leaves == 0 {
+            return vec![];
+        }
+
+        // Find the number of the last macro stored for the given epoch.
+        let last_leaf = tree.get_leaf(num_leaves - 1).unwrap();
+        let last_tx = self.get_historic_tx(&last_leaf, Some(txn)).unwrap();
+        let last_macro_block = Policy::last_macro_block(last_tx.block_number);
+
+        // Count the historic transactions up to the last macro block.
+        let mut hist_txs = Vec::new();
+
+        for i in 0..tree.num_leaves() {
+            let leaf_hash = tree.get_leaf(i).unwrap();
+            let hist_tx = self.get_historic_tx(&leaf_hash, Some(txn)).unwrap();
+            if hist_tx.block_number > last_macro_block {
+                break;
+            }
+            hist_txs.push(hist_tx);
+        }
+
+        hist_txs
+    }
+
+    /// Gets the number of all finalized historic transactions for a given epoch.
+    /// This is basically an optimization of calling `get_final_epoch_transactions(..).len()`
+    /// since the latter is very expensive
+    fn get_number_final_epoch_transactions(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&TransactionProxy>,
+    ) -> usize {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        // Get history tree for given epoch.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_table,
+            txn,
+            epoch_number,
+        ));
+
+        // Return early if there are no leaves in the HistoryTree for the given epoch.
+        let num_leaves = tree.num_leaves();
+        if num_leaves == 0 {
+            return 0;
+        }
+
+        // Find the number of the last macro stored for the given epoch.
+        let last_leaf = tree.get_leaf(num_leaves - 1).unwrap();
+        let last_tx = self.get_historic_tx(&last_leaf, Some(txn)).unwrap();
+        let last_macro_block = Policy::last_macro_block(last_tx.block_number);
+
+        // Iterate backwards and check when we find a transaction of a block that is before the last macro block
+        let mut count = tree.num_leaves();
+        for i in (0..tree.num_leaves()).rev() {
+            let leaf_hash = tree.get_leaf(i).unwrap();
+            let hist_tx = self.get_historic_tx(&leaf_hash, Some(txn)).unwrap();
+            if hist_tx.block_number > last_macro_block {
+                count -= 1;
+            } else {
+                break;
+            }
+        }
+
+        count
+    }
+
+    /// Gets all non-finalized historic transactions for a given epoch.
+    fn get_nonfinal_epoch_transactions(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Vec<HistoricTransaction> {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        // Get history tree for given epoch.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_table,
+            txn,
+            epoch_number,
+        ));
+
+        // Return early if there are no leaves in the HistoryTree for the given epoch.
+        let num_leaves = tree.num_leaves();
+        if num_leaves == 0 {
+            return vec![];
+        }
+
+        // Find the block number of the last macro stored for the given epoch.
+        let last_leaf = tree.get_leaf(num_leaves - 1).unwrap();
+        let last_tx = self.get_historic_tx(&last_leaf, Some(txn)).unwrap();
+        let last_macro_block = Policy::last_macro_block(last_tx.block_number);
+
+        // Get each historic transaction after the last macro block from the tree.
+        let mut hist_txs = VecDeque::new();
+
+        for i in (num_leaves - 1)..0 {
+            let leaf_hash = tree.get_leaf(i).unwrap();
+            let hist_tx = self.get_historic_tx(&leaf_hash, Some(txn)).unwrap();
+            if hist_tx.block_number <= last_macro_block {
+                break;
+            }
+            hist_txs.push_front(hist_tx);
+        }
+
+        hist_txs.into()
+    }
+
+    /// Returns a vector containing all transaction (and reward inherents) hashes corresponding to the given
+    /// address. It fetches the transactions from most recent to least recent up to the maximum
+    /// number given.
+    fn get_tx_hashes_by_address(
+        &self,
+        address: &Address,
+        max: u16,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Vec<Blake2bHash> {
+        if max == 0 {
+            return vec![];
+        }
+
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        let mut tx_hashes = vec![];
+
+        // Seek to the first transaction hash at the given address. If there's none, stop here.
+        let mut cursor = txn.cursor(&self.address_table);
+
+        if cursor.seek_key::<Address, OrderedHash>(address).is_none() {
+            return tx_hashes;
+        }
+
+        // Then go to the last transaction hash at the given address and add it to the transaction
+        // hashes list.
+        tx_hashes.push(cursor.last_duplicate::<OrderedHash>().expect("This shouldn't panic since we already verified before that there is at least one transactions at this address!").hash);
+
+        while tx_hashes.len() < max as usize {
+            // Get previous transaction hash.
+            match cursor.prev_duplicate::<Address, OrderedHash>() {
+                Some((_, v)) => tx_hashes.push(v.hash),
+                None => break,
+            };
+        }
+
+        tx_hashes
+    }
+
+    /// Returns a proof for transactions with the given hashes. The proof also includes the extended
+    /// transactions.
+    /// The verifier state is used for those cases where the verifier might have an incomplete MMR,
+    /// for instance this could occur where we want to create transaction inclusion proofs of incomplete epochs.
+    fn prove(
+        &self,
+        epoch_number: u32,
+        hashes: Vec<&Blake2bHash>,
+        verifier_state: Option<usize>,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Option<HistoryTreeProof> {
+        // Get the leaf indexes.
+        let mut positions = vec![];
+
+        for hash in hashes {
+            let mut indices = self
+                .get_leaves_by_tx_hash(hash, txn_option)
+                .iter()
+                .map(|i| i.index as usize)
+                .collect();
+
+            positions.append(&mut indices)
+        }
+
+        self.prove_with_position(epoch_number, positions, verifier_state, txn_option)
+    }
+
+    /// Returns the `chunk_index`th chunk of size `chunk_size` for a given epoch.
+    /// The return value consists of a vector of all the historic transactions in that chunk
+    /// and a proof for these in the MMR.
+    /// The `verifier_block_number` is the block the chunk proof should be verified against.
+    /// That means that no leaf beyond this block is returned and that the proof should be
+    /// verified with the history root from this block.
+    fn prove_chunk(
+        &self,
+        epoch_number: u32,
+        verifier_block_number: u32,
+        chunk_size: usize,
+        chunk_index: usize,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Option<HistoryTreeChunk> {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        // Get history tree for given epoch.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_table,
+            txn,
+            epoch_number,
+        ));
+
+        // Calculate number of nodes in the verifier's history tree.
+        let leaf_count = self.length_at(verifier_block_number, Some(txn)) as usize;
+        let number_of_nodes = leaf_number_to_index(leaf_count);
+
+        // Calculate chunk boundaries.
+        let start = cmp::min(chunk_size * chunk_index, leaf_count);
+        // Do not go beyond the verifier's block.
+        let end = cmp::min(start + chunk_size, leaf_count);
+
+        // TODO: Setting `assume_previous` to false allows the proofs to be verified independently.
+        //  This, however, increases the size of the proof. We might change this in the future.
+        let proof = tree
+            .prove_range(start..end, Some(number_of_nodes), false)
+            .ok()?;
+
+        // Get each historic transaction from the tree.
+        let mut hist_txs = vec![];
+
+        for i in start..end {
+            let leaf_hash = tree.get_leaf(i).unwrap();
+            hist_txs.push(self.get_historic_tx(&leaf_hash, Some(txn)).unwrap());
+        }
+
+        Some(HistoryTreeChunk {
+            proof,
+            history: hist_txs,
+        })
+    }
+
+    /// Creates a new history tree from chunks and returns the root hash.
+    fn tree_from_chunks(
+        &self,
+        epoch_number: u32,
+        chunks: Vec<(Vec<HistoricTransaction>, RangeProof<Blake2bHash>)>,
+        txn: &mut WriteTransactionProxy,
+    ) -> Result<Blake2bHash, MMRError> {
+        // Get partial history tree for given epoch.
+        let mut tree = PartialMerkleMountainRange::new(MMRStore::with_write_transaction(
+            &self.hist_tree_table,
+            txn,
+            epoch_number,
+        ));
+
+        // Push all proofs into the history tree and remember all leaves.
+        let mut all_leaves = Vec::with_capacity(
+            chunks.len() * chunks.first().map(|(leaves, _)| leaves.len()).unwrap_or(0),
+        );
+        for (mut leaves, proof) in chunks {
+            tree.push_proof(proof, &leaves)?;
+            all_leaves.append(&mut leaves);
+        }
+
+        // Calculate the root once the tree is complete.
+        if !tree.is_finished() {
+            return Err(MMRError::IncompleteProof);
+        }
+
+        let root = tree.get_root()?;
+
+        // Then add all transactions to the database as the tree is finished.
+        for (i, leaf) in all_leaves.iter().enumerate() {
+            // The prefix is one because it is a leaf.
+            self.put_historic_tx(txn, &leaf.hash(1), i as u32, leaf);
+        }
+
+        Ok(root)
+    }
+
+    /// Returns the block number of the last leaf in the history store
+    fn get_last_leaf_block_number(&self, txn_option: Option<&TransactionProxy>) -> Option<u32> {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        // Seek to the last leaf index of the block, if it exists.
+        let mut cursor = txn.cursor(&self.last_leaf_table);
+        cursor.last::<u32, u32>().map(|(key, _)| key)
+    }
+
+    /// Check whether an equivocation proof at a given equivocation locator has
+    /// already been included.
+    fn has_equivocation_proof(
+        &self,
+        locator: EquivocationLocator,
+        txn_option: Option<&TransactionProxy>,
+    ) -> bool {
+        let hash = HistoricTransactionData::Equivocation(EquivocationEvent { locator }).hash();
+        !self.get_hist_tx_by_hash(&hash, txn_option).is_empty()
+    }
+
+    fn prove_num_leaves(
         &self,
         block_number: u32,
         txn_option: Option<&TransactionProxy>,
@@ -1148,6 +1595,18 @@ impl HistoryStore {
         let number_of_nodes = leaf_number_to_index(leaf_count);
 
         tree.prove_num_leaves(f, Some(number_of_nodes))
+    }
+
+    fn add_block(
+        &self,
+        _txn: &mut WriteTransactionProxy,
+        _block: &nimiq_block::Block,
+    ) -> Option<Blake2bHash> {
+        todo!()
+    }
+
+    fn remove_block(&self, _txn: &mut WriteTransactionProxy, _block_number: u32) -> u64 {
+        todo!()
     }
 }
 
