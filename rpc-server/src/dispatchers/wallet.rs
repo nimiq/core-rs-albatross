@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use nimiq_database::traits::WriteTransaction;
 use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, KeyPair, PrivateKey};
 use nimiq_rpc_interface::{
-    types::RPCResult,
-    wallet::{ReturnAccount, ReturnSignature, WalletInterface},
+    types::{RPCResult, ReturnAccount, ReturnSignature},
+    wallet::WalletInterface,
 };
 use nimiq_serde::Deserialize;
 use nimiq_utils::otp::Locked;

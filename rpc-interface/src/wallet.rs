@@ -1,22 +1,7 @@
 use async_trait::async_trait;
-use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, PrivateKey};
+use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature};
 
-use crate::types::RPCResult;
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReturnSignature {
-    pub public_key: Ed25519PublicKey,
-    pub signature: Ed25519Signature,
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReturnAccount {
-    pub address: Address,
-    pub public_key: Ed25519PublicKey,
-    pub private_key: PrivateKey,
-}
+use crate::types::{RPCResult, ReturnAccount, ReturnSignature};
 
 #[nimiq_jsonrpc_derive::proxy(name = "WalletProxy", rename_all = "camelCase")]
 #[async_trait]
