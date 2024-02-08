@@ -75,9 +75,9 @@ def parse_args():
     parser.add_argument('-dt', "--down-time", type=check_positive, default=10,
                         help="Time in seconds that validators are taken down, "
                         "by default 10s")
-    parser.add_argument('-ut', "--up-time", type=check_positive, default=40,
+    parser.add_argument('-ut', "--up-time", type=check_positive, default=100,
                         help="Time in seconds during which all validators are "
-                        "up, by default 40s")
+                        "up, by default 100s")
     parser.add_argument('-d', "--db", action='store_true',
                         help="Erases only the database state of the validator "
                         "as part of restarting it")
