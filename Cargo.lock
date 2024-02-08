@@ -4335,6 +4335,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "convert_case 0.6.0",
  "hex",
  "nimiq-bls",
  "nimiq-hash",
@@ -4343,7 +4344,11 @@ dependencies = [
  "nimiq-serde",
  "nimiq-transaction",
  "nimiq-utils",
+ "open-rpc",
+ "quote",
  "rand",
+ "serde_json",
+ "syn 2.0.48",
  "thiserror",
  "tracing",
 ]
@@ -4953,6 +4958,16 @@ name = "opaque-debug"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
+
+[[package]]
+name = "open-rpc"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f922edc55696fc3c1bb89981d90a6c171603ac1b95f14855a48ee2dd32b08a2b"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "openssl"
