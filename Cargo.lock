@@ -2385,7 +2385,16 @@ version = "0.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "affdc52f7596ccb2d7645231fc6163bb314630c989b64998f3699a28b4d5d4dc"
 dependencies = [
- "jsonrpsee-core",
+ "jsonrpsee-core 0.20.3",
+]
+
+[[package]]
+name = "jsonrpsee"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a95f7cc23d5fab0cdeeaf6bad8c8f5e7a3aa7f0d211957ea78232b327ab27b0"
+dependencies = [
+ "jsonrpsee-core 0.22.0",
 ]
 
 [[package]]
@@ -2399,7 +2408,25 @@ dependencies = [
  "beef",
  "futures-util",
  "hyper",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.20.3",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "jsonrpsee-core"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82030d038658974732103e623ba2e0abec03bbbe175b39c0a2fafbada60c5868"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "beef",
+ "futures-util",
+ "jsonrpsee-types 0.22.0",
  "serde",
  "serde_json",
  "thiserror",
@@ -2416,8 +2443,8 @@ dependencies = [
  "async-trait",
  "hyper",
  "hyper-rustls",
- "jsonrpsee-core",
- "jsonrpsee-types",
+ "jsonrpsee-core 0.20.3",
+ "jsonrpsee-types 0.20.3",
  "serde",
  "serde_json",
  "thiserror",
@@ -2439,6 +2466,19 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tracing",
+]
+
+[[package]]
+name = "jsonrpsee-types"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a48fdc1202eafc51c63e00406575e59493284ace8b8b61aa16f3a6db5d64f1a"
+dependencies = [
+ "anyhow",
+ "beef",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -4029,7 +4069,7 @@ dependencies = [
  "hex",
  "humantime",
  "indicatif",
- "jsonrpsee",
+ "jsonrpsee 0.22.0",
  "nimiq-blockchain",
  "nimiq-bls",
  "nimiq-database",
@@ -4764,7 +4804,7 @@ source = "git+https://github.com/jsdanielh/rust-client.git#88fe31028df2afd356708
 dependencies = [
  "async-trait",
  "base64 0.21.7",
- "jsonrpsee",
+ "jsonrpsee 0.20.3",
  "jsonrpsee-http-client",
  "serde",
  "serde_json",
