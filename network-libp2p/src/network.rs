@@ -890,38 +890,6 @@ impl Network {
                                                         .query_mut(&id)
                                                         .unwrap()
                                                         .finish();
-                                                    let signed_best_record = results
-                                                        .best_value
-                                                        .clone()
-                                                        .get_signed_record();
-                                                    // Send the best result to the application layer ASAP since we already know it
-                                                    if let Some(output) = state.dht_gets.remove(&id)
-                                                    {
-                                                        if output
-                                                            .send(Ok(signed_best_record
-                                                                .clone()
-                                                                .value))
-                                                            .is_err()
-                                                        {
-                                                            error!(query_id = ?id, error = "receiver hung up", "could not send get record query result to channel");
-                                                        }
-                                                    } else {
-                                                        warn!(query_id = ?id, ?step, "GetRecord query result for unknown query ID");
-                                                    }
-                                                    if !results.outdated_values.is_empty() {
-                                                        // Now push the best value to the outdated peers
-                                                        let outdated_peers = results
-                                                            .outdated_values
-                                                            .iter()
-                                                            .map(|dht_record| {
-                                                                dht_record.get_peer_id()
-                                                            });
-                                                        swarm.behaviour_mut().dht.put_record_to(
-                                                            signed_best_record,
-                                                            outdated_peers,
-                                                            kad::Quorum::One,
-                                                        );
-                                                    }
                                                 }
                                             } else {
                                                 log::error!(query_id = ?id, "DHT inconsistent state");
@@ -937,11 +905,36 @@ impl Network {
                                             cache_candidates,
                                         },
                                     )) => {
-                                        // Remove the query and push the best result to the cache candidates
+                                        // Remove the query, send the best result to the application layer
+                                        // and push the best result to the cache candidates
                                         if let Some(results) = state.dht_get_results.remove(&id) {
+                                            let signed_best_record =
+                                                results.best_value.clone().get_signed_record();
+                                            // Send the best result to the application layer
+                                            if let Some(output) = state.dht_gets.remove(&id) {
+                                                if output
+                                                    .send(Ok(signed_best_record.clone().value))
+                                                    .is_err()
+                                                {
+                                                    error!(query_id = ?id, error = "receiver hung up", "could not send get record query result to channel");
+                                                }
+                                            } else {
+                                                warn!(query_id = ?id, ?step, "GetRecord query result for unknown query ID");
+                                            }
+                                            if !results.outdated_values.is_empty() {
+                                                // Now push the best value to the outdated peers
+                                                let outdated_peers = results
+                                                    .outdated_values
+                                                    .iter()
+                                                    .map(|dht_record| dht_record.get_peer_id());
+                                                swarm.behaviour_mut().dht.put_record_to(
+                                                    signed_best_record.clone(),
+                                                    outdated_peers,
+                                                    kad::Quorum::One,
+                                                );
+                                            }
+                                            // Push the best result to the cache candidates
                                             if !cache_candidates.is_empty() {
-                                                let signed_best_record =
-                                                    results.best_value.get_signed_record();
                                                 let peers = cache_candidates
                                                     .iter()
                                                     .map(|(_, &peer_id)| peer_id);
@@ -951,6 +944,8 @@ impl Network {
                                                     kad::Quorum::One,
                                                 );
                                             }
+                                        } else {
+                                            panic!("DHT inconsistent state, query_id: {:?}", id);
                                         }
                                     }
                                     QueryResult::GetRecord(Err(error)) => {
