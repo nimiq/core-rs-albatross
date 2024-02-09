@@ -85,7 +85,7 @@ impl Blockchain {
     /// It does _not_ deal with the faulty blocks.
     pub(super) fn rebranch_to(
         &self,
-        target_chain: &mut Vec<(Blake2bHash, ChainInfo, Option<TrieDiff>)>,
+        target_chain: &mut [(Blake2bHash, ChainInfo, Option<TrieDiff>)],
         ancestor: &mut (Blake2bHash, ChainInfo, Option<TrieDiff>),
         write_txn: &mut WriteTransactionProxy,
     ) -> Result<
