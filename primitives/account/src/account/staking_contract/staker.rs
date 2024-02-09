@@ -514,11 +514,11 @@ impl StakingContract {
         let mut staker = store.expect_staker(staker_address)?;
 
         // Fail if staker does not have sufficient funds.
-        let total_balance = staker.total_balance();
-        if total_balance < new_active_balance {
+        let non_retired_balance = staker.none_retired_balance();
+        if non_retired_balance < new_active_balance {
             return Err(AccountError::InsufficientFunds {
                 needed: new_active_balance,
-                balance: total_balance,
+                balance: non_retired_balance,
             });
         }
 
@@ -527,7 +527,7 @@ impl StakingContract {
         // Store old values for receipt.
         let old_inactive_from = staker.inactive_from;
         let old_active_balance = staker.active_balance;
-        let new_inactive_balance = total_balance - new_active_balance;
+        let new_inactive_balance = non_retired_balance - new_active_balance;
 
         // Update the staker's balances.
         staker.active_balance = new_active_balance;
@@ -580,14 +580,14 @@ impl StakingContract {
         let mut staker = store.expect_staker(staker_address)?;
 
         // Keep the old values.
-        let total_balance = staker.total_balance();
+        let non_retired_balance = staker.none_retired_balance();
         let old_inactive_from = staker.inactive_from;
         let old_inactive_balance = staker.inactive_balance;
 
         // Restore the previous inactive since and balances.
         staker.inactive_from = receipt.old_inactive_from;
         staker.active_balance = receipt.old_active_balance;
-        staker.inactive_balance = total_balance - staker.active_balance;
+        staker.inactive_balance = non_retired_balance - staker.active_balance;
 
         // If we are delegating to a validator, we update the active stake of the validator.
         // This function never changes the staker's delegation, so the validator counter should not be updated.

@@ -536,10 +536,11 @@ fn can_set_inactive_balance() {
     // -----------------------------------
     // Test setup:
     // -----------------------------------
-    let mut staker_setup = StakerSetup::setup_staker_with_inactive_balance(
+    let mut staker_setup = StakerSetup::setup_staker_with_inactive_retired_balance(
         ValidatorState::Active,
         50_000_000,
         50_000_000,
+        10_000_000,
     );
     let data_store = staker_setup
         .accounts
