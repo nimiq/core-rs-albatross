@@ -95,7 +95,7 @@ impl Staker {
     }
 
     /// Returns the current non-retired balance of the staker.
-    pub fn none_retired_balance(&self) -> Coin {
+    pub fn non_retired_balance(&self) -> Coin {
         self.active_balance + self.inactive_balance
     }
 
@@ -484,9 +484,9 @@ impl StakingContract {
         }
 
         // Restore the previous balances and values.
-        let total_balance = staker.total_balance();
+        let non_retired_balance = staker.non_retired_balance();
         staker.active_balance = receipt.active_balance;
-        staker.inactive_balance = total_balance - staker.active_balance;
+        staker.inactive_balance = non_retired_balance - staker.active_balance;
         staker.inactive_from = receipt.inactive_from;
 
         // Update the staker entry.
@@ -514,7 +514,7 @@ impl StakingContract {
         let mut staker = store.expect_staker(staker_address)?;
 
         // Fail if staker does not have sufficient funds.
-        let non_retired_balance = staker.none_retired_balance();
+        let non_retired_balance = staker.non_retired_balance();
         if non_retired_balance < new_active_balance {
             return Err(AccountError::InsufficientFunds {
                 needed: new_active_balance,
@@ -580,7 +580,7 @@ impl StakingContract {
         let mut staker = store.expect_staker(staker_address)?;
 
         // Keep the old values.
-        let non_retired_balance = staker.none_retired_balance();
+        let non_retired_balance = staker.non_retired_balance();
         let old_inactive_from = staker.inactive_from;
         let old_inactive_balance = staker.inactive_balance;
 

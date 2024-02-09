@@ -406,19 +406,6 @@ struct StakerSetup {
 }
 
 impl StakerSetup {
-    fn setup_staker_with_inactive_balance(
-        validator_state: ValidatorState,
-        active_stake: u64,
-        inactive_stake: u64,
-    ) -> Self {
-        Self::setup_staker_with_inactive_retired_balance(
-            validator_state,
-            active_stake,
-            inactive_stake,
-            0,
-        )
-    }
-
     fn setup_staker_with_inactive_retired_balance(
         validator_state: ValidatorState,
         active_stake: u64,
