@@ -4,7 +4,7 @@ use open_rpc_schema::document::{
     Components, ContactObject, InfoObject, LicenseObject, Openrpc, OpenrpcDocument,
 };
 
-use crate::parser::ParsedItemStruct;
+use crate::parser::{ParsedItemStruct, ParsedTraitItemFn};
 
 #[derive(Clone)]
 pub struct OpenRpcBuilder(OpenrpcDocument);
@@ -34,6 +34,11 @@ impl OpenRpcBuilder {
             .as_mut()
             .expect("Component schema not initialized.")
             .insert(item_struct.title(), Some(item_struct.to_schema()));
+        self
+    }
+
+    pub fn with_method(mut self, item_fn: &ParsedTraitItemFn) -> OpenRpcBuilder {
+        self.0.methods.push(item_fn.to_method());
         self
     }
 

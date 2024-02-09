@@ -1,16 +1,26 @@
 use convert_case::{Case, Casing};
+use open_rpc_schema::{
+    document::{ContentDescriptorObject, ContentDescriptorOrReference, JSONSchema, MethodObject},
+    schemars::schema::{InstanceType, RootSchema, SchemaObject, SingleOrVec},
+};
 use quote::ToTokens;
 use serde_json::{Map, Value};
-use syn::{Field, File, GenericArgument, Ident, ItemStruct, Path, PathArguments, Type};
+use syn::{
+    Field, File, GenericArgument, Ident, ItemStruct, Pat, PatIdent, Path, PathArguments,
+    PathSegment, ReturnType, TraitItem, TraitItemFn, Type,
+};
 
 #[derive(Debug)]
 pub struct ParsedItemStruct(ItemStruct);
+pub struct ParsedTraitItemFn(TraitItemFn);
 
 impl ParsedItemStruct {
+    #[inline]
     pub fn title(&self) -> String {
         self.0.ident.to_string()
     }
 
+    #[inline]
     pub fn description(&self) -> String {
         "".into()
     }
@@ -142,21 +152,174 @@ impl ParsedItemStruct {
     }
 }
 
+impl ParsedTraitItemFn {
+    #[inline]
+    pub fn title(&self) -> String {
+        self.0.sig.ident.to_string()
+    }
+
+    #[inline]
+    pub fn description(&self) -> String {
+        "".into()
+    }
+
+    pub fn to_method(&self) -> MethodObject {
+        let mut method =
+            MethodObject::new(self.title().to_case(Case::Camel), Some(self.description()));
+        method.params = self.params();
+        method.result = self.return_type();
+        method
+    }
+
+    fn params(&self) -> Vec<ContentDescriptorOrReference> {
+        self.0
+            .sig
+            .inputs
+            .iter()
+            .filter_map(|input| match input {
+                syn::FnArg::Typed(typed) => {
+                    Some(ContentDescriptorOrReference::ContentDescriptorObject(
+                        ContentDescriptorObject {
+                            name: Self::param_ident(&typed.pat)
+                                .ident
+                                .to_string()
+                                .to_case(Case::Camel),
+                            description: None,
+                            summary: None,
+                            schema: JSONSchema::JsonSchemaObject(RootSchema {
+                                ..Default::default()
+                            }),
+                            required: Some(Self::param_required(&*typed.ty)),
+                            deprecated: None,
+                        },
+                    ))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn param_ident(pat: &Box<Pat>) -> PatIdent {
+        match &**pat {
+            syn::Pat::Ident(ident) => ident.clone(),
+            _ => unreachable!(),
+        }
+    }
+
+    fn param_required(ty: &Type) -> bool {
+        if ty.to_token_stream().to_string().contains("Option") {
+            return false;
+        }
+        true
+    }
+
+    fn return_type(&self) -> ContentDescriptorOrReference {
+        let ty = match &self.0.sig.output {
+            ReturnType::Type(_, ty) => match ty.as_ref() {
+                Type::Path(path) => path,
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        };
+
+        let arg = match &ty
+            .path
+            .segments
+            .first()
+            .expect("Type must have at least one segment.")
+            .arguments
+        {
+            PathArguments::AngleBracketed(arg) => arg
+                .args
+                .first()
+                .expect("Type must have at least one argument."),
+            _ => unreachable!(),
+        };
+
+        let path = match arg {
+            GenericArgument::Type(return_type) => match return_type {
+                Type::Path(path) => path,
+                _ => {
+                    unreachable!()
+                }
+            },
+            _ => unreachable!(),
+        };
+        let ident = path
+            .path
+            .segments
+            .first()
+            .expect("Path must have an identity.");
+
+        ContentDescriptorOrReference::ContentDescriptorObject(ContentDescriptorObject {
+            name: ident.ident.to_string(),
+            description: None,
+            summary: None,
+            schema: JSONSchema::JsonSchemaObject(RootSchema {
+                schema: Self::return_type_schema(&ident),
+                ..Default::default()
+            }),
+            required: None,
+            deprecated: None,
+        })
+    }
+
+    fn return_type_schema(ident: &PathSegment) -> SchemaObject {
+        let mut schema = SchemaObject {
+            ..Default::default()
+        };
+
+        let (is_rust_type, instance_type) = match ident.ident.to_string().as_str() {
+            "u32" | "u64" | "usize" | "BoxStream" => (true, InstanceType::Number),
+            "Vec" => (true, InstanceType::Array),
+            "String" => (true, InstanceType::String),
+            "bool" => (true, InstanceType::Boolean),
+            _ => (false, InstanceType::Null),
+        };
+
+        if is_rust_type {
+            schema.instance_type = Some(SingleOrVec::Single(Box::new(instance_type)))
+        } else {
+            schema.reference = Some(format!("#/components/schemas/{}", ident.ident.to_string()));
+        }
+
+        schema
+    }
+}
+
 impl Into<ParsedItemStruct> for ItemStruct {
     fn into(self) -> ParsedItemStruct {
         ParsedItemStruct(self)
     }
 }
 
+impl Into<ParsedTraitItemFn> for TraitItemFn {
+    fn into(self) -> ParsedTraitItemFn {
+        ParsedTraitItemFn(self)
+    }
+}
+
 pub fn extract_structs_from_ast(file: &File) -> Vec<ParsedItemStruct> {
-    let structs: Vec<ParsedItemStruct> = file
-        .items
+    file.items
         .iter()
         .filter_map(|item| match item {
             syn::Item::Struct(item_struct) => Some(item_struct.clone().into()),
             _ => None,
         })
-        .collect();
+        .collect()
+}
 
-    structs
+pub fn extract_fns_from_ast(file: &File) -> Vec<ParsedTraitItemFn> {
+    file.items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Trait(trait_item) => Some(trait_item.items.clone()),
+            _ => None,
+        })
+        .flatten()
+        .filter_map(|trait_item| match trait_item {
+            TraitItem::Fn(trait_item_fn) => Some(trait_item_fn.into()),
+            _ => None,
+        })
+        .collect()
 }
