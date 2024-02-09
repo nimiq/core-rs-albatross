@@ -16,12 +16,12 @@ impl ParsedItemStruct {
     }
 
     pub fn to_schema(&self) -> Value {
-        let mut map = Map::new();
-        map.insert("title".into(), Value::String(self.title()));
-        map.insert("description".into(), Value::String(self.description()));
-        map.insert("properties".into(), self.properties());
-        map.insert("required".into(), Value::Array(self.required_fields()));
-        Value::Object(map)
+        let mut schema = Map::new();
+        schema.insert("title".into(), Value::String(self.title()));
+        schema.insert("description".into(), Value::String(self.description()));
+        schema.insert("properties".into(), self.properties());
+        schema.insert("required".into(), Value::Array(self.required_fields()));
+        Value::Object(schema)
     }
 
     fn properties(&self) -> Value {
@@ -46,6 +46,8 @@ impl ParsedItemStruct {
         Value::Object(props)
     }
 
+    // TODO: This method turns a parameter to a final litaral.
+    // In this stage use ident name so that later on references can be identified.
     fn param_to_json_type(param: &Field) -> Value {
         match &param.ty {
             Type::Path(path) => {
@@ -57,6 +59,7 @@ impl ParsedItemStruct {
                     .ident
                     .to_string();
 
+                // TODO: if ident is an Option, we need to unwrap it. Necassary for Option<Vec<T>>
                 if ident.to_string() == "Vec" {
                     return Value::String("array".into());
                 }
@@ -73,7 +76,7 @@ impl ParsedItemStruct {
                     "u8" | "u16" | "u32" | "u64" | "usize" | "Coin" => {
                         return Value::String("number".into())
                     }
-                    "bool" => return Value::String("bool".into()),
+                    "bool" => return Value::String("boolean".into()),
                     "AccountAdditionalFields"
                     | "BitSet"
                     | "Block"
