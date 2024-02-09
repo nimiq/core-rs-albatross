@@ -23,7 +23,7 @@ workspace = true
 ark-groth16 = { version = "0.4", default-features = false }
 ark-mnt6-753 = "0.4"
 async-trait = "0.1"
-clap = { version = "4.4", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 futures = { package = "futures-util", version = "0.3" }
 hex = "0.4"
 parking_lot = "0.12"
