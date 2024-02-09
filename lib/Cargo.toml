@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-clap = { version = "4.4", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 console-subscriber = { version = "0.2", features = ["parking_lot"], optional = true }
 derive_builder = "0.13"
 directories = "5.0"
