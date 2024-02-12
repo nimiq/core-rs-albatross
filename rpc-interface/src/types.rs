@@ -321,8 +321,11 @@ pub struct PolicyConstants {
     pub batches_per_epoch: u16,
     pub blocks_per_epoch: u32,
     pub validator_deposit: u64,
+    pub minimum_stake: u64,
     pub total_supply: u64,
     pub block_separation_time: u64,
+    pub jail_epochs: u32,
+    pub genesis_block_number: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

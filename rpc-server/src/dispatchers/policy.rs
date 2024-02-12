@@ -19,7 +19,7 @@ impl PolicyInterface for PolicyDispatcher {
         Ok(PolicyConstants {
             staking_contract_address: Policy::STAKING_CONTRACT_ADDRESS.to_string(),
             coinbase_address: Policy::COINBASE_ADDRESS.to_string(),
-            transaction_validity_window: Policy::transaction_validity_window(),
+            transaction_validity_window: Policy::transaction_validity_window_blocks(),
             max_size_micro_body: Policy::MAX_SIZE_MICRO_BODY,
             version: Policy::VERSION,
             slots: Policy::SLOTS,
@@ -27,8 +27,11 @@ impl PolicyInterface for PolicyDispatcher {
             batches_per_epoch: Policy::batches_per_epoch(),
             blocks_per_epoch: Policy::blocks_per_epoch(),
             validator_deposit: Policy::VALIDATOR_DEPOSIT,
+            minimum_stake: Policy::MINIMUM_STAKE,
             total_supply: Policy::TOTAL_SUPPLY,
             block_separation_time: Policy::BLOCK_SEPARATION_TIME,
+            jail_epochs: Policy::JAIL_EPOCHS,
+            genesis_block_number: Policy::genesis_block_number(),
         }
         .into())
     }
@@ -69,10 +72,9 @@ impl PolicyInterface for PolicyDispatcher {
         &mut self,
         block_number: u32,
     ) -> RPCResult<u32, (), Self::Error> {
-        if block_number == 0 {
-            return Err(Error::BlockNumberNotZero);
+        if block_number < Policy::genesis_block_number() {
+            return Err(Error::BlockNumberBeforeGenesis);
         }
-
         Ok(Policy::election_block_before(block_number).into())
     }
 
@@ -82,6 +84,9 @@ impl PolicyInterface for PolicyDispatcher {
         &mut self,
         block_number: u32,
     ) -> RPCResult<u32, (), Self::Error> {
+        if block_number < Policy::genesis_block_number() {
+            return Err(Error::BlockNumberBeforeGenesis);
+        }
         Ok(Policy::last_election_block(block_number).into())
     }
 
@@ -107,16 +112,18 @@ impl PolicyInterface for PolicyDispatcher {
         &mut self,
         block_number: u32,
     ) -> RPCResult<u32, (), Self::Error> {
-        if block_number == 0 {
-            return Err(Error::BlockNumberNotZero);
+        if block_number < Policy::genesis_block_number() {
+            return Err(Error::BlockNumberBeforeGenesis);
         }
-
         Ok(Policy::macro_block_before(block_number).into())
     }
 
     /// Returns block the number (height) of the last macro block at a given block number (height).
     /// If the given block number is a macro block, then it returns that block number.
     async fn get_last_macro_block(&mut self, block_number: u32) -> RPCResult<u32, (), Self::Error> {
+        if block_number < Policy::genesis_block_number() {
+            return Err(Error::BlockNumberBeforeGenesis);
+        }
         Ok(Policy::last_macro_block(block_number).into())
     }
 
@@ -132,10 +139,6 @@ impl PolicyInterface for PolicyDispatcher {
 
     /// Returns the block number of the first block of the given epoch (which is always a micro block).
     async fn get_first_block_of(&mut self, epoch: u32) -> RPCResult<u32, (), Self::Error> {
-        if epoch == 0 {
-            return Err(Error::EpochNumberNotZero);
-        }
-
         match Policy::first_block_of(epoch) {
             Some(block_number) => Ok(block_number.into()),
             None => Err(Error::InvalidArgument("epoch".to_string())),
@@ -144,10 +147,6 @@ impl PolicyInterface for PolicyDispatcher {
 
     /// Returns the block number of the first block of the given batch (which is always a micro block).
     async fn get_first_block_of_batch(&mut self, batch: u32) -> RPCResult<u32, (), Self::Error> {
-        if batch == 0 {
-            return Err(Error::BatchNumberNotZero);
-        }
-
         match Policy::first_block_of_batch(batch) {
             Some(block_number) => Ok(block_number.into()),
             None => Err(Error::InvalidArgument("batch".to_string())),
@@ -178,6 +177,19 @@ impl PolicyInterface for PolicyDispatcher {
         block_number: u32,
     ) -> RPCResult<bool, (), Self::Error> {
         Ok(Policy::first_batch_of_epoch(block_number).into())
+    }
+
+    /// Returns the first block after the reporting window of a given block number has ended.
+    async fn get_block_after_reporting_window(
+        &mut self,
+        block_number: u32,
+    ) -> RPCResult<u32, (), Self::Error> {
+        Ok(Policy::block_after_reporting_window(block_number).into())
+    }
+
+    /// Returns the first block after the jail period of a given block number has ended.
+    async fn get_block_after_jail(&mut self, block_number: u32) -> RPCResult<u32, (), Self::Error> {
+        Ok(Policy::block_after_jail(block_number).into())
     }
 
     /// Returns the supply at a given time (as Unix time) in Lunas (1 NIM = 100,000 Lunas). It is

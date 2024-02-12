@@ -62,6 +62,13 @@ pub trait PolicyInterface {
         block_number: u32,
     ) -> RPCResult<bool, (), Self::Error>;
 
+    async fn get_block_after_reporting_window(
+        &mut self,
+        block_number: u32,
+    ) -> RPCResult<u32, (), Self::Error>;
+
+    async fn get_block_after_jail(&mut self, block_number: u32) -> RPCResult<u32, (), Self::Error>;
+
     async fn get_supply_at(
         &mut self,
         genesis_supply: u64,
