@@ -384,7 +384,7 @@ impl StakingContract {
                 return Err(AccountError::InvalidForRecipient);
             }
 
-            // Fail if the the funds are in locked or jailed.
+            // Fail if the funds are locked or jailed.
             if !staker.is_inactive_stake_released(store, block_number) {
                 debug!(
                     ?staker_address,
@@ -641,7 +641,7 @@ impl StakingContract {
             staker.retired_balance + retire_stake,
         )?;
 
-        // Fail if the the funds are locked or jailed.
+        // Fail if the funds are locked or jailed.
         if !staker.is_inactive_stake_released(store, block_number) {
             debug!(
                 ?staker_address,

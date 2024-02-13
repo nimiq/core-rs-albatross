@@ -56,7 +56,7 @@ impl<H: Merge + PartialEq + Clone, S: Store<H>> PartialMerkleMountainRange<H, S>
             .unwrap_or(false)
     }
 
-    /// Transforms a partial MMR into a MMR, if the the partial MMR is finished.
+    /// Transforms a partial MMR into a MMR, if the partial MMR is finished.
     pub fn into_mmr(self) -> Result<MerkleMountainRange<H, S>, Self> {
         if self.is_finished() {
             return Ok(MerkleMountainRange::new(self.store));

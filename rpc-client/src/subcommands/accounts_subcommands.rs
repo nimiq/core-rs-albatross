@@ -62,7 +62,7 @@ pub enum AccountCommand {
         address: Address,
     },
 
-    /// Signs a message using the the specified account. The account must already be unlocked.
+    /// Signs a message using the specified account. The account must already be unlocked.
     Sign {
         /// The message to be signed.
         message: String,

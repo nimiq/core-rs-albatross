@@ -25,7 +25,7 @@ Value and fees are returned in Luna.
 ## 1. Become a Validator
 
 To become a validator, you need to have an account with at least the validator deposit fee (10 000 NIM).
-This guide assumes that this condition is met and that the client that this RPC commands will be run for is already configured to validate (check [this guide](becoming_validator.md#22-configure) to setup you client).
+This guide assumes that this condition is met and that the client that this RPC commands will be run for is already configured to validate (check [this guide](becoming_validator.md#22-configure) to setup your client).
 
 These are the steps to becoming a validator using `jsonrpc-cli`:
 

@@ -543,7 +543,7 @@ where
     }
 
     fn on_equivocation_proof(&mut self, proof: EquivocationProof) {
-        // Keep the lock until the proof is added to the the proof pool.
+        // Keep the lock until the proof is added to the proof pool.
         let blockchain = self.blockchain.read();
         if blockchain
             .history_store
