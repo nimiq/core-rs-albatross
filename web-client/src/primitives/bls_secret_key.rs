@@ -13,13 +13,13 @@ pub struct BLSSecretKey {
 impl BLSSecretKey {
     /// Generates a new private key from secure randomness.
     pub fn generate() -> BLSSecretKey {
-        BLSSecretKey::from_native(nimiq_bls::SecretKey::generate_default_csprng())
+        BLSSecretKey::from(nimiq_bls::SecretKey::generate_default_csprng())
     }
 
     /// Deserializes a private key from a byte array.
     pub fn unserialize(bytes: &[u8]) -> Result<BLSSecretKey, JsError> {
         let key = nimiq_bls::SecretKey::deserialize_from_vec(bytes)?;
-        Ok(BLSSecretKey::from_native(key))
+        Ok(BLSSecretKey::from(key))
     }
 
     /// Creates a new private key from a byte array.
@@ -58,11 +58,13 @@ impl BLSSecretKey {
     }
 }
 
-impl BLSSecretKey {
-    pub fn from_native(secret_key: nimiq_bls::SecretKey) -> BLSSecretKey {
+impl From<nimiq_bls::SecretKey> for BLSSecretKey {
+    fn from(secret_key: nimiq_bls::SecretKey) -> BLSSecretKey {
         BLSSecretKey { inner: secret_key }
     }
+}
 
+impl BLSSecretKey {
     pub fn native_ref(&self) -> &nimiq_bls::SecretKey {
         &self.inner
     }

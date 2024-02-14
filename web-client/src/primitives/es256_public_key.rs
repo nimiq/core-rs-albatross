@@ -34,7 +34,7 @@ impl ES256PublicKey {
             return Err(JsError::new("Public key primitive: Invalid length"));
         }
         let key = nimiq_keys::ES256PublicKey::deserialize_from_vec(bytes)?;
-        Ok(ES256PublicKey::from_native(key))
+        Ok(ES256PublicKey::from(key))
     }
 
     /// Deserializes a public key from its SPKI representation.
@@ -104,7 +104,7 @@ impl ES256PublicKey {
     #[wasm_bindgen(js_name = fromHex)]
     pub fn from_hex(hex: &str) -> Result<ES256PublicKey, JsError> {
         let key = nimiq_keys::ES256PublicKey::from_str(hex)?;
-        Ok(ES256PublicKey::from_native(key))
+        Ok(ES256PublicKey::from(key))
     }
 
     /// Formats the public key into a hex string.
@@ -116,15 +116,17 @@ impl ES256PublicKey {
     /// Gets the public key's address.
     #[wasm_bindgen(js_name = toAddress)]
     pub fn to_address(&self) -> Address {
-        Address::from_native(nimiq_keys::Address::from(&self.inner))
+        Address::from(nimiq_keys::Address::from(&self.inner))
+    }
+}
+
+impl From<nimiq_keys::ES256PublicKey> for ES256PublicKey {
+    fn from(public_key: nimiq_keys::ES256PublicKey) -> ES256PublicKey {
+        ES256PublicKey { inner: public_key }
     }
 }
 
 impl ES256PublicKey {
-    pub fn from_native(public_key: nimiq_keys::ES256PublicKey) -> ES256PublicKey {
-        ES256PublicKey { inner: public_key }
-    }
-
     pub fn native_ref(&self) -> &nimiq_keys::ES256PublicKey {
         &self.inner
     }

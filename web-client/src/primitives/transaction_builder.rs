@@ -45,7 +45,7 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
-        Ok(Transaction::from_native(tx))
+        Ok(Transaction::from(tx))
     }
 
     /// Creates a basic transaction that transfers `value` amount of luna (NIM's smallest unit) from the
@@ -78,7 +78,7 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
-        Ok(Transaction::from_native(tx))
+        Ok(Transaction::from(tx))
     }
 
     // pub fn new_create_vesting()
@@ -124,7 +124,7 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
-        Ok(Transaction::from_native(tx))
+        Ok(Transaction::from(tx))
     }
 
     /// Adds stake to a staker in the staking contract and transfers `value` amount of luna (NIM's smallest unit)
@@ -156,7 +156,7 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
-        Ok(Transaction::from_native(tx))
+        Ok(Transaction::from(tx))
     }
 
     /// Updates a staker in the staking contract to stake for a different validator. This is a
@@ -191,7 +191,7 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
-        Ok(Transaction::from_native(tx))
+        Ok(Transaction::from(tx))
     }
 
     /// Sets the active stake balance of the staker. This is a
@@ -222,7 +222,7 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
-        Ok(Transaction::from_native(tx))
+        Ok(Transaction::from(tx))
     }
 
     /// Retires a portion of the inactive stake balance of the staker. This is a
@@ -253,7 +253,7 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
-        Ok(Transaction::from_native(tx))
+        Ok(Transaction::from(tx))
     }
 
     /// Removes stake from the staking contract and transfers `value` amount of luna (NIM's smallest unit)
@@ -287,7 +287,7 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
-        Ok(Transaction::from_native(tx))
+        Ok(Transaction::from(tx))
     }
 
     /// Registers a new validator in the staking contract.
@@ -326,7 +326,7 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
-        Ok(Transaction::from_native(tx))
+        Ok(Transaction::from(tx))
     }
 
     /// Updates parameters of a validator in the staking contract.
@@ -369,7 +369,7 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
-        Ok(Transaction::from_native(tx))
+        Ok(Transaction::from(tx))
     }
 
     /// Deactivates a validator in the staking contract.
@@ -399,7 +399,7 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
-        Ok(Transaction::from_native(tx))
+        Ok(Transaction::from(tx))
     }
 
     // pub fn new_reactivate_validator()
@@ -434,7 +434,7 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
-        Ok(Transaction::from_native(tx))
+        Ok(Transaction::from(tx))
     }
 
     /// Retires a validator in the staking contract.
@@ -463,6 +463,6 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate()?;
         let tx = proof_builder.preliminary_transaction().to_owned();
-        Ok(Transaction::from_native(tx))
+        Ok(Transaction::from(tx))
     }
 }

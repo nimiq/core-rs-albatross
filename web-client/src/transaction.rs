@@ -136,7 +136,7 @@ impl Transaction {
             return Err(JsError::new("Invalid flags"));
         };
 
-        Ok(Transaction::from_native(tx))
+        Ok(Transaction::from(tx))
     }
 
     /// Signs the transaction with the provided key pair. Automatically determines the format
@@ -239,7 +239,7 @@ impl Transaction {
     /// Returns the address of the contract that is created with this transaction.
     #[wasm_bindgen(js_name = getContractCreationAddress)]
     pub fn get_contract_creation_address(&self) -> Address {
-        Address::from_native(self.inner.contract_creation_address())
+        Address::from(self.inner.contract_creation_address())
     }
 
     /// Serializes the transaction's content to be used for creating its signature.
@@ -262,7 +262,7 @@ impl Transaction {
     /// The transaction's sender address.
     #[wasm_bindgen(getter)]
     pub fn sender(&self) -> Address {
-        Address::from_native(self.inner.sender.clone())
+        Address::from(self.inner.sender.clone())
     }
 
     /// The transaction's sender {@link AccountType}.
@@ -274,7 +274,7 @@ impl Transaction {
     /// The transaction's recipient address.
     #[wasm_bindgen(getter)]
     pub fn recipient(&self) -> Address {
-        Address::from_native(self.inner.recipient.clone())
+        Address::from(self.inner.recipient.clone())
     }
 
     /// The transaction's recipient {@link AccountType}.
@@ -384,11 +384,11 @@ impl Transaction {
         if let Ok(plain) = serde_wasm_bindgen::from_value::<PlainTransaction>(js_value.clone()) {
             Ok(Transaction::from_plain_transaction(&plain)?)
         } else if let Ok(string) = serde_wasm_bindgen::from_value::<String>(js_value.to_owned()) {
-            Ok(Transaction::from_native(
+            Ok(Transaction::from(
                 nimiq_transaction::Transaction::deserialize_from_vec(&hex::decode(string)?)?,
             ))
         } else if let Ok(bytes) = serde_wasm_bindgen::from_value::<Vec<u8>>(js_value.to_owned()) {
-            Ok(Transaction::from_native(
+            Ok(Transaction::from(
                 nimiq_transaction::Transaction::deserialize_from_vec(&bytes)?,
             ))
         } else {
@@ -409,11 +409,13 @@ impl Transaction {
     }
 }
 
-impl Transaction {
-    pub fn from_native(transaction: nimiq_transaction::Transaction) -> Transaction {
+impl From<nimiq_transaction::Transaction> for Transaction {
+    fn from(transaction: nimiq_transaction::Transaction) -> Self {
         Transaction { inner: transaction }
     }
+}
 
+impl Transaction {
     pub fn native_ref(&self) -> &nimiq_transaction::Transaction {
         &self.inner
     }
@@ -1140,10 +1142,8 @@ impl PlainTransactionDetails {
         let executed_transaction = hist_tx.clone().into_transaction().unwrap();
 
         Self {
-            transaction: Transaction::from_native(
-                executed_transaction.get_raw_transaction().clone(),
-            )
-            .to_plain_transaction(),
+            transaction: Transaction::from(executed_transaction.get_raw_transaction().clone())
+                .to_plain_transaction(),
             state,
             execution_result: Some(executed_transaction.succeeded()),
             block_height: Some(block_number),

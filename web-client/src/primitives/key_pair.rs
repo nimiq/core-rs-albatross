@@ -22,13 +22,13 @@ impl KeyPair {
     /// Generates a new keypair from secure randomness.
     pub fn generate() -> KeyPair {
         let key_pair = nimiq_keys::KeyPair::generate_default_csprng();
-        KeyPair::from_native(key_pair)
+        KeyPair::from(key_pair)
     }
 
     /// Derives a keypair from an existing private key.
     pub fn derive(private_key: &PrivateKey) -> KeyPair {
         let key_pair = nimiq_keys::KeyPair::from(private_key.native_ref().clone());
-        KeyPair::from_native(key_pair)
+        KeyPair::from(key_pair)
     }
 
     /// Parses a keypair from its hex representation.
@@ -40,7 +40,7 @@ impl KeyPair {
         let public = nimiq_keys::Ed25519PublicKey::from_str(&hex[64..])?;
         // TODO: Deserialize locked state if bytes remaining
         let key_pair = nimiq_keys::KeyPair { private, public };
-        Ok(KeyPair::from_native(key_pair))
+        Ok(KeyPair::from(key_pair))
     }
 
     /// Deserializes a keypair from a byte array.
@@ -49,7 +49,7 @@ impl KeyPair {
     pub fn unserialize(bytes: &[u8]) -> Result<KeyPair, JsError> {
         let key_pair = nimiq_keys::KeyPair::deserialize_from_vec(bytes)?;
         // TODO: Deserialize locked state if bytes remaining
-        Ok(KeyPair::from_native(key_pair))
+        Ok(KeyPair::from(key_pair))
     }
 
     #[wasm_bindgen(constructor)]
@@ -58,7 +58,7 @@ impl KeyPair {
             private: private_key.native_ref().clone(),
             public: *public_key.native_ref(),
         };
-        KeyPair::from_native(key_pair)
+        KeyPair::from(key_pair)
     }
 
     /// Serializes the keypair to a byte array.
@@ -70,7 +70,7 @@ impl KeyPair {
 
     /// Signs arbitrary data, returns a signature object.
     pub fn sign(&self, data: &[u8]) -> Signature {
-        Signature::from_native(self.inner.sign(data))
+        Signature::from(self.inner.sign(data))
     }
 
     /// Signs a transaction and sets the signature proof on the transaction object.
@@ -82,19 +82,19 @@ impl KeyPair {
     /// Gets the keypair's private key.
     #[wasm_bindgen(getter, js_name = privateKey)]
     pub fn private_key(&self) -> PrivateKey {
-        PrivateKey::from_native(self.inner.private.clone())
+        PrivateKey::from(self.inner.private.clone())
     }
 
     /// Gets the keypair's public key.
     #[wasm_bindgen(getter, js_name = publicKey)]
     pub fn public_key(&self) -> PublicKey {
-        PublicKey::from_native(self.inner.public)
+        PublicKey::from(self.inner.public)
     }
 
     /// Gets the keypair's address.
     #[wasm_bindgen(js_name = toAddress)]
     pub fn to_address(&self) -> Address {
-        Address::from_native(nimiq_keys::Address::from(&self.inner))
+        Address::from(nimiq_keys::Address::from(&self.inner))
     }
 
     /// Formats the keypair into a hex string.
@@ -104,11 +104,13 @@ impl KeyPair {
     }
 }
 
-impl KeyPair {
-    pub fn from_native(key_pair: nimiq_keys::KeyPair) -> KeyPair {
+impl From<nimiq_keys::KeyPair> for KeyPair {
+    fn from(key_pair: nimiq_keys::KeyPair) -> KeyPair {
         KeyPair { inner: key_pair }
     }
+}
 
+impl KeyPair {
     pub fn native_ref(&self) -> &nimiq_keys::KeyPair {
         &self.inner
     }

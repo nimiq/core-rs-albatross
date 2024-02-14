@@ -14,13 +14,13 @@ pub struct BLSPublicKey {
 impl BLSPublicKey {
     /// Derives a public key from an existing private key.
     pub fn derive(secret_key: &BLSSecretKey) -> BLSPublicKey {
-        BLSPublicKey::from_native(nimiq_bls::PublicKey::from_secret(secret_key.native_ref()))
+        BLSPublicKey::from(nimiq_bls::PublicKey::from_secret(secret_key.native_ref()))
     }
 
     /// Deserializes a public key from a byte array.
     pub fn unserialize(bytes: &[u8]) -> Result<BLSPublicKey, JsError> {
         let key = nimiq_bls::PublicKey::deserialize_from_vec(bytes)?;
-        Ok(BLSPublicKey::from_native(key))
+        Ok(BLSPublicKey::from(key))
     }
 
     /// Creates a new public key from a byte array.
@@ -50,11 +50,13 @@ impl BLSPublicKey {
     }
 }
 
-impl BLSPublicKey {
-    pub fn from_native(public_key: nimiq_bls::PublicKey) -> BLSPublicKey {
+impl From<nimiq_bls::PublicKey> for BLSPublicKey {
+    fn from(public_key: nimiq_bls::PublicKey) -> BLSPublicKey {
         BLSPublicKey { inner: public_key }
     }
+}
 
+impl BLSPublicKey {
     pub fn native_ref(&self) -> &nimiq_bls::PublicKey {
         &self.inner
     }

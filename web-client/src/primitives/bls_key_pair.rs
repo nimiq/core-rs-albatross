@@ -17,19 +17,19 @@ impl BLSKeyPair {
     /// Generates a new keypair from secure randomness.
     pub fn generate() -> BLSKeyPair {
         let key_pair = nimiq_bls::KeyPair::generate_default_csprng();
-        BLSKeyPair::from_native(key_pair)
+        BLSKeyPair::from(key_pair)
     }
 
     /// Derives a keypair from an existing private key.
     pub fn derive(private_key: &BLSSecretKey) -> BLSKeyPair {
         let key_pair = nimiq_bls::KeyPair::from(*private_key.native_ref());
-        BLSKeyPair::from_native(key_pair)
+        BLSKeyPair::from(key_pair)
     }
 
     /// Deserializes a keypair from a byte array.
     pub fn unserialize(bytes: &[u8]) -> Result<BLSKeyPair, JsError> {
         let key_pair = nimiq_bls::KeyPair::deserialize_from_vec(bytes)?;
-        Ok(BLSKeyPair::from_native(key_pair))
+        Ok(BLSKeyPair::from(key_pair))
     }
 
     #[wasm_bindgen(constructor)]
@@ -38,7 +38,7 @@ impl BLSKeyPair {
             secret_key: *secret_key.native_ref(),
             public_key: *public_key.native_ref(),
         };
-        BLSKeyPair::from_native(key_pair)
+        BLSKeyPair::from(key_pair)
     }
 
     /// Serializes to a byte array.
@@ -49,13 +49,13 @@ impl BLSKeyPair {
     /// Gets the keypair's secret key.
     #[wasm_bindgen(getter, js_name = secretKey)]
     pub fn secret_key(&self) -> BLSSecretKey {
-        BLSSecretKey::from_native(self.inner.secret_key)
+        BLSSecretKey::from(self.inner.secret_key)
     }
 
     /// Gets the keypair's public key.
     #[wasm_bindgen(getter, js_name = publicKey)]
     pub fn public_key(&self) -> BLSPublicKey {
-        BLSPublicKey::from_native(self.inner.public_key)
+        BLSPublicKey::from(self.inner.public_key)
     }
 
     /// Formats the keypair into a hex string.
@@ -65,11 +65,13 @@ impl BLSKeyPair {
     }
 }
 
-impl BLSKeyPair {
-    pub fn from_native(key_pair: nimiq_bls::KeyPair) -> BLSKeyPair {
+impl From<nimiq_bls::KeyPair> for BLSKeyPair {
+    fn from(key_pair: nimiq_bls::KeyPair) -> BLSKeyPair {
         BLSKeyPair { inner: key_pair }
     }
+}
 
+impl BLSKeyPair {
     pub fn native_ref(&self) -> &nimiq_bls::KeyPair {
         &self.inner
     }

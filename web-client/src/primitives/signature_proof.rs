@@ -21,7 +21,7 @@ impl SignatureProof {
     /// Creates a Ed25519/Schnorr signature proof for a single-sig signature.
     #[wasm_bindgen(js_name = singleSig)]
     pub fn single_sig(public_key: &PublicKey, signature: &Signature) -> SignatureProof {
-        SignatureProof::from_native(nimiq_transaction::SignatureProof::from_ed25519(
+        SignatureProof::from(nimiq_transaction::SignatureProof::from_ed25519(
             *public_key.native_ref(),
             signature.native_ref().clone(),
         ))
@@ -53,7 +53,7 @@ impl SignatureProof {
             return Err(JsError::new("Invalid signature"));
         };
 
-        Ok(SignatureProof::from_native(
+        Ok(SignatureProof::from(
             nimiq_transaction::SignatureProof::try_from_webauthn(
                 public_key,
                 signature,
@@ -79,11 +79,11 @@ impl SignatureProof {
     pub fn signature(&self) -> SignatureUnion {
         match self.inner.signature {
             nimiq_keys::Signature::Ed25519(ref signature) => {
-                let signature = Signature::from_native(signature.clone());
+                let signature = Signature::from(signature.clone());
                 JsValue::unchecked_into(signature.into())
             }
             nimiq_keys::Signature::ES256(ref signature) => {
-                let signature = ES256Signature::from_native(signature.clone());
+                let signature = ES256Signature::from(signature.clone());
                 JsValue::unchecked_into(signature.into())
             }
         }
@@ -94,11 +94,11 @@ impl SignatureProof {
     pub fn public_key(&self) -> PublicKeyUnion {
         match self.inner.public_key {
             nimiq_keys::PublicKey::Ed25519(ref public_key) => {
-                let key = PublicKey::from_native(*public_key);
+                let key = PublicKey::from(*public_key);
                 JsValue::unchecked_into(key.into())
             }
             nimiq_keys::PublicKey::ES256(ref public_key) => {
-                let key = ES256PublicKey::from_native(*public_key);
+                let key = ES256PublicKey::from(*public_key);
                 JsValue::unchecked_into(key.into())
             }
         }
@@ -110,13 +110,15 @@ impl SignatureProof {
     }
 }
 
-impl SignatureProof {
-    pub fn from_native(signature_proof: nimiq_transaction::SignatureProof) -> SignatureProof {
+impl From<nimiq_transaction::SignatureProof> for SignatureProof {
+    fn from(signature_proof: nimiq_transaction::SignatureProof) -> Self {
         SignatureProof {
             inner: signature_proof,
         }
     }
+}
 
+impl SignatureProof {
     pub fn native_ref(&self) -> &nimiq_transaction::SignatureProof {
         &self.inner
     }

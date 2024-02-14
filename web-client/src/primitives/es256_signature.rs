@@ -20,7 +20,7 @@ impl ES256Signature {
     #[wasm_bindgen(js_name = fromBytes)]
     pub fn deserialize(bytes: &[u8]) -> Result<ES256Signature, JsError> {
         match nimiq_keys::ES256Signature::from_bytes(bytes) {
-            Ok(sig) => Ok(ES256Signature::from_native(sig)),
+            Ok(sig) => Ok(ES256Signature::from(sig)),
             Err(err) => Err(JsError::from(err)),
         }
     }
@@ -45,7 +45,7 @@ impl ES256Signature {
     #[wasm_bindgen(js_name = fromHex)]
     pub fn from_hex(hex: &str) -> Result<ES256Signature, JsError> {
         match nimiq_keys::ES256Signature::from_str(hex) {
-            Ok(sig) => Ok(ES256Signature::from_native(sig)),
+            Ok(sig) => Ok(ES256Signature::from(sig)),
             Err(err) => Err(JsError::from(err)),
         }
     }
@@ -57,11 +57,13 @@ impl ES256Signature {
     }
 }
 
-impl ES256Signature {
-    pub fn from_native(signature: nimiq_keys::ES256Signature) -> ES256Signature {
+impl From<nimiq_keys::ES256Signature> for ES256Signature {
+    fn from(signature: nimiq_keys::ES256Signature) -> ES256Signature {
         ES256Signature { inner: signature }
     }
+}
 
+impl ES256Signature {
     pub fn native_ref(&self) -> &nimiq_keys::ES256Signature {
         &self.inner
     }

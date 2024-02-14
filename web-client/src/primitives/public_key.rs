@@ -26,7 +26,7 @@ impl PublicKey {
 impl PublicKey {
     /// Derives a public key from an existing private key.
     pub fn derive(private_key: &PrivateKey) -> PublicKey {
-        PublicKey::from_native(nimiq_keys::Ed25519PublicKey::from(private_key.native_ref()))
+        PublicKey::from(nimiq_keys::Ed25519PublicKey::from(private_key.native_ref()))
     }
 
     /// Verifies that a signature is valid for this public key and the provided data.
@@ -39,7 +39,7 @@ impl PublicKey {
     /// Throws when the byte array contains less than 32 bytes.
     pub fn unserialize(bytes: &[u8]) -> Result<PublicKey, JsError> {
         let key = nimiq_keys::Ed25519PublicKey::deserialize_from_vec(bytes)?;
-        Ok(PublicKey::from_native(key))
+        Ok(PublicKey::from(key))
     }
 
     /// Deserializes a public key from its SPKI representation.
@@ -87,7 +87,7 @@ impl PublicKey {
     #[wasm_bindgen(js_name = fromHex)]
     pub fn from_hex(hex: &str) -> Result<PublicKey, JsError> {
         let key = nimiq_keys::Ed25519PublicKey::from_str(hex)?;
-        Ok(PublicKey::from_native(key))
+        Ok(PublicKey::from(key))
     }
 
     /// Formats the public key into a hex string.
@@ -99,15 +99,17 @@ impl PublicKey {
     /// Gets the public key's address.
     #[wasm_bindgen(js_name = toAddress)]
     pub fn to_address(&self) -> Address {
-        Address::from_native(nimiq_keys::Address::from(&self.inner))
+        Address::from(nimiq_keys::Address::from(&self.inner))
+    }
+}
+
+impl From<nimiq_keys::Ed25519PublicKey> for PublicKey {
+    fn from(public_key: nimiq_keys::Ed25519PublicKey) -> PublicKey {
+        PublicKey { inner: public_key }
     }
 }
 
 impl PublicKey {
-    pub fn from_native(public_key: nimiq_keys::Ed25519PublicKey) -> PublicKey {
-        PublicKey { inner: public_key }
-    }
-
     pub fn native_ref(&self) -> &nimiq_keys::Ed25519PublicKey {
         &self.inner
     }

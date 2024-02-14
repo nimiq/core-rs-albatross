@@ -13,8 +13,8 @@ pub struct PlainPeerInfo {
     pub node_type: String,
 }
 
-impl PlainPeerInfo {
-    pub fn from_native(peer_info: nimiq_network_interface::peer_info::PeerInfo) -> Self {
+impl From<nimiq_network_interface::peer_info::PeerInfo> for PlainPeerInfo {
+    fn from(peer_info: nimiq_network_interface::peer_info::PeerInfo) -> Self {
         let node_type = if peer_info
             .get_services()
             .contains(Services::provided(NodeType::History))

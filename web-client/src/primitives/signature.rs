@@ -20,7 +20,7 @@ impl Signature {
     #[wasm_bindgen(js_name = fromBytes)]
     pub fn deserialize(bytes: &[u8]) -> Result<Signature, JsError> {
         match nimiq_keys::Ed25519Signature::from_bytes(bytes) {
-            Ok(sig) => Ok(Signature::from_native(sig)),
+            Ok(sig) => Ok(Signature::from(sig)),
             Err(err) => Err(JsError::from(err)),
         }
     }
@@ -43,7 +43,7 @@ impl Signature {
     #[wasm_bindgen(js_name = fromHex)]
     pub fn from_hex(hex: &str) -> Result<Signature, JsError> {
         match nimiq_keys::Ed25519Signature::from_str(hex) {
-            Ok(sig) => Ok(Signature::from_native(sig)),
+            Ok(sig) => Ok(Signature::from(sig)),
             Err(err) => Err(JsError::from(err)),
         }
     }
@@ -55,11 +55,13 @@ impl Signature {
     }
 }
 
-impl Signature {
-    pub fn from_native(signature: nimiq_keys::Ed25519Signature) -> Signature {
+impl From<nimiq_keys::Ed25519Signature> for Signature {
+    fn from(signature: nimiq_keys::Ed25519Signature) -> Signature {
         Signature { inner: signature }
     }
+}
 
+impl Signature {
     pub fn native_ref(&self) -> &nimiq_keys::Ed25519Signature {
         &self.inner
     }

@@ -18,7 +18,7 @@ pub struct Address {
 impl Address {
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: &[u8]) -> Result<Address, JsError> {
-        Ok(Address::from_native(nimiq_keys::Address::from(
+        Ok(Address::from(nimiq_keys::Address::from(
             &bytes[0..nimiq_keys::Address::len()],
         )))
     }
@@ -47,7 +47,7 @@ impl Address {
     /// Throws when an address cannot be parsed from the string.
     #[wasm_bindgen(js_name = fromString)]
     pub fn from_string(str: &str) -> Result<Address, JsError> {
-        Ok(Address::from_native(nimiq_keys::Address::from_str(str)?))
+        Ok(Address::from(nimiq_keys::Address::from_str(str)?))
     }
 
     /// Parses an address from its user-friendly string representation.
@@ -56,7 +56,7 @@ impl Address {
     #[cfg(feature = "primitives")]
     #[wasm_bindgen(js_name = fromUserFriendlyAddress)]
     pub fn from_user_friendly_address(str: &str) -> Result<Address, JsError> {
-        Ok(Address::from_native(
+        Ok(Address::from(
             nimiq_keys::Address::from_user_friendly_address(str)?,
         ))
     }
@@ -87,11 +87,13 @@ impl Address {
     }
 }
 
-impl Address {
-    pub fn from_native(address: nimiq_keys::Address) -> Address {
+impl From<nimiq_keys::Address> for Address {
+    fn from(address: nimiq_keys::Address) -> Self {
         Address { inner: address }
     }
+}
 
+impl Address {
     pub fn native_ref(&self) -> &nimiq_keys::Address {
         &self.inner
     }
