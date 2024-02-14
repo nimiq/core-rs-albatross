@@ -3,7 +3,7 @@ use nimiq_transaction::historic_transaction::HistoricTransaction;
 
 use super::{interface::HistoryInterface, validity_store::ValidityStore};
 
-/// The LightHistoryStore is essentially an MMRthat only stores peaks.
+/// The LightHistoryStore is essentially an MMR that only stores peaks.
 /// It also contains a validity store, the is used to keep track of which
 /// transactions have been included in the validity window.
 pub struct LightHistoryStore {

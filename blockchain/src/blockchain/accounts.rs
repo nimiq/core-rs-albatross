@@ -13,7 +13,7 @@ use nimiq_serde::Deserialize;
 use nimiq_transaction::historic_transaction::HistoricTransaction;
 use nimiq_trie::WriteTransactionProxy;
 
-use crate::{interface::HistoryInterface,Blockchain};
+use crate::{interface::HistoryInterface, Blockchain};
 
 /// Subset of the accounts in the accounts tree
 pub struct AccountsChunk {

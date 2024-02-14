@@ -200,7 +200,7 @@ impl HistoryStore {
     }
 
     /// Removes a number of historic transactions from an existing history tree. It returns the root
-    /// of the resulting tree and the total size of of the transactions removed.
+    /// of the resulting tree and the total size of the transactions removed.
     pub fn remove_partial_history(
         &self,
         txn: &mut WriteTransactionProxy,
@@ -997,7 +997,7 @@ impl HistoryInterface for HistoryStore {
     }
 
     /// Removes a number of historic transactions from an existing history tree. It returns the root
-    /// of the resulting tree and the total size of of the transactions removed.
+    /// of the resulting tree and the total size of the transactions removed.
     fn remove_partial_history(
         &self,
         txn: &mut WriteTransactionProxy,
