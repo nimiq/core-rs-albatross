@@ -6,7 +6,7 @@ use log::warn;
 use nimiq_bls::{lazy::LazyPublicKey, CompressedPublicKey, KeyPair, SecretKey};
 use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, Network, SubscribeEvents, Topic},
-    request::{Message, Request, RequestCommon},
+    request::{InboundRequestError, Message, Request, RequestCommon, RequestError},
 };
 use nimiq_serde::{Deserialize, Serialize};
 use parking_lot::RwLock;
@@ -184,13 +184,22 @@ where
         Err(NetworkError::UnknownValidator(validator_id))
     }
 
-    /// Clears the validator->peer_id cache.
+    /// Clears the validator->peer_id cache on a `RequestError`.
     /// The cached entry should be cleared when the peer id might have changed.
-    fn clear_validator_peer_id_cache(&self, validator_id: u16) {
-        if let Some(validator_key) = self.validator_keys.read().get(usize::from(validator_id)) {
-            self.validator_peer_id_cache
-                .write()
-                .remove(validator_key.compressed());
+    fn clear_validator_peer_id_cache_on_error(&self, validator_id: u16, error: &RequestError) {
+        match error {
+            // The no receiver is not an error since the peer might not be aggregating
+            RequestError::InboundRequest(InboundRequestError::NoReceiver) => {}
+            // In all other cases, clear the Peer ID cache for this validator
+            _ => {
+                if let Some(validator_key) =
+                    self.validator_keys.read().get(usize::from(validator_id))
+                {
+                    self.validator_peer_id_cache
+                        .write()
+                        .remove(validator_key.compressed());
+                }
+            }
         }
     }
 }
@@ -265,7 +274,7 @@ where
             .message(msg, peer_id)
             .map_err(|e| {
                 // The validator peer id might have changed and thus caused a connection failure.
-                self.clear_validator_peer_id_cache(validator_id);
+                self.clear_validator_peer_id_cache_on_error(validator_id, &e);
 
                 NetworkError::Request(e)
             })
@@ -289,7 +298,7 @@ where
                 .request(request, peer_id)
                 .map_err(|e| {
                     // The validator peer id might have changed and thus caused a connection failure.
-                    self.clear_validator_peer_id_cache(validator_id);
+                    self.clear_validator_peer_id_cache_on_error(validator_id, &e);
 
                     NetworkError::Request(e)
                 })
