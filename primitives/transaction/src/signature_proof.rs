@@ -255,10 +255,10 @@ impl SignatureProof {
 
     pub fn make_type_and_flags_byte(&self) -> u8 {
         // Use the lower 4 bits for the algorithm variant
-        let mut type_flags: u8 = match self.public_key {
-            PublicKey::Ed25519(_) => 0,
-            PublicKey::ES256(_) => 1,
-        };
+        let mut type_flags = match self.public_key {
+            PublicKey::Ed25519(_) => SignatureProofAlgorithm::Ed25519,
+            PublicKey::ES256(_) => SignatureProofAlgorithm::ES256,
+        } as u8;
 
         // Use the upper 4 bits as flags
         let mut flags = SignatureProofFlags::default();
@@ -270,13 +270,20 @@ impl SignatureProof {
         type_flags
     }
 
-    pub fn parse_type_and_flags_byte(byte: u8) -> (u8, SignatureProofFlags) {
+    pub fn parse_type_and_flags_byte(
+        byte: u8,
+    ) -> Result<(SignatureProofAlgorithm, SignatureProofFlags), String> {
         // The algorithm is encoded in the lower 4 bits
-        let algorithm = byte & 0b0000_1111;
+        let type_byte = byte & 0b0000_1111;
+        let algorithm = match type_byte {
+            0 => SignatureProofAlgorithm::Ed25519,
+            1 => SignatureProofAlgorithm::ES256,
+            _ => return Err(format!("Invalid signature proof algorithm: {}", type_byte)),
+        };
         // The flags are encoded in the upper 4 bits
         let flags = SignatureProofFlags::from_bits_truncate(byte >> 4);
 
-        (algorithm, flags)
+        Ok((algorithm, flags))
     }
 }
 
@@ -290,6 +297,12 @@ impl Default for SignatureProof {
             webauthn_fields: None,
         }
     }
+}
+
+#[repr(u8)]
+pub enum SignatureProofAlgorithm {
+    Ed25519,
+    ES256,
 }
 
 bitflags! {
@@ -421,44 +434,41 @@ mod serde_derive {
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
 
-            let (algorithm, flags) = SignatureProof::parse_type_and_flags_byte(type_field);
+            let (algorithm, flags) = SignatureProof::parse_type_and_flags_byte(type_field)
+                .map_err(serde::de::Error::custom)?;
 
-            let public_key: PublicKey = if algorithm == 0 {
-                let public_key: Ed25519PublicKey = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
-                PublicKey::Ed25519(public_key)
-            } else if algorithm == 1 {
-                let public_key: ES256PublicKey = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
-                PublicKey::ES256(public_key)
-            } else {
-                return Err(serde::de::Error::custom(format!(
-                    "Unknown algorithm: {}",
-                    algorithm
-                )));
+            let public_key = match algorithm {
+                SignatureProofAlgorithm::Ed25519 => {
+                    let public_key: Ed25519PublicKey = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                    PublicKey::Ed25519(public_key)
+                }
+                SignatureProofAlgorithm::ES256 => {
+                    let public_key: ES256PublicKey = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                    PublicKey::ES256(public_key)
+                }
             };
 
             let merkle_path: Blake2bMerklePath = seq
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
 
-            let signature: Signature = if algorithm == 0 {
-                let signature: Ed25519Signature = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
-                Signature::Ed25519(signature)
-            } else if algorithm == 1 {
-                let signature: ES256Signature = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
-                Signature::ES256(signature)
-            } else {
-                return Err(serde::de::Error::custom(format!(
-                    "Unknown algorithm: {}",
-                    algorithm
-                )));
+            let signature = match algorithm {
+                SignatureProofAlgorithm::Ed25519 => {
+                    let signature: Ed25519Signature = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
+                    Signature::Ed25519(signature)
+                }
+                SignatureProofAlgorithm::ES256 => {
+                    let signature: ES256Signature = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
+                    Signature::ES256(signature)
+                }
             };
 
             let webauthn_fields = if flags.contains(SignatureProofFlags::WEBAUTHN_FIELDS) {

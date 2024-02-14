@@ -669,22 +669,21 @@ mod serde_derive {
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
             let (algorithm, flags) =
-                SignatureProof::parse_type_and_flags_byte(proof_type_and_flags);
-            let public_key: PublicKey = if algorithm == 0 {
-                let public_key: Ed25519PublicKey = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
-                PublicKey::Ed25519(public_key)
-            } else if algorithm == 1 {
-                let public_key: ES256PublicKey = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
-                PublicKey::ES256(public_key)
-            } else {
-                return Err(serde::de::Error::custom(format!(
-                    "Unknown algorithm: {}",
-                    algorithm
-                )));
+                SignatureProof::parse_type_and_flags_byte(proof_type_and_flags)
+                    .map_err(serde::de::Error::custom)?;
+            let public_key = match algorithm {
+                SignatureProofAlgorithm::Ed25519 => {
+                    let public_key: Ed25519PublicKey = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                    PublicKey::Ed25519(public_key)
+                }
+                SignatureProofAlgorithm::ES256 => {
+                    let public_key: ES256PublicKey = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                    PublicKey::ES256(public_key)
+                }
             };
             let recipient: Address = seq
                 .next_element()?
@@ -701,21 +700,19 @@ mod serde_derive {
             let network_id: NetworkId = seq
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(6, &self))?;
-            let signature: Signature = if algorithm == 0 {
-                let signature: Ed25519Signature = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(7, &self))?;
-                Signature::Ed25519(signature)
-            } else if algorithm == 1 {
-                let signature: ES256Signature = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(7, &self))?;
-                Signature::ES256(signature)
-            } else {
-                return Err(serde::de::Error::custom(format!(
-                    "Unknown algorithm: {}",
-                    algorithm
-                )));
+            let signature = match algorithm {
+                SignatureProofAlgorithm::Ed25519 => {
+                    let signature: Ed25519Signature = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
+                    Signature::Ed25519(signature)
+                }
+                SignatureProofAlgorithm::ES256 => {
+                    let signature: ES256Signature = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
+                    Signature::ES256(signature)
+                }
             };
             let webauthn_fields = if flags.contains(SignatureProofFlags::WEBAUTHN_FIELDS) {
                 Some(
