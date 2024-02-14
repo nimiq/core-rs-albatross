@@ -37,6 +37,10 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
                     if self.network.peer_provides_required_services(peer_id) {
                         // Request epoch_ids from the peer that joined.
                         self.add_peer(peer_id);
+                    } else {
+                        // We can't sync with this peer as it doesn't provide the services that we need.
+                        // Emit the peer as incompatible.
+                        return Poll::Ready(Some(MacroSyncReturn::Incompatible(peer_id)));
                     }
                 }
                 Ok(_) => {}

@@ -1,17 +1,21 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
+    mem,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
     time::Duration,
 };
 
-use futures::{Stream, StreamExt};
-use instant::Instant;
+use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, Stream, StreamExt};
 use nimiq_block::Block;
+use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::network::Network;
+use nimiq_network_interface::network::{CloseReason, Network};
+use wasm_timer::Interval;
 
-use crate::consensus::ResolveBlockRequest;
+use crate::{consensus::ResolveBlockRequest, messages::RequestHead};
 
 /// Trait that defines how a node synchronizes macro blocks
 /// The expected functionality is that there could be different methods of syncing but they
@@ -21,7 +25,7 @@ use crate::consensus::ResolveBlockRequest;
 /// implementor of these trait.
 pub trait MacroSync<TPeerId>: Stream<Item = MacroSyncReturn<TPeerId>> + Unpin + Send {
     /// Adds a peer to synchronize macro blocks
-    fn add_peer(&self, peer_id: TPeerId);
+    fn add_peer(&mut self, peer_id: TPeerId);
 }
 
 /// Trait that defines how a node synchronizes receiving the blocks the peers are currently
@@ -56,10 +60,12 @@ pub trait LiveSync<N: Network>: Stream<Item = LiveSyncEvent<N::PeerId>> + Unpin 
 #[derive(Debug, PartialEq, Eq)]
 /// Return type for a `MacroSync`
 pub enum MacroSyncReturn<T> {
-    /// Macro Sync returned a good type
+    /// We have synced to this peer's macro state.
     Good(T),
-    /// Macro Sync returned an outdated type
+    /// The peer is behind our own state.
     Outdated(T),
+    /// We can't sync with this peer.
+    Incompatible(T),
 }
 
 #[derive(Clone, Debug)]
@@ -114,27 +120,47 @@ pub struct Syncer<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> {
     /// Synchronizes the blockchain to the latest macro blocks of the peers
     pub macro_sync: M,
 
-    /// The number of extended blocks through announcements
-    accepted_announcements: usize,
+    /// A proxy to the blockchain
+    blockchain: BlockchainProxy,
 
-    /// Hash set with the set of peers that have been qualified as outdated
+    /// A reference to the network
+    network: Arc<N>,
+
+    /// The set of peers that macro sync deemed outdated
     outdated_peers: HashSet<N::PeerId>,
 
-    /// Hash set with the peer ID as key containing the elapsed time when a peer
-    /// was qualified as outdated
-    outdated_timeouts: HashMap<N::PeerId, Instant>,
+    /// The set of peers that macro sync deemed incompatible
+    incompatible_peers: HashSet<N::PeerId>,
+
+    /// Interval to regularly check outdated/incompatible peers if they are up-to-date.
+    check_interval: Interval,
+
+    /// The ongoing up-to-date checks for incompatible peers.
+    pending_checks: FuturesUnordered<BoxFuture<'static, (N::PeerId, bool)>>,
+
+    /// The number of blockchain extensions triggered by block announcements
+    accepted_announcements: usize,
 }
 
 impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
-    const CHECK_OUTDATED_TIMEOUT: Duration = Duration::from_secs(20);
+    const CHECK_INTERVAL: Duration = Duration::from_secs(60);
 
-    pub fn new(live_sync: L, macro_sync: M) -> Syncer<N, M, L> {
+    pub fn new(
+        blockchain: BlockchainProxy,
+        network: Arc<N>,
+        live_sync: L,
+        macro_sync: M,
+    ) -> Syncer<N, M, L> {
         Syncer {
             live_sync,
             macro_sync,
-            accepted_announcements: 0,
+            blockchain,
+            network,
             outdated_peers: Default::default(),
-            outdated_timeouts: Default::default(),
+            incompatible_peers: Default::default(),
+            check_interval: Interval::new(Self::CHECK_INTERVAL),
+            pending_checks: Default::default(),
+            accepted_announcements: 0,
         }
     }
 
@@ -172,13 +198,105 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
     pub fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
         self.live_sync.resolve_block(request)
     }
+
+    fn check_outdated_peers(&mut self) {
+        for peer_id in mem::take(&mut self.outdated_peers) {
+            self.move_peer_into_macro_sync(peer_id);
+        }
+    }
+
+    fn check_incompatible_peers(&mut self) {
+        for peer_id in mem::take(&mut self.incompatible_peers) {
+            self.check_incompatible_peer(peer_id);
+        }
+    }
+
+    fn check_incompatible_peer(&mut self, peer_id: N::PeerId) {
+        let blockchain = self.blockchain.clone();
+        let network = Arc::clone(&self.network);
+
+        debug!(%peer_id, "Checking if incompatible peer is in sync");
+
+        let future = async move {
+            let synced = Self::is_peer_synced(blockchain, network, peer_id).await;
+            (peer_id, synced)
+        }
+        .boxed();
+
+        self.pending_checks.push(future);
+    }
+
+    async fn is_peer_synced(
+        blockchain: BlockchainProxy,
+        network: Arc<N>,
+        peer_id: N::PeerId,
+    ) -> bool {
+        // Request the peer's head state.
+        // Disconnect the peer if the request fails.
+        let head = match network.request(RequestHead {}, peer_id).await {
+            Ok(head) => head,
+            Err(e) => {
+                debug!(%peer_id, ?e, "Head request to incompatible peer failed");
+                network.disconnect_peer(peer_id, CloseReason::Other).await;
+                return false;
+            }
+        };
+
+        // Fetch the reported election block from our chain.
+        // If we don't know the block, the peer is either ahead of us or on a different chain.
+        // In this case, we conservatively assume that the peer is not synced.
+        let blockchain = blockchain.read();
+        let election_block = match blockchain.get_block(&head.election, false) {
+            Ok(block) => block,
+            Err(_) => {
+                debug!(
+                    %peer_id,
+                    election_head = %head.election,
+                    "Incompatible peer's election block not found"
+                );
+                return false;
+            }
+        };
+
+        // If the peer is in a different epoch than us, we assume that it's not synced.
+        if election_block.epoch_number() != blockchain.election_head().epoch_number() {
+            debug!(
+                %peer_id,
+                peers_epoch = election_block.epoch_number(),
+                our_epoch = blockchain.election_head().epoch_number(),
+                "Incompatible peer is in a different epoch"
+            );
+            return false;
+        }
+
+        // Fetch the reported checkpoint block from our chain.
+        // If we don't know the block, the peer is either ahead of us or on a different chain.
+        // Since we are in the same epoch, we speculatively assume that the peer is ahead.
+        let checkpoint = match blockchain.get_block(&head.r#macro, false) {
+            Ok(block) => block,
+            Err(_) => return true,
+        };
+
+        // We consider the peer synced if it's at most one batch behind us.
+        if checkpoint.batch_number() < blockchain.macro_head().batch_number().saturating_sub(1) {
+            debug!(
+                %peer_id,
+                peers_batch = checkpoint.batch_number(),
+                our_batch = blockchain.macro_head().batch_number(),
+                "Incompatible peer is in a different batch"
+            );
+            return false;
+        }
+
+        true
+    }
 }
 
 impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M, L> {
     type Item = LiveSyncPushEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        // Poll self.history_sync and add new peers to self.sync_queue.
+        // Poll macro sync and track the peers that it emits.
         while let Poll::Ready(result) = self.macro_sync.poll_next_unpin(cx) {
             match result {
                 Some(MacroSyncReturn::Good(peer_id)) => {
@@ -186,16 +304,18 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
                     self.move_peer_into_live_sync(peer_id);
                 }
                 Some(MacroSyncReturn::Outdated(peer_id)) => {
-                    debug!(%peer_id,"Macro sync returned outdated peer. Waiting.");
-                    self.outdated_timeouts.insert(peer_id, Instant::now());
+                    debug!(%peer_id, "Macro sync returned outdated peer");
                     self.outdated_peers.insert(peer_id);
+                }
+                Some(MacroSyncReturn::Incompatible(peer_id)) => {
+                    debug!(%peer_id, "Macro sync returned incompatible peer");
+                    self.check_incompatible_peer(peer_id);
                 }
                 None => {}
             }
         }
 
-        self.check_peers_up_to_date();
-
+        // Poll live sync and track the peers that it emits.
         while let Poll::Ready(Some(result)) = self.live_sync.poll_next_unpin(cx) {
             match result {
                 LiveSyncEvent::PushEvent(push_event) => {
@@ -206,7 +326,6 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
                 }
                 LiveSyncEvent::PeerEvent(peer_event) => match peer_event {
                     LiveSyncPeerEvent::Behind(peer_id) => {
-                        self.outdated_timeouts.insert(peer_id, Instant::now());
                         self.outdated_peers.insert(peer_id);
                     }
                     LiveSyncPeerEvent::Ahead(peer_id) => {
@@ -216,25 +335,22 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
             }
         }
 
-        Poll::Pending
-    }
-}
-
-impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
-    /// Adds all outdated peers that were checked more than TIMEOUT ago to macro sync
-    fn check_peers_up_to_date(&mut self) {
-        let mut peers_todo = Vec::new();
-        self.outdated_timeouts.retain(|&peer_id, last_checked| {
-            let timeouted = last_checked.elapsed() >= Self::CHECK_OUTDATED_TIMEOUT;
-            if timeouted {
-                peers_todo.push(peer_id);
-            }
-            !timeouted
-        });
-        for peer_id in peers_todo {
-            debug!("Adding outdated peer {:?} to history sync", peer_id);
-            let peer_id = self.outdated_peers.take(&peer_id).unwrap();
-            self.macro_sync.add_peer(peer_id);
+        // Re-check all outdated/incompatible peers whenever the interval triggers.
+        while self.check_interval.poll_next_unpin(cx).is_ready() {
+            self.check_outdated_peers();
+            self.check_incompatible_peers();
         }
+
+        // Handle pending incompatible peer checks.
+        while let Poll::Ready(Some((peer_id, synced))) = self.pending_checks.poll_next_unpin(cx) {
+            if synced {
+                debug!(%peer_id, "Incompatible peer is in sync");
+                self.move_peer_into_live_sync(peer_id);
+            } else {
+                self.incompatible_peers.insert(peer_id);
+            }
+        }
+
+        Poll::Pending
     }
 }

@@ -69,29 +69,33 @@ impl<N: Network> SyncerProxy<N> {
             "History Syncer can only be created for a full blockchain"
         );
 
-        match blockchain_proxy {
-            BlockchainProxy::Full(ref blockchain) => {
-                let block_queue = BlockQueue::new(
-                    Arc::clone(&network),
-                    blockchain_proxy.clone(),
-                    QueueConfig::default(),
-                )
-                .await;
-
-                let live_sync = BlockLiveSync::with_queue(
-                    blockchain_proxy.clone(),
-                    Arc::clone(&network),
-                    block_queue,
-                    bls_cache,
-                );
-
-                let macro_sync =
-                    HistoryMacroSync::new(Arc::clone(blockchain), network, network_event_rx);
-
-                Self::History(Syncer::new(live_sync, macro_sync))
-            }
+        let blockchain = match &blockchain_proxy {
+            BlockchainProxy::Full(blockchain) => Arc::clone(blockchain),
             BlockchainProxy::Light(_) => unreachable!(),
-        }
+        };
+
+        let block_queue = BlockQueue::new(
+            Arc::clone(&network),
+            blockchain_proxy.clone(),
+            QueueConfig::default(),
+        )
+        .await;
+
+        let live_sync = BlockLiveSync::with_queue(
+            blockchain_proxy.clone(),
+            Arc::clone(&network),
+            block_queue,
+            bls_cache,
+        );
+
+        let macro_sync = HistoryMacroSync::new(blockchain, Arc::clone(&network), network_event_rx);
+
+        Self::History(Syncer::new(
+            blockchain_proxy,
+            network,
+            live_sync,
+            macro_sync,
+        ))
     }
 
     #[cfg(feature = "full")]
@@ -140,8 +144,8 @@ impl<N: Network> SyncerProxy<N> {
         // The task executor that is supplied for the light macro sync variant is tokio
         // because the full sync is not supported in wasm
         let macro_sync = LightMacroSync::new(
-            blockchain_proxy,
-            network,
+            blockchain_proxy.clone(),
+            Arc::clone(&network),
             network_event_rx,
             zkp_component_proxy,
             full_sync_threshold,
@@ -150,7 +154,12 @@ impl<N: Network> SyncerProxy<N> {
             }),
         );
 
-        Self::Full(Syncer::new(live_sync, macro_sync))
+        Self::Full(Syncer::new(
+            blockchain_proxy,
+            network,
+            live_sync,
+            macro_sync,
+        ))
     }
 
     /// Creates a new instance of a `SyncerProxy` for the `Light` variant
@@ -182,15 +191,20 @@ impl<N: Network> SyncerProxy<N> {
         );
 
         let macro_sync = LightMacroSync::new(
-            blockchain_proxy,
-            network,
+            blockchain_proxy.clone(),
+            Arc::clone(&network),
             network_event_rx,
             zkp_component_proxy,
             0, // Since the light sync does not keep state, we ignore the threshold.
             executor,
         );
 
-        Self::Light(Syncer::new(live_sync, macro_sync))
+        Self::Light(Syncer::new(
+            blockchain_proxy,
+            network,
+            live_sync,
+            macro_sync,
+        ))
     }
 
     /// Pushes a block for the live sync method

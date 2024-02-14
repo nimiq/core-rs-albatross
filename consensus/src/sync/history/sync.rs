@@ -104,7 +104,7 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
 }
 
 impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for HistoryMacroSync<TNetwork> {
-    fn add_peer(&self, peer_id: TNetwork::PeerId) {
+    fn add_peer(&mut self, peer_id: TNetwork::PeerId) {
         // Ignore peer if we already know it.
         if self.peers.contains_key(&peer_id) {
             return;

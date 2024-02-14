@@ -390,8 +390,13 @@ impl RequestMissingBlocks {
 }
 
 impl<N: Network> Handle<N, BlockchainProxy> for RequestHead {
-    fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> Blake2bHash {
-        blockchain.read().head_hash()
+    fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> ResponseHead {
+        let blockchain = blockchain.read();
+        ResponseHead {
+            micro: blockchain.head_hash(),
+            r#macro: blockchain.macro_head_hash(),
+            election: blockchain.election_head_hash(),
+        }
     }
 }
 

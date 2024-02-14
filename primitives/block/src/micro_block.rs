@@ -41,6 +41,11 @@ impl MicroBlock {
         self.header.block_number
     }
 
+    /// Returns the batch number of this micro block.
+    pub fn batch_number(&self) -> u32 {
+        Policy::batch_at(self.header.block_number)
+    }
+
     /// Returns the epoch number of this micro block.
     pub fn epoch_number(&self) -> u32 {
         Policy::epoch_at(self.header.block_number)

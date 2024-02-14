@@ -340,10 +340,17 @@ impl RequestCommon for RequestMissingBlocks {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestHead {}
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ResponseHead {
+    pub micro: Blake2bHash,
+    pub r#macro: Blake2bHash,
+    pub election: Blake2bHash,
+}
+
 impl RequestCommon for RequestHead {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 210;
-    type Response = Blake2bHash;
+    type Response = ResponseHead;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_HEAD;
 }
 

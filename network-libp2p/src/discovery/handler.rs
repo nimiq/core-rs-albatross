@@ -525,11 +525,7 @@ impl ConnectionHandler for Handler {
                                     let mut peer_contact_book = self.peer_contact_book.write();
 
                                     // Insert the peer into the peer contact book.
-                                    peer_contact_book.insert_filtered(
-                                        peer_contact.clone(),
-                                        self.config.required_services,
-                                        self.config.only_secure_ws_connections,
-                                    );
+                                    peer_contact_book.insert(peer_contact.clone());
 
                                     // Insert the peer's contacts (filtered) into my contact book
                                     peer_contact_book.insert_all_filtered(

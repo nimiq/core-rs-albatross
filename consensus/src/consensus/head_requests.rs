@@ -14,13 +14,13 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestError};
 
-use crate::messages::{BlockError, RequestBlock, RequestHead};
+use crate::messages::{BlockError, RequestBlock, RequestHead, ResponseHead};
 
 /// Requests the head blocks for a set of peers.
 /// Calculates the number of known/unknown blocks and a vector of unknown blocks.
 pub struct HeadRequests<TNetwork: Network + 'static> {
     peers: Vec<TNetwork::PeerId>,
-    head_hashes: FuturesUnordered<BoxFuture<'static, (usize, Result<Blake2bHash, RequestError>)>>,
+    head_hashes: FuturesUnordered<BoxFuture<'static, (usize, Result<ResponseHead, RequestError>)>>,
     head_blocks: FuturesUnordered<
         BoxFuture<
             'static,
@@ -87,7 +87,7 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
     async fn request_head(
         network: Arc<TNetwork>,
         peer_id: TNetwork::PeerId,
-    ) -> Result<Blake2bHash, RequestError> {
+    ) -> Result<ResponseHead, RequestError> {
         network
             .request::<RequestHead>(RequestHead {}, peer_id)
             .await
@@ -119,7 +119,8 @@ impl<TNetwork: Network + 'static> Future for HeadRequests<TNetwork> {
         while let Poll::Ready(Some((i, result))) = self.head_hashes.poll_next_unpin(cx) {
             // If we got a result, check it and classify it as known block/unknown block.
             match result {
-                Ok(hash) => {
+                Ok(head) => {
+                    let hash = head.micro;
                     if self.blockchain.read().get_block(&hash, false).is_ok() {
                         self.num_known_blocks += 1;
                     } else {
