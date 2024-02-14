@@ -4412,6 +4412,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-utils",
+ "rust_json",
  "serde",
  "serde_json",
  "strum_macros",
@@ -5752,6 +5753,12 @@ dependencies = [
  "blake2b_simd",
  "constant_time_eq 0.3.0",
 ]
+
+[[package]]
+name = "rust_json"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "540c69f089252cacc268b7f273cfcd4ddeeae2d961936e43baa1311ab1c17388"
 
 [[package]]
 name = "rustc-demangle"

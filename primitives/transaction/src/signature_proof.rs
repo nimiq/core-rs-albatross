@@ -6,6 +6,7 @@ use nimiq_hash::{Blake2bHasher, Hasher, Sha256Hasher};
 use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, PublicKey, Signature};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_utils::merkle::Blake2bMerklePath;
+use rust_json::{json_parse, JsonElem};
 use url::Url;
 
 #[derive(Clone, Debug)]
@@ -52,24 +53,41 @@ impl SignatureProof {
         let mut client_data_extra_fields = "".to_string();
 
         // Convert client_data_json bytes to string for search & split operations
-        // FIXME: Handle invalid UTF-8
-        let client_data_json_str = std::str::from_utf8(client_data_json).unwrap();
+        let client_data_json_str = std::str::from_utf8(client_data_json).map_err(|e| {
+            SerializationError::new(&format!("Invalid UTF-8 in clientDataJSON: {}", e))
+        })?;
 
-        // Extract origin from client_data_json
-        let origin_search_term = r#","origin":""#;
-        // Find the start of the origin value
-        // FIXME: Handle missing origin
-        let origin_start =
-            client_data_json_str.find(origin_search_term).unwrap() + origin_search_term.len();
-        // Find the closing quotation mark of the origin value
-        // FIXME: Handle missing closing quotation mark
-        let origin_length = client_data_json_str[origin_start..].find('"').unwrap();
-        // The origin is the string between the two indices
-        let origin = &client_data_json_str[origin_start..origin_start + origin_length];
+        let parsed_client_data = json_parse(
+            // Make sure single backward-slashes from Android Chrome's origin protocol are kept in the parsed JSON
+            &client_data_json_str.replace(r":\/\/", r":\\/\\/"),
+        )
+        .map_err(|e| SerializationError::new(&format!("JSON parsing error: {:?}", e)))?;
+        let client_data = match parsed_client_data {
+            JsonElem::Object(map) => map,
+            _ => {
+                return Err(SerializationError::new(
+                    "clientDataJSON must be a JSON object",
+                ))
+            }
+        };
+
+        let origin_json = client_data
+            .get("origin")
+            .ok_or_else(|| SerializationError::new("Missing origin in clientDataJSON"))?;
+        let origin = match origin_json {
+            JsonElem::Str(s) => s,
+            _ => {
+                return Err(SerializationError::new(
+                    "origin in clientDataJSON must be a string",
+                ))
+            }
+        };
 
         // Compute and compare RP ID with authenticatorData
         let url = url::Url::parse(origin)?;
-        let hostname = url.host_str().unwrap(); // FIXME: Handle missing hostname
+        let hostname = url
+            .host_str()
+            .ok_or_else(|| SerializationError::new("Cannot extract hostname from origin"))?;
         let rp_id = nimiq_hash::Sha256Hasher::default().digest(hostname.as_bytes());
         if rp_id.0 != authenticator_data[0..32] {
             return Err(SerializationError::new(
@@ -87,24 +105,32 @@ impl SignatureProof {
 
         // Check if client_data_json contains any extra fields
         // Search for the crossOrigin field first
-        let parts = client_data_json_str
-            .split(r#""crossOrigin":false"#)
-            .collect::<Vec<_>>();
-        let suffix = if parts.len() == 2 {
-            parts[1]
+        let has_crossorigin_field = client_data.contains_key("crossOrigin");
+        if has_crossorigin_field {
+            if client_data.get("crossOrigin").unwrap() != &JsonElem::Bool(false) {
+                return Err(SerializationError::new(
+                    "crossOrigin in clientDataJSON must be false",
+                ));
+            }
         } else {
             // Client data does not include the crossOrigin field
             client_data_flags.insert(WebauthnClientDataFlags::NO_CROSSORIGIN_FIELD);
-
-            // We need to check for extra fields after the origin field instead
-            let parts = client_data_json_str
-                .split(&format!(r#""origin":"{}""#, origin))
-                .collect::<Vec<_>>();
-            assert_eq!(parts.len(), 2);
-            parts[1]
+        }
+        let split_pattern = if has_crossorigin_field {
+            r#""crossOrigin":false"#.to_string()
+        } else {
+            format!(r#""origin":"{}""#, origin)
         };
+        let suffix = client_data_json_str
+            .split(&split_pattern)
+            .skip(1)
+            .take(1)
+            .last()
+            .ok_or_else(|| {
+                SerializationError::new("Cannot determine extra fields of clientDataJSON")
+            })?;
 
-        // Check if the suffix contains extra fields
+        // Check if the suffix contains extra fields, i.e. it has more characters than one closing curly brace
         if suffix.len() > 1 {
             // Cut off first comma and last curly brace
             client_data_extra_fields = suffix[1..suffix.len() - 1].to_string();
