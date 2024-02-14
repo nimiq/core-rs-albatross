@@ -94,6 +94,16 @@ impl MacroBlock {
         self.header.block_number
     }
 
+    /// Returns the batch number of this macro block.
+    pub fn batch_number(&self) -> u32 {
+        Policy::batch_at(self.header.block_number)
+    }
+
+    /// Returns the epoch number of this macro block.
+    pub fn epoch_number(&self) -> u32 {
+        Policy::epoch_at(self.header.block_number)
+    }
+
     /// Returns the block number of this macro block.
     pub fn timestamp(&self) -> u64 {
         self.header.timestamp
@@ -102,11 +112,6 @@ impl MacroBlock {
     /// Return the round of this macro block.
     pub fn round(&self) -> u32 {
         self.header.round
-    }
-
-    /// Returns the epoch number of this macro block.
-    pub fn epoch_number(&self) -> u32 {
-        Policy::epoch_at(self.header.block_number)
     }
 
     /// Verifies that the block is valid for the given validators.

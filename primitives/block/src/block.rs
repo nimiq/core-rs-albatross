@@ -103,6 +103,11 @@ impl Block {
         }
     }
 
+    /// Returns the batch number of the block.
+    pub fn batch_number(&self) -> u32 {
+        Policy::batch_at(self.block_number())
+    }
+
     /// Returns the epoch number of the block.
     pub fn epoch_number(&self) -> u32 {
         Policy::epoch_at(self.block_number())

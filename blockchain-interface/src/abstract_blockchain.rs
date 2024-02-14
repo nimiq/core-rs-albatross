@@ -50,6 +50,11 @@ pub trait AbstractBlockchain {
     }
 
     /// Returns the epoch number at the head of the main chain.
+    fn batch_number(&self) -> u32 {
+        self.head().batch_number()
+    }
+
+    /// Returns the epoch number at the head of the main chain.
     fn epoch_number(&self) -> u32 {
         self.head().epoch_number()
     }

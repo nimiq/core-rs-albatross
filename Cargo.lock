@@ -3565,6 +3565,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "wasm-timer",
 ]
 
 [[package]]

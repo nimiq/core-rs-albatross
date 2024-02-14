@@ -35,6 +35,10 @@ impl AbstractBlockchain for Blockchain {
         self.state.main_chain.head.block_number()
     }
 
+    fn batch_number(&self) -> u32 {
+        self.state.main_chain.head.batch_number()
+    }
+
     fn epoch_number(&self) -> u32 {
         self.state.main_chain.head.epoch_number()
     }
