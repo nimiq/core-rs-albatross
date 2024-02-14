@@ -36,26 +36,22 @@ impl SignatureProof {
         client_data_json: &[u8],
     ) -> Result<SignatureProof, JsError> {
         let js_value: &JsValue = public_key.unchecked_ref();
-        let public_key = PublicKey::try_from(js_value).map_or_else(
-            |_| {
-                ES256PublicKey::try_from(js_value).map_or_else(
-                    |_| Err(JsError::new("Invalid public key")),
-                    |key| Ok(nimiq_keys::PublicKey::ES256(*key.native_ref())),
-                )
-            },
-            |key| Ok(nimiq_keys::PublicKey::Ed25519(*key.native_ref())),
-        )?;
+        let public_key = if let Ok(key) = PublicKey::try_from(js_value) {
+            nimiq_keys::PublicKey::Ed25519(*key.native_ref())
+        } else if let Ok(key) = ES256PublicKey::try_from(js_value) {
+            nimiq_keys::PublicKey::ES256(*key.native_ref())
+        } else {
+            return Err(JsError::new("Invalid public key"));
+        };
 
         let js_value: &JsValue = signature.unchecked_ref();
-        let signature = Signature::try_from(js_value).map_or_else(
-            |_| {
-                ES256Signature::try_from(js_value).map_or_else(
-                    |_| Err(JsError::new("Invalid signature")),
-                    |sig| Ok(nimiq_keys::Signature::ES256(sig.native_ref().clone())),
-                )
-            },
-            |sig| Ok(nimiq_keys::Signature::Ed25519(sig.native_ref().clone())),
-        )?;
+        let signature = if let Ok(sig) = Signature::try_from(js_value) {
+            nimiq_keys::Signature::Ed25519(sig.native_ref().clone())
+        } else if let Ok(sig) = ES256Signature::try_from(js_value) {
+            nimiq_keys::Signature::ES256(sig.native_ref().clone())
+        } else {
+            return Err(JsError::new("Invalid signature"));
+        };
 
         Ok(SignatureProof::from_native(
             nimiq_transaction::SignatureProof::try_from_webauthn(
