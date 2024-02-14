@@ -6,7 +6,6 @@ use nimiq_hash::{Blake2bHasher, Hasher, Sha256Hasher};
 use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, PublicKey, Signature};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_utils::merkle::Blake2bMerklePath;
-use serde_json::json;
 use url::Url;
 
 #[derive(Clone, Debug)]
@@ -144,7 +143,7 @@ impl SignatureProof {
         if self.webauthn_fields.is_some() {
             self.verify_webauthn(message)
         } else {
-            self.do_verify(message)
+            self.verify_signature(message)
         }
     }
 
@@ -203,33 +202,30 @@ impl SignatureProof {
             [rp_id.as_slice(), &webauthn_fields.authenticator_data_suffix].concat();
 
         // 4. Build the clientDataJSON from challenge and origin
-        let mut client_data_json = json!({
-            // Order of fields is defined by https://w3c.github.io/webauthn/#clientdatajson-serialization
-            "type": "webauthn.get", // Do not support signing at credential registration, only at assertation
-            "challenge": base64::prelude::BASE64_URL_SAFE_NO_PAD.encode(challenge),
-            "origin": origin,
-            "crossOrigin": false, // Signing inside iframes is not supported
-        })
-        .to_string()
-        // If the `origin` has escaped slashes, the json! macro re-escapes those escape-backslashes,
-        // We remove the double escape here so the `origin` matches the expected value
-        .replace(r"\\", r"\");
+        let mut json: Vec<String> = vec![
+            r#""type":"webauthn.get""#.to_string(),
+            format!(
+                r#""challenge":"{}""#,
+                base64::prelude::BASE64_URL_SAFE_NO_PAD.encode(challenge)
+            ),
+            format!(r#""origin":"{}""#, origin),
+        ];
 
-        if webauthn_fields
+        // If not omitted, append the crossOrigin field
+        if !webauthn_fields
             .client_data_flags
             .contains(WebauthnClientDataFlags::NO_CROSSORIGIN_FIELD)
         {
-            client_data_json = client_data_json.replace(r#","crossOrigin":false"#, "");
+            json.push(r#""crossOrigin":false"#.to_string());
         }
 
-        // Append extra clientData fields before the final closing bracket
+        // Append extra clientData fields at the end
         if !webauthn_fields.client_data_extra_fields.is_empty() {
-            client_data_json = format!(
-                "{},{}}}",
-                &client_data_json[..client_data_json.len() - 1],
-                webauthn_fields.client_data_extra_fields
-            );
+            json.push(webauthn_fields.client_data_extra_fields.clone());
         }
+
+        // Combine parts into a JSON string
+        let client_data_json = format!("{{{}}}", json.join(","));
 
         // Hash the clientDataJSON
         let client_data_hash = Sha256Hasher::default().digest(client_data_json.as_bytes());
@@ -237,10 +233,10 @@ impl SignatureProof {
         // 5. Concat authenticatorData and clientDataHash to build the data signed by Webauthn
         let signed_data = [authenticator_data.as_slice(), client_data_hash.as_slice()].concat();
 
-        self.do_verify(signed_data.as_slice())
+        self.verify_signature(signed_data.as_slice())
     }
 
-    fn do_verify(&self, message: &[u8]) -> bool {
+    fn verify_signature(&self, message: &[u8]) -> bool {
         match self.public_key {
             PublicKey::Ed25519(ref public_key) => match self.signature {
                 Signature::Ed25519(ref signature) => public_key.verify(signature, message),
