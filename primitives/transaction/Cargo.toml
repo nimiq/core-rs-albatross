@@ -21,6 +21,7 @@ base64 = "0.21"
 bitflags = { version = "2.4", features = ["serde"] }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 serde = "1.0"
+serde_json = { version = "1.0", optional = true }
 strum_macros = "0.26"
 thiserror = "1.0"
 tsify = { git = "https://github.com/sisou/tsify", branch = "sisou/comments", default-features = false, features = ["js"], optional = true }
@@ -49,3 +50,4 @@ nimiq-test-utils = { workspace = true }
 
 [features]
 ts-types = ["tsify", "wasm-bindgen"]
+webauthn = ["serde_json"]

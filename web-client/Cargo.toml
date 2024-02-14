@@ -47,7 +47,7 @@ nimiq-keys = { workspace = true }
 nimiq-network-interface = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["coin", "networks", "ts-types"] }
 nimiq-serde = { workspace = true }
-nimiq-transaction = { workspace = true, features = ["ts-types"] }
+nimiq-transaction = { workspace = true, features = ["ts-types", "webauthn"] }
 nimiq-transaction-builder = { workspace = true }
 
 [dependencies.nimiq]
