@@ -99,8 +99,19 @@ async fn test_request_transactions_by_address() {
 
     let key_pair = KeyPair::from(PrivateKey::from_str(REWARD_KEY).unwrap());
 
+    let receipts = consensus_proxy
+        .request_transaction_receipts_by_address(Address::from(&key_pair.public), 1, None)
+        .await;
+    assert!(receipts.is_ok());
     let res = consensus_proxy
-        .request_transactions_by_address(Address::from(&key_pair.public), 0, vec![], 1, None)
+        .prove_transactions_from_receipts(
+            receipts
+                .unwrap()
+                .into_iter()
+                .map(|r| (r.0, Some(r.1)))
+                .collect(),
+            1,
+        )
         .await;
     assert!(res.is_ok());
 
