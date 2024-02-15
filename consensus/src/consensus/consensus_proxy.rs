@@ -140,32 +140,6 @@ impl<N: Network> ConsensusProxy<N> {
         Ok(receipts)
     }
 
-    pub async fn request_transactions_by_address(
-        &self,
-        address: Address,
-        since_block_height: u32,
-        ignored_hashes: Vec<Blake2bHash>,
-        min_peers: usize,
-        max: Option<u16>,
-    ) -> Result<Vec<HistoricTransaction>, RequestError> {
-        let receipts: Vec<_> = self
-            .request_transaction_receipts_by_address(address, min_peers, max)
-            .await?
-            .into_iter()
-            .filter(|(hash, block_number)| {
-                block_number > &since_block_height && !ignored_hashes.contains(hash)
-            })
-            .map(|(hash, block_number)| (hash, Some(block_number)))
-            .collect();
-
-        if receipts.is_empty() {
-            return Ok(vec![]);
-        }
-
-        self.prove_transactions_from_receipts(receipts, min_peers)
-            .await
-    }
-
     pub async fn request_transaction_by_hash_and_block_number(
         &self,
         tx_hash: Blake2bHash,
