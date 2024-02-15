@@ -4,7 +4,7 @@ listen_addresses = [
     "/ip4/{{ listen_ip }}/tcp/{{ port }}/ws",
 ]
 allow_loopback_addresses = true
-dht_quorum = 1
+dht_quorum = 3
 
 {% if seed_addresses is defined %}
 seed_nodes = [
