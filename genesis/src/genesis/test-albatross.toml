@@ -1,18 +1,18 @@
 
-# File generated at 2024-02-07T20:04:15.464756+00:00 from Nimiq Pos chain
-# - Block height: 15581983
-# - Block hash: ca58bf822546921d3e2cecb6ce34bb227feab402545e80130d926c8bbfb2d3a9
+# File generated at 2024-02-16T20:08:45.495646+00:00 from Nimiq Pos chain
+# - Block height: 16335524
+# - Block hash: b1c979db3976c194a806f394846c9c897c59ce1129382d7ced2b31feb08ba716
 
 name = "test-albatross"
 network = "TestAlbatross"
-timestamp = "2024-02-07T20:04:15.464756+00:00"
+timestamp = "2024-02-16T20:08:45.495646+00:00"
 vrf_seed = "e8c7f2f3935da9ca39419aa7d2cc90817245f75e58cc543f2b9478766308e8a50fffccb09e2df3546f5a0c0059d73a506c48fa2b546f15b511d0f7a63f0ee20cd510a87f520e26478bb687ca31a08db8b02921f9a22e32a790c07f16dbdf4501"
 parent_hash = "d7b808129639b27cfc6c3245111db37ba85099496c66ffcb14a6754eb5a1007f"
 parent_election_hash = "264aaf8a4f9828a76c550635da078eb466306a189fcc03710bee9f649c869d12"
-block_number = 15581984
+block_number = 16335524
 [[basic_accounts]]
 address = "NQ07 0000 0000 0000 0000 0000 0000 0000 0000"
-balance = 626259901999
+balance = 634611318206
 
 [[basic_accounts]]
 address = "NQ33 0083 5NU9 P7T8 Y04V 8PML TT3Y DKL0 H8DD"
@@ -36,7 +36,7 @@ balance = 335123147
 
 [[basic_accounts]]
 address = "NQ65 05CF 9H8B 26SR C6XV AHJU KP0K L3TD YF4Q"
-balance = 1100000000
+balance = 2200000000
 
 [[basic_accounts]]
 address = "NQ32 05KB BSCH QC9C EMLH 7GJ9 XH2Q BE5E AM7V"
@@ -52,7 +52,7 @@ balance = 602659516
 
 [[basic_accounts]]
 address = "NQ49 06JN 7TA5 38R8 2GMD PLRV QRPX YL5B PQ10"
-balance = 1100000000
+balance = 2200000000
 
 [[basic_accounts]]
 address = "NQ04 078T CCBB TNVY R262 JNPV 1FEX 65B9 GQX0"
@@ -175,6 +175,10 @@ address = "NQ36 0HL6 VQSS GS40 57KP B8E6 NTLG RRQ6 4BN0"
 balance = 980506774
 
 [[basic_accounts]]
+address = "NQ58 0HRF 0CGX EF3H 11YS G3VM H6DE TR0G SPC3"
+balance = 1100000000
+
+[[basic_accounts]]
 address = "NQ32 0JA1 DVTG APSA PP19 8HSU 7BLK AS2G 6H6A"
 balance = 1100000000
 
@@ -231,6 +235,10 @@ address = "NQ80 0N8K CRF5 96U6 MQEV CH80 QUQ6 8VR1 B4EF"
 balance = 218995127
 
 [[basic_accounts]]
+address = "NQ64 0NUE PV63 4PUT BHUL M75Y 8NBE 6DTN KK2Y"
+balance = 10395367967
+
+[[basic_accounts]]
 address = "NQ65 0PQG S42D LGP3 8LMN 82C7 259X QCCT P3KR"
 balance = 15322734
 
@@ -276,7 +284,7 @@ balance = 300000000
 
 [[basic_accounts]]
 address = "NQ38 0VD7 DKA9 X137 C2D0 KV36 ELL4 4F95 UPTU"
-balance = 26889172626
+balance = 25460447626
 
 [[basic_accounts]]
 address = "NQ80 0VGH X2SY 6FCB 03Q7 XD03 LJNB P03X GC07"
@@ -613,6 +621,10 @@ balance = 782829826
 [[basic_accounts]]
 address = "NQ21 1S2L BRDF 2AYS D3YA K9H2 VYMF AE4F GX39"
 balance = 1575987215
+
+[[basic_accounts]]
+address = "NQ66 1S4P 0V9F H76E JMNG UNLF 1LT9 UF4P TBFJ"
+balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ12 1SEE 3142 LBLC R1S1 1QCL G0PR 7JY2 8X98"
@@ -1167,6 +1179,10 @@ address = "NQ79 3HK9 H90E Q7TE AUAN VX5F SRAR XLRK N56P"
 balance = 100454162
 
 [[basic_accounts]]
+address = "NQ92 3HS7 LGJJ Y4J2 CAYX 36PK 6P8G S6KQ AYMF"
+balance = 1100000000
+
+[[basic_accounts]]
 address = "NQ59 3JDE XYEG R3TU 7LPY 7XK7 0AMH EV33 264H"
 balance = 276900000
 
@@ -1344,7 +1360,7 @@ balance = 1099000000
 
 [[basic_accounts]]
 address = "NQ64 47VJ GKYC ADTA 2VRV XQQC 77S3 TJ6K TJNP"
-balance = 27034
+balance = 1100027034
 
 [[basic_accounts]]
 address = "NQ15 48DJ FAQG M8HJ F0TF JG3J KP34 10KK 10LQ"
@@ -1536,7 +1552,7 @@ balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ94 4U2Y 8D9C VJJ6 1L1M FMG8 HUYL 7R6J AQ6Q"
-balance = 100278531338556
+balance = 100335781979423
 
 [[basic_accounts]]
 address = "NQ75 4U4P B3AK X0A3 36GH 2VAR CQ7E 52AM AD9T"
@@ -1939,6 +1955,10 @@ address = "NQ80 67RH 10CS FXQL 7HUT 75AK YAQV 0M3S 1FUH"
 balance = 685252086
 
 [[basic_accounts]]
+address = "NQ66 694L 45T3 NT5A K5FU AAAB V3GB QR40 HJNF"
+balance = 1100000000
+
+[[basic_accounts]]
 address = "NQ91 69GG DL54 9BSS 82PY 1M6F Y1BY 0HD7 JMXF"
 balance = 790378164
 
@@ -2024,7 +2044,7 @@ balance = 603227704
 
 [[basic_accounts]]
 address = "NQ64 6KRX QP6D 7XBA BFSV 41PV SEAV DCTF FJB0"
-balance = 60500000000
+balance = 67100000000
 
 [[basic_accounts]]
 address = "NQ12 6L5D TREA MG7Q 31NY TVVK PUS1 5LS0 3DSB"
@@ -2155,6 +2175,10 @@ address = "NQ23 72CR 1DQR 0D0S ACXD SU9R KTYX CNE2 A0PU"
 balance = 1098700000
 
 [[basic_accounts]]
+address = "NQ85 736D RLFP YT6N ETGA 62XG 37Q4 5JD7 R0DE"
+balance = 1100000000
+
+[[basic_accounts]]
 address = "NQ11 738B G2CC XFS3 5AFD BSXN EKCN EQ7D 9J27"
 balance = 1100000000
 
@@ -2173,6 +2197,10 @@ balance = 138143959
 [[basic_accounts]]
 address = "NQ67 74LY RQD2 T3LR F3E0 6TH5 7217 7FK9 KUXC"
 balance = 1244744195
+
+[[basic_accounts]]
+address = "NQ03 766X EFF0 XH09 K6F7 GHXH YJR2 1ENL LLN0"
+balance = 900000000
 
 [[basic_accounts]]
 address = "NQ10 76MH Y8P2 EKN0 QJA6 K952 FRMB EHUC UCHA"
@@ -2240,7 +2268,7 @@ balance = 92998544
 
 [[basic_accounts]]
 address = "NQ37 7C3V VMN8 FRPN FXS9 PLAG JMRE 8SC6 KUSQ"
-balance = 88865310100000
+balance = 88810310100000
 
 [[basic_accounts]]
 address = "NQ72 7C6N L0YK 9ES9 VJ1A DFJD XD0S YF9Y QTCC"
@@ -2372,7 +2400,7 @@ balance = 567310966
 
 [[basic_accounts]]
 address = "NQ19 7SNT KSMT 0P1N M16R QJEB EYSJ M5BQ R673"
-balance = 99842404918901
+balance = 99894747278658
 
 [[basic_accounts]]
 address = "NQ72 7SXB 4DS1 3EY7 LQHT 7RRR 6TTE DMV1 KE6R"
@@ -2400,6 +2428,10 @@ balance = 196252692
 
 [[basic_accounts]]
 address = "NQ28 7U9Q GERE QE68 NSRA V25S G88A X4KR P14S"
+balance = 1100000000
+
+[[basic_accounts]]
+address = "NQ33 7UJA F3KF 8KAN 861Q A43Y GY0H 1CE0 G0H5"
 balance = 1100000000
 
 [[basic_accounts]]
@@ -2503,10 +2535,6 @@ address = "NQ43 88EV 95X8 SK33 U2T4 842Q DX99 C8R2 9EAT"
 balance = 241906268
 
 [[basic_accounts]]
-address = "NQ41 88F6 MLTC 48JJ CNGU 4SNK DQP6 47VT Y7B9"
-balance = 100000000
-
-[[basic_accounts]]
 address = "NQ72 88JH DPMN VGA7 R77Y L4QL BT3X 2956 LG7D"
 balance = 1100000000
 
@@ -2600,7 +2628,7 @@ balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ27 8KGR G20Y 8BCR 21TQ V4CE SC3G 9H0Q 1USJ"
-balance = 1869133922
+balance = 718454148
 
 [[basic_accounts]]
 address = "NQ28 8KMJ HAET LL3S SKNN U4J7 81F3 K3SU 1SMU"
@@ -2792,7 +2820,7 @@ balance = 734883653
 
 [[basic_accounts]]
 address = "NQ34 96R3 HYK9 D83S CP8B EPBK 880J 0S7M Q3T6"
-balance = 78133
+balance = 13265
 
 [[basic_accounts]]
 address = "NQ77 97RF L4C6 1F1N 6S1M J3P9 KVPB NCGN 6U43"
@@ -2825,6 +2853,10 @@ balance = 2200000000
 [[basic_accounts]]
 address = "NQ15 9A2E 4ERF 4CPP N00C X50R 6JHB U812 7154"
 balance = 673509487
+
+[[basic_accounts]]
+address = "NQ14 9A5S 0H4T USRB SM48 18CF D9A6 4771 CT2R"
+balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ42 9AJX RUQE 58H1 A5PS U1VD E996 DB49 N5BR"
@@ -3104,7 +3136,7 @@ balance = 731938887
 
 [[basic_accounts]]
 address = "NQ85 A80G 3TTD U9X6 PUDD VJ9Q LP0D TVGS T6VU"
-balance = 967770227
+balance = 2067770227
 
 [[basic_accounts]]
 address = "NQ91 A811 C8C9 8B3T R3CB 52AQ K567 0PR0 DANM"
@@ -3431,6 +3463,10 @@ address = "NQ11 B932 RJ3F EXMJ LPCK RYT0 NDXF S0A3 N8RY"
 balance = 504016177
 
 [[basic_accounts]]
+address = "NQ34 B9EY CGE3 EYQF 4GG4 GFS9 LF3T SUB8 DAUE"
+balance = 1100000000
+
+[[basic_accounts]]
 address = "NQ18 BAAN VG6V RV6H H4DY C280 76QL B3NJ MV0K"
 balance = 93051
 
@@ -3476,7 +3512,7 @@ balance = 603127024
 
 [[basic_accounts]]
 address = "NQ95 BE87 98HC 4PMC VUH7 GGGQ A4HB MQ8Y YMYJ"
-balance = 1100000000
+balance = 2200000000
 
 [[basic_accounts]]
 address = "NQ34 BEH1 4SF2 P58Y 8S55 5NVT RSAJ 40V5 LHSR"
@@ -3604,7 +3640,7 @@ balance = 277645201
 
 [[basic_accounts]]
 address = "NQ85 C0L0 82BN V5RL F6TY BT9K K6AX N8HS 0J3E"
-balance = 162758021
+balance = 58021
 
 [[basic_accounts]]
 address = "NQ91 C0LM S2V6 VHDC SLKN Q3T3 BCC9 2JER 72A3"
@@ -3688,7 +3724,7 @@ balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ81 CAJQ E7X8 0D0H YM6T M915 X63J EHVR GSLP"
-balance = 2200000000
+balance = 3300000000
 
 [[basic_accounts]]
 address = "NQ79 CB5B 7HPY 0VCJ N98C PQ7T X3KC FU0N PUXQ"
@@ -3696,7 +3732,7 @@ balance = 258364204
 
 [[basic_accounts]]
 address = "NQ80 CBR0 QTNJ UQVD HV9J 2QSH FMDR 786S R6YS"
-balance = 1099904542
+balance = 840504542
 
 [[basic_accounts]]
 address = "NQ28 CCTU XXGU 7BBL 1KLM C995 BKSA QTS2 A37N"
@@ -3976,11 +4012,11 @@ balance = 30459354
 
 [[basic_accounts]]
 address = "NQ20 D9MC 01Y1 H40S HM7E AL3J 872Y RGYJ 09B4"
-balance = 3700000000
+balance = 1764100000
 
 [[basic_accounts]]
 address = "NQ41 D9UN RC7G UMHE 4XA7 R1PL DNCF TH2N 7JQ8"
-balance = 9686000
+balance = 49686000
 
 [[basic_accounts]]
 address = "NQ03 D9UV U615 LYJC V12F 4P5J SSS6 M431 X60F"
@@ -4044,7 +4080,7 @@ balance = 31917
 
 [[basic_accounts]]
 address = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
-balance = 212777002245
+balance = 193373028837
 
 [[basic_accounts]]
 address = "NQ58 DHT4 TY7Q V5UF SKVL 5TEE HXUV BKY3 DB9F"
@@ -4352,7 +4388,7 @@ balance = 9900000000
 
 [[basic_accounts]]
 address = "NQ86 EL3D 1P2K QS6J MGM2 U6CT Q7BS 73FY 01U4"
-balance = 5500000911
+balance = 395632596215
 
 [[basic_accounts]]
 address = "NQ43 EL6N 245D JRXE 80V0 H5HA 3NUX JH26 UGC7"
@@ -4613,6 +4649,10 @@ balance = 450000000
 [[basic_accounts]]
 address = "NQ46 FLT4 0T8T 3MAJ YARR 596C S665 CJQ3 TRXN"
 balance = 585342434
+
+[[basic_accounts]]
+address = "NQ95 FMKY YNMQ BEMR H0NJ 4K6G F15X B2LD QRVV"
+balance = 1050800000
 
 [[basic_accounts]]
 address = "NQ96 FML8 KGPX 9J7R J6DR HM9X 8QYS 1VNL 3PCM"
@@ -4876,7 +4916,7 @@ balance = 359328148
 
 [[basic_accounts]]
 address = "NQ44 GJR3 QKYL 3RD9 4KAY FPYH F8AK 7E9Q SYSD"
-balance = 18274124937
+balance = 24937
 
 [[basic_accounts]]
 address = "NQ56 GKCA TSD3 7S3A 07NH LGFR B11C C416 3JHA"
@@ -4909,6 +4949,10 @@ balance = 1100000000
 [[basic_accounts]]
 address = "NQ72 GN35 2AS8 RC9R MXPD 1H91 22GC 9E42 69T2"
 balance = 453126343
+
+[[basic_accounts]]
+address = "NQ21 GN8F LY54 GHE7 G6SY K14L EKQM LYTH XY08"
+balance = 10210703912
 
 [[basic_accounts]]
 address = "NQ52 GNKN J5T2 DYD5 GDSB T5SV K919 SN6J CQL0"
@@ -5059,6 +5103,10 @@ address = "NQ16 H7FF AANF DSNV 5AU8 FNF1 8650 0AUD JEL3"
 balance = 74900000
 
 [[basic_accounts]]
+address = "NQ40 H7MV FDY4 2V2T 25HT UC9T QYG8 J6JV VSPS"
+balance = 1100000000
+
+[[basic_accounts]]
 address = "NQ32 H88U YF8K HHQM BMVA QHEL LFPX 91P8 BTNX"
 balance = 414410676
 
@@ -5100,7 +5148,7 @@ balance = 11066
 
 [[basic_accounts]]
 address = "NQ70 HA7G 4TYD TUVA QH6J 7R4A KRES 6NMB 958J"
-balance = 17333899563
+balance = 20199794563
 
 [[basic_accounts]]
 address = "NQ20 HA7J 7HAJ SBEE JH7R JE1D CGMJ F9NK PR52"
@@ -5172,7 +5220,11 @@ balance = 423621226
 
 [[basic_accounts]]
 address = "NQ63 HH88 N94E CD6A 7YRG 3SJ9 RJNU 38LN 7042"
-balance = 2410160
+balance = 3002010160
+
+[[basic_accounts]]
+address = "NQ29 HJ73 38R9 9VPQ D0EU LMCD NAGE FTC6 87Q0"
+balance = 40000000000
 
 [[basic_accounts]]
 address = "NQ37 HJLH YAA8 8KG8 1SV6 9HX8 XSYD B7FJ K8U6"
@@ -5316,7 +5368,7 @@ balance = 861092851
 
 [[basic_accounts]]
 address = "NQ55 J6P2 9SLR 0GFQ XJKM P3MB HRJN NLFT EQ30"
-balance = 101149565663291
+balance = 101220679938018
 
 [[basic_accounts]]
 address = "NQ74 J76E 0DSQ SPDG M5TD HMRP KKAS 4L4L G74R"
@@ -5360,7 +5412,11 @@ balance = 2200000000
 
 [[basic_accounts]]
 address = "NQ06 J94U JHMD 02S3 08JJ A7YC 3TC3 PVX5 FHYJ"
-balance = 654336586
+balance = 1754336586
+
+[[basic_accounts]]
+address = "NQ50 J9UR XS9V 18GU 46QC MCXD PAXU Y0XH 70S8"
+balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ13 JA1C DFQ5 9L69 PVPS M9GR QV8Q MLBD R1U6"
@@ -5400,7 +5456,7 @@ balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ62 JE6M Q130 MF10 M92K HQRR P394 L8MK HE7R"
-balance = 101004425768068
+balance = 101078913668291
 
 [[basic_accounts]]
 address = "NQ08 JEJ7 SJ1X X4D3 8HAV KC2T X2Y1 2TQM B1KP"
@@ -5428,7 +5484,7 @@ balance = 57100366
 
 [[basic_accounts]]
 address = "NQ61 JFPK V52Y K77N 8FR6 L9CA 521J Y2CE T94N"
-balance = 2583094577
+balance = 9028448726
 
 [[basic_accounts]]
 address = "NQ28 JGJ0 78E8 RMQ3 X9SL NHQ5 JG1M Y6AP BQ7S"
@@ -5527,10 +5583,6 @@ address = "NQ77 JV2F UV40 2PSY E0D4 M29E 23EJ AUYS 32U4"
 balance = 515300000
 
 [[basic_accounts]]
-address = "NQ80 JX3V J4RX LF9J EEU0 QKT5 8Q5X GV0U PTJ2"
-balance = 77348
-
-[[basic_accounts]]
 address = "NQ51 JXFK 1QSP L9Q6 B45R XV5X T622 TJSH YGFU"
 balance = 565308469
 
@@ -5553,6 +5605,10 @@ balance = 363908859
 [[basic_accounts]]
 address = "NQ02 K1YL 4PXY 26ME FUJB R0GY G7FT UAFF K9CB"
 balance = 1100000000
+
+[[basic_accounts]]
+address = "NQ81 K225 R015 744E 7UFQ 4XGA F33L GNXX H2TR"
+balance = 10899500
 
 [[basic_accounts]]
 address = "NQ59 K2L8 0GCV 7A3F 2J3N H49D HR90 RGLQ RU4E"
@@ -5640,7 +5696,7 @@ balance = 7665328781
 
 [[basic_accounts]]
 address = "NQ68 K9SF 8EHS YGCK 60TK 83VB U6AC F0VA RPLD"
-balance = 541500000
+balance = 1641500000
 
 [[basic_accounts]]
 address = "NQ80 KABS JUDE 76RC 11SS L0AP MFA7 G80T RCL2"
@@ -5796,7 +5852,7 @@ balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ75 KRJH LXQV XHCT 9QEB 5S85 JT03 PQUA QLAY"
-balance = 269746027199
+balance = 269026820199
 
 [[basic_accounts]]
 address = "NQ11 KRXD BV62 A15C 1F7K 5AAH D1RQ XD5G KDNN"
@@ -5888,7 +5944,7 @@ balance = 633272523
 
 [[basic_accounts]]
 address = "NQ45 L3VX GNGA VDRF V6FL Q66Q Q884 S269 0MRT"
-balance = 101631012219181
+balance = 101699699596861
 
 [[basic_accounts]]
 address = "NQ75 L42V KTNA FSXP 96VU 7R36 VB9V GX0C K7SX"
@@ -5956,7 +6012,7 @@ balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ53 LC70 JHGH UEMV 2CAB DFQL JKHQ 21FS D3AY"
-balance = 101043339181355
+balance = 101117503963990
 
 [[basic_accounts]]
 address = "NQ17 LCA5 3J2R PGVU K012 XSBR Y92G BBAD K5G5"
@@ -6176,7 +6232,7 @@ balance = 99900000
 
 [[basic_accounts]]
 address = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
-balance = 62191333464
+balance = 68228082050
 
 [[basic_accounts]]
 address = "NQ56 M1NT TTCY XFCQ 6QHR GA5Y S9RK 193P M7LV"
@@ -6236,7 +6292,7 @@ balance = 649250093
 
 [[basic_accounts]]
 address = "NQ33 M94N XQAS VDFM AYG3 30RC FN7X 7L6N NAY8"
-balance = 1120667583000
+balance = 1119949620000
 
 [[basic_accounts]]
 address = "NQ59 M9M1 X09N 6XS6 B7K0 GR1V SQEA S0PF T05A"
@@ -6540,7 +6596,7 @@ balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ40 NEH3 SY40 0FBU BCTD 9SSD NQ1G D69S MVPG"
-balance = 1100063932
+balance = 2200063932
 
 [[basic_accounts]]
 address = "NQ33 NG26 3C3L TRBX BPAP YYBQ 1AV3 FPHL CTXE"
@@ -6764,7 +6820,7 @@ balance = 213450403
 
 [[basic_accounts]]
 address = "NQ42 P5YC ML3T G7K2 RYS9 SCLF G6A5 4PBG DPNU"
-balance = 5340449605
+balance = 5342488942
 
 [[basic_accounts]]
 address = "NQ14 P96F DAUF 1E2R DV44 64MN 2A27 R53C VK04"
@@ -6900,7 +6956,7 @@ balance = 1235200000
 
 [[basic_accounts]]
 address = "NQ80 PPUM AKE8 XGUN FMYT 4AXJ 1K5E GQBP BN05"
-balance = 6132216011
+balance = 26132216011
 
 [[basic_accounts]]
 address = "NQ39 PQ5Y EF75 TGU9 JBL5 975C 95AR EUCL NRD1"
@@ -6964,7 +7020,7 @@ balance = 623298588
 
 [[basic_accounts]]
 address = "NQ10 PTY6 8PJ6 F5SH V24M V23J D78C LGR2 6HAA"
-balance = 47972
+balance = 1100047972
 
 [[basic_accounts]]
 address = "NQ73 PU9P R5CV ML24 U6K5 0SHD CPA2 TD5J 8LNK"
@@ -7000,7 +7056,7 @@ balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ73 Q1CT 89XX SFHC JMRE QSG0 UH4P FGHC 72A8"
-balance = 54143
+balance = 1100082709
 
 [[basic_accounts]]
 address = "NQ33 Q2JJ B1VA 5R2X C9F6 TVV4 B2NK 8M26 BAJP"
@@ -7123,10 +7179,6 @@ address = "NQ71 QGMU 8F2U 2XY4 2CK2 CF3E BA2M 7PLC 8BTT"
 balance = 406917436
 
 [[basic_accounts]]
-address = "NQ89 QGRH 139K DME5 8QLN 40BH 35VH VCY1 BLJ2"
-balance = 424660113
-
-[[basic_accounts]]
 address = "NQ34 QHBU HSCL QNTY 1R46 VJ2J 8DSH Q6NL 1SPL"
 balance = 950080988
 
@@ -7241,6 +7293,10 @@ balance = 1100000000
 [[basic_accounts]]
 address = "NQ26 QY9T KC0U RYY2 S01V AM0S D3UM FBND SRL0"
 balance = 691600000
+
+[[basic_accounts]]
+address = "NQ96 QYHA F8PY VDXH 4QEU 4BX8 CT01 CJPM G33U"
+balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ26 R190 4X5M A5VR VG4M HFQX LHSN 6T3N B20Q"
@@ -7411,8 +7467,8 @@ address = "NQ11 RKJE B4B7 2GA9 YE3J 5RQY FL2A JH0J EYH7"
 balance = 371474441
 
 [[basic_accounts]]
-address = "NQ90 RKMU QLCF AKNV YEYS RJAK EHXU QGUP 9GAR"
-balance = 424660113
+address = "NQ90 RKRN JRY9 532K SS8C K7E0 9C7J 870X JQ3R"
+balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ19 RLC7 U61C 8U4Y P3UC B6B7 GM3U 7A3S 4KRP"
@@ -7788,7 +7844,7 @@ balance = 772771255
 
 [[basic_accounts]]
 address = "NQ20 T51N 5A7M 768V 3SE5 HVXC QYEB QBTT 690V"
-balance = 61600000000
+balance = 69300000000
 
 [[basic_accounts]]
 address = "NQ60 T539 GQ40 PQ96 DFPH F9HD G5MV JQTK JCCF"
@@ -7959,6 +8015,10 @@ address = "NQ89 TP3T 36J7 GDBE EQJA 9PJ5 JBA0 1SJX 6QTR"
 balance = 1098694000
 
 [[basic_accounts]]
+address = "NQ11 TPPD TKPY 0RR8 RXJ5 F798 VDY3 23LQ 0LBX"
+balance = 999500
+
+[[basic_accounts]]
 address = "NQ12 TQ0B AJ5R A5KX MN8S 8L7Y 9XGQ 9FX6 BJTQ"
 balance = 1223893171
 
@@ -7968,7 +8028,7 @@ balance = 600000000
 
 [[basic_accounts]]
 address = "NQ26 TT94 M4LL F8QS UH4M XPQK 9P42 QNH9 XVNY"
-balance = 7460356089
+balance = 25305920832
 
 [[basic_accounts]]
 address = "NQ81 TTHE 4C4L R483 E2EH 8SYK 25D9 6DLY JCXN"
@@ -8004,7 +8064,7 @@ balance = 574983959
 
 [[basic_accounts]]
 address = "NQ83 TYM9 GFDY AXU7 8EYS 303B T83A PJ6Q T9KL"
-balance = 321761
+balance = 523839
 
 [[basic_accounts]]
 address = "NQ29 U009 CTY3 TSUG VLVV G134 GQT2 8U0J YJ3U"
@@ -8109,6 +8169,10 @@ balance = 658534704
 [[basic_accounts]]
 address = "NQ94 UBXN A4DR 3NEH 508N M2A2 CRJG HDKS C7JK"
 balance = 1096483429
+
+[[basic_accounts]]
+address = "NQ30 UCBP 5123 2DA5 H3K5 VRGH 049T 2KYV 8LNS"
+balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ37 UCK5 X2EY QTJG HNL3 MQ15 MK9T 8QTK ND6R"
@@ -8392,7 +8456,7 @@ balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ19 VBNY 2BPQ ESG2 HVX1 96EJ 60BE MSHD FUY7"
-balance = 1100000000
+balance = 2200000000
 
 [[basic_accounts]]
 address = "NQ08 VBS8 4TFG 99KK 0YU2 AR5B KR2P 8NSY YA99"
@@ -8731,8 +8795,12 @@ address = "NQ45 XGUU TE7C F5FL K5LA EQTD GB4F 4FFP HF41"
 balance = 1100000000
 
 [[basic_accounts]]
+address = "NQ96 XH50 PF7P 5SAL CG4M TSTV 7APE UY8Q NXB1"
+balance = 1100000000
+
+[[basic_accounts]]
 address = "NQ88 XHD8 8ULG PF17 3Q7N 3SGN AAYE XGS9 GV1F"
-balance = 101058026915941
+balance = 101135600691144
 
 [[basic_accounts]]
 address = "NQ73 XHG3 2URJ 9A2T KCFF SDLS HYEE 9HN8 H84K"
@@ -8809,6 +8877,10 @@ balance = 753221713
 [[basic_accounts]]
 address = "NQ46 XN8C D7X2 982F E674 DGU0 RBRL AG4V YMV3"
 balance = 16069047
+
+[[basic_accounts]]
+address = "NQ33 XNAJ 443V M7XA BSJ1 FAPC T9NY NF70 30DH"
+balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ64 XNGL 95KA NEBM CADD DEU9 TSMA 20VY MDM4"
@@ -8959,6 +9031,10 @@ address = "NQ16 Y7LJ EA5C 2C8R 6UHR TG4C KLVU 9Y3K 324A"
 balance = 157281726
 
 [[basic_accounts]]
+address = "NQ63 Y7T1 3P5J ULK2 XQP0 TTBD HJ6C FHH9 51G8"
+balance = 200000000
+
+[[basic_accounts]]
 address = "NQ04 Y8J8 2GJD GCGB PHA5 YP5N NQ91 20Y5 NY12"
 balance = 481519284
 
@@ -9004,7 +9080,7 @@ balance = 1100000000
 
 [[basic_accounts]]
 address = "NQ02 YD9Y 0G94 ETHG 6VKV VXJQ YM2R 4FFJ YF6C"
-balance = 47300000000
+balance = 51700000000
 
 [[basic_accounts]]
 address = "NQ54 YDHS 6H0U UJFE EX8R 4G3N Y7GX 3XET 6XV3"
@@ -9064,11 +9140,11 @@ balance = 503790833
 
 [[basic_accounts]]
 address = "NQ24 YJF5 2AR9 VQ42 YPCQ 764C 6C5N SPH1 AAAU"
-balance = 20406232968
+balance = 1240575663
 
 [[basic_accounts]]
 address = "NQ91 YJNG P54M J335 JRVQ QDLY 4CYJ X5K9 R8RT"
-balance = 99691843272777
+balance = 99726961676099
 
 [[basic_accounts]]
 address = "NQ71 YJUM DRAB N0DV 8C5N HXU4 250F DQV2 0QXR"
@@ -9181,6 +9257,14 @@ balance = 942162197
 [[basic_accounts]]
 address = "NQ02 YYU0 AK8M MCFG SFC6 LX3R F41C KFUX C67A"
 balance = 1100000000
+
+[[validators]]
+validator_address = "NQ64 0NUE PV63 4PUT BHUL M75Y 8NBE 6DTN KK2Y"
+signing_key = "f5d14354509c105644876367f31c33d19307bfc21777cb22a99abd08814d0d1d"
+voting_key = "f6698f5035e499a4e98771a1493b613eb60e9c1e5a96ced4b27b8564b8cf9c9cc8b8b416056e0418eec2525f7fccdc00f675cafa2d0ada0070f0cc3eaacaf959b5dd481c9647d853c4a5bf169016a4ea8cff09024e2f7b3e24092a71774300ceb2bf4f6c1af6cbf1d9d341bc07860d7a6f3113513fed1c3e10b2155cee238f67146979a131143b73467f3b74998caa11998a1b20b69ba6c809cff06bafbdc8a96739c0da458f6f917dc2ff0fad01024d8a5889d32f4781b471a2b55e7f0191c5897d8e363111239bb8c6e02736cc45f838a36a793eb73a07ee7bd8d86925c0c3b9772cda103c77c4ebde6d6f17112ab96104699891ed74cec5f6322403c80afb17faafe21fa9a0a447968f1fae9cb781925fbfc33d1ebaf3cd36c97700"
+reward_address = "NQ64 0NUE PV63 4PUT BHUL M75Y 8NBE 6DTN KK2Y"
+inactive_from = 16013984
+retired = false
 
 [[validators]]
 validator_address = "NQ93 296E JCV2 6E6E 2MPE TG3D 0YGD 7LFV 4N4V"
@@ -9305,7 +9389,6 @@ validator_address = "NQ56 BBC5 B9RR PRT9 6V21 TJJ7 PJQ0 N5KA ELAU"
 signing_key = "51483c5db7a578c3d5016ce98e5aea8051b5a3938fb28aaefa8e45d4d1e826c1"
 voting_key = "b87844cf5fa411eace058d45dce7e2ba07096bff58fac0582da9c2a88d24adb661278aadde2f0fbe4818810ecec3877877aa81d495655ca9341fa3b9b4f125de8d944ad4bac36b93562c5ff6076a56d8982219174de04820582c1c9393b201a4402ad482aafa2b766914eea437378e54f8c765b193910621880dc57199c0f32183c20db70d275f1a260e6c56d9b644907dc63c4bcbd03452b7f29c9622a15c2437bce27e9d4f00c676c701b0b4c78a828a40bdb9112299a874e00d106000a76810ad132ed04a23ae63645431fa307aa08ad0e281133ba5eb1c5454b3073f579b487a2ebaae6141f0f0141f6bb5a9bf35fa48d0d1a7667e9d9d2aed0f6581242fb959a2095e74843e40007bc4e985c0e669818f55db5cce10cf62142480"
 reward_address = "NQ91 YJNG P54M J335 JRVQ QDLY 4CYJ X5K9 R8RT"
-inactive_from = 15044050
 retired = false
 
 [[validators]]
@@ -9313,7 +9396,6 @@ validator_address = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 signing_key = "b1881f7b5412d456a9acb7d9021d3b032686608c407b487ff377d07cd9fbf244"
 voting_key = "81f8c6e4d629b91fae9afb4fcb4ce5639002cc5a27b10669752cae00d60879133681dc113e4ea5acc05e1a157b2bf07ddcbfa449a8999f9420cc4fc57bd25fdb23d564a5d9de0337853415342090c17d5131fad9c1c81e8632410b803d3b00baf9bd234d3510512665f083a644eca7bbe41fc1c06c1cead3d4e4f52550182af411e0cff067bb749d23e3d22784be671902813062f04f7877c682dd6039f954caea0038704e91614b0389b6ae584e81526f16040297dceaf4ba994af5d100543d87de2dc0c033449d706b6a4dad44ea90f49e7fcbd888dec4e95cc35efaf04108335ef74f97730dd0c809b25a737f7f9e821800e27b2e3078b65aa4af516adc649a514f6cb46981f3bf080f312a872e3a120b709905310ff3b75fe06681"
 reward_address = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
-inactive_from = 15432850
 retired = false
 jailed_from = 15390731
 
@@ -9338,7 +9420,6 @@ validator_address = "NQ79 F94K NYV6 3V7D 68X6 FXAD 4PCM XMQR PP4U"
 signing_key = "ee1424f128e4b8ae9a4951b7fb4717fa94cd9c74f29dbffdf591cdedbe149a8d"
 voting_key = "fcdd7c2a13dfa03fb29ea92c8edbd4315055d84114f75a3bc36fc311e6eae698e9cc5d6c7e1e4a4a0f937a694fa666e47eb6f1a21d44a4f9b69f2acf6f25e3289d77c3bb3caab154dee0e263ec79c0a263e5c84c45c7e2d84c8f7f96f356015be91276a5d6e4923009ccc42fff3474b51609f31dff4410b25017a265dc350c698a06597391fb67a15003df808da1cdf70aa313c80cae0e793c6289d7e420ab4084acf32d531ebf2eafbe73e6b2ab923f3589efc75ba8e9bb0c62a7e11e00116e3f1a4164540b01073decb05ca56c83ec6eacb4af0234910b1b0133f06556003601e5e00d25d905c68c9fb95e3c28859cadd49b23a2a1b5606d63de7b2f1b8806badef3fb188d9be4cb9215926762b6cf0743d44c8790544f0a77be2701"
 reward_address = "NQ94 4U2Y 8D9C VJJ6 1L1M FMG8 HUYL 7R6J AQ6Q"
-inactive_from = 13748050
 retired = false
 
 [[validators]]
@@ -9377,7 +9458,13 @@ validator_address = "NQ70 JM4N PU3R Y2U2 9RGX ABJE VKA4 4TBB HKF1"
 signing_key = "81def5effc93ae283b5acfa466d0a544218b1bf3c3558f6cf6403bd9aed14dee"
 voting_key = "c8512dc4a69729170fe2ac5cf6c9b25322fa974ceee569b5d4f86a5238a51de896deb5e6998d59f90944aad3e47e676433d13137b1bb0cffeeb158ce5594c937294a8330475b79a2463fa752b1fc851e42383175a7f05b0183475da14129013e5b437436f6705ef9e4509391663806ff62e7abf8a49e583c3a5741e2272f014f50f686f2181849f05d43d82ed5d62f69a427529b4f981ce582ad811565db5e1b18c6b7a6bf6664c6d54eaf7fd7424fd6a92f13543568681a4115b15204003f3efe58109efd1af4c591bb3984aac1e74eee4ddd5f5f4900d62feb2ac1e046ccf52c66d8526c69a6ca72823dcf3e060d7e488f7aded41d6f94bc9876a4083d243cff5fa6e4758674270d18ec9c32fbd553049bd0394da82cfa7a69390600"
 reward_address = "NQ55 J6P2 9SLR 0GFQ XJKM P3MB HRJN NLFT EQ30"
-inactive_from = 15260050
+retired = false
+
+[[validators]]
+validator_address = "NQ81 K225 R015 744E 7UFQ 4XGA F33L GNXX H2TR"
+signing_key = "50d00d5e5bb1bdf36800fc6b509ac218c11beeb76c1eb9c44a8baeb68cdba194"
+voting_key = "080c9ebfec8910f241fea51936dea743a9998718c2c0ec1087bc5a50aa1282b9cf73dc07269433c9a958a9ded37131b58cf11c0b5cd888de16610d0a36d50b6e5a6b9c3b16b64f799496b269e023ab08193a6bda4b551b54314c01ffd53701c1b66b8a3a5a7e11c22c79775e077099c21bd197a99ee72fc7cf6c56e20f94ceb7ff10e3f334c23fa7b0f5777ca0530b7989801f30fb4a9b1d3a4145a859cfcca70c18307c0c206a45222bc5e7652323ae19a91beda2fd756d98eb833f5301db65227d29b64edba0ea3edcc184db9cfe205dd09d37094c83f71934ebfeea1cf6e36b6c558b2fca475c626fbbae89149552e4cfbe19d44680a54033e3aed65938bc9659ecaf94f5d63d878a007b93e10f13b26655fb838af2865fa61fc480"
+reward_address = "NQ21 GN8F LY54 GHE7 G6SY K14L EKQM LYTH XY08"
 retired = false
 
 [[validators]]
@@ -9401,7 +9488,6 @@ validator_address = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 signing_key = "b5487c57e8f22f18968dd68c51671649a80b496266b3239353cd767c606692de"
 voting_key = "53a4acb81010e714c8b3e85888a39bbb8252ea7edea3dee1b7962cf5c57f6bf1cd110d9b150b9531cf0eac428bbdeb34fec6d61a837dbcdec6624630341326ee04a58058f26e4f2df83e6732530729be189c5502d2f911a87eb738cd5bb2012e8990c98cc12966a056f2471109f134d13c62a4da99ba91de0bf15d42b0b5c03fe942e1f8107d371bdae866ed1f9af6ea76f0ed39605f53b8c3058b682718640f1cf16ecaf330177567bc75e07eec37e4fb8d4eca45feeba36a92f98d34006b54c5c8c3ca926b071a0910035983ec5d144ae03d6771b2dc25528e23615b046d63cf06241d79c4c081d1ae79346ca84062c9f84420f5ee918fdb3d511e29011d65be59bfc260073c328fe03746d7c5ee19498a23e5cea84705e91995fb00"
 reward_address = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
-inactive_from = 15562450
 retired = false
 
 [[validators]]
@@ -9433,6 +9519,7 @@ validator_address = "NQ42 P5YC ML3T G7K2 RYS9 SCLF G6A5 4PBG DPNU"
 signing_key = "8e66dcf48ae985c707439ec176b29e48c0999487e8e5f486faeacb26630aec86"
 voting_key = "8e2ac96e330123206f6dcbdaeb1f044808febef80fa6f7465a97c9e1caf376cb63ff20c38e5d4928e3f94fb9ac1c734a1ec7fdc879831fa8fa7aea008111baa10e89ab7a15749fddbae926b91a939e2150021bc52fd79e7e1173d0ecac53017b0bdd112f6056f215d73cbaf0b2155d08e13ccb87b0871d8db530a480ef804a5c83f62619fdb026daf8b762e5ed92efd46ce69a603342ea8a885793417ddd95ab420bfc55987529c1cd2fb882215872e0aa20a897c6c25fd7402a24c498010df2adf6e80699078319c16abab7110765fe77b2b20fa11a4fbefeccbe0415a4cfeaad84278287202b3ee9960786e79ab9e3bbbed7dfdd1d1e6d9fa529fb355c2e9ccd9e0c3c720d6636aee926b04c2f04072b82e5e8807ad60b76b598a481"
 reward_address = "NQ42 P5YC ML3T G7K2 RYS9 SCLF G6A5 4PBG DPNU"
+inactive_from = 15625184
 retired = false
 
 [[validators]]
@@ -9476,6 +9563,13 @@ inactive_from = 10724050
 retired = true
 
 [[validators]]
+validator_address = "NQ11 TPPD TKPY 0RR8 RXJ5 F798 VDY3 23LQ 0LBX"
+signing_key = "da8bee6bfcbdf1fc8414ebec26524b073f5141c78d93e96d4154264d34a729c8"
+voting_key = "d07d3dd4cf41c2e4f727ef8950824a51aa64ae51a8d41558845e6646aef17ca61d277d8fd781413aad5adb29960e959007acfe4d43e37f9d30e207db8b6c7f58e484325b4363c7de946d5e6726bb9e4e9275dc79b08477e7bfd159fb635b00b91fdcc9b5ef797fe6edaf200ee130119d42f90bc5d506eed454935ba3096cb315183fa83a7ac63749079f109bfad9194bad00dede0d495d59fbf84868df85242936f306524d38a09c3d3d601e329e25c0a7b4cfb658755c6fbc76a4b18f00737054df4848faa04c6472876930c1f3aabb6226f57221e664926f3f3dc4d88e673d06d707755e43965a18a18ba23668787ea2d9c5a9b4231f57f0f996f0363598d93af9d46297a5849b14e46b4aad845cc7356c697933bf67050f3c9a6b81"
+reward_address = "NQ11 TPPD TKPY 0RR8 RXJ5 F798 VDY3 23LQ 0LBX"
+retired = false
+
+[[validators]]
 validator_address = "NQ26 TT94 M4LL F8QS UH4M XPQK 9P42 QNH9 XVNY"
 signing_key = "fc2d2b8e3b7abfa39b79d2c2969c55a9996dbf79f6bd2fe80fad7c810ac279ea"
 voting_key = "e6459600e07c11f28eb225fb9b2ca3ae8aaab06835afc557087e39f6177a505482f00d908dc401d342e84cd83327fbaff578d9bb6264b39b5a52905c0cb37d6f255eb49c1cf66e7828a94e44c1d7433154e9cd7b646b16224ee79cfdaaed00424d176afe578b7c2643dd03e1fd237129db30f772368911847592781b4d382413a6800997ee71f16daca8fd04dc689ae77922cea72b8c64fa4bfd2d08fcd182fcf81297b0b3d760beeb1a49bef91375ddc6af74413c596b8f9fd8634c7300477b7fa471a73fbf2c4a4c30fbc207f927b3cae8212f3f2a46c382de933e84aa7810648243843bdc81a2ad807917533eda1111ba38a18f903097941ed59733f8d3f5e364fa8bc379285e703a9af636b0a17618d99a68413225941bd622f780"
@@ -9487,7 +9581,7 @@ validator_address = "NQ83 TYM9 GFDY AXU7 8EYS 303B T83A PJ6Q T9KL"
 signing_key = "161053145076cfc68f5a2c05fcbd89a213641b718803e9d9f7649cd4c991d56e"
 voting_key = "540c5d7621f3dfa159798876684272792089920dac10dedbc63ef801937cee2ad13c5a2b8e08e6d68d7ad5d36bb12c3265553230b2186a3d06801d90e7348183f38b88e379f1c05488887281ccbe249b2416e7d1f9a5c18df9a45d031f130055972f6f300922692a30b26984616db9d563d78b0a514a5874090f66e924d0cdf612adfa228a07a1b32620b3a8897e391d82df72042a076dc26590459d12f2f327657cff8fd5727ac8cc462523867f17a35bfa9451a59248c7fb381f094901e9da69964384fe00425cbe848ab0e2d61fe6c45d4e991eea38a4041741d45ba54c2ad80524cf7166d3b9150cdab93afd7955a5a5753a8e656ea63ebbcf29d487246dd64cc731547e0a13d2ed503b5fcf8c5b51de4f279b41b716a467751280"
 reward_address = "NQ83 TYM9 GFDY AXU7 8EYS 303B T83A PJ6Q T9KL"
-inactive_from = 10124339
+inactive_from = 16057184
 retired = false
 
 [[validators]]
@@ -9495,7 +9589,6 @@ validator_address = "NQ85 UD3C U8F9 J1L9 J32V X9QX S3NJ BQ4L SCAN"
 signing_key = "9c630945f2764818e8ea0924b8cea68a6680aa344edfd8103fd882392556ca03"
 voting_key = "e9859318d2985998a8753ced371682cd3fc3638ab0d75028d39305625b844ea452bd00e39cfdec4bf48d8cbc2b1fade2eb1c555f30270a4d391dff9dc55985a09137bca7e15248f8f446af49ddd16562ca3c95232386d901a7ae51de1dc0010b8d9785b198c8781083d4b09aaf5d58ba24d9c2bd29d88fc54cfbd8053c41bb2041f7ef0328ff32906b77ab1664e707c4da4723acce5ec2c2df39f4698d4cdd77b82b3a282b0ebf0034bc0f4fc3d7c11fd00cc8533ecabbdcb7dcf27d0e019775ca127da296a62a430c417bc8fbd8fe2c1d0bee0e291b6adab795e4f802adb10c9d589c8b7a6b01810291e9fe2b1a226496cf768f0d35f135d03afafcf16e0e2a75702280299b481e2e0e5ad7e6cb58ced498d8cce76446882778568400"
 reward_address = "NQ19 7SNT KSMT 0P1N M16R QJEB EYSJ M5BQ R673"
-inactive_from = 14957650
 retired = false
 
 [[validators]]
@@ -9526,7 +9619,8 @@ retired = false
 validator_address = "NQ24 YJF5 2AR9 VQ42 YPCQ 764C 6C5N SPH1 AAAU"
 signing_key = "8d441fdeeb109a3c6616ab6414317b5267858848b41e4d9b4ead8e7d91386666"
 voting_key = "1146f39d58b6a51ed062dba131751dd645a990cd5d4d409cde0287903b88a7949c1a03c12bf1d528cca39c41420bfc9ea9c48e7284246776d860fc11ce507128deb80fbd12f5d166e3b68fde4c86264da8d1f941baeb34932013d3f27c590068a1ae694db2118ecaa919f032a6350adf2da38585a0f477c9136805a91b35daf6746ad2fcee5b76e4d2c0f46bc7f61ea852c4666ec5cb795739a1ae0f9ae1212583a7a76bad3671ec7c5693b90ac48777d9c8c83b48fd3f860af9d6951300476926295ac1e002b802c8fd4a99cd2d4beb5f8901746f41b137678b2ffd21bd62591ebecae61279c9bfdf0f90013281cf87ba208c6408ed6e05796a4d0e033c9bf6826a224b9787d27293f0e177b62f02faf740b036ab8c897fcc6d716200"
-reward_address = "NQ24 YJF5 2AR9 VQ42 YPCQ 764C 6C5N SPH1 AAAU"
+reward_address = "NQ21 GN8F LY54 GHE7 G6SY K14L EKQM LYTH XY08"
+inactive_from = 15884384
 retired = false
 
 [[validators]]
@@ -10991,7 +11085,7 @@ inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ73 Q1CT 89XX SFHC JMRE QSG0 UH4P FGHC 72A8"
-balance = 30989151218
+balance = 32089200000
 delegation = "NQ84 3NMP N7X3 90XQ G8PB 48V3 M15Y B9V0 6C41"
 inactive_balance = 0
 
@@ -11635,8 +11729,7 @@ inactive_balance = 0
 staker_address = "NQ86 EL3D 1P2K QS6J MGM2 U6CT Q7BS 73FY 01U4"
 balance = 21506798462
 delegation = "NQ94 58R8 YDR5 05EX JTA4 37JU N1EK 6R3Q M9C5"
-inactive_balance = 450132595304
-inactive_from = 15605650
+inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ91 ELXH C0EU D60A VP95 S9Y1 KSG0 Q7HA M42L"
@@ -12716,6 +12809,13 @@ delegation = "NQ56 BBC5 B9RR PRT9 6V21 TJJ7 PJQ0 N5KA ELAU"
 inactive_balance = 0
 
 [[stakers]]
+staker_address = "NQ80 CBR0 QTNJ UQVD HV9J 2QSH FMDR 786S R6YS"
+balance = 124400000
+delegation = "NQ56 BBC5 B9RR PRT9 6V21 TJJ7 PJQ0 N5KA ELAU"
+inactive_balance = 135000000
+inactive_from = 15754784
+
+[[stakers]]
 staker_address = "NQ88 CTQH MBFT 1MNX F8VM BQ7J JGJ8 XYL7 55V7"
 balance = 71233779
 delegation = "NQ56 BBC5 B9RR PRT9 6V21 TJJ7 PJQ0 N5KA ELAU"
@@ -12736,6 +12836,12 @@ inactive_balance = 0
 [[stakers]]
 staker_address = "NQ16 D5RC FBN0 FK6R 6QR9 H4YR HYS1 HVXB AX5A"
 balance = 1550392702
+delegation = "NQ56 BBC5 B9RR PRT9 6V21 TJJ7 PJQ0 N5KA ELAU"
+inactive_balance = 0
+
+[[stakers]]
+staker_address = "NQ20 D9MC 01Y1 H40S HM7E AL3J 872Y RGYJ 09B4"
+balance = 1935900000
 delegation = "NQ56 BBC5 B9RR PRT9 6V21 TJJ7 PJQ0 N5KA ELAU"
 inactive_balance = 0
 
@@ -12996,6 +13102,13 @@ inactive_balance = 222208620
 inactive_from = 3002400
 
 [[stakers]]
+staker_address = "NQ38 MH5L 2F8X UY1B 11B3 1PFD 4BSU 9R9Q E2XQ"
+balance = 10000000
+delegation = "NQ56 BBC5 B9RR PRT9 6V21 TJJ7 PJQ0 N5KA ELAU"
+inactive_balance = 1100000000
+inactive_from = 16013984
+
+[[stakers]]
 staker_address = "NQ68 MRDD BTRC 2RCR K7G9 047B YY54 XKKY 3YNY"
 balance = 6301081555
 delegation = "NQ56 BBC5 B9RR PRT9 6V21 TJJ7 PJQ0 N5KA ELAU"
@@ -13243,6 +13356,12 @@ delegation = "NQ56 BBC5 B9RR PRT9 6V21 TJJ7 PJQ0 N5KA ELAU"
 inactive_balance = 0
 
 [[stakers]]
+staker_address = "NQ74 UU4N K38C HFBJ T8KT 6EQP 63JH AFHA J5MF"
+balance = 1100000000
+delegation = "NQ56 BBC5 B9RR PRT9 6V21 TJJ7 PJQ0 N5KA ELAU"
+inactive_balance = 0
+
+[[stakers]]
 staker_address = "NQ04 UYBT GH53 3SKE T013 H80H MDVL QRA0 Q4M2"
 balance = 3159007518
 delegation = "NQ56 BBC5 B9RR PRT9 6V21 TJJ7 PJQ0 N5KA ELAU"
@@ -13383,1559 +13502,1560 @@ inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ09 06QV 3FA2 48TX CE4S ECMM G5PY B3X4 P2S0"
-balance = 1161002199
+balance = 1200398058
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ68 0FTL SGNP LD7C U6XV M40N YAPN PH2R MK4V"
-balance = 1178865242
+balance = 1218867369
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ39 0GYK 50GG H6RD YQA7 CJMC NSG1 46S2 QXBL"
-balance = 1103761570
+balance = 1141214705
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ80 0J25 E1RA C7TQ 7S46 8NH2 58AE GJKM NBDC"
-balance = 1235973350
+balance = 1277913699
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ37 1EPF 7G8G LBR9 CCCM 0YK4 HQ06 VG25 KY7D"
-balance = 1235973350
+balance = 1277913699
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ86 1FSE V4K1 5C1N C8XD 7HGL FPAA NV74 M60M"
-balance = 694445914
+balance = 718007052
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ62 1KQ3 G3JB 299P VPBU F8V4 38G9 68BN RL6C"
-balance = 10000000
+balance = 10331335
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ26 1Q1Q L1KB PVJ2 GB3J 8HEJ UCP5 3K65 BGHQ"
-balance = 1235966400
+balance = 1277906513
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ93 1XLP B3MF ALA7 R1MG P18J M00Y MNK5 D4AL"
-balance = 1235939383
+balance = 1277878579
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ18 238Q VCVG 9C6B 150N T9CJ BDJ4 1NC4 4D40"
-balance = 631278247
+balance = 652695502
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ67 2CET 9NKT 9CYG GEFR 4QDC 6V5L KSX9 3LC3"
-balance = 98337818
+balance = 101667300
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ62 2CXC 8GMM TU1P AU9S CKPQ 0L2V XSRQ S9BB"
-balance = 1233075372
+balance = 1274917363
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ14 2E0M K57T Q5NX 9FDA HVDA 6Y7X DMKQ UC47"
-balance = 1597292859
+balance = 1651496235
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ66 2NUB QM8J ATX9 649C 2852 NC6Y K6RH GGGA"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ25 2QKN 02YP LV99 4HBD 3VFG 8D30 J0S9 FULQ"
-balance = 898716951
+balance = 929210957
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ47 2QXJ PXU5 CT1L EB73 C0CJ USGL KF0F 0Y1U"
-balance = 1235966400
+balance = 1277906513
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ03 2YSV 0LP9 1T4H 43AQ SSFB 9QSQ U7QR LK06"
-balance = 284507716
+balance = 294155725
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ54 302D 97B4 4A9S L1N8 FQXC PYQM T9Y7 SHV5"
-balance = 1235966400
+balance = 1277906513
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ76 30AG LV6Y X2F1 XPNS R4TL TVBV TGUK EXCD"
-balance = 1235966400
+balance = 1277906513
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ24 33HT C2B0 6AXE A9M9 7EUS XB0G Q4HP 40QP"
-balance = 63138618
+balance = 65273456
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ75 37J5 M1S9 E7G1 GF08 7F86 FSM9 0N5F PJC4"
-balance = 1235966400
+balance = 1277906513
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ69 380X TSN0 D687 CTP5 GCV3 DA5J KXN7 7TDP"
-balance = 763753304
+balance = 789666705
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ50 3A0N YYR2 Q4QY TSTT DA4M 64B3 LVV1 RJLN"
-balance = 10000000
+balance = 10331335
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ44 3BJS AJ68 LH5Q 6MQF 7NXE T20V LL5R EBR7"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ27 3K0X NUNN RT8T K2VF JRKS 6KQB 68L0 BHQS"
-balance = 766467413
+balance = 792472929
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ34 3NQH 1JU4 6F07 HQQF 7GYL 3JBX Y37J NDUC"
-balance = 224262956
+balance = 231866288
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ20 3NY8 ABFG L1B8 PT5U D1J4 JV5N VS49 84Q2"
-balance = 125468108
+balance = 129718382
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ31 3PA5 EJ9H 5MYN N0ES HVNN 5XJB KLF2 6TUQ"
-balance = 1235954581
+balance = 1277894293
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ95 3TKD GA7Q RUXH TYGE PSM9 7KPT UX7K NB0F"
-balance = 294461747
+balance = 304447592
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ69 43E0 0RXV XK4X 7E0U QR93 33LM A3GP JNKG"
-balance = 10000000
+balance = 10331335
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ64 47VJ GKYC ADTA 2VRV XQQC 77S3 TJ6K TJNP"
-balance = 2335800000
+balance = 2415067994
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ07 4BGH A2QU QRFU X9UL LLQS UHEV K8UX 6TJ0"
-balance = 322009204
+balance = 332930000
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ44 4HLJ LMBQ H8QX PEJ6 NXMY 9MT6 JK01 EPK0"
-balance = 1248104612
+balance = 1290456690
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ20 52XT 1F7Q R6AF ULG8 VJLM FEXM KHMH 80RF"
-balance = 1133882113
+balance = 1172357530
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ10 57A8 DGL9 8MLN TTT5 4EK7 VAJ4 TYBJ T9GQ"
-balance = 989766624
+balance = 1023350821
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ40 5C4S A0TB V8QQ T13K PQ8V ETYH YJSA V4VA"
-balance = 261245404
+balance = 270103903
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ52 5JF5 ETL3 CRCP 1U6T SRG6 LRS8 J5PK K132"
-balance = 259988998
+balance = 268804852
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ17 5P4G HTYC UP3Y SDKJ 6EA8 3DGV 7TRF 7HU7"
-balance = 224262956
+balance = 231866288
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ93 6FUM 3GPC XKCT EMU7 JG8C ESQN 8MHS FAXA"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ84 6MHM A65S X3HJ JQXY CCBF ETJU EEF7 P3UB"
-balance = 77476429
+balance = 80097890
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ89 6NK7 DB56 A9D6 A29K RMMQ F2AL ND00 8FYB"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ70 6P7U VRXQ 10QC CYV3 RV5P EJTQ KBCV PR0V"
-balance = 299255905
+balance = 309404466
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ63 6QKT KLEU MNA3 5T4N QEHR YKQ2 LVQS AFL5"
-balance = 531901899
+balance = 549946363
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ79 78M5 REHL S22D JM0G U96V 3KME JUHS MGQS"
-balance = 169661865
+balance = 175412053
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ02 7AXA G3AY EBYB V90Q 2079 A1B1 PRKM 6AVU"
-balance = 4945573938
+balance = 5113416542
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ28 7B4P NVR7 FBHF KEC2 7LNH J438 9MEK 1LT0"
-balance = 1235948132
+balance = 1277887624
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ72 7C6N L0YK 9ES9 VJ1A DFJD XD0S YF9Y QTCC"
-balance = 798568074
+balance = 825663072
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ54 7FB7 U5G6 3MDX FLKR F8FG H30G YQBR J04H"
-balance = 1235948132
+balance = 1277887624
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ37 7HD8 8CF4 HB6X Y6QQ G4Q8 SE82 QKVK 8B5X"
-balance = 1178842011
+balance = 1218843344
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ11 7RST R1T1 DRJE M5DA 1DFE AVF3 8NXX E6P6"
-balance = 1235948132
+balance = 1277887624
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ34 7Y0P V4EK UY59 AQ0U EV98 4JRE CAQ2 EAHL"
-balance = 860711548
+balance = 889915667
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ07 82LK 1SYP SMCU YS2B 50NU SE4E FFMM SH5B"
-balance = 580150666
+balance = 599832672
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ98 86HP 9BN6 9CDQ APMQ M732 U8QJ L5VJ EJVR"
-balance = 1123534534
+balance = 1161658754
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ54 86VF 188K MBK7 LK0H UVD2 QKBJ BMCF ER16"
-balance = 1195366818
+balance = 1235928995
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ66 8LE3 KUPX VTT1 Y8SR KJPY K86A N61D CLC2"
-balance = 702904361
+balance = 726752572
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ15 8NLF URBX 8J5F 97JX ULYS 328P 3RMA SF9V"
-balance = 10719941
+balance = 11075713
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ39 8NYP NGR9 RMLC PMYJ YH2Q QQ5A FXQ8 460P"
-balance = 472350179
+balance = 488373481
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ32 8QCX FC5J YBU3 XUB4 RVTR 6TQD G213 H4VN"
-balance = 898707342
+balance = 929201030
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ28 8QDL K9JF 4BS9 RE4B HDLS K2M9 RQXJ DQDN"
-balance = 898703933
+balance = 929197500
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ46 8UAY 1J26 GX99 YJ5Y 8M0L MLS2 SPL7 U333"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ87 8XGE 0CK8 1JN6 LJ9Q D3AD MRTP 66F6 0PER"
-balance = 1235941760
+balance = 1277881036
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ63 8YY4 GLED MXTN PSCB P697 NV7A XEFG K6RU"
-balance = 1348354390
+balance = 1394108901
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ79 92ES JH1V EU3L 6MNX F0A6 LY2D 9EC6 MHM9"
-balance = 10719941
+balance = 11075713
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ33 93NY 1UV2 0E21 V0XY HD87 595R JXHL JGUC"
-balance = 1122082156
+balance = 1160157087
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ41 97SF SS6F T8CE 2VN0 YM1D 3JPV RRCK NBK3"
-balance = 1723401283
+balance = 1781884728
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ17 9F7X K8SP 6A5K DH21 AXKU BQRE FRCB MKTJ"
-balance = 10000000
+balance = 10331335
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ22 9LQK DEB2 RY0J JTL0 3DHG HHFQ 49Q9 KF98"
-balance = 470543452
+balance = 486505432
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ07 9PJ3 XDLU EEM7 LXAB L4SK Y6T6 NQM1 4QXD"
-balance = 136891887
+balance = 141529880
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ18 9PM9 5T9H N7E6 Q4VK YNVB 5YUJ MUF3 T26K"
-balance = 1385338132
+balance = 1432347857
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ58 A1P5 0DNG EA57 BA5C LNKV NRNL 59EM P9DT"
-balance = 1235941760
+balance = 1277881036
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ30 A6NY 4UEX DFTE B62F Y2EP HJCV TJ9J XBDD"
-balance = 434374556
+balance = 449108986
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ91 A811 C8C9 8B3T R3CB 52AQ K567 0PR0 DANM"
-balance = 631162012
+balance = 652575322
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ36 AEAH 6HE1 FNDS MA5B YS6L NC80 R8HF 1V86"
-balance = 1235941760
+balance = 1277881036
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ39 AFP5 GM8D 8BDL X8G6 KRSJ 4LRV 4THF P389"
-balance = 263103681
+balance = 272025249
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ25 AKVT N715 X6TR XL3B UB3P UPRN AQR5 VTRU"
-balance = 1123529197
+balance = 1161653237
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ95 ALHJ H546 50YY 9VCY GJ2E 25YT 1777 BQGV"
-balance = 617672548
+balance = 638628029
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ14 APT1 FQH9 CF1Y PPKK 2BBE T16P J93J 3C89"
-balance = 182373977
+balance = 188555611
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ10 ARAB H1HX M30V LP8P 1QYM NRKP 4UDS 6P2U"
-balance = 1235941760
+balance = 1277881036
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ06 B10N 3XPQ GJCY N42P 9651 XBL6 YGQ6 ESCF"
-balance = 369177610
+balance = 381699284
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ03 B2K6 XPCY CXL2 8G4N D45V 7FX8 XD4G 82Y0"
-balance = 1123529197
+balance = 1161653237
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ60 BAJQ F6FH QDB1 NHXY TD7F 9A14 PVB7 5GAX"
-balance = 838343529
+balance = 866788488
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ71 BC21 Q8DB UHAD GYFY PB5A PN23 RR1F V5KM"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ36 BCDS RTBC 4CVS YT98 RJ0V D3L8 83CJ DNXS"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ93 BFYN Q3NN SVTQ PB6T AK96 KVY0 QNAR K82Y"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ80 BLJB DMNA G9BL 7U1H QE3V V5MP RVFG T5XY"
-balance = 819754065
+balance = 847568107
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ15 BTD5 0GMV HL7M NDD6 5GK8 E9H4 PNVQ 4Q1C"
-balance = 432313390
+balance = 446977863
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ90 BU4A Y5VG LNLR EE0C 1KVD U240 A6C8 HHLF"
-balance = 10000000
+balance = 10331335
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ36 C1JK G8C3 A97J XSG8 XC80 SL6G NV0J FLH6"
-balance = 224824942
+balance = 232447343
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ46 C20V 2076 9MM2 A2S8 V77V A0KM 7C39 EBP4"
-balance = 201221957
+balance = 208043287
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ30 C4KP FMT2 JJLF 4BA5 B0A5 6H8L CM1D D6AK"
-balance = 898703933
+balance = 929197500
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ28 CAJ9 XCSP 8TCA BYBC 2KRT 48AV 8S51 9T7M"
-balance = 1235872240
+balance = 1277809159
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ21 CHG8 N0CF 8P8U R037 C6K4 AMS7 HET4 QM90"
-balance = 562062545482
+balance = 581138699906
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ73 CHT5 TK2M 176E UVSK 6LVX XXSH G962 HLJC"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ48 CLDM 9H2L X7JF LSHQ CKJT CJ3P NGFE YV9M"
-balance = 1016737207
+balance = 1051236773
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ51 CM2C YRRR LDGA C0SE U68L 4TCG 0RDA G8X9"
-balance = 562812807
+balance = 581906375
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ90 CMPM SFQP YS76 QMQ9 6X9C 9UKE BCJF TGPB"
-balance = 1236616290
+balance = 1278578459
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ34 CPAE AA8U FEU5 UKLC QHU3 GBVP X41N VXPV"
-balance = 3708541324
+balance = 3834399570
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ95 CSSS TCHB 5B8K A1G1 YTQ0 DFHE DRMU LFBJ"
-balance = 10000000
+balance = 10331335
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ29 D0AQ TBFP K81L U1BG Y6B2 N14M 23UL 8VG9"
-balance = 1246710662
+balance = 1289015429
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ61 D40H QASK 14SG QAVA 2DNH N77V NUL1 1YU8"
-balance = 617648515
+balance = 638603184
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ98 D6A6 6EF1 PFCM 9VYY 5PDC L15A JUM1 NF1N"
-balance = 1266385541
+balance = 1309358064
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ89 D93G VMPE PERP 5KC0 U0UC 0VQ2 8KKF SVTC"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ03 D9UV U615 LYJC V12F 4P5J SSS6 M431 X60F"
-balance = 313845474
+balance = 324489197
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ94 DC7G 3GDC 0TQL 6A9U RJJ5 0UN2 VSYQ D21L"
-balance = 845221666
+balance = 873900069
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ90 DEPK DJCC ANSD 3739 TYUE AVRY EXH2 B6NU"
-balance = 648567923
+balance = 670571980
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ04 DGAP 28V4 HKM1 J0TX GS50 7C2S EVPM 17R3"
-balance = 1350040570
+balance = 1395852311
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ52 DM0E 42MK 7CBF 03V2 LMAL J37B KXTH H8R5"
-balance = 489365549
+balance = 505966349
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ79 DM9G N8SP XREL 9SM0 91YG 145G XXLV TYC2"
-balance = 2472480478
+balance = 2556387349
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ18 E1Y7 UL7T PK54 SYKC 8QPS CAHY D270 N2QX"
-balance = 39027237
+balance = 40343746
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ28 E44Q B3TR R6AA 5GQS PN01 03HJ Q98N 3SEQ"
-balance = 310592420
+balance = 321125735
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ43 E4AG N6AR KC8V 01Q5 JSCA 1MBX B4T4 JLQN"
-balance = 1017973725
+balance = 1052515260
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ89 E85N BKVU HT4G Y78Q 5E71 DGGL URB8 J3QH"
-balance = 1123430927
+balance = 1161551633
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ37 EBND 48GQ GAUU R5TG 80RK 5LY4 MH9D 6E1Y"
-balance = 1235941760
+balance = 1277881036
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ71 EC5Q RGK9 EAN3 MJCD 8KYE 3U4X TRFQ UKRA"
-balance = 1235941760
+balance = 1277881036
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ94 EDG6 5U5Y 8039 8P38 B5UJ VGQ4 048L QFE5"
-balance = 617672548
+balance = 638628029
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ05 EJ6F QA6X 93XE 1PAH EX38 L3RR 29H8 CKP0"
-balance = 617672548
+balance = 638628029
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ82 ERSG RSHX 9Y2L E3HH CA77 KR74 3DT5 NE0H"
-balance = 1235890647
+balance = 1277828190
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ31 F141 SU9J N6E1 RE04 A8YU 3RJG LF53 UTNP"
-balance = 2472184123
+balance = 2556080939
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ69 F3LP H7C6 KX8M VDPJ BG2C 4R4C DHHH QS41"
-balance = 617672548
+balance = 638628029
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ92 FA1E 3XP3 S8FS ADF1 VFXC 8B63 VFT5 SBTG"
-balance = 673878807
+balance = 696741907
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ17 FADC N82B 1LQ4 XUKY EHN1 Y5B5 3RQU 9YU3"
-balance = 10000000
+balance = 10331335
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ41 FFFS 5LYJ 8YR0 GD7C 5X5N K51J 65Q0 URNS"
-balance = 2472184123
+balance = 2556080939
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ67 FT71 333T KQKR PP8P BGJ6 6M8P SDRK 67KP"
-balance = 10719941
+balance = 11075713
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ60 FTGK 3A0V PGN8 AGGL 266E FRGF D7PS PR2S"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ17 FTYY M5AQ X7ER Q4DA 7RFK PF82 RG3B GFDG"
-balance = 1235941760
+balance = 1277881036
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ40 FVTD PEB3 PDVB VVQJ U7Y2 1FG9 1X9B UBT1"
-balance = 10000000
+balance = 10331335
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ57 G110 F2P5 NAS3 X51S FY96 SX67 YHEQ F5CU"
-balance = 900952225
+balance = 931522099
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ49 GBJB VSBV L1JX 9L22 1Y0B J8YY MGRG J5XY"
-balance = 383150068
+balance = 396145957
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ87 GFME R7RX L0KV 68BY A15H 1JTV 7YVL 6DDD"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ91 GM9N F14J XD32 GJNE UF14 0SEM 80DQ GGFP"
-balance = 402042130
+balance = 415679207
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ62 GMGS 4QUU 0HDS YN78 DC3M XS7K 3N81 682X"
-balance = 1235941760
+balance = 1277881036
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ90 GR5N E3U5 GBQD ET0N 8U5C TDUX T7EC CPAP"
-balance = 2472184123
+balance = 2556080939
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ73 GS0P LHBG E82E H3K0 BY8Y HFY3 QSM8 XR3U"
-balance = 626640231
+balance = 647900074
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ90 GXBY QK3K 8C6T 15QX 8B8V SVTF 532C 7T1Q"
-balance = 683658720
+balance = 706853746
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ60 H18G NSMX PYPR B6YB P9VR 0M5X K30H X9EL"
-balance = 560415572
+balance = 579427775
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ25 H49H 82SH XSPE 0VHH 1S54 J4N7 EX4E JJ4L"
-balance = 1130287046
+balance = 1168640442
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ62 H9V1 K4TY F4VC JN6D 1VXH UQ5R EYY4 HVVX"
-balance = 902750826
+balance = 933381740
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ36 H9XH LJ33 3BNS Q5LM J2XE FXTJ 4GYK DTPK"
-balance = 677443220
+balance = 700427296
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ89 HCGJ N8AC GLH3 5F69 9N39 6XYX J014 4BYN"
-balance = 305526469
+balance = 315887845
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ06 HJVC C6TC 6M83 JGQD NA88 CX2D T9GD X086"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ67 HVF0 8E2N ESRH N3JB 2GBN YX0V 1DSC PMEQ"
-balance = 1235941760
+balance = 1277881036
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ83 HVYA NQL7 HXEJ KUVP 51A2 46HC 24SM PAH6"
-balance = 683552790
+balance = 706744220
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ61 JFPK V52Y K77N 8FR6 L9CA 521J Y2CE T94N"
-balance = 821707127141
+balance = 849595507655
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ45 JKEF GJPY 51U7 LXR9 E61A VYD6 GRJQ Y9RN"
-balance = 1123430927
+balance = 1161551633
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ75 JM2X 354J MX0M BM2M 4HHQ N54L YMT6 EY3V"
-balance = 620594695
+balance = 641649353
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ34 JN0C XY3S UATU FL3J RQ15 0CB5 8RAG HKAV"
-balance = 1235872240
+balance = 1277809159
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ52 K9BF L18B K61D E262 SPG2 AN6Q X89H SHCK"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ68 K9SF 8EHS YGCK 60TK 83VB U6AC F0VA RPLD"
-balance = 10000000
+balance = 10331335
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 558500000
 inactive_from = 15389650
 
 [[stakers]]
 staker_address = "NQ50 KABC 76BA Q8CU UBH8 QXJJ R2M5 VE98 J214"
-balance = 1235937964
+balance = 1277877110
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ57 KDYL RT5T TL8L 090Y 7PTR BNM4 PTB1 R2NQ"
-balance = 1911646546
+balance = 1976518954
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ84 KF1K A60H 6U41 353V QMC3 S8TP NT2K V6LR"
-balance = 247305885871
+balance = 255699333841
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ95 KKAP Q4V8 K9FH C0NU SF8A J0DN 23G3 TV3B"
-balance = 617671984
+balance = 638627448
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ89 KVFA JRXG 1Y9Q H2V3 CA66 MHKJ E8S1 D2UN"
-balance = 673867211
+balance = 696729916
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ36 L081 7KNV JU6A 98M0 C9QT R903 T737 632S"
-balance = 1123430927
+balance = 1161551633
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ97 L67C ES8C F92D UTAA 7QU7 7JU3 Y9FK R6N3"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ26 LK57 RFM0 GD1B VP55 LKQT 3CHX GQ9M MRXV"
-balance = 1123525957
+balance = 1161649888
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ03 LK7P XJAY FNLX AYH6 TJ93 J7MV SEB9 3B29"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ97 LNU3 EEHR QAAS A3C5 EHP2 LT3Q 14XT Q82Q"
-balance = 898701887
+balance = 929195383
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ38 LPSN 4XFQ P65E NCF6 M84B 1BBJ 7PM5 B1KH"
-balance = 898701887
+balance = 929195383
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ70 LTTD 41XA S8KM EXAJ YMD7 MRUY AJAV 3MC7"
-balance = 448767135
+balance = 463990039
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ47 LV43 2HRP 4F3H DTPT KSTG JU2U LRN1 VSUQ"
-balance = 3369742935
+balance = 3484102509
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ98 LY8L A76N FCX8 CJBV VAQ0 Q2AY FDM0 F94T"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ42 M43Y MVQP 1CQP 9SY5 VC1X VJC6 9DTE TDG8"
-balance = 1235937964
+balance = 1277877110
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ96 MB9D CRU9 53QX 3HP9 MPKY C2Y8 M8HC JCUT"
-balance = 1019769634
+balance = 1054372116
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ08 MLFR LRUC KBF5 M34D L3N2 5CF3 F0GD X3VC"
-balance = 1145797725
+balance = 1184677549
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ66 MLP4 AUAB 6GP5 7YBQ 3QQ0 2UXX EJHE XB1B"
-balance = 11240608854
+balance = 11622102248
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ82 MP08 AC8E LJXA 8PR7 P5LN 4M4E V0UX YCGU"
-balance = 7418599614
+balance = 7670375650
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ94 MSV3 L4KG HVF0 TRPA 0BX5 V7UY XNSN 3QCX"
-balance = 903760442
+balance = 934425624
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ83 MVT0 A6H1 4623 KYLN ND29 F10X F8VL 12F8"
-balance = 1235937964
+balance = 1277877110
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ54 N0EY V6CJ U7VT 0QFY 1QKE 74QK SG85 03RK"
-balance = 1235937964
+balance = 1277877110
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ89 N0NP 3EG9 C20B 4FFH KN3F RHCE BLT5 7124"
-balance = 1167525150
+balance = 1207142396
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ03 NMRB D5XF TN68 1H79 4NB4 SXQ5 CNMF CRR1"
-balance = 1235937964
+balance = 1277877110
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ56 NPMN 4X8A T0P1 RHXY 0L1C X0L3 HBM3 QA4S"
-balance = 10719941
+balance = 11075713
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ95 NPTF EBG3 Q3CM 38EF YVDQ GUKL 2GNF 9GR5"
-balance = 1235931638
+balance = 1277870571
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ73 NTEA 3GTT 0DUM FMC4 F721 E866 31D1 B3L1"
-balance = 10000000
+balance = 10331335
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 800000000
 inactive_from = 10724050
 
 [[stakers]]
 staker_address = "NQ18 NTV9 PGXF 60S0 36UF 70TQ NP97 BLH9 HKVX"
-balance = 756754539
+balance = 782430404
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ66 NYFG V9TU 2P93 JVN4 XJJY SVN7 VXV7 NPXD"
-balance = 152962174
+balance = 158145587
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ87 P0Q7 M9PL 2A84 XCSX BPQA EYG4 CPXE SBQM"
-balance = 1235899594
+balance = 1277837436
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ27 P5NF F6X8 RQ3F P50N JPG1 4B6Q 8Q95 B28C"
-balance = 756345363
+balance = 782007339
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ33 P5PH 1TM7 36BH NMSD LMX8 S3A0 1A06 VA1E"
-balance = 719328651
+balance = 743734297
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ21 PB08 3DUM F11F C0J7 JALG XYEX 1NXJ HMXL"
-balance = 519656337
+balance = 537285190
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ02 PD8M AKTL E0XB M9UU 3MJH FJPL THV5 9UH6"
-balance = 916122260
+balance = 947206999
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ52 PG4K HBR9 MJH1 C8RR CRKM 3MUC H3KB JC0Y"
-balance = 10000000
+balance = 10331335
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 3300200000
 inactive_from = 3002400
 
 [[stakers]]
 staker_address = "NQ11 PHVK 2HT0 DGT4 C4F5 Q270 XTX8 1228 AQBL"
-balance = 152261278
+balance = 157420902
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ05 PKVG 5A4L JL6E LFXM 5B05 H46H AF66 00DK"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ10 PMQ1 U9V5 NCPL 8BMS H9NT XS5E 3QYF F2GG"
-balance = 7121786694
+balance = 7363489031
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ67 PQA2 PQBR 3CVV 2MX1 185S A9RB GX7V DT05"
-balance = 651611232
+balance = 673718578
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ40 PQVU XRDT RPUQ 2GXJ NKRY 7MQK 4P8V MGUD"
-balance = 1135211309
+balance = 1173731839
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ10 PTY6 8PJ6 F5SH V24M V23J D78C LGR2 6HAA"
-balance = 28026119970
+balance = 43637932
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
-inactive_balance = 0
+inactive_balance = 28538928975
+inactive_from = 16100384
 
 [[stakers]]
 staker_address = "NQ53 Q184 DN78 0QRU JK56 HDNM 2ES0 XKK4 AN7G"
-balance = 1235931638
+balance = 1277870571
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ60 Q4XT 7N64 960E 00PU JHU6 07F5 TLD7 9SRG"
-balance = 905780454
+balance = 936514195
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ14 Q9EU 98R9 PTCV 7Y9L F8CE Y7P5 FH3M 2U3G"
-balance = 29373649
+balance = 30362518
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ86 QAMS 197Y TXG8 563P GCDR CADL VNEF 6M5T"
-balance = 982232339
+balance = 1015560826
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ28 QBNK D4JS TRMG H9VA YLDR 8G36 GY32 CB5X"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ78 QCL1 451M PLQF N68E 3C7D 3S6K K9DC NBM8"
-balance = 310450445
+balance = 320978942
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ79 QNET GKU6 AR0T 790Q NL7V 166A PQGR U7F2"
-balance = 59453408
+balance = 61463172
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ71 QUQK N3D2 M233 6X36 DKQC L23S NGSN EVKV"
-balance = 10000000
+balance = 10331335
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ26 QY9T KC0U RYY2 S01V AM0S D3UM FBND SRL0"
-balance = 458502520
+balance = 474055841
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ49 R4YJ 41PB SSHE 7UTN TPN5 K9M2 42C7 3MUM"
-balance = 1235931638
+balance = 1277870571
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ29 R82X RQSR VX0Y HMFP 537C R94H NTMX Y20N"
-balance = 516494838
+balance = 534016393
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ90 RB8J 38RB LX70 TBBB GH6U 7VR2 PH03 E050"
-balance = 100598622
+balance = 104004838
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ13 RBQC 2PX6 7VML TU7X 9JDV 652M 0U6B 0QU5"
-balance = 933258910
+balance = 964925262
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ11 RDXN P6B1 TMGQ YDPD JT5P 81L1 H163 QLNT"
-balance = 883033400
+balance = 912995118
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ11 RKJE B4B7 2GA9 YE3J 5RQY FL2A JH0J EYH7"
-balance = 513041491
+balance = 530445841
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ90 RKRN JRY9 532K SS8C K7E0 9C7J 870X JQ3R"
-balance = 10000000
+balance = 10331335
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ81 RPU7 SF5M FF0S RHDA D668 ET6L HXYK TDP4"
-balance = 945095259
+balance = 977163328
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ06 RQ2Q 4M9R ULLS PMMM TH8L 7EYL PMJ5 FPPY"
-balance = 621377603
+balance = 642458833
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ48 S1VC 9MBB FRR4 RAVH 6DVG 136Y Q855 DYLN"
-balance = 703440585
+balance = 727306999
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ85 S7F2 8HC1 1Q85 SMU9 GVV1 9NSQ KGT1 LV7K"
-balance = 1123515993
+balance = 1161639585
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ77 S7PJ TF29 DAAA FY1U B44C 7GQN A8EN 4LB9"
-balance = 485590842
+balance = 502063528
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ83 SBT6 7X4X X96A BH88 GJHV YMN4 1PY3 JKP8"
-balance = 1097774081
+balance = 1135024004
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ78 SCF1 8CLC LPQ3 QJAQ 13PH 3U0J 508P 120G"
-balance = 1235872240
+balance = 1277809159
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ48 SCK4 QAEV GRHL STH5 LKA8 F315 4FJ0 U5FJ"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ58 SCLF GEVV A1X4 M8LX 7Q63 QDVN 116R UXQ6"
-balance = 798350801
+balance = 825438427
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ87 SG04 G630 XP8M P1LM G0NA VP6U TGGJ 20PL"
-balance = 203994323
+balance = 210909744
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ87 SLLR EQGB GUAQ X941 8914 809Y 69XV G09Y"
-balance = 1235926174
+balance = 1277864918
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ46 SM94 44XG TS0Q TS5D EA87 0TGF HV7V VHYQ"
-balance = 748740444
+balance = 774144321
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ33 SU9E NFB1 MQDS Y4E9 3HXK DESD KPAU BTMB"
-balance = 1207435632
+balance = 1248407418
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ21 SYMV 8KJM 4CA5 UK8M 27T6 8NVM 7XFC QG6X"
-balance = 11240434759
+balance = 11621922250
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ55 T1S6 QF6R 5XV0 QE4G UEXP 1XV9 FRU7 YRXU"
-balance = 1211870430
+balance = 1252992736
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ74 T31S 3VBL EK9S D8EH D0NC PTC3 HK1D 4B6U"
-balance = 1145276334
+balance = 1184138464
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ95 T3KA SBE8 TE2H XY39 BUKB 8H9L 56XU E65M"
-balance = 1235926174
+balance = 1277864918
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ33 T6CM 1TUF T1Y7 HE5J V4BJ 8SGM XXQ6 SLS6"
-balance = 905322906
+balance = 936041121
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ74 T8H7 QGJA XQK3 BE8E 7GH7 0TQG TDBD YRJ1"
-balance = 369473319
+balance = 382005028
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ26 T8MJ QXNY MTJ1 BX88 JJXT XBU8 NMEK ADBN"
-balance = 1324842648
+balance = 1369799180
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ78 TASY XUJ5 8XFM 3Q81 FGTT 1X08 0HHR 1KKJ"
-balance = 959734333
+balance = 992299246
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ42 TFV1 N782 CH0K AXFA R5R1 AUTY 235Y QGBR"
-balance = 608564994
+balance = 629211372
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ42 TG5A 2FTS 6UAC 6HQ8 PPKU Q6Q2 F7YM KR0J"
-balance = 1182776027
+balance = 1222910880
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 46788189
 inactive_from = 7084800
 
 [[stakers]]
 staker_address = "NQ77 TH53 PA3Y MXKJ R0XS VLP9 PXN1 UJCT ND7R"
-balance = 1109173897
+balance = 1146810726
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ45 THG0 GG6U YABN 2PFM DECV F9XE NJ0F Y18V"
-balance = 1235926174
+balance = 1277864918
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ38 TJHN NX4P S1AQ UYXC 3KFC N66X 1TQ3 C30G"
-balance = 673598975
+balance = 696452576
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ03 TK10 E0CN 18LB AH1T 8QNU 2X1G JRFJ 468F"
-balance = 502516389
+balance = 519563522
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ81 TMND H7K6 A06Q 6FCB VQ6A EK78 1FTE TQF2"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ47 TVQ6 3GHU XUFC 8HKB K1RU R97P B8KS N2HK"
-balance = 1235926174
+balance = 1277864918
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ36 UHU1 6LG8 A74D 3KP9 TH72 P3AN PE8R FSH7"
-balance = 593483395
+balance = 613617908
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ03 UNA5 DN3A 1UNC XXDP TN40 B4A9 RHU6 SGCM"
-balance = 898695612
+balance = 929188898
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ13 US1E 7LAL KDJU BTGG QF2T BD8C YSU2 SEFY"
-balance = 41160734
+balance = 42549654
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ08 USCL GTH7 3XDP V6AT VA8H 52CK 2B1E HYCN"
-balance = 1148968929
+balance = 1187956385
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ97 USLX JN57 VU1R 2UGU SY50 VE8C M1GG KF2C"
-balance = 561842429
+balance = 580903058
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ94 UVNN 0S03 E25Q 249F HNFV 0R3B XURL VKKM"
-balance = 1235920718
+balance = 1277859280
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ67 V1YR A40V R0YL XNAV NBMN 4XSK PNH3 QUK1"
-balance = 572352958
+balance = 591770311
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ63 V4XL 07SX YJPS 6AA5 N62N 7GCA S1T6 YFHF"
-balance = 3708926567
+balance = 3834797891
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ26 V64P HHBK Q7RH BXB8 TCAN 1FB3 40FQ HQBT"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ06 V6LG 8GH5 1GFK F99R 14KM VC3M R339 L7TX"
-balance = 243351629
+balance = 251602823
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ44 VC32 YM2N Q30Y UQ71 JLF7 FUMB U40U 4Y63"
-balance = 676924795
+balance = 699891274
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ53 VDE1 63FV LVSS 5XF6 NVPF BP5U 8DD6 A8C9"
-balance = 243573421
+balance = 251832139
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ42 VDPJ CKM2 3P3V VYV5 Y3NA VG5C J0HR XKCE"
-balance = 1217110079
+balance = 1258410210
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ88 VJVQ LVPJ 2XV8 Q7LS B4E9 VQYD V2LN VAQR"
-balance = 147911261
+balance = 152923245
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ50 VXFK 5S7T V488 B2R8 UU3E S0D6 HKC3 D6L3"
-balance = 1235920718
+balance = 1277859280
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ11 X0AJ 67J5 0K9P TFQ5 JM7U 3FXD G9KQ DRDK"
-balance = 10000000
+balance = 10331335
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ32 X2AR U5FL HQAE F1YE R52F 1KS3 VCC2 26DG"
-balance = 1235920718
+balance = 1277859280
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ37 X3FS 7CL0 6RL9 89NA QYLS HUK5 NSDL E41J"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ40 XDHD RY19 L19R MJX3 UX6B EJ8E XEU4 87F4"
-balance = 1235920718
+balance = 1277859280
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ34 XGXL RLJ2 DVSX 9GJ4 A2TR LE3X 0AUS C7NP"
-balance = 1235827034
+balance = 1277762414
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ96 XMEU X96U 1SC6 CXEB MJ47 KJYJ HVJX L0XY"
-balance = 211626634
+balance = 218801095
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ97 XPDA U4NK 7DPD KT8R 2GUL YRDT 9321 4D4T"
-balance = 1235920718
+balance = 1277859280
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ04 XRSY 6D8E U6D3 J1BC 29QC U8FN NHRJ JCKA"
-balance = 1235884324
+balance = 1277821647
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ39 Y379 UGXN 0JMS TBPG NCFP GLUV JFXK SD9C"
-balance = 1235920718
+balance = 1277859280
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ54 YKEX EG91 0MT9 E0T1 ERV2 X4FR 7CSF AB7T"
-balance = 1023618969
+balance = 1058352100
 delegation = "NQ65 DHN8 4BSR 5YSX FC3V BB5J GKM2 GB2L H17C"
 inactive_balance = 0
 
@@ -15253,9 +15373,10 @@ inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ36 6NE1 K6GT 3X4R TMM3 AKUV XQL9 FB89 261G"
-balance = 7144599475
+balance = 10000000
 delegation = "NQ79 F94K NYV6 3V7D 68X6 FXAD 4PCM XMQR PP4U"
-inactive_balance = 0
+inactive_balance = 7144599475
+inactive_from = 15754784
 
 [[stakers]]
 staker_address = "NQ05 6R5K 6GN8 U7N5 0KHG YS4S M334 LT5Y SMX5"
@@ -16862,7 +16983,7 @@ inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ63 HH88 N94E CD6A 7YRG 3SJ9 RJNU 38LN 7042"
-balance = 1877200000
+balance = 721400000
 delegation = "NQ63 HH88 N94E CD6A 7YRG 3SJ9 RJNU 38LN 7042"
 inactive_balance = 0
 
@@ -17679,9 +17800,10 @@ inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ34 96R3 HYK9 D83S CP8B EPBK 880J 0S7M Q3T6"
-balance = 15435148996
+balance = 10000000
 delegation = "NQ70 JM4N PU3R Y2U2 9RGX ABJE VKA4 4TBB HKF1"
-inactive_balance = 0
+inactive_balance = 15435213864
+inactive_from = 16100384
 
 [[stakers]]
 staker_address = "NQ68 97KX FMU6 LQGD NMAY 4A6U LYU4 KB5J HVYL"
@@ -18436,154 +18558,160 @@ inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ23 21CC Q824 NGS6 5252 DD96 EYJK MK3R JPRT"
-balance = 4197897766
+balance = 4366679592
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ59 2Y5P PP6T B1S2 MCRN MGV8 R60E SEPM B00C"
-balance = 1118235985
+balance = 1163192117
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ16 36GV CG70 AHE7 L21L 8P3L LQB2 D8FA 3BHD"
-balance = 710609325
+balance = 739175764
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ75 3PM9 C7BB 0PK4 FGJB Q274 PLPM 87CD 9RET"
-balance = 10000000
+balance = 10396666
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 1109098486
 inactive_from = 12884050
 
 [[stakers]]
 staker_address = "NQ19 3T9R MKQJ 2Y1A 8VSB 3L68 NNRB U8D6 GAJD"
-balance = 517783892
+balance = 538597324
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ66 5L83 J6V7 KNF9 AHBT JC9T 844V 36T9 A8J6"
-balance = 1118235985
+balance = 1163192117
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ38 647U B6GP 9L0B EDT0 7M99 BUMN F6G4 LCBD"
-balance = 1114896838
+balance = 1159718679
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ37 7B3E 2EHP NQT0 Y10U 1C1S KGGG 950T DP4D"
-balance = 614215725
+balance = 638906425
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ71 8ACN YCGE J85G KQUE A5PS 6LNT Y08P 6VF8"
-balance = 1182271515
+balance = 1229802379
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ85 A80G 3TTD U9X6 PUDD VJ9Q LP0D TVGS T6VU"
-balance = 132861335
+balance = 138197956
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ68 AJDQ 0GHF JYG8 KYV4 NTKR KQX6 Y5XV 3CLV"
-balance = 1118235985
+balance = 1163192117
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ31 C58C EN5A 1PAT 3BAL UCLR 2NGV N1N0 6VU9"
-balance = 1114835443
+balance = 1159654850
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ68 D40E KU4Q V8JV E96E X1M1 5NL6 KUYC SQXS"
-balance = 809853055704
+balance = 842415280612
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ24 E4F0 6G24 1SHM Q61E 8R0T 0F6T 5347 1HY9"
-balance = 2364550770
+balance = 2459618162
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ98 FJST 3TPR M9VV L0NP HFGE TRB2 D1U6 G154"
-balance = 10000000
+balance = 10396666
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 1100000000
 inactive_from = 14482450
 
 [[stakers]]
+staker_address = "NQ95 FMKY YNMQ BEMR H0NJ 4K6G F15X B2LD QRVV"
+balance = 49200000
+delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
+inactive_balance = 0
+
+[[stakers]]
 staker_address = "NQ50 J9UR XS9V 18GU 46QC MCXD PAXU Y0XH 70S8"
-balance = 10000000
+balance = 10396666
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ81 K9GD RN99 K38D 1ND0 A80R 6ET5 1TP7 QCNP"
-balance = 1106847250
+balance = 1151345477
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ69 KEX9 NXSJ 6TN9 D11M U5L0 LVC0 BNQ0 GDRX"
-balance = 5069176800
+balance = 5272990703
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ75 L45E DSHK QE86 5UCL MR6Q QS57 PFX1 XR88"
-balance = 1114835443
+balance = 1159654850
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ66 QM96 3TPH 6NQ0 JARL 98CF L068 1MYU TJ1X"
-balance = 4416727210
+balance = 4594307655
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ96 QYHA F8PY VDXH 4QEU 4BX8 CT01 CJPM G33U"
-balance = 1147146805
+balance = 1193265378
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ60 ST8P AGA0 34MF U4J0 MQQA 48S5 MNY3 Y7Q2"
-balance = 10000000
+balance = 10396666
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 1100038121
 inactive_from = 11631250
 
 [[stakers]]
 staker_address = "NQ66 T9E1 U6T1 0H87 43QX YGYA G5KR F21L GC3J"
-balance = 1518136138
+balance = 1579171356
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ88 X9VY 9M8P NCCM S5QR A21R HGN4 JJLP 129K"
-balance = 150465744057
+balance = 156515601868
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ48 YU3M UQ2Q GBJ5 F3SD GS4V KM20 63HL C740"
-balance = 158714306459
+balance = 165095818979
 delegation = "NQ57 M1NT JRQA FGD2 HX1P FN2G 611P JNAE K7HN"
 inactive_balance = 0
 
@@ -18847,7 +18975,7 @@ inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ41 88F6 MLTC 48JJ CNGU 4SNK DQP6 47VT Y7B9"
-balance = 1000000000
+balance = 1100000000
 delegation = "NQ83 P1EH GRM8 HUE8 GS7L CBST UVDS 778L HEX4"
 inactive_balance = 0
 
@@ -18883,7 +19011,7 @@ inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ27 8KGR G20Y 8BCR 21TQ V4CE SC3G 9H0Q 1USJ"
-balance = 10000000000
+balance = 12000000000
 delegation = "NQ83 P1EH GRM8 HUE8 GS7L CBST UVDS 778L HEX4"
 inactive_balance = 0
 
@@ -19033,7 +19161,7 @@ inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ85 C0L0 82BN V5RL F6TY BT9K K6AX N8HS 0J3E"
-balance = 16471500000
+balance = 16634200000
 delegation = "NQ83 P1EH GRM8 HUE8 GS7L CBST UVDS 778L HEX4"
 inactive_balance = 0
 
@@ -19177,7 +19305,7 @@ inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ44 GJR3 QKYL 3RD9 4KAY FPYH F8AK 7E9Q SYSD"
-balance = 149842600000
+balance = 168116700000
 delegation = "NQ83 P1EH GRM8 HUE8 GS7L CBST UVDS 778L HEX4"
 inactive_balance = 0
 
@@ -19786,9 +19914,9 @@ delegation = "NQ26 TT94 M4LL F8QS UH4M XPQK 9P42 QNH9 XVNY"
 inactive_balance = 0
 
 [[stakers]]
-staker_address = "NQ26 TT94 M4LL F8QS UH4M XPQK 9P42 QNH9 XVNY"
-balance = 16602900000
-delegation = "NQ26 TT94 M4LL F8QS UH4M XPQK 9P42 QNH9 XVNY"
+staker_address = "NQ13 0RA5 XMBQ 5QE8 2SYR 0FPU X9GY 7N2G QLL4"
+balance = 1100000000
+delegation = "NQ85 UD3C U8F9 J1L9 J32V X9QX S3NJ BQ4L SCAN"
 inactive_balance = 0
 
 [[stakers]]
@@ -20177,7 +20305,7 @@ inactive_balance = 0
 
 [[stakers]]
 staker_address = "NQ21 GN8F LY54 GHE7 G6SY K14L EKQM LYTH XY08"
-balance = 959488900000
+balance = 10000000
 delegation = "NQ24 YJF5 2AR9 VQ42 YPCQ 764C 6C5N SPH1 AAAU"
 inactive_balance = 0
 
