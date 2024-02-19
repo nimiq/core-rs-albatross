@@ -57,9 +57,12 @@ use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned};
 use nimiq_validator_network::validator_record::ValidatorRecord;
 use parking_lot::{Mutex, RwLock};
 use thiserror::Error;
-use tokio::sync::{broadcast, mpsc, oneshot};
 #[cfg(feature = "tokio-time")]
 use tokio::time::{Instant, Interval};
+use tokio::{
+    sync::{broadcast, mpsc, oneshot},
+    time,
+};
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 #[cfg(not(feature = "tokio-time"))]
 use wasm_timer::Interval;
@@ -1717,7 +1720,14 @@ impl Network {
         }
 
         if let Ok(request_id) = output_rx.await {
-            let result = response_rx.await;
+            let timeout = Req::TIME_WINDOW.mul_f32(1.5f32);
+            let result = match time::timeout(timeout, response_rx).await {
+                Ok(result) => result,
+                Err(_) => {
+                    warn!(%request_id, request_type = std::any::type_name::<Req>(), %peer_id, "Request timed out with no response from libp2p");
+                    return Err(RequestError::OutboundRequest(OutboundRequestError::Timeout));
+                }
+            };
             match result {
                 Err(_) => Err(RequestError::OutboundRequest(
                     OutboundRequestError::SenderFutureDropped,
