@@ -555,5 +555,3 @@ fn test_verify_election_macro_body() {
     // Skipping the verification of the PK tree root should make the verify function to pass
     assert_eq!(block.verify(NetworkId::UnitAlbatross), Ok(()));
 }
-
-// TODO: network ID test
