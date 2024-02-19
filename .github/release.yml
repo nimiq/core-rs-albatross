@@ -1,0 +1,15 @@
+changelog:
+  categories:
+    - title: Protocol Breaking Changes
+      labels:
+        - testnet-restart
+    - title: What's changed
+      labels:
+        - '*'
+      exclude:
+        labels:
+          - testnet-restart
+          - dependency
+    - title: Dependencies
+      labels:
+        - dependency
