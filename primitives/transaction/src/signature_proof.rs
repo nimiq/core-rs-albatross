@@ -52,24 +52,29 @@ impl SignatureProof {
         let mut client_data_extra_fields = "".to_string();
 
         // Convert client_data_json bytes to string for search & split operations
-        // FIXME: Handle invalid UTF-8
-        let client_data_json_str = std::str::from_utf8(client_data_json).unwrap();
+        let client_data_json_str = std::str::from_utf8(client_data_json).map_err(|e| {
+            SerializationError::new(&format!("Invalid UTF-8 in clientDataJSON: {}", e))
+        })?;
 
         // Extract origin from client_data_json
         let origin_search_term = r#","origin":""#;
         // Find the start of the origin value
-        // FIXME: Handle missing origin
-        let origin_start =
-            client_data_json_str.find(origin_search_term).unwrap() + origin_search_term.len();
+        let origin_start = client_data_json_str
+            .find(origin_search_term)
+            .ok_or_else(|| SerializationError::new("Missing origin in clientDataJSON"))?
+            + origin_search_term.len();
         // Find the closing quotation mark of the origin value
-        // FIXME: Handle missing closing quotation mark
-        let origin_length = client_data_json_str[origin_start..].find('"').unwrap();
+        let origin_length = client_data_json_str[origin_start..]
+            .find('"')
+            .ok_or_else(|| SerializationError::new("Cannot detect origin in clientDataJSON"))?;
         // The origin is the string between the two indices
         let origin = &client_data_json_str[origin_start..origin_start + origin_length];
 
         // Compute and compare RP ID with authenticatorData
         let url = url::Url::parse(origin)?;
-        let hostname = url.host_str().unwrap(); // FIXME: Handle missing hostname
+        let hostname = url
+            .host_str()
+            .ok_or_else(|| SerializationError::new("Cannot extract hostname from origin"))?;
         let rp_id = nimiq_hash::Sha256Hasher::default().digest(hostname.as_bytes());
         if rp_id.0 != authenticator_data[0..32] {
             return Err(SerializationError::new(
