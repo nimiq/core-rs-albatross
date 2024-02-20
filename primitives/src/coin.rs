@@ -19,13 +19,13 @@ pub struct Coin(u64);
 impl Coin {
     /// 0 NIM.
     pub const ZERO: Coin = Coin(0u64);
-    /// The maximum value supported by the `Coin` type.
+    /// The maximum value supported by the [`Coin`] type.
     pub const MAX: Coin = Coin(Self::MAX_SAFE_VALUE);
 
     /// How many Lunas fit in one Coin
     pub const LUNAS_PER_COIN: u64 = 100_000u64;
     /// The number of digits after the decimal point for NIM values, ten to the
-    /// power of this is [`LUNAS_PER_COIN`].
+    /// power of this is [`Coin::LUNAS_PER_COIN`].
     pub const FRAC_DIGITS: u32 = 5u32;
 
     /// JavaScript's Number.MAX_SAFE_INTEGER: 2**53 - 1
@@ -38,7 +38,7 @@ impl Coin {
     ///
     /// # Panics
     ///
-    /// Panics if the amount of LUNAs is greater than [`MAX_SAFE_VALUE`].
+    /// Panics if the amount of LUNAs is greater than [`Coin::MAX_SAFE_VALUE`].
     #[inline]
     pub fn from_u64_unchecked(val: u64) -> Coin {
         val.try_into().expect("Coin::from_u64_unchecked")
