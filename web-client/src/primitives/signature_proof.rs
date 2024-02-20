@@ -108,6 +108,26 @@ impl SignatureProof {
     pub fn serialize(&self) -> Vec<u8> {
         self.inner.serialize_to_vec()
     }
+
+    #[cfg(test)]
+    pub fn webauthn_fields_flags(&self) -> u8 {
+        self.inner
+            .webauthn_fields
+            .as_ref()
+            .unwrap()
+            .client_data_flags
+            .bits()
+    }
+
+    #[cfg(test)]
+    pub fn webauthn_extra_fields(&self) -> String {
+        self.inner
+            .webauthn_fields
+            .as_ref()
+            .unwrap()
+            .client_data_extra_fields
+            .clone()
+    }
 }
 
 impl From<nimiq_transaction::SignatureProof> for SignatureProof {
@@ -184,6 +204,10 @@ mod tests {
         // if proof.is_err() {
         //     console_log!("{:?}", proof.map_err(JsValue::from).err().unwrap());
         // }
+        let proof = proof.map_err(JsValue::from).unwrap();
+        assert_eq!(proof.serialize()[0], 0b0001_0001);
+        assert_eq!(proof.webauthn_fields_flags(), 0b0000_0000);
+        assert_eq!(proof.webauthn_extra_fields().is_empty(), true);
     }
 
     /// Tests a signature generated with Android Chrome, which has no crossOrigin field in the client data JSON
@@ -229,5 +253,9 @@ mod tests {
         // if proof.is_err() {
         //     console_log!("{:?}", proof.map_err(JsValue::from).err().unwrap());
         // }
+        let proof = proof.map_err(JsValue::from).unwrap();
+        assert_eq!(proof.serialize()[0], 0b0001_0001);
+        assert_eq!(proof.webauthn_fields_flags(), 0b0000_0011);
+        assert_eq!(proof.webauthn_extra_fields().is_empty(), false);
     }
 }
