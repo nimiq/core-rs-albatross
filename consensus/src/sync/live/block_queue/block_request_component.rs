@@ -50,7 +50,6 @@ pub struct MissingBlockRequest {
 pub struct MissingBlockResponse {
     pub target_block_number: u32,
     pub target_block_hash: Blake2bHash,
-    pub epoch_validators: Validators,
     pub blocks: Vec<Block>,
 }
 
@@ -110,7 +109,6 @@ impl<N: Network> BlockRequestComponent<N> {
                             Ok(Ok(missing_blocks)) => Ok(MissingBlockResponse {
                                 target_block_number: request.target_block_number,
                                 target_block_hash: request.target_block_hash,
-                                epoch_validators: request.epoch_validators,
                                 blocks: missing_blocks,
                             }),
                             Ok(Err(error)) => Err(MissingBlockError::Response(error)),
