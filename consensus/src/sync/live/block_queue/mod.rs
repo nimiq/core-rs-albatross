@@ -669,7 +669,7 @@ impl<N: Network> BlockQueue<N> {
                 // Do not return as even though the request might not be awaited it should still be executed to
                 // try and retrieve the block using the pubsub_id given. It could be the same as in the previous request,
                 // but they should be reasonably deduplicated by the network layer. Otherwise it would be a different
-                // pubsub_id thus giving more options to actually resolve the block in terms of peers ot ask.
+                // pubsub_id thus giving more options to actually resolve the block in terms of peers to ask.
             }
             HashMapEntry::Vacant(entry) => {
                 entry.insert(response_sender);
@@ -682,7 +682,7 @@ impl<N: Network> BlockQueue<N> {
             .get(&block_number)
             .map_or(false, |blocks| blocks.contains_key(&block_hash))
         {
-            // Block is already buffered and wil be pushed sometime soon. No need to request it.
+            // Block is already buffered and will be pushed sometime soon. No need to request it.
             return;
         }
 

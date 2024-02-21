@@ -173,7 +173,7 @@ mod tests {
         assert_eq!(partitioner.range(3), Ok(4..=7), "Level 3");
         assert_eq!(second_partitioner.range(3), Ok(4..=7), "Level 3");
 
-        // must be symetrical
+        // must be symmetrical
         for level in 2..partitioner.levels() {
             if partitioner
                 .range(level)

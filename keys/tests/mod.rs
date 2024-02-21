@@ -173,7 +173,7 @@ fn it_parses_friendly_addresses() {
     let addr = Address::from_user_friendly_address("NQ05 563U 530Y XDRTL7GQ M6HE YRNU 20FE 4PNR");
     assert!(addr.is_ok());
 
-    // Having NQ in lowercase at the beggining should not be ok
+    // Having NQ in lowercase at the beginning should not be ok
     let addr = Address::from_user_friendly_address("nq05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR");
     assert_eq!(addr, Err(AddressParseError::WrongCountryCode));
 

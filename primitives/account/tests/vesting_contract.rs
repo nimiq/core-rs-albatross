@@ -527,7 +527,7 @@ fn can_reserve_balance_after_time_step() {
         })
     );
 
-    // Advancing the block state should alow further reserve balance.
+    // Advancing the block state should allow further reserve balance.
     let block_state = BlockState::new(3, 300);
 
     let tx = make_signed_transaction(key_1.clone(), key_2.clone(), 100);

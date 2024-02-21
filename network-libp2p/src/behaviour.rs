@@ -141,7 +141,7 @@ impl Behaviour {
         self.dht.remove_address(&peer_id, &address);
     }
 
-    /// Returns wether an address in `Multiaddr` format is a dialable websocket address
+    /// Returns whether an address in `Multiaddr` format is a dialable websocket address
     pub fn is_address_dialable(&self, address: &Multiaddr) -> bool {
         self.discovery.is_address_dialable(address)
     }

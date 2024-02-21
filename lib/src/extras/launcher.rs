@@ -63,7 +63,7 @@ impl Launcher {
         self
     }
 
-    #[cfg(fature = "panic")]
+    #[cfg(feature = "panic")]
     #[must_use]
     pub fn panic_reporting(mut self) -> Self {
         self.panic = PanicMode::default();

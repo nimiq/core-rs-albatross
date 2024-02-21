@@ -495,7 +495,7 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Changes the active and consequentially the inactive balances of the staker.
+    /// Changes the active and consequently the inactive balances of the staker.
     /// The active balance will be set immediately.
     /// The inactive balance will be available to retire after a lock-up period and, if applicable,
     /// after the validator's jail period has finished.
@@ -610,7 +610,7 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Adds to the retired balance and consequentially changes the inactive balance of the staker.
+    /// Adds to the retired balance and consequently changes the inactive balance of the staker.
     /// The balance can only be retired if the lock-up period and associated validator's jail period have passed.
     /// The retire fails if the invariant 1 for the non-retired stake is violated.
     /// Once retired the funds can be withdrawn immediately.

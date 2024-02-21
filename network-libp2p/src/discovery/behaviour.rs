@@ -44,7 +44,7 @@ pub struct Config {
     /// Services for which we filter (the services that we need others to provide)
     pub required_services: Services,
 
-    /// Minimium interval that we will update other peers with.
+    /// Minimum interval that we will update other peers with.
     pub min_send_update_interval: Duration,
 
     /// Interval in which the peer address book is cleaned up.
@@ -150,7 +150,7 @@ impl Behaviour {
             .add_own_addresses(addresses, &self.keypair)
     }
 
-    /// Returns wether an address in `Multiaddr` format is a dialable websocket address
+    /// Returns whether an address in `Multiaddr` format is a dialable websocket address
     pub fn is_address_dialable(&self, address: &Multiaddr) -> bool {
         self.peer_contact_book.read().is_address_dialable(address)
     }

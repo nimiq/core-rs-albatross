@@ -34,7 +34,7 @@ impl VerifyingKeyMetadata {
         self.vks_commitment
             .clone()
             .try_into()
-            .expect("Verifying keys committment has wrong size")
+            .expect("Verifying keys commitment has wrong size")
     }
 
     pub fn save_to_file(self, path: &Path) -> Result<(), io::Error> {

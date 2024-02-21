@@ -63,7 +63,7 @@ impl BlockInclusionProof {
             }
         }
 
-        // Convert into a more suitable data structure TODO mabye just always use this and only convert to vec on wire
+        // Convert into a more suitable data structure TODO maybe just always use this and only convert to vec on wire
         let mut number_to_block = HashMap::<u32, MacroBlock>::new();
         for block in self.proof.clone() {
             number_to_block.insert(block.block_number(), block);

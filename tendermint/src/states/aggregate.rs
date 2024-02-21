@@ -137,7 +137,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
     }
 
     /// For the current round and step as denoted within `self.state` this will perform all necessary
-    /// action to advance to the next state while having seen 2f+1 votes for the known proposal wth `proposal_hash`
+    /// action to advance to the next state while having seen 2f+1 votes for the known proposal with `proposal_hash`
     /// as its hash.
     ///
     /// As precommit aggregations with 2f+1 votes result in a decision being produced and as those are produced

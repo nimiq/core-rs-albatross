@@ -56,7 +56,7 @@ seed_nodes = [
 # - Path to private key file (PEM-encoded ASN.1 in either PKCS#8 or PKCS#1 format)
 # - Path to a certificate or fullchain file (PEM-encoded X.509 format)
 #
-# Ususally, PEM files from SSL providers like Let's Encrypt can be used as-is.
+# Usually, PEM files from SSL providers like Let's Encrypt can be used as-is.
 #
 ##############################################################################
 #[network.tls]

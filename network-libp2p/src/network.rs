@@ -1628,7 +1628,7 @@ impl Network {
                 }
 
                 if output.send(successful_peers).is_err() {
-                    error!("Could not send sucessful peers vector");
+                    error!("Could not send successful peers vector");
                 }
             }
             NetworkAction::DisconnectPeer { peer_id, reason } => {

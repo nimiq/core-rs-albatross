@@ -74,7 +74,7 @@ impl ExtendedPrivateKey {
         &self.chain_code
     }
 
-    /// Converts the ExtendedPrivateKey format into a normal PrivateKey, loosing the ability for derivation.
+    /// Converts the ExtendedPrivateKey format into a normal PrivateKey, losing the ability for derivation.
     pub fn into_private_key(self) -> PrivateKey {
         self.key
     }

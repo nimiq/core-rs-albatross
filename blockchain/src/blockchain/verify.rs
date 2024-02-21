@@ -505,7 +505,7 @@ impl Blockchain {
             Blockchain::rebranch_to(self, &mut fork_chain, &mut ancestor, &mut write_txn)
         {
             // Failed to apply blocks. All blocks within revert chain must be removed.
-            // To do that the txn must be aborted first, as the txn will be comitted and
+            // To do that the txn must be aborted first, as the txn will be committed and
             // prior changes are unwanted.
             write_txn.abort();
 

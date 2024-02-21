@@ -3,7 +3,7 @@ use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_derive::TryFromJsValue;
 
-/// An Ed25519 Signature represents a cryptocraphic proof that a private key signed some data.
+/// An Ed25519 Signature represents a cryptographic proof that a private key signed some data.
 /// It can be verified with the private key's public key.
 #[derive(TryFromJsValue)]
 #[wasm_bindgen]

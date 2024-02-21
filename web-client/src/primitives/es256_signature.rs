@@ -3,7 +3,7 @@ use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_derive::TryFromJsValue;
 
-/// An ES256 Signature represents a cryptocraphic proof that an ES256 private key signed some data.
+/// An ES256 Signature represents a cryptographic proof that an ES256 private key signed some data.
 /// It can be verified with the private key's public key.
 #[derive(TryFromJsValue)]
 #[wasm_bindgen]
