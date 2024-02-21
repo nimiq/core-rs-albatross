@@ -10,7 +10,7 @@ use syn::{
     PathSegment, ReturnType, TraitItem, TraitItemFn, Type,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ParsedItemStruct(ItemStruct);
 pub struct ParsedTraitItemFn(TraitItemFn);
 
@@ -25,21 +25,21 @@ impl ParsedItemStruct {
         "".into()
     }
 
-    pub fn to_schema(&self) -> Value {
-        let mut schema = Map::new();
-        schema.insert("title".into(), Value::String(self.title()));
-        schema.insert("description".into(), Value::String(self.description()));
-        schema.insert("properties".into(), self.properties());
-        schema.insert("required".into(), Value::Array(self.required_fields()));
-        Value::Object(schema)
-    }
-
-    fn properties(&self) -> Value {
+    pub fn properties(&self, structs: &Vec<ParsedItemStruct>) -> Value {
         let props: Map<String, Value> = self
             .0
             .fields
             .iter()
-            .map(|field| {
+            .filter_map(|field| {
+                let path = match &field.ty {
+                    Type::Path(p) => p,
+                    Type::Array(_) => {
+                        return None;
+                    }
+                    _ => unreachable!(),
+                };
+                let inner_type = Self::unwrap_type(path.path.clone(), true);
+
                 let mut prop_fields = Map::new();
                 let field_ident = field
                     .ident
@@ -48,63 +48,92 @@ impl ParsedItemStruct {
                     .to_case(Case::Camel);
 
                 prop_fields.insert("title".into(), Value::String(field_ident.clone()));
-                prop_fields.insert("type".into(), Self::param_to_json_type(field));
-                (field_ident, Value::Object(prop_fields))
+                let schema_ref = structs
+                    .iter()
+                    .find(|s| inner_type.1.to_string() == s.title());
+                prop_fields.append(&mut Self::param_to_json_type(&field, schema_ref));
+
+                Some((field_ident, Value::Object(prop_fields)))
             })
             .collect();
 
         Value::Object(props)
     }
 
-    // TODO: This method turns a parameter to a final litaral.
-    // In this stage use ident name so that later on references can be identified.
-    fn param_to_json_type(param: &Field) -> Value {
+    fn param_to_json_type(
+        param: &Field,
+        schema_ref: Option<&ParsedItemStruct>,
+    ) -> Map<String, Value> {
+        let mut map = Map::new();
         match &param.ty {
-            Type::Path(path) => {
-                let ident = path
-                    .path
+            Type::Path(type_path) => {
+                let mut path = type_path.path.clone();
+                let mut ident = path
                     .segments
                     .first()
                     .expect("Function paramater should have a segment")
                     .ident
-                    .to_string();
+                    .clone();
 
-                // TODO: if ident is an Option, we need to unwrap it. Necassary for Option<Vec<T>>
-                if ident.to_string() == "Vec" {
-                    return Value::String("array".into());
+                if ident == "Option" {
+                    (path, ident) = Self::unwrap_type(type_path.path.clone(), false);
                 }
 
-                let (_path_type, inner_ident) = Self::flatten_type(path.path.clone());
-                match inner_ident.to_string().as_str() {
-                    "Address"
-                    | "Blake2bHash"
-                    | "Blake2sHash"
-                    | "CompressedPublicKey"
-                    | "PublicKey"
-                    | "String"
-                    | "VrfSeed" => return Value::String("string".into()),
-                    "u8" | "u16" | "u32" | "u64" | "usize" | "Coin" => {
-                        return Value::String("number".into())
+                if ident.to_string() == "Vec" {
+                    let mut items_map = Map::new();
+                    if let Some(reference) = schema_ref {
+                        items_map.insert(
+                            "$ref".into(),
+                            Value::String(format!("#/components/schemas/{}", reference.title())),
+                        );
+                    } else {
+                        items_map.insert("type".into(), Self::map_type(&path));
                     }
-                    "bool" => return Value::String("boolean".into()),
-                    "AccountAdditionalFields"
-                    | "BitSet"
-                    | "Block"
-                    | "BlockAdditionalFields"
-                    | "ExecutedTransaction"
-                    | "MultiSignature"
-                    | "Transaction"
-                    | "T"
-                    | "S" => return Value::String("object".into()),
-                    _ => panic!("{:?}", inner_ident),
+
+                    map.insert("type".to_string(), Value::String("array".into()));
+                    map.insert("items".to_string(), Value::Object(items_map));
+                } else {
+                    if let Some(reference) = schema_ref {
+                        map.insert(
+                            "$ref".into(),
+                            Value::String(format!("#/components/schemas/{}", reference.title())),
+                        );
+                    } else {
+                        map.insert("type".into(), Self::map_type(&path));
+                    }
                 }
             }
-            Type::Array(_) => Value::String("array".into()),
             _ => unreachable!(),
+        }
+
+        map
+    }
+
+    fn map_type(path: &Path) -> Value {
+        let (_path_type, inner_ident) = Self::unwrap_type(path.clone(), true);
+        match inner_ident.to_string().as_str() {
+            "Address"
+            | "Blake2bHash"
+            | "Blake2sHash"
+            | "CompressedPublicKey"
+            | "PublicKey"
+            | "String"
+            | "VrfSeed" => return Value::String("string".into()),
+            "u8" | "u16" | "u32" | "u64" | "usize" | "Coin" => {
+                return Value::String("number".into())
+            }
+            "bool" => return Value::String("boolean".into()),
+            "AccountAdditionalFields"
+            | "BitSet"
+            | "S"
+            | "T"
+            | "BlockAdditionalFields"
+            | "MultiSignature" => return Value::String("object".into()),
+            _ => panic!("{:?}", inner_ident),
         }
     }
 
-    fn required_fields(&self) -> Vec<Value> {
+    pub fn required_fields(&self) -> Vec<Value> {
         self.0
             .fields
             .iter()
@@ -124,9 +153,10 @@ impl ParsedItemStruct {
             .collect()
     }
 
-    /// Check if we are dealing with a wrapped type here, e.g. `Vec<u8>`, `Option<String>` and flatten those to its most inner type.
-    /// `Vec<u8>` becomes `u8`, `Option<String>` becomes `String` and `Option<Vec<String>>` becomes `String`.
-    fn flatten_type(path: Path) -> (Path, Ident) {
+    /// Check if we are dealing with a wrapped type here, e.g. `Vec<u8>`, `Option<String>` and flatten those to its child type.
+    /// `Vec<u8>` becomes `u8`, `Option<String>` becomes `String` and `Option<Vec<String>>` becomes `Vec<String>`.
+    /// Calling this function with `recursive` is true, it will keep unwrapping until it no further can. `Option<Vec<String>>` would become `String`.
+    fn unwrap_type(path: Path, recursive: bool) -> (Path, Ident) {
         let ident = path.segments.first().unwrap().ident.clone();
 
         match ident.to_string().as_str() {
@@ -136,7 +166,14 @@ impl ParsedItemStruct {
                 {
                     if let GenericArgument::Type(arg) = outer_type.args.first().unwrap() {
                         if let Type::Path(inner_type) = arg {
-                            return Self::flatten_type(inner_type.path.clone());
+                            if recursive {
+                                return Self::unwrap_type(inner_type.path.clone(), true);
+                            }
+
+                            (
+                                inner_type.path.clone(),
+                                inner_type.path.segments.first().unwrap().ident.clone(),
+                            )
                         } else {
                             return (path, ident);
                         }
@@ -187,6 +224,7 @@ impl ParsedTraitItemFn {
                             description: None,
                             summary: None,
                             schema: JSONSchema::JsonSchemaObject(RootSchema {
+                                // meta_schema: Some(typed.ty.to_token_stream().to_string()),
                                 ..Default::default()
                             }),
                             required: Some(Self::param_required(&*typed.ty)),
