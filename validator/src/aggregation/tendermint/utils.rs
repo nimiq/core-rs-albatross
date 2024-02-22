@@ -39,7 +39,7 @@ pub(super) struct AggregationDescriptor {
 /// is only needed in the very end we work on the TendermintContribution in the meantime and convert before returning.
 #[derive(std::fmt::Debug)]
 pub enum TendermintAggregationEvent {
-    /// Indicates updates with a combined vote weight of or exceeding f+1 have been received for a future round (independant of step).
+    /// Indicates updates with a combined vote weight of or exceeding f+1 have been received for a future round (independent of step).
     NewRound(u32),
     /// A new Aggregate(TendermintContribution) is available for a given round(u32) and step(TendermintStep)
     Aggregation(u32, TendermintStep, TendermintContribution),

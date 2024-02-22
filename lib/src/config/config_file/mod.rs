@@ -175,9 +175,8 @@ pub struct ConsensusSettings {
     #[serde(default)]
     /// The maximum amount of epochs that are stored in the client
     pub max_epochs_stored: usize,
-    #[serde(default)]
-    /// Different possible networks (testing, mainnet, developer, etc)
-    pub network: Network,
+    /// Different possible networks (Albatross, DevAlbatross, UnitAlbatross)
+    pub network: Option<NetworkId>,
     /// Minimum number of peers necessary to reach consensus
     pub min_peers: Option<usize>,
 }
@@ -218,51 +217,6 @@ impl From<SyncMode> for config::SyncMode {
             SyncMode::History => Self::History,
             SyncMode::Full => Self::Full,
             SyncMode::Light => Self::Light,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "kebab-case")]
-// TODO: I think we can directly use `NetworkId` here
-pub enum Network {
-    Main,
-    Test,
-    Dev,
-    TestAlbatross,
-    #[default]
-    DevAlbatross,
-    UnitAlbatross,
-    MainAlbatross,
-}
-
-impl FromStr for Network {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Network, ()> {
-        Ok(match s.to_lowercase().as_str() {
-            "main" => Network::Main,
-            "test" => Network::Test,
-            "dev" => Network::Dev,
-            "test-albatross" => Network::TestAlbatross,
-            "dev-albatross" => Network::DevAlbatross,
-            "unit-albatross" => Network::UnitAlbatross,
-            "main-albatross" => Network::MainAlbatross,
-            _ => return Err(()),
-        })
-    }
-}
-
-impl From<Network> for NetworkId {
-    fn from(network: Network) -> NetworkId {
-        match network {
-            Network::Main => NetworkId::Main,
-            Network::Test => NetworkId::Test,
-            Network::Dev => NetworkId::Dev,
-            Network::TestAlbatross => NetworkId::TestAlbatross,
-            Network::DevAlbatross => NetworkId::DevAlbatross,
-            Network::UnitAlbatross => NetworkId::UnitAlbatross,
-            Network::MainAlbatross => NetworkId::MainAlbatross,
         }
     }
 }

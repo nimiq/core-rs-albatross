@@ -16,6 +16,8 @@ use url::Url;
 use crate::extras::deadlock::initialize_deadlock_detection;
 #[cfg(feature = "logging")]
 use crate::extras::logging::initialize_logging;
+#[cfg(feature = "panic")]
+use crate::extras::panic::initialize_panic_reporting;
 
 pub fn go() -> Launcher {
     Launcher::default()
@@ -25,7 +27,7 @@ pub fn go() -> Launcher {
 #[derive(Debug, Default)]
 pub struct PanicMode {
     /// Write panics into log
-    _logging: bool,
+    logging: bool,
 
     /// Prints panic message with instruction to report and provides a dump file with stack trace.
     _human_panic: bool,
@@ -43,7 +45,7 @@ pub struct PanicMode {
 pub struct Launcher {
     deadlock_detection: bool,
     logging: bool,
-    _panic: PanicMode,
+    panic: PanicMode,
 }
 
 impl Launcher {
@@ -63,11 +65,12 @@ impl Launcher {
         self
     }
 
-    #[cfg(fature = "panic")]
+    #[cfg(feature = "panic")]
     #[must_use]
     pub fn panic_reporting(mut self) -> Self {
         self.panic = PanicMode::default();
         self.panic.logging = true;
         initialize_panic_reporting();
+        self
     }
 }

@@ -14,7 +14,7 @@ pub struct PrivateKey {
 impl PrivateKey {
     /// Generates a new private key from secure randomness.
     pub fn generate() -> PrivateKey {
-        PrivateKey::from_native(nimiq_keys::PrivateKey::generate_default_csprng())
+        PrivateKey::from(nimiq_keys::PrivateKey::generate_default_csprng())
     }
 
     /// Deserializes a private key from a byte array.
@@ -22,7 +22,7 @@ impl PrivateKey {
     /// Throws when the byte array contains less than 32 bytes.
     pub fn unserialize(bytes: &[u8]) -> Result<PrivateKey, JsError> {
         let key = nimiq_keys::PrivateKey::deserialize_from_vec(bytes)?;
-        Ok(PrivateKey::from_native(key))
+        Ok(PrivateKey::from(key))
     }
 
     /// Creates a new private key from a byte array.
@@ -47,7 +47,7 @@ impl PrivateKey {
     #[wasm_bindgen(js_name = fromHex)]
     pub fn from_hex(hex: &str) -> Result<PrivateKey, JsError> {
         let key = nimiq_keys::PrivateKey::from_str(hex)?;
-        Ok(PrivateKey::from_native(key))
+        Ok(PrivateKey::from(key))
     }
 
     /// Formats the private key into a hex string.
@@ -57,11 +57,13 @@ impl PrivateKey {
     }
 }
 
-impl PrivateKey {
-    pub fn from_native(private_key: nimiq_keys::PrivateKey) -> PrivateKey {
+impl From<nimiq_keys::PrivateKey> for PrivateKey {
+    fn from(private_key: nimiq_keys::PrivateKey) -> PrivateKey {
         PrivateKey { inner: private_key }
     }
+}
 
+impl PrivateKey {
     pub fn native_ref(&self) -> &nimiq_keys::PrivateKey {
         &self.inner
     }

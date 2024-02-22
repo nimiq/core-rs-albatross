@@ -1,6 +1,6 @@
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::{Address, KeyPair, PublicKey};
+use nimiq_keys::{Address, Ed25519PublicKey, KeyPair};
 use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_transaction::{
     account::htlc_contract::{AnyHash, PreImage},
@@ -176,9 +176,6 @@ impl TransactionBuilder {
     /// * `update staker details`
     /// * `retire staker funds`
     /// * `re-activate staker funds`
-    ///
-    /// Signaling transactions have a special status as they also require an additional step
-    /// during the proof generation (see [`StakingDataBuilder`]).
     ///
     /// # Examples
     ///
@@ -1237,7 +1234,7 @@ impl TransactionBuilder {
     pub fn new_create_validator(
         key_pair: &KeyPair,
         cold_key_pair: &KeyPair,
-        signing_key: PublicKey,
+        signing_key: Ed25519PublicKey,
         voting_key_pair: &BlsKeyPair,
         reward_address: Address,
         signal_data: Option<Blake2bHash>,
@@ -1296,7 +1293,7 @@ impl TransactionBuilder {
     pub fn new_update_validator(
         key_pair: &KeyPair,
         cold_key_pair: &KeyPair,
-        new_signing_key: Option<PublicKey>,
+        new_signing_key: Option<Ed25519PublicKey>,
         new_voting_key_pair: Option<&BlsKeyPair>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<Option<Blake2bHash>>,

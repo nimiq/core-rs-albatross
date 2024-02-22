@@ -1,6 +1,6 @@
 use nimiq_bls::{CompressedSignature, KeyPair as BlsKeyPair};
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::account::staking_contract::IncomingStakingTransactionData;
 
@@ -149,7 +149,7 @@ impl StakingRecipientBuilder {
     }
 
     /// This method allows to change the active stake balance of the staker and
-    /// consequentially its inactive balance. Changing the amount of inactive stake
+    /// consequently its inactive balance. Changing the amount of inactive stake
     /// resets the release time.
     /// It needs to be signed by the key pair corresponding to the staker address.
     pub fn set_active_stake(&mut self, new_active_balance: Coin) -> &mut Self {

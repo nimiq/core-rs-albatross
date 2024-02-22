@@ -10,15 +10,17 @@ use std::{
 };
 
 use bitflags::bitflags;
+use historic_transaction::RawTransactionHash;
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
-use nimiq_keys::{Address, PublicKey, Signature};
+use nimiq_keys::{Address, PublicKey};
 use nimiq_network_interface::network::Topic;
 use nimiq_primitives::{
     account::AccountType, coin::Coin, networks::NetworkId, policy::Policy,
     transaction::TransactionError,
 };
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_utils::merkle::{Blake2bMerklePath, Blake2bMerkleProof};
+use nimiq_utils::merkle::Blake2bMerkleProof;
+pub use signature_proof::*;
 use thiserror::Error;
 
 use crate::account::AccountTransactionVerification;
@@ -30,6 +32,7 @@ pub mod historic_transaction;
 pub mod history_proof;
 pub mod inherent;
 pub mod reward;
+pub mod signature_proof;
 
 pub use self::equivocation_locator::{
     DoubleProposalLocator, DoubleVoteLocator, EquivocationLocator, ForkLocator,
@@ -111,46 +114,6 @@ impl From<TransactionFlags> for u8 {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SignatureProof {
-    pub public_key: PublicKey,
-    pub merkle_path: Blake2bMerklePath,
-    pub signature: Signature,
-}
-
-impl SignatureProof {
-    pub fn from(public_key: PublicKey, signature: Signature) -> Self {
-        SignatureProof {
-            public_key,
-            merkle_path: Blake2bMerklePath::empty(),
-            signature,
-        }
-    }
-
-    pub fn compute_signer(&self) -> Address {
-        let merkle_root = self.merkle_path.compute_root(&self.public_key);
-        Address::from(merkle_root)
-    }
-
-    pub fn is_signed_by(&self, address: &Address) -> bool {
-        self.compute_signer() == *address
-    }
-
-    pub fn verify(&self, message: &[u8]) -> bool {
-        self.public_key.verify(&self.signature, message)
-    }
-}
-
-impl Default for SignatureProof {
-    fn default() -> Self {
-        SignatureProof {
-            public_key: Default::default(),
-            merkle_path: Default::default(),
-            signature: Signature::from_bytes(&[0u8; Signature::SIZE]).unwrap(),
-        }
-    }
-}
-
 /// A wrapper around the Transaction struct that encodes the result of executing such transaction
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 #[repr(u8)]
@@ -183,11 +146,29 @@ impl ExecutedTransaction {
         }
     }
 
-    pub fn hash(&self) -> Blake2bHash {
+    pub fn serialize_content(&self) -> Vec<u8> {
+        let mut result = Vec::new();
+        SerializeContent::serialize_content::<_, Blake2bHash>(self, &mut result).unwrap();
+        result
+    }
+
+    /// Gets the inner transaction hash without the execution result.
+    /// This hash is the only hash the mempool and users know.
+    pub fn raw_tx_hash(&self) -> RawTransactionHash {
+        self.get_raw_transaction().hash::<Blake2bHash>().into()
+    }
+}
+
+impl SerializeContent for ExecutedTransaction {
+    fn serialize_content<W: Write, H>(&self, writer: &mut W) -> io::Result<()> {
+        matches!(self, ExecutedTransaction::Ok(_)).serialize_to_writer(writer)?;
+
         match self {
-            ExecutedTransaction::Ok(txn) => txn.hash(),
-            ExecutedTransaction::Err(txn) => txn.hash(),
+            ExecutedTransaction::Ok(txn) | ExecutedTransaction::Err(txn) => {
+                txn.serialize_to_writer(writer)?;
+            }
         }
+        Ok(())
     }
 }
 
@@ -523,6 +504,9 @@ impl Ord for Transaction {
 mod serde_derive {
     use std::fmt;
 
+    use nimiq_keys::{
+        ES256PublicKey, ES256Signature, Ed25519PublicKey, Ed25519Signature, Signature,
+    };
     use serde::{
         de::{EnumAccess, Error, SeqAccess, VariantAccess, Visitor},
         ser::{Error as SerError, SerializeStructVariant},
@@ -533,6 +517,7 @@ mod serde_derive {
     const ENUM_NAME: &str = "Transaction";
     const VARIANTS: &[&str] = &["Basic", "Extended"];
     const BASIC_FIELDS: &[&str] = &[
+        "proof_type_and_flags",
         "public_key",
         "recipient",
         "value",
@@ -540,6 +525,7 @@ mod serde_derive {
         "validity_start_height",
         "network_id",
         "signature",
+        "webauthn_fields",
     ];
     const EXTENDED_FIELDS: &[&str] = &[
         "sender",
@@ -576,13 +562,38 @@ mod serde_derive {
                     let signature_proof: SignatureProof =
                         Deserialize::deserialize_from_vec(&self.proof)
                             .map_err(|_| S::Error::custom("Could not serialize signature proof"))?;
-                    sv.serialize_field(BASIC_FIELDS[0], &signature_proof.public_key)?;
-                    sv.serialize_field(BASIC_FIELDS[1], &self.recipient)?;
-                    sv.serialize_field(BASIC_FIELDS[2], &self.value)?;
-                    sv.serialize_field(BASIC_FIELDS[3], &self.fee)?;
-                    sv.serialize_field(BASIC_FIELDS[4], &self.validity_start_height.to_be_bytes())?;
-                    sv.serialize_field(BASIC_FIELDS[5], &self.network_id)?;
-                    sv.serialize_field(BASIC_FIELDS[6], &signature_proof.signature)?;
+                    // Serialize public_key and signature algorithm and if webauthn_fields exist in one u8
+                    sv.serialize_field(
+                        BASIC_FIELDS[0],
+                        &signature_proof.make_type_and_flags_byte(),
+                    )?;
+                    match signature_proof.public_key {
+                        PublicKey::Ed25519(ref public_key) => {
+                            sv.serialize_field(BASIC_FIELDS[1], public_key)?;
+                        }
+                        PublicKey::ES256(ref public_key) => {
+                            sv.serialize_field(BASIC_FIELDS[1], public_key)?;
+                        }
+                    }
+                    sv.serialize_field(BASIC_FIELDS[2], &self.recipient)?;
+                    sv.serialize_field(BASIC_FIELDS[3], &self.value)?;
+                    sv.serialize_field(BASIC_FIELDS[4], &self.fee)?;
+                    sv.serialize_field(BASIC_FIELDS[5], &self.validity_start_height.to_be_bytes())?;
+                    sv.serialize_field(BASIC_FIELDS[6], &self.network_id)?;
+                    match signature_proof.signature {
+                        Signature::Ed25519(ref signature) => {
+                            sv.serialize_field(BASIC_FIELDS[7], signature)?;
+                        }
+                        Signature::ES256(ref signature) => {
+                            sv.serialize_field(BASIC_FIELDS[7], signature)?;
+                        }
+                    }
+                    if signature_proof.webauthn_fields.is_some() {
+                        sv.serialize_field(
+                            BASIC_FIELDS[8],
+                            signature_proof.webauthn_fields.as_ref().unwrap(),
+                        )?;
+                    }
                     sv.end()
                 }
                 TransactionFormat::Extended => {
@@ -653,27 +664,64 @@ mod serde_derive {
         where
             A: SeqAccess<'de>,
         {
-            let public_key: PublicKey = seq
+            // Read type field to determine public_key and signature algorithm and if webauthn_fields exists
+            let proof_type_and_flags: u8 = seq
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+            let (algorithm, flags) =
+                SignatureProof::parse_type_and_flags_byte(proof_type_and_flags)
+                    .map_err(serde::de::Error::custom)?;
+            let public_key = match algorithm {
+                SignatureProofAlgorithm::Ed25519 => {
+                    let public_key: Ed25519PublicKey = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                    PublicKey::Ed25519(public_key)
+                }
+                SignatureProofAlgorithm::ES256 => {
+                    let public_key: ES256PublicKey = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                    PublicKey::ES256(public_key)
+                }
+            };
             let recipient: Address = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
             let value: Coin = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
             let fee: Coin = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(4, &self))?;
             let validity_start_height: [u8; 4] = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(4, &self))?;
+                .ok_or_else(|| serde::de::Error::invalid_length(5, &self))?;
             let network_id: NetworkId = seq
                 .next_element()?
-                .ok_or_else(|| serde::de::Error::invalid_length(5, &self))?;
-            let signature: Signature = seq
-                .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(6, &self))?;
+            let signature = match algorithm {
+                SignatureProofAlgorithm::Ed25519 => {
+                    let signature: Ed25519Signature = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
+                    Signature::Ed25519(signature)
+                }
+                SignatureProofAlgorithm::ES256 => {
+                    let signature: ES256Signature = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
+                    Signature::ES256(signature)
+                }
+            };
+            let webauthn_fields = if flags.contains(SignatureProofFlags::WEBAUTHN_FIELDS) {
+                Some(
+                    seq.next_element::<WebauthnExtraFields>()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(8, &self))?,
+                )
+            } else {
+                None
+            };
             Ok(Transaction {
                 sender: Address::from(&public_key),
                 sender_type: AccountType::Basic,
@@ -686,7 +734,8 @@ mod serde_derive {
                 validity_start_height: u32::from_be_bytes(validity_start_height),
                 network_id,
                 flags: TransactionFlags::empty(),
-                proof: SignatureProof::from(public_key, signature).serialize_to_vec(),
+                proof: SignatureProof::from(public_key, signature, webauthn_fields)
+                    .serialize_to_vec(),
                 valid: false,
             })
         }

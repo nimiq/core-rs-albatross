@@ -253,7 +253,7 @@ fn push_rebranch_across_epochs(config: BlockConfig) {
         next_micro_block(&temp_producer2.producer.signing_key, blockchain, &config)
     };
 
-    // Pushing a block from a previous batch/epoch is atm cought before checking if it's a fork or known block
+    // Pushing a block from a previous batch/epoch is atm caught before checking if it's a fork or known block
     assert_eq!(
         temp_producer1.push(Block::Micro(fork)),
         Ok(PushResult::Ignored)

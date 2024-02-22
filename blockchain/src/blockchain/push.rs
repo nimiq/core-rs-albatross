@@ -23,7 +23,7 @@ use nimiq_trie::WriteTransactionProxy as TrieWriteTransactionProxy;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 use tokio::sync::broadcast::Sender as BroadcastSender;
 
-use crate::{blockchain_state::BlockchainState, Blockchain};
+use crate::Blockchain;
 
 fn send_vec(log_notifier: &BroadcastSender<BlockLog>, logs: Vec<BlockLog>) {
     for log in logs {
@@ -302,13 +302,8 @@ impl Blockchain {
             block_number,
             chain_info.head.timestamp(),
         );
-        let total_tx_size = this.check_and_commit(
-            &this.state,
-            &chain_info.head,
-            diff,
-            &mut txn,
-            &mut block_logger,
-        )?;
+        let total_tx_size =
+            this.check_and_commit(&chain_info.head, diff, &mut txn, &mut block_logger)?;
 
         chain_info.on_main_chain = true;
         chain_info.set_cumulative_hist_tx_size(&prev_info, total_tx_size);
@@ -535,12 +530,12 @@ impl Blockchain {
 
     pub(super) fn check_and_commit(
         &self,
-        state: &BlockchainState,
         block: &Block,
         diff: Option<TrieDiff>,
         txn: &mut WriteTransactionProxy,
         block_logger: &mut BlockLogger,
     ) -> Result<u64, PushError> {
+        // TODO: check block.network somewhere!
         // Check transactions against replay attacks. This is only necessary for micro blocks.
         if block.is_micro() {
             let transactions = block.transactions();
@@ -563,7 +558,7 @@ impl Blockchain {
 
         // Macro blocks: Verify the state against the block before modifying the staking contract.
         // (FinalizeBatch and FinalizeEpoch Inherents clear some fields in preparation for the next epoch.)
-        if let Err(e) = self.verify_block_state_pre_commit(state, block, txn) {
+        if let Err(e) = self.verify_block_state_pre_commit(block, txn) {
             warn!(%block, reason = "bad state", error = &e as &dyn Error, "Rejecting block");
             return Err(e);
         }
@@ -571,12 +566,12 @@ impl Blockchain {
         // Commit block to AccountsTree.
         let total_tx_size;
         {
-            let is_complete = state.accounts.is_complete(Some(txn));
+            let is_complete = self.state.accounts.is_complete(Some(txn));
             let mut txn: TrieWriteTransactionProxy = txn.into();
             if is_complete {
                 txn.start_recording();
             }
-            total_tx_size = self.commit_accounts(state, block, diff, &mut txn, block_logger).map_err(|e| {
+            total_tx_size = self.commit_accounts(block, diff, &mut txn, block_logger).map_err(|e| {
                 warn!(%block, reason = "commit failed", error = &e as &dyn Error, "Rejecting block");
                 #[cfg(feature = "metrics")]
                 self.metrics.note_invalid_block();
@@ -590,7 +585,7 @@ impl Blockchain {
         }
 
         // Verify the state against the block.
-        if let Err(e) = self.verify_block_state_post_commit(state, block, txn) {
+        if let Err(e) = self.verify_block_state_post_commit(block, txn) {
             warn!(%block, reason = "bad state", error = &e as &dyn Error, "Rejecting block");
             return Err(e);
         }

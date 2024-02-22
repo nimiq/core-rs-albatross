@@ -130,7 +130,7 @@ fn it_can_verify_outgoing_transactions() {
     );
 
     let signature = key_pair.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::from(key_pair.public, signature);
+    let signature_proof = SignatureProof::from_ed25519(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));

@@ -10,7 +10,7 @@ use nimiq_keys::{
         public_key::DelinearizedPublicKey,
         CommitmentsData, MUSIG2_PARAMETER_V,
     },
-    Address, KeyPair, PublicKey, SecureGenerate,
+    Address, Ed25519PublicKey, KeyPair, PublicKey, SecureGenerate, Signature,
 };
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_serde::Serialize;
@@ -28,7 +28,7 @@ pub struct MultiSigAccount {
     /// Minimum number of required signatures.
     pub min_signatures: NonZeroU8,
     /// A list of all aggregated public keys.
-    pub public_keys: Vec<PublicKey>,
+    pub public_keys: Vec<Ed25519PublicKey>,
 }
 
 impl MultiSigAccount {
@@ -42,7 +42,7 @@ impl MultiSigAccount {
     pub fn from_public_keys(
         key_pair: &KeyPair,
         min_signatures: NonZeroU8,
-        public_keys: &[PublicKey],
+        public_keys: &[Ed25519PublicKey],
     ) -> Result<Self, MultiSigAccountError> {
         if public_keys.is_empty() {
             return Err(MultiSigAccountError::PublicKeysNotEmpty);
@@ -66,7 +66,11 @@ impl MultiSigAccount {
     /// * `key_pair` - Keypair owning this account.
     /// * `min_signatures` - Number of signatures required.
     /// * `public_keys` - A list of all aggregated public keys.
-    pub fn new(key_pair: &KeyPair, min_signatures: NonZeroU8, public_keys: &[PublicKey]) -> Self {
+    pub fn new(
+        key_pair: &KeyPair,
+        min_signatures: NonZeroU8,
+        public_keys: &[Ed25519PublicKey],
+    ) -> Self {
         Self {
             address: compute_address(public_keys),
             key_pair: key_pair.clone(),
@@ -105,7 +109,7 @@ impl MultiSigAccount {
     }
 
     /// Utility method that delinearizes and aggregates the provided slice of public keys.
-    pub fn aggregate_public_keys(public_keys: &[PublicKey]) -> PublicKey {
+    pub fn aggregate_public_keys(public_keys: &[Ed25519PublicKey]) -> Ed25519PublicKey {
         DelinearizedPublicKey::sum_delinearized(public_keys)
     }
 
@@ -122,7 +126,7 @@ impl MultiSigAccount {
     /// Creates a signature proof.
     pub fn create_proof(
         &self,
-        aggregated_public_key: &PublicKey,
+        aggregated_public_key: &Ed25519PublicKey,
         aggregated_commitment: &Commitment,
         partial_signatures: &[PartialSignature],
     ) -> Result<SignatureProof, MultiSigAccountError> {
@@ -138,8 +142,9 @@ impl MultiSigAccount {
                 &self.public_keys,
                 aggregated_public_key,
             ),
-            public_key: *aggregated_public_key,
-            signature,
+            public_key: PublicKey::Ed25519(*aggregated_public_key),
+            signature: Signature::Ed25519(signature),
+            webauthn_fields: None,
         })
     }
 
@@ -147,7 +152,7 @@ impl MultiSigAccount {
     pub fn sign_transaction(
         &self,
         transaction: &Transaction,
-        aggregated_public_key: &PublicKey,
+        aggregated_public_key: &Ed25519PublicKey,
         aggregated_commitment: &Commitment,
         partial_signatures: &[PartialSignature],
     ) -> Result<Transaction, MultiSigAccountError> {

@@ -66,7 +66,7 @@ impl HtlcProofBuilder {
     /// ```
     pub fn signature_with_key_pair(&self, key_pair: &KeyPair) -> SignatureProof {
         let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
-        SignatureProof::from(key_pair.public, signature)
+        SignatureProof::from_ed25519(key_pair.public, signature)
     }
 
     /// This method creates a proof for the `TimeoutResolve` case, i.e.,

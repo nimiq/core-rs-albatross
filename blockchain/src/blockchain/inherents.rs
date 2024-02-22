@@ -12,7 +12,7 @@ use nimiq_primitives::{
 use nimiq_transaction::{inherent::Inherent, reward::RewardTransaction};
 use nimiq_vrf::{DiscreteDistribution, VrfUseCase};
 
-use crate::{blockchain_state::BlockchainState, reward::block_reward_for_batch, Blockchain};
+use crate::{reward::block_reward_for_batch, Blockchain};
 
 /// Implements methods that create inherents.
 impl Blockchain {
@@ -146,14 +146,10 @@ impl Blockchain {
         let mut inherents: Vec<Inherent> = if let Some(body) = macro_block.body.as_ref() {
             body.transactions.iter().map(Inherent::from).collect()
         } else {
-            self.create_reward_transactions(
-                self.state(),
-                &macro_block.header,
-                &self.get_staking_contract(),
-            )
-            .iter()
-            .map(Inherent::from)
-            .collect()
+            self.create_reward_transactions(&macro_block.header, &self.get_staking_contract())
+                .iter()
+                .map(Inherent::from)
+                .collect()
         };
 
         // Push FinalizeBatch inherent to update StakingContract.
@@ -166,11 +162,10 @@ impl Blockchain {
     /// updating the StakingContract.
     pub fn create_reward_transactions(
         &self,
-        state: &BlockchainState,
         macro_header: &MacroHeader,
         staking_contract: &StakingContract,
     ) -> Vec<RewardTransaction> {
-        let prev_macro_info = &state.macro_info;
+        let prev_macro_info = &self.state.macro_info;
 
         // Special case for first batch: Batch 0 is finalized by definition.
         if Policy::batch_at(macro_header.block_number) - 1 == 0 {
@@ -180,12 +175,12 @@ impl Blockchain {
         // Get validator slots
         // NOTE: Fields `current_slots` and `previous_slots` are expected to always be set.
         let validator_slots = if Policy::first_batch_of_epoch(macro_header.block_number) {
-            state
+            self.state
                 .previous_slots
                 .as_ref()
                 .expect("Slots for last batch are missing")
         } else {
-            state
+            self.state
                 .current_slots
                 .as_ref()
                 .expect("Slots for current batch are missing")
@@ -283,7 +278,7 @@ impl Blockchain {
                 // Test whether account will accept inherent. If it can't then the reward will be
                 // burned.
                 // TODO Improve this check: it assumes that only BasicAccounts can receive transactions.
-                let account = state.accounts.get_complete(&tx.recipient, Some(&txn));
+                let account = self.state.accounts.get_complete(&tx.recipient, Some(&txn));
                 if account.account_type() == AccountType::Basic {
                     num_eligible_slots_for_accepted_tx.push(num_eligible_slots);
                     transactions.push(tx);

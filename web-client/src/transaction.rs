@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::{PublicKey, Signature};
 #[cfg(feature = "client")]
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
@@ -135,7 +136,7 @@ impl Transaction {
             return Err(JsError::new("Invalid flags"));
         };
 
-        Ok(Transaction::from_native(tx))
+        Ok(Transaction::from(tx))
     }
 
     /// Signs the transaction with the provided key pair. Automatically determines the format
@@ -238,7 +239,7 @@ impl Transaction {
     /// Returns the address of the contract that is created with this transaction.
     #[wasm_bindgen(js_name = getContractCreationAddress)]
     pub fn get_contract_creation_address(&self) -> Address {
-        Address::from_native(self.inner.contract_creation_address())
+        Address::from(self.inner.contract_creation_address())
     }
 
     /// Serializes the transaction's content to be used for creating its signature.
@@ -261,7 +262,7 @@ impl Transaction {
     /// The transaction's sender address.
     #[wasm_bindgen(getter)]
     pub fn sender(&self) -> Address {
-        Address::from_native(self.inner.sender.clone())
+        Address::from(self.inner.sender.clone())
     }
 
     /// The transaction's sender {@link AccountType}.
@@ -273,7 +274,7 @@ impl Transaction {
     /// The transaction's recipient address.
     #[wasm_bindgen(getter)]
     pub fn recipient(&self) -> Address {
-        Address::from_native(self.inner.recipient.clone())
+        Address::from(self.inner.recipient.clone())
     }
 
     /// The transaction's recipient {@link AccountType}.
@@ -383,11 +384,11 @@ impl Transaction {
         if let Ok(plain) = serde_wasm_bindgen::from_value::<PlainTransaction>(js_value.clone()) {
             Ok(Transaction::from_plain_transaction(&plain)?)
         } else if let Ok(string) = serde_wasm_bindgen::from_value::<String>(js_value.to_owned()) {
-            Ok(Transaction::from_native(
+            Ok(Transaction::from(
                 nimiq_transaction::Transaction::deserialize_from_vec(&hex::decode(string)?)?,
             ))
         } else if let Ok(bytes) = serde_wasm_bindgen::from_value::<Vec<u8>>(js_value.to_owned()) {
-            Ok(Transaction::from_native(
+            Ok(Transaction::from(
                 nimiq_transaction::Transaction::deserialize_from_vec(&bytes)?,
             ))
         } else {
@@ -408,11 +409,13 @@ impl Transaction {
     }
 }
 
-impl Transaction {
-    pub fn from_native(transaction: nimiq_transaction::Transaction) -> Transaction {
+impl From<nimiq_transaction::Transaction> for Transaction {
+    fn from(transaction: nimiq_transaction::Transaction) -> Self {
         Transaction { inner: transaction }
     }
+}
 
+impl Transaction {
     pub fn native_ref(&self) -> &nimiq_transaction::Transaction {
         &self.inner
     }
@@ -627,8 +630,14 @@ impl Transaction {
                                 hash_root: hash_root.to_hex(),
                                 pre_image: pre_image.to_hex(),
                                 signer: signature_proof.compute_signer().to_user_friendly_address(),
-                                signature: signature_proof.signature.to_hex(),
-                                public_key: signature_proof.public_key.to_hex(),
+                                signature: match signature_proof.signature {
+                                    Signature::Ed25519(ref signature) => signature.to_hex(),
+                                    Signature::ES256(ref signature) => signature.to_hex(),
+                                },
+                                public_key: match signature_proof.public_key {
+                                    PublicKey::Ed25519(ref public_key) => public_key.to_hex(),
+                                    PublicKey::ES256(ref public_key) => public_key.to_hex(),
+                                },
                                 path_length: signature_proof.merkle_path.len() as u8,
                             })
                         }
@@ -639,8 +648,14 @@ impl Transaction {
                             creator: signature_proof_sender
                                 .compute_signer()
                                 .to_user_friendly_address(),
-                            creator_signature: signature_proof_sender.signature.to_hex(),
-                            creator_public_key: signature_proof_sender.public_key.to_hex(),
+                            creator_signature: match signature_proof_sender.signature {
+                                Signature::Ed25519(ref signature) => signature.to_hex(),
+                                Signature::ES256(ref signature) => signature.to_hex(),
+                            },
+                            creator_public_key: match signature_proof_sender.public_key {
+                                PublicKey::Ed25519(ref public_key) => public_key.to_hex(),
+                                PublicKey::ES256(ref public_key) => public_key.to_hex(),
+                            },
                             creator_path_length: signature_proof_sender.merkle_path.len() as u8,
                         }),
                         OutgoingHTLCTransactionProof::EarlyResolve {
@@ -651,14 +666,26 @@ impl Transaction {
                             signer: signature_proof_recipient
                                 .compute_signer()
                                 .to_user_friendly_address(),
-                            signature: signature_proof_recipient.signature.to_hex(),
-                            public_key: signature_proof_recipient.public_key.to_hex(),
+                            signature: match signature_proof_recipient.signature {
+                                Signature::Ed25519(ref signature) => signature.to_hex(),
+                                Signature::ES256(ref signature) => signature.to_hex(),
+                            },
+                            public_key: match signature_proof_recipient.public_key {
+                                PublicKey::Ed25519(ref public_key) => public_key.to_hex(),
+                                PublicKey::ES256(ref public_key) => public_key.to_hex(),
+                            },
                             path_length: signature_proof_recipient.merkle_path.len() as u8,
                             creator: signature_proof_sender
                                 .compute_signer()
                                 .to_user_friendly_address(),
-                            creator_signature: signature_proof_sender.signature.to_hex(),
-                            creator_public_key: signature_proof_sender.public_key.to_hex(),
+                            creator_signature: match signature_proof_sender.signature {
+                                Signature::Ed25519(ref signature) => signature.to_hex(),
+                                Signature::ES256(ref signature) => signature.to_hex(),
+                            },
+                            creator_public_key: match signature_proof_sender.public_key {
+                                PublicKey::Ed25519(ref public_key) => public_key.to_hex(),
+                                PublicKey::ES256(ref public_key) => public_key.to_hex(),
+                            },
                             creator_path_length: signature_proof_sender.merkle_path.len() as u8,
                         }),
                     }
@@ -666,8 +693,14 @@ impl Transaction {
                     let proof = SignatureProof::deserialize_from_vec(&self.inner.proof).unwrap();
                     PlainTransactionProof::Standard(PlainStandardProof {
                         raw: hex::encode(self.proof()),
-                        signature: proof.signature.to_hex(),
-                        public_key: proof.public_key.to_hex(),
+                        signature: match proof.signature {
+                            Signature::Ed25519(ref signature) => signature.to_hex(),
+                            Signature::ES256(ref signature) => signature.to_hex(),
+                        },
+                        public_key: match proof.public_key {
+                            PublicKey::Ed25519(ref public_key) => public_key.to_hex(),
+                            PublicKey::ES256(ref public_key) => public_key.to_hex(),
+                        },
                         signer: proof.compute_signer().to_user_friendly_address(),
                         path_length: proof.merkle_path.len() as u8,
                     })
@@ -1109,10 +1142,8 @@ impl PlainTransactionDetails {
         let executed_transaction = hist_tx.clone().into_transaction().unwrap();
 
         Self {
-            transaction: Transaction::from_native(
-                executed_transaction.get_raw_transaction().clone(),
-            )
-            .to_plain_transaction(),
+            transaction: Transaction::from(executed_transaction.get_raw_transaction().clone())
+                .to_plain_transaction(),
             state,
             execution_result: Some(executed_transaction.succeeded()),
             block_height: Some(block_number),

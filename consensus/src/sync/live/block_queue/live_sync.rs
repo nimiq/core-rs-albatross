@@ -123,7 +123,7 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
                     ));
                 }
             }
-            PushOpResult::Missing(result, mut adopted_blocks, mut invalid_blocks) => {
+            PushOpResult::Missing(result, adopted_blocks, mut invalid_blocks) => {
                 for hash in &adopted_blocks {
                     self.on_block_processed(hash);
                 }
@@ -134,9 +134,8 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
                 self.remove_invalid_blocks(&mut invalid_blocks);
 
                 if result.is_ok() && !adopted_blocks.is_empty() {
-                    let hash = adopted_blocks.pop().expect("adopted_blocks not empty");
                     return Some(LiveSyncEvent::PushEvent(
-                        LiveSyncPushEvent::ReceivedMissingBlocks(hash, adopted_blocks.len() + 1),
+                        LiveSyncPushEvent::ReceivedMissingBlocks(adopted_blocks),
                     ));
                 }
             }
@@ -177,5 +176,9 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
 
     fn include_micro_bodies(&self) -> bool {
         self.config.include_micro_bodies
+    }
+
+    fn resolve_block(&mut self, request: crate::consensus::ResolveBlockRequest<N>) {
+        self.resolve_block(request)
     }
 }

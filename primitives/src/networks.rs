@@ -1,15 +1,11 @@
 use std::{
-    fmt::{Display, Error, Formatter},
+    fmt::{Display, Formatter},
     str::FromStr,
 };
 
 use thiserror::Error;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-#[cfg_attr(
-    feature = "serde-derive",
-    derive(serde_repr::Serialize_repr, serde_repr::Deserialize_repr)
-)]
 #[repr(u8)]
 pub enum NetworkId {
     Test = 1,
@@ -22,6 +18,31 @@ pub enum NetworkId {
     DevAlbatross = 6,
     UnitAlbatross = 7,
     MainAlbatross = 24,
+}
+
+#[derive(Error, Debug)]
+#[error("not a valid network ID")]
+pub struct NetworkIdFromU8Error;
+
+impl TryFrom<u8> for NetworkId {
+    type Error = NetworkIdFromU8Error;
+    fn try_from(value: u8) -> Result<NetworkId, NetworkIdFromU8Error> {
+        use NetworkId::*;
+        Ok(match value {
+            1 => Test,
+            2 => Dev,
+            3 => Bounty,
+            4 => Dummy,
+            42 => Main,
+
+            5 => TestAlbatross,
+            6 => DevAlbatross,
+            7 => UnitAlbatross,
+            24 => MainAlbatross,
+
+            _ => return Err(NetworkIdFromU8Error),
+        })
+    }
 }
 
 impl NetworkId {
@@ -50,24 +71,24 @@ impl FromStr for NetworkId {
     type Err = NetworkIdParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "test" => Ok(NetworkId::Test),
-            "dev" => Ok(NetworkId::Dev),
-            "bounty" => Ok(NetworkId::Bounty),
-            "dummy" => Ok(NetworkId::Dummy),
-            "main" => Ok(NetworkId::Main),
-            "unitalbatross" => Ok(NetworkId::UnitAlbatross),
-            "testalbatross" => Ok(NetworkId::TestAlbatross),
-            "devalbatross" => Ok(NetworkId::DevAlbatross),
-            "mainalbatross" => Ok(NetworkId::MainAlbatross),
+        match s {
+            "Test" | "test" => Ok(NetworkId::Test),
+            "Dev" | "dev" => Ok(NetworkId::Dev),
+            "Bounty" | "bounty" => Ok(NetworkId::Bounty),
+            "Dummy" | "dummy" => Ok(NetworkId::Dummy),
+            "Main" | "main" => Ok(NetworkId::Main),
+            "UnitAlbatross" | "unitalbatross" | "unit-albatross" => Ok(NetworkId::UnitAlbatross),
+            "TestAlbatross" | "testalbatross" | "test-albatross" => Ok(NetworkId::TestAlbatross),
+            "DevAlbatross" | "devalbatross" | "dev-albatross" => Ok(NetworkId::DevAlbatross),
+            "MainAlbatross" | "mainalbatross" | "main-albatross" => Ok(NetworkId::MainAlbatross),
             _ => Err(NetworkIdParseError(String::from(s))),
         }
     }
 }
 
-impl Display for NetworkId {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        f.write_str(match *self {
+impl NetworkId {
+    pub fn as_str(self) -> &'static str {
+        match self {
             NetworkId::Test => "Test",
             NetworkId::Dev => "Dev",
             NetworkId::Bounty => "Bounty",
@@ -77,6 +98,42 @@ impl Display for NetworkId {
             NetworkId::DevAlbatross => "DevAlbatross",
             NetworkId::UnitAlbatross => "UnitAlbatross",
             NetworkId::MainAlbatross => "MainAlbatross",
-        })
+        }
+    }
+}
+
+impl Display for NetworkId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.as_str().fmt(f)
+    }
+}
+
+impl serde::Serialize for NetworkId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(self.as_str())
+        } else {
+            serializer.serialize_u8(*self as u8)
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for NetworkId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::{Error as _, Unexpected};
+        if deserializer.is_human_readable() {
+            let intermediate = String::deserialize(deserializer)?;
+            NetworkId::from_str(&intermediate).map_err(|_| {
+                D::Error::invalid_value(Unexpected::Str(&intermediate), &"a valid network name")
+            })
+        } else {
+            let intermediate = u8::deserialize(deserializer)?;
+            NetworkId::try_from(intermediate).map_err(|_| {
+                D::Error::invalid_value(
+                    Unexpected::Unsigned(intermediate.into()),
+                    &"an ID corresponding to a network",
+                )
+            })
+        }
     }
 }

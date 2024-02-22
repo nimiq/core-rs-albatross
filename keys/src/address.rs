@@ -6,7 +6,7 @@ use nimiq_hash::{hash_typed_array, Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_macros::create_typed_array;
 use thiserror::Error;
 
-use crate::{key_pair::KeyPair, PublicKey};
+use crate::{key_pair::KeyPair, ES256PublicKey, Ed25519PublicKey, PublicKey};
 
 create_typed_array!(Address, u8, 20);
 hash_typed_array!(Address);
@@ -159,10 +159,26 @@ impl From<Blake2bHash> for Address {
     }
 }
 
-impl<'a> From<&'a PublicKey> for Address {
-    fn from(public_key: &'a PublicKey) -> Self {
+impl<'a> From<&'a Ed25519PublicKey> for Address {
+    fn from(public_key: &'a Ed25519PublicKey) -> Self {
         let hash = Blake2bHasher::default().digest(public_key.as_bytes());
         Address::from(hash)
+    }
+}
+
+impl<'a> From<&'a ES256PublicKey> for Address {
+    fn from(public_key: &'a ES256PublicKey) -> Self {
+        let hash = Blake2bHasher::default().digest(public_key.as_bytes());
+        Address::from(hash)
+    }
+}
+
+impl<'a> From<&'a PublicKey> for Address {
+    fn from(public_key: &'a PublicKey) -> Self {
+        match public_key {
+            PublicKey::Ed25519(public_key) => Address::from(public_key),
+            PublicKey::ES256(public_key) => Address::from(public_key),
+        }
     }
 }
 

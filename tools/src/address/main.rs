@@ -1,7 +1,7 @@
 use std::{error::Error, process};
 
 use clap::{Arg, Command};
-use nimiq_keys::{Address, PrivateKey, PublicKey, SecureGenerate};
+use nimiq_keys::{Address, Ed25519PublicKey, PrivateKey, SecureGenerate};
 use nimiq_serde::Deserialize;
 
 fn parse_private_key(s: &str) -> Result<PrivateKey, Box<dyn Error>> {
@@ -25,7 +25,7 @@ fn main() {
     } else {
         PrivateKey::generate_default_csprng()
     };
-    let public_key = PublicKey::from(&private_key);
+    let public_key = Ed25519PublicKey::from(&private_key);
     let address = Address::from(&public_key);
 
     println!("Address:       {}", address.to_user_friendly_address());

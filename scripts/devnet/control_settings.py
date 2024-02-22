@@ -111,7 +111,7 @@ class ControlSettings:
         should freely run before monitoring if they panicked or stopped
         producing blocks. This only takes effect in continuous mode (not
         passing `restart_settings`).
-    :type monitor_interval: Optiona[int]
+    :type monitor_interval: Optional[int]
     """
 
     def __init__(self, restart_settings: Optional[RestartSettings] = None,
@@ -124,7 +124,7 @@ class ControlSettings:
 
     def is_continuous(self):
         """
-        Wether the control settings were configured for continuous mode or not
+        Whether the control settings were configured for continuous mode or not
 
         :return: A boolean indicating the continuous mode configuration.
         :rtype: bool

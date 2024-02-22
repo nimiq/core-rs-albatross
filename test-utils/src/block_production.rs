@@ -29,7 +29,7 @@ use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
 
 /// Secret keys of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
-const SIGNING_KEY: &str = "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";
+pub const SIGNING_KEY: &str = "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";
 const VOTING_KEY: &str = "99237809f3b37bd0878854d2b5b66e4cc00ba1a1d64377c374f2b6d1bf3dec7835bfae3e7ab89b6d331b3ef7d1e9a06a7f6967bf00edf9e0bcfe34b58bd1260e96406e09156e4c190ff8f69a9ce1183b4289383e6d798fd5104a3800fabd00";
 
 pub struct TemporaryBlockProducer {
@@ -227,6 +227,7 @@ impl TemporaryBlockProducer {
         let vote = TendermintVote {
             proposal_hash: Some(block_hash),
             id: TendermintIdentifier {
+                network: proposal.proposal.network,
                 block_number: proposal.proposal.block_number,
                 step: TendermintStep::PreCommit,
                 round_number: 0,

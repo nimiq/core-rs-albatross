@@ -82,6 +82,9 @@ impl BlockProducer {
         // The rng seed. We need this parameterized in order to have determinism when running unit tests.
         rng: &mut R,
     ) -> MicroBlock {
+        // The network ID stays unchanged for the whole blockchain.
+        let network = blockchain.head().network();
+
         // Calculate the block number. It is simply the previous block number incremented by one.
         let block_number = blockchain.block_number() + 1;
 
@@ -124,7 +127,7 @@ impl BlockProducer {
         // Update the state and calculate the state root.
         let block_state = BlockState::new(block_number, timestamp);
         let (state_root, diff_root, executed_txns) = blockchain
-            .state()
+            .state
             .accounts
             .exercise_transactions(&transactions, &inherents, &block_state)
             .expect("Failed to compute accounts hash during block production");
@@ -163,6 +166,7 @@ impl BlockProducer {
 
         // Create the micro block header.
         let header = MicroHeader {
+            network,
             version: Policy::VERSION,
             block_number,
             timestamp,
@@ -233,6 +237,9 @@ impl BlockProducer {
         // The rng seed. We need this parameterized in order to have determinism when running unit tests.
         rng: &mut R,
     ) -> MacroBlock {
+        // The network ID stays unchanged for the whole blockchain.
+        let network = blockchain.head().network();
+
         // Calculate the block number. It is simply the previous block number incremented by one.
         let block_number = blockchain.block_number() + 1;
 
@@ -263,6 +270,7 @@ impl BlockProducer {
         // We need several fields of this header in order to calculate the transactions and the
         // state.
         let mut header = MacroHeader {
+            network,
             version: Policy::VERSION,
             block_number,
             round,
@@ -296,7 +304,7 @@ impl BlockProducer {
         // Update the state and add the state root to the header.
         let block_state = BlockState::new(block_number, timestamp);
         let (state_root, diff_root, _) = blockchain
-            .state()
+            .state
             .accounts
             .exercise_transactions(&[], &inherents, &block_state)
             .expect("Failed to compute accounts hash during block production.");
@@ -346,11 +354,8 @@ impl BlockProducer {
             );
 
         // Calculate the reward transactions.
-        let reward_transactions = blockchain.create_reward_transactions(
-            blockchain.state(),
-            macro_header,
-            &staking_contract,
-        );
+        let reward_transactions =
+            blockchain.create_reward_transactions(macro_header, &staking_contract);
 
         // If this is an election block, calculate the validator set for the next epoch.
         let validators = match Policy::is_election_block_at(macro_header.block_number) {

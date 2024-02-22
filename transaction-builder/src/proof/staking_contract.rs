@@ -39,7 +39,7 @@ impl StakingDataBuilder {
             IncomingStakingTransactionData::AddStake { .. } => {}
             _ => {
                 let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
-                let proof = SignatureProof::from(key_pair.public, signature);
+                let proof = SignatureProof::from_ed25519(key_pair.public, signature);
                 data.set_signature(proof);
             }
         }
@@ -83,7 +83,7 @@ impl StakingProofBuilder {
     /// using a key pair `key_pair`.
     pub fn sign_with_key_pair(&mut self, key_pair: &KeyPair) -> &mut Self {
         let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
-        self.proof = Some(SignatureProof::from(key_pair.public, signature));
+        self.proof = Some(SignatureProof::from_ed25519(key_pair.public, signature));
         self
     }
 

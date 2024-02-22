@@ -59,8 +59,9 @@ fn make_signed_transaction(value: u64, sender: Address, recipient: Address) -> T
         PrivateKey::deserialize_from_vec(&hex::decode(SECRET_KEY_1).unwrap()).unwrap(),
     );
 
-    let proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content()))
-        .serialize_to_vec();
+    let proof =
+        SignatureProof::from_ed25519(key_pair.public, key_pair.sign(&tx.serialize_content()))
+            .serialize_to_vec();
 
     tx.proof = proof;
 

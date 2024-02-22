@@ -3,6 +3,7 @@ use std::fmt::{Debug, Formatter};
 use nimiq_block::{Block, BlockInclusionProof, MacroBlock};
 #[cfg(feature = "full")]
 use nimiq_blockchain::HistoryTreeChunk;
+use nimiq_blockchain_interface::Direction;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_mmr::mmr::proof::SizeProof;
@@ -297,6 +298,7 @@ impl Debug for ResponseBlocks {
 }
 
 /// Request "missing" blocks, from a set of locators to a target hash.
+/// Requests of the sort must choose a direction to facilitate requesting of inferior chain blocks as well.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestMissingBlocks {
     /// Target block hash.
@@ -307,7 +309,24 @@ pub struct RequestMissingBlocks {
     pub include_micro_bodies: bool,
     /// Set of hashes of blocks known to the requester, possible starts of the
     /// answer chain.
+    ///
+    /// The locator ordering should be from newest to oldest block.
+    ///
+    /// For requests with `Direction::Forward`, if not ordered that way any response may include blocks which are
+    /// not necessary as they answer with respect to an older locator than they could have.
+    /// For `Direction::Backward` it does have no effect.
     pub locators: Vec<Blake2bHash>,
+
+    /// The direction the responder should take to search.
+    ///  - Direction::Forward searches from the best locator to the target on the main chain.
+    ///
+    ///     That also implies that any block request using forward direction can only return main chain blocks.
+    ///
+    ///  - Direction::Backward searches from the target hash backwards until a locator (or macro block) is reached.
+    ///
+    ///     Using Backward makes retrieving inferior chains possible, but is more expensive for bigger
+    ///     sets of anticipated returned blocks.
+    pub direction: Direction,
 }
 
 impl RequestCommon for RequestMissingBlocks {

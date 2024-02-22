@@ -190,6 +190,7 @@ pub fn sign_macro_block(
     let precommit = TendermintVote {
         proposal_hash: Some(block_hash),
         id: TendermintIdentifier {
+            network: block.network(),
             block_number: block.block_number(),
             round_number: 0,
             step: TendermintStep::PreCommit,

@@ -32,10 +32,7 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::policy::Policy;
 use tsify::Tsify;
-use wasm_bindgen::{
-    prelude::{wasm_bindgen, Closure, JsError, JsValue},
-    JsCast,
-};
+use wasm_bindgen::{prelude::*, JsCast};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::MessageEvent;
 
@@ -928,10 +925,8 @@ impl Client {
                             peer_id.to_string(),
                             "joined",
                             Some(
-                                serde_wasm_bindgen::to_value(&PlainPeerInfo::from_native(
-                                    peer_info,
-                                ))
-                                .unwrap(),
+                                serde_wasm_bindgen::to_value(&PlainPeerInfo::from(peer_info))
+                                    .unwrap(),
                             ),
                         ))
                     }
@@ -1027,7 +1022,7 @@ impl Client {
                         let tx = exe_tx.get_raw_transaction();
 
                         let details = PlainTransactionDetails::new(
-                            &Transaction::from_native(tx.clone()),
+                            &Transaction::from(tx.clone()),
                             TransactionState::Included,
                             Some(exe_tx.succeeded()),
                             Some(block_number),
@@ -1118,7 +1113,7 @@ impl Client {
         let default = nimiq_account::Account::default();
 
         for address in &addresses {
-            ordered_accounts.push(PlainAccount::from_native(
+            ordered_accounts.push(PlainAccount::from(
                 accounts
                     .get(address)
                     .ok_or(JsError::new(&format!(
@@ -1154,7 +1149,7 @@ impl Client {
                         address
                     )))?
                     .as_ref()
-                    .map(PlainStaker::from_native),
+                    .map(PlainStaker::from),
             );
         }
 
@@ -1182,7 +1177,7 @@ impl Client {
                         address
                     )))?
                     .as_ref()
-                    .map(PlainValidator::from_native),
+                    .map(PlainValidator::from),
             );
         }
 

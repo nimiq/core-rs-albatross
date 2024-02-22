@@ -1218,7 +1218,7 @@ async fn it_updates_best_votes_retroactively() {
 ///     * The validator sees a proposal and 2f votes for the proposal and 1 against all proposals. Votes None.
 ///     * During 0-precommit it sees a new 0-Prevote with 2f+1 prevotes. It must not update its vote.
 ///         0-precommit fails to produce a decision.
-/// Round 2: The proposal from round 1 is re-proposed wih VR set and that proposal must produce a decision.
+/// Round 2: The proposal from round 1 is re-proposed with VR set and that proposal must produce a decision.
 #[test(tokio::test)]
 async fn it_accepts_vr_proposal() {
     // Validator shall not propose.

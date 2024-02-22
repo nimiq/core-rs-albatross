@@ -18,7 +18,7 @@ use tokio::{
 use super::types::ZKPState;
 use crate::types::*;
 
-/// Generates the zk proof and sends it through the channel provided. Upon failure, the error is sent trough the channel provided.
+/// Generates the zk proof and sends it through the channel provided. Upon failure, the error is sent through the channel provided.
 pub fn generate_new_proof(
     prev_block: MacroBlock,
     previous_proof: Option<Proof<MNT6_753>>,

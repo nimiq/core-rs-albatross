@@ -12,7 +12,7 @@ use nimiq_database::{
     volatile::VolatileDatabase,
 };
 use nimiq_genesis_builder::GenesisBuilder;
-use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, SecureGenerate};
+use nimiq_keys::{Address, Ed25519PublicKey, KeyPair, PrivateKey, SecureGenerate};
 use nimiq_primitives::{
     account::{AccountType, FailReason},
     coin::Coin,
@@ -419,6 +419,7 @@ fn accounts_performance() {
     let sender_balances = vec![num_txns as u64 * 10; num_txns];
     let recipient_balances = vec![0; num_txns];
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
     let address_validator = Address::from([1u8; Address::SIZE]);
     let reward = Inherent::Reward {
         validator_address: Address::burn_address(),
@@ -449,7 +450,7 @@ fn accounts_performance() {
     // Add validator to genesis
     genesis_builder.with_genesis_validator(
         Address::from(&KeyPair::generate(&mut rng)),
-        PublicKey::from([0u8; 32]),
+        Ed25519PublicKey::from([0u8; 32]),
         BLSKeyPair::generate(&mut rng).public_key,
         Address::default(),
         None,
@@ -536,6 +537,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
     let sender_balances = vec![100_000_000_000; 1];
     let recipient_balances = vec![0; total_txns as usize];
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
     let rewards = vec![];
 
     // Generate accounts
@@ -571,7 +573,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
     // Add validator to genesis
     genesis_builder.with_genesis_validator(
         Address::from(&KeyPair::generate(&mut rng)),
-        PublicKey::from([0u8; 32]),
+        Ed25519PublicKey::from([0u8; 32]),
         BLSKeyPair::generate(&mut rng).public_key,
         Address::default(),
         None,
@@ -664,6 +666,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
     let sender_balances = vec![100_000_000_000; total_txns as usize];
     let recipient_balances = vec![10; total_txns as usize];
     let mut genesis_builder = GenesisBuilder::default();
+    genesis_builder.with_network(NetworkId::UnitAlbatross);
     let rewards = vec![];
 
     // Generate accounts
@@ -699,7 +702,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
     // Add validator to genesis
     genesis_builder.with_genesis_validator(
         Address::from(&KeyPair::generate(&mut rng)),
-        PublicKey::from([0u8; 32]),
+        Ed25519PublicKey::from([0u8; 32]),
         BLSKeyPair::generate(&mut rng).public_key,
         Address::default(),
         None,
@@ -806,7 +809,7 @@ fn it_commits_valid_and_failing_txns() {
     tx.sender_type = AccountType::Vesting;
 
     let signature = key_pair.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::from(key_pair.public, signature);
+    let signature_proof = SignatureProof::from_ed25519(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     let block_state = BlockState::new(1, 200);
@@ -847,10 +850,10 @@ fn it_commits_valid_and_failing_txns() {
         1,
         NetworkId::Dummy,
     );
-    tx.sender_type = AccountType::Basic;
+    // tx.sender_type = AccountType::Basic;
 
     let signature = key_pair.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::from(key_pair.public, signature);
+    let signature_proof = SignatureProof::from_ed25519(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     let mut block_logger = BlockLogger::empty();

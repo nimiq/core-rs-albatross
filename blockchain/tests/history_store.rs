@@ -168,6 +168,7 @@ fn do_double_vote(temp_producer1: &TemporaryBlockProducer) -> EquivocationProof 
     let slots = validator.slots;
 
     let tendermint_id = TendermintIdentifier {
+        network: header.network,
         block_number: header.block_number,
         round_number: header.round,
         step: TendermintStep::PreVote,
@@ -416,5 +417,62 @@ fn it_pushes_macro_block_with_rewards() {
             hist_tx_after[i].unwrap_reward()
         );
         i += 1;
+    }
+}
+
+#[test]
+fn it_can_find_txns() {
+    // Adds the same initial block to both producers.
+    let (temp_producer1, _temp_producer2) = setup_blockchain_with_history();
+
+    // Get initial history store.
+    let hist_tx_pre = get_hist_tx(&temp_producer1);
+
+    // Adds block with transactions.
+    let key_pair = key_pair_with_funds();
+    let mut txns = generate_transactions(
+        &key_pair,
+        temp_producer1.blockchain.read().block_number(),
+        NetworkId::UnitAlbatross,
+        3,
+        0,
+    );
+    txns.sort_unstable();
+
+    add_block_assert_history_store(&temp_producer1, vec![], txns.clone(), false);
+
+    // Find the transactions in the history store.
+    let blockchain = temp_producer1.blockchain.read();
+    let head = blockchain.head();
+    for txn in txns.iter() {
+        assert_eq!(
+            blockchain
+                .history_store
+                .get_hist_tx_by_hash(&txn.hash(), None)
+                .pop()
+                .unwrap(),
+            HistoricTransaction {
+                network_id: NetworkId::UnitAlbatross,
+                block_number: head.block_number(),
+                block_time: head.timestamp(),
+                data: HistoricTransactionData::Basic(ExecutedTransaction::Ok(txn.clone()))
+            }
+        );
+    }
+    drop(blockchain);
+
+    // Revert block and assert that history store is reverted as well.
+    revert_block(&temp_producer1, &hist_tx_pre);
+
+    // Cannot find the transactions in the history store.
+    let blockchain = temp_producer1.blockchain.read();
+    for txn in txns {
+        assert_eq!(
+            blockchain
+                .history_store
+                .get_hist_tx_by_hash(&txn.hash(), None)
+                .pop(),
+            None
+        );
     }
 }

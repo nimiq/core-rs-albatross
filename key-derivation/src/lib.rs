@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use byteorder::{BigEndian, WriteBytesExt};
 use nimiq_hash::{hmac::*, sha512::Sha512Hash};
-use nimiq_keys::{Address, PrivateKey, PublicKey};
+use nimiq_keys::{Address, Ed25519PublicKey, PrivateKey};
 use nimiq_serde::Serialize;
 use regex::Regex;
 
@@ -74,20 +74,19 @@ impl ExtendedPrivateKey {
         &self.chain_code
     }
 
-    /// Converts the ExtendedPrivateKey format into a normal PrivateKey, loosing the ability for derivation.
+    /// Converts the ExtendedPrivateKey format into a normal PrivateKey, losing the ability for derivation.
     pub fn into_private_key(self) -> PrivateKey {
         self.key
     }
 
     /// Returns the public key for this private key.
-    pub fn to_public_key(&self) -> PublicKey {
-        PublicKey::from(&self.key)
+    pub fn to_public_key(&self) -> Ed25519PublicKey {
+        Ed25519PublicKey::from(&self.key)
     }
 
     /// Returns the public address for this private key.
     pub fn to_address(&self) -> Address {
-        let pub_key = PublicKey::from(&self.key);
-        Address::from(&pub_key)
+        Address::from(&self.to_public_key())
     }
 }
 
@@ -118,7 +117,7 @@ impl<'a> From<&'a ExtendedPrivateKey> for Address {
     }
 }
 
-impl<'a> From<&'a ExtendedPrivateKey> for PublicKey {
+impl<'a> From<&'a ExtendedPrivateKey> for Ed25519PublicKey {
     fn from(key: &'a ExtendedPrivateKey) -> Self {
         key.to_public_key()
     }

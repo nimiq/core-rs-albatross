@@ -5,8 +5,8 @@ use nimiq_bls::{AggregateSignature, CompressedPublicKey, KeyPair};
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::update::LevelUpdate;
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Blake2sHash, Hasher};
-use nimiq_keys::{Address, PublicKey};
-use nimiq_primitives::slots_allocation::ValidatorsBuilder;
+use nimiq_keys::{Address, Ed25519PublicKey};
+use nimiq_primitives::{networks::NetworkId, slots_allocation::ValidatorsBuilder};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_vrf::VrfSeed;
@@ -73,7 +73,7 @@ fn it_can_convert_macro_block_into_slots() {
     let mut builder = ValidatorsBuilder::new();
 
     for (validator_address, num_slots, signing_key, voting_key) in slot_allocation {
-        let signing_key = PublicKey::from_str(signing_key).unwrap();
+        let signing_key = Ed25519PublicKey::from_str(signing_key).unwrap();
         // The 6 unused bytes in the middle come from reducing the public key size to 270 bytes.
         let voting_key = CompressedPublicKey::from_str(&voting_key[..570]).unwrap();
 
@@ -88,6 +88,7 @@ fn it_can_convert_macro_block_into_slots() {
 
     let macro_block = MacroBlock {
         header: MacroHeader {
+            network: NetworkId::UnitAlbatross,
             version: 1,
             block_number: 42,
             round: 0,

@@ -11,6 +11,8 @@ use nimiq_block::Block;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::Network;
 
+use crate::consensus::ResolveBlockRequest;
+
 /// Trait that defines how a node synchronizes macro blocks
 /// The expected functionality is that there could be different methods of syncing but they
 /// all must synchronize to the latest macro block. An implementation of this trait requests,
@@ -47,6 +49,8 @@ pub trait LiveSync<N: Network>: Stream<Item = LiveSyncEvent<N::PeerId>> + Unpin 
     fn state_complete(&self) -> bool {
         true
     }
+    /// Initiates an attempt to resolve a ResolveBlockRequest.
+    fn resolve_block(&mut self, request: ResolveBlockRequest<N>);
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -74,8 +78,8 @@ pub enum LiveSyncPushEvent {
     AcceptedAnnouncedBlock(Blake2bHash),
     /// A buffered block has been accepted
     AcceptedBufferedBlock(Blake2bHash, usize),
-    /// Missing blocks were received
-    ReceivedMissingBlocks(Blake2bHash, usize),
+    /// Missing blocks were received. The vec of all adopted blocks hashes is given here.
+    ReceivedMissingBlocks(Vec<Blake2bHash>),
     /// Block was rejected
     /// (this is only returned in *some* cases blocks were rejected)
     RejectedBlock(Blake2bHash),
@@ -162,6 +166,11 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
 
     pub fn state_complete(&self) -> bool {
         self.live_sync.state_complete()
+    }
+
+    /// Initiates an attempt to resolve a ResolveBlockRequest.
+    pub fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
+        self.live_sync.resolve_block(request)
     }
 }
 

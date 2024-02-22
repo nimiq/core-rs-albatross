@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
 use byteorder::WriteBytesExt;
-use nimiq_block::{MacroBody, MacroHeader};
+use nimiq_block::{MacroBody, MacroHeader, MicroBlock};
+use nimiq_blockchain::Blockchain;
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_hash::{Blake2sHash, Blake2sHasher, Hash, Hasher, SerializeContent};
-use nimiq_keys::Signature as SchnorrSignature;
+use nimiq_keys::Ed25519Signature as SchnorrSignature;
 use nimiq_network_interface::{
     network::Network,
     request::{Handle, RequestCommon, RequestMarker},
@@ -91,6 +93,44 @@ impl SignedProposal {
             .expect("Must be able to serialize content of the valid_round to hasher ");
 
         h.finish()
+    }
+
+    /// To a given Message and predecessor as well as blockchain, this function returns true iff
+    /// the signer given in the message fits the proposer the blockchain will yield given the predecessor.
+    /// The predecessor will be check for correct block_height and hash.
+    pub fn verify_signer_matches_producer(
+        &self,
+        predecessor: MicroBlock,
+        blockchain: &Blockchain,
+    ) -> bool {
+        // Make sure the proposal references the predecessor as its parent hash
+        if predecessor.hash() != self.proposal.parent_hash {
+            return false;
+        }
+
+        // Make sure the height of the predecessor fits
+        if predecessor.block_number() + 1 != self.proposal.block_number {
+            return false;
+        }
+        // Get the active validators.
+        let validators = blockchain.current_validators().unwrap();
+
+        // Get the validator who signed the proposal and whose signature was already verified.
+        let assumed_validator = validators.get_validator_by_slot_band(self.signer);
+
+        // Calculate the validator who was supposed to produce the block.
+        let actual_validator = blockchain
+            .get_proposer(
+                self.proposal.block_number,
+                self.round,
+                predecessor.header.seed.entropy(),
+                None,
+            )
+            .expect("Must be able to calculate block producer.")
+            .validator;
+
+        // Compare the expected and the actual validator
+        *assumed_validator == actual_validator
     }
 }
 

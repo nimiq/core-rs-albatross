@@ -21,14 +21,8 @@ pub enum Error {
     #[error("Block not found: {0}")]
     BlockNotFoundByHash(Blake2bHash),
 
-    #[error("Block number is not allowed to be 0")]
-    BlockNumberNotZero,
-
-    #[error("Epoch number is not allowed to be 0")]
-    EpochNumberNotZero,
-
-    #[error("Batch number is not allowed to be 0")]
-    BatchNumberNotZero,
+    #[error("Block number cannot be smaller than genesis block")]
+    BlockNumberBeforeGenesis,
 
     #[error("Unexpected macro block: {0}")]
     UnexpectedMacroBlock(u32),

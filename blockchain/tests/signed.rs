@@ -8,9 +8,9 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::{lazy::LazyPublicKey, AggregateSignature, KeyPair};
 use nimiq_collections::bitset::BitSet;
 use nimiq_database::volatile::VolatileDatabase;
-use nimiq_genesis::NetworkId;
-use nimiq_keys::{Address, PublicKey};
+use nimiq_keys::{Address, Ed25519PublicKey};
 use nimiq_primitives::{
+    networks::NetworkId,
     policy::Policy,
     slots_allocation::{Validator, Validators},
     TendermintIdentifier, TendermintStep, TendermintVote,
@@ -56,7 +56,7 @@ fn test_skip_block_single_signature() {
     let validators = Validators::new(vec![Validator::new(
         Address::default(),
         LazyPublicKey::from(key_pair.public_key),
-        PublicKey::from([0u8; 32]),
+        Ed25519PublicKey::from([0u8; 32]),
         0..Policy::SLOTS,
     )]);
 
@@ -85,6 +85,7 @@ fn test_replay() {
 
     // create dummy block
     let mut block = MacroBlock::default();
+    block.header.network = NetworkId::UnitAlbatross;
     block.header.block_number = 1;
 
     // create hash and prepare message
@@ -96,6 +97,7 @@ fn test_replay() {
     let vote = TendermintVote {
         proposal_hash: Some(block_hash.clone()),
         id: TendermintIdentifier {
+            network: NetworkId::UnitAlbatross,
             block_number: 1u32,
             step: TendermintStep::PreVote,
             round_number: 0,
@@ -126,6 +128,7 @@ fn test_replay() {
     let vote = TendermintVote {
         proposal_hash: Some(block_hash),
         id: TendermintIdentifier {
+            network: NetworkId::UnitAlbatross,
             block_number: 1u32,
             step: TendermintStep::PreCommit,
             round_number: 0,

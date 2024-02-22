@@ -1,6 +1,7 @@
 use std::{io, time::Instant};
 
-use ark_ff::Field;
+use ark_ff::{FftField, Field};
+use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystem, OptimizationGoal};
 use log::{info, level_filters::LevelFilter};
 use nimiq_log::TargetsExt;
@@ -8,17 +9,21 @@ use nimiq_zkp_circuits::circuits::{mnt4, mnt6};
 use rand::{thread_rng, Rng};
 use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt};
 
-fn evaluate_circuit<F: Field, C: ConstraintSynthesizer<F> + Clone>(circuit: C, circuit_name: &str) {
+fn evaluate_circuit<F: Field + FftField, C: ConstraintSynthesizer<F> + Clone>(
+    circuit: C,
+    circuit_name: &str,
+) {
     let cs = ConstraintSystem::new_ref();
     cs.set_optimization_goal(OptimizationGoal::Constraints);
     circuit.clone().generate_constraints(cs.clone()).unwrap();
     cs.finalize();
-    let num_constraints = cs.num_constraints();
-    let num_constraints_powers = num_constraints.next_power_of_two().ilog2();
+    let circuit_size = cs.num_constraints() + cs.num_instance_variables();
+    let domain_size = GeneralEvaluationDomain::<F>::new(circuit_size).expect("Circuit too large");
+    let num_constraints_powers = domain_size.size().next_power_of_two().ilog2();
 
     info!(
         "- {}: opt_constraints=2^{} ({})",
-        circuit_name, num_constraints_powers, num_constraints
+        circuit_name, num_constraints_powers, circuit_size
     );
 }
 

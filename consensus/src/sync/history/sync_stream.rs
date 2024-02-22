@@ -109,6 +109,11 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
                     Some(Ok(batch_set)) => {
                         let hash = batch_set.block.hash();
                         let blockchain = Arc::clone(&self.blockchain);
+
+                        // Note the fact that the future surrounding the spawn_blocking is created deliberately as
+                        // it is not necessarily polled immediately. It must wait until preceding futures have resolved
+                        // before the actual push_history_sync call has any chance of succeeding. Thus using the
+                        // spawn_blocking as the future is unfeasible.
                         let future = async move {
                             debug!(
                                 "Processing epoch #{} ({} history items)",

@@ -95,7 +95,7 @@ impl Staker {
     }
 
     /// Returns the current non-retired balance of the staker.
-    pub fn none_retired_balance(&self) -> Coin {
+    pub fn non_retired_balance(&self) -> Coin {
         self.active_balance + self.inactive_balance
     }
 
@@ -384,7 +384,7 @@ impl StakingContract {
                 return Err(AccountError::InvalidForRecipient);
             }
 
-            // Fail if the the funds are in locked or jailed.
+            // Fail if the funds are locked or jailed.
             if !staker.is_inactive_stake_released(store, block_number) {
                 debug!(
                     ?staker_address,
@@ -484,9 +484,9 @@ impl StakingContract {
         }
 
         // Restore the previous balances and values.
-        let total_balance = staker.total_balance();
+        let non_retired_balance = staker.non_retired_balance();
         staker.active_balance = receipt.active_balance;
-        staker.inactive_balance = total_balance - staker.active_balance;
+        staker.inactive_balance = non_retired_balance - staker.active_balance;
         staker.inactive_from = receipt.inactive_from;
 
         // Update the staker entry.
@@ -495,7 +495,7 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Changes the active and consequentially the inactive balances of the staker.
+    /// Changes the active and consequently the inactive balances of the staker.
     /// The active balance will be set immediately.
     /// The inactive balance will be available to retire after a lock-up period and, if applicable,
     /// after the validator's jail period has finished.
@@ -514,11 +514,11 @@ impl StakingContract {
         let mut staker = store.expect_staker(staker_address)?;
 
         // Fail if staker does not have sufficient funds.
-        let total_balance = staker.total_balance();
-        if total_balance < new_active_balance {
+        let non_retired_balance = staker.non_retired_balance();
+        if non_retired_balance < new_active_balance {
             return Err(AccountError::InsufficientFunds {
                 needed: new_active_balance,
-                balance: total_balance,
+                balance: non_retired_balance,
             });
         }
 
@@ -527,7 +527,7 @@ impl StakingContract {
         // Store old values for receipt.
         let old_inactive_from = staker.inactive_from;
         let old_active_balance = staker.active_balance;
-        let new_inactive_balance = total_balance - new_active_balance;
+        let new_inactive_balance = non_retired_balance - new_active_balance;
 
         // Update the staker's balances.
         staker.active_balance = new_active_balance;
@@ -580,14 +580,14 @@ impl StakingContract {
         let mut staker = store.expect_staker(staker_address)?;
 
         // Keep the old values.
-        let total_balance = staker.total_balance();
+        let non_retired_balance = staker.non_retired_balance();
         let old_inactive_from = staker.inactive_from;
         let old_inactive_balance = staker.inactive_balance;
 
         // Restore the previous inactive since and balances.
         staker.inactive_from = receipt.old_inactive_from;
         staker.active_balance = receipt.old_active_balance;
-        staker.inactive_balance = total_balance - staker.active_balance;
+        staker.inactive_balance = non_retired_balance - staker.active_balance;
 
         // If we are delegating to a validator, we update the active stake of the validator.
         // This function never changes the staker's delegation, so the validator counter should not be updated.
@@ -610,7 +610,7 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Adds to the retired balance and consequentially changes the inactive balance of the staker.
+    /// Adds to the retired balance and consequently changes the inactive balance of the staker.
     /// The balance can only be retired if the lock-up period and associated validator's jail period have passed.
     /// The retire fails if the invariant 1 for the non-retired stake is violated.
     /// Once retired the funds can be withdrawn immediately.
@@ -641,7 +641,7 @@ impl StakingContract {
             staker.retired_balance + retire_stake,
         )?;
 
-        // Fail if the the funds are locked or jailed.
+        // Fail if the funds are locked or jailed.
         if !staker.is_inactive_stake_released(store, block_number) {
             debug!(
                 ?staker_address,

@@ -111,6 +111,7 @@ pub async fn get_pos_genesis(
         };
 
     Ok(GenesisConfig {
+        network: network_id,
         vrf_seed: Some(vrf_seed),
         parent_election_hash: Some(parent_election_hash),
         parent_hash: Some(parent_hash),

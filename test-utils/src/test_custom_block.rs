@@ -11,7 +11,9 @@ use nimiq_collections::BitSet;
 use nimiq_database::traits::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::KeyPair as SchnorrKeyPair;
-use nimiq_primitives::{policy::Policy, TendermintIdentifier, TendermintStep, TendermintVote};
+use nimiq_primitives::{
+    networks::NetworkId, policy::Policy, TendermintIdentifier, TendermintStep, TendermintVote,
+};
 use nimiq_tendermint::ProposalMessage;
 use nimiq_transaction::{
     historic_transaction::HistoricTransaction, inherent::Inherent, Transaction,
@@ -20,6 +22,7 @@ use nimiq_vrf::VrfSeed;
 
 #[derive(Clone)]
 pub struct BlockConfig {
+    pub network: Option<NetworkId>,
     pub version: Option<u16>,
     pub block_number_offset: i32,
     pub timestamp_offset: i64,
@@ -53,6 +56,7 @@ pub struct BlockConfig {
 impl Default for BlockConfig {
     fn default() -> Self {
         BlockConfig {
+            network: None,
             version: None,
             block_number_offset: 0,
             timestamp_offset: 0,
@@ -83,6 +87,10 @@ pub fn next_micro_block(
     blockchain: &Blockchain,
     config: &BlockConfig,
 ) -> MicroBlock {
+    let network = config
+        .network
+        .unwrap_or_else(|| blockchain.head().network());
+
     let block_number = (blockchain.block_number() as i32 + 1 + config.block_number_offset) as u32;
 
     let timestamp = (blockchain.head().timestamp() as i64 + 1 + config.timestamp_offset) as u64;
@@ -111,7 +119,7 @@ pub fn next_micro_block(
     let block_state = BlockState::new(block_number, timestamp);
 
     let (state_root, diff_root, executed_txns) = blockchain
-        .state()
+        .state
         .accounts
         .exercise_transactions(&transactions, &inherents, &block_state)
         .expect("Failed to compute accounts hash during block production");
@@ -147,6 +155,7 @@ pub fn next_micro_block(
     };
 
     let header = MicroHeader {
+        network,
         version: config.version.unwrap_or(Policy::VERSION),
         block_number,
         timestamp,
@@ -179,6 +188,10 @@ pub fn next_skip_block(
     blockchain: &Blockchain,
     config: &BlockConfig,
 ) -> MicroBlock {
+    let network = config
+        .network
+        .unwrap_or_else(|| blockchain.head().network());
+
     let block_number = (blockchain.block_number() as i32 + 1 + config.block_number_offset) as u32;
 
     let timestamp = if config.timestamp_offset != 0 {
@@ -206,7 +219,7 @@ pub fn next_skip_block(
     let block_state = BlockState::new(block_number, timestamp);
 
     let (real_state_root, real_diff_root, _) = blockchain
-        .state()
+        .state
         .accounts
         .exercise_transactions(&[], &inherents, &block_state)
         .expect("Failed to compute accounts hash during block production");
@@ -241,6 +254,7 @@ pub fn next_skip_block(
     };
 
     let header = MicroHeader {
+        network,
         version: config.version.unwrap_or(Policy::VERSION),
         block_number,
         timestamp,
@@ -271,6 +285,10 @@ pub fn next_macro_block_proposal(
     blockchain: &Blockchain,
     config: &BlockConfig,
 ) -> MacroBlock {
+    let network = config
+        .network
+        .unwrap_or_else(|| blockchain.head().network());
+
     let block_number = (blockchain.block_number() as i32 + 1 + config.block_number_offset) as u32;
 
     let timestamp = (blockchain.head().timestamp() as i64 + config.timestamp_offset) as u64;
@@ -299,6 +317,7 @@ pub fn next_macro_block_proposal(
         .unwrap_or_else(|| blockchain.head().seed().sign_next(signing_key));
 
     let mut header = MacroHeader {
+        network,
         version: config.version.unwrap_or(Policy::VERSION),
         block_number,
         round: 0,
@@ -314,7 +333,6 @@ pub fn next_macro_block_proposal(
         history_root: Blake2bHash::default(),
     };
 
-    let state = blockchain.state();
     // Get the staking contract PRIOR to any state changes.
     let staking_contract = blockchain.get_staking_contract();
 
@@ -322,8 +340,7 @@ pub fn next_macro_block_proposal(
         .punished_slots
         .next_batch_initial_punished_set(header.block_number, &staking_contract.active_validators);
 
-    let reward_transactions =
-        blockchain.create_reward_transactions(state, &header, &staking_contract);
+    let reward_transactions = blockchain.create_reward_transactions(&header, &staking_contract);
 
     let validators = if Policy::is_election_block_at(blockchain.block_number() + 1) {
         Some(blockchain.next_validators(&header.seed))
@@ -349,7 +366,8 @@ pub fn next_macro_block_proposal(
 
     let block_state = BlockState::new(block_number, timestamp);
 
-    let (state_root, diff_root, _) = state
+    let (state_root, diff_root, _) = blockchain
+        .state
         .accounts
         .exercise_transactions(&[], &inherents, &block_state)
         .expect("Failed to compute accounts hash during block production.");
@@ -389,6 +407,7 @@ pub fn finalize_macro_block(
     let vote = TendermintVote {
         proposal_hash: Some(block_hash),
         id: TendermintIdentifier {
+            network: proposal.proposal.network,
             block_number: proposal.proposal.block_number,
             step: TendermintStep::PreCommit,
             round_number: proposal.round,

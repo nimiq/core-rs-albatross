@@ -354,7 +354,7 @@ impl BasicProofBuilder {
     /// using a key pair `key_pair`.
     pub fn sign_with_key_pair(&mut self, key_pair: &KeyPair) -> &mut Self {
         let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
-        self.signature = Some(SignatureProof::from(key_pair.public, signature));
+        self.signature = Some(SignatureProof::from_ed25519(key_pair.public, signature));
         self
     }
 

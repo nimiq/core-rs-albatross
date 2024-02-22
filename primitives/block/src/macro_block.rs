@@ -4,8 +4,9 @@ use ark_ec::Group;
 use nimiq_bls::{G2Projective, PublicKey as BlsPublicKey};
 use nimiq_collections::bitset::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput, Hasher, SerializeContent};
-use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{
+    networks::NetworkId,
     policy::Policy,
     slots_allocation::{Validators, ValidatorsBuilder},
     Message, PREFIX_TENDERMINT_PROPOSAL,
@@ -30,6 +31,11 @@ pub struct MacroBlock {
 }
 
 impl MacroBlock {
+    /// Returns the network ID of this macro block.
+    pub fn network(&self) -> NetworkId {
+        self.header.network
+    }
+
     /// Returns the Blake2b hash of the block header.
     pub fn hash(&self) -> Blake2bHash {
         self.header.hash()
@@ -158,6 +164,8 @@ impl fmt::Display for MacroBlock {
 /// The struct representing the header of a Macro block (can be either checkpoint or election).
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroHeader {
+    /// Network of the block.
+    pub network: NetworkId,
     /// The version number of the block. Changing this always results in a hard fork.
     pub version: u16,
     /// The number of the block.
@@ -197,6 +205,7 @@ impl MacroHeader {
     /// size since we assume that the extra_data field is completely filled.
     #[allow(clippy::identity_op)]
     pub const MAX_SIZE: usize = 0
+        + /*network*/ nimiq_serde::U8_SIZE
         + /*version*/ nimiq_serde::U16_MAX_SIZE
         + /*block_number*/ nimiq_serde::U32_MAX_SIZE
         + /*round*/ nimiq_serde::U32_MAX_SIZE
@@ -227,8 +236,12 @@ impl fmt::Display for MacroHeader {
     }
 }
 
+// This needs to be kept in sync with `MacroBlockGadget::hash` of
+// `nimiq-zkp-circuits`. Whenever this is changed, `MacroBlockGadget::hash`
+// also needs to be adjusted.
 impl SerializeContent for MacroHeader {
     fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
+        self.network.serialize_to_writer(writer)?;
         self.version.to_be_bytes().serialize_to_writer(writer)?;
         self.block_number.to_be_bytes().serialize(writer)?;
         self.round.to_be_bytes().serialize_to_writer(writer)?;

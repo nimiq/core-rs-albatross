@@ -5,9 +5,11 @@ use nimiq_bls::cache::PublicKeyCache;
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_hash_derive::SerializeContent;
-use nimiq_keys::PublicKey;
+use nimiq_keys::Ed25519PublicKey;
 use nimiq_network_interface::network::Topic;
-use nimiq_primitives::{coin::Coin, policy::Policy, slots_allocation::Validators};
+use nimiq_primitives::{
+    coin::Coin, networks::NetworkId, policy::Policy, slots_allocation::Validators,
+};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::ExecutedTransaction;
 use nimiq_vrf::VrfSeed;
@@ -74,6 +76,14 @@ impl Block {
         match self {
             Block::Macro(_) => BlockType::Macro,
             Block::Micro(_) => BlockType::Micro,
+        }
+    }
+
+    /// Returns the network ID of the block.
+    pub fn network(&self) -> NetworkId {
+        match self {
+            Block::Macro(ref block) => block.header.network,
+            Block::Micro(ref block) => block.header.network,
         }
     }
 
@@ -378,7 +388,7 @@ impl Block {
     /// Verifies the block.
     /// Note that only intrinsic verifications are performed and further checks
     /// are needed when completely verifying a block.
-    pub fn verify(&self) -> Result<(), BlockError> {
+    pub fn verify(&self, network: NetworkId) -> Result<(), BlockError> {
         // Check the block type.
         if self.ty() != BlockType::of(self.header().block_number()) {
             return Err(BlockError::InvalidBlockType);
@@ -386,7 +396,7 @@ impl Block {
 
         // Perform header intrinsic verification.
         let header = self.header();
-        header.verify(self.is_skip())?;
+        header.verify(network, self.is_skip())?;
 
         // Verify body if it exists.
         if let Some(body) = self.body() {
@@ -541,7 +551,7 @@ impl Block {
     /// Verifies that the block is valid for the given proposer and VRF seed.
     pub fn verify_proposer(
         &self,
-        signing_key: &PublicKey,
+        signing_key: &Ed25519PublicKey,
         prev_seed: &VrfSeed,
     ) -> Result<(), BlockError> {
         // Verify VRF seed.
@@ -615,6 +625,14 @@ impl BlockHeader {
         match self {
             BlockHeader::Macro(_) => BlockType::Macro,
             BlockHeader::Micro(_) => BlockType::Micro,
+        }
+    }
+
+    /// Returns the network ID of the block.
+    pub fn network(&self) -> NetworkId {
+        match self {
+            BlockHeader::Macro(ref header) => header.network,
+            BlockHeader::Micro(ref header) => header.network,
         }
     }
 
@@ -747,7 +765,12 @@ impl BlockHeader {
     /// Verifies the header.
     /// Note that only header intrinsic verifications are performed and further checks
     /// are needed when completely verifying a block header.
-    pub fn verify(&self, is_skip: bool) -> Result<(), BlockError> {
+    pub fn verify(&self, network: NetworkId, is_skip: bool) -> Result<(), BlockError> {
+        // Check whether the block is from the correct network.
+        if self.network() != network {
+            return Err(BlockError::NetworkMismatch);
+        }
+
         // Check the version
         if self.version() != Policy::VERSION {
             warn!(

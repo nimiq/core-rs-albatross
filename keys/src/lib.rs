@@ -1,6 +1,22 @@
+use nimiq_serde::{Deserialize, Serialize};
 pub use nimiq_utils::key_rng::{SecureGenerate, SecureRng};
 
-pub use self::{address::*, errors::*, key_pair::*, private_key::*, public_key::*, signature::*};
+pub use self::{
+    address::*, errors::*, es256_public_key::*, es256_signature::*, key_pair::*, private_key::*,
+    public_key::*, signature::*,
+};
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum PublicKey {
+    Ed25519(public_key::Ed25519PublicKey),
+    ES256(es256_public_key::ES256PublicKey),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum Signature {
+    Ed25519(signature::Ed25519Signature),
+    ES256(es256_signature::ES256Signature),
+}
 
 #[macro_export]
 macro_rules! implement_simple_add_sum_traits {
@@ -50,6 +66,8 @@ pub mod multisig;
 
 mod address;
 mod errors;
+mod es256_public_key;
+mod es256_signature;
 mod key_pair;
 mod private_key;
 mod public_key;

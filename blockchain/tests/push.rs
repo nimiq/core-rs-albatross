@@ -195,7 +195,7 @@ fn push_rebranch_across_epochs(config: &BlockConfig) {
         next_micro_block(&temp_producer2.producer.signing_key, blockchain, config)
     };
 
-    // Pushing a block from a previous batch/epoch is atm cought before checking if it's a fork or known block
+    // Pushing a block from a previous batch/epoch is atm caught before checking if it's a fork or known block
     assert_eq!(
         temp_producer1.push(Block::Micro(fork)),
         Ok(PushResult::Ignored)
@@ -524,6 +524,7 @@ fn it_validates_double_vote_proofs() {
         BlockConfig {
             equivocation_proofs: vec![DoubleVoteProof::new(
                 TendermintIdentifier {
+                    network: macro_header.network,
                     block_number: macro_header.block_number,
                     round_number: 0,
                     step: TendermintStep::PreVote,

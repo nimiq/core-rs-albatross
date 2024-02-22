@@ -7,6 +7,7 @@ use std::{
 
 use futures::{FutureExt, Stream, StreamExt};
 use nimiq_block::Block;
+use nimiq_blockchain_interface::Direction;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
     network::{Network, NetworkEvent, SubscribeEvents},
@@ -29,11 +30,20 @@ pub enum BlockRequestComponentEvent {
 
 #[derive(Debug, Clone)]
 pub struct MissingBlockRequest {
+    /// The block number of the requested block.
     pub target_block_number: u32,
+    /// The hash the last block which is requested with this request.
     pub target_block_hash: Blake2bHash,
+    /// The validators of the epoch the target block is from.
     pub epoch_validators: Validators,
+    /// List of locator hashes of blocks, sorted from newest to oldest.
     pub locators: Vec<Blake2bHash>,
+    /// Indicator whether or not micro bodies must be included or omitted.
+    /// Macro bodies are always included.
     pub include_micro_bodies: bool,
+    /// The Direction the request is to be executed in.
+    /// See [RequestMissingBlocks] for details on the effect.
+    pub direction: Direction,
 }
 
 #[derive(Debug, Clone)]
@@ -93,6 +103,7 @@ impl<N: Network> BlockRequestComponent<N> {
                             request.target_block_hash.clone(),
                             request.locators,
                             request.include_micro_bodies,
+                            request.direction,
                         )
                         .await
                         {
@@ -209,6 +220,7 @@ impl<N: Network> BlockRequestComponent<N> {
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
         include_micro_bodies: bool,
+        direction: Direction,
     ) -> Result<Result<Vec<Block>, ResponseBlocksError>, RequestError> {
         network
             .request::<RequestMissingBlocks>(
@@ -216,6 +228,7 @@ impl<N: Network> BlockRequestComponent<N> {
                     locators,
                     target_hash: target_block_hash,
                     include_micro_bodies,
+                    direction,
                 },
                 peer_id,
             )
@@ -228,6 +241,7 @@ impl<N: Network> BlockRequestComponent<N> {
         target_block_number: u32,
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
+        direction: Direction,
         epoch_validators: Validators,
         pubsub_id: Option<N::PubsubId>,
     ) {
@@ -238,6 +252,7 @@ impl<N: Network> BlockRequestComponent<N> {
                 target_block_hash,
                 epoch_validators,
                 locators,
+                direction,
                 include_micro_bodies: self.include_micro_bodies,
             },
             pubsub_id,

@@ -462,8 +462,8 @@ class Topology:
             # Wait a second for node to be up
             time.sleep(1)
 
-        # Let the validators produce blocks for 30 seconds
-        time.sleep(30)
+        # Let the validators produce blocks for 60 seconds
+        time.sleep(60)
 
         if control_settings.is_continuous():
             # Continuous mode

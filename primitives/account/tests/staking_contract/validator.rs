@@ -5,7 +5,7 @@ use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_collections::BitSet;
 use nimiq_database::{traits::Database, volatile::VolatileDatabase};
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::{Address, PublicKey};
+use nimiq_keys::Address;
 use nimiq_primitives::{
     account::AccountError,
     coin::Coin,
@@ -333,7 +333,7 @@ fn update_validator_works() {
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateValidator {
-            new_signing_key: Some(PublicKey::from([88u8; 32])),
+            new_signing_key: Some(Ed25519PublicKey::from([88u8; 32])),
             new_voting_key: Some(new_voting_keypair.public_key.compress()),
             new_reward_address: new_reward_address.clone(),
             new_signal_data: Some(Some(Blake2bHash::default())),
@@ -389,7 +389,7 @@ fn update_validator_works() {
         .expect("Validator should exist");
 
     assert_eq!(validator.address, validator_setup.validator_address);
-    assert_eq!(validator.signing_key, PublicKey::from([88u8; 32]));
+    assert_eq!(validator.signing_key, Ed25519PublicKey::from([88u8; 32]));
     assert_eq!(
         validator.voting_key,
         new_voting_keypair.public_key.compress()
@@ -450,7 +450,7 @@ fn update_validator_works() {
 
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateValidator {
-            new_signing_key: Some(PublicKey::from([88u8; 32])),
+            new_signing_key: Some(Ed25519PublicKey::from([88u8; 32])),
             new_voting_key: Some(new_voting_keypair.public_key.compress()),
             new_reward_address: Some(Address::from([77u8; 20])),
             new_signal_data: Some(Some(Blake2bHash::default())),

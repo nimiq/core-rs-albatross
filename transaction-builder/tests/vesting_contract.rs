@@ -125,7 +125,7 @@ fn it_can_create_outgoing_transactions() {
     tx.sender_type = AccountType::Vesting;
 
     let signature = key_pair.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::from(key_pair.public, signature);
+    let signature_proof = SignatureProof::from_ed25519(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     let mut builder = TransactionBuilder::new();

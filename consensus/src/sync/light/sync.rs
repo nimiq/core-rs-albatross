@@ -180,7 +180,7 @@ pub struct LightMacroSync<TNetwork: Network> {
     pub(crate) validity_requests: Option<ValidityChunkRequest>,
     /// The peers we are currently syncing with
     pub(crate) syncing_peers: HashSet<TNetwork::PeerId>,
-    /// A vec of all the peers that we succesfully synced with
+    /// A vec of all the peers that we successfully synced with
     pub(crate) synced_validity_peers: Vec<TNetwork::PeerId>,
     /// Minimum distance to light sync in #blocks from the peers head.
     pub(crate) full_sync_threshold: u32,

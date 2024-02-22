@@ -178,7 +178,7 @@ class Node:
         """
         Gets the state directory of the current node
 
-        :return: The state directory of yhe node.
+        :return: The state directory of the node.
         :rtype: str
         """
         return self.state_dir
@@ -319,7 +319,7 @@ class Node:
 
         :return: The return code of the process if it ended, None if it hasn't
             finished
-        :rtype: int ot None
+        :rtype: int or None
         """
         return self.process.poll()
 

@@ -106,7 +106,6 @@ pub fn initialize_logging(
     let file = match &settings.file {
         Some(filename) => {
             let file = fs::OpenOptions::new()
-                .write(true)
                 .create(true)
                 .append(true)
                 .open(filename)

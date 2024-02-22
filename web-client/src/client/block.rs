@@ -22,6 +22,8 @@ pub struct PlainBlockCommonFields {
     /// The timestamp of the block. It follows the Unix time and has millisecond precision.
     pub timestamp: u64,
 
+    /// The network that this block is valid for.
+    pub network: &'static str,
     /// The protocol version that this block is valid for.
     pub version: u16,
     /// The hash of the header of the immediately preceding block (either micro or macro), in HEX format.
@@ -122,6 +124,7 @@ where
     plain.serialize_field("epoch", &common.epoch)?;
     plain.serialize_field("timestamp", &common.timestamp)?;
 
+    plain.serialize_field("network", &common.network)?;
     plain.serialize_field("version", &common.version)?;
     plain.serialize_field("prevHash", &common.prev_hash)?;
     plain.serialize_field("seed", &common.seed)?;
@@ -146,6 +149,7 @@ impl PlainBlock {
             epoch: Policy::epoch_at(block_number),
             timestamp: block.timestamp(),
 
+            network: block.network().as_str(),
             version: block.version(),
             prev_hash: block.parent_hash().to_hex(),
             seed: block.seed().to_string(),

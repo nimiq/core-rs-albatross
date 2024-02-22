@@ -3,8 +3,11 @@ use std::{cmp::Ordering, hash::Hasher, io, mem, ops::Range};
 use nimiq_bls::{AggregatePublicKey, AggregateSignature};
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash as _, HashOutput, SerializeContent};
-use nimiq_keys::{Address, PublicKey as SchnorrPublicKey, Signature as SchnorrSignature};
+use nimiq_keys::{
+    Address, Ed25519PublicKey as SchnorrPublicKey, Ed25519Signature as SchnorrSignature,
+};
 use nimiq_primitives::{
+    networks::NetworkId,
     policy::Policy,
     slots_allocation::{Validator, Validators},
     TendermintIdentifier, TendermintStep, TendermintVote,
@@ -68,6 +71,16 @@ impl EquivocationProof {
         }
     }
 
+    /// Network ID this equivocation happened on. This assumes that the equivocation proof is valid.
+    pub fn network(&self) -> NetworkId {
+        use self::EquivocationProof::*;
+        match self {
+            Fork(proof) => proof.network(),
+            DoubleProposal(proof) => proof.network(),
+            DoubleVote(proof) => proof.network(),
+        }
+    }
+
     /// Address of the offending validator.
     pub fn validator_address(&self) -> &Address {
         use self::EquivocationProof::*;
@@ -92,8 +105,15 @@ impl EquivocationProof {
     /// Check if an equivocation proof contains a valid offense.
     ///
     /// The parameter `validators` must be the historic validators at the time of the offense.
-    pub fn verify(&self, validators: &Validators) -> Result<(), EquivocationProofError> {
-        self.verify_excluding_address(
+    pub fn verify(
+        &self,
+        network: NetworkId,
+        validators: &Validators,
+    ) -> Result<(), EquivocationProofError> {
+        if network != self.network() {
+            return Err(EquivocationProofError::NetworkMismatch);
+        }
+        self.verify_excluding_address_and_network(
             validators,
             get_validator(validators, self.validator_address())?,
         )
@@ -101,17 +121,19 @@ impl EquivocationProof {
 
     /// Check if an equivocation proof contains a valid offense, but do not check attribution to
     /// the `validator_address`.
-    pub fn verify_excluding_address(
+    pub fn verify_excluding_address_and_network(
         &self,
         validators: &Validators,
         validator: &Validator,
     ) -> Result<(), EquivocationProofError> {
         use self::EquivocationProof::*;
         match self {
-            Fork(proof) => proof.verify_excluding_address(&validator.signing_key),
-            DoubleProposal(proof) => proof.verify_excluding_address(&validator.signing_key),
+            Fork(proof) => proof.verify_excluding_address_and_network(&validator.signing_key),
+            DoubleProposal(proof) => {
+                proof.verify_excluding_address_and_network(&validator.signing_key)
+            }
             DoubleVote(proof) => {
-                proof.verify_excluding_address(validators, validator.slots.clone())
+                proof.verify_excluding_address_and_network(validators, validator.slots.clone())
             }
         }
     }
@@ -216,6 +238,10 @@ impl ForkProof {
         }
     }
 
+    /// Network ID this equivocation happened on.
+    pub fn network(&self) -> NetworkId {
+        self.header1.network
+    }
     /// Address of the offending validator.
     pub fn validator_address(&self) -> &Address {
         &self.validator_address
@@ -236,7 +262,7 @@ impl ForkProof {
     /// Verify the validity of a fork proof.
     ///
     /// Does not verify the validator address.
-    pub fn verify_excluding_address(
+    pub fn verify_excluding_address_and_network(
         &self,
         signing_key: &SchnorrPublicKey,
     ) -> Result<(), EquivocationProofError> {
@@ -248,6 +274,11 @@ impl ForkProof {
             Ordering::Less => {}
             Ordering::Equal => return Err(EquivocationProofError::SameHeader),
             Ordering::Greater => return Err(EquivocationProofError::WrongOrder),
+        }
+
+        // Check that the headers have equal network IDs.
+        if self.header1.network != self.header2.network {
+            return Err(EquivocationProofError::NetworkMismatch);
         }
 
         // Check that the headers have equal block numbers and seeds.
@@ -283,6 +314,8 @@ impl SerializeContent for ForkProof {
 /// Possible equivocation proof validation errors.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum EquivocationProofError {
+    #[error("Mismatch between network IDs")]
+    NetworkMismatch,
     #[error("Slot mismatch")]
     SlotMismatch,
     #[error("No overlap between signer sets")]
@@ -352,6 +385,10 @@ impl DoubleProposalProof {
         }
     }
 
+    /// Network ID this equivocation happened on.
+    pub fn network(&self) -> NetworkId {
+        self.header1.network
+    }
     /// Address of the offending validator.
     pub fn validator_address(&self) -> &Address {
         &self.validator_address
@@ -374,7 +411,7 @@ impl DoubleProposalProof {
     }
 
     /// Verify the validity of a double proposal proof.
-    pub fn verify_excluding_address(
+    pub fn verify_excluding_address_and_network(
         &self,
         signing_key: &SchnorrPublicKey,
     ) -> Result<(), EquivocationProofError> {
@@ -386,6 +423,11 @@ impl DoubleProposalProof {
             Ordering::Less => {}
             Ordering::Equal => return Err(EquivocationProofError::SameHeader),
             Ordering::Greater => return Err(EquivocationProofError::WrongOrder),
+        }
+
+        // Check that the headers have equal network IDs.
+        if self.header1.network != self.header2.network {
+            return Err(EquivocationProofError::NetworkMismatch);
         }
 
         if self.header1.block_number != self.header2.block_number
@@ -486,6 +528,10 @@ impl DoubleVoteProof {
         }
     }
 
+    /// Network ID this equivocation happened on.
+    pub fn network(&self) -> NetworkId {
+        self.tendermint_id.network
+    }
     /// Address of the offending validator.
     pub fn validator_address(&self) -> &Address {
         &self.validator_address
@@ -507,7 +553,7 @@ impl DoubleVoteProof {
     ///
     /// The parameter `validators` must be the historic validators of that
     /// macro block production.
-    pub fn verify_excluding_address(
+    pub fn verify_excluding_address_and_network(
         &self,
         validators: &Validators,
         validator_slots: Range<u16>,
@@ -580,7 +626,9 @@ mod test {
     use nimiq_collections::BitSet;
     use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
     use nimiq_keys::{Address, KeyPair, PrivateKey};
-    use nimiq_primitives::{policy::Policy, TendermintIdentifier, TendermintStep, TendermintVote};
+    use nimiq_primitives::{
+        networks::NetworkId, policy::Policy, TendermintIdentifier, TendermintStep, TendermintVote,
+    };
     use nimiq_serde::Deserialize;
     use nimiq_vrf::VrfSeed;
 
@@ -600,6 +648,7 @@ mod test {
         );
 
         let header1 = MicroHeader {
+            network: NetworkId::UnitAlbatross,
             version: Policy::VERSION,
             block_number: Policy::genesis_block_number(),
             timestamp: 0,
@@ -612,6 +661,7 @@ mod test {
             history_root: Blake2bHash::default(),
         };
         let header2 = MicroHeader {
+            network: NetworkId::UnitAlbatross,
             version: 1234,
             block_number: Policy::genesis_block_number(),
             timestamp: 1,
@@ -624,6 +674,7 @@ mod test {
             history_root: "".hash(),
         };
         let header3 = MicroHeader {
+            network: NetworkId::UnitAlbatross,
             version: 4321,
             block_number: Policy::genesis_block_number(),
             timestamp: 2,
@@ -698,6 +749,7 @@ mod test {
         );
 
         let header1 = MacroHeader {
+            network: NetworkId::UnitAlbatross,
             version: Policy::VERSION,
             block_number: Policy::genesis_block_number(),
             round: 0,
@@ -713,6 +765,7 @@ mod test {
             history_root: Blake2bHash::default(),
         };
         let header2 = MacroHeader {
+            network: NetworkId::UnitAlbatross,
             version: 1234,
             block_number: Policy::genesis_block_number(),
             round: 0,
@@ -728,6 +781,7 @@ mod test {
             history_root: "".hash(),
         };
         let header3 = MacroHeader {
+            network: NetworkId::UnitAlbatross,
             version: 4321,
             block_number: Policy::genesis_block_number(),
             round: 0,
@@ -824,30 +878,35 @@ mod test {
         let proposal3 = Some("".hash());
 
         let id = TendermintIdentifier {
+            network: NetworkId::UnitAlbatross,
             block_number: 1,
             round_number: 2,
             step: TendermintStep::PreVote,
         };
 
         let other_id1 = TendermintIdentifier {
+            network: NetworkId::UnitAlbatross,
             block_number: 2,
             round_number: 2,
             step: TendermintStep::PreVote,
         };
 
         let other_id2 = TendermintIdentifier {
+            network: NetworkId::UnitAlbatross,
             block_number: 1,
             round_number: 3,
             step: TendermintStep::PreVote,
         };
 
         let other_id3 = TendermintIdentifier {
+            network: NetworkId::UnitAlbatross,
             block_number: 1,
             round_number: 2,
             step: TendermintStep::PreCommit,
         };
 
         let other_id4 = TendermintIdentifier {
+            network: NetworkId::UnitAlbatross,
             block_number: 1,
             round_number: 2,
             step: TendermintStep::Propose,

@@ -1,6 +1,6 @@
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
 use nimiq_primitives::coin::Coin;
 #[cfg(feature = "interaction-traits")]
 use nimiq_primitives::{account::AccountError, policy::Policy};
@@ -28,7 +28,7 @@ use crate::{
 /// 6. Retire: Permanently retires a validator. This action is required for deletion.
 ///
 /// The actions can be summarized by the following state diagram:
-///           +---+----+                            +---------+   
+///           +---+----+                            +---------+
 ///   create  |        |            retire          |         |  delete
 ///+--------->+ active +--------------------------->+ retired +----------->
 ///           |        |                            |         |
@@ -44,13 +44,13 @@ use crate::{
 ///                               +----------+
 /// (*)  A validator can only reactivate itself if it has been released from jail or if it was not jailed
 ///      in the first place.
-/// (**) The validator my be set to automatically reactivate itself upon inactivation.
+/// (**) The validator may be set to automatically reactivate itself upon inactivation.
 ///      If this setting is not enabled the state change can only be triggered manually.
 ///
 /// Create, Update, Deactivate, Retire and Re-activate are incoming transactions to the staking contract.
 /// Delete is an outgoing transaction from the staking contract.
 /// To Create, Update or Delete, the cold key must be used (the one corresponding to the validator
-/// address). For the other transactions, the the signing key must be used.
+/// address). For the other transactions, the signing key must be used.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Validator {
     /// The address of the validator. The corresponding key can be used to create, update or drop

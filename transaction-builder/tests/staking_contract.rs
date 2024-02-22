@@ -304,12 +304,13 @@ fn make_signed_incoming_transaction(
     let mut tx = make_incoming_transaction(data, value);
     tx.recipient_data = IncomingStakingTransactionData::set_signature_on_data(
         &tx.recipient_data,
-        SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())),
+        SignatureProof::from_ed25519(key_pair.public, key_pair.sign(&tx.serialize_content())),
     )
     .unwrap();
 
-    tx.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content()))
-        .serialize_to_vec();
+    tx.proof =
+        SignatureProof::from_ed25519(key_pair.public, key_pair.sign(&tx.serialize_content()))
+            .serialize_to_vec();
     tx
 }
 

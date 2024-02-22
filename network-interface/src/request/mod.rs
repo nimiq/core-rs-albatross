@@ -72,7 +72,7 @@ pub enum OutboundRequestError {
     #[error("No receiver for request")]
     NoReceiver,
     /// Error sending this request
-    #[error("Could't send request")]
+    #[error("Couldn't send request")]
     SendError,
     /// Sender future has already been dropped
     #[error("Sender future is already dropped")]

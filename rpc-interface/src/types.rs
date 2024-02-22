@@ -14,8 +14,10 @@ use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_bls::CompressedPublicKey;
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
-use nimiq_keys::{Address, PrivateKey, PublicKey, Signature};
-use nimiq_primitives::{coin::Coin, policy::Policy, slots_allocation::Validators};
+use nimiq_keys::{Address, Ed25519PublicKey, PrivateKey, PublicKey, Signature};
+use nimiq_primitives::{
+    coin::Coin, networks::NetworkId, policy::Policy, slots_allocation::Validators,
+};
 use nimiq_serde::Serialize as NimiqSerialize;
 use nimiq_transaction::{
     account::htlc_contract::AnyHash,
@@ -106,6 +108,7 @@ pub struct Block {
     pub batch: u32,
     pub epoch: u32,
 
+    pub network: NetworkId,
     pub version: u16,
     pub number: u32,
     pub timestamp: u64,
@@ -190,6 +193,7 @@ impl Block {
             size: macro_block.serialized_size() as u32,
             batch: Policy::batch_at(block_number),
             epoch: Policy::epoch_at(block_number),
+            network: macro_block.header.network,
             version: macro_block.header.version,
             number: block_number,
             timestamp: macro_block.header.timestamp,
@@ -258,6 +262,7 @@ impl Block {
             size: micro_block.serialized_size() as u32,
             batch: Policy::batch_at(block_number),
             epoch: Policy::epoch_at(block_number),
+            network: micro_block.header.network,
             version: micro_block.header.version,
             number: micro_block.header.block_number,
             timestamp: micro_block.header.timestamp,
@@ -321,8 +326,11 @@ pub struct PolicyConstants {
     pub batches_per_epoch: u16,
     pub blocks_per_epoch: u32,
     pub validator_deposit: u64,
+    pub minimum_stake: u64,
     pub total_supply: u64,
     pub block_separation_time: u64,
+    pub jail_epochs: u32,
+    pub genesis_block_number: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -826,7 +834,7 @@ impl Staker {
 #[serde(rename_all = "camelCase")]
 pub struct Validator {
     pub address: Address,
-    pub signing_key: PublicKey,
+    pub signing_key: Ed25519PublicKey,
     pub voting_key: CompressedPublicKey,
     pub reward_address: Address,
     #[serde(skip_serializing_if = "Option::is_none")]

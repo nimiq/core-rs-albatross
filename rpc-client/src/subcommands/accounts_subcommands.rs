@@ -1,7 +1,7 @@
 use anyhow::Error;
 use async_trait::async_trait;
 use clap::Parser;
-use nimiq_keys::{Address, PublicKey, Signature};
+use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature};
 use nimiq_rpc_interface::{blockchain::BlockchainInterface, wallet::WalletInterface};
 
 use crate::Client;
@@ -62,7 +62,7 @@ pub enum AccountCommand {
         address: Address,
     },
 
-    /// Signs a message using the the specified account. The account must already be unlocked.
+    /// Signs a message using the specified account. The account must already be unlocked.
     Sign {
         /// The message to be signed.
         message: String,
@@ -81,11 +81,11 @@ pub enum AccountCommand {
         message: String,
 
         /// The public key returned upon signing the message.
-        public_key: PublicKey,
+        public_key: Ed25519PublicKey,
 
         /// The signature returned upon signing the message. The r and s bytes should be all concatenated
         /// into one continuous input.
-        signature: Signature,
+        signature: Ed25519Signature,
 
         /// Specifies if the message is in hexadecimal.
         #[clap(long)]

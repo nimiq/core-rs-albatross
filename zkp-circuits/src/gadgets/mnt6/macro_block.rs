@@ -32,6 +32,7 @@ use crate::{
 ///     validator list).
 ///  3. There are enough signers.
 pub struct MacroBlockGadget {
+    pub network: UInt8<MNT6Fq>,
     pub version: UInt16<MNT6Fq>,
     pub block_number: UInt32<MNT6Fq>,
     /// Encompasses everything in between timestamp and body root
@@ -77,6 +78,8 @@ impl MacroBlockGadget {
     }
 
     /// Calculates the header hash of the block.
+    //
+    // Needs to be kept in sync with `MacroHeader::serialize_content`.
     pub fn hash(
         &mut self,
         _cs: ConstraintSystemRef<MNT6Fq>,
@@ -93,6 +96,7 @@ impl MacroBlockGadget {
 
         // Initialize bytes to be hashed for the header hash.
         let mut header_bytes = vec![];
+        header_bytes.push(self.network.clone());
         header_bytes.append(&mut self.version.to_bytes_be()?);
         header_bytes.append(&mut self.block_number.to_bytes_be()?);
         header_bytes.extend_from_slice(&self.intermediate_header_bytes);
@@ -110,12 +114,14 @@ impl MacroBlockGadget {
     ///     2. Calculate the first hash like so:
     ///             first_hash = Blake2s( header_hash || pk_tree_root )
     ///     3. Calculate the second (and final) hash like so:
-    ///             second_hash = Blake2s( 0x04 || round number || block number || 0x01 || first_hash )
-    ///        The first four fields (0x04, round number, block number, 0x01) are needed for the
-    ///        Tendermint protocol and there is no reason to explain their meaning here.
+    ///             second_hash = Blake2s( network_id || 0x04 || round number || block number || 0x01 || first_hash )
+    ///        The first four fields (network_id, 0x04, round number, block number, 0x01) are needed
+    ///        for the Tendermint protocol and there is no reason to explain their meaning here.
     ///     4. Finally, we take the second hash and map it to an elliptic curve point using the
     ///        "try-and-increment" method.
     /// The function || means concatenation.
+    //
+    // Needs to be kept in sync with `TendermintVote::serialize_content`.
     pub fn tendermint_hash(
         &mut self,
         cs: ConstraintSystemRef<MNT6Fq>,
@@ -125,6 +131,9 @@ impl MacroBlockGadget {
 
         // Add the tendermint step.
         bytes.push(UInt8::constant(TendermintStep::PreCommit as u8));
+
+        // The network ID.
+        bytes.push(self.network.clone());
 
         // The round number.
         let mut round_number_bytes = self.round.to_bytes_be()?;
@@ -217,6 +226,7 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
             justification_round = 0;
         }
 
+        let network = UInt8::<MNT6Fq>::new_input(cs.clone(), || Ok(value.header.network as u8))?;
         let version = UInt16::<MNT6Fq>::new_input(cs.clone(), || Ok(value.header.version))?;
         let block_number =
             UInt32::<MNT6Fq>::new_input(cs.clone(), || Ok(value.header.block_number))?;
@@ -228,7 +238,7 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
 
         // Get all bytes starting after the round number until the last two hashes.
         let intermediate_header_bytes =
-            UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &header_bytes[6..header_bytes.len() - 64])?;
+            UInt8::<MNT6Fq>::new_input_vec(cs.clone(), &header_bytes[7..header_bytes.len() - 64])?;
         let history_root =
             UInt8::<MNT6Fq>::new_input_vec(cs.clone(), value.header.history_root.as_bytes())?;
 
@@ -258,6 +268,7 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
         let round = UInt32::<MNT6Fq>::new_input(cs, || Ok(justification_round))?;
 
         Ok(MacroBlockGadget {
+            network,
             version,
             block_number,
             intermediate_header_bytes,
@@ -301,6 +312,7 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
             justification_round = 0;
         }
 
+        let network = UInt8::<MNT6Fq>::new_witness(cs.clone(), || Ok(value.header.network as u8))?;
         let version = UInt16::<MNT6Fq>::new_witness(cs.clone(), || Ok(value.header.version))?;
         let block_number =
             UInt32::<MNT6Fq>::new_witness(cs.clone(), || Ok(value.header.block_number))?;
@@ -314,7 +326,7 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
         // Get all bytes starting after the round number until the last two hashes.
         let intermediate_header_bytes = UInt8::<MNT6Fq>::new_witness_vec(
             cs.clone(),
-            &header_bytes[6..header_bytes.len() - 64],
+            &header_bytes[7..header_bytes.len() - 64],
         )?;
         let history_root =
             UInt8::<MNT6Fq>::new_witness_vec(cs.clone(), value.header.history_root.as_bytes())?;
@@ -345,6 +357,7 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
         let round = UInt32::<MNT6Fq>::new_witness(cs, || Ok(justification_round))?;
 
         Ok(MacroBlockGadget {
+            network,
             version,
             block_number,
             intermediate_header_bytes,
@@ -370,7 +383,9 @@ mod tests {
     use nimiq_collections::bitset::BitSet;
     use nimiq_hash::{Blake2bHash, Hash};
     use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, SecureGenerate};
-    use nimiq_primitives::{coin::Coin, policy::Policy, slots_allocation::ValidatorsBuilder};
+    use nimiq_primitives::{
+        coin::Coin, networks::NetworkId, policy::Policy, slots_allocation::ValidatorsBuilder,
+    };
     use nimiq_tendermint::ProposalMessage;
     use nimiq_test_log::test;
     use nimiq_test_utils::{block_production::TemporaryBlockProducer, test_rng::test_rng};
@@ -419,6 +434,7 @@ mod tests {
         // Initialize the header.
         let body_root = body.hash();
         let header = MacroHeader {
+            network: NetworkId::UnitAlbatross,
             version: 1,
             block_number: 5,
             round: 3,
@@ -505,6 +521,7 @@ mod tests {
 
         // Create macro block with correct signers set.
         let mut block = MacroBlock::non_empty_default();
+        block.header.network = NetworkId::UnitAlbatross;
         block.header.block_number = block_number;
         block.header.round = round;
 

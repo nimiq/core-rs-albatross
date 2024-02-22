@@ -74,7 +74,7 @@ impl LightBlockchain {
         }
 
         // Perform block intrinsic checks.
-        block.verify()?;
+        block.verify(this.network_id)?;
 
         // Verify that the block is a valid immediate successor to its predecessor.
         let predecessor = &prev_info.head;

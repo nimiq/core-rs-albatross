@@ -123,6 +123,13 @@ impl Blockchain {
             return Err(BlockchainError::InvalidGenesisBlock);
         }
 
+        if network_id != genesis_block.network() {
+            log::error!(
+                "The genesis block network ID must match the one configured for the blockchain"
+            );
+            return Err(BlockchainError::InvalidGenesisBlock);
+        }
+
         let chain_store = ChainStore::new(env.clone());
         let history_store = HistoryStore::new(env.clone());
 

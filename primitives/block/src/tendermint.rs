@@ -48,6 +48,7 @@ impl TendermintProof {
         let message = TendermintVote {
             proposal_hash: Some(block_hash),
             id: TendermintIdentifier {
+                network: block.network(),
                 block_number: block.block_number(),
                 round_number: justification.round,
                 step: TendermintStep::PreCommit,

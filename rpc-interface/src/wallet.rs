@@ -1,6 +1,5 @@
 use async_trait::async_trait;
-use nimiq_keys::{Address, PublicKey, Signature};
-
+use nimiq_keys::{Address,Ed25519PublicKey, Ed25519Signature, PublicKey,PrivateKey, Signature};
 use crate::types::{RPCResult, ReturnAccount, ReturnSignature};
 
 #[nimiq_jsonrpc_derive::proxy(name = "WalletProxy", rename_all = "camelCase")]
@@ -49,8 +48,8 @@ pub trait WalletInterface {
     async fn verify_signature(
         &mut self,
         message: String,
-        public_key: PublicKey,
-        signature: Signature,
+        public_key: Ed25519PublicKey,
+        signature: Ed25519Signature,
         is_hex: bool,
     ) -> RPCResult<bool, (), Self::Error>;
 }

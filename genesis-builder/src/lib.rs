@@ -18,10 +18,10 @@ use nimiq_database::{
     DatabaseProxy,
 };
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
-use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{
-    account::AccountError, coin::Coin, key_nibbles::KeyNibbles, policy::Policy, trie::TrieItem,
-    TreeProof,
+    account::AccountError, coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId,
+    policy::Policy, trie::TrieItem, TreeProof,
 };
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_trie::WriteTransactionProxy;
@@ -66,6 +66,8 @@ pub struct GenesisInfo {
 
 /// Auxiliary struct for generating `GenesisInfo`.
 pub struct GenesisBuilder {
+    /// The network identification.
+    pub network: NetworkId,
     /// The genesis block timestamp.
     pub timestamp: Option<OffsetDateTime>,
     /// The genesis block number.
@@ -101,6 +103,7 @@ impl Default for GenesisBuilder {
 impl GenesisBuilder {
     fn new_without_defaults() -> Self {
         GenesisBuilder {
+            network: NetworkId::Dummy,
             timestamp: None,
             vrf_seed: None,
             parent_election_hash: None,
@@ -115,6 +118,9 @@ impl GenesisBuilder {
         }
     }
 
+    /// Read a genesis config from a TOML config file.
+    ///
+    /// See `genesis/src/genesis/unit-albatross.toml` for an example.
     pub fn from_config_file<P: AsRef<Path>>(path: P) -> Result<Self, GenesisBuilderError> {
         let mut result = Self::new_without_defaults();
         result.with_config_file(path)?;
@@ -126,31 +132,57 @@ impl GenesisBuilder {
         self
     }
 
+    /// The network ID for the genesis block.
+    ///
+    /// Used to distinguish testnet from mainnet and unit tests.
+    ///
+    /// Sets [`MacroHeader::network`].
+    pub fn with_network(&mut self, network: NetworkId) -> &mut Self {
+        self.network = network;
+        self
+    }
+
+    /// The timestamp of the genesis block.
+    ///
+    /// Sets [`MacroHeader::timestamp`].
     pub fn with_timestamp(&mut self, timestamp: OffsetDateTime) -> &mut Self {
         self.timestamp = Some(timestamp);
         self
     }
 
+    /// The original VRF seed of the genesis block.
+    ///
+    /// Sets [`MacroHeader::seed`].
     pub fn with_vrf_seed(&mut self, vrf_seed: VrfSeed) -> &mut Self {
         self.vrf_seed = Some(vrf_seed);
         self
     }
 
+    /// The preceding election macro block hash of the genesis block.
+    ///
+    /// Sets [`MacroHeader::parent_election_hash`].
     pub fn with_parent_election_hash(&mut self, hash: Blake2bHash) -> &mut Self {
         self.parent_election_hash = Some(hash);
         self
     }
 
+    /// The preceding block hash of the genesis block.
+    ///
+    /// Sets [`MacroHeader::parent_hash`].
     pub fn with_parent_hash(&mut self, hash: Blake2bHash) -> &mut Self {
         self.parent_hash = Some(hash);
         self
     }
 
+    /// The merkle history root of the genesis block.
+    ///
+    /// Sets [`MacroHeader::history_root`].
     pub fn with_history_root(&mut self, history_root: Blake2bHash) -> &mut Self {
         self.history_root = Some(history_root);
         self
     }
 
+    /// Add a validator to the genesis block.
     pub fn with_genesis_validator(
         &mut self,
         validator_address: Address,
@@ -173,6 +205,7 @@ impl GenesisBuilder {
         self
     }
 
+    /// Add a staker to the genesis block.
     pub fn with_genesis_staker(
         &mut self,
         staker_address: Address,
@@ -191,6 +224,7 @@ impl GenesisBuilder {
         self
     }
 
+    /// Add a basic account with a certain balance to the genesis block.
     pub fn with_basic_account(&mut self, address: Address, balance: Coin) -> &mut Self {
         self.basic_accounts
             .push(config::GenesisAccount { address, balance });
@@ -202,6 +236,7 @@ impl GenesisBuilder {
         path: P,
     ) -> Result<&mut Self, GenesisBuilderError> {
         let config::GenesisConfig {
+            network,
             timestamp,
             vrf_seed,
             parent_election_hash,
@@ -214,8 +249,9 @@ impl GenesisBuilder {
             mut vesting_accounts,
             mut htlc_accounts,
         } = toml::from_str(&read_to_string(path)?)?;
-        vrf_seed.map(|vrf_seed| self.with_vrf_seed(vrf_seed));
+        self.with_network(network);
         timestamp.map(|t| self.with_timestamp(t));
+        vrf_seed.map(|vrf_seed| self.with_vrf_seed(vrf_seed));
         parent_election_hash.map(|hash| self.with_parent_election_hash(hash));
         parent_hash.map(|hash| self.with_parent_hash(hash));
         history_root.map(|history_root| self.with_history_root(history_root));
@@ -228,6 +264,7 @@ impl GenesisBuilder {
         Ok(self)
     }
 
+    /// Add a basic account with a certain balance to the genesis block.
     pub fn generate(&self, env: DatabaseProxy) -> Result<GenesisInfo, GenesisBuilderError> {
         // Initialize the environment.
         let timestamp = self.timestamp.unwrap_or_else(OffsetDateTime::now_utc);
@@ -350,6 +387,7 @@ impl GenesisBuilder {
 
         // The header
         let header = MacroHeader {
+            network: self.network,
             version: 1,
             block_number: self.block_number,
             round: 0,

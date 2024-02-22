@@ -43,10 +43,11 @@ fn it_can_create_batch_finalization_inherents() {
     );
 
     let macro_header = MacroHeader {
+        network: NetworkId::UnitAlbatross,
         version: 1,
         block_number: Policy::macro_block_of(2).unwrap(),
         round: 0,
-        timestamp: blockchain.state().election_head.header.timestamp + 1,
+        timestamp: blockchain.state.election_head.header.timestamp + 1,
         parent_hash: Blake2bHash::default(),
         parent_election_hash: Blake2bHash::default(),
         interlink: None,
@@ -61,7 +62,7 @@ fn it_can_create_batch_finalization_inherents() {
     let staking_contract = blockchain.get_staking_contract();
     let active_validators = staking_contract.active_validators.clone();
     let reward_transactions =
-        blockchain.create_reward_transactions(blockchain.state(), &macro_header, &staking_contract);
+        blockchain.create_reward_transactions(&macro_header, &staking_contract);
 
     let body = MacroBody {
         validators: None,
@@ -111,7 +112,7 @@ fn it_can_create_batch_finalization_inherents() {
     let mut txn = blockchain.write_transaction();
     // adds slot 0 to previous_lost_rewards -> slot won't get reward on next finalize_previous_batch
     assert!(blockchain
-        .state()
+        .state
         .accounts
         .commit(
             &mut (&mut txn).into(),
@@ -128,7 +129,7 @@ fn it_can_create_batch_finalization_inherents() {
 
     let staking_contract = blockchain.get_staking_contract();
     let reward_transactions =
-        blockchain.create_reward_transactions(blockchain.state(), &macro_header, &staking_contract);
+        blockchain.create_reward_transactions(&macro_header, &staking_contract);
     let body = MacroBody {
         validators: None,
         next_batch_initial_punished_set: staking_contract
@@ -193,7 +194,7 @@ fn it_can_penalize_delayed_batch() {
     // Delay in ms, so this means a 30s delay. For a 1m target batch time, this represents half of it
     let delay = 30000;
 
-    let previous_timestamp = blockchain.state().election_head.header.timestamp;
+    let previous_timestamp = blockchain.state.election_head.header.timestamp;
 
     // We introduce a delay on purpose
     let next_timestamp = previous_timestamp
@@ -224,6 +225,7 @@ fn it_can_penalize_delayed_batch() {
     );
 
     let macro_header = MacroHeader {
+        network: NetworkId::UnitAlbatross,
         version: 1,
         block_number: 42 + genesis_block_number,
         round: 0,
@@ -241,7 +243,7 @@ fn it_can_penalize_delayed_batch() {
 
     let staking_contract = blockchain.get_staking_contract();
     let reward_transactions =
-        blockchain.create_reward_transactions(blockchain.state(), &macro_header, &staking_contract);
+        blockchain.create_reward_transactions(&macro_header, &staking_contract);
 
     let body = MacroBody {
         validators: None,
@@ -576,6 +578,7 @@ fn it_correctly_creates_inherents_from_double_vote_proof() {
         .unwrap();
     let validator = validators.validators[0].clone();
     let tendermint_id = TendermintIdentifier {
+        network: header.network,
         block_number: header.block_number,
         round_number: header.round,
         step: TendermintStep::PreVote,

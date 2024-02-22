@@ -93,7 +93,7 @@ where
 {
     pub consensus: ConsensusProxy<TValidatorNetwork::NetworkType>,
     pub blockchain: Arc<RwLock<Blockchain>>,
-    network: Arc<TValidatorNetwork>,
+    pub network: Arc<TValidatorNetwork>,
 
     database: TableProxy,
     env: DatabaseProxy,
@@ -173,8 +173,11 @@ where
         };
         let macro_state = Arc::new(RwLock::new(macro_state));
 
-        let (proposal_sender, proposal_receiver) =
-            ProposalBuffer::new(Arc::clone(&blockchain), Arc::clone(&network));
+        let (proposal_sender, proposal_receiver) = ProposalBuffer::new(
+            Arc::clone(&blockchain),
+            Arc::clone(&network),
+            consensus.proxy(),
+        );
 
         let mempool = Arc::new(Mempool::new(Arc::clone(&blockchain), mempool_config));
         let mempool_active = false;
@@ -329,6 +332,7 @@ where
 
         let head = blockchain.head();
         let next_block_number = head.block_number() + 1;
+        let network_id = head.network();
         let block_producer = BlockProducer::new(self.signing_key(), self.voting_key());
 
         debug!(
@@ -349,6 +353,7 @@ where
                     block_producer,
                     self.validator_slot_band(),
                     active_validators,
+                    network_id,
                     next_block_number,
                     self.macro_state.read().clone(),
                     proposal_stream,
@@ -543,7 +548,7 @@ where
     }
 
     fn on_equivocation_proof(&mut self, proof: EquivocationProof) {
-        // Keep the lock until the proof is added to the the proof pool.
+        // Keep the lock until the proof is added to the proof pool.
         let blockchain = self.blockchain.read();
         if blockchain
             .history_store

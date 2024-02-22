@@ -163,7 +163,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         );
     }
 
-    /// Process the history chunks that are received as part of the validity window syncrhonization process
+    /// Process the history chunks that are received as part of the validity window synchronization process
     /// Each time a history chunk is received, it is verified and the history store is updated.
     pub fn poll_validity_window_chunks(
         &mut self,

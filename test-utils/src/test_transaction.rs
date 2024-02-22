@@ -64,7 +64,7 @@ pub fn generate_transactions(
         );
 
         if signature {
-            let signature_proof = SignatureProof::from(
+            let signature_proof = SignatureProof::from_ed25519(
                 mempool_transaction.sender.keypair.public,
                 mempool_transaction
                     .sender

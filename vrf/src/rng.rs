@@ -6,7 +6,7 @@ pub trait Rng {
 
     /// Returns a random integer in range [0, limit)
     ///
-    /// It's choosen from a uniform distribution using rejection sampling.
+    /// It's chosen from a uniform distribution using rejection sampling.
     ///
     /// See <https://en.wikipedia.org/wiki/Rejection_sampling>.
     ///

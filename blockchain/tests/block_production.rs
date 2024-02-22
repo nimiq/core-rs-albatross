@@ -8,8 +8,8 @@ use nimiq_database::{mdbx::MdbxDatabase, traits::WriteTransaction, volatile::Vol
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{
-    Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey,
-    PublicKey as SchnorrPublicKey, SecureGenerate,
+    Address, Ed25519PublicKey as SchnorrPublicKey, KeyPair as SchnorrKeyPair,
+    PrivateKey as SchnorrPrivateKey, SecureGenerate,
 };
 use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_serde::Deserialize;
@@ -498,11 +498,7 @@ fn it_can_revert_failed_transactions() {
     let producer = BlockProducer::new(signing_key(), voting_key());
 
     // These values will be used at the end of the test
-    let initial_root = blockchain
-        .read()
-        .state()
-        .accounts
-        .get_root_hash_assert(None);
+    let initial_root = blockchain.read().state.accounts.get_root_hash_assert(None);
     let initial_history = blockchain
         .read()
         .history_store
@@ -626,7 +622,7 @@ fn it_can_revert_failed_transactions() {
 
     txn.commit();
 
-    let final_root = bc.state().accounts.get_root_hash_assert(None);
+    let final_root = bc.state.accounts.get_root_hash_assert(None);
     let final_history = bc.history_store.get_history_tree_root(0, None);
 
     // Verify that the state after reverting the blocks is equal to the initial state.
@@ -711,11 +707,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
     drop(bc);
 
     // These values will be used at the end of the test
-    let initial_root = blockchain
-        .read()
-        .state()
-        .accounts
-        .get_root_hash_assert(None);
+    let initial_root = blockchain.read().state.accounts.get_root_hash_assert(None);
     let initial_history = blockchain
         .read()
         .history_store
@@ -794,7 +786,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
         Coin::from_u64_unchecked(1000)
     );
 
-    let final_root = bc.state().accounts.get_root_hash_assert(None);
+    let final_root = bc.state.accounts.get_root_hash_assert(None);
     let final_history = bc.history_store.get_history_tree_root(0, None);
 
     // Verify that the state after reverting the blocks is equal to the initial state.

@@ -6,7 +6,7 @@ use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_genesis_builder::config::{
     GenesisAccount, GenesisHTLC, GenesisStaker, GenesisVestingContract,
 };
-use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_rpc::{
     primitives::{

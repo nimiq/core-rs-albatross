@@ -50,8 +50,8 @@ pub enum PlainAccount {
     Staking(PlainStakingContract),
 }
 
-impl PlainAccount {
-    pub fn from_native(account: &nimiq_account::Account) -> PlainAccount {
+impl From<&nimiq_account::Account> for PlainAccount {
+    fn from(account: &nimiq_account::Account) -> Self {
         match account {
             nimiq_account::Account::Basic(acc) => PlainAccount::Basic(PlainBasicAccount {
                 balance: acc.balance.into(),
@@ -160,8 +160,8 @@ pub struct PlainStaker {
     retired_balance: u64,
 }
 
-impl PlainStaker {
-    pub fn from_native(staker: &nimiq_account::Staker) -> PlainStaker {
+impl From<&nimiq_account::Staker> for PlainStaker {
+    fn from(staker: &nimiq_account::Staker) -> Self {
         PlainStaker {
             delegation: staker
                 .delegation
@@ -220,8 +220,8 @@ pub struct PlainValidator {
     pub jailed_release: Option<u32>,
 }
 
-impl PlainValidator {
-    pub fn from_native(validator: &nimiq_account::Validator) -> PlainValidator {
+impl From<&nimiq_account::Validator> for PlainValidator {
+    fn from(validator: &nimiq_account::Validator) -> PlainValidator {
         PlainValidator {
             signing_public_key: validator.signing_key.to_hex(),
             voting_public_key: validator.voting_key.to_hex(),

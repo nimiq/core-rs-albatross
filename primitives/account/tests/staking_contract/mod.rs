@@ -12,7 +12,7 @@ use nimiq_database::{
     volatile::VolatileDatabase,
     DatabaseProxy,
 };
-use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
+use nimiq_keys::{Address, Ed25519PublicKey, KeyPair, PrivateKey};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
@@ -68,8 +68,8 @@ fn ed25519_key_pair(sk: &str) -> KeyPair {
     KeyPair::from(PrivateKey::deserialize_from_vec(&hex::decode(sk).unwrap()).unwrap())
 }
 
-fn ed25519_public_key(pk: &str) -> PublicKey {
-    PublicKey::deserialize_from_vec(&hex::decode(pk).unwrap()).unwrap()
+fn ed25519_public_key(pk: &str) -> Ed25519PublicKey {
+    Ed25519PublicKey::deserialize_from_vec(&hex::decode(pk).unwrap()).unwrap()
 }
 
 fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -> Transaction {
@@ -108,7 +108,7 @@ fn make_signed_incoming_transaction(
 ) -> Transaction {
     let mut tx = make_incoming_transaction(data, value);
 
-    let in_proof = SignatureProof::from(
+    let in_proof = SignatureProof::from_ed25519(
         in_key_pair.public,
         in_key_pair.sign(&tx.serialize_content()),
     );
@@ -122,7 +122,7 @@ fn make_signed_incoming_transaction(
 
     let out_key_pair = KeyPair::from(out_private_key);
 
-    let out_proof = SignatureProof::from(
+    let out_proof = SignatureProof::from_ed25519(
         out_key_pair.public,
         out_key_pair.sign(&tx.serialize_content()),
     )
@@ -152,7 +152,7 @@ fn make_delete_validator_transaction() -> Transaction {
 
     let key_pair = KeyPair::from(private_key);
     let signature = key_pair.sign(&tx.serialize_content());
-    tx.proof = SignatureProof::from(key_pair.public, signature).serialize_to_vec();
+    tx.proof = SignatureProof::from_ed25519(key_pair.public, signature).serialize_to_vec();
 
     tx
 }
@@ -165,7 +165,8 @@ fn make_sample_contract(
     let staker_address = staker_address();
 
     let signing_key =
-        PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
+        Ed25519PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap())
+            .unwrap();
 
     let voting_key =
         BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_VOTING_KEY).unwrap()).unwrap();
@@ -406,19 +407,6 @@ struct StakerSetup {
 }
 
 impl StakerSetup {
-    fn setup_staker_with_inactive_balance(
-        validator_state: ValidatorState,
-        active_stake: u64,
-        inactive_stake: u64,
-    ) -> Self {
-        Self::setup_staker_with_inactive_retired_balance(
-            validator_state,
-            active_stake,
-            inactive_stake,
-            0,
-        )
-    }
-
     fn setup_staker_with_inactive_retired_balance(
         validator_state: ValidatorState,
         active_stake: u64,

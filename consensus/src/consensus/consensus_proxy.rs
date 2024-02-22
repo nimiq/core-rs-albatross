@@ -23,9 +23,13 @@ use nimiq_transaction::{
     historic_transaction::HistoricTransaction, ControlTransactionTopic, Transaction,
     TransactionTopic,
 };
-use tokio::sync::broadcast::Sender as BroadcastSender;
+use tokio::sync::{
+    broadcast::Sender as BroadcastSender, mpsc::Sender as MpscSender,
+    oneshot::channel as oneshot_channel,
+};
 use tokio_stream::wrappers::BroadcastStream;
 
+use super::{ConsensusRequest, ResolveBlockError, ResolveBlockRequest};
 use crate::{
     consensus::remote_data_store::RemoteDataStore,
     messages::{
@@ -41,6 +45,7 @@ pub struct ConsensusProxy<N: Network> {
     pub network: Arc<N>,
     pub(crate) established_flag: Arc<AtomicBool>,
     pub(crate) events: BroadcastSender<ConsensusEvent>,
+    pub(crate) request: MpscSender<ConsensusRequest<N>>,
 }
 
 impl<N: Network> Clone for ConsensusProxy<N> {
@@ -50,6 +55,7 @@ impl<N: Network> Clone for ConsensusProxy<N> {
             network: Arc::clone(&self.network),
             established_flag: Arc::clone(&self.established_flag),
             events: self.events.clone(),
+            request: self.request.clone(),
         }
     }
 }
@@ -264,7 +270,7 @@ impl<N: Network> ConsensusProxy<N> {
 
             for (hash, block_number) in &receipts {
                 // If the transaction was already verified, then we don't need to verify it again
-                if verified_transactions.contains_key(hash) {
+                if verified_transactions.contains_key(&hash.clone().into()) {
                     continue;
                 }
 
@@ -288,7 +294,7 @@ impl<N: Network> ConsensusProxy<N> {
                             .or_insert(vec![])
                             .push(hash.clone());
                     } else {
-                        // Third Case: Transanctions from the current batch
+                        // Third Case: Transactions from the current batch
                         hashes_by_block
                             .entry(Some(current_head.block_number()))
                             .or_insert(vec![])
@@ -587,5 +593,42 @@ impl<N: Network> ConsensusProxy<N> {
             // We don't care about the response, we just unsubscribe addresses from peers
         }
         Ok(())
+    }
+
+    /// Attempts to resolve a block with `block_hash` header hash at the given `block_height`.
+    /// The `pubsub_id` must contain the pubsup id containing the information which referenced
+    /// the block being resolved here. One example is the predecessor, other could be possible.
+    /// The peers present in the id will be asked for the information as they should be able to
+    /// produce it.
+    ///
+    /// This function fails, if the consensus cannot accept more requests or if the consensus drops
+    /// the request on its side, generally indicating that it is no longer of use.
+    pub async fn resolve_block(
+        self,
+        block_number: u32,
+        block_hash: Blake2bHash,
+        pubsub_id: N::PubsubId,
+    ) -> Result<Block, ResolveBlockError<N>> {
+        // Create the oneshot sender whose receiver this fn will await and whose
+        // sender will be given to the consensus proper to resolve the call.
+        let (response_sender, receiver) = oneshot_channel();
+
+        // Create the request structure.
+        let request = ResolveBlockRequest {
+            block_number,
+            block_hash,
+            pubsub_id,
+            response_sender,
+        };
+
+        // Send the request to the consensus. If the send fails the resolve block fails.
+        self.request
+            .send(ConsensusRequest::ResolveBlock(request))
+            .await
+            .map_err(ResolveBlockError::<N>::SendError)?;
+
+        // Wait for the consensus to resolve the request. The only error case is when the sender of
+        // the channel drops in which case the resolve block request will fail.
+        receiver.await.map_err(ResolveBlockError::ReceiveError)?
     }
 }

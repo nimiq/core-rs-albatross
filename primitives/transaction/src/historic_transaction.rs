@@ -1,6 +1,11 @@
-use std::{error, fmt, io, io::Write, ops::Range};
+use std::{
+    borrow::Cow,
+    error, fmt,
+    io::{self, Write},
+    ops::{Deref, Range},
+};
 
-use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Hash, Hasher};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::Address;
@@ -12,6 +17,76 @@ use crate::{
     inherent::Inherent, EquivocationLocator, ExecutedTransaction,
     Transaction as BlockchainTransaction,
 };
+
+/// The raw transaction hash is a type wrapper.
+/// This corresponds to the hash of the transaction without the execution result.
+/// This hash is the external facing hash.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct RawTransactionHash(Blake2bHash);
+
+impl From<Blake2bHash> for RawTransactionHash {
+    fn from(hash: Blake2bHash) -> Self {
+        RawTransactionHash(hash)
+    }
+}
+impl From<RawTransactionHash> for Blake2bHash {
+    fn from(hash: RawTransactionHash) -> Self {
+        hash.0
+    }
+}
+impl Deref for RawTransactionHash {
+    type Target = Blake2bHash;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl AsDatabaseBytes for RawTransactionHash {
+    fn as_database_bytes(&self) -> Cow<[u8]> {
+        Cow::Owned(self.deref().0.to_vec())
+    }
+}
+impl FromDatabaseValue for RawTransactionHash {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(RawTransactionHash(bytes[4..].into()))
+    }
+}
+
+/// The executed transaction hash is a type wrapper.
+/// This corresponds to the hash of the transaction with the execution result.
+/// This hash is used in the history store so that we have a record of the transaction
+/// and its execution result. This is an internal to it.
+#[derive(Clone, Debug)]
+struct ExecutedTransactionHash(Blake2bHash);
+
+impl From<Blake2bHash> for ExecutedTransactionHash {
+    fn from(hash: Blake2bHash) -> Self {
+        ExecutedTransactionHash(hash)
+    }
+}
+impl Deref for ExecutedTransactionHash {
+    type Target = Blake2bHash;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl AsDatabaseBytes for ExecutedTransactionHash {
+    fn as_database_bytes(&self) -> Cow<[u8]> {
+        Cow::Owned(self.deref().0.to_vec())
+    }
+}
+impl FromDatabaseValue for ExecutedTransactionHash {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(ExecutedTransactionHash(bytes[4..].into()))
+    }
+}
 
 /// A single struct that stores information that represents any possible transaction (basic
 /// transaction or inherent) on the blockchain.
@@ -171,9 +246,10 @@ impl HistoricTransaction {
     }
 
     /// Returns the hash based on the underlying transaction/event.
-    pub fn tx_hash(&self) -> Blake2bHash {
+    /// In case of a basic historic transaction, it returns the executed transaction hash.
+    fn executed_tx_hash(&self) -> ExecutedTransactionHash {
         match &self.data {
-            HistoricTransactionData::Basic(tx) => tx.hash(),
+            HistoricTransactionData::Basic(tx) => tx.hash::<Blake2bHash>().into(),
             _ => {
                 let block_height = if matches!(self.data, HistoricTransactionData::Equivocation(_))
                 {
@@ -204,8 +280,18 @@ impl HistoricTransaction {
                 self.network_id.serialize_to_writer(&mut hasher).unwrap();
                 block_height.serialize_to_writer(&mut hasher).unwrap();
                 self.data.serialize_to_writer(&mut hasher).unwrap();
-                hasher.finish()
+                hasher.finish().into()
             }
+        }
+    }
+
+    /// Returns the hash based on the underlying transaction/event.
+    /// In case of a basic historic transaction, it returns the hash of the inner transaction,
+    /// without the execution result.
+    pub fn tx_hash(&self) -> RawTransactionHash {
+        match &self.data {
+            HistoricTransactionData::Basic(tx) => tx.raw_tx_hash(),
+            _ => self.executed_tx_hash().hash::<Blake2bHash>().into(),
         }
     }
 
@@ -236,6 +322,7 @@ impl HistoricTransaction {
 impl MMRHash<Blake2bHash> for HistoricTransaction {
     /// Hashes a prefix and an historic transaction into a Blake2bHash. The prefix is necessary
     /// to include it into the History Tree.
+    /// This returns the executed transaction hash prefixed with 'prefix' number of leaves.
     fn hash(&self, prefix: u64) -> Blake2bHash {
         let mut message = prefix.to_be_bytes().to_vec();
         message.append(&mut self.serialize_to_vec());

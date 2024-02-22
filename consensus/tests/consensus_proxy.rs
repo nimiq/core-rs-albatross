@@ -27,6 +27,7 @@ use parking_lot::{Mutex, RwLock};
 async fn test_request_transactions_by_address() {
     let mut hub = MockHub::default();
 
+    // Create one node with a full epoch. The first batch will have one tx per block.
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(
             VolatileDatabase::new(20).unwrap(),
@@ -44,7 +45,6 @@ async fn test_request_transactions_by_address() {
     produce_macro_blocks(&producer, &blockchain1, num_macro_blocks);
 
     let net1 = Arc::new(hub.new_network());
-
     let zkp_prover1 = ZKPComponent::new(
         BlockchainProxy::from(&blockchain1),
         Arc::clone(&net1),
@@ -55,7 +55,6 @@ async fn test_request_transactions_by_address() {
     )
     .await
     .proxy();
-
     let blockchain1_proxy = BlockchainProxy::from(&blockchain1);
 
     let syncer1 = SyncerProxy::new_history(
@@ -75,8 +74,8 @@ async fn test_request_transactions_by_address() {
         zkp_prover1.clone(),
     );
 
+    // Setup another node that will sync with the previous one.
     let net2 = Arc::new(hub.new_network());
-
     let syncer2 = SyncerProxy::new_history(
         blockchain1_proxy.clone(),
         Arc::clone(&net2),
@@ -86,25 +85,24 @@ async fn test_request_transactions_by_address() {
         net2.subscribe_events(),
     )
     .await;
-
     let consensus2 = Consensus::from_network(
         blockchain1_proxy.clone(),
         Arc::clone(&net2),
         syncer2,
         zkp_prover1,
     );
-
     let consensus_proxy = consensus2.proxy();
     net1.dial_mock(&net2);
 
+    // Fetching all the transactions of the epoch.
     let key_pair = KeyPair::from(PrivateKey::from_str(REWARD_KEY).unwrap());
-
     let res = consensus_proxy
         .request_transactions_by_address(Address::from(&key_pair.public), 0, vec![], 1, None)
         .await;
     assert!(res.is_ok());
 
     let txs = res.unwrap();
+
     assert_eq!(
         txs.iter()
             .filter(|tx| {

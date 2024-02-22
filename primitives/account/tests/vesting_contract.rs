@@ -60,7 +60,7 @@ fn make_signed_transaction(key_1: KeyPair, key_2: KeyPair, value: u64) -> Transa
     );
     tx.sender_type = AccountType::Vesting;
     let signature = key_1.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::from(key_1.public, signature);
+    let signature_proof = SignatureProof::from_ed25519(key_1.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     tx
@@ -305,7 +305,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     tx.sender_type = AccountType::Vesting;
 
     let signature = key_1.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::from(key_1.public, signature);
+    let signature_proof = SignatureProof::from_ed25519(key_1.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     let mut tx_logger = TransactionLog::empty();
@@ -368,7 +368,7 @@ fn it_refuses_invalid_transactions() {
 
     // Invalid signature
     let signature = key_1_alt.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::from(key_1_alt.public, signature);
+    let signature_proof = SignatureProof::from_ed25519(key_1_alt.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     let block_state = BlockState::new(1, 200);
@@ -387,7 +387,7 @@ fn it_refuses_invalid_transactions() {
 
     // Funds still vested
     let signature = key_1.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::from(key_1.public, signature);
+    let signature_proof = SignatureProof::from_ed25519(key_1.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
     let block_state = BlockState::new(100000, 100);
@@ -527,7 +527,7 @@ fn can_reserve_balance_after_time_step() {
         })
     );
 
-    // Advancing the block state should alow further reserve balance.
+    // Advancing the block state should allow further reserve balance.
     let block_state = BlockState::new(3, 300);
 
     let tx = make_signed_transaction(key_1.clone(), key_2.clone(), 100);
