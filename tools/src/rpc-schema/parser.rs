@@ -1,7 +1,11 @@
 use convert_case::{Case, Casing};
 use open_rpc_schema::{
-    document::{ContentDescriptorObject, ContentDescriptorOrReference, JSONSchema, MethodObject},
-    schemars::schema::{InstanceType, RootSchema, SchemaObject, SingleOrVec},
+    document::{ContentDescriptorObject, ContentDescriptorOrReference, JSONSchema},
+    schemars::schema::{
+        ArrayValidation, InstanceType, RootSchema,
+        Schema::{self},
+        SchemaObject, SingleOrVec,
+    },
 };
 use quote::ToTokens;
 use serde_json::{Map, Value};
@@ -12,6 +16,7 @@ use syn::{
 
 #[derive(Debug, Clone)]
 pub struct ParsedItemStruct(ItemStruct);
+#[derive(Debug, Clone)]
 pub struct ParsedTraitItemFn(TraitItemFn);
 
 impl ParsedItemStruct {
@@ -79,7 +84,7 @@ impl ParsedItemStruct {
                     (path, ident) = Self::unwrap_type(type_path.path.clone(), false);
                 }
 
-                if ident.to_string() == "Vec" {
+                if ident == "Vec" {
                     let mut items_map = Map::new();
                     if let Some(reference) = schema_ref {
                         items_map.insert(
@@ -110,13 +115,15 @@ impl ParsedItemStruct {
     }
 
     fn map_type(path: &Path) -> Value {
-        let (_path_type, inner_ident) = Self::unwrap_type(path.clone(), true);
-        match inner_ident.to_string().as_str() {
+        let inner_ident = Self::unwrap_type(path.clone(), true);
+        match inner_ident.1.to_string().as_str() {
             "Address"
             | "Blake2bHash"
             | "Blake2sHash"
             | "CompressedPublicKey"
             | "PublicKey"
+            | "PrivateKey"
+            | "Signature"
             | "String"
             | "VrfSeed" => return Value::String("string".into()),
             "u8" | "u16" | "u32" | "u64" | "usize" | "Coin" => {
@@ -192,7 +199,7 @@ impl ParsedItemStruct {
 impl ParsedTraitItemFn {
     #[inline]
     pub fn title(&self) -> String {
-        self.0.sig.ident.to_string()
+        self.0.sig.ident.to_string().to_case(Case::Camel)
     }
 
     #[inline]
@@ -200,21 +207,21 @@ impl ParsedTraitItemFn {
         "".into()
     }
 
-    pub fn to_method(&self) -> MethodObject {
-        let mut method =
-            MethodObject::new(self.title().to_case(Case::Camel), Some(self.description()));
-        method.params = self.params();
-        method.result = self.return_type();
-        method
-    }
-
-    fn params(&self) -> Vec<ContentDescriptorOrReference> {
+    pub fn params(&self, structs: &Vec<ParsedItemStruct>) -> Vec<ContentDescriptorOrReference> {
         self.0
             .sig
             .inputs
             .iter()
             .filter_map(|input| match input {
                 syn::FnArg::Typed(typed) => {
+                    let segment = match *typed.ty.clone() {
+                        Type::Path(p) => p.path.segments.first().unwrap().clone(),
+                        _ => unreachable!(),
+                    };
+
+                    let (inner_segment, inner_type) = Self::unwrap_type(&segment);
+                    let schema_ref = structs.iter().find(|s| inner_type.to_string() == s.title());
+
                     Some(ContentDescriptorOrReference::ContentDescriptorObject(
                         ContentDescriptorObject {
                             name: Self::param_ident(&typed.pat)
@@ -224,7 +231,7 @@ impl ParsedTraitItemFn {
                             description: None,
                             summary: None,
                             schema: JSONSchema::JsonSchemaObject(RootSchema {
-                                // meta_schema: Some(typed.ty.to_token_stream().to_string()),
+                                schema: Self::return_type_schema(&inner_segment, schema_ref),
                                 ..Default::default()
                             }),
                             required: Some(Self::param_required(&*typed.ty)),
@@ -244,14 +251,15 @@ impl ParsedTraitItemFn {
         }
     }
 
-    fn param_required(ty: &Type) -> bool {
-        if ty.to_token_stream().to_string().contains("Option") {
-            return false;
-        }
+    fn param_required(_ty: &Type) -> bool {
+        // At the moment, all params are required even if the type is wrapped in an Option.
+        // if ty.to_token_stream().to_string().contains("Option") {
+        //     return false;
+        // }
         true
     }
 
-    fn return_type(&self) -> ContentDescriptorOrReference {
+    pub fn return_type(&self, structs: &Vec<ParsedItemStruct>) -> ContentDescriptorOrReference {
         let ty = match &self.0.sig.output {
             ReturnType::Type(_, ty) => match ty.as_ref() {
                 Type::Path(path) => path,
@@ -277,6 +285,26 @@ impl ParsedTraitItemFn {
         let path = match arg {
             GenericArgument::Type(return_type) => match return_type {
                 Type::Path(path) => path,
+                Type::Tuple(_) => {
+                    return ContentDescriptorOrReference::ContentDescriptorObject(
+                        ContentDescriptorObject {
+                            name: "null".to_string(),
+                            description: None,
+                            summary: None,
+                            schema: JSONSchema::JsonSchemaObject(RootSchema {
+                                schema: SchemaObject {
+                                    instance_type: Some(SingleOrVec::Single(Box::new(
+                                        InstanceType::Null,
+                                    ))),
+                                    ..Default::default()
+                                },
+                                ..Default::default()
+                            }),
+                            required: None,
+                            deprecated: None,
+                        },
+                    )
+                }
                 _ => {
                     unreachable!()
                 }
@@ -289,12 +317,17 @@ impl ParsedTraitItemFn {
             .first()
             .expect("Path must have an identity.");
 
+        let inner_type = Self::unwrap_type(ident);
+        let schema_ref = structs
+            .iter()
+            .find(|s| inner_type.1.to_string() == s.title());
+
         ContentDescriptorOrReference::ContentDescriptorObject(ContentDescriptorObject {
             name: ident.ident.to_string(),
             description: None,
             summary: None,
             schema: JSONSchema::JsonSchemaObject(RootSchema {
-                schema: Self::return_type_schema(&ident),
+                schema: Self::return_type_schema(&ident, schema_ref),
                 ..Default::default()
             }),
             required: None,
@@ -302,26 +335,83 @@ impl ParsedTraitItemFn {
         })
     }
 
-    fn return_type_schema(ident: &PathSegment) -> SchemaObject {
+    fn return_type_schema(
+        ident: &PathSegment,
+        schema_ref: Option<&ParsedItemStruct>,
+    ) -> SchemaObject {
         let mut schema = SchemaObject {
             ..Default::default()
         };
 
-        let (is_rust_type, instance_type) = match ident.ident.to_string().as_str() {
-            "u32" | "u64" | "usize" | "BoxStream" => (true, InstanceType::Number),
-            "Vec" => (true, InstanceType::Array),
-            "String" => (true, InstanceType::String),
-            "bool" => (true, InstanceType::Boolean),
-            _ => (false, InstanceType::Null),
-        };
+        let (is_rust_type, instance_type) = Self::to_instance_type(&ident.ident);
 
         if is_rust_type {
-            schema.instance_type = Some(SingleOrVec::Single(Box::new(instance_type)))
+            schema.instance_type = Some(SingleOrVec::Single(Box::new(instance_type)));
         } else {
             schema.reference = Some(format!("#/components/schemas/{}", ident.ident.to_string()));
         }
 
+        if instance_type == InstanceType::Array {
+            let inner_type = Self::unwrap_type(&ident);
+            let inner_instance_type = Self::to_instance_type(&inner_type.1);
+            let mut inner_schema = SchemaObject {
+                ..Default::default()
+            };
+
+            if schema_ref.is_some() {
+                inner_schema.reference =
+                    Some(format!("#/components/schemas/{}", inner_type.1.to_string()));
+            } else {
+                inner_schema.instance_type =
+                    Some(SingleOrVec::Single(Box::new(inner_instance_type.1)))
+            }
+
+            schema.array = Some(Box::new(ArrayValidation {
+                items: Some(SingleOrVec::Single(Box::new(Schema::Object(inner_schema)))),
+                ..Default::default()
+            }));
+        }
+
         schema
+    }
+
+    fn to_instance_type(ident: &Ident) -> (bool, InstanceType) {
+        match ident.to_string().as_str() {
+            "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+            | "f64"
+            | "usize"
+            | "BoxStream"
+            | "ValidityStartHeight"
+            | "Coin" => (true, InstanceType::Number),
+            "Vec" | "LogType" => (true, InstanceType::Array),
+            "String" | "AnyHash" | "Signature" | "PublicKey" | "PreImage" | "Blake2bHash"
+            | "Address" => (true, InstanceType::String),
+            "bool" => (true, InstanceType::Boolean),
+            _ => (false, InstanceType::Object),
+        }
+    }
+
+    fn unwrap_type(path_segment: &PathSegment) -> (PathSegment, Ident) {
+        let ident = path_segment.ident.clone();
+
+        match ident.to_string().as_str() {
+            "Vec" | "Option" => {
+                if let PathArguments::AngleBracketed(outer_type) = &path_segment.arguments {
+                    if let GenericArgument::Type(arg) = outer_type.args.first().unwrap() {
+                        if let Type::Path(inner_type) = arg {
+                            let segment = inner_type.path.segments.first().unwrap();
+                            return (segment.to_owned(), segment.ident.clone());
+                        }
+                    }
+                    unreachable!()
+                }
+                (path_segment.to_owned(), ident)
+            }
+            _ => (path_segment.to_owned(), ident),
+        }
     }
 }
 

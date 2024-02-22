@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use open_rpc_schema::document::{
-    Components, ContactObject, InfoObject, LicenseObject, Openrpc, OpenrpcDocument,
+    Components, ContactObject, InfoObject, LicenseObject, MethodObject, Openrpc, OpenrpcDocument,
 };
 use serde_json::{Map, Value};
 
@@ -11,31 +11,17 @@ use crate::parser::{ParsedItemStruct, ParsedTraitItemFn};
 pub struct OpenRpcBuilder {
     open_rpc_doc: OpenrpcDocument,
     structs: Vec<ParsedItemStruct>,
+    methods: Vec<ParsedTraitItemFn>,
 }
 
 impl OpenRpcBuilder {
-    pub fn with_components(mut self) -> OpenRpcBuilder {
-        if self.open_rpc_doc.components.is_none() {
-            self.open_rpc_doc.components = Some(Components {
-                schemas: Some(HashMap::new()),
-                links: None,
-                errors: None,
-                examples: None,
-                example_pairings: Some(HashMap::new()),
-                content_descriptors: None,
-                tags: None,
-            });
-        }
-        self
-    }
-
     pub fn with_schema(mut self, item_struct: &ParsedItemStruct) -> OpenRpcBuilder {
         self.structs.push(item_struct.clone());
         self
     }
 
     pub fn with_method(mut self, item_fn: &ParsedTraitItemFn) -> OpenRpcBuilder {
-        self.open_rpc_doc.methods.push(item_fn.to_method());
+        self.methods.push(item_fn.clone());
         self
     }
 
@@ -50,8 +36,17 @@ impl OpenRpcBuilder {
                 contact: Some(ContactObject { name: Some("The Nimiq Foundation".to_string()), email: Some("info@nimiq.com".to_string()), url: Some("https://nimiq.com".to_string()) }),
                 license: Some(LicenseObject{ name: Some("Apache License, Version 2.0".to_string()), url: Some("http://www.apache.org/licenses/LICENSE-2.0".to_string()) }),
             },
+            components: Some(Components {
+                schemas: Some(HashMap::new()),
+                links: None,
+                errors: None,
+                examples: None,
+                example_pairings: Some(HashMap::new()),
+                content_descriptors: None,
+                tags: None,
+            }),
             ..Default::default()
-        }, structs: vec![]}
+        }, structs: vec![], methods: vec![]}
     }
 
     pub fn build(self) -> OpenrpcDocument {
@@ -67,7 +62,7 @@ impl OpenRpcBuilder {
         let schemas = doc
             .components
             .as_mut()
-            .expect("Components not initialized. Consider calling builder.with_components first.")
+            .expect("Components not initialized.")
             .schemas
             .as_mut()
             .expect("Component schema not initialized.");
@@ -80,6 +75,14 @@ impl OpenRpcBuilder {
             schema.insert("properties".into(), s.properties(&self.structs));
             schemas.insert(s.title(), Some(Value::Object(schema)));
         });
+
+        self.methods.iter().for_each(|m| {
+            let mut method = MethodObject::new(m.title(), Some(m.description()));
+            method.params = m.params(&self.structs);
+            method.result = m.return_type(&self.structs);
+            doc.methods.push(method);
+        });
+        doc.methods.sort_by_key(|m| m.name.clone());
 
         doc
     }
