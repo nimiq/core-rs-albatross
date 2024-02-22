@@ -14,7 +14,7 @@ use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_bls::CompressedPublicKey;
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
-use nimiq_keys::{Address, Ed25519PublicKey, PrivateKey, PublicKey, Signature};
+use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, PrivateKey};
 use nimiq_primitives::{
     coin::Coin, networks::NetworkId, policy::Policy, slots_allocation::Validators,
 };
@@ -688,15 +688,15 @@ pub struct Account {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReturnSignature {
-    pub public_key: PublicKey,
-    pub signature: Signature,
+    pub public_key: Ed25519PublicKey,
+    pub signature: Ed25519Signature,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReturnAccount {
     pub address: Address,
-    pub public_key: PublicKey,
+    pub public_key: Ed25519PublicKey,
     pub private_key: PrivateKey,
 }
 

@@ -1,6 +1,6 @@
-use async_trait::async_trait;
-use nimiq_keys::{Address,Ed25519PublicKey, Ed25519Signature, PublicKey,PrivateKey, Signature};
 use crate::types::{RPCResult, ReturnAccount, ReturnSignature};
+use async_trait::async_trait;
+use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature};
 
 #[nimiq_jsonrpc_derive::proxy(name = "WalletProxy", rename_all = "camelCase")]
 #[async_trait]
