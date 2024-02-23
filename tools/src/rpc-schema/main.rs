@@ -15,29 +15,27 @@ fn main() -> Result<(), Box<dyn Error>> {
     let directory = "./rpc-interface/src";
     let mut builder = OpenRpcBuilder::builder();
     if let Ok(entries) = fs::read_dir(directory) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.is_file() {
-                    if let Ok(contents) = fs::read_to_string(&path) {
-                        match parse_file(&contents) {
-                            Ok(ast) => {
-                                let structs = parser::extract_structs_from_ast(&ast);
-                                let fns = parser::extract_fns_from_ast(&ast);
-                                for index in 0..structs.len() {
-                                    builder = builder.with_schema(structs.get(index).unwrap());
-                                }
-                                for index in 0..fns.len() {
-                                    builder = builder.with_method(fns.get(index).unwrap());
-                                }
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Ok(contents) = fs::read_to_string(&path) {
+                    match parse_file(&contents) {
+                        Ok(ast) => {
+                            let structs = parser::extract_structs_from_ast(&ast);
+                            let fns = parser::extract_fns_from_ast(&ast);
+                            for index in 0..structs.len() {
+                                builder = builder.with_schema(structs.get(index).unwrap());
                             }
-                            Err(err) => {
-                                println!(
-                                    "Failed to parse file '{:?}': {}",
-                                    path.file_name().unwrap().to_str(),
-                                    err
-                                );
+                            for index in 0..fns.len() {
+                                builder = builder.with_method(fns.get(index).unwrap());
                             }
+                        }
+                        Err(err) => {
+                            println!(
+                                "Failed to parse file '{:?}': {}",
+                                path.file_name().unwrap().to_str(),
+                                err
+                            );
                         }
                     }
                 }

@@ -30,7 +30,7 @@ impl ParsedItemStruct {
         "".into()
     }
 
-    pub fn properties(&self, structs: &Vec<ParsedItemStruct>) -> Value {
+    pub fn properties(&self, structs: &[ParsedItemStruct]) -> Value {
         let props: Map<String, Value> = self
             .0
             .fields
@@ -53,10 +53,8 @@ impl ParsedItemStruct {
                     .to_case(Case::Camel);
 
                 prop_fields.insert("title".into(), Value::String(field_ident.clone()));
-                let schema_ref = structs
-                    .iter()
-                    .find(|s| inner_type.1.to_string() == s.title());
-                prop_fields.append(&mut Self::param_to_json_type(&field, schema_ref));
+                let schema_ref = structs.iter().find(|s| inner_type.1 == s.title());
+                prop_fields.append(&mut Self::param_to_json_type(field, schema_ref));
 
                 Some((field_ident, Value::Object(prop_fields)))
             })
@@ -97,15 +95,13 @@ impl ParsedItemStruct {
 
                     map.insert("type".to_string(), Value::String("array".into()));
                     map.insert("items".to_string(), Value::Object(items_map));
+                } else if let Some(reference) = schema_ref {
+                    map.insert(
+                        "$ref".into(),
+                        Value::String(format!("#/components/schemas/{}", reference.title())),
+                    );
                 } else {
-                    if let Some(reference) = schema_ref {
-                        map.insert(
-                            "$ref".into(),
-                            Value::String(format!("#/components/schemas/{}", reference.title())),
-                        );
-                    } else {
-                        map.insert("type".into(), Self::map_type(&path));
-                    }
+                    map.insert("type".into(), Self::map_type(&path));
                 }
             }
             _ => unreachable!(),
@@ -126,17 +122,15 @@ impl ParsedItemStruct {
             | "PrivateKey"
             | "Ed25519Signature"
             | "String"
-            | "VrfSeed" => return Value::String("string".into()),
-            "u8" | "u16" | "u32" | "u64" | "usize" | "Coin" => {
-                return Value::String("number".into())
-            }
-            "bool" => return Value::String("boolean".into()),
+            | "VrfSeed" => Value::String("string".into()),
+            "u8" | "u16" | "u32" | "u64" | "usize" | "Coin" => Value::String("number".into()),
+            "bool" => Value::String("boolean".into()),
             "AccountAdditionalFields"
             | "BitSet"
             | "S"
             | "T"
             | "BlockAdditionalFields"
-            | "MultiSignature" => return Value::String("object".into()),
+            | "MultiSignature" => Value::String("object".into()),
             _ => panic!("{:?}", inner_ident),
         }
     }
@@ -172,27 +166,25 @@ impl ParsedItemStruct {
                 if let PathArguments::AngleBracketed(outer_type) =
                     path.segments.first().unwrap().arguments.clone()
                 {
-                    if let GenericArgument::Type(arg) = outer_type.args.first().unwrap() {
-                        if let Type::Path(inner_type) = arg {
-                            if recursive {
-                                return Self::unwrap_type(inner_type.path.clone(), true);
-                            }
-
-                            (
-                                inner_type.path.clone(),
-                                inner_type.path.segments.first().unwrap().ident.clone(),
-                            )
-                        } else {
-                            return (path, ident);
+                    if let GenericArgument::Type(Type::Path(inner_type)) =
+                        outer_type.args.first().unwrap()
+                    {
+                        if recursive {
+                            return Self::unwrap_type(inner_type.path.clone(), true);
                         }
+
+                        (
+                            inner_type.path.clone(),
+                            inner_type.path.segments.first().unwrap().ident.clone(),
+                        )
                     } else {
-                        return (path, ident);
+                        (path, ident)
                     }
                 } else {
-                    return (path, ident);
+                    (path, ident)
                 }
             }
-            _ => return (path, ident),
+            _ => (path, ident),
         }
     }
 }
@@ -208,7 +200,7 @@ impl ParsedTraitItemFn {
         "".into()
     }
 
-    pub fn params(&self, structs: &Vec<ParsedItemStruct>) -> Vec<ContentDescriptorOrReference> {
+    pub fn params(&self, structs: &[ParsedItemStruct]) -> Vec<ContentDescriptorOrReference> {
         self.0
             .sig
             .inputs
@@ -221,7 +213,7 @@ impl ParsedTraitItemFn {
                     };
 
                     let (inner_segment, inner_type) = Self::unwrap_type(&segment);
-                    let schema_ref = structs.iter().find(|s| inner_type.to_string() == s.title());
+                    let schema_ref = structs.iter().find(|s| inner_type == s.title());
 
                     Some(ContentDescriptorOrReference::ContentDescriptorObject(
                         ContentDescriptorObject {
@@ -235,7 +227,7 @@ impl ParsedTraitItemFn {
                                 schema: Self::return_type_schema(&inner_segment, schema_ref),
                                 ..Default::default()
                             }),
-                            required: Some(Self::param_required(&*typed.ty)),
+                            required: Some(Self::param_required(&typed.ty)),
                             deprecated: None,
                         },
                     ))
@@ -245,8 +237,8 @@ impl ParsedTraitItemFn {
             .collect()
     }
 
-    fn param_ident(pat: &Box<Pat>) -> PatIdent {
-        match &**pat {
+    fn param_ident(pat: &Pat) -> PatIdent {
+        match pat {
             syn::Pat::Ident(ident) => ident.clone(),
             _ => unreachable!(),
         }
@@ -260,7 +252,7 @@ impl ParsedTraitItemFn {
         true
     }
 
-    pub fn return_type(&self, structs: &Vec<ParsedItemStruct>) -> ContentDescriptorOrReference {
+    pub fn return_type(&self, structs: &[ParsedItemStruct]) -> ContentDescriptorOrReference {
         let ty = match &self.0.sig.output {
             ReturnType::Type(_, ty) => match ty.as_ref() {
                 Type::Path(path) => path,
@@ -319,16 +311,14 @@ impl ParsedTraitItemFn {
             .expect("Path must have an identity.");
 
         let inner_type = Self::unwrap_type(ident);
-        let schema_ref = structs
-            .iter()
-            .find(|s| inner_type.1.to_string() == s.title());
+        let schema_ref = structs.iter().find(|s| inner_type.1 == s.title());
 
         ContentDescriptorOrReference::ContentDescriptorObject(ContentDescriptorObject {
             name: ident.ident.to_string(),
             description: None,
             summary: None,
             schema: JSONSchema::JsonSchemaObject(RootSchema {
-                schema: Self::return_type_schema(&ident, schema_ref),
+                schema: Self::return_type_schema(ident, schema_ref),
                 ..Default::default()
             }),
             required: None,
@@ -349,19 +339,18 @@ impl ParsedTraitItemFn {
         if is_rust_type {
             schema.instance_type = Some(SingleOrVec::Single(Box::new(instance_type)));
         } else {
-            schema.reference = Some(format!("#/components/schemas/{}", ident.ident.to_string()));
+            schema.reference = Some(format!("#/components/schemas/{}", ident.ident));
         }
 
         if instance_type == InstanceType::Array {
-            let inner_type = Self::unwrap_type(&ident);
+            let inner_type = Self::unwrap_type(ident);
             let inner_instance_type = Self::to_instance_type(&inner_type.1);
             let mut inner_schema = SchemaObject {
                 ..Default::default()
             };
 
             if schema_ref.is_some() {
-                inner_schema.reference =
-                    Some(format!("#/components/schemas/{}", inner_type.1.to_string()));
+                inner_schema.reference = Some(format!("#/components/schemas/{}", inner_type.1));
             } else {
                 inner_schema.instance_type =
                     Some(SingleOrVec::Single(Box::new(inner_instance_type.1)))
@@ -401,11 +390,11 @@ impl ParsedTraitItemFn {
         match ident.to_string().as_str() {
             "Vec" | "Option" => {
                 if let PathArguments::AngleBracketed(outer_type) = &path_segment.arguments {
-                    if let GenericArgument::Type(arg) = outer_type.args.first().unwrap() {
-                        if let Type::Path(inner_type) = arg {
-                            let segment = inner_type.path.segments.first().unwrap();
-                            return (segment.to_owned(), segment.ident.clone());
-                        }
+                    if let GenericArgument::Type(Type::Path(inner_type)) =
+                        outer_type.args.first().unwrap()
+                    {
+                        let segment = inner_type.path.segments.first().unwrap();
+                        return (segment.to_owned(), segment.ident.clone());
                     }
                     unreachable!()
                 }
@@ -416,15 +405,15 @@ impl ParsedTraitItemFn {
     }
 }
 
-impl Into<ParsedItemStruct> for ItemStruct {
-    fn into(self) -> ParsedItemStruct {
-        ParsedItemStruct(self)
+impl From<ItemStruct> for ParsedItemStruct {
+    fn from(val: ItemStruct) -> Self {
+        ParsedItemStruct(val)
     }
 }
 
-impl Into<ParsedTraitItemFn> for TraitItemFn {
-    fn into(self) -> ParsedTraitItemFn {
-        ParsedTraitItemFn(self)
+impl From<TraitItemFn> for ParsedTraitItemFn {
+    fn from(val: TraitItemFn) -> Self {
+        ParsedTraitItemFn(val)
     }
 }
 
