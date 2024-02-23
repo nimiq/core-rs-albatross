@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::*;
 
 pub struct MemoryStore<H> {
@@ -104,5 +106,45 @@ impl<'a, H: Clone, S: Store<H>> Store<H> for MemoryTransaction<'a, H, S> {
 
     fn is_empty(&self) -> bool {
         self.data.is_empty()
+    }
+}
+
+pub struct LightMemoryStore<H> {
+    pub inner: HashMap<usize, H>,
+}
+
+impl<H: Clone> LightMemoryStore<H> {
+    pub fn new() -> Self {
+        LightMemoryStore {
+            inner: HashMap::new(),
+        }
+    }
+}
+
+impl<H: Clone> Default for LightMemoryStore<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H: Clone> LightStore<H> for LightMemoryStore<H> {
+    fn insert(&mut self, elem: H, pos: usize) {
+        let _ = self.inner.insert(pos, elem);
+    }
+
+    fn remove(&mut self, pos: usize) {
+        let _ = self.inner.remove(&pos);
+    }
+
+    fn get(&self, pos: usize) -> Option<H> {
+        self.inner.get(&pos).cloned()
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.inner.len() == 0
     }
 }
