@@ -51,11 +51,6 @@ optional = true
 version = "0.4"
 optional = true
 
-[dependencies.postcard-derive]
-path = "./postcard-derive"
-version = "0.1.1"
-optional = true
-
 [dependencies.crc]
 version = "3.0.1"
 optional = true
@@ -72,11 +67,3 @@ heapless-cas = ["heapless", "heapless/cas"]
 alloc = ["serde/alloc", "embedded-io/alloc"]
 use-defmt = ["defmt"]
 use-crc = ["crc", "paste"]
-
-# Experimental features!
-#
-# NOT subject to SemVer guarantees!
-experimental-derive = ["postcard-derive", "const_format"]
-
-[workspace]
-members = ["postcard-derive"]
