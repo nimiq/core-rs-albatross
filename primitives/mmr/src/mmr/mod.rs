@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashSet, VecDeque},
     marker::PhantomData,
     ops::RangeBounds,
 };
@@ -14,7 +14,7 @@ use crate::{
         proof::{Proof, RangeProof},
         utils::bagging,
     },
-    store::{memory::MemoryTransaction, Store},
+    store::{memory::MemoryTransaction, LightStore, Store},
 };
 
 pub mod partial;
@@ -481,27 +481,23 @@ impl<H: Merge + Clone + PartialEq, S: Store<H>> MerkleMountainRange<H, S> {
 
 /// This is the main struct for the Peaks Merkle Mountain Range.
 /// It is a MMR where only peaks are stored.
-pub struct PeaksMerkleMountainRange<H> {
-    memory_store: HashMap<usize, H>,
+pub struct PeaksMerkleMountainRange<H, S: LightStore<H>> {
+    store: S,
     len: usize,
     num_leaves: usize,
     hash: PhantomData<H>,
 }
 
-impl<H: Merge + Clone> Default for PeaksMerkleMountainRange<H> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<H: Merge + Clone> PeaksMerkleMountainRange<H> {
+impl<H: Merge + Clone, S: LightStore<H>> PeaksMerkleMountainRange<H, S> {
     /// Creates a new Peaks Merkle Mountain Range
-    pub fn new() -> Self {
+    pub fn new(store: S) -> Self {
+        let initial_len = store.len();
+
         let mut mmr = PeaksMerkleMountainRange {
+            store,
             num_leaves: 0,
             hash: PhantomData,
-            memory_store: HashMap::new(),
-            len: 0,
+            len: initial_len,
         };
 
         // The number of leaves is the sum over 2^height for all full binary trees.
@@ -534,14 +530,21 @@ impl<H: Merge + Clone> PeaksMerkleMountainRange<H> {
     where
         T: Hash<H>,
     {
+        // We will use this hash set to collect items that might be deleted after the end of this operation
+        let mut temp_elements = HashSet::new();
+
         // Set new leaf index.
         let num_leaves = self.num_leaves();
 
         let index = self.len();
         let mut pos = Position::from(index);
 
-        self.memory_store
-            .insert(pos.index, elem.hash(pos.num_leaves() as u64));
+        let old_peaks: HashSet<usize> = self.peaks().map(|pos| pos.index).collect();
+
+        self.store
+            .insert(elem.hash(pos.num_leaves() as u64), pos.index);
+
+        temp_elements.insert(pos.index);
 
         self.len += 1;
 
@@ -550,33 +553,41 @@ impl<H: Merge + Clone> PeaksMerkleMountainRange<H> {
             let left_pos = pos.sibling();
 
             let left_elem = self
-                .memory_store
-                .get(&left_pos.index)
+                .store
+                .get(left_pos.index)
                 .ok_or(Error::InconsistentStore)?;
-            let right_elem = self
-                .memory_store
-                .get(&pos.index)
-                .ok_or(Error::InconsistentStore)?;
+            let right_elem = self.store.get(pos.index).ok_or(Error::InconsistentStore)?;
 
             pos = pos.parent();
 
             // Prefix the merged hash with the number of leaf elements below that hash, which are
             // 2^height as it is a perfect binary tree.
-            let parent_elem = left_elem.merge(right_elem, pos.num_leaves() as u64);
-            self.memory_store.insert(pos.index, parent_elem);
+            let parent_elem = left_elem.merge(&right_elem, pos.num_leaves() as u64);
+            self.store.insert(parent_elem, pos.index);
+            temp_elements.insert(pos.index);
             self.len += 1;
         }
 
-        // Peaks is the only thing we want to store.
-        let peaks_positions: HashSet<usize> = self.peaks().map(|pos| pos.index).collect();
+        let new_peaks: HashSet<usize> = self.peaks().map(|pos| pos.index).collect();
 
-        self.memory_store
-            .retain(|pos, _| peaks_positions.contains(pos));
+        // Values that are in old that are not in the new positions
+        let to_remove: HashSet<usize> = old_peaks.difference(&new_peaks).cloned().collect();
+
+        // Finally update the store
+        for pos in to_remove {
+            self.store.remove(pos);
+        }
+
+        // Remove any temporal element that was created that is no longer needed
+        for pos in temp_elements {
+            if !new_peaks.contains(&pos) {
+                self.store.remove(pos);
+            }
+        }
 
         // Update num_leaves.
         self.num_leaves += 1;
-        let leaf_index = num_leaves;
-        Ok(leaf_index)
+        Ok(num_leaves)
     }
 
     /// Calculates the root.
@@ -588,9 +599,8 @@ impl<H: Merge + Clone> PeaksMerkleMountainRange<H> {
         // The peak hashes are not given in reverse order as we pop them from the end.
         let it = self.rev_peaks().map(|peak_pos| {
             Ok((
-                self.memory_store
-                    .get(&peak_pos.index)
-                    .cloned()
+                self.store
+                    .get(peak_pos.index)
                     .ok_or(Error::InconsistentStore)?,
                 peak_pos.num_leaves(),
             ))
@@ -619,7 +629,7 @@ mod tests {
     use super::*;
     use crate::{
         mmr::utils::test_utils::{hash_mmr, TestHash},
-        store::memory::MemoryStore,
+        store::memory::{LightMemoryStore, MemoryStore},
     };
 
     #[test]
@@ -645,7 +655,8 @@ mod tests {
     fn it_correctly_constructs_ptrees() {
         let nodes = vec![2, 3, 5, 7, 11, 13, 17, 19, 23, 29];
 
-        let mut mmr = PeaksMerkleMountainRange::<TestHash>::new();
+        let store = LightMemoryStore::new();
+        let mut mmr = PeaksMerkleMountainRange::<TestHash, _>::new(store);
 
         for (i, v) in nodes.clone().into_iter().enumerate() {
             // Add value.

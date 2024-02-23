@@ -12,3 +12,11 @@ pub trait Store<H> {
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool;
 }
+
+pub trait LightStore<H> {
+    fn insert(&mut self, elem: H, pos: usize);
+    fn remove(&mut self, pos: usize);
+    fn get(&self, pos: usize) -> Option<H>;
+    fn len(&self) -> usize;
+    fn is_empty(&self) -> bool;
+}
