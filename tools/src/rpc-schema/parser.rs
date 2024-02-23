@@ -121,9 +121,10 @@ impl ParsedItemStruct {
             | "Blake2bHash"
             | "Blake2sHash"
             | "CompressedPublicKey"
-            | "PublicKey"
+            | "Ed25519PublicKey"
+            | "NetworkId"
             | "PrivateKey"
-            | "Signature"
+            | "Ed25519Signature"
             | "String"
             | "VrfSeed" => return Value::String("string".into()),
             "u8" | "u16" | "u32" | "u64" | "usize" | "Coin" => {
@@ -387,8 +388,8 @@ impl ParsedTraitItemFn {
             | "ValidityStartHeight"
             | "Coin" => (true, InstanceType::Number),
             "Vec" | "LogType" => (true, InstanceType::Array),
-            "String" | "AnyHash" | "Signature" | "PublicKey" | "PreImage" | "Blake2bHash"
-            | "Address" => (true, InstanceType::String),
+            "String" | "AnyHash" | "Ed25519Signature" | "Ed25519PublicKey" | "PreImage"
+            | "Blake2bHash" | "Address" => (true, InstanceType::String),
             "bool" => (true, InstanceType::Boolean),
             _ => (false, InstanceType::Object),
         }

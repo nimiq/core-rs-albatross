@@ -31,7 +31,7 @@ impl OpenRpcBuilder {
             info: InfoObject {
                 title: "Nimiq JSON-RPC Specification".to_string(),
                 description: Some("Through the use of JSON-RPC, Nimiq nodes expose a set of standardized methods and endpoints that allow external applications and tools to interact, stream and control the behavior of the nodes. This includes functionalities such as retrieving information about the blockchain state, submitting transactions, managing accounts, and configuring node settings.".to_string()),
-                version: "0.20.0".to_string(),
+                version: "Testnet 0.20.0".to_string(),
                 terms_of_service: None,
                 contact: Some(ContactObject { name: Some("The Nimiq Foundation".to_string()), email: Some("info@nimiq.com".to_string()), url: Some("https://nimiq.com".to_string()) }),
                 license: Some(LicenseObject{ name: Some("Apache License, Version 2.0".to_string()), url: Some("http://www.apache.org/licenses/LICENSE-2.0".to_string()) }),

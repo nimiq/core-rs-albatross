@@ -3,7 +3,7 @@
   "info": {
     "title": "Nimiq JSON-RPC Specification",
     "description": "Through the use of JSON-RPC, Nimiq nodes expose a set of standardized methods and endpoints that allow external applications and tools to interact, stream and control the behavior of the nodes. This includes functionalities such as retrieving information about the blockchain state, submitting transactions, managing accounts, and configuring node settings.",
-    "version": "0.20.0",
+    "version": "Testnet 0.20.0",
     "contact": {
       "name": "The Nimiq Foundation",
       "email": "info@nimiq.com",
@@ -15,6 +15,1126 @@
     }
   },
   "methods": [
+    {
+      "name": "createAccount",
+      "description": "",
+      "params": [
+        {
+          "name": "passphrase",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "ReturnAccount",
+        "schema": {
+          "$ref": "#/components/schemas/ReturnAccount"
+        }
+      }
+    },
+    {
+      "name": "createBasicTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "wallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createBasicTransactionWithData",
+      "description": "",
+      "params": [
+        {
+          "name": "wallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "data",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createDeactivateValidatorTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "validatorAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "signingSecretKey",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createDeleteValidatorTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "validatorWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createNewHtlcTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "wallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "htlcSender",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "htlcRecipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "hashRoot",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "hashCount",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "timeout",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createNewStakerTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "stakerWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "delegation",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createNewValidatorTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "validatorWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "signingSecretKey",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "votingSecretKey",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "rewardAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "signalData",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createNewVestingTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "wallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "owner",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "startTime",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "timeStep",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "numSteps",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createReactivateValidatorTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "validatorAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "signingSecretKey",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createRedeemEarlyHtlcTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "contractAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "htlcSenderSignature",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "htlcRecipientSignature",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createRedeemRegularHtlcTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "wallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "contractAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "preImage",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "hashRoot",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "hashCount",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createRedeemTimeoutHtlcTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "wallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "contractAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createRedeemVestingTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "wallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "contractAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createRemoveStakeTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "stakerWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createRetireStakeTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "stakerWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "retireStake",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createRetireValidatorTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "validatorWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createSetActiveStakeTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "stakerWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "newActiveBalance",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createStakeTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "stakerAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createUpdateStakerTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "stakerWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "newDelegation",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "reactivateAllStake",
+          "schema": {
+            "type": "boolean"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "createUpdateValidatorTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "validatorWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "newSigningSecretKey",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "newVotingSecretKey",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "newRewardAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "newSignalData",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
     {
       "name": "getAccountByAddress",
       "description": "",
@@ -63,9 +1183,96 @@
       }
     },
     {
+      "name": "getAddress",
+      "description": "",
+      "params": [],
+      "result": {
+        "name": "Address",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "getBatchAt",
+      "description": "",
+      "params": [
+        {
+          "name": "blockNumber",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "u32",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "getBatchIndexAt",
+      "description": "",
+      "params": [
+        {
+          "name": "blockNumber",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "u32",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
       "name": "getBatchNumber",
       "description": "",
       "params": [],
+      "result": {
+        "name": "u32",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "getBlockAfterJail",
+      "description": "",
+      "params": [
+        {
+          "name": "blockNumber",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "u32",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "getBlockAfterReportingWindow",
+      "description": "",
+      "params": [
+        {
+          "name": "blockNumber",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
       "result": {
         "name": "u32",
         "schema": {
@@ -148,9 +1355,161 @@
       }
     },
     {
+      "name": "getElectionBlockAfter",
+      "description": "",
+      "params": [
+        {
+          "name": "blockNumber",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "u32",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "getElectionBlockBefore",
+      "description": "",
+      "params": [
+        {
+          "name": "blockNumber",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "u32",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "getElectionBlockOf",
+      "description": "",
+      "params": [
+        {
+          "name": "epoch",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "u32",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "getEpochAt",
+      "description": "",
+      "params": [
+        {
+          "name": "blockNumber",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "u32",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "getEpochIndexAt",
+      "description": "",
+      "params": [
+        {
+          "name": "blockNumber",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "u32",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
       "name": "getEpochNumber",
       "description": "",
       "params": [],
+      "result": {
+        "name": "u32",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "getFirstBatchOfEpoch",
+      "description": "",
+      "params": [
+        {
+          "name": "blockNumber",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "bool",
+        "schema": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "getFirstBlockOf",
+      "description": "",
+      "params": [
+        {
+          "name": "epoch",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "u32",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "getFirstBlockOfBatch",
+      "description": "",
+      "params": [
+        {
+          "name": "batch",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
       "result": {
         "name": "u32",
         "schema": {
@@ -203,6 +1562,44 @@
       }
     },
     {
+      "name": "getLastElectionBlock",
+      "description": "",
+      "params": [
+        {
+          "name": "blockNumber",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "u32",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "getLastMacroBlock",
+      "description": "",
+      "params": [
+        {
+          "name": "blockNumber",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "u32",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
       "name": "getLatestBlock",
       "description": "",
       "params": [
@@ -222,6 +1619,121 @@
       }
     },
     {
+      "name": "getMacroBlockAfter",
+      "description": "",
+      "params": [
+        {
+          "name": "blockNumber",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "u32",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "getMacroBlockBefore",
+      "description": "",
+      "params": [
+        {
+          "name": "blockNumber",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "u32",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "getMacroBlockOf",
+      "description": "",
+      "params": [
+        {
+          "name": "batch",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "u32",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "getMinFeePerByte",
+      "description": "",
+      "params": [],
+      "result": {
+        "name": "f64",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "getPeerCount",
+      "description": "",
+      "params": [],
+      "result": {
+        "name": "usize",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
+      "name": "getPeerId",
+      "description": "",
+      "params": [],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "getPeerList",
+      "description": "",
+      "params": [],
+      "result": {
+        "name": "Vec",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "getPolicyConstants",
+      "description": "",
+      "params": [],
+      "result": {
+        "name": "PolicyConstants",
+        "schema": {
+          "$ref": "#/components/schemas/PolicyConstants"
+        }
+      }
+    },
+    {
       "name": "getPreviousPenalizedSlots",
       "description": "",
       "params": [],
@@ -229,6 +1741,36 @@
         "name": "PenalizedSlots",
         "schema": {
           "$ref": "#/components/schemas/PenalizedSlots"
+        }
+      }
+    },
+    {
+      "name": "getRawTransactionInfo",
+      "description": "",
+      "params": [
+        {
+          "name": "rawTx",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Transaction",
+        "schema": {
+          "$ref": "#/components/schemas/Transaction"
+        }
+      }
+    },
+    {
+      "name": "getSigningKey",
+      "description": "",
+      "params": [],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
         }
       }
     },
@@ -300,6 +1842,39 @@
       }
     },
     {
+      "name": "getSupplyAt",
+      "description": "",
+      "params": [
+        {
+          "name": "genesisSupply",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "genesisTime",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "currentTime",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "u64",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    {
       "name": "getTransactionByHash",
       "description": "",
       "params": [
@@ -315,6 +1890,25 @@
         "name": "ExecutedTransaction",
         "schema": {
           "$ref": "#/components/schemas/ExecutedTransaction"
+        }
+      }
+    },
+    {
+      "name": "getTransactionFromMempool",
+      "description": "",
+      "params": [
+        {
+          "name": "hash",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Transaction",
+        "schema": {
+          "$ref": "#/components/schemas/Transaction"
         }
       }
     },
@@ -454,6 +2048,1519 @@
       }
     },
     {
+      "name": "getVotingKey",
+      "description": "",
+      "params": [],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "getZkpState",
+      "description": "",
+      "params": [],
+      "result": {
+        "name": "ZKPState",
+        "schema": {
+          "$ref": "#/components/schemas/ZKPState"
+        }
+      }
+    },
+    {
+      "name": "importRawKey",
+      "description": "",
+      "params": [
+        {
+          "name": "keyData",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "passphrase",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Address",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "isAccountImported",
+      "description": "",
+      "params": [
+        {
+          "name": "address",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "bool",
+        "schema": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "isAccountUnlocked",
+      "description": "",
+      "params": [
+        {
+          "name": "address",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "bool",
+        "schema": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "isConsensusEstablished",
+      "description": "",
+      "params": [],
+      "result": {
+        "name": "bool",
+        "schema": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "isElectionBlockAt",
+      "description": "",
+      "params": [
+        {
+          "name": "blockNumber",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "bool",
+        "schema": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "isMacroBlockAt",
+      "description": "",
+      "params": [
+        {
+          "name": "blockNumber",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "bool",
+        "schema": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "isMicroBlockAt",
+      "description": "",
+      "params": [
+        {
+          "name": "blockNumber",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "bool",
+        "schema": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "isValidatorElected",
+      "description": "",
+      "params": [],
+      "result": {
+        "name": "bool",
+        "schema": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "isValidatorSynced",
+      "description": "",
+      "params": [],
+      "result": {
+        "name": "bool",
+        "schema": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "listAccounts",
+      "description": "",
+      "params": [],
+      "result": {
+        "name": "Vec",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "lockAccount",
+      "description": "",
+      "params": [
+        {
+          "name": "address",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "null",
+        "schema": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "name": "mempool",
+      "description": "",
+      "params": [],
+      "result": {
+        "name": "MempoolInfo",
+        "schema": {
+          "$ref": "#/components/schemas/MempoolInfo"
+        }
+      }
+    },
+    {
+      "name": "mempoolContent",
+      "description": "",
+      "params": [
+        {
+          "name": "includeTransactions",
+          "schema": {
+            "type": "boolean"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Vec",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "name": "pushHighPriorityTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "rawTx",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "pushTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "rawTx",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendBasicTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "wallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendBasicTransactionWithData",
+      "description": "",
+      "params": [
+        {
+          "name": "wallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "data",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendDeactivateValidatorTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "validatorAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "signingSecretKey",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendDeleteValidatorTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "validatorWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendNewHtlcTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "wallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "htlcSender",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "htlcRecipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "hashRoot",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "hashCount",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "timeout",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendNewStakerTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "stakerWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "delegation",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendNewValidatorTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "validatorWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "signingSecretKey",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "votingSecretKey",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "rewardAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "signalData",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendNewVestingTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "wallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "owner",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "startTime",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "timeStep",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "numSteps",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendRawTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "rawTx",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendReactivateValidatorTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "validatorAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "signingSecretKey",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendRedeemEarlyHtlcTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "contractAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "htlcSenderSignature",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "htlcRecipientSignature",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendRedeemRegularHtlcTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "wallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "contractAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "preImage",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "hashRoot",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "hashCount",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendRedeemTimeoutHtlcTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "wallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "contractAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendRedeemVestingTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "wallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "contractAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendRemoveStakeTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "stakerWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendRetireStakeTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "stakerWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "retireStake",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendRetireValidatorTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "validatorWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendSetActiveStakeTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "stakerWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "newActiveBalance",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendStakeTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "stakerAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendUpdateStakerTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "stakerWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "newDelegation",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "reactivateAllStake",
+          "schema": {
+            "type": "boolean"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "sendUpdateValidatorTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "senderWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "validatorWallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "newSigningSecretKey",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "newVotingSecretKey",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "newRewardAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "newSignalData",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "Blake2bHash",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "setAutomaticReactivation",
+      "description": "",
+      "params": [
+        {
+          "name": "automaticReactivate",
+          "schema": {
+            "type": "boolean"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "null",
+        "schema": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "name": "sign",
+      "description": "",
+      "params": [
+        {
+          "name": "message",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "address",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "passphrase",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "isHex",
+          "schema": {
+            "type": "boolean"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "ReturnSignature",
+        "schema": {
+          "$ref": "#/components/schemas/ReturnSignature"
+        }
+      }
+    },
+    {
+      "name": "signRedeemEarlyHtlcTransaction",
+      "description": "",
+      "params": [
+        {
+          "name": "wallet",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "contractAddress",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "recipient",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "value",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "fee",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        },
+        {
+          "name": "validityStartHeight",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "String",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
       "name": "subscribeForHeadBlock",
       "description": "",
       "params": [
@@ -530,10 +3637,239 @@
           "type": "number"
         }
       }
+    },
+    {
+      "name": "unlockAccount",
+      "description": "",
+      "params": [
+        {
+          "name": "address",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "passphrase",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "duration",
+          "schema": {
+            "type": "number"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "bool",
+        "schema": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "name": "verifySignature",
+      "description": "",
+      "params": [
+        {
+          "name": "message",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "publicKey",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "signature",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "isHex",
+          "schema": {
+            "type": "boolean"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "bool",
+        "schema": {
+          "type": "boolean"
+        }
+      }
     }
   ],
   "components": {
     "schemas": {
+      "DoubleProposalProof": {
+        "title": "DoubleProposalProof",
+        "description": "",
+        "required": [
+          "blockNumber",
+          "hashes"
+        ],
+        "properties": {
+          "blockNumber": {
+            "title": "blockNumber",
+            "type": "number"
+          }
+        }
+      },
+      "Slot": {
+        "title": "Slot",
+        "description": "",
+        "required": [
+          "slotNumber",
+          "validator",
+          "publicKey"
+        ],
+        "properties": {
+          "slotNumber": {
+            "title": "slotNumber",
+            "type": "number"
+          },
+          "validator": {
+            "title": "validator",
+            "type": "string"
+          },
+          "publicKey": {
+            "title": "publicKey",
+            "type": "string"
+          }
+        }
+      },
+      "PenalizedSlots": {
+        "title": "PenalizedSlots",
+        "description": "",
+        "required": [
+          "blockNumber",
+          "disabled"
+        ],
+        "properties": {
+          "blockNumber": {
+            "title": "blockNumber",
+            "type": "number"
+          },
+          "disabled": {
+            "title": "disabled",
+            "type": "object"
+          }
+        }
+      },
+      "ReturnSignature": {
+        "title": "ReturnSignature",
+        "description": "",
+        "required": [
+          "publicKey",
+          "signature"
+        ],
+        "properties": {
+          "publicKey": {
+            "title": "publicKey",
+            "type": "string"
+          },
+          "signature": {
+            "title": "signature",
+            "type": "string"
+          }
+        }
+      },
+      "PolicyConstants": {
+        "title": "PolicyConstants",
+        "description": "",
+        "required": [
+          "stakingContractAddress",
+          "coinbaseAddress",
+          "transactionValidityWindow",
+          "maxSizeMicroBody",
+          "version",
+          "slots",
+          "blocksPerBatch",
+          "batchesPerEpoch",
+          "blocksPerEpoch",
+          "validatorDeposit",
+          "minimumStake",
+          "totalSupply",
+          "blockSeparationTime",
+          "jailEpochs",
+          "genesisBlockNumber"
+        ],
+        "properties": {
+          "stakingContractAddress": {
+            "title": "stakingContractAddress",
+            "type": "string"
+          },
+          "coinbaseAddress": {
+            "title": "coinbaseAddress",
+            "type": "string"
+          },
+          "transactionValidityWindow": {
+            "title": "transactionValidityWindow",
+            "type": "number"
+          },
+          "maxSizeMicroBody": {
+            "title": "maxSizeMicroBody",
+            "type": "number"
+          },
+          "version": {
+            "title": "version",
+            "type": "number"
+          },
+          "slots": {
+            "title": "slots",
+            "type": "number"
+          },
+          "blocksPerBatch": {
+            "title": "blocksPerBatch",
+            "type": "number"
+          },
+          "batchesPerEpoch": {
+            "title": "batchesPerEpoch",
+            "type": "number"
+          },
+          "blocksPerEpoch": {
+            "title": "blocksPerEpoch",
+            "type": "number"
+          },
+          "validatorDeposit": {
+            "title": "validatorDeposit",
+            "type": "number"
+          },
+          "minimumStake": {
+            "title": "minimumStake",
+            "type": "number"
+          },
+          "totalSupply": {
+            "title": "totalSupply",
+            "type": "number"
+          },
+          "blockSeparationTime": {
+            "title": "blockSeparationTime",
+            "type": "number"
+          },
+          "jailEpochs": {
+            "title": "jailEpochs",
+            "type": "number"
+          },
+          "genesisBlockNumber": {
+            "title": "genesisBlockNumber",
+            "type": "number"
+          }
+        }
+      },
       "BlockchainState": {
         "title": "BlockchainState",
         "description": "",
@@ -552,21 +3888,170 @@
           }
         }
       },
-      "RPCData": {
-        "title": "RPCData",
+      "TendermintProof": {
+        "title": "TendermintProof",
         "description": "",
         "required": [
-          "data",
-          "metadata"
+          "round",
+          "sig"
         ],
         "properties": {
-          "data": {
-            "title": "data",
-            "type": "object"
+          "round": {
+            "title": "round",
+            "type": "number"
           },
-          "metadata": {
-            "title": "metadata",
+          "sig": {
+            "title": "sig",
             "type": "object"
+          }
+        }
+      },
+      "ZKPState": {
+        "title": "ZKPState",
+        "description": "",
+        "required": [
+          "latestBlock"
+        ],
+        "properties": {
+          "latestBlock": {
+            "title": "latestBlock",
+            "$ref": "#/components/schemas/Block"
+          },
+          "latestProof": {
+            "title": "latestProof",
+            "type": "string"
+          }
+        }
+      },
+      "DoubleVoteProof": {
+        "title": "DoubleVoteProof",
+        "description": "",
+        "required": [
+          "blockNumber"
+        ],
+        "properties": {
+          "blockNumber": {
+            "title": "blockNumber",
+            "type": "number"
+          }
+        }
+      },
+      "ExecutedTransaction": {
+        "title": "ExecutedTransaction",
+        "description": "",
+        "required": [
+          "transaction",
+          "executionResult"
+        ],
+        "properties": {
+          "transaction": {
+            "title": "transaction",
+            "$ref": "#/components/schemas/Transaction"
+          },
+          "executionResult": {
+            "title": "executionResult",
+            "type": "boolean"
+          }
+        }
+      },
+      "Slots": {
+        "title": "Slots",
+        "description": "",
+        "required": [
+          "firstSlotNumber",
+          "numSlots",
+          "validator",
+          "publicKey"
+        ],
+        "properties": {
+          "firstSlotNumber": {
+            "title": "firstSlotNumber",
+            "type": "number"
+          },
+          "numSlots": {
+            "title": "numSlots",
+            "type": "number"
+          },
+          "validator": {
+            "title": "validator",
+            "type": "string"
+          },
+          "publicKey": {
+            "title": "publicKey",
+            "type": "string"
+          }
+        }
+      },
+      "Account": {
+        "title": "Account",
+        "description": "",
+        "required": [
+          "address",
+          "balance",
+          "accountAdditionalFields"
+        ],
+        "properties": {
+          "address": {
+            "title": "address",
+            "type": "string"
+          },
+          "balance": {
+            "title": "balance",
+            "type": "number"
+          },
+          "accountAdditionalFields": {
+            "title": "accountAdditionalFields",
+            "type": "object"
+          }
+        }
+      },
+      "Staker": {
+        "title": "Staker",
+        "description": "",
+        "required": [
+          "address",
+          "balance",
+          "inactiveBalance",
+          "retiredBalance"
+        ],
+        "properties": {
+          "address": {
+            "title": "address",
+            "type": "string"
+          },
+          "balance": {
+            "title": "balance",
+            "type": "number"
+          },
+          "delegation": {
+            "title": "delegation",
+            "type": "string"
+          },
+          "inactiveBalance": {
+            "title": "inactiveBalance",
+            "type": "number"
+          },
+          "inactiveFrom": {
+            "title": "inactiveFrom",
+            "type": "number"
+          },
+          "retiredBalance": {
+            "title": "retiredBalance",
+            "type": "number"
+          }
+        }
+      },
+      "ForkProof": {
+        "title": "ForkProof",
+        "description": "",
+        "required": [
+          "blockNumber",
+          "hashes"
+        ],
+        "properties": {
+          "blockNumber": {
+            "title": "blockNumber",
+            "type": "number"
           }
         }
       },
@@ -647,61 +4132,6 @@
           }
         }
       },
-      "Slot": {
-        "title": "Slot",
-        "description": "",
-        "required": [
-          "slotNumber",
-          "validator",
-          "publicKey"
-        ],
-        "properties": {
-          "slotNumber": {
-            "title": "slotNumber",
-            "type": "number"
-          },
-          "validator": {
-            "title": "validator",
-            "type": "string"
-          },
-          "publicKey": {
-            "title": "publicKey",
-            "type": "string"
-          }
-        }
-      },
-      "PenalizedSlots": {
-        "title": "PenalizedSlots",
-        "description": "",
-        "required": [
-          "blockNumber",
-          "disabled"
-        ],
-        "properties": {
-          "blockNumber": {
-            "title": "blockNumber",
-            "type": "number"
-          },
-          "disabled": {
-            "title": "disabled",
-            "type": "object"
-          }
-        }
-      },
-      "ForkProof": {
-        "title": "ForkProof",
-        "description": "",
-        "required": [
-          "blockNumber",
-          "hashes"
-        ],
-        "properties": {
-          "blockNumber": {
-            "title": "blockNumber",
-            "type": "number"
-          }
-        }
-      },
       "Block": {
         "title": "Block",
         "description": "",
@@ -710,6 +4140,7 @@
           "size",
           "batch",
           "epoch",
+          "network",
           "version",
           "number",
           "timestamp",
@@ -736,6 +4167,10 @@
           "epoch": {
             "title": "epoch",
             "type": "number"
+          },
+          "network": {
+            "title": "network",
+            "type": "string"
           },
           "version": {
             "title": "version",
@@ -786,141 +4221,6 @@
           "additionalFields": {
             "title": "additionalFields",
             "type": "object"
-          }
-        }
-      },
-      "ReturnSignature": {
-        "title": "ReturnSignature",
-        "description": "",
-        "required": [
-          "publicKey",
-          "signature"
-        ],
-        "properties": {
-          "publicKey": {
-            "title": "publicKey",
-            "type": "string"
-          },
-          "signature": {
-            "title": "signature",
-            "type": "string"
-          }
-        }
-      },
-      "ReturnAccount": {
-        "title": "ReturnAccount",
-        "description": "",
-        "required": [
-          "address",
-          "publicKey",
-          "privateKey"
-        ],
-        "properties": {
-          "address": {
-            "title": "address",
-            "type": "string"
-          },
-          "publicKey": {
-            "title": "publicKey",
-            "type": "string"
-          },
-          "privateKey": {
-            "title": "privateKey",
-            "type": "string"
-          }
-        }
-      },
-      "Slots": {
-        "title": "Slots",
-        "description": "",
-        "required": [
-          "firstSlotNumber",
-          "numSlots",
-          "validator",
-          "publicKey"
-        ],
-        "properties": {
-          "firstSlotNumber": {
-            "title": "firstSlotNumber",
-            "type": "number"
-          },
-          "numSlots": {
-            "title": "numSlots",
-            "type": "number"
-          },
-          "validator": {
-            "title": "validator",
-            "type": "string"
-          },
-          "publicKey": {
-            "title": "publicKey",
-            "type": "string"
-          }
-        }
-      },
-      "ZKPState": {
-        "title": "ZKPState",
-        "description": "",
-        "required": [
-          "latestBlock"
-        ],
-        "properties": {
-          "latestBlock": {
-            "title": "latestBlock",
-            "$ref": "#/components/schemas/Block"
-          },
-          "latestProof": {
-            "title": "latestProof",
-            "type": "string"
-          }
-        }
-      },
-      "TendermintProof": {
-        "title": "TendermintProof",
-        "description": "",
-        "required": [
-          "round",
-          "sig"
-        ],
-        "properties": {
-          "round": {
-            "title": "round",
-            "type": "number"
-          },
-          "sig": {
-            "title": "sig",
-            "type": "object"
-          }
-        }
-      },
-      "DoubleVoteProof": {
-        "title": "DoubleVoteProof",
-        "description": "",
-        "required": [
-          "blockNumber"
-        ],
-        "properties": {
-          "blockNumber": {
-            "title": "blockNumber",
-            "type": "number"
-          }
-        }
-      },
-      "ExecutedTransaction": {
-        "title": "ExecutedTransaction",
-        "description": "",
-        "required": [
-          "transaction",
-          "executionResult"
-        ],
-        "properties": {
-          "transaction": {
-            "title": "transaction",
-            "$ref": "#/components/schemas/Transaction"
-          },
-          "executionResult": {
-            "title": "executionResult",
-            "type": "boolean"
           }
         }
       },
@@ -1018,93 +4318,43 @@
           }
         }
       },
-      "PolicyConstants": {
-        "title": "PolicyConstants",
-        "description": "",
-        "required": [
-          "stakingContractAddress",
-          "coinbaseAddress",
-          "transactionValidityWindow",
-          "maxSizeMicroBody",
-          "version",
-          "slots",
-          "blocksPerBatch",
-          "batchesPerEpoch",
-          "blocksPerEpoch",
-          "validatorDeposit",
-          "totalSupply",
-          "blockSeparationTime"
-        ],
-        "properties": {
-          "stakingContractAddress": {
-            "title": "stakingContractAddress",
-            "type": "string"
-          },
-          "coinbaseAddress": {
-            "title": "coinbaseAddress",
-            "type": "string"
-          },
-          "transactionValidityWindow": {
-            "title": "transactionValidityWindow",
-            "type": "number"
-          },
-          "maxSizeMicroBody": {
-            "title": "maxSizeMicroBody",
-            "type": "number"
-          },
-          "version": {
-            "title": "version",
-            "type": "number"
-          },
-          "slots": {
-            "title": "slots",
-            "type": "number"
-          },
-          "blocksPerBatch": {
-            "title": "blocksPerBatch",
-            "type": "number"
-          },
-          "batchesPerEpoch": {
-            "title": "batchesPerEpoch",
-            "type": "number"
-          },
-          "blocksPerEpoch": {
-            "title": "blocksPerEpoch",
-            "type": "number"
-          },
-          "validatorDeposit": {
-            "title": "validatorDeposit",
-            "type": "number"
-          },
-          "totalSupply": {
-            "title": "totalSupply",
-            "type": "number"
-          },
-          "blockSeparationTime": {
-            "title": "blockSeparationTime",
-            "type": "number"
-          }
-        }
-      },
-      "Account": {
-        "title": "Account",
+      "ReturnAccount": {
+        "title": "ReturnAccount",
         "description": "",
         "required": [
           "address",
-          "balance",
-          "accountAdditionalFields"
+          "publicKey",
+          "privateKey"
         ],
         "properties": {
           "address": {
             "title": "address",
             "type": "string"
           },
-          "balance": {
-            "title": "balance",
-            "type": "number"
+          "publicKey": {
+            "title": "publicKey",
+            "type": "string"
           },
-          "accountAdditionalFields": {
-            "title": "accountAdditionalFields",
+          "privateKey": {
+            "title": "privateKey",
+            "type": "string"
+          }
+        }
+      },
+      "RPCData": {
+        "title": "RPCData",
+        "description": "",
+        "required": [
+          "data",
+          "metadata"
+        ],
+        "properties": {
+          "data": {
+            "title": "data",
+            "type": "object"
+          },
+          "metadata": {
+            "title": "metadata",
             "type": "object"
           }
         }
@@ -1160,56 +4410,6 @@
           },
           "jailedFrom": {
             "title": "jailedFrom",
-            "type": "number"
-          }
-        }
-      },
-      "DoubleProposalProof": {
-        "title": "DoubleProposalProof",
-        "description": "",
-        "required": [
-          "blockNumber",
-          "hashes"
-        ],
-        "properties": {
-          "blockNumber": {
-            "title": "blockNumber",
-            "type": "number"
-          }
-        }
-      },
-      "Staker": {
-        "title": "Staker",
-        "description": "",
-        "required": [
-          "address",
-          "balance",
-          "inactiveBalance",
-          "retiredBalance"
-        ],
-        "properties": {
-          "address": {
-            "title": "address",
-            "type": "string"
-          },
-          "balance": {
-            "title": "balance",
-            "type": "number"
-          },
-          "delegation": {
-            "title": "delegation",
-            "type": "string"
-          },
-          "inactiveBalance": {
-            "title": "inactiveBalance",
-            "type": "number"
-          },
-          "inactiveFrom": {
-            "title": "inactiveFrom",
-            "type": "number"
-          },
-          "retiredBalance": {
-            "title": "retiredBalance",
             "type": "number"
           }
         }
