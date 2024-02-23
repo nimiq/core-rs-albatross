@@ -67,3 +67,19 @@ heapless-cas = ["heapless", "heapless/cas"]
 alloc = ["serde/alloc", "embedded-io/alloc"]
 use-defmt = ["defmt"]
 use-crc = ["crc", "paste"]
+
+[dev-dependencies.criterion]
+version = "0.5"
+
+[dev-dependencies.serde-big-array]
+version = "0.5.1"
+
+[dev-dependencies.serde_bytes]
+version = "0.11.12"
+
+[dev-dependencies.serde-byte-array]
+version = "0.1.2"
+
+[[bench]]
+name = "byte_array"
+harness = false
