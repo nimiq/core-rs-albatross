@@ -57,7 +57,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
             self.validity_requests = Some(ValidityChunkRequest {
                 verifier_block_number,
-                root_hash: expected_root,
+                root_hash: expected_root.clone(),
                 chunk_index,
                 validity_start: validity_window_start,
                 election_in_window,
@@ -79,6 +79,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 epoch = epoch_number,
                 validity_start = validity_window_start,
                 election_in_between = election_in_window,
+                expected_root = %expected_root,
                 "Starting validity window synchronization process"
             );
 
@@ -222,7 +223,9 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                             if peer_request.election_in_window {
                                 log::trace!(
                                     current_epoch = Policy::epoch_at(verifier_block_number),
-                                    "Moving to the next epoch to continue syncing, current epoch",
+                                    new_verifier_bn = macro_head_number,
+                                    new_expected_root = %macro_history_root,
+                                    "Moving to the next epoch to continue syncing",
                                 );
 
                                 // Move to the next epoch:
@@ -233,7 +236,10 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                 peer_request.verifier_block_number = verifier_block_number;
                             } else {
                                 // No election in between, so we are done
-                                log::debug!("Validity window syncing is complete");
+                                log::debug!(
+                                    synced_root = %expected_root,
+                                    "Validity window syncing is complete"
+                                );
 
                                 self.validity_queue.remove_peer(&peer_id);
                                 self.syncing_peers.remove(&peer_id);
