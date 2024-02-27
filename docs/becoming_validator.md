@@ -125,7 +125,7 @@ status
 ## 3. Become a Validator
 
 To become a validator, you need to send a _create_ validator transaction. For that you need to have an account
-with at least the validator deposit fee (10 000 NIM). This guide assumes that this amount is already present in the validator address. To check if that is the case, use:
+with at least the validator deposit fee (100 000 NIM). This guide assumes that this amount is already present in the validator address. To check if that is the case, use:
 
 ```
 account:get <validator_address>
