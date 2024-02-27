@@ -1,7 +1,7 @@
 use std::{cmp, convert::TryInto};
 
 use nimiq_database::{
-    traits::{ReadCursor, ReadTransaction, WriteTransaction},
+    traits::{ReadCursor, ReadTransaction, WriteCursor, WriteTransaction},
     TableProxy, TransactionProxy, WriteTransactionProxy,
 };
 use nimiq_hash::Blake2bHash;
@@ -163,7 +163,7 @@ impl<'a, 'env> Store<Blake2bHash> for MMRStore<'a, 'env> {
 pub struct LightMMRStore<'a, 'env> {
     hist_tree_table: &'a TableProxy,
     tx: Tx<'a, 'env>,
-    epoch_number: u32,
+    block_number: u32,
     size: usize,
 }
 
@@ -172,13 +172,13 @@ impl<'a, 'env> LightMMRStore<'a, 'env> {
     pub fn with_read_transaction(
         hist_tree_table: &'a TableProxy,
         tx: &'a TransactionProxy<'env>,
-        epoch_number: u32,
+        block_number: u32,
     ) -> Self {
-        let size = get_size(hist_tree_table, tx, epoch_number);
+        let size = get_size(hist_tree_table, tx, block_number);
         LightMMRStore {
             hist_tree_table,
             tx: Tx::Read(tx),
-            epoch_number,
+            block_number,
             size,
         }
     }
@@ -187,35 +187,68 @@ impl<'a, 'env> LightMMRStore<'a, 'env> {
     pub fn with_write_transaction(
         hist_tree_table: &'a TableProxy,
         tx: &'a mut WriteTransactionProxy<'env>,
-        epoch_number: u32,
+        block_number: u32,
     ) -> Self {
-        let size = get_size(hist_tree_table, tx, epoch_number);
+        let size = get_size(hist_tree_table, tx, block_number);
         LightMMRStore {
             hist_tree_table,
             tx: Tx::Write(tx),
-            epoch_number,
+            block_number,
             size,
         }
+    }
+}
+
+/// Removes all txns corresponding to the given block number
+pub fn remove_block_from_store(
+    hist_tree_table: &TableProxy,
+    txn: &mut WriteTransactionProxy,
+    block_number: u32,
+) {
+    // Calculate the key for the beginning of the block `block_number || 0`.
+    let block_start = index_to_key(block_number, 0);
+
+    // Initialize the cursor for the database.
+    let mut cursor = WriteTransaction::cursor(txn, hist_tree_table);
+
+    if cursor.seek_key::<_, Blake2bHash>(&block_start).is_none() {
+        return;
+    }
+
+    let mut current_block_number = block_number;
+
+    while current_block_number == block_number {
+        cursor.remove();
+
+        let (next_key, _) = match cursor.next::<Vec<u8>, Blake2bHash>() {
+            Some(v) => v,
+            None => return,
+        };
+
+        // Deconstruct the key into a block number and a node index.
+        let (new_block_number, _) = key_to_index(next_key).unwrap();
+
+        current_block_number = new_block_number;
     }
 }
 
 impl<'a, 'env> LightStore<Blake2bHash> for LightMMRStore<'a, 'env> {
     fn insert(&mut self, elem: Blake2bHash, pos: usize) {
         if let Tx::Write(ref mut tx) = self.tx {
-            let key = index_to_key(self.epoch_number, pos);
+            let key = index_to_key(self.block_number, pos);
             tx.put(self.hist_tree_table, &key, &elem);
         }
     }
 
     fn remove(&mut self, pos: usize) {
         if let Tx::Write(ref mut tx) = self.tx {
-            let key = index_to_key(self.epoch_number, pos);
+            let key = index_to_key(self.block_number, pos);
             tx.remove(self.hist_tree_table, &key);
         }
     }
 
     fn get(&self, pos: usize) -> Option<Blake2bHash> {
-        let key = index_to_key(self.epoch_number, pos);
+        let key = index_to_key(self.block_number, pos);
         match self.tx {
             Tx::Read(tx) => tx.get(self.hist_tree_table, &key),
             Tx::Write(ref tx) => tx.get(self.hist_tree_table, &key),

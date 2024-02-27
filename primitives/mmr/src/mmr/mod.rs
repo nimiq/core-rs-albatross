@@ -575,12 +575,14 @@ impl<H: Merge + Clone, S: LightStore<H>> PeaksMerkleMountainRange<H, S> {
 
         // Finally update the store
         for pos in to_remove {
-            self.store.remove(pos);
+            if pos != 0 {
+                self.store.remove(pos);
+            }
         }
 
-        // Remove any temporal element that was created that is no longer needed
+        // Remove any temporary element that was created that is no longer needed
         for pos in temp_elements {
-            if !new_peaks.contains(&pos) {
+            if !new_peaks.contains(&pos) && pos != 0 {
                 self.store.remove(pos);
             }
         }

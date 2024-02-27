@@ -6,7 +6,11 @@ use nimiq_hash::Blake2bHash;
 use nimiq_mmr::mmr::PeaksMerkleMountainRange;
 use nimiq_transaction::historic_transaction::HistoricTransaction;
 
-use super::{interface::HistoryInterface, mmr_store::LightMMRStore, validity_store::ValidityStore};
+use super::{
+    interface::HistoryInterface,
+    mmr_store::{remove_block_from_store, LightMMRStore},
+    validity_store::ValidityStore,
+};
 
 /// The LightHistoryStore is a simplified version of the history store.
 /// Internally it uses a Peaks-only MMR
@@ -43,8 +47,8 @@ impl HistoryInterface for LightHistoryStore {
         todo!()
     }
 
-    fn remove_block(&self, _txn: &mut WriteTransactionProxy, _block_number: u32) -> u64 {
-        todo!()
+    fn remove_block(&self, txn: &mut WriteTransactionProxy, block_number: u32) {
+        remove_block_from_store(&self.hist_tree_table, txn, block_number);
     }
 
     fn remove_history(&self, _txn: &mut WriteTransactionProxy, _epoch_number: u32) -> Option<()> {
@@ -291,7 +295,9 @@ impl HistoryInterface for LightHistoryStore {
 mod tests {
     use nimiq_database::{traits::Database, volatile::VolatileDatabase};
     use nimiq_genesis::NetworkId;
+    use nimiq_hash::Blake2bHash;
     use nimiq_keys::Address;
+    use nimiq_mmr::hash::Merge;
     use nimiq_primitives::coin::Coin;
     use nimiq_transaction::{
         historic_transaction::{HistoricTransaction, HistoricTransactionData},
@@ -308,15 +314,99 @@ mod tests {
 
         // Create historic transactions.
         let ext_0 = create_transaction(1, 0);
-        let ext_1 = create_transaction(3, 1);
-        let ext_2 = create_transaction(7, 2);
-        let ext_3 = create_transaction(8, 3);
+        let ext_1 = create_transaction(1, 1);
+        let ext_2 = create_transaction(2, 2);
+        let ext_3 = create_transaction(3, 3);
+        let ext_4 = create_transaction(3, 4);
+        let ext_5 = create_transaction(3, 5);
+        let ext_6 = create_transaction(3, 6);
+        let ext_7 = create_transaction(3, 7);
 
-        let hist_txs = vec![ext_0, ext_1, ext_2, ext_3];
+        let hist_txs = vec![ext_0, ext_1];
 
         // Add historic transactions to History Store.
         let mut txn = env.write_transaction();
         history_store.add_to_history(&mut txn, 1, &hist_txs);
+
+        let hist_txs = vec![ext_2];
+        history_store.add_to_history(&mut txn, 2, &hist_txs);
+
+        let hist_txs = vec![ext_3, ext_4, ext_5, ext_6, ext_7];
+        history_store.add_to_history(&mut txn, 3, &hist_txs);
+
+        let len_1 = history_store.total_len_at_epoch(1, Some(&txn));
+        let len_2 = history_store.total_len_at_epoch(2, Some(&txn));
+        let len_3 = history_store.total_len_at_epoch(3, Some(&txn));
+
+        assert_eq!(len_1, 3);
+        assert_eq!(len_2, 1);
+        assert_eq!(len_3, 8);
+    }
+
+    #[test]
+    fn it_can_remove_a_block() {
+        // Initialize History Store.
+        let env = VolatileDatabase::new(20).unwrap();
+        let history_store = LightHistoryStore::_new(env.clone());
+        let mut txn = env.write_transaction();
+
+        // Create historic transactions for block 1
+        let ext_0 = create_transaction(1, 0);
+        let ext_1 = create_transaction(1, 1);
+        let hist_txs = vec![ext_0, ext_1];
+
+        // Add historic transactions to History Store.
+        history_store.add_to_history(&mut txn, 1, &hist_txs);
+
+        // Create historic transactions for block 2
+        let ext_0 = create_transaction(2, 0);
+        let ext_1 = create_transaction(2, 1);
+        let ext_2 = create_transaction(2, 2);
+        let hist_txs = vec![ext_0, ext_1, ext_2];
+
+        // Add historic transactions to History Store.
+        history_store.add_to_history(&mut txn, 2, &hist_txs);
+
+        // Create historic transactions for block 3
+        let ext_0 = create_transaction(3, 0);
+        let ext_1 = create_transaction(3, 1);
+        let ext_2 = create_transaction(3, 2);
+        let ext_3 = create_transaction(3, 3);
+        let hist_txs = vec![ext_0, ext_1, ext_2, ext_3];
+
+        // Add historic transactions to History Store.
+        history_store.add_to_history(&mut txn, 3, &hist_txs);
+
+        let size_1 = history_store.total_len_at_epoch(1, Some(&txn));
+        let size_2 = history_store.total_len_at_epoch(2, Some(&txn));
+        let size_3 = history_store.total_len_at_epoch(3, Some(&txn));
+
+        assert_eq!(size_1, 3);
+        assert_eq!(size_2, 4);
+        assert_eq!(size_3, 7);
+
+        let prev_root_1 = history_store.get_history_tree_root(1, Some(&txn)).unwrap();
+        let _prev_root_2 = history_store.get_history_tree_root(2, Some(&txn)).unwrap();
+        let prev_root_3 = history_store.get_history_tree_root(3, Some(&txn)).unwrap();
+
+        history_store.remove_block(&mut txn, 2);
+
+        let size_1 = history_store.total_len_at_epoch(1, Some(&txn));
+        let size_2 = history_store.total_len_at_epoch(2, Some(&txn));
+        let size_3 = history_store.total_len_at_epoch(3, Some(&txn));
+
+        assert_eq!(size_1, 3);
+        assert_eq!(size_2, 0);
+        assert_eq!(size_3, 7);
+
+        let empty_root = Blake2bHash::empty(0);
+        let root_1 = history_store.get_history_tree_root(1, Some(&txn)).unwrap();
+        let root_2 = history_store.get_history_tree_root(2, Some(&txn)).unwrap();
+        let root_3 = history_store.get_history_tree_root(3, Some(&txn)).unwrap();
+
+        assert_eq!(prev_root_1, root_1);
+        assert_eq!(empty_root, root_2);
+        assert_eq!(prev_root_3, root_3);
     }
 
     fn create_transaction(block: u32, value: u64) -> HistoricTransaction {
