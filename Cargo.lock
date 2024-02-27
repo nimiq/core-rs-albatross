@@ -2163,7 +2163,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.5",
+ "socket2 0.4.9",
  "tokio",
  "tower-service",
  "tracing",
@@ -4808,7 +4808,7 @@ dependencies = [
 [[package]]
 name = "nimiq_rpc"
 version = "0.1.3"
-source = "git+https://github.com/jsdanielh/rust-client.git#88fe31028df2afd356708ce86d5370f8011b1946"
+source = "git+https://github.com/jsdanielh/rust-client.git#13883e8ea4aa9f45b51caf486efb17566b3c3f05"
 dependencies = [
  "async-trait",
  "base64 0.21.7",
