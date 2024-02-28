@@ -14,9 +14,9 @@ use syn::{
     PathSegment, ReturnType, TraitItem, TraitItemFn, Type,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ParsedItemStruct(ItemStruct);
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ParsedTraitItemFn(TraitItemFn);
 
 impl ParsedItemStruct {
@@ -111,8 +111,8 @@ impl ParsedItemStruct {
     }
 
     fn map_type(path: &Path) -> Value {
-        let inner_ident = Self::unwrap_type(path.clone(), true);
-        match inner_ident.1.to_string().as_str() {
+        let (_, inner_ident) = Self::unwrap_type(path.clone(), true);
+        match inner_ident.to_string().as_str() {
             "Address"
             | "Blake2bHash"
             | "Blake2sHash"
@@ -131,7 +131,7 @@ impl ParsedItemStruct {
             | "T"
             | "BlockAdditionalFields"
             | "MultiSignature" => Value::String("object".into()),
-            _ => panic!("{:?}", inner_ident),
+            _ => panic!("{}", inner_ident),
         }
     }
 
