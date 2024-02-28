@@ -1,12 +1,12 @@
 use convert_case::{Case, Casing};
-use open_rpc_schema::{
+use crate::openrpc::{
     document::{ContentDescriptorObject, ContentDescriptorOrReference, JSONSchema},
-    schemars::schema::{
-        ArrayValidation, InstanceType, RootSchema,
-        Schema::{self},
-        SchemaObject, SingleOrVec,
-    },
 };
+    use schemars::schema::{
+        ArrayValidation, InstanceType, RootSchema,
+        Schema,
+        SchemaObject, SingleOrVec,
+    };
 use quote::ToTokens;
 use serde_json::{Map, Value};
 use syn::{

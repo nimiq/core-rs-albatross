@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 
-use open_rpc_schema::document::{
+use self::document::{
     Components, ContactObject, InfoObject, LicenseObject, MethodObject, Openrpc, OpenrpcDocument,
 };
 use serde_json::{Map, Value};
 
 use crate::parser::{ParsedItemStruct, ParsedTraitItemFn};
+
+#[allow(unused)]
+pub mod document;
 
 #[derive(Clone)]
 pub struct OpenRpcBuilder {

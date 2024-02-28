@@ -12,7 +12,7 @@ use syn::parse_file;
 use crate::openrpc::OpenRpcBuilder;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let directory = "./rpc-interface/src";
+    let directory = "rpc-interface/src";
     let mut builder = OpenRpcBuilder::builder();
     if let Ok(entries) = fs::read_dir(directory) {
         for entry in entries.flatten() {
