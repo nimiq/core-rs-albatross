@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use schemars::gen::SchemaSettings;
 use schemars::schema::RootSchema;
 use nimiq_serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum Openrpc {
@@ -124,7 +124,7 @@ pub struct ServerObjectVariable {
     pub variable_enum: Option<ServerObjectVariableEnum>,
 }
 
-pub type ServerObjectVariables = HashMap<String, Option<serde_json::Value>>;
+pub type ServerObjectVariables = BTreeMap<String, Option<serde_json::Value>>;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ServerObject {
@@ -244,21 +244,21 @@ pub type StringArray = Vec<StringDoaGddGA>;
 ///
 /// {}
 ///
-pub type Definitions = HashMap<String, Option<serde_json::Value>>;
+pub type Definitions = BTreeMap<String, Option<serde_json::Value>>;
 /// Properties
 ///
 /// # Default
 ///
 /// {}
 ///
-pub type Properties = HashMap<String, Option<serde_json::Value>>;
+pub type Properties = BTreeMap<String, Option<serde_json::Value>>;
 /// PatternProperties
 ///
 /// # Default
 ///
 /// {}
 ///
-pub type PatternProperties = HashMap<String, Option<serde_json::Value>>;
+pub type PatternProperties = BTreeMap<String, Option<serde_json::Value>>;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(untagged)]
@@ -267,7 +267,7 @@ pub enum DependenciesSet {
     StringArray(StringArray),
 }
 
-pub type Dependencies = HashMap<String, Option<serde_json::Value>>;
+pub type Dependencies = BTreeMap<String, Option<serde_json::Value>>;
 pub type Enum = Vec<AlwaysTrue>;
 pub type SimpleTypes = serde_json::Value;
 pub type ArrayOfSimpleTypes = Vec<SimpleTypes>;
@@ -485,13 +485,13 @@ pub struct MethodObject {
 }
 
 pub type Methods = Vec<MethodObject>;
-pub type SchemaComponents = HashMap<String, Option<serde_json::Value>>;
-pub type LinkComponents = HashMap<String, Option<serde_json::Value>>;
-pub type ErrorComponents = HashMap<String, Option<serde_json::Value>>;
-pub type ExampleComponents = HashMap<String, Option<serde_json::Value>>;
-pub type ExamplePairingComponents = HashMap<String, Option<serde_json::Value>>;
-pub type ContentDescriptorComponents = HashMap<String, Option<serde_json::Value>>;
-pub type TagComponents = HashMap<String, Option<serde_json::Value>>;
+pub type SchemaComponents = BTreeMap<String, Option<serde_json::Value>>;
+pub type LinkComponents = BTreeMap<String, Option<serde_json::Value>>;
+pub type ErrorComponents = BTreeMap<String, Option<serde_json::Value>>;
+pub type ExampleComponents = BTreeMap<String, Option<serde_json::Value>>;
+pub type ExamplePairingComponents = BTreeMap<String, Option<serde_json::Value>>;
+pub type ContentDescriptorComponents = BTreeMap<String, Option<serde_json::Value>>;
+pub type TagComponents = BTreeMap<String, Option<serde_json::Value>>;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Components {
