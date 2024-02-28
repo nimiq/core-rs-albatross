@@ -7,6 +7,7 @@ use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, PublicKey, Signatu
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_utils::merkle::Blake2bMerklePath;
 use url::Url;
+use zstd::bulk::{Compressor, Decompressor};
 
 #[derive(Clone, Debug)]
 pub struct SignatureProof {
@@ -17,13 +18,16 @@ pub struct SignatureProof {
 }
 
 fn compress(prediction: &[u8], data: &[u8]) -> Vec<u8> {
-    let _ = prediction;
-    Vec::from(data)
+    let mut compressor =
+        Compressor::with_dictionary(zstd::DEFAULT_COMPRESSION_LEVEL, prediction).unwrap();
+    compressor.include_magicbytes(false).unwrap();
+    compressor.compress(data).unwrap()
 }
 
 fn decompress(prediction: &[u8], compressed: &[u8]) -> Result<Vec<u8>, io::Error> {
-    let _ = prediction;
-    Ok(Vec::from(compressed))
+    let mut decompressor = Decompressor::with_dictionary(prediction).unwrap();
+    decompressor.include_magicbytes(false).unwrap();
+    decompressor.decompress(compressed, 4096)
 }
 
 #[derive(Debug, Deserialize, Serialize)]
