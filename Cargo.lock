@@ -2163,7 +2163,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.5",
+ "socket2 0.4.9",
  "tokio",
  "tower-service",
  "tracing",
@@ -3677,7 +3677,7 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-client"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#96ff281c75db3dc206407466ec926b2801ae74e3"
+source = "git+https://github.com/nimiq/jsonrpc.git#99e0ab412a3d3d4700fda4e1de39f5d60712ca07"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -3698,7 +3698,7 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-core"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#96ff281c75db3dc206407466ec926b2801ae74e3"
+source = "git+https://github.com/nimiq/jsonrpc.git#99e0ab412a3d3d4700fda4e1de39f5d60712ca07"
 dependencies = [
  "log",
  "serde",
@@ -3709,7 +3709,7 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-derive"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#96ff281c75db3dc206407466ec926b2801ae74e3"
+source = "git+https://github.com/nimiq/jsonrpc.git#99e0ab412a3d3d4700fda4e1de39f5d60712ca07"
 dependencies = [
  "darling",
  "heck",
@@ -3724,7 +3724,7 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-server"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#96ff281c75db3dc206407466ec926b2801ae74e3"
+source = "git+https://github.com/nimiq/jsonrpc.git#99e0ab412a3d3d4700fda4e1de39f5d60712ca07"
 dependencies = [
  "async-trait",
  "bytes",
