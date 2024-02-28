@@ -1,4 +1,4 @@
-use std::{cmp::Ord, error::Error, fmt, str};
+use std::{cmp::Ord, error::Error, fmt, io, str};
 
 use base64::prelude::{Engine as _, BASE64_URL_SAFE_NO_PAD};
 use bitflags::bitflags;
@@ -16,6 +16,16 @@ pub struct SignatureProof {
     pub webauthn_fields: Option<WebauthnExtraFields>,
 }
 
+fn compress(prediction: &[u8], data: &[u8]) -> Vec<u8> {
+    let _ = prediction;
+    Vec::from(data)
+}
+
+fn decompress(prediction: &[u8], compressed: &[u8]) -> Result<Vec<u8>, io::Error> {
+    let _ = prediction;
+    Ok(Vec::from(compressed))
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct WebauthnClientData {
@@ -25,6 +35,18 @@ struct WebauthnClientData {
     origin: Url,
     #[serde(skip_serializing_if = "Option::is_none")]
     cross_origin: Option<bool>,
+}
+
+fn predicted(challenge: &[u8]) -> Vec<u8> {
+    let mut result = Vec::new();
+    let client_data = WebauthnClientData {
+        type_: WebauthnClientDataType::WebauthnGet,
+        challenge: BASE64_URL_SAFE_NO_PAD.encode(challenge),
+        origin: Url::parse("https://localhost").unwrap(),
+        cross_origin: Some(false),
+    };
+    serde_json::to_writer(&mut result, &client_data).unwrap();
+    result
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -63,9 +85,7 @@ impl SignatureProof {
         authenticator_data: &[u8],
         client_data_json: &[u8],
     ) -> Result<Self, SerializationError> {
-        let client_data_json_str = str::from_utf8(client_data_json)
-            .map_err(|e| SerializationError::new(&format!("invalid UTF-8: {e}")))?;
-        let client_data: WebauthnClientData = serde_json::from_str(client_data_json_str)
+        let client_data: WebauthnClientData = serde_json::from_slice(client_data_json)
             .map_err(|e| SerializationError::new(&format!("invalid JSON: {e}")))?;
 
         let hostname = client_data
@@ -89,6 +109,9 @@ impl SignatureProof {
                 "crossOrigin in clientDataJSON must be false",
             ));
         }
+        let challenge = BASE64_URL_SAFE_NO_PAD
+            .decode(&client_data.challenge)
+            .map_err(|e| SerializationError::new(&format!("invalid base64: {e}")))?;
 
         Ok(SignatureProof {
             public_key,
@@ -96,7 +119,7 @@ impl SignatureProof {
             signature,
             webauthn_fields: Some(WebauthnExtraFields {
                 authenticator_data_suffix: authenticator_data[32..].to_vec(),
-                client_data_json: String::from(client_data_json_str),
+                client_data_json_compressed: compress(&predicted(&challenge), client_data_json),
             }),
         })
     }
@@ -127,14 +150,28 @@ impl SignatureProof {
             .as_ref()
             .expect("Webauthn fields not set");
 
-        let client_data: WebauthnClientData =
-            match serde_json::from_str(&webauthn_fields.client_data_json) {
-                Ok(client_data) => client_data,
-                Err(e) => {
-                    debug!("Failed to read client data JSON: {e}");
-                    return false;
-                }
-            };
+        // Message in our case is a transaction's serialized content
+        // 1. We need to hash the message to get our challenge data
+        let challenge: Blake2bHash = message.hash();
+
+        let client_data_json = match decompress(
+            &predicted(challenge.as_slice()),
+            &webauthn_fields.client_data_json_compressed,
+        ) {
+            Ok(client_data_json) => client_data_json,
+            Err(e) => {
+                debug!("Failed to decompress client data JSON: {e}");
+                return false;
+            }
+        };
+
+        let client_data: WebauthnClientData = match serde_json::from_slice(&client_data_json) {
+            Ok(client_data) => client_data,
+            Err(e) => {
+                debug!("Failed to read client data JSON: {e}");
+                return false;
+            }
+        };
 
         let hostname = match client_data.origin.host_str() {
             Some(hostname) => hostname,
@@ -144,9 +181,6 @@ impl SignatureProof {
             }
         };
 
-        // Message in our case is a transaction's serialized content
-        // 1. We need to hash the message to get our challenge data
-        let challenge: Blake2bHash = message.hash();
         let challenge_base64 = BASE64_URL_SAFE_NO_PAD.encode(challenge);
         if challenge_base64 != client_data.challenge {
             debug!(
@@ -165,7 +199,7 @@ impl SignatureProof {
         authenticator_data.extend_from_slice(&webauthn_fields.authenticator_data_suffix);
 
         // 4. Hash the clientDataJSON
-        let client_data_hash: Sha256Hash = webauthn_fields.client_data_json.hash();
+        let client_data_hash: Sha256Hash = client_data_json.hash();
 
         // 5. Concat authenticatorData and clientDataHash to build the data signed by Webauthn
         let mut signed_data = authenticator_data;
@@ -251,7 +285,7 @@ bitflags! {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WebauthnExtraFields {
     pub authenticator_data_suffix: Vec<u8>,
-    pub client_data_json: String,
+    pub client_data_json_compressed: Vec<u8>,
 }
 
 mod serde_derive {

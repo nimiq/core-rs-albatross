@@ -1,8 +1,6 @@
 use nimiq_keys::{Address, ES256PublicKey, ES256Signature, PublicKey, Signature};
 use nimiq_primitives::{account::AccountType, networks::NetworkId, transaction::TransactionError};
-use nimiq_transaction::{
-    account::AccountTransactionVerification, SignatureProof, Transaction,
-};
+use nimiq_transaction::{account::AccountTransactionVerification, SignatureProof, Transaction};
 
 #[test]
 fn it_does_not_allow_creation() {
