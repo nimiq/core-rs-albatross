@@ -1,8 +1,8 @@
-use std::{cmp::Ord, error::Error, fmt};
+use std::{cmp::Ord, error::Error, fmt, str};
 
-use base64::Engine;
+use base64::prelude::{Engine as _, BASE64_URL_SAFE_NO_PAD};
 use bitflags::bitflags;
-use nimiq_hash::{Blake2bHasher, Hasher, Sha256Hasher};
+use nimiq_hash::{Blake2bHash, Hash, HashOutput, Sha256Hash};
 use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, PublicKey, Signature};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_utils::merkle::Blake2bMerklePath;
@@ -14,6 +14,24 @@ pub struct SignatureProof {
     pub merkle_path: Blake2bMerklePath,
     pub signature: Signature,
     pub webauthn_fields: Option<WebauthnExtraFields>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WebauthnClientData {
+    #[serde(rename = "type")]
+    type_: WebauthnClientDataType,
+    challenge: String,
+    origin: Url,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cross_origin: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum WebauthnClientDataType {
+    #[serde(rename = "webauthn.get")]
+    WebauthnGet,
 }
 
 impl SignatureProof {
@@ -45,73 +63,31 @@ impl SignatureProof {
         authenticator_data: &[u8],
         client_data_json: &[u8],
     ) -> Result<Self, SerializationError> {
-        // Extract host, client_data_flags and client_data_extra_fields from client_data_json
+        let client_data_json_str = str::from_utf8(client_data_json)
+            .map_err(|e| SerializationError::new(&format!("invalid UTF-8: {e}")))?;
+        let client_data: WebauthnClientData = serde_json::from_str(client_data_json_str)
+            .map_err(|e| SerializationError::new(&format!("invalid JSON: {e}")))?;
 
-        // Setup inner fields
-        let mut client_data_flags = WebauthnClientDataFlags::default();
-        let mut client_data_extra_fields = "".to_string();
+        let hostname = client_data
+            .origin
+            .host_str()
+            .ok_or_else(|| SerializationError::new("missing hostname"))?;
+        let rp_id: Sha256Hash = hostname.hash();
 
-        // Convert client_data_json bytes to string for search & split operations
-        // FIXME: Handle invalid UTF-8
-        let client_data_json_str = std::str::from_utf8(client_data_json).unwrap();
+        if authenticator_data.len() < 32 {
+            return Err(SerializationError::new("authenticator data too short"));
+        }
 
-        // Extract origin from client_data_json
-        let origin_search_term = r#","origin":""#;
-        // Find the start of the origin value
-        // FIXME: Handle missing origin
-        let origin_start =
-            client_data_json_str.find(origin_search_term).unwrap() + origin_search_term.len();
-        // Find the closing quotation mark of the origin value
-        // FIXME: Handle missing closing quotation mark
-        let origin_length = client_data_json_str[origin_start..].find('"').unwrap();
-        // The origin is the string between the two indices
-        let origin = &client_data_json_str[origin_start..origin_start + origin_length];
-
-        // Compute and compare RP ID with authenticatorData
-        let url = url::Url::parse(origin)?;
-        let hostname = url.host_str().unwrap(); // FIXME: Handle missing hostname
-        let rp_id = nimiq_hash::Sha256Hasher::default().digest(hostname.as_bytes());
-        if rp_id.0 != authenticator_data[0..32] {
+        if *rp_id.as_bytes() != authenticator_data[0..32] {
             return Err(SerializationError::new(
                 "Computed RP ID does not match authenticator data",
             ));
         }
 
-        // Compute host field, which includes the port if non-standard
-        let port_suffix = if let Some(port) = url.port() {
-            format!(":{}", port)
-        } else {
-            "".to_string()
-        };
-        let host = format!("{}{}", hostname, port_suffix);
-
-        // Check if client_data_json contains any extra fields
-        // Search for the crossOrigin field first
-        let parts = client_data_json_str
-            .split(r#""crossOrigin":false"#)
-            .collect::<Vec<_>>();
-        let suffix = if parts.len() == 2 {
-            parts[1]
-        } else {
-            // Client data does not include the crossOrigin field
-            client_data_flags.insert(WebauthnClientDataFlags::NO_CROSSORIGIN_FIELD);
-
-            // We need to check for extra fields after the origin field instead
-            let parts = client_data_json_str
-                .split(&format!(r#""origin":"{}""#, origin))
-                .collect::<Vec<_>>();
-            assert_eq!(parts.len(), 2);
-            parts[1]
-        };
-
-        // Check if the suffix contains extra fields
-        if suffix.len() > 1 {
-            // Cut off first comma and last curly brace
-            client_data_extra_fields = suffix[1..suffix.len() - 1].to_string();
-        }
-
-        if origin.contains(r":\/\/") {
-            client_data_flags.insert(WebauthnClientDataFlags::ESCAPED_ORIGIN_SLASHES);
+        if client_data.cross_origin == Some(true) {
+            return Err(SerializationError::new(
+                "crossOrigin in clientDataJSON must be false",
+            ));
         }
 
         Ok(SignatureProof {
@@ -119,10 +95,8 @@ impl SignatureProof {
             merkle_path: Blake2bMerklePath::empty(),
             signature,
             webauthn_fields: Some(WebauthnExtraFields {
-                host,
                 authenticator_data_suffix: authenticator_data[32..].to_vec(),
-                client_data_flags,
-                client_data_extra_fields,
+                client_data_json: String::from(client_data_json_str),
             }),
         })
     }
@@ -153,87 +127,51 @@ impl SignatureProof {
             .as_ref()
             .expect("Webauthn fields not set");
 
+        let client_data: WebauthnClientData =
+            match serde_json::from_str(&webauthn_fields.client_data_json) {
+                Ok(client_data) => client_data,
+                Err(e) => {
+                    debug!("Failed to read client data JSON: {e}");
+                    return false;
+                }
+            };
+
+        let hostname = match client_data.origin.host_str() {
+            Some(hostname) => hostname,
+            None => {
+                debug!("Missing hostname in client data JSON origin");
+                return false;
+            }
+        };
+
         // Message in our case is a transaction's serialized content
-
         // 1. We need to hash the message to get our challenge data
-        let challenge = Blake2bHasher::default().digest(message);
-
-        // 2. We need to calculate the RP ID (Relaying Party ID) from the hostname (without port)
-        // First we construct the origin from the host, as we need it for the clientDataJSON later
-        let origin_protocol = if webauthn_fields.host.starts_with("localhost") {
-            "http"
-        } else {
-            "https"
-        };
-
-        let protocol_separator = if webauthn_fields
-            .client_data_flags
-            .contains(WebauthnClientDataFlags::ESCAPED_ORIGIN_SLASHES)
-        {
-            r":\/\/"
-        } else {
-            "://"
-        };
-
-        let origin = format!(
-            "{}{}{}",
-            origin_protocol, protocol_separator, webauthn_fields.host
-        );
-
-        let url = Url::parse(&origin);
-        if url.is_err() {
-            debug!("Failed to parse origin: {}", origin);
+        let challenge: Blake2bHash = message.hash();
+        let challenge_base64 = BASE64_URL_SAFE_NO_PAD.encode(challenge);
+        if challenge_base64 != client_data.challenge {
+            debug!(
+                "challenge mismatch: expected {}, got {}",
+                client_data.challenge, challenge_base64,
+            );
             return false;
         }
-        let url = url.unwrap();
 
-        let hostname = url.host_str();
-        if hostname.is_none() {
-            debug!("Failed to extract hostname: {:?}", url);
-            return false;
-        }
-        let hostname = hostname.unwrap();
-
-        // The RP ID is the SHA256 hash of the hostname
-        let rp_id = Sha256Hasher::default().digest(hostname.as_bytes());
+        // 2. The RP ID is the SHA256 hash of the hostname
+        let rp_id: Sha256Hash = hostname.hash();
 
         // 3. Build the authenticatorData from the RP ID and the suffix
-        let authenticator_data =
-            [rp_id.as_slice(), &webauthn_fields.authenticator_data_suffix].concat();
+        let mut authenticator_data = Vec::new();
+        authenticator_data.extend_from_slice(rp_id.as_slice());
+        authenticator_data.extend_from_slice(&webauthn_fields.authenticator_data_suffix);
 
-        // 4. Build the clientDataJSON from challenge and origin
-        let mut json: Vec<String> = vec![
-            r#""type":"webauthn.get""#.to_string(),
-            format!(
-                r#""challenge":"{}""#,
-                base64::prelude::BASE64_URL_SAFE_NO_PAD.encode(challenge)
-            ),
-            format!(r#""origin":"{}""#, origin),
-        ];
-
-        // If not omitted, append the crossOrigin field
-        if !webauthn_fields
-            .client_data_flags
-            .contains(WebauthnClientDataFlags::NO_CROSSORIGIN_FIELD)
-        {
-            json.push(r#""crossOrigin":false"#.to_string());
-        }
-
-        // Append extra clientData fields at the end
-        if !webauthn_fields.client_data_extra_fields.is_empty() {
-            json.push(webauthn_fields.client_data_extra_fields.clone());
-        }
-
-        // Combine parts into a JSON string
-        let client_data_json = format!("{{{}}}", json.join(","));
-
-        // Hash the clientDataJSON
-        let client_data_hash = Sha256Hasher::default().digest(client_data_json.as_bytes());
+        // 4. Hash the clientDataJSON
+        let client_data_hash: Sha256Hash = webauthn_fields.client_data_json.hash();
 
         // 5. Concat authenticatorData and clientDataHash to build the data signed by Webauthn
-        let signed_data = [authenticator_data.as_slice(), client_data_hash.as_slice()].concat();
+        let mut signed_data = authenticator_data;
+        signed_data.extend_from_slice(client_data_hash.as_slice());
 
-        self.verify_signature(signed_data.as_slice())
+        self.verify_signature(&signed_data)
     }
 
     fn verify_signature(&self, message: &[u8]) -> bool {
@@ -310,31 +248,10 @@ bitflags! {
     }
 }
 
-bitflags! {
-    #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-    /// Some authenticators may behave non-standard for signing with Webauthn:
-    ///
-    /// - they might not include the mandatory `crossOrigin` field in clientDataJSON
-    /// - they might escape the `origin`'s forward slashes with backslashes, although not necessary for UTF-8 nor JSON encoding
-    ///
-    /// To allow the WebauthnSignatureProof to construct a correct `clientDataJSON` for verification,
-    /// the proof needs to know these non-standard behaviors.
-    ///
-    /// See this tracking issue for Android Chrome: https://bugs.chromium.org/p/chromium/issues/detail?id=1233616
-    pub struct WebauthnClientDataFlags: u8 {
-        const NO_CROSSORIGIN_FIELD  = 1 << 0;
-        const ESCAPED_ORIGIN_SLASHES = 1 << 1;
-
-        // const HAS_EXTRA_FIELDS = 1 << 7; // TODO Replace client_data_extra_fields length null byte when no extra fields are present
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WebauthnExtraFields {
-    pub host: String,
     pub authenticator_data_suffix: Vec<u8>,
-    pub client_data_flags: WebauthnClientDataFlags,
-    pub client_data_extra_fields: String,
+    pub client_data_json: String,
 }
 
 mod serde_derive {
