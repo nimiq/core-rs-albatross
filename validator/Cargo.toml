@@ -25,7 +25,7 @@ linked-hash-map = "0.5.6"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 rand = "0.8"
-rayon = "1.8"
+rayon = "1.9"
 serde = "1.0"
 tokio = { version = "1.36", features = ["rt", "time", "tracing"] }
 tokio-metrics = "0.3"
