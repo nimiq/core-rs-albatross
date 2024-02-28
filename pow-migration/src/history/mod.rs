@@ -15,7 +15,7 @@ use nimiq_primitives::{
 };
 use nimiq_rpc::{
     primitives::{
-        TransactionDetails as PoWTransaction, TransactionSequence as PoWTransactionSequence,
+        TransactionDetails2 as PoWTransaction, TransactionSequence as PoWTransactionSequence,
     },
     Client,
 };
@@ -29,7 +29,7 @@ use thiserror::Error;
 pub enum Error {
     /// RPC error
     #[error("RPC error: {0}")]
-    Rpc(#[from] jsonrpsee::core::Error),
+    Rpc(#[from] nimiq_rpc::jsonrpsee::core::ClientError),
     /// Unknown PoW block
     #[error("Unknown PoW block")]
     UnknownBlock,
@@ -159,7 +159,7 @@ pub async fn get_history_root(
                 }
                 for hash in hashes {
                     log::trace!(hash, "Processing transaction");
-                    let pow_transaction = client.get_transaction_by_hash(&hash).await?;
+                    let pow_transaction = client.get_transaction_by_hash_2(&hash).await?;
                     let pos_transaction = from_pow_transaction(&pow_transaction)?;
                     network_id = pos_transaction.network_id;
 

@@ -16,5 +16,5 @@ pub enum ValidatorsReadiness {
 pub enum Error {
     /// RPC error
     #[error("RPC error: {0}")]
-    Rpc(#[from] jsonrpsee::core::Error),
+    Rpc(#[from] nimiq_rpc::jsonrpsee::core::ClientError),
 }
