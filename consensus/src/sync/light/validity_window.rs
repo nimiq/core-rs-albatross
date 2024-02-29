@@ -74,7 +74,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             };
 
             log::debug!(
-                verifier_bn = verifier_block_number,
+                target_macro = verifier_block_number,
                 chunk_index = chunk_index,
                 epoch = epoch_number,
                 validity_start = validity_window_start,
@@ -175,10 +175,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         {
             log::trace!(peer=%peer_id, chunk_index=request.chunk_index, block_number=request.block_number,  "Processing response from validity queue");
 
-            let macro_head = self.blockchain.read().macro_head();
-            let macro_head_number = macro_head.block_number();
-            let macro_history_root = macro_head.header.history_root;
-
             match result {
                 Ok(chunk) => {
                     let peer_request = self.validity_requests.as_mut().unwrap();
@@ -191,7 +187,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                     log::trace!(
                         leaf_index = leaf_index,
                         chunk_index = peer_request.chunk_index,
-                        verifier_bn = verifier_block_number,
+                        target_macro = verifier_block_number,
                         "Applying a new validity chunk"
                     );
 
@@ -218,43 +214,61 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         // Get ready for requesting the next chunk
                         let mut chunk_index = peer_request.chunk_index + 1;
 
+                        // We need to check which is the latest macro head.
+                        let latest_macro_head = self.blockchain.read().macro_head();
+                        let latest_macro_head_number = latest_macro_head.block_number();
+                        let latest_history_root = latest_macro_head.header.history_root;
+
                         if epoch_complete {
                             // We need to check if there was an election in between, if so, we need to proceed to the next epoch
                             if peer_request.election_in_window {
                                 log::trace!(
                                     current_epoch = Policy::epoch_at(verifier_block_number),
-                                    new_verifier_bn = macro_head_number,
-                                    new_expected_root = %macro_history_root,
+                                    new_verifier_bn = latest_macro_head_number,
+                                    new_expected_root = %latest_history_root,
                                     "Moving to the next epoch to continue syncing",
                                 );
 
                                 // Move to the next epoch:
-                                verifier_block_number = macro_head_number;
+                                verifier_block_number = latest_macro_head_number;
                                 chunk_index = 0;
                                 peer_request.election_in_window = false;
-                                peer_request.root_hash = macro_history_root.clone();
-                                peer_request.verifier_block_number = verifier_block_number;
+                                peer_request.root_hash = latest_history_root.clone();
+                                peer_request.verifier_block_number = latest_macro_head_number;
                             } else {
-                                // No election in between, so we are done
-                                log::debug!(
-                                    synced_root = %expected_root,
-                                    "Validity window syncing is complete"
-                                );
+                                // No election in between, so we need to check if we are done or if we have a newer macro head.
 
-                                self.validity_queue.remove_peer(&peer_id);
-                                self.syncing_peers.remove(&peer_id);
+                                // We have a more recent macro head
+                                if latest_macro_head_number > verifier_block_number {
+                                    log::debug!(new_macro_head=latest_macro_head_number, new_history_root=%latest_history_root,"We have a new macro head, updating the validity sync target");
+                                    verifier_block_number = latest_macro_head_number;
+                                    peer_request.root_hash = latest_history_root.clone();
+                                    peer_request.verifier_block_number = latest_macro_head_number;
+                                    // TODO: We could keep track of the latest macro heads on a per peer basis
+                                    // because not all peers have the latest state.
+                                } else {
+                                    // We are done
+                                    log::debug!(
+                                        synced_root = %expected_root,
+                                        synced_macro_head = verifier_block_number,
+                                        "Validity window syncing is complete"
+                                    );
 
-                                // We move all the peers from the sync queue to the synced peers.
-                                for peer_id in self.syncing_peers.iter() {
-                                    self.synced_validity_peers.push(*peer_id);
-                                    self.validity_queue.remove_peer(peer_id);
+                                    self.validity_queue.remove_peer(&peer_id);
+                                    self.syncing_peers.remove(&peer_id);
+
+                                    // We move all the peers from the sync queue to the synced peers.
+                                    for peer_id in self.syncing_peers.iter() {
+                                        self.synced_validity_peers.push(*peer_id);
+                                        self.validity_queue.remove_peer(peer_id);
+                                    }
+
+                                    // We are complete so we emit the peer
+                                    self.validity_requests = None;
+                                    self.syncing_peers.clear();
+
+                                    return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
                                 }
-
-                                // We are complete so we emit the peer
-                                self.validity_requests = None;
-                                self.syncing_peers.clear();
-
-                                return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
                             }
                         }
 
