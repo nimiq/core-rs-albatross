@@ -14,22 +14,27 @@ use syn::{
     PathSegment, ReturnType, TraitItem, TraitItemFn, Type,
 };
 
+/// Represents a parsed Rust struct.
 #[derive(Debug, Clone)]
 pub struct ParsedItemStruct(ItemStruct);
+/// Represents a parsed Rust trait method.
 #[derive(Debug, Clone)]
 pub struct ParsedTraitItemFn(TraitItemFn);
 
 impl ParsedItemStruct {
+    /// Retrieves the name of a Rust struct.
     #[inline]
     pub fn title(&self) -> String {
         self.0.ident.to_string()
     }
 
+    /// Retrieves the description of a Rust struct based on the Rustdoc.
     #[inline]
     pub fn description(&self) -> String {
         "".into()
     }
 
+    /// Generates the properties for the Rust struct in the form of a JSON Object.
     pub fn properties(&self, structs: &[ParsedItemStruct]) -> Value {
         let props: Map<String, Value> = self
             .0
@@ -63,6 +68,7 @@ impl ParsedItemStruct {
         Value::Object(props)
     }
 
+    /// Converts a Rust struct property to JSON type.
     fn param_to_json_type(
         param: &Field,
         schema_ref: Option<&ParsedItemStruct>,
@@ -110,6 +116,7 @@ impl ParsedItemStruct {
         map
     }
 
+    /// Maps a Rust type to a JSON type.
     fn map_type(path: &Path) -> Value {
         let inner_ident = Self::unwrap_type(path.clone(), true);
         match inner_ident.1.to_string().as_str() {
@@ -135,6 +142,8 @@ impl ParsedItemStruct {
         }
     }
 
+    /// Creates a list of Rust struct properties that are mandatory.
+    /// This is determined by checking if the type is wrapped in an `Option<T>`.
     pub fn required_fields(&self) -> Vec<Value> {
         self.0
             .fields
@@ -190,16 +199,19 @@ impl ParsedItemStruct {
 }
 
 impl ParsedTraitItemFn {
+    /// Retrieves the name of a Rust trait method.
     #[inline]
     pub fn title(&self) -> String {
         self.0.sig.ident.to_string().to_case(Case::Camel)
     }
 
+    /// Retrieves the description of a Rust trait method based on the Rustdoc.
     #[inline]
     pub fn description(&self) -> String {
         "".into()
     }
 
+    /// Generates a list of parameters that accepted by the Rust trait method.
     pub fn params(&self, structs: &[ParsedItemStruct]) -> Vec<ContentDescriptorOrReference> {
         self.0
             .sig
@@ -237,6 +249,7 @@ impl ParsedTraitItemFn {
             .collect()
     }
 
+    /// Extract the identity of a parameter.
     fn param_ident(pat: &Pat) -> PatIdent {
         match pat {
             syn::Pat::Ident(ident) => ident.clone(),
@@ -244,6 +257,7 @@ impl ParsedTraitItemFn {
         }
     }
 
+    /// Determines whether a Rust trait method parameter is required.
     fn param_required(_ty: &Type) -> bool {
         // At the moment, all params are required even if the type is wrapped in an Option.
         // if ty.to_token_stream().to_string().contains("Option") {
@@ -252,6 +266,8 @@ impl ParsedTraitItemFn {
         true
     }
 
+    /// Generates a content descriptor containing the base information about the return type
+    /// of the Rust trait method.
     pub fn return_type(&self, structs: &[ParsedItemStruct]) -> ContentDescriptorOrReference {
         let ty = match &self.0.sig.output {
             ReturnType::Type(_, ty) => match ty.as_ref() {
@@ -326,6 +342,7 @@ impl ParsedTraitItemFn {
         })
     }
 
+    /// Generates the schema object for the return type of the Rust trait method.
     fn return_type_schema(
         ident: &PathSegment,
         schema_ref: Option<&ParsedItemStruct>,
@@ -365,6 +382,7 @@ impl ParsedTraitItemFn {
         schema
     }
 
+    /// Converts a Rust type to a JSON Value.
     fn to_instance_type(ident: &Ident) -> (bool, InstanceType) {
         match ident.to_string().as_str() {
             "u8"
@@ -384,6 +402,7 @@ impl ParsedTraitItemFn {
         }
     }
 
+    /// Unwrap a type if it is wrapped. This method turns an `Option<String>` into a String for example.
     fn unwrap_type(path_segment: &PathSegment) -> (PathSegment, Ident) {
         let ident = path_segment.ident.clone();
 
@@ -417,6 +436,7 @@ impl From<TraitItemFn> for ParsedTraitItemFn {
     }
 }
 
+/// Filter a syntrax tree and only extract the Rust struct definitions.
 pub fn extract_structs_from_ast(file: &File) -> Vec<ParsedItemStruct> {
     file.items
         .iter()
@@ -427,6 +447,7 @@ pub fn extract_structs_from_ast(file: &File) -> Vec<ParsedItemStruct> {
         .collect()
 }
 
+/// Filter a syntrax tree and only extract the Rust methods within a trait definition.
 pub fn extract_fns_from_ast(file: &File) -> Vec<ParsedTraitItemFn> {
     file.items
         .iter()

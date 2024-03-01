@@ -7,6 +7,7 @@ use serde_json::{Map, Value};
 
 use crate::parser::{ParsedItemStruct, ParsedTraitItemFn};
 
+/// A builder for constructing an OpenRPC document.
 #[derive(Clone)]
 pub struct OpenRpcBuilder {
     open_rpc_doc: OpenrpcDocument,
@@ -15,16 +16,19 @@ pub struct OpenRpcBuilder {
 }
 
 impl OpenRpcBuilder {
+    /// Adds a schema based on a Rust struct to the OpenRPC document.
     pub fn with_schema(mut self, item_struct: &ParsedItemStruct) -> OpenRpcBuilder {
         self.structs.push(item_struct.clone());
         self
     }
 
+    /// Adds a method based on a Rust trait method to the OpenRPC document.
     pub fn with_method(mut self, item_fn: &ParsedTraitItemFn) -> OpenRpcBuilder {
         self.methods.push(item_fn.clone());
         self
     }
 
+    /// Creates a new instance of OpenRpcBuilder with default settings and returns it.
     pub fn builder() -> OpenRpcBuilder {
         OpenRpcBuilder{ open_rpc_doc: OpenrpcDocument {
             openrpc: Openrpc::V26,
@@ -49,6 +53,7 @@ impl OpenRpcBuilder {
         }, structs: vec![], methods: vec![]}
     }
 
+    /// Builds the final OpenRPC document and returns constructed OpenrpcDocument.
     pub fn build(self) -> OpenrpcDocument {
         let mut doc = OpenrpcDocument {
             openrpc: self.open_rpc_doc.openrpc,

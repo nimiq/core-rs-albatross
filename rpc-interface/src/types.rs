@@ -685,18 +685,25 @@ pub struct Account {
     pub account_additional_fields: AccountAdditionalFields,
 }
 
+/// A Ed25519 signature containing the actual signature and the corresponding public key.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReturnSignature {
+    /// The public key of the keypair that signed the signature.
     pub public_key: Ed25519PublicKey,
+    /// The output of the signing process. The signature can be used to verify the authenticity and integrity of the message using the corresponding public key.
     pub signature: Ed25519Signature,
 }
 
+/// A wallet account.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReturnAccount {
+    /// The address of the wallet account.
     pub address: Address,
+    /// The public key of the account keypair.
     pub public_key: Ed25519PublicKey,
+    /// The private key of the account keypair.
     pub private_key: PrivateKey,
 }
 
