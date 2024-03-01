@@ -147,11 +147,6 @@ where
                     }
                 }
             } else {
-                log::debug!(
-                    ?public_key,
-                    validator_id,
-                    "Could not find peer ID for validator in DHT. Performing a DHT query",
-                );
                 true
             }
         };
@@ -174,6 +169,15 @@ where
                             return Err(NetworkError::UnknownValidator(validator_id));
                         }
                     }
+                } else {
+                    // No cache entry for this validator ID: we are going to perform the DHT query
+                    validator_peer_id_cache
+                        .insert(public_key.compressed().clone(), CacheState::InProgress);
+                    log::debug!(
+                        ?public_key,
+                        validator_id,
+                        "Could not find peer ID for validator in DHT. Performing a DHT query",
+                    );
                 }
             }
             let self_ = self.arc_clone();
@@ -186,7 +190,12 @@ where
 
     /// Clears the validator->peer_id cache on a `RequestError`.
     /// The cached entry should be cleared when the peer id might have changed.
-    fn clear_validator_peer_id_cache_on_error(&self, validator_id: u16, error: &RequestError) {
+    fn clear_validator_peer_id_cache_on_error(
+        &self,
+        validator_id: u16,
+        error: &RequestError,
+        peer_id: &N::PeerId,
+    ) {
         match error {
             // The no receiver is not an error since the peer might not be aggregating
             RequestError::InboundRequest(InboundRequestError::NoReceiver) => {}
@@ -195,9 +204,16 @@ where
                 if let Some(validator_key) =
                     self.validator_keys.read().get(usize::from(validator_id))
                 {
-                    self.validator_peer_id_cache
-                        .write()
-                        .remove(validator_key.compressed());
+                    // Clear the peer ID cache only if the error happened for the same Peer ID that we have cached
+                    let mut validator_peer_id_cache = self.validator_peer_id_cache.write();
+                    let compressed_pk = validator_key.compressed();
+                    if let Some(CacheState::Resolved(cached_peer_id)) =
+                        validator_peer_id_cache.get(compressed_pk)
+                    {
+                        if cached_peer_id == peer_id {
+                            validator_peer_id_cache.remove(compressed_pk);
+                        }
+                    }
                 }
             }
         }
@@ -274,7 +290,7 @@ where
             .message(msg, peer_id)
             .map_err(|e| {
                 // The validator peer id might have changed and thus caused a connection failure.
-                self.clear_validator_peer_id_cache_on_error(validator_id, &e);
+                self.clear_validator_peer_id_cache_on_error(validator_id, &e, &peer_id);
 
                 NetworkError::Request(e)
             })
@@ -298,7 +314,7 @@ where
                 .request(request, peer_id)
                 .map_err(|e| {
                     // The validator peer id might have changed and thus caused a connection failure.
-                    self.clear_validator_peer_id_cache_on_error(validator_id, &e);
+                    self.clear_validator_peer_id_cache_on_error(validator_id, &e, &peer_id);
 
                     NetworkError::Request(e)
                 })
