@@ -1,24 +1,21 @@
 use convert_case::{Case, Casing};
-use open_rpc_schema::{
-    document::{ContentDescriptorObject, ContentDescriptorOrReference, JSONSchema},
-    schemars::schema::{
-        ArrayValidation, InstanceType, RootSchema,
-        Schema::{self},
-        SchemaObject, SingleOrVec,
-    },
-};
 use quote::ToTokens;
+use schemars::schema::{
+    ArrayValidation, InstanceType, RootSchema, Schema, SchemaObject, SingleOrVec,
+};
 use serde_json::{Map, Value};
 use syn::{
     Field, File, GenericArgument, Ident, ItemStruct, Pat, PatIdent, Path, PathArguments,
     PathSegment, ReturnType, TraitItem, TraitItemFn, Type,
 };
 
+use crate::openrpc::document::{ContentDescriptorObject, ContentDescriptorOrReference, JSONSchema};
+
 /// Represents a parsed Rust struct.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ParsedItemStruct(ItemStruct);
 /// Represents a parsed Rust trait method.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ParsedTraitItemFn(TraitItemFn);
 
 impl ParsedItemStruct {
@@ -118,8 +115,8 @@ impl ParsedItemStruct {
 
     /// Maps a Rust type to a JSON type.
     fn map_type(path: &Path) -> Value {
-        let inner_ident = Self::unwrap_type(path.clone(), true);
-        match inner_ident.1.to_string().as_str() {
+        let (_, inner_ident) = Self::unwrap_type(path.clone(), true);
+        match inner_ident.to_string().as_str() {
             "Address"
             | "Blake2bHash"
             | "Blake2sHash"
@@ -138,7 +135,7 @@ impl ParsedItemStruct {
             | "T"
             | "BlockAdditionalFields"
             | "MultiSignature" => Value::String("object".into()),
-            _ => panic!("{:?}", inner_ident),
+            _ => panic!("{}", inner_ident),
         }
     }
 

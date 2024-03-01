@@ -1,11 +1,14 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
-use open_rpc_schema::document::{
-    Components, ContactObject, InfoObject, LicenseObject, MethodObject, Openrpc, OpenrpcDocument,
-};
 use serde_json::{Map, Value};
 
+use self::document::{
+    Components, ContactObject, InfoObject, LicenseObject, MethodObject, Openrpc, OpenrpcDocument,
+};
 use crate::parser::{ParsedItemStruct, ParsedTraitItemFn};
+
+#[allow(unused)]
+pub mod document;
 
 /// A builder for constructing an OpenRPC document.
 #[derive(Clone)]
@@ -41,11 +44,11 @@ impl OpenRpcBuilder {
                 license: Some(LicenseObject{ name: Some("Apache License, Version 2.0".to_string()), url: Some("http://www.apache.org/licenses/LICENSE-2.0".to_string()) }),
             },
             components: Some(Components {
-                schemas: Some(HashMap::new()),
+                schemas: Some(BTreeMap::new()),
                 links: None,
                 errors: None,
                 examples: None,
-                example_pairings: Some(HashMap::new()),
+                example_pairings: Some(BTreeMap::new()),
                 content_descriptors: None,
                 tags: None,
             }),

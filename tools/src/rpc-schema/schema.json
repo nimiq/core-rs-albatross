@@ -3714,159 +3714,118 @@
   ],
   "components": {
     "schemas": {
-      "DoubleProposalProof": {
-        "title": "DoubleProposalProof",
+      "Account": {
+        "title": "Account",
         "description": "",
         "required": [
-          "blockNumber",
-          "hashes"
+          "address",
+          "balance",
+          "accountAdditionalFields"
         ],
         "properties": {
-          "blockNumber": {
-            "title": "blockNumber",
-            "type": "number"
-          }
-        }
-      },
-      "Slot": {
-        "title": "Slot",
-        "description": "",
-        "required": [
-          "slotNumber",
-          "validator",
-          "publicKey"
-        ],
-        "properties": {
-          "slotNumber": {
-            "title": "slotNumber",
-            "type": "number"
-          },
-          "validator": {
-            "title": "validator",
+          "address": {
+            "title": "address",
             "type": "string"
           },
-          "publicKey": {
-            "title": "publicKey",
-            "type": "string"
-          }
-        }
-      },
-      "PenalizedSlots": {
-        "title": "PenalizedSlots",
-        "description": "",
-        "required": [
-          "blockNumber",
-          "disabled"
-        ],
-        "properties": {
-          "blockNumber": {
-            "title": "blockNumber",
+          "balance": {
+            "title": "balance",
             "type": "number"
           },
-          "disabled": {
-            "title": "disabled",
+          "accountAdditionalFields": {
+            "title": "accountAdditionalFields",
             "type": "object"
           }
         }
       },
-      "ReturnSignature": {
-        "title": "ReturnSignature",
+      "Block": {
+        "title": "Block",
         "description": "",
         "required": [
-          "publicKey",
-          "signature"
-        ],
-        "properties": {
-          "publicKey": {
-            "title": "publicKey",
-            "type": "string"
-          },
-          "signature": {
-            "title": "signature",
-            "type": "string"
-          }
-        }
-      },
-      "PolicyConstants": {
-        "title": "PolicyConstants",
-        "description": "",
-        "required": [
-          "stakingContractAddress",
-          "coinbaseAddress",
-          "transactionValidityWindow",
-          "maxSizeMicroBody",
+          "hash",
+          "size",
+          "batch",
+          "epoch",
+          "network",
           "version",
-          "slots",
-          "blocksPerBatch",
-          "batchesPerEpoch",
-          "blocksPerEpoch",
-          "validatorDeposit",
-          "minimumStake",
-          "totalSupply",
-          "blockSeparationTime",
-          "jailEpochs",
-          "genesisBlockNumber"
+          "number",
+          "timestamp",
+          "parentHash",
+          "seed",
+          "extraData",
+          "stateHash",
+          "historyHash",
+          "additionalFields"
         ],
         "properties": {
-          "stakingContractAddress": {
-            "title": "stakingContractAddress",
+          "hash": {
+            "title": "hash",
             "type": "string"
           },
-          "coinbaseAddress": {
-            "title": "coinbaseAddress",
+          "size": {
+            "title": "size",
+            "type": "number"
+          },
+          "batch": {
+            "title": "batch",
+            "type": "number"
+          },
+          "epoch": {
+            "title": "epoch",
+            "type": "number"
+          },
+          "network": {
+            "title": "network",
             "type": "string"
-          },
-          "transactionValidityWindow": {
-            "title": "transactionValidityWindow",
-            "type": "number"
-          },
-          "maxSizeMicroBody": {
-            "title": "maxSizeMicroBody",
-            "type": "number"
           },
           "version": {
             "title": "version",
             "type": "number"
           },
-          "slots": {
-            "title": "slots",
+          "number": {
+            "title": "number",
             "type": "number"
           },
-          "blocksPerBatch": {
-            "title": "blocksPerBatch",
+          "timestamp": {
+            "title": "timestamp",
             "type": "number"
           },
-          "batchesPerEpoch": {
-            "title": "batchesPerEpoch",
-            "type": "number"
+          "parentHash": {
+            "title": "parentHash",
+            "type": "string"
           },
-          "blocksPerEpoch": {
-            "title": "blocksPerEpoch",
-            "type": "number"
+          "seed": {
+            "title": "seed",
+            "type": "string"
           },
-          "validatorDeposit": {
-            "title": "validatorDeposit",
-            "type": "number"
+          "extraData": {
+            "title": "extraData",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
           },
-          "minimumStake": {
-            "title": "minimumStake",
-            "type": "number"
+          "stateHash": {
+            "title": "stateHash",
+            "type": "string"
           },
-          "totalSupply": {
-            "title": "totalSupply",
-            "type": "number"
+          "bodyHash": {
+            "title": "bodyHash",
+            "type": "string"
           },
-          "blockSeparationTime": {
-            "title": "blockSeparationTime",
-            "type": "number"
+          "historyHash": {
+            "title": "historyHash",
+            "type": "string"
           },
-          "jailEpochs": {
-            "title": "jailEpochs",
-            "type": "number"
+          "transactions": {
+            "title": "transactions",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExecutedTransaction"
+            }
           },
-          "genesisBlockNumber": {
-            "title": "genesisBlockNumber",
-            "type": "number"
+          "additionalFields": {
+            "title": "additionalFields",
+            "type": "object"
           }
         }
       },
@@ -3888,38 +3847,17 @@
           }
         }
       },
-      "TendermintProof": {
-        "title": "TendermintProof",
+      "DoubleProposalProof": {
+        "title": "DoubleProposalProof",
         "description": "",
         "required": [
-          "round",
-          "sig"
+          "blockNumber",
+          "hashes"
         ],
         "properties": {
-          "round": {
-            "title": "round",
+          "blockNumber": {
+            "title": "blockNumber",
             "type": "number"
-          },
-          "sig": {
-            "title": "sig",
-            "type": "object"
-          }
-        }
-      },
-      "ZKPState": {
-        "title": "ZKPState",
-        "description": "",
-        "required": [
-          "latestBlock"
-        ],
-        "properties": {
-          "latestBlock": {
-            "title": "latestBlock",
-            "$ref": "#/components/schemas/Block"
-          },
-          "latestProof": {
-            "title": "latestProof",
-            "type": "string"
           }
         }
       },
@@ -3951,93 +3889,6 @@
           "executionResult": {
             "title": "executionResult",
             "type": "boolean"
-          }
-        }
-      },
-      "Slots": {
-        "title": "Slots",
-        "description": "",
-        "required": [
-          "firstSlotNumber",
-          "numSlots",
-          "validator",
-          "publicKey"
-        ],
-        "properties": {
-          "firstSlotNumber": {
-            "title": "firstSlotNumber",
-            "type": "number"
-          },
-          "numSlots": {
-            "title": "numSlots",
-            "type": "number"
-          },
-          "validator": {
-            "title": "validator",
-            "type": "string"
-          },
-          "publicKey": {
-            "title": "publicKey",
-            "type": "string"
-          }
-        }
-      },
-      "Account": {
-        "title": "Account",
-        "description": "",
-        "required": [
-          "address",
-          "balance",
-          "accountAdditionalFields"
-        ],
-        "properties": {
-          "address": {
-            "title": "address",
-            "type": "string"
-          },
-          "balance": {
-            "title": "balance",
-            "type": "number"
-          },
-          "accountAdditionalFields": {
-            "title": "accountAdditionalFields",
-            "type": "object"
-          }
-        }
-      },
-      "Staker": {
-        "title": "Staker",
-        "description": "",
-        "required": [
-          "address",
-          "balance",
-          "inactiveBalance",
-          "retiredBalance"
-        ],
-        "properties": {
-          "address": {
-            "title": "address",
-            "type": "string"
-          },
-          "balance": {
-            "title": "balance",
-            "type": "number"
-          },
-          "delegation": {
-            "title": "delegation",
-            "type": "string"
-          },
-          "inactiveBalance": {
-            "title": "inactiveBalance",
-            "type": "number"
-          },
-          "inactiveFrom": {
-            "title": "inactiveFrom",
-            "type": "number"
-          },
-          "retiredBalance": {
-            "title": "retiredBalance",
-            "type": "number"
           }
         }
       },
@@ -4132,94 +3983,267 @@
           }
         }
       },
-      "Block": {
-        "title": "Block",
+      "PenalizedSlots": {
+        "title": "PenalizedSlots",
         "description": "",
         "required": [
-          "hash",
-          "size",
-          "batch",
-          "epoch",
-          "network",
-          "version",
-          "number",
-          "timestamp",
-          "parentHash",
-          "seed",
-          "extraData",
-          "stateHash",
-          "historyHash",
-          "additionalFields"
+          "blockNumber",
+          "disabled"
         ],
         "properties": {
-          "hash": {
-            "title": "hash",
+          "blockNumber": {
+            "title": "blockNumber",
+            "type": "number"
+          },
+          "disabled": {
+            "title": "disabled",
+            "type": "object"
+          }
+        }
+      },
+      "PolicyConstants": {
+        "title": "PolicyConstants",
+        "description": "",
+        "required": [
+          "stakingContractAddress",
+          "coinbaseAddress",
+          "transactionValidityWindow",
+          "maxSizeMicroBody",
+          "version",
+          "slots",
+          "blocksPerBatch",
+          "batchesPerEpoch",
+          "blocksPerEpoch",
+          "validatorDeposit",
+          "minimumStake",
+          "totalSupply",
+          "blockSeparationTime",
+          "jailEpochs",
+          "genesisBlockNumber"
+        ],
+        "properties": {
+          "stakingContractAddress": {
+            "title": "stakingContractAddress",
             "type": "string"
           },
-          "size": {
-            "title": "size",
-            "type": "number"
-          },
-          "batch": {
-            "title": "batch",
-            "type": "number"
-          },
-          "epoch": {
-            "title": "epoch",
-            "type": "number"
-          },
-          "network": {
-            "title": "network",
+          "coinbaseAddress": {
+            "title": "coinbaseAddress",
             "type": "string"
+          },
+          "transactionValidityWindow": {
+            "title": "transactionValidityWindow",
+            "type": "number"
+          },
+          "maxSizeMicroBody": {
+            "title": "maxSizeMicroBody",
+            "type": "number"
           },
           "version": {
             "title": "version",
             "type": "number"
           },
-          "number": {
-            "title": "number",
+          "slots": {
+            "title": "slots",
             "type": "number"
           },
-          "timestamp": {
-            "title": "timestamp",
+          "blocksPerBatch": {
+            "title": "blocksPerBatch",
             "type": "number"
           },
-          "parentHash": {
-            "title": "parentHash",
+          "batchesPerEpoch": {
+            "title": "batchesPerEpoch",
+            "type": "number"
+          },
+          "blocksPerEpoch": {
+            "title": "blocksPerEpoch",
+            "type": "number"
+          },
+          "validatorDeposit": {
+            "title": "validatorDeposit",
+            "type": "number"
+          },
+          "minimumStake": {
+            "title": "minimumStake",
+            "type": "number"
+          },
+          "totalSupply": {
+            "title": "totalSupply",
+            "type": "number"
+          },
+          "blockSeparationTime": {
+            "title": "blockSeparationTime",
+            "type": "number"
+          },
+          "jailEpochs": {
+            "title": "jailEpochs",
+            "type": "number"
+          },
+          "genesisBlockNumber": {
+            "title": "genesisBlockNumber",
+            "type": "number"
+          }
+        }
+      },
+      "RPCData": {
+        "title": "RPCData",
+        "description": "",
+        "required": [
+          "data",
+          "metadata"
+        ],
+        "properties": {
+          "data": {
+            "title": "data",
+            "type": "object"
+          },
+          "metadata": {
+            "title": "metadata",
+            "type": "object"
+          }
+        }
+      },
+      "ReturnAccount": {
+        "title": "ReturnAccount",
+        "description": "",
+        "required": [
+          "address",
+          "publicKey",
+          "privateKey"
+        ],
+        "properties": {
+          "address": {
+            "title": "address",
             "type": "string"
           },
-          "seed": {
-            "title": "seed",
+          "publicKey": {
+            "title": "publicKey",
             "type": "string"
           },
-          "extraData": {
-            "title": "extraData",
-            "type": "array",
-            "items": {
-              "type": "number"
-            }
-          },
-          "stateHash": {
-            "title": "stateHash",
+          "privateKey": {
+            "title": "privateKey",
+            "type": "string"
+          }
+        }
+      },
+      "ReturnSignature": {
+        "title": "ReturnSignature",
+        "description": "",
+        "required": [
+          "publicKey",
+          "signature"
+        ],
+        "properties": {
+          "publicKey": {
+            "title": "publicKey",
             "type": "string"
           },
-          "bodyHash": {
-            "title": "bodyHash",
+          "signature": {
+            "title": "signature",
+            "type": "string"
+          }
+        }
+      },
+      "Slot": {
+        "title": "Slot",
+        "description": "",
+        "required": [
+          "slotNumber",
+          "validator",
+          "publicKey"
+        ],
+        "properties": {
+          "slotNumber": {
+            "title": "slotNumber",
+            "type": "number"
+          },
+          "validator": {
+            "title": "validator",
             "type": "string"
           },
-          "historyHash": {
-            "title": "historyHash",
+          "publicKey": {
+            "title": "publicKey",
+            "type": "string"
+          }
+        }
+      },
+      "Slots": {
+        "title": "Slots",
+        "description": "",
+        "required": [
+          "firstSlotNumber",
+          "numSlots",
+          "validator",
+          "publicKey"
+        ],
+        "properties": {
+          "firstSlotNumber": {
+            "title": "firstSlotNumber",
+            "type": "number"
+          },
+          "numSlots": {
+            "title": "numSlots",
+            "type": "number"
+          },
+          "validator": {
+            "title": "validator",
             "type": "string"
           },
-          "transactions": {
-            "title": "transactions",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ExecutedTransaction"
-            }
+          "publicKey": {
+            "title": "publicKey",
+            "type": "string"
+          }
+        }
+      },
+      "Staker": {
+        "title": "Staker",
+        "description": "",
+        "required": [
+          "address",
+          "balance",
+          "inactiveBalance",
+          "retiredBalance"
+        ],
+        "properties": {
+          "address": {
+            "title": "address",
+            "type": "string"
           },
-          "additionalFields": {
-            "title": "additionalFields",
+          "balance": {
+            "title": "balance",
+            "type": "number"
+          },
+          "delegation": {
+            "title": "delegation",
+            "type": "string"
+          },
+          "inactiveBalance": {
+            "title": "inactiveBalance",
+            "type": "number"
+          },
+          "inactiveFrom": {
+            "title": "inactiveFrom",
+            "type": "number"
+          },
+          "retiredBalance": {
+            "title": "retiredBalance",
+            "type": "number"
+          }
+        }
+      },
+      "TendermintProof": {
+        "title": "TendermintProof",
+        "description": "",
+        "required": [
+          "round",
+          "sig"
+        ],
+        "properties": {
+          "round": {
+            "title": "round",
+            "type": "number"
+          },
+          "sig": {
+            "title": "sig",
             "type": "object"
           }
         }
@@ -4318,47 +4342,6 @@
           }
         }
       },
-      "ReturnAccount": {
-        "title": "ReturnAccount",
-        "description": "",
-        "required": [
-          "address",
-          "publicKey",
-          "privateKey"
-        ],
-        "properties": {
-          "address": {
-            "title": "address",
-            "type": "string"
-          },
-          "publicKey": {
-            "title": "publicKey",
-            "type": "string"
-          },
-          "privateKey": {
-            "title": "privateKey",
-            "type": "string"
-          }
-        }
-      },
-      "RPCData": {
-        "title": "RPCData",
-        "description": "",
-        "required": [
-          "data",
-          "metadata"
-        ],
-        "properties": {
-          "data": {
-            "title": "data",
-            "type": "object"
-          },
-          "metadata": {
-            "title": "metadata",
-            "type": "object"
-          }
-        }
-      },
       "Validator": {
         "title": "Validator",
         "description": "",
@@ -4411,6 +4394,23 @@
           "jailedFrom": {
             "title": "jailedFrom",
             "type": "number"
+          }
+        }
+      },
+      "ZKPState": {
+        "title": "ZKPState",
+        "description": "",
+        "required": [
+          "latestBlock"
+        ],
+        "properties": {
+          "latestBlock": {
+            "title": "latestBlock",
+            "$ref": "#/components/schemas/Block"
+          },
+          "latestProof": {
+            "title": "latestProof",
+            "type": "string"
           }
         }
       }
