@@ -24,9 +24,9 @@ use nimiq_transaction_builder::TransactionProofBuilder;
 #[cfg(feature = "client")]
 use serde::ser::SerializeStruct;
 use tsify::Tsify;
-use wasm_bindgen::prelude::*;
 #[cfg(feature = "primitives")]
-use wasm_bindgen_derive::TryFromJsValue;
+use wasm_bindgen::convert::TryFromJsValue;
+use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "primitives")]
 use crate::primitives::key_pair::KeyPair;
@@ -42,9 +42,7 @@ use crate::{
 ///
 /// Transactions require a valid signature proof over their serialized content.
 /// Furthermore, transactions are only valid for 2 hours after their validity-start block height.
-#[cfg_attr(feature = "primitives", derive(TryFromJsValue))]
 #[wasm_bindgen]
-#[cfg_attr(feature = "primitives", derive(Clone))]
 pub struct Transaction {
     inner: nimiq_transaction::Transaction,
 }
@@ -377,7 +375,7 @@ impl Transaction {
         let js_value: &JsValue = tx.unchecked_ref();
 
         #[cfg(feature = "primitives")]
-        if let Ok(transaction) = Transaction::try_from(js_value) {
+        if let Ok(transaction) = Transaction::try_from_js_value(js_value.to_owned()) {
             return Ok(transaction);
         }
 

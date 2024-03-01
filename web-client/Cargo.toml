@@ -32,7 +32,6 @@ serde-wasm-bindgen = "0.6"
 tsify = { git = "https://github.com/sisou/tsify", branch = "sisou/comments", default-features = false, features = ["js"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
-wasm-bindgen-derive = { version = "0.2", optional = true }
 wasm-timer = "0.2"
 web-sys = { version = "0.3.68", features = ["MessageEvent"]}
 
@@ -77,4 +76,4 @@ nimiq-zkp-component = { workspace = true, default-features = false }
 [features]
 client = []
 default = ["client", "primitives"]
-primitives = ["wasm-bindgen-derive"]
+primitives = []
