@@ -2,7 +2,7 @@ use std::str;
 
 use js_sys::Array;
 use nimiq_serde::Serialize;
-use wasm_bindgen::prelude::*;
+use wasm_bindgen::{convert::TryFromJsValue, prelude::*};
 
 use crate::{
     address::Address,
@@ -215,9 +215,9 @@ impl SignatureProof {
 
     fn unpack_public_key(public_key: &PublicKeyUnion) -> Result<nimiq_keys::PublicKey, JsError> {
         let js_value: &JsValue = public_key.unchecked_ref();
-        let public_key = if let Ok(key) = PublicKey::try_from(js_value) {
+        let public_key = if let Ok(key) = PublicKey::try_from_js_value(js_value.to_owned()) {
             nimiq_keys::PublicKey::Ed25519(*key.native_ref())
-        } else if let Ok(key) = ES256PublicKey::try_from(js_value) {
+        } else if let Ok(key) = ES256PublicKey::try_from_js_value(js_value.to_owned()) {
             nimiq_keys::PublicKey::ES256(*key.native_ref())
         } else {
             return Err(JsError::new("Invalid public key"));
@@ -228,9 +228,9 @@ impl SignatureProof {
 
     fn unpack_signature(signature: &SignatureUnion) -> Result<nimiq_keys::Signature, JsError> {
         let js_value: &JsValue = signature.unchecked_ref();
-        let signature = if let Ok(sig) = Signature::try_from(js_value) {
+        let signature = if let Ok(sig) = Signature::try_from_js_value(js_value.to_owned()) {
             nimiq_keys::Signature::Ed25519(sig.native_ref().clone())
-        } else if let Ok(sig) = ES256Signature::try_from(js_value) {
+        } else if let Ok(sig) = ES256Signature::try_from_js_value(js_value.to_owned()) {
             nimiq_keys::Signature::ES256(sig.native_ref().clone())
         } else {
             return Err(JsError::new("Invalid signature"));

@@ -2,7 +2,6 @@ use std::str::FromStr;
 
 use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_derive::TryFromJsValue;
 
 use crate::{
     address::Address,
@@ -10,9 +9,7 @@ use crate::{
 };
 
 /// The non-secret (public) part of an asymmetric key pair that is typically used to digitally verify or encrypt data.
-#[derive(TryFromJsValue)]
 #[wasm_bindgen]
-#[derive(Clone)]
 pub struct PublicKey {
     inner: nimiq_keys::Ed25519PublicKey,
 }

@@ -3,15 +3,13 @@ use std::str::FromStr;
 use nimiq_serde::Deserialize;
 #[cfg(feature = "primitives")]
 use nimiq_serde::Serialize;
-use wasm_bindgen::prelude::*;
 #[cfg(feature = "primitives")]
-use wasm_bindgen_derive::TryFromJsValue;
+use wasm_bindgen::convert::TryFromJsValue;
+use wasm_bindgen::prelude::*;
 
 /// An object representing a Nimiq address.
 /// Offers methods to parse and format addresses from and to strings.
-#[cfg_attr(feature = "primitives", derive(TryFromJsValue))]
 #[wasm_bindgen]
-#[cfg_attr(feature = "primitives", derive(Clone))]
 pub struct Address {
     inner: nimiq_keys::Address,
 }
@@ -33,7 +31,7 @@ impl Address {
         let js_value: &JsValue = addr.unchecked_ref();
 
         #[cfg(feature = "primitives")]
-        if let Ok(address) = Address::try_from(js_value) {
+        if let Ok(address) = Address::try_from_js_value(js_value.to_owned()) {
             return Ok(address);
         }
 
