@@ -62,7 +62,7 @@ fn it_can_verify_webauthn_signature_proofs() {
             .unwrap(),
         ),
             &hex::decode("49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97630165019a6c").unwrap(),
-            br#"{"type":"webauthn.get","challenge":"4rk3LpNhR-jlyPRHP-xgniidFviD-pbL1hSyh5Nole8","origin":"http://localhost:3000","crossOrigin":false}"#,
+            r#"{"type":"webauthn.get","challenge":"4rk3LpNhR-jlyPRHP-xgniidFviD-pbL1hSyh5Nole8","origin":"http://localhost:3000","crossOrigin":false}"#,
     ).unwrap();
 
     let tx_content = hex::decode("00009a606a88b08f0be5d0d06b34aa58e851ad6aaf0a000000000000000000000000000000000000000000000000000000989680000000000000000000000000050000").unwrap();
@@ -86,7 +86,7 @@ fn it_can_verify_android_chrome_webauthn_signature_proofs() {
             .unwrap(),
         ),
         &hex::decode("7a03a16dfe0c4358b79eebe4f25cba56ec7aa7c8331f46a96988006db440e6900500000010").unwrap(),
-        br#"{"type":"webauthn.get","challenge":"jOG3lhPd8ENEsalR2DSrsLkFO--JT87NHl__MWTVC8c","origin":"https:\/\/webauthn.pos.nimiqwatch.com","androidPackageName":"com.android.chrome"}"#,
+        r#"{"type":"webauthn.get","challenge":"jOG3lhPd8ENEsalR2DSrsLkFO--JT87NHl__MWTVC8c","origin":"https:\/\/webauthn.pos.nimiqwatch.com","androidPackageName":"com.android.chrome"}"#,
     ).unwrap();
 
     let tx_content = hex::decode("00005f24d6eea3f0299d50dccecfb7a34f8bd5d5168000890c3fee58a9c27ae0f4b5fb9e4a72ee12ccfecf00000000000098968000000000000000000000a7d8060000").unwrap();

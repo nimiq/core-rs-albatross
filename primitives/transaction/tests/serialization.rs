@@ -98,7 +98,7 @@ fn it_can_serialize_and_deserialize_signature_proofs() {
             .unwrap(),
         ),
         &hex::decode("49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97630165019a6c").unwrap(),
-        br#"{"type":"webauthn.get","challenge":"4rk3LpNhR-jlyPRHP-xgniidFviD-pbL1hSyh5Nole8","origin":"http://localhost:3000","crossOrigin":false}"#,
+        r#"{"type":"webauthn.get","challenge":"4rk3LpNhR-jlyPRHP-xgniidFviD-pbL1hSyh5Nole8","origin":"http://localhost:3000","crossOrigin":false}"#,
     ).unwrap();
 
     let serialized = Serialize::serialize_to_vec(&proof.clone());

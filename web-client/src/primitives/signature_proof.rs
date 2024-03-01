@@ -64,7 +64,7 @@ impl SignatureProof {
         public_key: &PublicKeyUnion,
         signature: &SignatureUnion,
         authenticator_data: &[u8],
-        client_data_json: &[u8],
+        client_data_json: &str,
     ) -> Result<SignatureProof, JsError> {
         let public_key = SignatureProof::unpack_public_key(public_key)?;
         let signature = SignatureProof::unpack_signature(signature)?;
@@ -265,7 +265,7 @@ mod tests {
             "49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97630100000007",
         )
         .unwrap();
-        let client_data_json = br#"{"type":"webauthn.get","challenge":"u7CRZnGHrWoR9ix5llhl2VopsexuW36FKszgHBx4FfM","origin":"http://localhost:5173","crossOrigin":false}"#;
+        let client_data_json = r#"{"type":"webauthn.get","challenge":"u7CRZnGHrWoR9ix5llhl2VopsexuW36FKszgHBx4FfM","origin":"http://localhost:5173","crossOrigin":false}"#;
         let proof = SignatureProof::webauthn_single_sig(
             &JsValue::from(public_key).into(),
             &JsValue::from(signature).into(),
@@ -295,7 +295,7 @@ mod tests {
             "7a03a16dfe0c4358b79eebe4f25cba56ec7aa7c8331f46a96988006db440e690050000003c",
         )
         .unwrap();
-        let client_data_json = br#"{"type":"webauthn.get","challenge":"OCAjaXEXs-P4zqEk-61MhWPOq9a8VpDL2qf3ZwnAI9I","origin":"https:\/\/webauthn.pos.nimiqwatch.com","androidPackageName":"com.android.chrome"}"#;
+        let client_data_json = r#"{"type":"webauthn.get","challenge":"OCAjaXEXs-P4zqEk-61MhWPOq9a8VpDL2qf3ZwnAI9I","origin":"https:\/\/webauthn.pos.nimiqwatch.com","androidPackageName":"com.android.chrome"}"#;
         let proof = SignatureProof::webauthn_single_sig(
             &JsValue::from(public_key).into(),
             &JsValue::from(signature).into(),
