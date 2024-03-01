@@ -252,38 +252,24 @@ mod tests {
     /// Tests a signature generated with Desktop Chrome, which follows the Webauthn standard.
     #[wasm_bindgen_test]
     fn it_can_create_a_standard_webauthn_signature_proof() {
-        let public_key = ES256PublicKey::new(&[
-            2, 175, 112, 174, 46, 130, 50, 235, 92, 162, 248, 164, 196, 122, 113, 217, 205, 110,
-            166, 47, 85, 36, 103, 240, 211, 197, 100, 40, 190, 71, 214, 56, 8,
-        ])
+        let public_key = ES256PublicKey::new(
+            &hex::decode("02af70ae2e8232eb5ca2f8a4c47a71d9cd6ea62f552467f0d3c56428be47d63808")
+                .unwrap(),
+        )
         .map_err(JsValue::from)
         .unwrap();
-        let signature = ES256Signature::from_asn1(&[
-            48, 69, 2, 33, 0, 201, 203, 227, 93, 193, 31, 158, 177, 202, 78, 166, 237, 11, 99, 247,
-            73, 47, 96, 40, 118, 68, 173, 222, 27, 31, 131, 60, 181, 219, 147, 176, 63, 2, 32, 102,
-            75, 139, 198, 83, 231, 220, 191, 196, 173, 208, 211, 140, 101, 175, 98, 79, 23, 135,
-            16, 43, 90, 100, 21, 92, 13, 37, 33, 169, 36, 253, 73,
-        ])
+        let signature = ES256Signature::from_asn1(&hex::decode("3045022100c9cbe35dc11f9eb1ca4ea6ed0b63f7492f60287644adde1b1f833cb5db93b03f0220664b8bc653e7dcbfc4add0d38c65af624f1787102b5a64155c0d2521a924fd49").unwrap())
         .map_err(JsValue::from)
         .unwrap();
-        let authenticator_data = &[
-            73, 150, 13, 229, 136, 14, 140, 104, 116, 52, 23, 15, 100, 118, 96, 91, 143, 228, 174,
-            185, 162, 134, 50, 199, 153, 92, 243, 186, 131, 29, 151, 99, 1, 0, 0, 0, 7,
-        ];
-        let client_data_json = &[
-            123, 34, 116, 121, 112, 101, 34, 58, 34, 119, 101, 98, 97, 117, 116, 104, 110, 46, 103,
-            101, 116, 34, 44, 34, 99, 104, 97, 108, 108, 101, 110, 103, 101, 34, 58, 34, 117, 55,
-            67, 82, 90, 110, 71, 72, 114, 87, 111, 82, 57, 105, 120, 53, 108, 108, 104, 108, 50,
-            86, 111, 112, 115, 101, 120, 117, 87, 51, 54, 70, 75, 115, 122, 103, 72, 66, 120, 52,
-            70, 102, 77, 34, 44, 34, 111, 114, 105, 103, 105, 110, 34, 58, 34, 104, 116, 116, 112,
-            58, 47, 47, 108, 111, 99, 97, 108, 104, 111, 115, 116, 58, 53, 49, 55, 51, 34, 44, 34,
-            99, 114, 111, 115, 115, 79, 114, 105, 103, 105, 110, 34, 58, 102, 97, 108, 115, 101,
-            125,
-        ];
+        let authenticator_data = hex::decode(
+            "49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97630100000007",
+        )
+        .unwrap();
+        let client_data_json = br#"{"type":"webauthn.get","challenge":"u7CRZnGHrWoR9ix5llhl2VopsexuW36FKszgHBx4FfM","origin":"http://localhost:5173","crossOrigin":false}"#;
         let proof = SignatureProof::webauthn_single_sig(
             &JsValue::from(public_key).into(),
             &JsValue::from(signature).into(),
-            authenticator_data,
+            &authenticator_data,
             client_data_json,
         );
         assert!(proof.is_ok());
@@ -296,39 +282,24 @@ mod tests {
     /// and has escaped forward slashes in the origin. It also has extra fields in the client data JSON.
     #[wasm_bindgen_test]
     fn it_can_create_a_nonstandard_webauthn_signature_proof() {
-        let public_key = ES256PublicKey::new(&[
-            3, 39, 225, 247, 153, 91, 222, 93, 248, 162, 43, 217, 194, 120, 51, 181, 50, 215, 156,
-            35, 80, 230, 31, 201, 168, 86, 33, 209, 67, 142, 171, 235, 124,
-        ])
+        let public_key = ES256PublicKey::new(
+            &hex::decode("0327e1f7995bde5df8a22bd9c27833b532d79c2350e61fc9a85621d1438eabeb7c")
+                .unwrap(),
+        )
         .map_err(JsValue::from)
         .unwrap();
-        let signature = ES256Signature::from_asn1(&[
-            48, 68, 2, 32, 113, 93, 20, 133, 221, 14, 184, 248, 122, 252, 45, 231, 122, 117, 249,
-            13, 81, 25, 193, 158, 66, 9, 4, 25, 189, 42, 84, 211, 52, 255, 185, 16, 2, 32, 75, 245,
-            24, 65, 236, 120, 114, 212, 34, 104, 105, 109, 80, 116, 252, 38, 53, 172, 76, 237, 183,
-            46, 144, 179, 241, 138, 5, 61, 235, 172, 178, 252,
-        ])
+        let signature = ES256Signature::from_asn1(&hex::decode("30440220715d1485dd0eb8f87afc2de77a75f90d5119c19e42090419bd2a54d334ffb91002204bf51841ec7872d42268696d5074fc2635ac4cedb72e90b3f18a053debacb2fc").unwrap())
         .map_err(JsValue::from)
         .unwrap();
-        let authenticator_data = &[
-            122, 3, 161, 109, 254, 12, 67, 88, 183, 158, 235, 228, 242, 92, 186, 86, 236, 122, 167,
-            200, 51, 31, 70, 169, 105, 136, 0, 109, 180, 64, 230, 144, 5, 0, 0, 0, 60,
-        ];
-        let client_data_json = &[
-            123, 34, 116, 121, 112, 101, 34, 58, 34, 119, 101, 98, 97, 117, 116, 104, 110, 46, 103,
-            101, 116, 34, 44, 34, 99, 104, 97, 108, 108, 101, 110, 103, 101, 34, 58, 34, 79, 67,
-            65, 106, 97, 88, 69, 88, 115, 45, 80, 52, 122, 113, 69, 107, 45, 54, 49, 77, 104, 87,
-            80, 79, 113, 57, 97, 56, 86, 112, 68, 76, 50, 113, 102, 51, 90, 119, 110, 65, 73, 57,
-            73, 34, 44, 34, 111, 114, 105, 103, 105, 110, 34, 58, 34, 104, 116, 116, 112, 115, 58,
-            92, 47, 92, 47, 119, 101, 98, 97, 117, 116, 104, 110, 46, 112, 111, 115, 46, 110, 105,
-            109, 105, 113, 119, 97, 116, 99, 104, 46, 99, 111, 109, 34, 44, 34, 97, 110, 100, 114,
-            111, 105, 100, 80, 97, 99, 107, 97, 103, 101, 78, 97, 109, 101, 34, 58, 34, 99, 111,
-            109, 46, 97, 110, 100, 114, 111, 105, 100, 46, 99, 104, 114, 111, 109, 101, 34, 125,
-        ];
+        let authenticator_data = hex::decode(
+            "7a03a16dfe0c4358b79eebe4f25cba56ec7aa7c8331f46a96988006db440e690050000003c",
+        )
+        .unwrap();
+        let client_data_json = br#"{"type":"webauthn.get","challenge":"OCAjaXEXs-P4zqEk-61MhWPOq9a8VpDL2qf3ZwnAI9I","origin":"https:\/\/webauthn.pos.nimiqwatch.com","androidPackageName":"com.android.chrome"}"#;
         let proof = SignatureProof::webauthn_single_sig(
             &JsValue::from(public_key).into(),
             &JsValue::from(signature).into(),
-            authenticator_data,
+            &authenticator_data,
             client_data_json,
         );
         assert!(proof.is_ok());
