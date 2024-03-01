@@ -1,10 +1,6 @@
 use nimiq_keys::{Address, ES256PublicKey, ES256Signature, PublicKey, Signature};
 use nimiq_primitives::{account::AccountType, networks::NetworkId, transaction::TransactionError};
-use nimiq_transaction::{
-    account::AccountTransactionVerification, SignatureProof, Transaction, WebauthnClientDataFlags,
-    WebauthnExtraFields,
-};
-use nimiq_utils::merkle::Blake2bMerklePath;
+use nimiq_transaction::{account::AccountTransactionVerification, SignatureProof, Transaction};
 
 #[test]
 fn it_does_not_allow_creation() {
@@ -51,74 +47,48 @@ fn it_does_not_allow_signalling() {
 
 #[test]
 fn it_can_verify_webauthn_signature_proofs() {
-    let signature_proof = SignatureProof {
-        public_key: PublicKey::ES256(
-            ES256PublicKey::from_bytes(&[
-                2, 145, 87, 130, 102, 84, 114, 146, 139, 254, 114, 194, 134, 155, 187, 214, 188,
-                12, 35, 147, 121, 213, 161, 80, 234, 94, 43, 25, 178, 5, 213, 54, 89,
-            ])
+    let signature_proof = SignatureProof::try_from_webauthn(
+        PublicKey::ES256(
+            ES256PublicKey::from_bytes(
+                &hex::decode("02915782665472928bfe72c2869bbbd6bc0c239379d5a150ea5e2b19b205d53659").unwrap(),
+            )
             .unwrap(),
         ),
-        merkle_path: Blake2bMerklePath::default(),
-        signature: Signature::ES256(
-            ES256Signature::from_bytes(&[
-                7, 185, 23, 233, 88, 246, 250, 252, 173, 116, 122, 201, 94, 32, 221, 241, 172, 99,
-                252, 93, 153, 191, 69, 22, 233, 2, 233, 69, 145, 100, 16, 132, 1, 94, 247, 237, 70,
-                3, 74, 241, 133, 18, 116, 58, 13, 203, 199, 167, 134, 170, 226, 113, 16, 184, 203,
-                209, 204, 232, 27, 6, 43, 216, 12, 110,
-            ])
+        None,
+        Signature::ES256(
+            ES256Signature::from_bytes(
+                &hex::decode("07b917e958f6fafcad747ac95e20ddf1ac63fc5d99bf4516e902e94591641084015ef7ed46034af18512743a0dcbc7a786aae27110b8cbd1cce81b062bd80c6e").unwrap(),
+            )
             .unwrap(),
         ),
-        webauthn_fields: Some(WebauthnExtraFields {
-            host: "localhost:3000".to_string(),
-            authenticator_data_suffix: vec![1, 101, 1, 154, 108],
-            client_data_flags: WebauthnClientDataFlags::default(),
-            client_data_extra_fields: "".to_string(),
-        }),
-    };
+            &hex::decode("49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97630165019a6c").unwrap(),
+            br#"{"type":"webauthn.get","challenge":"4rk3LpNhR-jlyPRHP-xgniidFviD-pbL1hSyh5Nole8","origin":"http://localhost:3000","crossOrigin":false}"#,
+    ).unwrap();
 
-    let tx_content = [
-        0, 0, 154, 96, 106, 136, 176, 143, 11, 229, 208, 208, 107, 52, 170, 88, 232, 81, 173, 106,
-        175, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        152, 150, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0,
-    ];
+    let tx_content = hex::decode("00009a606a88b08f0be5d0d06b34aa58e851ad6aaf0a000000000000000000000000000000000000000000000000000000989680000000000000000000000000050000").unwrap();
     assert!(signature_proof.verify(&tx_content));
 }
 
 #[test]
 fn it_can_verify_android_chrome_webauthn_signature_proofs() {
-    let signature_proof = SignatureProof {
-        public_key: PublicKey::ES256(
-            ES256PublicKey::from_bytes(&[
-                3, 39, 225, 247, 153, 91, 222, 93, 248, 162, 43, 217, 194, 120, 51, 181, 50, 215,
-                156, 35, 80, 230, 31, 201, 168, 86, 33, 209, 67, 142, 171, 235, 124,
-            ])
+    let signature_proof = SignatureProof::try_from_webauthn(
+        PublicKey::ES256(
+            ES256PublicKey::from_bytes(
+                &hex::decode("0327e1f7995bde5df8a22bd9c27833b532d79c2350e61fc9a85621d1438eabeb7c").unwrap(),
+            )
             .unwrap(),
         ),
-        merkle_path: Blake2bMerklePath::default(),
-        signature: Signature::ES256(
-            ES256Signature::from_bytes(&[
-                164, 254, 110, 78, 41, 144, 51, 93, 46, 76, 238, 175, 99, 238, 20, 158, 45, 194,
-                224, 112, 59, 194, 111, 99, 35, 244, 190, 187, 69, 76, 123, 80, 95, 95, 175, 79,
-                197, 164, 126, 168, 155, 237, 249, 211, 119, 134, 206, 126, 83, 85, 177, 121, 189,
-                241, 62, 151, 113, 206, 66, 111, 19, 134, 122, 157,
-            ])
+        None,
+        Signature::ES256(
+            ES256Signature::from_bytes(
+                &hex::decode("a4fe6e4e2990335d2e4ceeaf63ee149e2dc2e0703bc26f6323f4bebb454c7b505f5faf4fc5a47ea89bedf9d37786ce7e5355b179bdf13e9771ce426f13867a9d").unwrap(),
+            )
             .unwrap(),
         ),
-        webauthn_fields: Some(WebauthnExtraFields {
-            host: "webauthn.pos.nimiqwatch.com".to_string(),
-            authenticator_data_suffix: vec![5, 0, 0, 0, 16],
-            client_data_flags: WebauthnClientDataFlags::NO_CROSSORIGIN_FIELD
-                | WebauthnClientDataFlags::ESCAPED_ORIGIN_SLASHES,
-            client_data_extra_fields: r#""androidPackageName":"com.android.chrome""#.to_string(),
-        }),
-    };
+        &hex::decode("7a03a16dfe0c4358b79eebe4f25cba56ec7aa7c8331f46a96988006db440e6900500000010").unwrap(),
+        br#"{"type":"webauthn.get","challenge":"jOG3lhPd8ENEsalR2DSrsLkFO--JT87NHl__MWTVC8c","origin":"https:\/\/webauthn.pos.nimiqwatch.com","androidPackageName":"com.android.chrome"}"#,
+    ).unwrap();
 
-    let tx_content = [
-        0, 0, 95, 36, 214, 238, 163, 240, 41, 157, 80, 220, 206, 207, 183, 163, 79, 139, 213, 213,
-        22, 128, 0, 137, 12, 63, 238, 88, 169, 194, 122, 224, 244, 181, 251, 158, 74, 114, 238, 18,
-        204, 254, 207, 0, 0, 0, 0, 0, 0, 152, 150, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 167, 216, 6,
-        0, 0,
-    ];
+    let tx_content = hex::decode("00005f24d6eea3f0299d50dccecfb7a34f8bd5d5168000890c3fee58a9c27ae0f4b5fb9e4a72ee12ccfecf00000000000098968000000000000000000000a7d8060000").unwrap();
     assert!(signature_proof.verify(&tx_content));
 }
