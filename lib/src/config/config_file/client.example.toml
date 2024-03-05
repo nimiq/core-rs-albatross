@@ -50,6 +50,12 @@ seed_nodes = [
 # Default: false
 #autonat_allow_non_global_ips = false
 
+# Optionally specify the desired number of peer connections the network should try to maintain
+# Recommended setting is to keep it in the default value (12).
+#
+# Default: 12
+#desired_peer_count = 12
+
 ##############################################################################
 #
 # TLS network configuration:

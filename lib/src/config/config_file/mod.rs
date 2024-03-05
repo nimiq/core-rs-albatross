@@ -139,14 +139,20 @@ pub struct NetworkSettings {
 
     pub tls: Option<TlsSettings>,
     pub instant_inbound: Option<bool>,
-    #[serde(default)]
-    pub desired_peer_count: Option<usize>,
+    #[serde(default = "NetworkSettings::default_desired_peer_count")]
+    pub desired_peer_count: usize,
     #[serde(default)]
     pub autonat_allow_non_global_ips: bool,
     #[serde(default)]
     pub allow_loopback_addresses: bool,
     #[serde(default)]
     pub dht_quorum: Option<NonZeroU8>,
+}
+
+impl NetworkSettings {
+    pub fn default_desired_peer_count() -> usize {
+        12
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]

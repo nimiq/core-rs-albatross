@@ -122,8 +122,8 @@ pub struct NetworkConfig {
 
     /// Optional desired number of peers for the network to connect to.
     /// The network will always try to maintain this number of connections.
-    #[builder(default)]
-    pub desired_peer_count: Option<usize>,
+    #[builder(default = "12")]
+    pub desired_peer_count: usize,
 
     /// Optional setting to allow network autonat to use non global IPs
     #[builder(default)]
