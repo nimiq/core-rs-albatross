@@ -4,6 +4,7 @@ use std::{
         hash_map::{Entry as HashMapEntry, HashMap},
         BTreeSet, HashSet,
     },
+    error::Error,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -452,6 +453,32 @@ impl<N: Network> BlockQueue<N> {
             | BlockchainEvent::Finalized(block_hash)
             | BlockchainEvent::EpochFinalized(block_hash) => {
                 if let Ok(block) = self.blockchain.read().get_block(&block_hash, false) {
+                    // TODO: For Testing Only: Rebroadcast on the BlockHeaderTopic, if not a light node.
+                    if self.config.include_micro_bodies {
+                        let network = Arc::clone(&self.network);
+                        let mut block_copy = block.clone();
+
+                        tokio::spawn(async move {
+                            let block_id = format!("{}", block_copy);
+                            log::debug!(block = block_id, "Broadcasting on BlockHeaderTopic",);
+
+                            // Remove body from micro blocks before publishing to the block header topic.
+                            // Macro blocks must be always sent with body.
+                            match block_copy {
+                                Block::Micro(ref mut micro_block) => micro_block.body = None,
+                                Block::Macro(_) => {}
+                            }
+
+                            if let Err(e) = network.publish::<BlockHeaderTopic>(block_copy).await {
+                                debug!(
+                                    block = block_id,
+                                    error = &e as &dyn Error,
+                                    "Failed to publish block header"
+                                );
+                            }
+                        });
+                    }
+
                     block_infos.push(block);
                 }
             }
