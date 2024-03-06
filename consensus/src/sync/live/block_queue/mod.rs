@@ -452,9 +452,9 @@ impl<N: Network> BlockQueue<N> {
             | BlockchainEvent::HistoryAdopted(block_hash)
             | BlockchainEvent::Finalized(block_hash)
             | BlockchainEvent::EpochFinalized(block_hash) => {
-                if let Ok(block) = self.blockchain.read().get_block(&block_hash, false) {
+                if self.config.include_micro_bodies {
                     // TODO: For Testing Only: Rebroadcast on the BlockHeaderTopic, if not a light node.
-                    if self.config.include_micro_bodies {
+                    if let Ok(block) = self.blockchain.read().get_block(&block_hash, true) {
                         let network = Arc::clone(&self.network);
                         let mut block_copy = block.clone();
 
@@ -478,7 +478,8 @@ impl<N: Network> BlockQueue<N> {
                             }
                         });
                     }
-
+                }
+                if let Ok(block) = self.blockchain.read().get_block(&block_hash, false) {
                     block_infos.push(block);
                 }
             }
