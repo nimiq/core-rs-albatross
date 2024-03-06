@@ -163,6 +163,15 @@ impl<N: Network> BlockQueue<N> {
         peer_id: N::PeerId,
         pubsub_id: Option<<N as Network>::PubsubId>,
     ) -> Option<QueuedBlock<N>> {
+        let body_existence_matches_topic = match &block {
+            Block::Macro(block) => block.body.is_some(),
+            Block::Micro(block) => block.body.is_some() == self.config.include_micro_bodies,
+        };
+        if !body_existence_matches_topic {
+            self.report_validation_result(pubsub_id, MsgAcceptance::Reject);
+            return None;
+        }
+
         let blockchain = self.blockchain.read();
 
         let block_number = block.block_number();

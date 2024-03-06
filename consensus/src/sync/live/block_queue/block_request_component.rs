@@ -142,6 +142,24 @@ impl<N: Network> BlockRequestComponent<N> {
                         return false;
                     }
 
+                    for block in blocks {
+                        let body_existence_matches_request = match block {
+                            Block::Macro(block) => block.body.is_some(),
+                            Block::Micro(block) => {
+                                block.body.is_some() == request.include_micro_bodies
+                            }
+                        };
+                        if !body_existence_matches_request {
+                            log::error!(
+                                is_macro = block.is_macro(),
+                                has_body = block.body().is_some(),
+                                include_micro_bodies = request.include_micro_bodies,
+                                "Received block with body where none was expected or vice versa",
+                            );
+                            return false;
+                        }
+                    }
+
                     // Checks that the first block's parent was part of the block locators.
                     let first_block = blocks.first().unwrap(); // cannot be empty
                     if !request.locators.contains(first_block.parent_hash()) {
