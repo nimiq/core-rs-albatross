@@ -178,7 +178,15 @@ impl<N: Network> BlockQueue<N> {
         let head_height = blockchain.block_number();
 
         // Ignore blocks that we already know.
-        if blockchain.contains(&block.hash(), true) {
+        if let Ok(info) = blockchain.get_chain_info(&block.hash(), false) {
+            self.report_validation_result(
+                pubsub_id,
+                if info.on_main_chain {
+                    MsgAcceptance::Accept
+                } else {
+                    MsgAcceptance::Ignore
+                },
+            );
             return None;
         }
 
