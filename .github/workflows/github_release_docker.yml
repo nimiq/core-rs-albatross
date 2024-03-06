@@ -48,7 +48,6 @@ jobs:
 
       - name: Run some commands
         run: |
-          rm .dockerignore
           ls target/release/ -al
           chmod -R +x target/release/
       - name: Docker meta
