@@ -61,6 +61,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 chunk_index,
                 validity_start: validity_window_start,
                 election_in_window,
+                last_chunk_items: None,
             });
 
             // Add the peer
@@ -185,8 +186,8 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                     let chunk = chunk.chunk;
 
                     log::trace!(
-                        leaf_index = leaf_index,
                         chunk_index = peer_request.chunk_index,
+                        chunk_size = chunk.history.len(),
                         target_macro = verifier_block_number,
                         "Applying a new validity chunk"
                     );
@@ -197,12 +198,35 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         .map_or(false, |result| result);
 
                     if verification_result {
-                        let epoch_complete = match &self.blockchain {
+                        let mut epoch_complete = match &self.blockchain {
                             BlockchainProxy::Full(blockchain) => {
+                                // First we calculate the beginning of the chunk that we want to apply
+                                let starting_index = if let Some(prev_items) =
+                                    peer_request.last_chunk_items.take()
+                                {
+                                    // This is the case where we re-requested a chunk due to a new target
+
+                                    match prev_items.cmp(&chunk.history.len()) {
+                                        std::cmp::Ordering::Less => {
+                                            // If the chunk has new history items, we need to apply the delta
+                                            prev_items
+                                        }
+                                        std::cmp::Ordering::Equal => {
+                                            // If we recieved the same chunk (i.e nothing changed) we don't need to re-apply it
+                                            // So we set the start as the chunk length to apply an empty slice.
+                                            chunk.history.len()
+                                        }
+                                        std::cmp::Ordering::Greater => 0,
+                                    }
+                                } else {
+                                    // This is the regular case, where we just apply the whole chunk
+                                    0
+                                };
+
                                 let history_root = Blockchain::extend_validity_sync(
                                     blockchain.upgradable_read(),
                                     Policy::epoch_at(verifier_block_number),
-                                    &chunk.history,
+                                    &chunk.history[starting_index..],
                                 )
                                 .unwrap();
 
@@ -214,19 +238,38 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         // Get ready for requesting the next chunk
                         let mut chunk_index = peer_request.chunk_index + 1;
 
-                        // We need to check which is the latest macro head.
+                        // We need to check the latest macro head.
                         let latest_macro_head = self.blockchain.read().macro_head();
                         let latest_macro_head_number = latest_macro_head.block_number();
                         let latest_history_root = latest_macro_head.header.history_root;
 
-                        // We need to check if we have a newer macro head
                         if latest_macro_head_number > verifier_block_number {
-                            log::debug!(new_macro_head=latest_macro_head_number, new_history_root=%latest_history_root,"We have a new macro head, updating the validity sync target");
-                            verifier_block_number = latest_macro_head_number;
-                            peer_request.root_hash = latest_history_root.clone();
-                            peer_request.verifier_block_number = latest_macro_head_number;
+                            // A new macro head was adopted
                             // TODO: We could keep track of the latest macro heads on a per peer basis
                             // because not all peers have the latest state.
+                            if Policy::epoch_at(verifier_block_number)
+                                < Policy::epoch_at(latest_macro_head_number)
+                            {
+                                // If the new macro head belongs to the next epoch, we still need to finish syncing the current epoch.
+                                log::debug!(
+                                    new_macro_head = latest_macro_head_number,
+                                    new_epoch = Policy::epoch_at(latest_macro_head_number),
+                                    "We have a new macro head that belongs to the next epoch"
+                                );
+                                peer_request.election_in_window = true;
+                            } else {
+                                log::debug!(new_macro_head=latest_macro_head_number, new_history_root=%latest_history_root, current_epoch = Policy::epoch_at(latest_macro_head_number), "We have a new macro head, updating the validity sync target for our current epoch");
+                                verifier_block_number = latest_macro_head_number;
+                                peer_request.root_hash = latest_history_root.clone();
+                                peer_request.verifier_block_number = latest_macro_head_number;
+
+                                // We re-request the same chunk because applying a new macro head could potentially change the number of chunk items.
+                                chunk_index = peer_request.chunk_index;
+                                peer_request.last_chunk_items = Some(chunk.history.len());
+
+                                // We are no longer complete
+                                epoch_complete = false;
+                            }
                         }
 
                         if epoch_complete {
@@ -236,10 +279,12 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                     current_epoch = Policy::epoch_at(verifier_block_number),
                                     new_verifier_bn = latest_macro_head_number,
                                     new_expected_root = %latest_history_root,
-                                    "Moving to the next epoch to continue syncing",
+                                    next_epoch = Policy::epoch_at(latest_macro_head_number),
+                                    "Moving to the next epoch to continue validity syncing",
                                 );
 
                                 // Move to the next epoch:
+                                // Note, when we move to the next epoch, we always select the latest macro head as our target
                                 verifier_block_number = latest_macro_head_number;
                                 chunk_index = 0;
                                 peer_request.election_in_window = false;
@@ -281,6 +326,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
                         log::trace!(
                             verifier_bn = verifier_block_number,
+                            epoch_number = Policy::epoch_at(verifier_block_number),
                             chunk_index = chunk_index,
                             "Adding a new validity window chunk request"
                         );

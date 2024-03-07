@@ -66,6 +66,8 @@ pub struct ValidityChunkRequest {
     pub validity_start: u32,
     /// Flag to indicate if there is an election block within the validity window
     pub election_in_window: bool,
+    /// Number of items in the previous requested chunk (for cases where we adopt a new macro head)
+    pub last_chunk_items: Option<usize>,
 }
 
 /// This struct is used to track all the macro requests sent to a particular peer
