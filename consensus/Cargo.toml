@@ -69,6 +69,7 @@ nimiq-test-log = { workspace = true }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/14167
 nimiq-test-utils = { workspace = true }
+nimiq-transaction-builder = { workspace = true }
 nimiq-trie = { workspace = true }
 nimiq-zkp-component = { workspace = true, features = ["zkp-prover", "parallel"] }
 

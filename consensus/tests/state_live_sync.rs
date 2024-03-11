@@ -26,12 +26,15 @@ use nimiq_database::{
 };
 use nimiq_genesis::{NetworkId, NetworkInfo};
 use nimiq_hash::{Blake2bHash, Blake2sHash};
+use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
     network::Network,
     request::{Handle, RequestCommon},
 };
 use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
-use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy, trie::trie_diff::TrieDiff};
+use nimiq_primitives::{
+    coin::Coin, key_nibbles::KeyNibbles, policy::Policy, trie::trie_diff::TrieDiff,
+};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
@@ -39,6 +42,8 @@ use nimiq_test_utils::{
     mock_node::MockNode,
     node::TESTING_BLS_CACHE_MAX_CAPACITY,
 };
+use nimiq_transaction::ExecutedTransaction;
+use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::time::OffsetTime;
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::mpsc::{self, Sender};
@@ -734,15 +739,23 @@ async fn can_remove_chunks_related_to_invalid_blocks() {
                     mock_id,
                     blockchain_proxy,
                 );
-            match &mut response {
-                Ok(blocks) => match &mut blocks.blocks[0] {
-                    Block::Micro(micro_block) => {
-                        micro_block.body = None;
-                    }
-                    _ => unreachable!(),
-                },
-                _ => unreachable!(),
-            }
+            response.as_mut().unwrap().blocks[0]
+                .unwrap_micro_ref_mut()
+                .body
+                .as_mut()
+                .unwrap()
+                .transactions
+                .push(ExecutedTransaction::Ok(
+                    TransactionBuilder::new_basic(
+                        &KeyPair::default(),
+                        Address::burn_address(),
+                        Coin::MAX,
+                        Coin::ZERO,
+                        Policy::genesis_block_number(),
+                        NetworkId::UnitAlbatross,
+                    )
+                    .unwrap(),
+                ));
             response
         });
 
