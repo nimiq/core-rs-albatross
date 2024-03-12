@@ -177,6 +177,10 @@ impl ChainStore {
         txn.put(&self.height_idx, &height, hash);
     }
 
+    /// Gets the set of macro block hashes that delimits the epoch chunks.
+    /// For this it receives a block height and returns its corresponding hash
+    /// plus all of the macro block hashes that were marked as non-prunable and
+    /// that are part of the same epoch.
     pub fn get_epoch_chunks(
         &self,
         block_height: u32,
@@ -191,37 +195,25 @@ impl ChainStore {
             }
         };
 
-        let block = self.get_block_at(block_height, false, Some(txn))?;
         let epoch_number = Policy::epoch_at(block_height);
+        let mut blocks = vec![];
+        let mut prev_macro_block_number = block_height;
 
-        // Seek to the first block at the given height.
-        let mut blocks = vec![block.hash()];
-        let mut cursor = txn.cursor(&self.height_idx);
-        // First block is the last one inserted
-        let (first_block_number, _) = cursor
-            .first::<u32, Blake2bHash>()
-            .ok_or(BlockchainError::BlockNotFound)?;
-        let mut last_block_number = block_height;
-
-        // Iterate until we find all blocks at the same epoch.
-        while Policy::epoch_at(last_block_number) == epoch_number
-            && last_block_number != first_block_number
-        {
-            match cursor.prev_no_duplicate::<u32, Blake2bHash>() {
-                Some((block_number, hash)) => {
-                    if Policy::is_macro_block_at(block_number)
-                        && Policy::epoch_at(block_number) == epoch_number
-                    {
-                        if let Ok(chain_info) = self.get_chain_info(&hash, false, Some(txn)) {
-                            if !chain_info.prunable {
-                                blocks.push(hash);
-                            }
-                        }
+        // Iterate until we find all non prunable macro blocks at the same epoch.
+        while Policy::epoch_at(prev_macro_block_number) == epoch_number {
+            match self.get_chain_info_at(prev_macro_block_number, false, Some(txn)) {
+                Ok(chain_info) => {
+                    // Only add non-prunable macro blocks and the block height passed as argument
+                    if !chain_info.prunable || prev_macro_block_number == block_height {
+                        blocks.push(chain_info.head.hash());
                     }
-                    last_block_number = block_number;
                 }
-                None => break,
+                Err(_) => {
+                    // Ignore error since the chain info for this block could have been pruned already and we need to
+                    // find if there is a previous non-prunable macro block
+                }
             }
+            prev_macro_block_number = Policy::macro_block_before(prev_macro_block_number);
         }
         Ok(blocks.into_iter().rev().collect())
     }
