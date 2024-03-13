@@ -56,16 +56,21 @@ pub enum HistoryRequestError {
     InvalidHistoryChunk,
 }
 
+/// Structure to keep track of the history downloaded
 struct PendingBatchSet {
+    /// Macro block to verify the downloaded history
     macro_block: MacroBlock,
-    history_len: usize,
-    history_offset: usize,
-    batch_index: usize,
+    /// Total size of the history to download
+    history_len: u64,
+    /// Batch set index within the epoch
+    batch_set_index: usize,
+    /// Downloaded history
     history: Vec<HistoricTransaction>,
 }
+
 impl PendingBatchSet {
     fn is_complete(&self) -> bool {
-        self.history_len == self.history.len() + self.history_offset
+        self.history_len == self.history.len() as u64
     }
 
     fn epoch_number(&self) -> u32 {
@@ -95,7 +100,7 @@ impl From<PendingBatchSet> for BatchSet {
         Self {
             block: batch_set.macro_block,
             history: batch_set.history,
-            batch_index: batch_set.batch_index,
+            batch_index: batch_set.batch_set_index,
         }
     }
 }
@@ -362,7 +367,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         let num_known_txs = if epoch_number == current_epoch_number {
             blockchain
                 .history_store
-                .get_number_final_epoch_transactions(epoch_number, None)
+                .get_number_final_epoch_transactions(epoch_number, None) as u64
         } else {
             0
         };
@@ -378,51 +383,54 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             epoch.total_history_len(),
         );
 
-        let mut previous_history_size = 0usize;
+        let mut epoch_processed_history_items = 0u64;
 
         for (index, batch_set) in epoch.batch_sets.iter().enumerate() {
             // If the batch_set is in the current epoch, skip already known history.
             // We can only skip if the batch_set is not empty, otherwise we can't tell by the
             // history size if it was already adopted or not.
-            let batch_set_epoch_boundary = previous_history_size / CHUNK_SIZE * CHUNK_SIZE
-                + batch_set.history_len.size() as usize;
-            if batch_set.history_len.size() > 0 && num_known_txs >= batch_set_epoch_boundary {
+            let epoch_history_offset =
+                epoch_processed_history_items / CHUNK_SIZE as u64 * CHUNK_SIZE as u64;
+            let cum_history_len = batch_set.history_len.size();
+            if batch_set.history_len.size() > 0 && num_known_txs >= cum_history_len {
                 // This chunk is already known to the blockchain
-                previous_history_size = batch_set.history_len.size() as usize;
+                epoch_processed_history_items = batch_set.history_len.size();
                 continue;
             }
 
-            // Compute the index of the first transaction to download.
-            let start_txn = if current_epoch_number == epoch_number {
-                num_known_txs.saturating_sub(previous_history_size / CHUNK_SIZE * CHUNK_SIZE)
+            // Compute the index of the first transaction of this batch set to download.
+            let start_txn = if num_known_txs > epoch_history_offset {
+                num_known_txs / CHUNK_SIZE as u64 * CHUNK_SIZE as u64
             } else {
-                0
+                epoch_history_offset
             };
+
+            // Now compute how many history items we need to download
+            let history_len = batch_set.history_len.size() - start_txn;
 
             // Prepare pending info.
             let pending_batch_set = PendingBatchSet {
                 macro_block: batch_set.macro_block.clone(),
-                history_len: batch_set.history_len.size() as usize - previous_history_size,
-                history_offset: start_txn / CHUNK_SIZE * CHUNK_SIZE,
-                batch_index: index,
+                history_len,
+                batch_set_index: index,
                 history: Vec::new(),
             };
 
             log::debug!(
                 epoch = %batch_set.macro_block.epoch_number(),
                 block = %batch_set.macro_block,
-                history_len = batch_set.history_len.size(),
-                batch_index = index,
-                "Adding pending batch",
+                history_len,
+                batch_set_index = index,
+                "Adding pending batch set",
             );
 
             // Queue history chunks for the given batch set for download.
-            let history_chunk_ids: Vec<(HistoryChunkRequest, Option<_>)> = (start_txn / CHUNK_SIZE
-                ..((batch_set.history_len.size() as usize).div_ceil(CHUNK_SIZE)))
+            let history_chunk_ids: Vec<(HistoryChunkRequest, Option<_>)> = (start_txn
+                / CHUNK_SIZE as u64
+                ..((batch_set.history_len.size()).div_ceil(CHUNK_SIZE as u64)))
                 .map(|i| {
-                    let chunk_index = (previous_history_size / CHUNK_SIZE + i) as u64;
                     (
-                        HistoryChunkRequest::from_block(&batch_set.macro_block, chunk_index),
+                        HistoryChunkRequest::from_block(&batch_set.macro_block, i),
                         None,
                     )
                 })
@@ -432,8 +440,8 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             // We keep the epoch in pending_epochs while the history is downloading.
             self.pending_batch_sets.push_back(pending_batch_set);
 
-            // Set the previous history size.
-            previous_history_size = batch_set.history_len.size() as usize;
+            // Set the total history that we have processed for this epoch
+            epoch_processed_history_items = batch_set.history_len.size();
         }
 
         Ok(())
@@ -464,17 +472,14 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         // Add the received history chunk to the pending epoch.
         batch_set.history.append(&mut history_chunk.history);
 
-        if batch_set.history_len > CHUNK_SIZE {
-            log::info!(
-                "Downloading history for epoch #{}: {}/{} ({:.2}%)",
-                batch_set.epoch_number(),
-                batch_set.history.len(),
-                batch_set.history_len,
-                ((batch_set.history.len() + batch_set.history_offset) as f64
-                    / batch_set.history_len as f64)
-                    * 100f64,
-            );
-        }
+        log::info!(
+            "Downloading history for epoch #{}, batch set #{}: {}/{} ({:.2}%)",
+            batch_set.epoch_number(),
+            batch_set.batch_set_index,
+            batch_set.history.len(),
+            batch_set.history_len,
+            (batch_set.history.len() as f64 / batch_set.history_len as f64) * 100f64,
+        );
 
         Ok(())
     }

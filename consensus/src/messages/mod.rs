@@ -133,7 +133,9 @@ impl RequestCommon for RequestBatchSet {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BatchSet {
+    /// Verifying macro block
     pub macro_block: MacroBlock,
+    /// Total history length at the height of the specified macro block
     pub history_len: SizeProof<Blake2bHash, HistoricTransaction>,
 }
 
