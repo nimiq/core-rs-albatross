@@ -31,6 +31,12 @@ impl OpenRpcBuilder {
         self
     }
 
+    /// Sets the version of the OpenRPC document.
+    pub fn version(mut self, version: String) -> OpenRpcBuilder {
+        self.open_rpc_doc.info.version = version;
+        self
+    }
+
     /// Creates a new instance of OpenRpcBuilder with default settings and returns it.
     pub fn builder() -> OpenRpcBuilder {
         OpenRpcBuilder{ open_rpc_doc: OpenrpcDocument {

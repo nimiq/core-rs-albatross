@@ -1,19 +1,26 @@
 mod openrpc;
 mod parser;
 
-use std::{
-    error::Error,
-    fs::{self, File},
-    io::Write,
-};
+use std::{env, error::Error, fs};
 
 use syn::parse_file;
 
 use crate::openrpc::OpenRpcBuilder;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    if env::args().len() < 2 {
+        return Err("OpenRPC version number expected as argument".into());
+    }
+
+    let version = match String::try_from(env::args().nth(1).unwrap()) {
+        Ok(version) => version,
+        Err(e) => {
+            return Err(e.into());
+        }
+    };
+
     let directory = "rpc-interface/src";
-    let mut builder = OpenRpcBuilder::builder();
+    let mut builder = OpenRpcBuilder::builder().version(version);
     if let Ok(entries) = fs::read_dir(directory) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -45,11 +52,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Err("Unable to load directory".into());
     }
 
-    let json_spec =
-        serde_json::to_string_pretty(&builder.build()).expect("Failed to serialize OpenRPC spec");
-    let mut file = File::create("tools/src/rpc-schema/schema.json").expect("Failed to create file");
-    file.write_all(json_spec.as_bytes())
-        .expect("Failed to write to file");
+    print!(
+        "{}",
+        serde_json::to_string_pretty(&builder.build()).expect("Failed to serialize OpenRPC spec")
+    );
 
     Ok(())
 }
