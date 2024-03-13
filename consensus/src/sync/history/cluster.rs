@@ -378,23 +378,23 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             epoch.total_history_len(),
         );
 
-        let mut previous_history_size = 0usize;
+        let mut previous_cum_history_size = 0usize;
 
         for (index, batch_set) in epoch.batch_sets.iter().enumerate() {
             // If the batch_set is in the current epoch, skip already known history.
             // We can only skip if the batch_set is not empty, otherwise we can't tell by the
             // history size if it was already adopted or not.
-            let batch_set_epoch_boundary = previous_history_size / CHUNK_SIZE * CHUNK_SIZE
+            let batch_set_epoch_boundary = previous_cum_history_size / CHUNK_SIZE * CHUNK_SIZE
                 + batch_set.history_len.size() as usize;
             if batch_set.history_len.size() > 0 && num_known_txs >= batch_set_epoch_boundary {
                 // This chunk is already known to the blockchain
-                previous_history_size = batch_set.history_len.size() as usize;
+                previous_cum_history_size += batch_set.history_len.size() as usize;
                 continue;
             }
 
             // Compute the index of the first transaction to download.
             let start_txn = if current_epoch_number == epoch_number {
-                num_known_txs.saturating_sub(previous_history_size / CHUNK_SIZE * CHUNK_SIZE)
+                num_known_txs.saturating_sub(previous_cum_history_size / CHUNK_SIZE * CHUNK_SIZE)
             } else {
                 0
             };
@@ -402,7 +402,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             // Prepare pending info.
             let pending_batch_set = PendingBatchSet {
                 macro_block: batch_set.macro_block.clone(),
-                history_len: batch_set.history_len.size() as usize - previous_history_size,
+                history_len: batch_set.history_len.size() as usize - previous_cum_history_size,
                 history_offset: start_txn / CHUNK_SIZE * CHUNK_SIZE,
                 batch_index: index,
                 history: Vec::new(),
@@ -420,7 +420,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             let history_chunk_ids: Vec<(HistoryChunkRequest, Option<_>)> = (start_txn / CHUNK_SIZE
                 ..((batch_set.history_len.size() as usize).div_ceil(CHUNK_SIZE)))
                 .map(|i| {
-                    let chunk_index = (previous_history_size / CHUNK_SIZE + i) as u64;
+                    let chunk_index = (previous_cum_history_size / CHUNK_SIZE + i) as u64;
                     (
                         HistoryChunkRequest::from_block(&batch_set.macro_block, chunk_index),
                         None,
@@ -433,7 +433,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             self.pending_batch_sets.push_back(pending_batch_set);
 
             // Set the previous history size.
-            previous_history_size = batch_set.history_len.size() as usize;
+            previous_cum_history_size += batch_set.history_len.size() as usize;
         }
 
         Ok(())
