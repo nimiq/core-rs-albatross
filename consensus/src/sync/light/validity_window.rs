@@ -5,7 +5,7 @@ use std::{
 
 use futures::StreamExt;
 #[cfg(feature = "full")]
-use nimiq_blockchain::{Blockchain, CHUNK_SIZE};
+use nimiq_blockchain::{interface::HistoryInterface, Blockchain, CHUNK_SIZE};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
@@ -57,7 +57,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
             self.validity_requests = Some(ValidityChunkRequest {
                 verifier_block_number,
-                root_hash: expected_root,
+                root_hash: expected_root.clone(),
                 chunk_index,
                 validity_start: validity_window_start,
                 election_in_window,
@@ -74,11 +74,12 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             };
 
             log::debug!(
-                verifier_bn = verifier_block_number,
+                target_macro = verifier_block_number,
                 chunk_index = chunk_index,
                 epoch = epoch_number,
                 validity_start = validity_window_start,
                 election_in_between = election_in_window,
+                expected_root = %expected_root,
                 "Starting validity window synchronization process"
             );
 
@@ -174,10 +175,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         {
             log::trace!(peer=%peer_id, chunk_index=request.chunk_index, block_number=request.block_number,  "Processing response from validity queue");
 
-            let macro_head = self.blockchain.read().macro_head();
-            let macro_head_number = macro_head.block_number();
-            let macro_history_root = macro_head.header.history_root;
-
             match result {
                 Ok(chunk) => {
                     let peer_request = self.validity_requests.as_mut().unwrap();
@@ -190,7 +187,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                     log::trace!(
                         leaf_index = leaf_index,
                         chunk_index = peer_request.chunk_index,
-                        verifier_bn = verifier_block_number,
+                        target_macro = verifier_block_number,
                         "Applying a new validity chunk"
                     );
 
@@ -217,23 +214,44 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         // Get ready for requesting the next chunk
                         let mut chunk_index = peer_request.chunk_index + 1;
 
+                        // We need to check which is the latest macro head.
+                        let latest_macro_head = self.blockchain.read().macro_head();
+                        let latest_macro_head_number = latest_macro_head.block_number();
+                        let latest_history_root = latest_macro_head.header.history_root;
+
+                        // We need to check if we have a newer macro head
+                        if latest_macro_head_number > verifier_block_number {
+                            log::debug!(new_macro_head=latest_macro_head_number, new_history_root=%latest_history_root,"We have a new macro head, updating the validity sync target");
+                            verifier_block_number = latest_macro_head_number;
+                            peer_request.root_hash = latest_history_root.clone();
+                            peer_request.verifier_block_number = latest_macro_head_number;
+                            // TODO: We could keep track of the latest macro heads on a per peer basis
+                            // because not all peers have the latest state.
+                        }
+
                         if epoch_complete {
                             // We need to check if there was an election in between, if so, we need to proceed to the next epoch
                             if peer_request.election_in_window {
                                 log::trace!(
                                     current_epoch = Policy::epoch_at(verifier_block_number),
-                                    "Moving to the next epoch to continue syncing, current epoch",
+                                    new_verifier_bn = latest_macro_head_number,
+                                    new_expected_root = %latest_history_root,
+                                    "Moving to the next epoch to continue syncing",
                                 );
 
                                 // Move to the next epoch:
-                                verifier_block_number = macro_head_number;
+                                verifier_block_number = latest_macro_head_number;
                                 chunk_index = 0;
                                 peer_request.election_in_window = false;
-                                peer_request.root_hash = macro_history_root.clone();
-                                peer_request.verifier_block_number = verifier_block_number;
+                                peer_request.root_hash = latest_history_root.clone();
+                                peer_request.verifier_block_number = latest_macro_head_number;
                             } else {
-                                // No election in between, so we are done
-                                log::debug!("Validity window syncing is complete");
+                                // We are done
+                                log::debug!(
+                                    synced_root = %expected_root,
+                                    synced_macro_head = verifier_block_number,
+                                    "Validity window syncing is complete"
+                                );
 
                                 self.validity_queue.remove_peer(&peer_id);
                                 self.syncing_peers.remove(&peer_id);

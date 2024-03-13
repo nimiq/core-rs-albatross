@@ -25,7 +25,6 @@ convert_case = "0.6"
 hex = "0.4"
 humantime = "2.1"
 indicatif = "0.17"
-jsonrpsee = { version = "0.20", features = ["client-core"] }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 nimiq-blockchain = { workspace = true }
 nimiq-bls = { workspace = true }
@@ -52,7 +51,7 @@ nimiq-primitives = { workspace = true, features = ["policy"]}
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
 nimiq-vrf = { workspace = true }
-nimiq_rpc = { git = "https://github.com/jsdanielh/rust-client.git" }
+nimiq_rpc = "0.3"
 percentage = "0.1"
 rand = "0.8"
 serde = "1.0"

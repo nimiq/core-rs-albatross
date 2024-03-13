@@ -78,6 +78,9 @@ Alternatively, you can install it directly from git:
 cargo install --git https://github.com/nimiq/core-rs-albatross.git
 ```
 
+## Software Integrity and Authenticity
+You can refer to the [documentation](./build/README.md) to learn more about reproducing Nimiq software for yourself as well as checking software signatures in order to verify the integrity and authenticity of software.
+
 ## Usage
 
 After installation, you can run the client directly, like this:

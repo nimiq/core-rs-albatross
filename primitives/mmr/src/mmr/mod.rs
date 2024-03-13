@@ -1,4 +1,8 @@
-use std::{collections::VecDeque, marker::PhantomData, ops::RangeBounds};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    marker::PhantomData,
+    ops::RangeBounds,
+};
 
 use self::{proof::SizeProof, utils::prove_num_leaves};
 use crate::{
@@ -475,6 +479,137 @@ impl<H: Merge + Clone + PartialEq, S: Store<H>> MerkleMountainRange<H, S> {
     }
 }
 
+/// This is the main struct for the Peaks Merkle Mountain Range.
+/// It is a MMR where only peaks are stored.
+pub struct PeaksMerkleMountainRange<H> {
+    memory_store: HashMap<usize, H>,
+    len: usize,
+    num_leaves: usize,
+    hash: PhantomData<H>,
+}
+
+impl<H: Merge + Clone> Default for PeaksMerkleMountainRange<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H: Merge + Clone> PeaksMerkleMountainRange<H> {
+    /// Creates a new Peaks Merkle Mountain Range
+    pub fn new() -> Self {
+        let mut mmr = PeaksMerkleMountainRange {
+            num_leaves: 0,
+            hash: PhantomData,
+            memory_store: HashMap::new(),
+            len: 0,
+        };
+
+        // The number of leaves is the sum over 2^height for all full binary trees.
+        if !mmr.is_empty() {
+            mmr.num_leaves = mmr.peaks().map(|peak_pos| peak_pos.num_leaves()).sum();
+        };
+
+        mmr
+    }
+
+    /// Returns the number of elements in the tree.
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Returns the number of leaf hashes in the tree.
+    pub fn num_leaves(&self) -> usize {
+        self.num_leaves
+    }
+
+    /// Returns true if the tree is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Inserts an element and returns the corresponding leaf index.
+    /// The leaf index is not the internal index within the tree,
+    /// but a leaf index of i means that it is the i-th leaf (starting to count at 0).
+    pub fn push<T>(&mut self, elem: &T) -> Result<usize, Error>
+    where
+        T: Hash<H>,
+    {
+        // Set new leaf index.
+        let num_leaves = self.num_leaves();
+
+        let index = self.len();
+        let mut pos = Position::from(index);
+
+        self.memory_store
+            .insert(pos.index, elem.hash(pos.num_leaves() as u64));
+
+        self.len += 1;
+
+        // Hash up as long as possible (as long as we're the right child of the parent).
+        while pos.right_node {
+            let left_pos = pos.sibling();
+
+            let left_elem = self
+                .memory_store
+                .get(&left_pos.index)
+                .ok_or(Error::InconsistentStore)?;
+            let right_elem = self
+                .memory_store
+                .get(&pos.index)
+                .ok_or(Error::InconsistentStore)?;
+
+            pos = pos.parent();
+
+            // Prefix the merged hash with the number of leaf elements below that hash, which are
+            // 2^height as it is a perfect binary tree.
+            let parent_elem = left_elem.merge(right_elem, pos.num_leaves() as u64);
+            self.memory_store.insert(pos.index, parent_elem);
+            self.len += 1;
+        }
+
+        // Peaks is the only thing we want to store.
+        let peaks_positions: HashSet<usize> = self.peaks().map(|pos| pos.index).collect();
+
+        self.memory_store
+            .retain(|pos, _| peaks_positions.contains(pos));
+
+        // Update num_leaves.
+        self.num_leaves += 1;
+        let leaf_index = num_leaves;
+        Ok(leaf_index)
+    }
+
+    /// Calculates the root.
+    pub fn get_root(&self) -> Result<H, Error> {
+        if self.is_empty() {
+            return Ok(H::empty(0));
+        }
+
+        // The peak hashes are not given in reverse order as we pop them from the end.
+        let it = self.rev_peaks().map(|peak_pos| {
+            Ok((
+                self.memory_store
+                    .get(&peak_pos.index)
+                    .cloned()
+                    .ok_or(Error::InconsistentStore)?,
+                peak_pos.num_leaves(),
+            ))
+        });
+
+        bagging(it)
+    }
+
+    /// Returns an iterator for the MMR peaks in normal order. From biggest/left to smallest/right.
+    fn peaks(&self) -> PeakIterator {
+        PeakIterator::new(self.len())
+    }
+
+    /// Returns an iterator for the MMR peaks in reverse order. From smallest/right to biggest/left.
+    fn rev_peaks(&self) -> RevPeakIterator {
+        RevPeakIterator::new(self.len())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::vec;
@@ -501,6 +636,23 @@ mod tests {
             // Check properties.
             assert_eq!(mmr.num_leaves(), i + 1);
             assert_eq!(mmr.find(v), Some(i));
+            // Check hash.
+            assert_eq!(mmr.get_root(), Ok(hash_mmr(&nodes[..i + 1])))
+        }
+    }
+
+    #[test]
+    fn it_correctly_constructs_ptrees() {
+        let nodes = vec![2, 3, 5, 7, 11, 13, 17, 19, 23, 29];
+
+        let mut mmr = PeaksMerkleMountainRange::<TestHash>::new();
+
+        for (i, v) in nodes.clone().into_iter().enumerate() {
+            // Add value.
+            let index = mmr.push(&v);
+            assert_eq!(index, Ok(i));
+            // Check properties.
+            assert_eq!(mmr.num_leaves(), i + 1);
             // Check hash.
             assert_eq!(mmr.get_root(), Ok(hash_mmr(&nodes[..i + 1])))
         }

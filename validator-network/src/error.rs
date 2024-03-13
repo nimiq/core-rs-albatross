@@ -20,6 +20,11 @@ where
     #[error("Network is offline")]
     Offline,
 
+    /// The peer ID of this validator is still unknown
+    /// It might be eventually resolved.
+    #[error("Unknown validator peer ID: {0}")]
+    UnknownPeerID(u16),
+
     /// The public key for that validator is not known.
     #[error("Unknown validator: {0}")]
     UnknownValidator(u16),

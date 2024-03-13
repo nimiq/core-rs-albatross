@@ -34,7 +34,7 @@ wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 wasm-bindgen-derive = { version = "0.2", optional = true }
 wasm-timer = "0.2"
-web-sys = { version = "0.3.68", features = ["MessageEvent"]}
+web-sys = { version = "0.3.69", features = ["MessageEvent"]}
 
 nimiq-account = { workspace = true, default-features = false }
 nimiq-block = { workspace = true }
@@ -49,6 +49,7 @@ nimiq-primitives = { workspace = true, features = ["coin", "networks", "ts-types
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true, features = ["ts-types"] }
 nimiq-transaction-builder = { workspace = true }
+nimiq-utils = { workspace = true, features = ["merkle"] }
 
 [dependencies.nimiq]
 package = "nimiq-lib"

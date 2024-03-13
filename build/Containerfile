@@ -1,0 +1,39 @@
+FROM scratch as build
+COPY --from=stagex/busybox@sha256:6c1bce892ecda22691eb7e7ea02ccf939f018dcbb54af12ef99ce0b2066a8f4c . /
+COPY --from=stagex/rust@sha256:e7a7a152ddf91ba4f2d6e426867c54ab43b76eef3f2a97dd0c3d9234090f3ce8 . /
+COPY --from=stagex/ca-certificates@sha256:70c5136051c748fff0d1399101d082ecc204c1eb29d93da094ccf0d25f341121 . /
+COPY --from=stagex/binutils@sha256:9cc26e56cdfce106108a0f4c416a27967060d8d07c4da0cbc0e14fa87f7b1dfa . /
+COPY --from=stagex/libunwind@sha256:422fe0a108d9f1253dd9694ce432aa195d49a3b60b1d977aa4e94024c7ac52bf . /
+COPY --from=stagex/openssl@sha256:f4e218dba1167008456899c5f19d9e1a1be17d4fc6fb6bb84d41b8eb477fd402 . /
+COPY --from=stagex/zlib@sha256:d5df909418ef436e3dd23af397ba2b202bd72f45c81b0e161b507adc9e3e9b9c . /
+COPY --from=stagex/llvm@sha256:9dfc53795c89295da52719959f96df9122e0b921da6283c7bd7a582749545b1d . /
+COPY --from=stagex/pkgconf@sha256:36fc4ed10a6e044d068aa7316e72588dbd365be4eb0271a84cf632521dbd8a09 . /
+COPY --from=stagex/gcc@sha256:bb550daddcf95acdce9999e359e3ffb1c497916aea41bdd0cae1d6a5a908b4b9 . /
+COPY --from=stagex/musl@sha256:27ca6026619beae07a1e7096caa7ac41b1403f5c1839ed4ff79b5aee3c409cec . /
+COPY --from=stagex/clang@sha256:959dfa09f384e82ba5757451ab1ac45dca39b89c5125d13efda8cfc421bb5f33 . /
+# HACK: figure out why gcc package puts these in 
+# the wrong path at install time
+COPY --from=stagex/gcc@sha256:bb550daddcf95acdce9999e359e3ffb1c497916aea41bdd0cae1d6a5a908b4b9 /usr/lib64/* /usr/lib/
+
+# Set system time to 00:00:01 UTC
+ENV SOURCE_DATE_EPOCH=1
+
+# Create release dir for cargo build process
+WORKDIR /home/nimiq/target/release
+
+# Set workdir to /home/nimiq
+WORKDIR /home/nimiq
+
+# Copy project files into workdir
+COPY . /home/nimiq
+
+# Use one code generation unit and enable dynamic 
+# linking and building dynamic objects
+ENV RUSTFLAGS="-C target-feature=-crt-static -C codegen-units=1"
+
+# Install crates
+RUN cargo fetch
+
+# Build and and ensure Cargo.lock is not modified 
+# or accessing network for updates
+RUN /usr/bin/cargo build --release --frozen 

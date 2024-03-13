@@ -11,7 +11,7 @@ use std::{
 
 use futures::{FutureExt, Stream, StreamExt};
 use nimiq_block::{Block, MacroBlock};
-use nimiq_blockchain::{Blockchain, HistoryTreeChunk, CHUNK_SIZE};
+use nimiq_blockchain::{interface::HistoryInterface, Blockchain, HistoryTreeChunk, CHUNK_SIZE};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushError, PushResult};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestError};

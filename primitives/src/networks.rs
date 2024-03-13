@@ -108,32 +108,39 @@ impl Display for NetworkId {
     }
 }
 
-impl serde::Serialize for NetworkId {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        if serializer.is_human_readable() {
-            serializer.serialize_str(self.as_str())
-        } else {
-            serializer.serialize_u8(*self as u8)
+#[cfg(feature = "serde-derive")]
+mod serde_derive {
+    use std::str::FromStr;
+
+    use super::NetworkId;
+
+    impl serde::Serialize for NetworkId {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            if serializer.is_human_readable() {
+                serializer.serialize_str(self.as_str())
+            } else {
+                serializer.serialize_u8(*self as u8)
+            }
         }
     }
-}
 
-impl<'de> serde::Deserialize<'de> for NetworkId {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        use serde::de::{Error as _, Unexpected};
-        if deserializer.is_human_readable() {
-            let intermediate = String::deserialize(deserializer)?;
-            NetworkId::from_str(&intermediate).map_err(|_| {
-                D::Error::invalid_value(Unexpected::Str(&intermediate), &"a valid network name")
-            })
-        } else {
-            let intermediate = u8::deserialize(deserializer)?;
-            NetworkId::try_from(intermediate).map_err(|_| {
-                D::Error::invalid_value(
-                    Unexpected::Unsigned(intermediate.into()),
-                    &"an ID corresponding to a network",
-                )
-            })
+    impl<'de> serde::Deserialize<'de> for NetworkId {
+        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            use serde::de::{Error as _, Unexpected};
+            if deserializer.is_human_readable() {
+                let intermediate = String::deserialize(deserializer)?;
+                NetworkId::from_str(&intermediate).map_err(|_| {
+                    D::Error::invalid_value(Unexpected::Str(&intermediate), &"a valid network name")
+                })
+            } else {
+                let intermediate = u8::deserialize(deserializer)?;
+                NetworkId::try_from(intermediate).map_err(|_| {
+                    D::Error::invalid_value(
+                        Unexpected::Unsigned(intermediate.into()),
+                        &"an ID corresponding to a network",
+                    )
+                })
+            }
         }
     }
 }

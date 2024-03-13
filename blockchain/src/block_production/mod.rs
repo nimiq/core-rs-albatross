@@ -14,7 +14,7 @@ use nimiq_transaction::{
 };
 use rand::{CryptoRng, Rng, RngCore};
 
-use crate::Blockchain;
+use crate::{history::interface::HistoryInterface, Blockchain};
 
 /// Struct that contains all necessary information to actually produce blocks.
 /// It has the validator keys for this validator.
