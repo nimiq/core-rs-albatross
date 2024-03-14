@@ -162,13 +162,30 @@ impl<N: Network> BlockQueue<N> {
         peer_id: N::PeerId,
         pubsub_id: Option<<N as Network>::PubsubId>,
     ) -> Option<QueuedBlock<N>> {
+        let body_existence_matches_topic = match &block {
+            Block::Macro(block) => block.body.is_some(),
+            Block::Micro(block) => block.body.is_some() == self.config.include_micro_bodies,
+        };
+        if !body_existence_matches_topic {
+            self.report_validation_result(pubsub_id, MsgAcceptance::Reject);
+            return None;
+        }
+
         let blockchain = self.blockchain.read();
 
         let block_number = block.block_number();
         let head_height = blockchain.block_number();
 
         // Ignore blocks that we already know.
-        if blockchain.contains(&block.hash(), true) {
+        if let Ok(info) = blockchain.get_chain_info(&block.hash(), false) {
+            self.report_validation_result(
+                pubsub_id,
+                if info.on_main_chain {
+                    MsgAcceptance::Accept
+                } else {
+                    MsgAcceptance::Ignore
+                },
+            );
             return None;
         }
 
