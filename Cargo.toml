@@ -29,6 +29,7 @@ members = [
   "network-interface",
   "network-libp2p",
   "network-mock",
+  "postcard",
   "pow-migration",
   "primitives",
   "primitives/account",
@@ -221,3 +222,5 @@ nimiq-zkp = { path = "zkp", default-features = false }
 nimiq-zkp-circuits = { path = "zkp-circuits", default-features = false }
 nimiq-zkp-component = { path = "zkp-component", default-features = false }
 nimiq-zkp-primitives = { path = "zkp-primitives", default-features = false }
+
+postcard = { path = "postcard", default-features = false }
