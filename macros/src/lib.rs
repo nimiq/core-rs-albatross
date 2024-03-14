@@ -10,6 +10,9 @@ pub extern crate serde_big_array;
 #[doc(hidden)]
 pub extern crate nimiq_serde;
 
+#[doc(hidden)]
+pub extern crate byteorder;
+
 #[macro_export]
 macro_rules! create_typed_array {
     ($name: ident, $t: ty, $len: expr) => {
@@ -74,7 +77,7 @@ macro_rules! create_typed_array {
 }
 
 #[macro_export]
-macro_rules! add_serialization_fns_typed_arr {
+macro_rules! add_serde_serialization_fns_typed_arr {
     ($name: ident, $len: expr) => {
         impl ::nimiq_macros::serde::Serialize for $name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -116,6 +119,33 @@ macro_rules! add_serialization_fns_typed_arr {
                     ::nimiq_macros::serde_big_array::BigArray::deserialize(deserializer)?
                 };
                 Ok($name(data))
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! add_raw_serialization_fns_typed_arr {
+    ($name: ident, $len: expr) => {
+        impl $name {
+            pub fn serialize<W: nimiq_macros::byteorder::WriteBytesExt>(
+                &self,
+                writer: &mut W,
+            ) -> io::Result<()> {
+                writer.write_all(&self.0)?;
+                Ok(())
+            }
+
+            pub fn serialized_size(&self) -> usize {
+                $len
+            }
+
+            pub fn deserialize<R: nimiq_macros::byteorder::ReadBytesExt>(
+                reader: &mut R,
+            ) -> io::Result<Self> {
+                let mut buf = [0; $len];
+                reader.read_exact(&mut buf)?;
+                Ok(Self(buf))
             }
         }
     };

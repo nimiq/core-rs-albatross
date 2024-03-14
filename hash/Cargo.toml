@@ -34,3 +34,9 @@ nimiq-serde = { workspace = true }
 
 [dev-dependencies]
 nimiq-test-log = { workspace = true }
+criterion = "0.5"
+postcard = "1.0"
+
+[[bench]]
+name = "hash_serialize"
+harness = false
