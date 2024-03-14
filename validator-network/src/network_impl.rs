@@ -16,13 +16,37 @@ use super::{MessageStream, NetworkError, PubsubId, ValidatorNetwork};
 use crate::validator_record::ValidatorRecord;
 
 /// Validator `PeerId` cache state
-enum CacheState<TPeerId, TNetworkError> {
+#[derive(Clone, Copy)]
+enum CacheState<TPeerId> {
     /// Cache entry has been resolved with the peer ID
     Resolved(TPeerId),
-    /// Cache entry could not have been resolved
-    Error(TNetworkError),
-    /// Cache entry resolution is in progress (and result is yet unknown)
-    InProgress,
+    /// Cache entry could not have been resolved.
+    ///
+    /// We might know a previous peer ID.
+    Error(Option<TPeerId>),
+    /// Cache entry resolution is in progress (and result is yet unknown).
+    ///
+    /// We might know a previous peer ID.
+    InProgress(Option<TPeerId>),
+    /// No cached peer ID, but a previous one is known.
+    Empty(TPeerId),
+}
+
+impl<TPeerId: Clone> CacheState<TPeerId> {
+    fn current_peer_id(&self) -> Option<TPeerId> {
+        match self {
+            CacheState::Resolved(peer_id) => Some(peer_id.clone()),
+            _ => None,
+        }
+    }
+    fn potentially_outdated_peer_id(&self) -> Option<TPeerId> {
+        match self {
+            CacheState::Resolved(peer_id) => Some(peer_id.clone()),
+            CacheState::Error(maybe_peer_id) => maybe_peer_id.clone(),
+            CacheState::InProgress(maybe_peer_id) => maybe_peer_id.clone(),
+            CacheState::Empty(peer_id) => Some(peer_id.clone()),
+        }
+    }
 }
 
 /// Validator Network implementation
@@ -38,8 +62,7 @@ where
     /// Set of public keys for each of the validators
     validator_keys: Arc<RwLock<Vec<LazyPublicKey>>>,
     /// Cache for mapping validator public keys to peer IDs
-    validator_peer_id_cache:
-        Arc<RwLock<BTreeMap<CompressedPublicKey, CacheState<N::PeerId, NetworkError<N::Error>>>>>,
+    validator_peer_id_cache: Arc<RwLock<BTreeMap<CompressedPublicKey, CacheState<N::PeerId>>>>,
 }
 
 impl<N> ValidatorNetworkImpl<N>
@@ -87,105 +110,111 @@ where
         }
     }
 
-    // Looks up the peer ID for a validator public key in the DHT and updates the internal cache
+    /// Looks up the peer ID for a validator public key in the DHT and updates
+    /// the internal cache.
+    ///
+    /// Assumes that the cache entry has been set to `InProgress` by the
+    /// caller, will panic otherwise.
     async fn update_peer_id_cache(&self, validator_id: u16, public_key: &LazyPublicKey) {
         let cache_value = match Self::resolve_peer_id(&self.network, public_key).await {
-            Ok(result) => match result {
-                Some(peer_id) => {
-                    log::trace!(
-                        %peer_id,
-                        validator_id,
-                        %public_key,
-                        "Resolved validator peer ID"
-                    );
-                    CacheState::Resolved(peer_id)
-                }
-                None => {
-                    log::trace!(validator_id, %public_key, "Unable to resolve validator peer ID: Entry not found in DHT");
-                    CacheState::Error(NetworkError::Unreachable)
-                }
-            },
-            Err(e) => {
+            Ok(Some(peer_id)) => {
+                log::trace!(
+                    %peer_id,
+                    validator_id,
+                    %public_key,
+                    "Resolved validator peer ID"
+                );
+                Ok(peer_id)
+            }
+            Ok(None) => {
+                log::trace!(validator_id, %public_key, "Unable to resolve validator peer ID: Entry not found in DHT");
+                Err(())
+            }
+            Err(error) => {
                 log::trace!(
                     validator_id,
-                    error = ?e,
+                    ?error,
                     %public_key,
                     "Unable to resolve validator peer ID: Network error"
                 );
-                CacheState::Error(e)
+                Err(())
             }
         };
-        self.validator_peer_id_cache
+
+        match self
+            .validator_peer_id_cache
             .write()
-            .insert(public_key.compressed().clone(), cache_value);
+            .get_mut(public_key.compressed())
+        {
+            Some(cache_entry) => {
+                if let CacheState::InProgress(prev_peer_id) = *cache_entry {
+                    *cache_entry = match cache_value {
+                        Ok(peer_id) => CacheState::Resolved(peer_id),
+                        Err(()) => CacheState::Error(prev_peer_id),
+                    };
+                } else {
+                    unreachable!("cache state must be \"in progress\"");
+                }
+            }
+            None => unreachable!("cache state must exist"),
+        }
     }
 
     /// Look up the peer ID for a validator ID.
-    fn get_validator_peer_id(
-        &self,
-        validator_id: u16,
-    ) -> Result<N::PeerId, NetworkError<N::Error>> {
-        let public_key = self
-            .validator_keys
-            .read()
-            .get(usize::from(validator_id))
-            .ok_or(NetworkError::UnknownValidator(validator_id))?
-            .clone();
-
-        let update_peer_cache = {
-            if let Some(cache_state) = self
-                .validator_peer_id_cache
-                .read()
-                .get(&public_key.compressed().clone())
-            {
-                match cache_state {
-                    CacheState::Resolved(peer_id) => return Ok(*peer_id),
-                    CacheState::Error(_) => true,
-                    CacheState::InProgress => {
-                        log::debug!(validator_id, "Record resolution is in progress");
-                        false
-                    }
-                }
-            } else {
-                true
-            }
+    fn get_validator_cache(&self, validator_id: u16) -> CacheState<N::PeerId> {
+        let public_key = match self.validator_keys.read().get(usize::from(validator_id)) {
+            Some(pk) => pk.clone(),
+            None => return CacheState::Error(None),
         };
-        if update_peer_cache {
-            // Cache is empty for this validator ID, query the entry
-            {
-                // Re-check the validator Peer ID cache with the write lock taken and update it if necessary
-                let mut validator_peer_id_cache = self.validator_peer_id_cache.write();
-                if let Some(cache_state) =
-                    validator_peer_id_cache.get(&public_key.compressed().clone())
-                {
-                    match cache_state {
-                        CacheState::Resolved(peer_id) => return Ok(*peer_id),
-                        CacheState::Error(_) => {
-                            validator_peer_id_cache
-                                .insert(public_key.compressed().clone(), CacheState::InProgress);
-                        }
-                        CacheState::InProgress => {
-                            log::debug!(validator_id, "Record resolution is in progress");
-                            return Err(NetworkError::UnknownValidator(validator_id));
-                        }
-                    }
-                } else {
-                    // No cache entry for this validator ID: we are going to perform the DHT query
-                    validator_peer_id_cache
-                        .insert(public_key.compressed().clone(), CacheState::InProgress);
-                    log::debug!(
-                        ?public_key,
-                        validator_id,
-                        "Could not find peer ID for validator in DHT. Performing a DHT query",
-                    );
+
+        if let Some(cache_state) = self
+            .validator_peer_id_cache
+            .read()
+            .get(public_key.compressed())
+        {
+            match *cache_state {
+                CacheState::Resolved(..) => return *cache_state,
+                CacheState::Error(..) => {}
+                CacheState::InProgress(..) => {
+                    log::debug!(validator_id, "Record resolution is in progress");
+                    return *cache_state;
                 }
+                CacheState::Empty(..) => {}
             }
-            let self_ = self.arc_clone();
-            tokio::spawn(async move {
-                Self::update_peer_id_cache(&self_, validator_id, &public_key).await;
-            });
         }
-        Err(NetworkError::UnknownValidator(validator_id))
+
+        let new_cache_state;
+        // Cache is empty for this validator ID, query the entry
+        {
+            // Re-check the validator Peer ID cache with the write lock taken and update it if necessary
+            let mut validator_peer_id_cache = self.validator_peer_id_cache.write();
+            if let Some(cache_state) = validator_peer_id_cache.get_mut(public_key.compressed()) {
+                new_cache_state = match *cache_state {
+                    CacheState::Resolved(..) => return *cache_state,
+                    CacheState::Error(prev_peer_id) => CacheState::InProgress(prev_peer_id),
+                    CacheState::InProgress(..) => {
+                        log::debug!(validator_id, "Record resolution is in progress");
+                        return *cache_state;
+                    }
+                    CacheState::Empty(prev_peer_id) => CacheState::InProgress(Some(prev_peer_id)),
+                };
+                *cache_state = new_cache_state;
+            } else {
+                new_cache_state = CacheState::InProgress(None);
+                // No cache entry for this validator ID: we are going to perform the DHT query
+                validator_peer_id_cache.insert(public_key.compressed().clone(), new_cache_state);
+                log::debug!(
+                    ?public_key,
+                    validator_id,
+                    "Could not find peer ID for validator in DHT. Performing a DHT query",
+                );
+            }
+        }
+        let self_ = self.arc_clone();
+        tokio::spawn(async move {
+            Self::update_peer_id_cache(&self_, validator_id, &public_key).await;
+        });
+        new_cache_state
     }
 
     /// Clears the validator->peer_id cache on a `RequestError`.
@@ -206,12 +235,13 @@ where
                 {
                     // Clear the peer ID cache only if the error happened for the same Peer ID that we have cached
                     let mut validator_peer_id_cache = self.validator_peer_id_cache.write();
-                    let compressed_pk = validator_key.compressed();
-                    if let Some(CacheState::Resolved(cached_peer_id)) =
-                        validator_peer_id_cache.get(compressed_pk)
+                    if let Some(cache_entry) =
+                        validator_peer_id_cache.get_mut(validator_key.compressed())
                     {
-                        if cached_peer_id == peer_id {
-                            validator_peer_id_cache.remove(compressed_pk);
+                        if let CacheState::Resolved(cached_peer_id) = *cache_entry {
+                            if cached_peer_id == *peer_id {
+                                *cache_entry = CacheState::Empty(cached_peer_id);
+                            }
                         }
                     }
                 }
@@ -281,10 +311,13 @@ where
             validator_id: self.local_validator_id()?,
             inner: msg,
         };
-        let peer_id = self.get_validator_peer_id(validator_id).map_err(|error| {
-            log::error!(?error, "Error getting validator peer ID");
-            error
-        })?;
+        let peer_id = self
+            .get_validator_cache(validator_id)
+            .current_peer_id()
+            .ok_or_else(|| {
+                log::error!(validator_id, "Error getting validator peer ID");
+                NetworkError::UnknownValidator(validator_id)
+            })?;
 
         self.network
             .message(msg, peer_id)
@@ -309,7 +342,7 @@ where
             validator_id: self.local_validator_id()?,
             inner: request,
         };
-        if let Ok(peer_id) = self.get_validator_peer_id(validator_id) {
+        if let Some(peer_id) = self.get_validator_cache(validator_id).current_peer_id() {
             self.network
                 .request(request, peer_id)
                 .map_err(|e| {
@@ -335,7 +368,7 @@ where
                 .filter_map(move |(message, peer_id)| {
                     let self_ = self_.arc_clone();
                     async move {
-                        let validator_peer_id = self_.get_validator_peer_id(message.validator_id).ok();
+                        let validator_peer_id = self_.get_validator_cache(message.validator_id).potentially_outdated_peer_id();
                         // Check that each message actually comes from the peer that it
                         // claims it comes from. Reject it otherwise.
                         if validator_peer_id
