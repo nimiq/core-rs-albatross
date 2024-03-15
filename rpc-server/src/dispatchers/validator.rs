@@ -23,17 +23,14 @@ impl ValidatorDispatcher {
 impl ValidatorInterface for ValidatorDispatcher {
     type Error = Error;
 
-    /// Returns our validator address.
     async fn get_address(&mut self) -> RPCResult<Address, (), Self::Error> {
         Ok(self.validator.validator_address.read().clone().into())
     }
 
-    /// Returns our validator signing key.
     async fn get_signing_key(&mut self) -> RPCResult<String, (), Self::Error> {
         Ok(hex::encode(self.validator.signing_key.read().private.serialize_to_vec()).into())
     }
 
-    /// Returns our validator voting key.
     async fn get_voting_key(&mut self) -> RPCResult<String, (), Self::Error> {
         Ok(hex::encode(
             self.validator
@@ -45,7 +42,6 @@ impl ValidatorInterface for ValidatorDispatcher {
         .into())
     }
 
-    /// Updates the configuration setting to automatically reactivate our validator.
     async fn set_automatic_reactivation(
         &mut self,
         automatic_reactivate: bool,

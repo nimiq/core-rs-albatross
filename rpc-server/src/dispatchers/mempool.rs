@@ -28,7 +28,6 @@ impl MempoolDispatcher {
 impl MempoolInterface for MempoolDispatcher {
     type Error = Error;
 
-    /// Pushes the given serialized transaction to the local mempool.
     async fn push_transaction(
         &mut self,
         raw_tx: String,
@@ -43,7 +42,6 @@ impl MempoolInterface for MempoolDispatcher {
         }
     }
 
-    /// Pushes the given serialized transaction to the local mempool with high priority
     async fn push_high_priority_transaction(
         &mut self,
         raw_tx: String,
