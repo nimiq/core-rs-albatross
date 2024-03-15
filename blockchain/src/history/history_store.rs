@@ -25,6 +25,7 @@ use nimiq_serde::Serialize;
 use nimiq_transaction::{
     historic_transaction::{EquivocationEvent, HistoricTransaction, HistoricTransactionData},
     history_proof::HistoryTreeProof,
+    inherent::Inherent,
     EquivocationLocator,
 };
 
@@ -1157,7 +1158,8 @@ impl HistoryInterface for HistoryStore {
         &self,
         _txn: &mut WriteTransactionProxy,
         _block: &nimiq_block::Block,
-    ) -> Option<Blake2bHash> {
+        _inherents: Vec<Inherent>,
+    ) -> Option<(Blake2bHash, u64)> {
         todo!()
     }
 

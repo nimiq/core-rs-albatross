@@ -2,9 +2,10 @@ use nimiq_database::{
     traits::{Database, WriteTransaction},
     DatabaseProxy, TableProxy, TransactionProxy, WriteTransactionProxy,
 };
+use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
 use nimiq_mmr::mmr::PeaksMerkleMountainRange;
-use nimiq_transaction::historic_transaction::HistoricTransaction;
+use nimiq_transaction::{historic_transaction::HistoricTransaction, inherent::Inherent};
 
 use super::{
     interface::HistoryInterface,
@@ -17,6 +18,8 @@ use super::{
 /// It also contains a validity store, the is used to keep track of which
 /// transactions have been included in the validity window.
 pub struct LightHistoryStore {
+    /// The network ID. It determines if this is the mainnet or one of the testnets.
+    pub network_id: NetworkId,
     /// Database handle.
     db: DatabaseProxy,
     /// A database of all history trees indexed by their epoch number.
@@ -29,11 +32,13 @@ impl LightHistoryStore {
     /// Creates a new LightHistoryStore.
     pub fn _new(db: DatabaseProxy) -> Self {
         let hist_tree_table = db.open_table("LightHistoryTrees".to_string());
+        let validity_store = ValidityStore::_new();
 
         LightHistoryStore {
             db,
             hist_tree_table,
-            _validity_store: ValidityStore {},
+            _validity_store: validity_store,
+            network_id: NetworkId::Main,
         }
     }
 }
@@ -41,10 +46,53 @@ impl LightHistoryStore {
 impl HistoryInterface for LightHistoryStore {
     fn add_block(
         &self,
-        _txn: &mut WriteTransactionProxy,
-        _block: &nimiq_block::Block,
-    ) -> Option<nimiq_hash::Blake2bHash> {
-        todo!()
+        txn: &mut WriteTransactionProxy,
+        block: &nimiq_block::Block,
+        inherents: Vec<Inherent>,
+    ) -> Option<(Blake2bHash, u64)> {
+        match block {
+            nimiq_block::Block::Macro(macro_block) => {
+                // Store the transactions and the inherents into the History tree.
+                let hist_txs = HistoricTransaction::from(
+                    self.network_id,
+                    macro_block.header.block_number,
+                    macro_block.header.timestamp,
+                    vec![],
+                    inherents,
+                    vec![],
+                );
+                Some(
+                    self.add_to_history(txn, macro_block.epoch_number(), &hist_txs)
+                        .expect("Failed to store history"),
+                );
+            }
+            nimiq_block::Block::Micro(micro_block) => {
+                // Get the body of the block.
+                let body = micro_block
+                    .body
+                    .as_ref()
+                    .expect("Block body must be present");
+
+                // Store the transactions and the inherents into the History tree.
+                let hist_txs = HistoricTransaction::from(
+                    self.network_id,
+                    micro_block.header.block_number,
+                    micro_block.header.timestamp,
+                    body.transactions.clone(),
+                    inherents,
+                    body.equivocation_proofs
+                        .iter()
+                        .map(|proof| proof.locator())
+                        .collect(),
+                );
+                Some(
+                    self.add_to_history(txn, micro_block.epoch_number(), &hist_txs)
+                        .expect("Failed to store history"),
+                );
+            }
+        };
+
+        None
     }
 
     fn remove_block(&self, txn: &mut WriteTransactionProxy, block_number: u32) {
