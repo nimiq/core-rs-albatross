@@ -7,7 +7,8 @@ use nimiq_mmr::{
     mmr::proof::{RangeProof, SizeProof},
 };
 use nimiq_transaction::{
-    historic_transaction::HistoricTransaction, history_proof::HistoryTreeProof, EquivocationLocator,
+    historic_transaction::HistoricTransaction, history_proof::HistoryTreeProof, inherent::Inherent,
+    EquivocationLocator,
 };
 
 use crate::HistoryTreeChunk;
@@ -15,7 +16,12 @@ use crate::HistoryTreeChunk;
 /// Defines several methods to interact with a history store.
 pub trait HistoryInterface {
     /// Adds all the transactions included in a given block into the history store.
-    fn add_block(&self, txn: &mut WriteTransactionProxy, block: &Block) -> Option<Blake2bHash>;
+    fn add_block(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        block: &Block,
+        inherents: Vec<Inherent>,
+    ) -> Option<(Blake2bHash, u64)>;
 
     /// Removes all transactions, from a given block number, from the history store.
     fn remove_block(&self, txn: &mut WriteTransactionProxy, block_number: u32);
