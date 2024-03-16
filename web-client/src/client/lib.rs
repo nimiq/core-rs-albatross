@@ -6,7 +6,6 @@ use std::{
     },
     rc::Rc,
     str::FromStr,
-    time::Duration,
 };
 
 use futures::{
@@ -586,7 +585,7 @@ impl Client {
         // Actually send the transaction
         consensus.send_transaction(tx.native()).await?;
 
-        let timeout = wasm_timer::Delay::new(Duration::from_secs(10));
+        let timeout = gloo_timers::future::TimeoutFuture::new(10_000);
 
         // Wait for the transaction (will be None if the timeout is reached first)
         let res = select(receiver, timeout).await;

@@ -40,7 +40,6 @@ tokio = { version = "1.37", features = ["macros", "rt", "tracing"] }
 tokio-stream = "0.1"
 unsigned-varint = "0.8"
 void = "1.0"
-wasm-timer = "0.2"
 
 nimiq-bls = { workspace = true }
 nimiq-macros = { workspace = true }
@@ -48,6 +47,7 @@ nimiq-network-interface = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["policy"] }
 nimiq-hash = { workspace = true }
 nimiq-serde = { workspace = true }
+nimiq-time = { workspace = true }
 nimiq-utils = { workspace = true, features = [
     "tagged-signing",
     "libp2p",

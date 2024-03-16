@@ -23,6 +23,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 futures = { workspace = true }
+gloo-timers = { version = "0.3", features = ["futures"] }
 hex = "0.4"
 js-sys = "0.3"
 log = { workspace = true }
@@ -33,8 +34,7 @@ tsify = { git = "https://github.com/sisou/tsify", branch = "sisou/comments", def
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 wasm-bindgen-derive = { version = "0.3", optional = true }
-wasm-timer = "0.2"
-web-sys = { version = "0.3.69", features = ["MessageEvent"]}
+web-sys = { version = "0.3.69", features = ["MessageEvent"] }
 
 nimiq-account = { workspace = true, default-features = false }
 nimiq-block = { workspace = true }

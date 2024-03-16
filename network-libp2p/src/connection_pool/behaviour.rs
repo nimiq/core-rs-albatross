@@ -20,11 +20,11 @@ use libp2p::{
     Multiaddr, PeerId, TransportError,
 };
 use nimiq_network_interface::{network::CloseReason, peer_info::Services};
+use nimiq_time::{interval, Interval};
 use nimiq_utils::WakerExt as _;
 use parking_lot::RwLock;
 use rand::{seq::IteratorRandom, thread_rng};
 use void::Void;
-use wasm_timer::Interval;
 
 use super::Error;
 use crate::discovery::peer_contacts::PeerContactBook;
@@ -347,7 +347,7 @@ impl Behaviour {
             desired_peer_count,
             ..Default::default()
         };
-        let housekeeping_timer = Interval::new(config.housekeeping_interval);
+        let housekeeping_timer = interval(config.housekeeping_interval);
 
         Self {
             contacts,

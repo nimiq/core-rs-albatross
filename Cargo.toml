@@ -46,6 +46,7 @@ members = [
   "test-log",
   "test-log/proc-macro",
   "test-utils",
+  "time",
   "tools",
   "transaction-builder",
   "utils",
@@ -148,7 +149,6 @@ opt-level = 2
 ark-ec = { git = "https://github.com/paberr/algebra", branch = "pb/0.4" }
 ark-ff = { git = "https://github.com/paberr/algebra", branch = "pb/0.4" }
 ark-r1cs-std = { git = "https://github.com/paberr/r1cs-std", branch = "pb/fix-pedersen" }
-wasm-timer = { git = "https://github.com/sisou/wasm-timer.git" }
 
 [workspace.package]
 version = "0.1.0"
@@ -214,6 +214,7 @@ nimiq-tendermint = { path = "tendermint", default-features = false }
 nimiq-test-log = { path = "test-log", default-features = false }
 nimiq-test-log-proc-macro = { path = "test-log/proc-macro", default-features = false }
 nimiq-test-utils = { path = "test-utils", default-features = false }
+nimiq-time = { path = "time", default-features = false }
 nimiq-transaction = { path = "primitives/transaction", default-features = false }
 nimiq-transaction-builder = { path = "transaction-builder", default-features = false }
 nimiq-trie = { path = "primitives/trie", default-features = false }

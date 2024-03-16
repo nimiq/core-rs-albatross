@@ -1788,7 +1788,7 @@ version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e64b03909df88034c26dc1547e8970b91f98bdb65165d6a4e9110d94263dbb2c"
 dependencies = [
- "gloo-timers",
+ "gloo-timers 0.2.6",
  "send_wrapper 0.4.0",
 ]
 
@@ -1861,6 +1861,18 @@ name = "gloo-timers"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b995a66bb87bebce9a0f4a95aed01daca4872c050bfcb21653361c03bc35e5c"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "gloo-timers"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -4091,6 +4103,7 @@ dependencies = [
  "nimiq-serde",
  "nimiq-test-log",
  "nimiq-test-utils",
+ "nimiq-time",
  "nimiq-utils",
  "nimiq-validator-network",
  "parking_lot 0.12.3",
@@ -4106,7 +4119,6 @@ dependencies = [
  "tracing",
  "unsigned-varint 0.8.0",
  "void",
- "wasm-timer",
 ]
 
 [[package]]
@@ -4456,6 +4468,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "nimiq-time"
+version = "0.1.0"
+dependencies = [
+ "gloo-timers 0.2.6",
+ "send_wrapper 0.6.0",
+ "tokio",
+ "tokio-stream",
+]
+
+[[package]]
 name = "nimiq-tools"
 version = "0.1.0"
 dependencies = [
@@ -4678,6 +4700,7 @@ name = "nimiq-web-client"
 version = "0.1.0"
 dependencies = [
  "futures-util",
+ "gloo-timers 0.3.0",
  "hex",
  "js-sys",
  "nimiq-account",
@@ -4709,7 +4732,6 @@ dependencies = [
  "wasm-bindgen-derive",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
- "wasm-timer",
  "web-sys",
 ]
 
@@ -6129,6 +6151,9 @@ name = "send_wrapper"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd0b0ec5f1c1ca621c432a25813d8d60c88abe6d3e08a3eb9cf37d97a0fe3d73"
+dependencies = [
+ "futures-core",
+]
 
 [[package]]
 name = "serde"
@@ -7371,8 +7396,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-timer"
-version = "0.2.6"
-source = "git+https://github.com/sisou/wasm-timer.git#ba05e62cff7f09f11405b721936b141acf44defb"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be0ecb0db480561e9a7642b5d3e4187c128914e58aa84330b9493e3eb68c5e7f"
 dependencies = [
  "futures",
  "js-sys",

@@ -53,16 +53,16 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::task_executor::TaskExecutor;
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
+use nimiq_time::{interval, Interval};
 use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned};
 use nimiq_validator_network::validator_record::ValidatorRecord;
 use parking_lot::{Mutex, RwLock};
 use thiserror::Error;
-use tokio::sync::{broadcast, mpsc, oneshot};
-#[cfg(feature = "tokio-time")]
-use tokio::time::{Instant, Interval};
+use tokio::{
+    sync::{broadcast, mpsc, oneshot},
+    time::Instant,
+};
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
-#[cfg(not(feature = "tokio-time"))]
-use wasm_timer::Interval;
 
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;
@@ -380,10 +380,7 @@ impl Network {
         let peer_request_limits = Arc::new(Mutex::new(HashMap::new()));
         let rate_limits_pending_deletion = Arc::new(Mutex::new(PendingDeletion::default()));
 
-        #[cfg(not(feature = "tokio-time"))]
-        let update_scores = wasm_timer::Interval::new(params.decay_interval);
-        #[cfg(feature = "tokio-time")]
-        let update_scores = tokio::time::interval(params.decay_interval);
+        let update_scores = interval(params.decay_interval);
 
         #[cfg(feature = "metrics")]
         let metrics = Arc::new(NetworkMetrics::default());
@@ -536,81 +533,6 @@ impl Network {
         &self.local_peer_id
     }
 
-    #[cfg(feature = "tokio-time")]
-    async fn swarm_task(
-        mut swarm: NimiqSwarm,
-        events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
-        mut action_rx: mpsc::Receiver<NetworkAction>,
-        mut validate_rx: mpsc::UnboundedReceiver<ValidateMessage<PeerId>>,
-        connected_peers: Arc<RwLock<HashMap<PeerId, PeerInfo>>>,
-        peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
-        rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
-        mut update_scores: Interval,
-        contacts: Arc<RwLock<PeerContactBook>>,
-        force_dht_server_mode: bool,
-        dht_quorum: NonZeroU8,
-        #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
-    ) {
-        let mut task_state = TaskState {
-            dht_server_mode: force_dht_server_mode,
-            dht_quorum: dht_quorum.into(),
-            ..Default::default()
-        };
-
-        let peer_id = Swarm::local_peer_id(&swarm);
-        let task_span = trace_span!("swarm task", peer_id=?peer_id);
-
-        async move {
-            loop {
-                tokio::select! {
-                    validate_msg = validate_rx.recv() => {
-                        if let Some(validate_msg) = validate_msg {
-                            let topic = validate_msg.topic;
-                            let result: Result<bool, gossipsub::PublishError> = swarm
-                                .behaviour_mut()
-                                .gossipsub
-                                .report_message_validation_result(
-                                    &validate_msg.pubsub_id.message_id,
-                                    &validate_msg.pubsub_id.propagation_source,
-                                    validate_msg.acceptance,
-                                );
-
-                            match result {
-                                Ok(true) => {}, // success
-                                Ok(false) => debug!(topic, "Validation took too long: message is no longer in the message cache"),
-                                Err(e) => error!(topic, error = %e, "Network error while relaying message"),
-                            }
-                        }
-                    },
-                    event = swarm.next() => {
-                        if let Some(event) = event {
-                            Self::handle_event(event, &events_tx, &mut swarm, &mut task_state, &connected_peers, Arc::clone(&peer_request_limits), Arc::clone(&rate_limits_pending_deletion), #[cfg( feature = "metrics")] &metrics);
-                        }
-                    },
-                    action = action_rx.recv() => {
-                        if let Some(action) = action {
-                            Self::perform_action(action, &mut swarm, &mut task_state);
-                        }
-                        else {
-                            // `action_rx.next()` will return `None` if all senders (i.e. the `Network` object) are dropped.
-                            break;
-                        }
-                    },
-                    _ = update_scores.tick() => {
-                        swarm.behaviour().update_scores(Arc::clone(&contacts));
-                    },
-                };
-            }
-        }
-        .instrument(task_span)
-        .await
-    }
-
-    // This is a duplicate of the previous function.
-    // This is because these two functions use different implementation for the handling of intervals,
-    // And the tokio version (needed for some test) could  not be reconciled  with the non tokio version
-    // Essentially the tokio select macro is not compatible with the condition compilation flag
-    #[cfg(not(feature = "tokio-time"))]
     async fn swarm_task(
         mut swarm: NimiqSwarm,
         events_tx: broadcast::Sender<NetworkEvent<PeerId>>,
@@ -1719,7 +1641,8 @@ impl Network {
         if let Ok(request_id) = output_rx.await {
             let timeout = Req::TIME_WINDOW.mul_f32(1.5f32);
             let future = response_rx.map_err(std::io::Error::other);
-            match wasm_timer::TryFutureExt::timeout(future, timeout).await {
+            //match wasm_timer::TryFutureExt::timeout(future, timeout).await {
+            match future.await {
                 Err(_) => {
                     warn!(%request_id, request_type = std::any::type_name::<Req>(), %peer_id, "Request timed out with no response from libp2p");
                     Err(RequestError::OutboundRequest(
