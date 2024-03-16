@@ -7226,8 +7226,8 @@ dependencies = [
 
 [[package]]
 name = "wasm-timer"
-version = "0.2.6"
-source = "git+https://github.com/sisou/wasm-timer.git#ba05e62cff7f09f11405b721936b141acf44defb"
+version = "0.2.7"
+source = "git+https://github.com/sisou/wasm-timer.git#1ce278914cb4fd8ae1853e341f36bcd06784ff51"
 dependencies = [
  "futures",
  "js-sys",
