@@ -20,7 +20,7 @@ use nimiq_transaction::{
 };
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
-use crate::{interface::HistoryInterface, Blockchain};
+use crate::Blockchain;
 
 /// Implements methods to push macro blocks into the chain when an history node is syncing. This
 /// type of syncing is called history syncing. It works by having the node get all the election

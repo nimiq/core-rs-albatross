@@ -438,6 +438,21 @@ impl HistoryStore {
             Some(v) => v.index,
         }
     }
+
+    /// Calculates the history tree root from a vector of historic transactions. It doesn't use the
+    /// database, it is just used to check the correctness of the history root when syncing.
+    fn _root_from_hist_txs(hist_txs: &[HistoricTransaction]) -> Option<Blake2bHash> {
+        // Create a new history tree.
+        let mut tree = MerkleMountainRange::new(MemoryStore::new());
+
+        // Append the historic transactions to the history tree.
+        for tx in hist_txs {
+            tree.push(tx).ok()?;
+        }
+
+        // Return the history root.
+        tree.get_root().ok()
+    }
 }
 
 impl HistoryInterface for HistoryStore {
@@ -635,21 +650,6 @@ impl HistoryInterface for HistoryStore {
             txn,
             epoch_number,
         ));
-
-        // Return the history root.
-        tree.get_root().ok()
-    }
-
-    /// Calculates the history tree root from a vector of historic transactions. It doesn't use the
-    /// database, it is just used to check the correctness of the history root when syncing.
-    fn root_from_hist_txs(hist_txs: &[HistoricTransaction]) -> Option<Blake2bHash> {
-        // Create a new history tree.
-        let mut tree = MerkleMountainRange::new(MemoryStore::new());
-
-        // Append the historic transactions to the history tree.
-        for tx in hist_txs {
-            tree.push(tx).ok()?;
-        }
 
         // Return the history root.
         tree.get_root().ok()
@@ -1309,12 +1309,12 @@ mod tests {
 
         // Verify method works.
         let real_root_0 = history_store.get_history_tree_root(0, Some(&txn));
-        let calc_root_0 = HistoryStore::root_from_hist_txs(&hist_txs[..3]);
+        let calc_root_0 = HistoryStore::_root_from_hist_txs(&hist_txs[..3]);
 
         assert_eq!(real_root_0, calc_root_0);
 
         let real_root_1 = history_store.get_history_tree_root(1, Some(&txn));
-        let calc_root_1 = HistoryStore::root_from_hist_txs(&hist_txs[3..]);
+        let calc_root_1 = HistoryStore::_root_from_hist_txs(&hist_txs[3..]);
 
         assert_eq!(real_root_1, calc_root_1);
     }

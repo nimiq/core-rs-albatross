@@ -4,7 +4,7 @@ use nimiq_block::{
     MicroHeader, MicroJustification, MultiSignature, SignedSkipBlockInfo, SkipBlockInfo,
     SkipBlockProof, TendermintProof,
 };
-use nimiq_blockchain::{interface::HistoryInterface, Blockchain};
+use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair};
 use nimiq_collections::BitSet;

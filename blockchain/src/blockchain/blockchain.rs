@@ -19,7 +19,7 @@ use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 use crate::chain_metrics::BlockchainMetrics;
 use crate::{
     blockchain_state::BlockchainState, chain_store::ChainStore, history::HistoryStore,
-    reward::genesis_parameters,
+    interface::HistoryInterface, reward::genesis_parameters,
 };
 
 const BROADCAST_MAX_CAPACITY: usize = 256;
@@ -44,7 +44,7 @@ pub struct Blockchain {
     /// The chain store is a database containing all of the chain infos, blocks and receipts.
     pub chain_store: ChainStore,
     /// The history store is a database containing all of the history trees and transactions.
-    pub history_store: HistoryStore,
+    pub history_store: Box<dyn HistoryInterface + Sync + Send>,
     /// The current state of the blockchain.
     pub state: BlockchainState,
     /// A reference to a "function" to test whether a given transaction is known and valid.
@@ -271,7 +271,7 @@ impl Blockchain {
             fork_notifier: tx_fork,
             log_notifier: tx_log,
             chain_store,
-            history_store,
+            history_store: Box::new(history_store) as Box<dyn HistoryInterface + Sync + Send>,
             state: BlockchainState {
                 accounts,
                 main_chain,
@@ -336,7 +336,7 @@ impl Blockchain {
             fork_notifier: tx_fork,
             log_notifier: tx_log,
             chain_store,
-            history_store,
+            history_store: Box::new(history_store) as Box<dyn HistoryInterface + Sync + Send>,
             state: BlockchainState {
                 accounts,
                 macro_info: main_chain.clone(),

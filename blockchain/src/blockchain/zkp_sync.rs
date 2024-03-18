@@ -9,7 +9,7 @@ use nimiq_primitives::policy::Policy;
 use nimiq_zkp::{verify::verify, NanoProof, ZKP_VERIFYING_DATA};
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
-use crate::{interface::HistoryInterface, Blockchain};
+use crate::Blockchain;
 
 /// Implements methods to sync a full node via ZKP.
 impl Blockchain {
