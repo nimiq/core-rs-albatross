@@ -72,10 +72,6 @@ pub trait HistoryInterface {
         num_hist_txs: usize,
     ) -> Option<(Blake2bHash, u64)>;
 
-    /// Calculates the history tree root from a vector of historic transactions. It doesn't use the
-    /// database, it is just used to check the correctness of the history root when syncing.
-    fn root_from_hist_txs(hist_txs: &[HistoricTransaction]) -> Option<Blake2bHash>;
-
     /// Gets an historic transaction given its transaction hash.
     fn get_hist_tx_by_hash(
         &self,

@@ -61,10 +61,9 @@ impl HistoryInterface for LightHistoryStore {
                     inherents,
                     vec![],
                 );
-                Some(
-                    self.add_to_history(txn, macro_block.epoch_number(), &hist_txs)
-                        .expect("Failed to store history"),
-                );
+
+                self.add_to_history(txn, macro_block.epoch_number(), &hist_txs)
+                    .expect("Failed to store history")
             }
             nimiq_block::Block::Micro(micro_block) => {
                 // Get the body of the block.
@@ -85,10 +84,9 @@ impl HistoryInterface for LightHistoryStore {
                         .map(|proof| proof.locator())
                         .collect(),
                 );
-                Some(
-                    self.add_to_history(txn, micro_block.epoch_number(), &hist_txs)
-                        .expect("Failed to store history"),
-                );
+
+                self.add_to_history(txn, micro_block.epoch_number(), &hist_txs)
+                    .expect("Failed to store history")
             }
         };
 
@@ -190,12 +188,6 @@ impl HistoryInterface for LightHistoryStore {
         _num_hist_txs: usize,
     ) -> Option<(nimiq_hash::Blake2bHash, u64)> {
         None
-    }
-
-    fn root_from_hist_txs(
-        _hist_txs: &[nimiq_transaction::historic_transaction::HistoricTransaction],
-    ) -> Option<nimiq_hash::Blake2bHash> {
-        todo!()
     }
 
     fn get_hist_tx_by_hash(

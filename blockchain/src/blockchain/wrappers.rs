@@ -15,7 +15,7 @@ use nimiq_transaction::Transaction;
 
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
-use crate::{blockchain_state::BlockchainState, interface::HistoryInterface, Blockchain};
+use crate::{blockchain_state::BlockchainState, Blockchain};
 
 /// Implements several wrapper functions.
 impl Blockchain {
