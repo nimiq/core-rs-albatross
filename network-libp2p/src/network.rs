@@ -2097,14 +2097,16 @@ impl Network {
         // Receive the mpsc::Receiver, but propagate errors first.
         let subscribe_rx = ReceiverStream::new(rx.await??);
 
-        Ok(Box::pin(subscribe_rx.map(|(msg, msg_id, source)| {
-            let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data).unwrap();
-            let id = GossipsubId {
-                message_id: msg_id,
-                propagation_source: source,
-            };
-            (item, id)
-        })))
+        Ok(Box::pin(subscribe_rx.filter_map(
+            |(msg, msg_id, source)| async move {
+                let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data).ok()?;
+                let id = GossipsubId {
+                    message_id: msg_id,
+                    propagation_source: source,
+                };
+                Some((item, id))
+            },
+        )))
     }
 
     async fn unsubscribe_with_name(&self, topic_name: String) -> Result<(), NetworkError> {
