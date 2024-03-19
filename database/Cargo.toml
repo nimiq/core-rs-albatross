@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-bitflags = "2.4"
+bitflags = "2.5"
 libmdbx = "0.4.2"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 tempfile = "3"
