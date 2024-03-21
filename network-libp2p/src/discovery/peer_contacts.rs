@@ -380,7 +380,7 @@ impl PeerContactBook {
     /// Gets a peer contact if it exists given its peer_id.
     /// If the peer_id is not found, `None` is returned.
     pub fn get(&self, peer_id: &PeerId) -> Option<Arc<PeerContactInfo>> {
-        self.peer_contacts.get(peer_id).map(Arc::clone)
+        self.peer_contacts.get(peer_id).cloned()
     }
 
     /// Gets the peer contact's addresses if it exists given its peer_id.

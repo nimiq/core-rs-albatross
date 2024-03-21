@@ -38,7 +38,7 @@ pub struct TrieProof {
 }
 
 #[derive(Debug)]
-pub struct Error(&'static str);
+pub struct Error(pub &'static str);
 
 impl TrieProof {
     pub fn new(

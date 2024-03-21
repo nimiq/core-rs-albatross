@@ -43,6 +43,7 @@ impl FileStore {
         let file = OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(&self.path)?;
         let mut buf_writer = BufWriter::new(file);
         Serialize::serialize(item, &mut buf_writer)?;
