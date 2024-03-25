@@ -7,7 +7,8 @@ use nimiq_mmr::{
     mmr::proof::{RangeProof, SizeProof},
 };
 use nimiq_transaction::{
-    historic_transaction::HistoricTransaction, history_proof::HistoryTreeProof, EquivocationLocator,
+    historic_transaction::HistoricTransaction, history_proof::HistoryTreeProof, inherent::Inherent,
+    EquivocationLocator,
 };
 
 use crate::HistoryTreeChunk;
@@ -15,7 +16,12 @@ use crate::HistoryTreeChunk;
 /// Defines several methods to interact with a history store.
 pub trait HistoryInterface {
     /// Adds all the transactions included in a given block into the history store.
-    fn add_block(&self, txn: &mut WriteTransactionProxy, block: &Block) -> Option<Blake2bHash>;
+    fn add_block(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        block: &Block,
+        inherents: Vec<Inherent>,
+    ) -> Option<(Blake2bHash, u64)>;
 
     /// Removes all transactions, from a given block number, from the history store.
     fn remove_block(&self, txn: &mut WriteTransactionProxy, block_number: u32);
@@ -65,10 +71,6 @@ pub trait HistoryInterface {
         epoch_number: u32,
         num_hist_txs: usize,
     ) -> Option<(Blake2bHash, u64)>;
-
-    /// Calculates the history tree root from a vector of historic transactions. It doesn't use the
-    /// database, it is just used to check the correctness of the history root when syncing.
-    fn root_from_hist_txs(hist_txs: &[HistoricTransaction]) -> Option<Blake2bHash>;
 
     /// Gets an historic transaction given its transaction hash.
     fn get_hist_tx_by_hash(
