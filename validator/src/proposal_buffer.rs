@@ -19,6 +19,7 @@ use nimiq_consensus::consensus::{
 use nimiq_keys::Ed25519Signature as SchnorrSignature;
 use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{CloseReason, MsgAcceptance, Network, PubsubId as _, Topic};
+use nimiq_primitives::policy::Policy;
 use nimiq_serde::Serialize;
 use nimiq_tendermint::SignedProposalMessage;
 use nimiq_validator_network::{PubsubId, ValidatorNetwork};
@@ -356,7 +357,21 @@ where
         // proposal is in the future
         let bc = self.blockchain.read();
         if bc.block_number() >= proposal.0.proposal.block_number {
+            log::trace!(proposal = ?proposal.0, "Encountered old proposal");
             // The proposal is older than the current height, meaning the macro block was finalized and cannot be changed.
+            // The proposal is dropped.
+            self.network
+                .validate_message::<ProposalTopic<TValidatorNetwork>>(
+                    proposal.1,
+                    MsgAcceptance::Ignore,
+                );
+            return;
+        }
+
+        // Make sure the proposal is in the current epoch.
+        if Policy::election_block_after(bc.block_number()) < proposal.0.proposal.block_number {
+            log::trace!(proposal = ?proposal.0, "Encountered proposal from the next epoch");
+            // The proposal is in the next epoch. The validators can not be determined for it and as such it must be ignored.
             // The proposal is dropped.
             self.network
                 .validate_message::<ProposalTopic<TValidatorNetwork>>(
@@ -372,6 +387,20 @@ where
         // No need to hold the lock as validators would only change with an election block which makes
         // the validity of proposals moot.
         drop(bc);
+
+        // Make sure the given validator id is not outside of the range of valid validator ids for the current validator set.
+        if proposal.0.signer as usize > validators.num_validators() {
+            // The proposal indicates a nonsensical proposer as the validator id is out of bounds.
+            // The proposal is dropped and propagation is stopped.
+            self.network
+                .validate_message::<ProposalTopic<TValidatorNetwork>>(
+                    proposal.1,
+                    MsgAcceptance::Reject,
+                );
+            return;
+        } else {
+            log::debug!(proposal = ?proposal.0, "Proposal signer does not exist");
+        }
 
         // Get the validator whose id was presented in the proposal message.
         let stated_proposer = validators.get_validator_by_slot_band(proposal.0.signer);
