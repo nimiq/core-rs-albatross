@@ -250,13 +250,15 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                             if Policy::epoch_at(verifier_block_number)
                                 < Policy::epoch_at(latest_macro_head_number)
                             {
-                                // If the new macro head belongs to the next epoch, we still need to finish syncing the current epoch.
-                                log::debug!(
-                                    new_macro_head = latest_macro_head_number,
-                                    new_epoch = Policy::epoch_at(latest_macro_head_number),
-                                    "We have a new macro head that belongs to the next epoch"
-                                );
-                                peer_request.election_in_window = true;
+                                if !peer_request.election_in_window {
+                                    // If the new macro head belongs to the next epoch, we still need to finish syncing the current epoch.
+                                    log::debug!(
+                                        new_macro_head = latest_macro_head_number,
+                                        new_epoch = Policy::epoch_at(latest_macro_head_number),
+                                        "We have a new macro head that belongs to the next epoch"
+                                    );
+                                    peer_request.election_in_window = true;
+                                }
                             } else {
                                 log::debug!(new_macro_head=latest_macro_head_number, new_history_root=%latest_history_root, current_epoch = Policy::epoch_at(latest_macro_head_number), "We have a new macro head, updating the validity sync target for our current epoch");
                                 verifier_block_number = latest_macro_head_number;
