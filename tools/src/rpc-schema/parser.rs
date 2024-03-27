@@ -205,7 +205,19 @@ impl ParsedTraitItemFn {
     /// Retrieves the description of a Rust trait method based on the Rustdoc.
     #[inline]
     pub fn description(&self) -> String {
-        "".into()
+        self.0
+            .attrs
+            .iter()
+            .fold(String::new(), |acc, attr| {
+                if attr.path().is_ident("doc") {
+                    return acc + &attr.to_token_stream().to_string();
+                }
+                acc
+            })
+            .replace("# [doc = \"", "")
+            .replace("\"]", "")
+            .trim_start()
+            .into()
     }
 
     /// Generates a list of parameters that accepted by the Rust trait method.
