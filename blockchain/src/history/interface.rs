@@ -18,7 +18,7 @@ pub trait HistoryInterface {
     fn add_block(&self, txn: &mut WriteTransactionProxy, block: &Block) -> Option<Blake2bHash>;
 
     /// Removes all transactions, from a given block number, from the history store.
-    fn remove_block(&self, txn: &mut WriteTransactionProxy, block_number: u32) -> u64;
+    fn remove_block(&self, txn: &mut WriteTransactionProxy, block_number: u32);
 
     /// Removes the full history associated with a given epoch.
     fn remove_history(&self, txn: &mut WriteTransactionProxy, epoch_number: u32) -> Option<()>;

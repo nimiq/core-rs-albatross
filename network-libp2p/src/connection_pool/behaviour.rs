@@ -95,7 +95,7 @@ struct ConnectionState<T> {
     /// Set of connection IDs being dialed.
     dialing: BTreeSet<T>,
     /// Set of connection IDs marked as connected.
-    connected: BTreeSet<T>,
+    connected: BTreeMap<T, Option<Services>>,
     /// Set of connection IDs marked as banned.
     banned: BTreeSet<T>,
     /// Set of connection IDs mark as failed.
@@ -111,19 +111,27 @@ struct ConnectionState<T> {
     /// Desired number of connections. When the number of connections is below this number,
     /// the `housekeeping` will retry the down nodes after 1s instead of `retry_down_after`.
     desired_connections: usize,
+    /// The set of services that this peer requires.
+    required_services: Services,
 }
 
 impl<T: Ord> ConnectionState<T> {
-    fn new(max_failures: usize, retry_down_after: Duration, desired_connections: usize) -> Self {
+    fn new(
+        max_failures: usize,
+        retry_down_after: Duration,
+        desired_connections: usize,
+        required_services: Services,
+    ) -> Self {
         Self {
             dialing: BTreeSet::new(),
-            connected: BTreeSet::new(),
+            connected: BTreeMap::new(),
             banned: BTreeSet::new(),
             failed: BTreeMap::new(),
             down: BTreeMap::new(),
             max_failures,
             retry_down_after,
             desired_connections,
+            required_services,
         }
     }
 
@@ -135,11 +143,11 @@ impl<T: Ord> ConnectionState<T> {
     /// Marks a connection ID as connected. This also implies that if the
     /// connection ID was previously marked as failed/down or being dialed it
     /// will be removed from such state.
-    fn mark_connected(&mut self, id: T) {
+    fn mark_connected(&mut self, id: T, services: Option<Services>) {
         self.dialing.remove(&id);
         self.failed.remove(&id);
         self.down.remove(&id);
-        self.connected.insert(id);
+        self.connected.insert(id, services);
     }
 
     /// Marks a connection ID as closed (will be removed from the connected)
@@ -174,7 +182,7 @@ impl<T: Ord> ConnectionState<T> {
     /// as failed then the connection ID will be marked as down.
     fn mark_failed(&mut self, id: T) {
         let dialing = self.dialing.remove(&id);
-        if dialing && self.connected.contains(&id) {
+        if dialing && self.connected.contains_key(&id) {
             // We attempted a dial to an already connected peer.
             // This could happen dialing a peer that is also dialing us
             return;
@@ -208,7 +216,7 @@ impl<T: Ord> ConnectionState<T> {
     /// Returns whether a specific connection ID can dial another connection ID
     fn can_dial(&self, id: &T) -> bool {
         !self.dialing.contains(id)
-            && !self.connected.contains(id)
+            && !self.connected.contains_key(id)
             && !self.down.contains_key(id)
             && !self.banned.contains(id)
     }
@@ -219,8 +227,22 @@ impl<T: Ord> ConnectionState<T> {
     }
 
     /// Returns the number of connected instances
-    fn num_connected(&self) -> usize {
-        self.connected.len()
+    /// If `filter_required_services` is set, the number of instances is filtered by its known services and are only
+    /// returned if they contain our required services.
+    fn num_connected(&self, filter_required_services: bool) -> usize {
+        if filter_required_services {
+            self.connected
+                .iter()
+                .filter(|(_key, peer_services)| {
+                    if let Some(peer_services) = peer_services {
+                        return peer_services.contains(self.required_services);
+                    }
+                    false
+                })
+                .count()
+        } else {
+            self.connected.len()
+        }
     }
 
     /// Remove all down peers that haven't been dialed in a while from the `down`
@@ -228,7 +250,7 @@ impl<T: Ord> ConnectionState<T> {
     /// of connections, this happens for every connection marked as down after 1s, if not then
     /// `self.retry_after_down is used`.
     fn housekeeping(&mut self) {
-        let retry_down_after = if self.num_connected() < self.desired_connections {
+        let retry_down_after = if self.num_connected(true) < self.desired_connections {
             Duration::from_secs(1)
         } else {
             self.retry_down_after
@@ -332,8 +354,18 @@ impl Behaviour {
             own_peer_id,
             seeds,
             required_services,
-            peer_ids: ConnectionState::new(2, config.retry_down_after, desired_peer_count),
-            addresses: ConnectionState::new(4, config.retry_down_after, desired_peer_count),
+            peer_ids: ConnectionState::new(
+                2,
+                config.retry_down_after,
+                desired_peer_count,
+                required_services,
+            ),
+            addresses: ConnectionState::new(
+                4,
+                config.retry_down_after,
+                desired_peer_count,
+                required_services,
+            ),
             actions: VecDeque::new(),
             active: false,
             limits,
@@ -385,7 +417,7 @@ impl Behaviour {
         // reset the connections marked as down after 1s if the number of connections
         // is less than the desired peer count
         if self.active
-            && self.peer_ids.num_connected() < self.config.desired_peer_count
+            && self.peer_ids.num_connected(true) < self.config.desired_peer_count
             && self.peer_ids.num_dialing() + self.addresses.num_dialing() == 0
         {
             self.addresses.housekeeping();
@@ -396,7 +428,7 @@ impl Behaviour {
         // Note: when counting dialing IDs we have to account for peer IDs and
         // addresses (seeds may only be in the `addresses` set).
         if self.active
-            && self.peer_ids.num_connected() < self.config.desired_peer_count
+            && self.peer_ids.num_connected(true) < self.config.desired_peer_count
             && self.peer_ids.num_dialing() + self.addresses.num_dialing()
                 < self.config.dialing_count_max
         {
@@ -457,7 +489,7 @@ impl Behaviour {
 
     fn choose_peers_to_dial(&self) -> Vec<PeerId> {
         let num_peers = usize::min(
-            self.config.desired_peer_count - self.peer_ids.num_connected(),
+            self.config.desired_peer_count - self.peer_ids.num_connected(true),
             self.config.dialing_count_max - self.peer_ids.num_dialing(),
         );
         let contacts = self.contacts.read();
@@ -530,7 +562,7 @@ impl Behaviour {
 
         // Disconnect peers that have negative scores.
         let contacts = self.contacts.read();
-        for peer_id in &self.peer_ids.connected {
+        for peer_id in self.peer_ids.connected.keys() {
             let peer_score = contacts.get(peer_id).map(|e| e.get_score());
             if let Some(score) = peer_score {
                 if score < 0.0 {
@@ -634,8 +666,14 @@ impl Behaviour {
         }
 
         // Peer is connected, mark it as such.
-        self.peer_ids.mark_connected(*peer_id);
-        self.addresses.mark_connected(address.clone());
+        let peer_services = self
+            .contacts
+            .read()
+            .get(peer_id)
+            .map(|contact| contact.services());
+        self.peer_ids.mark_connected(*peer_id, peer_services);
+        self.addresses
+            .mark_connected(address.clone(), peer_services);
 
         self.actions
             .push_back(ToSwarm::GenerateEvent(Event::PeerJoined {

@@ -23,7 +23,6 @@ impl ZKPComponentDispatcher {
 impl ZKPComponentInterface for ZKPComponentDispatcher {
     type Error = Error;
 
-    /// Returns the current ZKP state (proof with its related block hash and block number).
     async fn get_zkp_state(&mut self) -> RPCResult<ZKPState, (), Self::Error> {
         Ok(ZKPState::with_zkp_state(&self.zkp_component.get_zkp_state()).into())
     }

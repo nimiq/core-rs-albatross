@@ -9,6 +9,24 @@ import wasm from './worker-wasm/index.js';
 
 // Provide a global WebSocket implementation, which is expected by the WASM code built for browsers.
 global.WebSocket = websocket.w3cwebsocket;
+// Workaround for Node.js as it currently lacks support for Web Workers by pretending there is
+// a WorkerGlobalScope object available which is checked within the libp2p's websocket-websys transport.
+global.WorkerGlobalScope = global;
+
+// Clean up performance measurements created by tracing.
+// TODO: find a solution to disable creating these measurements.
+setInterval(() => {
+    global.performance.clearMarks();
+    global.performance.clearMeasures();
+    global.performance.clearResourceTimings();
+}, 300 * 1000);
+
+// Prevent NodeJS exiting on an uncaught exception that we currently expect,
+// until it is fixed in upstream libp2p websocket-websys transport.
+process.on('uncaughtException', error => {
+    if (error.message.includes('closure invoked recursively')) return;
+    throw error;
+});
 
 // Defined both here and in main thread exports.js
 Comlink.transferHandlers.set('function', {

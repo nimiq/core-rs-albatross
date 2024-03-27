@@ -1161,7 +1161,7 @@ impl HistoryInterface for HistoryStore {
         todo!()
     }
 
-    fn remove_block(&self, _txn: &mut WriteTransactionProxy, _block_number: u32) -> u64 {
+    fn remove_block(&self, _txn: &mut WriteTransactionProxy, _block_number: u32) {
         todo!()
     }
 }

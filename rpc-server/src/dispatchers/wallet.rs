@@ -99,10 +99,7 @@ impl WalletInterface for WalletDispatcher {
         .into())
     }
 
-    /// # TODO
-    ///
-    ///  - The duration parameter is ignored.
-    ///
+    // # TODO The duration parameter is ignored.
     async fn unlock_account(
         &mut self,
         address: Address,

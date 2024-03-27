@@ -491,6 +491,7 @@ impl GenesisBuilder {
         info!(path = %block_path.display(), "Writing block to");
         let mut file = OpenOptions::new()
             .create(true)
+            .truncate(true)
             .write(true)
             .open(&block_path)?;
         block.serialize_to_writer(&mut file)?;
@@ -499,6 +500,7 @@ impl GenesisBuilder {
         info!(path = %accounts_path.display(), "Writing accounts to");
         let mut file = OpenOptions::new()
             .create(true)
+            .truncate(true)
             .write(true)
             .open(&accounts_path)?;
         accounts.serialize_to_writer(&mut file)?;

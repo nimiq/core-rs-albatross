@@ -10,7 +10,7 @@ use std::{
 use async_trait::async_trait;
 use base64::Engine;
 use bytes::Bytes;
-use futures::{future::BoxFuture, ready, stream::BoxStream, Stream, StreamExt};
+use futures::{future::BoxFuture, ready, stream::BoxStream, Stream, StreamExt, TryFutureExt};
 #[cfg(not(feature = "tokio-time"))]
 use instant::Instant;
 #[cfg(all(target_family = "wasm", not(feature = "tokio-websocket")))]
@@ -57,12 +57,9 @@ use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned};
 use nimiq_validator_network::validator_record::ValidatorRecord;
 use parking_lot::{Mutex, RwLock};
 use thiserror::Error;
+use tokio::sync::{broadcast, mpsc, oneshot};
 #[cfg(feature = "tokio-time")]
 use tokio::time::{Instant, Interval};
-use tokio::{
-    sync::{broadcast, mpsc, oneshot},
-    time,
-};
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 #[cfg(not(feature = "tokio-time"))]
 use wasm_timer::Interval;
@@ -1721,17 +1718,14 @@ impl Network {
 
         if let Ok(request_id) = output_rx.await {
             let timeout = Req::TIME_WINDOW.mul_f32(1.5f32);
-            let result = match time::timeout(timeout, response_rx).await {
-                Ok(result) => result,
+            let future = response_rx.map_err(std::io::Error::other);
+            match wasm_timer::TryFutureExt::timeout(future, timeout).await {
                 Err(_) => {
                     warn!(%request_id, request_type = std::any::type_name::<Req>(), %peer_id, "Request timed out with no response from libp2p");
-                    return Err(RequestError::OutboundRequest(OutboundRequestError::Timeout));
+                    Err(RequestError::OutboundRequest(
+                        OutboundRequestError::SenderFutureDropped,
+                    ))
                 }
-            };
-            match result {
-                Err(_) => Err(RequestError::OutboundRequest(
-                    OutboundRequestError::SenderFutureDropped,
-                )),
                 Ok(result) => {
                     let data = result?;
                     if let Ok((message, left_over)) =
@@ -2103,14 +2097,16 @@ impl Network {
         // Receive the mpsc::Receiver, but propagate errors first.
         let subscribe_rx = ReceiverStream::new(rx.await??);
 
-        Ok(Box::pin(subscribe_rx.map(|(msg, msg_id, source)| {
-            let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data).unwrap();
-            let id = GossipsubId {
-                message_id: msg_id,
-                propagation_source: source,
-            };
-            (item, id)
-        })))
+        Ok(Box::pin(subscribe_rx.filter_map(
+            |(msg, msg_id, source)| async move {
+                let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data).ok()?;
+                let id = GossipsubId {
+                    message_id: msg_id,
+                    propagation_source: source,
+                };
+                Some((item, id))
+            },
+        )))
     }
 
     async fn unsubscribe_with_name(&self, topic_name: String) -> Result<(), NetworkError> {
