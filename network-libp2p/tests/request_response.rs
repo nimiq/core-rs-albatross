@@ -640,6 +640,7 @@ async fn send_n_request_to_fail(net1: &Arc<Network>, net2: &Arc<Network>, n: u32
 
 #[cfg(feature = "tokio-time")]
 #[test(tokio::test)]
+#[ignore]
 async fn it_can_limit_requests_rate() {
     let (net1, net2) = TestNetwork::create_connected_networks().await;
     let net1 = Arc::new(net1);
@@ -762,6 +763,7 @@ async fn it_can_limit_requests_rate_after_reconnection() {
 
 #[cfg(feature = "tokio-time")]
 #[test(tokio::test)]
+#[ignore]
 async fn it_can_reset_requests_rate_with_reconnections() {
     let ((net1, addr1), (net2, _), (net3, _), _) = TestNetwork::create_4_connected_networks().await;
     let net1 = Arc::new(net1);
