@@ -18,7 +18,7 @@ futures = { package = "futures-util", version = "0.3" }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 thiserror = "1.0"
-tokio = { version = "1.36", features = ["sync"] }
+tokio = { version = "1.37", features = ["sync"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 
 nimiq-block = { workspace = true }

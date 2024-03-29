@@ -28,7 +28,7 @@ parking_lot = "0.12"
 prometheus-client = { version = "0.22.2", optional = true}
 serde = "1.0"
 thiserror = "1.0"
-tokio = { version = "1.36", features = ["rt", "rt-multi-thread", "sync", "tracing"] }
+tokio = { version = "1.37", features = ["rt", "rt-multi-thread", "sync", "tracing"] }
 tokio-metrics = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
 

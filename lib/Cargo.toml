@@ -38,7 +38,7 @@ signal-hook = { version = "0.3", optional = true }
 strum_macros = "0.26"
 thiserror = "1.0"
 time = { version = "0.3", optional = true }
-tokio = { version = "1.36", features = ["rt"], optional = true }
+tokio = { version = "1.37", features = ["rt"], optional = true }
 toml = "0.8"
 tracing-loki = { version = "0.2.4", optional = true }
 tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "std"] }

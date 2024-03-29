@@ -25,7 +25,7 @@ hyper = { version = "0.14.28", features = ["server", "tcp", "http2"] }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 prometheus-client = "0.22.2"
-tokio = { version = "1.36", features = [
+tokio = { version = "1.37", features = [
     "macros",
     "rt-multi-thread",
     "tracing",
