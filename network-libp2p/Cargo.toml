@@ -30,7 +30,7 @@ ip_network = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"
 pin-project = "1.1"
-pin-project-lite = "0.2.10"
+pin-project-lite = "0.2.14"
 prometheus-client = { version = "0.22.2", optional = true}
 rand = "0.8"
 serde = "1.0"
