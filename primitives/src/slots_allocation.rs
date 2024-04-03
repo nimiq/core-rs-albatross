@@ -127,6 +127,9 @@ impl Validators {
     }
 
     /// Calculates the slot band of the validator that owns the given slot.
+    ///
+    /// ## Panic
+    /// This function requires the slot to be within bounds. If it is not this function will panic.
     pub fn get_band_from_slot(&self, slot: u16) -> u16 {
         assert!(slot < Policy::SLOTS);
 
@@ -151,11 +154,17 @@ impl Validators {
     }
 
     /// Returns the validator given the slot number.
+    ///
+    /// ## Panic
+    /// This function requires the slot_number to be within bounds. If it is not this function will panic.
     pub fn get_validator_by_slot_number(&self, slot_number: u16) -> &Validator {
         &self.validators[self.get_band_from_slot(slot_number) as usize]
     }
 
     /// Returns the validator given the slot band.
+    ///
+    /// ## Panic
+    /// This function requires the slot_band to be within bounds. If it is not this function will panic.
     pub fn get_validator_by_slot_band(&self, slot_band: u16) -> &Validator {
         &self.validators[slot_band as usize]
     }
