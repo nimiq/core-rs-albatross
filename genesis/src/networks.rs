@@ -175,7 +175,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                 }
             }
             static INFO: NetworkInfo = NetworkInfo {
-                network_id: NetworkId::UnitAlbatross,
+                network_id: NetworkId::MainAlbatross,
                 name: "main-albatross",
                 genesis: include!(concat!(
                     env!("OUT_DIR"),
