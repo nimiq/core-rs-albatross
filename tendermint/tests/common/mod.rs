@@ -9,7 +9,7 @@ use futures::{
 };
 use nimiq_collections::BitSet;
 use nimiq_tendermint::*;
-use tokio::{sync::mpsc, time::timeout};
+use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
 pub mod helper;

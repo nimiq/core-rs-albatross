@@ -1,6 +1,7 @@
-use std::{num::NonZeroU8, sync::Arc};
+use std::{num::NonZeroU8, sync::Arc, time::Duration};
 
 use futures::{future::join_all, StreamExt};
+use instant::Instant;
 use libp2p::{
     core::multiaddr::{multiaddr, Multiaddr},
     gossipsub,
@@ -22,10 +23,8 @@ use nimiq_network_libp2p::{
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
+use nimiq_time::sleep;
 use rand::{thread_rng, Rng};
-use tokio::time::Duration;
-#[cfg(feature = "tokio-time")]
-use tokio::time::Instant;
 
 mod helper;
 
@@ -337,7 +336,7 @@ async fn test_valid_request_valid_response() {
         }
     });
 
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(1)).await;
 
     log::info!("Sending request");
 
@@ -387,7 +386,7 @@ async fn test_multiple_valid_requests_valid_responses() {
     // Spawn the request listener future
     tokio::spawn(request_listener_future);
 
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(1)).await;
 
     log::info!("Sending requests");
 
@@ -427,7 +426,7 @@ async fn test_valid_request_no_response() {
         async move { respond_requests::<TestRequest, TestRequest>(net1, None, test_request).await }
     });
 
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(1)).await;
 
     log::info!("Sending request");
 
@@ -468,7 +467,7 @@ async fn test_valid_request_no_response_close_connection() {
         async move { respond_requests::<TestRequest, TestRequest>(net1, None, test_request).await }
     });
 
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(1)).await;
 
     log::info!("Sending request");
 
@@ -476,7 +475,7 @@ async fn test_valid_request_no_response_close_connection() {
     let response = net2.request::<TestRequest>(test_request.clone(), net1.get_local_peer_id());
 
     tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        sleep(Duration::from_secs(1)).await;
         let net1 = Arc::clone(&net1);
         net1.disconnect_peer(net2_peer_id, CloseReason::MaliciousPeer)
             .await;
@@ -505,7 +504,7 @@ async fn test_valid_request_no_response_no_receiver() {
 
     let test_request = TestRequest { request: 42 };
 
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(1)).await;
 
     log::info!("Sending request");
 
@@ -665,7 +664,7 @@ async fn it_can_limit_requests_rate() {
     // Spawn the request listener future.
     tokio::spawn(request_listener_future);
 
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(1)).await;
 
     tokio::time::pause();
     log::error!("Clock stops at {:?}", Instant::now());
@@ -728,7 +727,7 @@ async fn it_can_limit_requests_rate_after_reconnection() {
     // Spawn the request listener future.
     tokio::spawn(request_listener_future);
 
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(1)).await;
 
     // The first head requests are sent. These should be the only requests that get an Ok response.
     send_n_request_to_succeed(&net1, &net2, TestRequest4::MAX_REQUESTS).await;
@@ -789,7 +788,7 @@ async fn it_can_reset_requests_rate_with_reconnections() {
     // Spawn the request listener future.
     tokio::spawn(request_listener_future);
 
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(1)).await;
 
     tokio::time::pause();
 

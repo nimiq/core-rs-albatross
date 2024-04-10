@@ -1,6 +1,7 @@
 use std::{
     ops::Range,
     task::{Context, Poll},
+    time::Duration,
 };
 
 use tokio::sync::mpsc;
@@ -134,7 +135,7 @@ pub fn expect_state<TProtocol: Protocol>(tm: &mut Tendermint<TProtocol>) -> Stat
 
 pub async fn await_state<TProtocol: Protocol>(tm: &mut Tendermint<TProtocol>) -> State<TProtocol> {
     // Only wait for a timeout, otherwise this could diverge
-    match timeout(tokio::time::Duration::from_millis(1000), tm.next()).await {
+    match nimiq_time::timeout(Duration::from_millis(1000), tm.next()).await {
         Ok(Some(Return::Update(u))) => u,
         Ok(Some(_other_returns)) => panic!("Tendermint should have returned a state."),
         Ok(None) => panic!("Tendermint should not have terminated."),

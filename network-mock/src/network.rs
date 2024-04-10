@@ -19,6 +19,7 @@ use nimiq_network_interface::{
     },
 };
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
+use nimiq_time::timeout;
 use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable};
 use parking_lot::{Mutex, RwLock};
 use thiserror::Error;
@@ -240,7 +241,7 @@ impl MockNetwork {
             ));
         }
 
-        let result = tokio::time::timeout(MockNetwork::REQUEST_TIMEOUT, rx).await;
+        let result = timeout(MockNetwork::REQUEST_TIMEOUT, rx).await;
         match result {
             Ok(Ok(data)) => match Req::Response::deserialize_from_vec(&data[..]) {
                 Ok(message) => Ok(message),

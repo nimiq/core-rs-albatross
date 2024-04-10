@@ -965,7 +965,7 @@ dependencies = [
  "futures-task",
  "hdrhistogram",
  "humantime",
- "parking_lot 0.12.3",
+ "parking_lot",
  "prost-types 0.12.1",
  "serde",
  "serde_json",
@@ -2083,7 +2083,7 @@ dependencies = [
  "ipconfig",
  "lru-cache",
  "once_cell",
- "parking_lot 0.12.3",
+ "parking_lot",
  "rand",
  "resolv-conf",
  "smallvec",
@@ -2626,7 +2626,7 @@ dependencies = [
  "indexmap 2.2.1",
  "libc",
  "mdbx-sys",
- "parking_lot 0.12.3",
+ "parking_lot",
  "sealed",
  "thiserror",
 ]
@@ -2730,7 +2730,7 @@ dependencies = [
  "multihash",
  "multistream-select",
  "once_cell",
- "parking_lot 0.12.3",
+ "parking_lot",
  "pin-project",
  "quick-protobuf",
  "rand",
@@ -2754,7 +2754,7 @@ dependencies = [
  "hickory-resolver",
  "libp2p-core",
  "libp2p-identity",
- "parking_lot 0.12.3",
+ "parking_lot",
  "smallvec",
  "tracing",
 ]
@@ -2936,7 +2936,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-identity",
  "libp2p-tls",
- "parking_lot 0.12.3",
+ "parking_lot",
  "quinn",
  "rand",
  "ring 0.16.20",
@@ -3067,7 +3067,7 @@ dependencies = [
  "futures-rustls",
  "libp2p-core",
  "libp2p-identity",
- "parking_lot 0.12.3",
+ "parking_lot",
  "pin-project-lite",
  "rw-stream-sink",
  "soketto",
@@ -3086,7 +3086,7 @@ dependencies = [
  "futures",
  "js-sys",
  "libp2p-core",
- "parking_lot 0.12.3",
+ "parking_lot",
  "send_wrapper 0.6.0",
  "thiserror",
  "tracing",
@@ -3442,7 +3442,7 @@ dependencies = [
  "nimiq-trie",
  "nimiq-utils",
  "nimiq-vrf",
- "parking_lot 0.12.3",
+ "parking_lot",
  "rand",
  "serde",
  "strum_macros",
@@ -3510,7 +3510,7 @@ dependencies = [
  "nimiq-vrf",
  "nimiq-zkp",
  "nimiq-zkp-primitives",
- "parking_lot 0.12.3",
+ "parking_lot",
  "prometheus-client",
  "rand",
  "rand_chacha",
@@ -3554,7 +3554,7 @@ dependencies = [
  "nimiq-light-blockchain",
  "nimiq-primitives",
  "nimiq-transaction",
- "parking_lot 0.12.3",
+ "parking_lot",
  "tokio-stream",
 ]
 
@@ -3577,7 +3577,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-utils",
- "parking_lot 0.12.3",
+ "parking_lot",
  "rand",
  "serde",
  "thiserror",
@@ -3636,12 +3636,13 @@ dependencies = [
  "nimiq-serde",
  "nimiq-test-log",
  "nimiq-test-utils",
+ "nimiq-time",
  "nimiq-transaction",
  "nimiq-transaction-builder",
  "nimiq-trie",
  "nimiq-utils",
  "nimiq-zkp-component",
- "parking_lot 0.12.3",
+ "parking_lot",
  "pin-project",
  "rand",
  "serde",
@@ -3649,7 +3650,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
- "wasm-timer",
 ]
 
 [[package]]
@@ -3722,6 +3722,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "futures-util",
+ "instant",
  "nimiq-bls",
  "nimiq-collections",
  "nimiq-hash",
@@ -3729,8 +3730,9 @@ dependencies = [
  "nimiq-network-mock",
  "nimiq-serde",
  "nimiq-test-log",
+ "nimiq-time",
  "nimiq-utils",
- "parking_lot 0.12.3",
+ "parking_lot",
  "rand",
  "serde",
  "thiserror",
@@ -3914,7 +3916,7 @@ dependencies = [
  "nimiq-zkp-circuits",
  "nimiq-zkp-component",
  "nimiq-zkp-primitives",
- "parking_lot 0.12.3",
+ "parking_lot",
  "rand",
  "rand_chacha",
  "rustls-pemfile 2.1.2",
@@ -3951,7 +3953,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "nimiq-zkp",
- "parking_lot 0.12.3",
+ "parking_lot",
  "rand",
  "thiserror",
  "tokio",
@@ -4004,11 +4006,12 @@ dependencies = [
  "nimiq-serde",
  "nimiq-test-log",
  "nimiq-test-utils",
+ "nimiq-time",
  "nimiq-transaction",
  "nimiq-transaction-builder",
  "nimiq-utils",
  "nimiq-vrf",
- "parking_lot 0.12.3",
+ "parking_lot",
  "prometheus-client",
  "rand",
  "serde",
@@ -4035,7 +4038,7 @@ dependencies = [
  "nimiq-mempool",
  "nimiq-network-interface",
  "nimiq-network-libp2p",
- "parking_lot 0.12.3",
+ "parking_lot",
  "prometheus-client",
  "tokio",
  "tokio-metrics",
@@ -4106,7 +4109,7 @@ dependencies = [
  "nimiq-time",
  "nimiq-utils",
  "nimiq-validator-network",
- "parking_lot 0.12.3",
+ "parking_lot",
  "pin-project",
  "pin-project-lite",
  "prometheus-client",
@@ -4133,8 +4136,9 @@ dependencies = [
  "nimiq-serde",
  "nimiq-test-log",
  "nimiq-test-utils",
+ "nimiq-time",
  "nimiq-utils",
- "parking_lot 0.12.3",
+ "parking_lot",
  "serde",
  "thiserror",
  "tokio",
@@ -4213,7 +4217,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-utils",
  "once_cell",
- "parking_lot 0.12.3",
+ "parking_lot",
  "regex",
  "serde",
  "serde_bytes",
@@ -4275,7 +4279,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-vrf",
  "nimiq-zkp-component",
- "parking_lot 0.12.3",
+ "parking_lot",
  "serde",
  "serde_json",
  "serde_with",
@@ -4317,7 +4321,7 @@ dependencies = [
  "nimiq-vrf",
  "nimiq-wallet",
  "nimiq-zkp-component",
- "parking_lot 0.12.3",
+ "parking_lot",
  "serde",
  "serde_json",
  "thiserror",
@@ -4383,6 +4387,7 @@ dependencies = [
  "futures-util",
  "nimiq-collections",
  "nimiq-test-log",
+ "nimiq-time",
  "nimiq-utils",
  "rand",
  "serde",
@@ -4400,7 +4405,7 @@ dependencies = [
  "nimiq-log",
  "nimiq-primitives",
  "nimiq-test-log-proc-macro",
- "parking_lot 0.12.3",
+ "parking_lot",
  "tracing",
  "tracing-subscriber 0.3.18",
 ]
@@ -4457,7 +4462,7 @@ dependencies = [
  "nimiq-zkp-circuits",
  "nimiq-zkp-component",
  "nimiq-zkp-primitives",
- "parking_lot 0.12.3",
+ "parking_lot",
  "paste",
  "rand",
  "rand_chacha",
@@ -4471,7 +4476,8 @@ dependencies = [
 name = "nimiq-time"
 version = "0.1.0"
 dependencies = [
- "gloo-timers 0.2.6",
+ "futures",
+ "gloo-timers 0.3.0",
  "send_wrapper 0.6.0",
  "tokio",
  "tokio-stream",
@@ -4580,7 +4586,7 @@ dependencies = [
  "nimiq-serde",
  "nimiq-test-log",
  "nimiq-test-utils",
- "parking_lot 0.12.3",
+ "parking_lot",
  "rand",
  "rand_core",
  "serde",
@@ -4596,6 +4602,7 @@ dependencies = [
  "byteorder",
  "futures-util",
  "hex",
+ "instant",
  "linked-hash-map",
  "nimiq-account",
  "nimiq-block",
@@ -4621,12 +4628,13 @@ dependencies = [
  "nimiq-tendermint",
  "nimiq-test-log",
  "nimiq-test-utils",
+ "nimiq-time",
  "nimiq-transaction-builder",
  "nimiq-utils",
  "nimiq-validator-network",
  "nimiq-vrf",
  "nimiq-zkp-component",
- "parking_lot 0.12.3",
+ "parking_lot",
  "rand",
  "rayon",
  "serde",
@@ -4648,7 +4656,7 @@ dependencies = [
  "nimiq-network-interface",
  "nimiq-serde",
  "nimiq-utils",
- "parking_lot 0.12.3",
+ "parking_lot",
  "serde",
  "thiserror",
  "time",
@@ -4722,7 +4730,7 @@ dependencies = [
  "nimiq-transaction-builder",
  "nimiq-utils",
  "nimiq-zkp-component",
- "parking_lot 0.12.3",
+ "parking_lot",
  "serde",
  "serde-wasm-bindgen 0.6.5",
  "tokio",
@@ -4762,7 +4770,7 @@ dependencies = [
  "nimiq-zkp-circuits",
  "nimiq-zkp-primitives",
  "once_cell",
- "parking_lot 0.12.3",
+ "parking_lot",
  "rand",
  "rand_chacha",
  "serde",
@@ -4846,7 +4854,7 @@ dependencies = [
  "nimiq-zkp",
  "nimiq-zkp-circuits",
  "nimiq-zkp-primitives",
- "parking_lot 0.12.3",
+ "parking_lot",
  "rand",
  "serde",
  "tempfile",
@@ -4907,7 +4915,7 @@ dependencies = [
  "nimiq-zkp-circuits",
  "nimiq-zkp-component",
  "nimiq-zkp-primitives",
- "parking_lot 0.12.3",
+ "parking_lot",
  "serde",
  "tokio",
  "tracing",
@@ -5182,37 +5190,12 @@ checksum = "427c3892f9e783d91cc128285287e70a59e206ca452770ece88a76f7a3eddd72"
 
 [[package]]
 name = "parking_lot"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d17b78036a60663b797adeaee46f5c9dfebb86948d1255007a1d6be0271ff99"
-dependencies = [
- "instant",
- "lock_api",
- "parking_lot_core 0.8.6",
-]
-
-[[package]]
-name = "parking_lot"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1bf18183cf54e8d6059647fc3063646a1801cf30896933ec2311622cc4b9a27"
 dependencies = [
  "lock_api",
- "parking_lot_core 0.9.7",
-]
-
-[[package]]
-name = "parking_lot_core"
-version = "0.8.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60a2cfe6f0ad2bfc16aefa463b497d5c7a5ecd44a23efa72aa342d90177356dc"
-dependencies = [
- "cfg-if",
- "instant",
- "libc",
- "redox_syscall",
- "smallvec",
- "winapi",
+ "parking_lot_core",
 ]
 
 [[package]]
@@ -5435,7 +5418,7 @@ checksum = "c1ca959da22a332509f2a73ae9e5f23f9dcfc31fd3a54d71f159495bd5909baa"
 dependencies = [
  "dtoa",
  "itoa",
- "parking_lot 0.12.3",
+ "parking_lot",
  "prometheus-client-derive-encode",
 ]
 
@@ -7011,7 +6994,7 @@ dependencies = [
  "matchers",
  "nu-ansi-term",
  "once_cell",
- "parking_lot 0.12.3",
+ "parking_lot",
  "regex",
  "sharded-slab",
  "smallvec",
@@ -7395,21 +7378,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasm-timer"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be0ecb0db480561e9a7642b5d3e4187c128914e58aa84330b9493e3eb68c5e7f"
-dependencies = [
- "futures",
- "js-sys",
- "parking_lot 0.11.2",
- "pin-utils",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
-]
-
-[[package]]
 name = "web-sys"
 version = "0.3.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7784,7 +7752,7 @@ dependencies = [
  "futures",
  "log",
  "nohash-hasher",
- "parking_lot 0.12.3",
+ "parking_lot",
  "pin-project",
  "rand",
  "static_assertions",
@@ -7800,7 +7768,7 @@ dependencies = [
  "instant",
  "log",
  "nohash-hasher",
- "parking_lot 0.12.3",
+ "parking_lot",
  "pin-project",
  "rand",
  "static_assertions",

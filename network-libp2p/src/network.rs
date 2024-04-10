@@ -10,8 +10,7 @@ use std::{
 use async_trait::async_trait;
 use base64::Engine;
 use bytes::Bytes;
-use futures::{future::BoxFuture, ready, stream::BoxStream, Stream, StreamExt, TryFutureExt};
-#[cfg(not(feature = "tokio-time"))]
+use futures::{future::BoxFuture, ready, stream::BoxStream, Stream, StreamExt};
 use instant::Instant;
 #[cfg(all(target_family = "wasm", not(feature = "tokio-websocket")))]
 use libp2p::websocket_websys;
@@ -53,15 +52,12 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::task_executor::TaskExecutor;
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
-use nimiq_time::{interval, Interval};
+use nimiq_time::{interval, timeout, Interval};
 use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned};
 use nimiq_validator_network::validator_record::ValidatorRecord;
 use parking_lot::{Mutex, RwLock};
 use thiserror::Error;
-use tokio::{
-    sync::{broadcast, mpsc, oneshot},
-    time::Instant,
-};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 
 #[cfg(feature = "metrics")]
@@ -1639,16 +1635,28 @@ impl Network {
         }
 
         if let Ok(request_id) = output_rx.await {
-            let timeout = Req::TIME_WINDOW.mul_f32(1.5f32);
-            let future = response_rx.map_err(std::io::Error::other);
-            //match wasm_timer::TryFutureExt::timeout(future, timeout).await {
-            match future.await {
+            let result = match timeout(Req::TIME_WINDOW.mul_f32(1.5f32), response_rx).await {
+                Ok(res) => res,
                 Err(_) => {
-                    warn!(%request_id, request_type = std::any::type_name::<Req>(), %peer_id, "Request timed out with no response from libp2p");
-                    Err(RequestError::OutboundRequest(
+                    warn!(
+                        %request_id,
+                        request_type = std::any::type_name::<Req>(),
+                        %peer_id,
+                        "Request timed out with no response from libp2p"
+                    );
+                    return Err(RequestError::OutboundRequest(
                         OutboundRequestError::SenderFutureDropped,
-                    ))
+                    ));
                 }
+            };
+
+            // let timeout = Req::TIME_WINDOW.mul_f32(1.5f32);
+            // let future = response_rx.map_err(std::io::Error::other);
+            //match wasm_timer::TryFutureExt::timeout(future, timeout).await {
+            match result {
+                Err(_) => Err(RequestError::OutboundRequest(
+                    OutboundRequestError::SenderFutureDropped,
+                )),
                 Ok(result) => {
                     let data = result?;
                     if let Ok((message, left_over)) =

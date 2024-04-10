@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use futures::StreamExt;
 use nimiq_blockchain::BlockProducer;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::KeyPair as BLSKeyPair;
@@ -14,6 +15,7 @@ use nimiq_test_utils::{
     node::Node,
     validator::seeded_rng,
 };
+use nimiq_time::{interval, sleep};
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 4))]
 #[ignore]
@@ -56,13 +58,13 @@ async fn test_request_component() {
         tokio::spawn(async move {
             loop {
                 produce_macro_blocks(&producer1, &prod_blockchain, 1);
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                sleep(Duration::from_secs(5)).await;
             }
         });
     }
 
     let mut connected = false;
-    let mut interval = tokio::time::interval(Duration::from_secs(1));
+    let mut interval = interval(Duration::from_secs(1));
     loop {
         if node1.blockchain.read().block_number() > 200 + Policy::genesis_block_number()
             && !connected
@@ -83,6 +85,6 @@ async fn test_request_component() {
             node2.blockchain.read().head_hash()
         );
 
-        interval.tick().await;
+        interval.next().await;
     }
 }

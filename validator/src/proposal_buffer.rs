@@ -552,9 +552,10 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
+    use std::{sync::Arc, time::Duration};
 
-    use futures::{future, select, FutureExt, StreamExt};
+    use futures::{select, FutureExt, StreamExt};
+    use instant::Instant;
     use nimiq_block::MacroHeader;
     use nimiq_blockchain::Blockchain;
     use nimiq_blockchain_proxy::BlockchainProxy;
@@ -573,6 +574,7 @@ mod test {
         block_production::{TemporaryBlockProducer, SIGNING_KEY},
         test_network::TestNetwork,
     };
+    use nimiq_time::{sleep, timeout};
     use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
     use nimiq_zkp_component::ZKPComponent;
     use parking_lot::{Mutex, RwLock};
@@ -656,13 +658,7 @@ mod test {
         let mut consensus_events2 = consensus2.subscribe_events().boxed().fuse();
 
         // At most wait 200 millis for them to connect and sync as there is nothing to do here.
-        let deadline = tokio::time::Instant::now()
-            .checked_add(tokio::time::Duration::from_millis(200))
-            .unwrap();
-
-        let mut deadline = tokio::time::timeout_at(deadline, future::pending::<()>())
-            .boxed()
-            .fuse();
+        let mut deadline = sleep(Duration::from_millis(200)).boxed().fuse();
 
         // Spawn both consensus before connecting them.
         tokio::spawn(consensus1);
@@ -775,11 +771,7 @@ mod test {
 
         // Poll the ProposalBuffer until it produces a proposal. This should resolve the so far unknown predecessor and resolve.
         // Do this with a timeout as it should really only take a single round trip.
-        let deadline = tokio::time::Instant::now()
-            .checked_add(tokio::time::Duration::from_millis(400))
-            .unwrap();
-
-        let _signed_proposal = tokio::time::timeout_at(deadline, proposal_receiver.next())
+        let _signed_proposal = timeout(Duration::from_millis(400), proposal_receiver.next())
             .await
             .expect("proposal buffer should have produced the proposal before the timeout")
             .expect("proposal buffer should have produced the proposal");
@@ -823,11 +815,7 @@ mod test {
 
         // Poll the ProposalBuffer until it produces a proposal. This should resolve the so far unknown predecessor and resolve.
         // Do this with a timeout as it should really only take a single round trip.
-        let deadline = tokio::time::Instant::now()
-            .checked_add(tokio::time::Duration::from_millis(400))
-            .unwrap();
-
-        let signed_proposal = tokio::time::timeout_at(deadline, proposal_receiver.next())
+        let signed_proposal = timeout(Duration::from_millis(400), proposal_receiver.next())
             .await
             .expect("proposal buffer should have resolved the proposal before the timeout")
             .expect("proposal buffer should have resolved the proposal");
@@ -886,11 +874,7 @@ mod test {
 
         // Poll the ProposalBuffer until it produces a proposal. This should resolve the so far unknown predecessor and resolve.
         // Do this with a timeout as it should really only take a single round trip.
-        let deadline = tokio::time::Instant::now()
-            .checked_add(tokio::time::Duration::from_millis(400))
-            .unwrap();
-
-        let signed_proposal = tokio::time::timeout_at(deadline, proposal_receiver.next())
+        let signed_proposal = timeout(Duration::from_millis(400), proposal_receiver.next())
             .await
             .expect("proposal buffer should have resolved the proposal before the timeout")
             .expect("proposal buffer should have resolved the proposal");
@@ -952,11 +936,7 @@ mod test {
 
         // Poll the ProposalBuffer until it produces a proposal. This should resolve the so far unknown predecessor and resolve.
         // Do this with a timeout as it should really only take a single round trip.
-        let deadline = tokio::time::Instant::now()
-            .checked_add(tokio::time::Duration::from_millis(400))
-            .unwrap();
-
-        let signed_proposal = tokio::time::timeout_at(deadline, proposal_receiver.next())
+        let signed_proposal = timeout(Duration::from_millis(400), proposal_receiver.next())
             .await
             .expect("proposal buffer should have resolved the proposal before the timeout")
             .expect("proposal buffer should have resolved the proposal");

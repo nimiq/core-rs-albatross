@@ -11,11 +11,11 @@ use nimiq_block::{Block, EquivocationProof, MicroBlock, SkipBlockInfo};
 use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_mempool::mempool::Mempool;
+use nimiq_time::sleep;
 use nimiq_utils::time::systemtime_to_timestamp;
 use nimiq_validator_network::ValidatorNetwork;
 use nimiq_vrf::VrfSeed;
 use parking_lot::RwLock;
-use tokio::time;
 
 use crate::aggregation::skip_block::SkipBlockAggregation;
 
@@ -152,7 +152,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             }
             // We have dropped the blockchain lock.
             // Wait for the expected timestamp to arrive before actually producing the block
-            time::sleep(delay).await;
+            sleep(delay).await;
         };
 
         if let Some(event) = return_value {
@@ -173,7 +173,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         let wait_until_expected = expected_next_ts
             + (self.producer_timeout - self.block_separation_time).as_millis() as u64;
         let next_block_timeout = cmp::max(wait_until_min, wait_until_expected) - now;
-        time::sleep(Duration::from_millis(next_block_timeout)).await;
+        sleep(Duration::from_millis(next_block_timeout)).await;
 
         info!(
             block_number = self.block_number,

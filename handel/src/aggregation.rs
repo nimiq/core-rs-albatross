@@ -9,8 +9,7 @@ use futures::{
     ready, select,
     stream::{BoxStream, Stream, StreamExt},
 };
-use tokio::time::{interval_at, Instant};
-use tokio_stream::wrappers::IntervalStream;
+use nimiq_time::{interval, Interval};
 
 use crate::{
     config::Config,
@@ -57,10 +56,10 @@ struct NextAggregation<
     sender: LevelUpdateSender<N>,
 
     /// Interval for starting the next level regardless of previous levels completion
-    start_level_interval: IntervalStream,
+    start_level_interval: Interval,
 
     /// Interval for sending level updates to the corresponding peers regardless of progression
-    periodic_update_interval: IntervalStream,
+    periodic_update_interval: Interval,
 
     /// the level which needs activation next
     next_level_timeout: usize,
@@ -90,15 +89,11 @@ impl<
 
         // Regardless of level completion consecutive levels need to be activated at some point. Activate Levels every time this interval ticks,
         // if the level has not already been activated due to level completion
-        let start_level_interval =
-            IntervalStream::new(interval_at(Instant::now() + config.timeout, config.timeout));
+        let start_level_interval = interval(config.timeout);
 
         // Every `config.update_interval` send Level updates to corresponding peers no matter the aggregations progression
         // (makes sure other peers can catch up).
-        let periodic_update_interval = IntervalStream::new(interval_at(
-            Instant::now() + config.update_interval,
-            config.update_interval,
-        ));
+        let periodic_update_interval = interval(config.update_interval);
 
         // Create the NextAggregation struct
         Self {

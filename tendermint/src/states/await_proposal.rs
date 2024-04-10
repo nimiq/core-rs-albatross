@@ -1,4 +1,4 @@
-use std::task::{Context, Poll};
+use std::task::Context;
 
 use futures::future::FutureExt;
 
@@ -128,7 +128,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
     /// That state must be yielded.
     fn check_proposal_timeout(&mut self, cx: &mut Context<'_>) -> bool {
         // Check if the timeout elapsed.
-        if let Poll::Ready(Err(_elapsed)) = self.timeout.as_mut().unwrap().poll_unpin(cx) {
+        if self.timeout.as_mut().unwrap().poll_unpin(cx).is_ready() {
             // The timeout elapsed, vote nil as the proposal did not arrive in time.
             self.state
                 .votes

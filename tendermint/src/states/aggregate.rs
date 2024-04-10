@@ -1,7 +1,4 @@
-use std::{
-    collections::btree_map::Entry,
-    task::{Context, Poll},
-};
+use std::{collections::btree_map::Entry, task::Context};
 
 use futures::{future::FutureExt, stream::StreamExt};
 use tokio::sync::mpsc;
@@ -122,7 +119,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
         self.start_timeout();
 
         // Check if the timeout elapsed. If so the result must be returned, even though it might still improve.
-        if let Poll::Ready(Err(_elapsed)) = self.timeout.as_mut().unwrap().poll_unpin(cx) {
+        if self.timeout.as_mut().unwrap().poll_unpin(cx).is_ready() {
             log::debug!("Aggregation timed out without final result.");
             self.on_none_polka();
 

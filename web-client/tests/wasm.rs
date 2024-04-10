@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::{sync::Arc, task::Poll};
 
-use futures::{Stream, StreamExt};
+use futures::{poll, Stream, StreamExt};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::{sync::syncer_proxy::SyncerProxy, Consensus};
@@ -67,7 +67,9 @@ pub async fn it_can_initialize_with_mock_network() {
         }),
     );
 
-    spawn_local(consensus);
+    if let Poll::Ready(_) = poll!(consensus) {
+        panic!("Consensus should not be ready");
+    }
 }
 
 // The following test is an adaptation of the mocking network test for wasm

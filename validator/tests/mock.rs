@@ -23,9 +23,9 @@ use nimiq_test_utils::{
         build_validator, build_validators, pop_validator_for_slot, seeded_rng, validator_for_slot,
     },
 };
+use nimiq_time::{sleep, timeout};
 use nimiq_validator::aggregation::skip_block::SignedSkipBlockMessage;
 use serde::{Deserialize, Serialize};
-use tokio::time;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct SkipBlockMessage(LevelUpdate<SignedSkipBlockMessage>);
@@ -118,7 +118,7 @@ async fn four_validators_can_create_micro_blocks() {
     });
 
     let events = blockchain.read().notifier_as_stream();
-    time::timeout(
+    timeout(
         Duration::from_secs(60),
         events.take_until(stop_fut).for_each(|e| {
             log::info!(?e, "EVENT");
@@ -160,7 +160,7 @@ async fn four_validators_can_do_skip_block() {
     let mut events = blockchain.read().notifier_as_stream();
 
     // Freeze time to immediately trigger the block producer timeout.
-    // time::pause();
+    tokio::time::pause();
 
     tokio::spawn(future::join_all(validators));
 
@@ -293,7 +293,7 @@ async fn validator_can_catch_up() {
     tokio::spawn(future::join_all(validators));
 
     // while waiting for them to run into the block producer timeout (10s)
-    time::sleep(Duration::from_secs(11)).await;
+    sleep(Duration::from_secs(11)).await;
     // At which point the prepared skip block message is broadcast
     // (only a subset of the validators will accept it as it send as level 1 message)
     for network in &networks {
@@ -306,7 +306,7 @@ async fn validator_can_catch_up() {
     }
 
     // wait enough time to complete the skip block aggregation (it really does not matter how long, as long as the vc completes)
-    time::sleep(Duration::from_secs(8)).await;
+    sleep(Duration::from_secs(8)).await;
 
     // reconnect a validator (who has not seen the proof for the skip block)
     log::warn!("connecting networks");

@@ -14,7 +14,8 @@ keywords.workspace = true
 workspace = true
 
 [dependencies]
-gloo-timers = { version = "0.2", features = ["futures"] }
+futures = "0.3"
+gloo-timers = { version = "0.3", features = ["futures"] }
 send_wrapper = { version = "0.6", features = ["futures"] }
 tokio = { version = "1.36", features = ["time"] }
 tokio-stream = { version = "0.1", features = ["time"] }

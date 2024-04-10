@@ -13,7 +13,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{CloseReason, Network};
-use wasm_timer::Interval;
+use nimiq_time::{interval, Interval};
 
 use crate::{consensus::ResolveBlockRequest, messages::RequestHead};
 
@@ -158,7 +158,7 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
             network,
             outdated_peers: Default::default(),
             incompatible_peers: Default::default(),
-            check_interval: Interval::new(Self::CHECK_INTERVAL),
+            check_interval: interval(Self::CHECK_INTERVAL),
             pending_checks: Default::default(),
             accepted_announcements: 0,
         }

@@ -20,7 +20,7 @@ use libp2p::{
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::peer_info::Services;
 use nimiq_serde::DeserializeError;
-use nimiq_time::{interval_at, Interval};
+use nimiq_time::{interval, Interval};
 use nimiq_utils::tagged_signing::TaggedKeyPair;
 use parking_lot::RwLock;
 use rand::{seq::IteratorRandom, thread_rng};
@@ -544,7 +544,7 @@ impl ConnectionHandler for Handler {
                                             update_interval = min_secs;
                                         }
                                         self.periodic_update_interval =
-                                            Some(interval_at(Duration::from_secs(update_interval)));
+                                            Some(interval(Duration::from_secs(update_interval)));
                                     }
 
                                     // Switch to established state

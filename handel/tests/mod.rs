@@ -286,11 +286,7 @@ async fn it_can_aggregate() {
     );
 
     // aggregating should not take more than 300 ms per each 7 contributors
-    let timeout_ms = 300u64 * (contributor_num / 7 + 1) as u64;
-
-    let deadline = tokio::time::Instant::now()
-        .checked_add(Duration::from_millis(timeout_ms))
-        .unwrap();
+    let timeout = Duration::from_millis(300u64 * (contributor_num / 7 + 1) as u64);
 
     // The final value needs to be the sum of all contributions.
     // For instance for `contributor_num = 7: 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 = 36`
@@ -300,7 +296,7 @@ async fn it_can_aggregate() {
     }
 
     loop {
-        match tokio::time::timeout_at(deadline, aggregation.next()).await {
+        match nimiq_time::timeout(timeout, aggregation.next()).await {
             Ok(Some(aggregate)) => {
                 if aggregate.num_contributors() == contributor_num + 1
                     && aggregate.value == exp_agg_value
@@ -318,7 +314,7 @@ async fn it_can_aggregate() {
     net.disconnect();
 
     // give the other aggregations time to complete themselves
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    nimiq_time::sleep(Duration::from_millis(100)).await;
 
     // after we have the final aggregate create a new instance and have it (without any other instances)
     // return a fully aggregated contribution and terminate.

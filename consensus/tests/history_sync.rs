@@ -1,5 +1,3 @@
-mod sync_utils;
-
 use std::{sync::Arc, time::Duration};
 
 use futures::StreamExt;
@@ -29,11 +27,14 @@ use nimiq_test_utils::{
     node::TESTING_BLS_CACHE_MAX_CAPACITY,
     test_network::TestNetwork,
 };
+use nimiq_time::sleep;
 use nimiq_utils::time::OffsetTime;
 use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
 
 use crate::sync_utils::{sync_two_peers, SyncMode};
+
+mod sync_utils;
 
 #[test(tokio::test)]
 async fn two_peers_can_sync_empty_chain() {
@@ -272,7 +273,7 @@ async fn sync_ingredients() {
     Network::connect_networks(&networks, 3u64).await;
     // Then wait for connection to be established.
     let _ = stream.next().await.unwrap();
-    tokio::time::sleep(Duration::from_secs(1)).await; // FIXME, Prof. Berrang told me to do this
+    sleep(Duration::from_secs(1)).await; // FIXME, Prof. Berrang told me to do this
 
     // Test ingredients:
     // Request macro chain, first request must return all epochs and one checkpoint.

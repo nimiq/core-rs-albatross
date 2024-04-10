@@ -18,11 +18,11 @@ use nimiq_network_libp2p::{
 };
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng::test_rng;
+use nimiq_time::{sleep, timeout};
 use nimiq_utils::{key_rng::SecureGenerate, tagged_signing::TaggedSignable};
 use nimiq_validator_network::validator_record::ValidatorRecord;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
-use tokio::time::timeout;
 
 mod helper;
 
@@ -445,7 +445,7 @@ async fn dht_put_and_get() {
     let net2 = &networks[1];
 
     // FIXME: Add delay while networks share their addresses
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    sleep(Duration::from_secs(2)).await;
 
     let put_record = ValidatorRecord {
         peer_id: net1.get_local_peer_id(),
@@ -528,7 +528,7 @@ async fn test_gossipsub() {
     let mut messages = net1.subscribe::<TestTopic>().await.unwrap();
     consume_stream(net2.subscribe::<TestTopic>().await.unwrap());
 
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    sleep(Duration::from_secs(10)).await;
 
     net2.publish::<TestTopic>(test_message.clone())
         .await

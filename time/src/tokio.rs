@@ -1,10 +1,22 @@
-use tokio::time::{interval as tokio_interval, interval_at as tokio_interval_at, Instant};
+use std::{future::Future, time::Duration};
+
+use tokio::time::{
+    interval_at, sleep as tokio_sleep, timeout as tokio_timeout, Instant, Sleep, Timeout,
+};
 pub use tokio_stream::wrappers::IntervalStream as Interval;
 
-pub fn interval(duration: std::time::Duration) -> Interval {
-    Interval::new(tokio_interval(duration))
+pub fn interval(period: Duration) -> Interval {
+    assert!(
+        period.as_millis() <= u32::MAX as u128,
+        "Period as millis must fit in u32"
+    );
+    Interval::new(interval_at(Instant::now() + period, period))
 }
 
-pub fn interval_at(duration: std::time::Duration) -> Interval {
-    Interval::new(tokio_interval_at(Instant::now() + duration, duration))
+pub fn timeout<F: Future>(duration: Duration, future: F) -> Timeout<F> {
+    tokio_timeout(duration, future)
+}
+
+pub fn sleep(duration: Duration) -> Sleep {
+    tokio_sleep(duration)
 }

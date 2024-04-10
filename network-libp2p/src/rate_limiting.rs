@@ -4,11 +4,8 @@ use std::{
     time::Duration,
 };
 
-#[cfg(not(feature = "tokio-time"))]
 use instant::Instant;
 use libp2p::PeerId;
-#[cfg(feature = "tokio-time")]
-use tokio::time::Instant;
 
 /// Holds the expiration time for a given peer and request type. This struct defines the ordering for the btree set.
 /// The smaller expiration times come first.

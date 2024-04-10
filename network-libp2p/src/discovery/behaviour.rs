@@ -18,7 +18,7 @@ use libp2p::{
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::peer_info::Services;
-use nimiq_time::{interval_at, Interval};
+use nimiq_time::{interval, Interval};
 use parking_lot::RwLock;
 
 use super::{
@@ -124,7 +124,7 @@ impl Behaviour {
         keypair: Keypair,
         peer_contact_book: Arc<RwLock<PeerContactBook>>,
     ) -> Self {
-        let house_keeping_timer = interval_at(config.house_keeping_interval);
+        let house_keeping_timer = interval(config.house_keeping_interval);
         peer_contact_book.write().update_own_contact(&keypair);
 
         // Report our own known addresses as candidates to the swarm

@@ -3,8 +3,9 @@ use std::{sync::Arc, time::Duration};
 use futures::future::BoxFuture;
 use nimiq_network_interface::network::{Network, PubsubId};
 use nimiq_primitives::{trie::trie_diff::TrieDiff, TreeProof};
+use nimiq_time::sleep;
 use parking_lot::RwLock;
-use tokio::{sync::Semaphore, time};
+use tokio::sync::Semaphore;
 
 use super::{RequestTrieDiff, ResponseTrieDiff};
 use crate::sync::{
@@ -72,7 +73,7 @@ impl<N: Network> DiffRequestComponent<N> {
                         Some(peer_id) => peer_id,
                         None => {
                             error!("couldn't fetch diff: no peers");
-                            time::sleep(Duration::from_secs(5)).await;
+                            sleep(Duration::from_secs(5)).await;
                             continue;
                         }
                     };
@@ -112,7 +113,7 @@ impl<N: Network> DiffRequestComponent<N> {
                     if num_tries >= max_tries {
                         error!(%num_tries, %max_tries, ?backoff_delay, "couldn't fetch diff: maximum tries reached");
 
-                        time::sleep(backoff_delay).await;
+                        sleep(backoff_delay).await;
                         backoff_delay = Duration::min(backoff_delay.mul_f32(2_f32), max_backoff);
                         num_tries = 0;
                     }

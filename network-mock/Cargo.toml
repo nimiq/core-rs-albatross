@@ -35,6 +35,7 @@ tokio-stream = "0.1"
 
 nimiq-network-interface = { workspace = true }
 nimiq-serde = { workspace = true }
+nimiq-time = { workspace = true }
 nimiq-utils = { workspace = true, features = ["tagged-signing"] }
 
 [dev-dependencies]

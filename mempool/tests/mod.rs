@@ -1,4 +1,4 @@
-use std::{env, str::FromStr, sync::Arc};
+use std::{env, str::FromStr, sync::Arc, time::Duration};
 
 use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
 use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
@@ -21,6 +21,7 @@ use nimiq_test_utils::{
     test_rng::test_rng,
     test_transaction::{generate_accounts, generate_transactions, TestTransaction},
 };
+use nimiq_time::sleep;
 use nimiq_transaction::{ExecutedTransaction, Transaction};
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::time::OffsetTime;
@@ -96,8 +97,7 @@ async fn send_txn_to_mempool(
     .await
     .expect("Send failed");
 
-    let timeout = tokio::time::Duration::from_secs(1);
-    tokio::time::sleep(timeout).await;
+    sleep(Duration::from_secs(1)).await;
     mempool.stop_executor_without_unsubscribe().await;
 }
 
@@ -130,8 +130,7 @@ async fn send_control_txn_to_mempool(
     .await
     .expect("Send failed");
 
-    let timeout = tokio::time::Duration::from_secs(1);
-    tokio::time::sleep(timeout).await;
+    sleep(Duration::from_secs(1)).await;
     mempool.stop_control_executor_without_unsubscribe().await;
 }
 
@@ -173,8 +172,7 @@ async fn multiple_start_stop_send(
     .await
     .expect("Send failed");
 
-    let timeout = tokio::time::Duration::from_secs(2);
-    tokio::time::sleep(timeout).await;
+    sleep(Duration::from_secs(2)).await;
     mempool.stop_executor_without_unsubscribe().await;
 
     // Get the transactions from the mempool
@@ -196,8 +194,7 @@ async fn multiple_start_stop_send(
     .await
     .expect("Send failed");
 
-    let timeout = tokio::time::Duration::from_secs(2);
-    tokio::time::sleep(timeout).await;
+    sleep(Duration::from_secs(2)).await;
 
     // Call stop again, nothing should happen.
     mempool.stop_executor_without_unsubscribe().await;
@@ -239,8 +236,7 @@ async fn multiple_start_stop_send(
     .await
     .expect("Send failed");
 
-    let timeout = tokio::time::Duration::from_secs(2);
-    tokio::time::sleep(timeout).await;
+    sleep(Duration::from_secs(2)).await;
     mempool.stop_executor_without_unsubscribe().await;
 
     // Get the transactions from the mempool

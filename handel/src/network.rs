@@ -159,14 +159,13 @@ impl<TNetwork: Network + Unpin> Stream for LevelUpdateSender<TNetwork> {
 
 #[cfg(test)]
 mod test {
-    use std::{sync::Arc, task::Context};
+    use std::{sync::Arc, task::Context, time::Duration};
 
     use futures::{FutureExt, StreamExt};
     use nimiq_collections::BitSet;
     use nimiq_test_log::test;
     use parking_lot::Mutex;
     use serde::{Deserialize, Serialize};
-    use tokio::time;
 
     use crate::{
         contribution::{AggregatableContribution, ContributionError},
@@ -199,7 +198,7 @@ mod test {
         ) -> futures::future::BoxFuture<'static, ()> {
             self.0.lock().push(msg);
 
-            async move { time::sleep(time::Duration::from_millis(100)).await }.boxed()
+            async move { nimiq_time::sleep(Duration::from_millis(100)).await }.boxed()
         }
     }
 
@@ -247,7 +246,7 @@ mod test {
         // Clear the buffer so test starts from scratch
         t.lock().clear();
         // Needed because the send also sleeps
-        time::sleep(time::Duration::from_millis(110)).await;
+        nimiq_time::sleep(Duration::from_millis(110)).await;
 
         assert_eq!(0, t.lock().len());
         send(&mut sender, 0);
@@ -271,7 +270,7 @@ mod test {
         assert_eq!(10, t.lock().len());
 
         // Wait for the futures to resolve, imitating a delay
-        time::sleep(time::Duration::from_millis(150)).await;
+        nimiq_time::sleep(Duration::from_millis(150)).await;
         // Send some more
         send(&mut sender, 9); // Not a Duplicate, this should be accepted
         send(&mut sender, 8); // Not a Duplicate, this should be accepted

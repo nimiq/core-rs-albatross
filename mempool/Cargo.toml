@@ -58,6 +58,7 @@ nimiq-genesis-builder = { workspace = true }
 nimiq-network-mock = { workspace = true }
 nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }
+nimiq-time = { workspace = true }
 nimiq-transaction-builder = { workspace = true }
 nimiq-vrf = { workspace = true }
 

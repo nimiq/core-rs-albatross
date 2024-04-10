@@ -32,7 +32,6 @@ serde = "1.0"
 thiserror = "1.0"
 tokio = { version = "1.37", features = ["rt", "sync", "time"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
-wasm-timer = "0.2"
 
 nimiq-account = { workspace = true, default-features = false }
 nimiq-block = { workspace = true }
@@ -47,6 +46,7 @@ nimiq-mmr = { workspace = true }
 nimiq-network-interface = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["policy", "trie"] }
 nimiq-serde = { workspace = true }
+nimiq-time = { workspace = true }
 nimiq-transaction = { workspace = true }
 nimiq-utils = { workspace = true, features = [
     "math",

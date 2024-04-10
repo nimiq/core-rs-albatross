@@ -21,6 +21,7 @@ workspace = true
 async-trait = "0.1"
 byteorder = "1.5"
 futures = { workspace = true }
+instant = { version = "0.1", features = ["wasm-bindgen"] }
 linked-hash-map = "0.5.6"
 log = { workspace = true }
 parking_lot = "0.12"
@@ -49,6 +50,7 @@ nimiq-network-interface = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["tendermint"] }
 nimiq-serde = { workspace = true }
 nimiq-tendermint = { workspace = true }
+nimiq-time = { workspace = true }
 nimiq-transaction-builder = { workspace = true }
 nimiq-utils = { workspace = true, features = [
     "time",
