@@ -555,7 +555,6 @@ mod test {
     use std::{sync::Arc, time::Duration};
 
     use futures::{select, FutureExt, StreamExt};
-    use instant::Instant;
     use nimiq_block::MacroHeader;
     use nimiq_blockchain::Blockchain;
     use nimiq_blockchain_proxy::BlockchainProxy;

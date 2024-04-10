@@ -3,11 +3,10 @@ use std::time::Duration;
 use log::info;
 use nimiq::prover::prover_main;
 pub use nimiq::{
-    client::{Client, Consensus},
+    client::Client,
     config::{command_line::CommandLine, config::ClientConfig, config_file::ConfigFile},
     error::Error,
     extras::{
-        deadlock::initialize_deadlock_detection,
         logging::{initialize_logging, log_error_cause_chain},
         metrics_server::NimiqTaskMonitor,
         panic::initialize_panic_reporting,
