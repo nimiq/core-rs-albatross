@@ -26,11 +26,19 @@ use crate::{
 };
 
 static TESTNET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
-    registration_start: 2590000,
-    registration_end: 2660000,
-    pre_stake_start: 2660000,
-    pre_stake_end: 2663100,
-    election_candidate: 2664100,
+    // The testnet blocks are produced ~every minute.
+    // So we have 60 blocks per hour, 1440 blocks per day
+    // Registration starts at Sunday April 14th at 00:00 UTC
+    registration_start: 3016529,
+    // Registration ends at Thursday April 18th at 00:00 UTC (4*1440 = 5760 blocks later)
+    registration_end: 3022289,
+    // Pre stake starts at Friday April 19th at 00:00 UTC (1440 blocks later)
+    pre_stake_start: 3023729,
+    // Pre stake ends at Monday April 22nd at 00:00 UTC (3*1440 = 4320 blocks later)
+    pre_stake_end: 3028049,
+    // 18 hours after pre stake ends (Monday April 22nd at 18:00 UTC):
+    election_candidate: 3029129,
+    // Block confirmations that are needed in order to start the Nimiq PoS client
     block_confirmations: 10,
     // This corresponds to ~24 hours.
     readiness_window: 1440,
@@ -65,8 +73,7 @@ static MAINET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
 /// 4. Pre-stake registration window end block. This block is also the activation
 ///    window start.
 /// 5. The final block in the PoW chain that will be taken as genesis block for the
-///    PoS chain. This block must have a block number that can be an election block
-///    number in the PoS chain.
+///    PoS chain.
 /// 6. This is a block whose block number is a number of confirmations away from
 ///    the final block described in 4.
 ///
