@@ -183,7 +183,10 @@ pub async fn get_validators(
             .or_insert(vec![txn]);
     }
     // First look for the 6 transactions that carries the validator data
-    for (_, txns) in txns_by_sender.iter() {
+    for (_, txns) in txns_by_sender.iter_mut() {
+        // First sort the transactions by this sender by timestamp
+        txns.sort_by_cached_key(|transaction| transaction.timestamp);
+
         let mut signing_key = SchnorrPublicKey::default();
         let mut address: Address = Address::default();
         let mut voting_key = vec![vec![0u8]; 5];
