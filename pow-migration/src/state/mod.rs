@@ -7,7 +7,7 @@ use nimiq_genesis_builder::config::{
     GenesisAccount, GenesisHTLC, GenesisStaker, GenesisVestingContract,
 };
 use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
-use nimiq_primitives::coin::Coin;
+use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_rpc::{
     primitives::{
         BasicAccount as PoWBasicAccount, Block, HTLCAccount as PoWHTLCAccount, TransactionDetails,
@@ -22,8 +22,6 @@ use crate::state::types::{Error, GenesisAccounts, GenesisValidator};
 
 // POW estimated block time in milliseconds
 const POW_BLOCK_TIME_MS: u64 = 60 * 1000; // 1 min
-                                          // PoS validator deposit
-const VALIDATOR_DEPOSIT: u64 = 10; // FixMe: This should match the actual PoS validator deposit.
 
 fn pos_basic_account_from_account(pow_account: &PoWBasicAccount) -> Result<GenesisAccount, Error> {
     let address = Address::from_user_friendly_address(&pow_account.address)?;
@@ -264,7 +262,10 @@ pub async fn get_validators(
 
     // Now look for the commit transaction
     for (_, txns) in txns_by_sender.iter() {
-        for txn in txns.iter().filter(|&txn| txn.value >= VALIDATOR_DEPOSIT) {
+        for txn in txns
+            .iter()
+            .filter(|&txn| txn.value >= Policy::VALIDATOR_DEPOSIT)
+        {
             if let Some(data) = &txn.data {
                 if let Ok(address_bytes) = hex::decode(data) {
                     if let Ok(address_str) = std::str::from_utf8(&address_bytes) {
@@ -313,10 +314,10 @@ pub async fn get_stakers(
             validator.validator.validator_address.to_string(),
             validator.clone(),
         );
-        if validator.balance > Coin::from_u64_unchecked(VALIDATOR_DEPOSIT) {
+        if validator.balance > Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT) {
             stakers.push(GenesisStaker {
                 staker_address: validator.validator.validator_address.clone(),
-                balance: validator.balance - Coin::from_u64_unchecked(VALIDATOR_DEPOSIT),
+                balance: validator.balance - Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
                 delegation: validator.validator.validator_address.clone(),
                 inactive_balance: Coin::ZERO,
                 inactive_from: None,
