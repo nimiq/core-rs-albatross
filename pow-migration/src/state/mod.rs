@@ -320,11 +320,14 @@ pub async fn get_stakers(
 
     // Build the hashmap for validators and check if there needs to be a staker for the validator address
     for registered_validator in registered_validators {
-        validators.insert(
-            registered_validator.validator.validator_address.to_string(),
-            registered_validator.clone(),
-        );
-        if registered_validator.balance > Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT) {
+        // Only add a staker for this validator if the validator was registered with more than the validator
+        // deposit and if the deposit exceeds the minimum stake. Otherwise, the extra needs to be burnt.
+        let extra_validator_deposit = registered_validator
+            .balance
+            .saturating_sub(Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT));
+        let balance_to_burn = if extra_validator_deposit > Coin::ZERO
+            && extra_validator_deposit >= Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
+        {
             let staker_address = registered_validator.validator.validator_address.clone();
             stakers.insert(
                 staker_address.clone(),
@@ -337,7 +340,21 @@ pub async fn get_stakers(
                     inactive_from: None,
                 },
             );
-        }
+            Coin::ZERO
+        } else {
+            extra_validator_deposit
+        };
+
+        // Update the validator balance with the burnt balance
+        let mut updated_registered_validator = registered_validator.clone();
+        updated_registered_validator.balance -= balance_to_burn;
+        validators.insert(
+            updated_registered_validator
+                .validator
+                .validator_address
+                .to_string(),
+            updated_registered_validator,
+        );
     }
 
     // Remove any transaction outside of the validator registration window
@@ -364,26 +381,28 @@ pub async fn get_stakers(
                                 log::info!(staker_address=txn.from_address, validator_address=%address, "Found pre-stake transaction for validator");
                                 if let Ok(staker_address) = Address::from_str(&txn.from_address) {
                                     let stake = Coin::from_u64_unchecked(txn.value);
-                                    validator.balance += stake;
-                                    stakers
-                                        .entry(staker_address.clone())
-                                        .and_modify(|staker| {
-                                            // If we have an entry for this staker, treat this as a switch to another
-                                            // validator or an increase of the stake (if the validator isn't changed)
-                                            staker.delegation =
-                                                validator.validator.validator_address.clone();
-                                            staker.balance += stake;
-                                        })
-                                        .or_insert(GenesisStaker {
-                                            staker_address,
-                                            balance: stake,
-                                            delegation: validator
-                                                .validator
-                                                .validator_address
-                                                .clone(),
-                                            inactive_balance: Coin::ZERO,
-                                            inactive_from: None,
-                                        });
+                                    if stake >= Coin::from_u64_unchecked(Policy::MINIMUM_STAKE) {
+                                        validator.balance += stake;
+                                        stakers
+                                            .entry(staker_address.clone())
+                                            .and_modify(|staker| {
+                                                // If we have an entry for this staker, treat this as a switch to another
+                                                // validator or an increase of the stake (if the validator isn't changed)
+                                                staker.delegation =
+                                                    validator.validator.validator_address.clone();
+                                                staker.balance += stake;
+                                            })
+                                            .or_insert(GenesisStaker {
+                                                staker_address,
+                                                balance: stake,
+                                                delegation: validator
+                                                    .validator
+                                                    .validator_address
+                                                    .clone(),
+                                                inactive_balance: Coin::ZERO,
+                                                inactive_from: None,
+                                            });
+                                    }
                                 } else {
                                     log::error!(
                                         staker_address = txn.from_address,
