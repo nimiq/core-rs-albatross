@@ -237,7 +237,8 @@ impl ClientInner {
             identity_keypair.public(),
             provided_services,
             None,
-        );
+        )
+        .map_err(|e| Error::Network(nimiq_network_libp2p::NetworkError::PeerContactError(e)))?;
         peer_contact.set_current_time();
 
         let seeds: Vec<Multiaddr> = config

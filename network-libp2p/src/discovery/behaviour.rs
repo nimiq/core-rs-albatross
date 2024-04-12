@@ -143,7 +143,7 @@ impl Behaviour {
         }
     }
 
-    /// Adds our own addresses into our own contact within the peer contact book
+    /// Adds addresses into our own contact within the peer contact book
     pub fn add_own_addresses(&self, addresses: Vec<Multiaddr>) {
         self.peer_contact_book
             .write()

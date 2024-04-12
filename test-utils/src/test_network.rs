@@ -60,7 +60,8 @@ impl TestNetwork for Network {
             peer_key.public(),
             Services::all(),
             None,
-        );
+        )
+        .expect("Could not create peer contact");
         peer_contact.set_current_time();
         let config = Config::new(
             peer_key,

@@ -549,7 +549,8 @@ impl Behaviour {
 
         let num_seeds = 1;
         let contacts = self.contacts.read();
-        let own_addresses: HashSet<&Multiaddr> = contacts.get_own_contact().addresses().collect();
+        let own_contact = contacts.get_own_contact();
+        let own_addresses: HashSet<&Multiaddr> = own_contact.addresses().collect();
         self.seeds
             .iter()
             .filter(|address| !own_addresses.contains(address) && self.addresses.can_dial(*address))

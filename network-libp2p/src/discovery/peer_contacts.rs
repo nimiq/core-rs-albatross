@@ -15,6 +15,13 @@ use nimiq_network_interface::peer_info::Services;
 use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSignature};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum PeerContactError {
+    #[error("Exceeded number of advertised addresses")]
+    AdvertisedAddressesExceeded,
+}
 
 /// A plain peer contact. This contains:
 ///
@@ -25,6 +32,7 @@ use serde::{Deserialize, Serialize};
 ///
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PeerContact {
+    /// Addresses that we advertise
     pub addresses: Vec<Multiaddr>,
 
     /// Public key of this peer.
@@ -39,22 +47,28 @@ pub struct PeerContact {
 }
 
 impl PeerContact {
+    /// Maximum number of advertised addresses
+    const MAX_ADDRESSES: usize = 15;
+
     pub fn new<I: IntoIterator<Item = Multiaddr>>(
-        addresses: I,
+        advertised_addresses: I,
         public_key: PublicKey,
         services: Services,
         timestamp: Option<u64>,
-    ) -> Self {
-        let mut addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
+    ) -> Result<Self, PeerContactError> {
+        let mut addresses = advertised_addresses.into_iter().collect::<Vec<Multiaddr>>();
+        if addresses.len() > Self::MAX_ADDRESSES {
+            return Err(PeerContactError::AdvertisedAddressesExceeded);
+        }
 
         addresses.sort();
 
-        Self {
+        Ok(Self {
             addresses,
             public_key,
             services,
             timestamp,
-        }
+        })
     }
 
     /// Returns whether this is a seed peer contact. See [`PeerContact::timestamp`].
@@ -98,7 +112,19 @@ impl PeerContact {
 
     /// Adds a set of addresses
     pub fn add_addresses(&mut self, addresses: Vec<Multiaddr>) {
-        self.addresses.extend(addresses)
+        if addresses.len() + self.addresses.len() > Self::MAX_ADDRESSES {
+            log::warn!(
+                maximum = Self::MAX_ADDRESSES,
+                ignored_addresses = ?addresses[Self::MAX_ADDRESSES - self.addresses.len()..],
+                "Ignoring some of the addresses since it exceeds the maximum allowed"
+            );
+        }
+        self.addresses.extend(
+            addresses
+                .into_iter()
+                .take(Self::MAX_ADDRESSES - self.addresses.len())
+                .collect::<Vec<Multiaddr>>(),
+        );
     }
 
     /// Removes addresses
@@ -106,6 +132,15 @@ impl PeerContact {
         let to_remove_addresses: HashSet<Multiaddr> = HashSet::from_iter(addresses);
         self.addresses
             .retain(|addr| !to_remove_addresses.contains(addr));
+    }
+
+    /// Verifies whether the lengths of the advertised addresses are within
+    /// the expected limits. This is helpful to verify a received peer contact.
+    pub fn verify(&self) -> Result<(), PeerContactError> {
+        if self.addresses.len() > Self::MAX_ADDRESSES {
+            return Err(PeerContactError::AdvertisedAddressesExceeded);
+        }
+        Ok(())
     }
 }
 
@@ -124,8 +159,12 @@ pub struct SignedPeerContact {
 }
 
 impl SignedPeerContact {
-    /// Verifies that the signature is valid for this peer contact.
+    /// Verifies that the signature is valid for this peer contact and also does
+    /// intrinsic verification on the inner PeerContact.
     pub fn verify(&self) -> bool {
+        if self.inner.verify().is_err() {
+            return false;
+        };
         self.signature
             .tagged_verify(&self.inner, &self.inner.public_key)
     }
@@ -199,7 +238,7 @@ impl PeerContactInfo {
         &self.contact.inner.public_key
     }
 
-    /// Returns an iterator over the multi-addresses of this contact.
+    /// Returns an iterator over the observed multi-addresses of this contact.
     pub fn addresses(&self) -> impl Iterator<Item = &Multiaddr> {
         self.contact.inner.addresses.iter()
     }
@@ -335,9 +374,8 @@ impl PeerContactBook {
             && info.services().contains(Services::VALIDATOR))
             || info.matches(services_filter)
         {
-            let has_secure_ws_connections = info
-                .contact
-                .inner
+            let peer_contact = &info.contact.inner;
+            let has_secure_ws_connections = peer_contact
                 .addresses
                 .iter()
                 .any(Self::is_address_ws_secure);
@@ -346,7 +384,7 @@ impl PeerContactBook {
                 log::trace!(
                     added_peer = %info.peer_id,
                     services = ?info.services(),
-                    addresses = ?info.contact.inner.addresses,
+                    addresses = ?peer_contact.addresses,
                     only_secure_ws_connections,
                     "Inserting into my peer contacts, because the peer is also a validator or because it is interesting to us",
                 );
@@ -387,7 +425,8 @@ impl PeerContactBook {
     /// If the peer_id is not found, `None` is returned.
     pub fn get_addresses(&self, peer_id: &PeerId) -> Option<Vec<Multiaddr>> {
         self.peer_contacts.get(peer_id).map(|e| {
-            e.contact()
+            let peer_contact = e.contact();
+            peer_contact
                 .addresses
                 .iter()
                 .filter(|&address| self.is_address_dialable(address))
@@ -424,7 +463,7 @@ impl PeerContactBook {
         }
     }
 
-    /// Adds a set of addresses to the list of addresses known for our own.
+    /// Adds a set of addresses to the list of addresses known for our own contact.
     pub fn add_own_addresses<I: IntoIterator<Item = Multiaddr>>(
         &mut self,
         addresses: I,
@@ -432,7 +471,7 @@ impl PeerContactBook {
     ) {
         let mut contact = self.own_peer_contact.contact.inner.clone();
         let addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
-        trace!(?addresses, "Adding addresses observed for us");
+        trace!(?addresses, "Adding own addresses");
         contact.add_addresses(addresses);
         self.own_peer_contact = PeerContactInfo::from(contact.sign(keypair));
     }

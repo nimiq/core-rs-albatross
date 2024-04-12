@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::dispatch::codecs::MessageCodec;
+use crate::{discovery::peer_contacts::PeerContactError, dispatch::codecs::MessageCodec};
 
 #[derive(Debug, Error)]
 pub enum NetworkError {
@@ -50,6 +50,9 @@ pub enum NetworkError {
     },
     #[error("Response channel closed: {0:?}")]
     ResponseChannelClosed(<MessageCodec as libp2p::request_response::Codec>::Response),
+
+    #[error("Peer contact error: {0}")]
+    PeerContactError(#[from] PeerContactError),
 }
 
 impl<T> From<tokio::sync::mpsc::error::SendError<T>> for NetworkError {
