@@ -309,22 +309,27 @@ pub async fn get_stakers(
         .get_transactions_by_address(&Address::burn_address().to_string(), u16::MAX)
         .await?;
     let mut validators = HashMap::new();
-    let mut stakers = vec![];
+    let mut stakers = HashMap::new();
 
     // Build the hashmap for validators and check if there needs to be a staker for the validator address
-    for validator in registered_validators {
+    for registered_validator in registered_validators {
         validators.insert(
-            validator.validator.validator_address.to_string(),
-            validator.clone(),
+            registered_validator.validator.validator_address.to_string(),
+            registered_validator.clone(),
         );
-        if validator.balance > Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT) {
-            stakers.push(GenesisStaker {
-                staker_address: validator.validator.validator_address.clone(),
-                balance: validator.balance - Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
-                delegation: validator.validator.validator_address.clone(),
-                inactive_balance: Coin::ZERO,
-                inactive_from: None,
-            })
+        if registered_validator.balance > Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT) {
+            let staker_address = registered_validator.validator.validator_address.clone();
+            stakers.insert(
+                staker_address.clone(),
+                GenesisStaker {
+                    staker_address,
+                    balance: registered_validator.balance
+                        - Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
+                    delegation: registered_validator.validator.validator_address.clone(),
+                    inactive_balance: Coin::ZERO,
+                    inactive_from: None,
+                },
+            );
         }
     }
 
@@ -339,8 +344,10 @@ pub async fn get_stakers(
             .or_insert(vec![txn]);
     }
 
-    // Now look for the commit transaction
-    for (_, txns) in txns_by_sender.iter() {
+    // Now look for the pre-stake transaction
+    for (_, txns) in txns_by_sender.iter_mut() {
+        // First order transactions by timestamp
+        txns.sort_by_cached_key(|transaction| transaction.timestamp);
         for txn in txns.iter() {
             if let Some(data) = &txn.data {
                 if let Ok(address_bytes) = hex::decode(data) {
@@ -351,13 +358,25 @@ pub async fn get_stakers(
                                 if let Ok(staker_address) = Address::from_str(&txn.from_address) {
                                     let stake = Coin::from_u64_unchecked(txn.value);
                                     validator.balance += stake;
-                                    stakers.push(GenesisStaker {
-                                        staker_address,
-                                        balance: stake,
-                                        delegation: validator.validator.validator_address.clone(),
-                                        inactive_balance: Coin::ZERO,
-                                        inactive_from: None,
-                                    });
+                                    stakers
+                                        .entry(staker_address.clone())
+                                        .and_modify(|staker| {
+                                            // If we have an entry for this staker, treat this as a switch to another
+                                            // validator or an increase of the stake (if the validator isn't changed)
+                                            staker.delegation =
+                                                validator.validator.validator_address.clone();
+                                            staker.balance += stake;
+                                        })
+                                        .or_insert(GenesisStaker {
+                                            staker_address,
+                                            balance: stake,
+                                            delegation: validator
+                                                .validator
+                                                .validator_address
+                                                .clone(),
+                                            inactive_balance: Coin::ZERO,
+                                            inactive_from: None,
+                                        });
                                 } else {
                                     log::error!(
                                         staker_address = txn.from_address,
@@ -377,7 +396,10 @@ pub async fn get_stakers(
         }
     }
 
-    Ok((stakers, validators.into_values().collect()))
+    Ok((
+        stakers.into_values().collect(),
+        validators.into_values().collect(),
+    ))
 }
 
 #[cfg(test)]
