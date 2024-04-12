@@ -29,15 +29,15 @@ static TESTNET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     // The testnet blocks are produced ~every minute.
     // So we have 60 blocks per hour, 1440 blocks per day
     // Registration starts at Sunday April 14th at 00:00 UTC
-    registration_start: 3016529,
+    registration_start: 3016530,
     // Registration ends at Thursday April 18th at 00:00 UTC (4*1440 = 5760 blocks later)
-    registration_end: 3022289,
+    registration_end: 3022290,
     // Pre stake starts at Friday April 19th at 00:00 UTC (1440 blocks later)
-    pre_stake_start: 3023729,
+    pre_stake_start: 3023730,
     // Pre stake ends at Monday April 22nd at 00:00 UTC (3*1440 = 4320 blocks later)
-    pre_stake_end: 3028049,
+    pre_stake_end: 3028050,
     // 18 hours after pre stake ends (Monday April 22nd at 18:00 UTC):
-    election_candidate: 3029129,
+    election_candidate: 3029130,
     // Block confirmations that are needed in order to start the Nimiq PoS client
     block_confirmations: 10,
     // This corresponds to ~24 hours.
