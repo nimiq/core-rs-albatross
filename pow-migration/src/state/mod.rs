@@ -117,6 +117,7 @@ pub async fn get_accounts(
     client: &Client,
     cutting_block: &Block,
     pos_genesis_ts: u64,
+    burnt_registration_balance: Coin,
 ) -> Result<GenesisAccounts, Error> {
     let mut genesis_accounts = GenesisAccounts {
         vesting_accounts: vec![],
@@ -136,7 +137,13 @@ pub async fn get_accounts(
         for node in chunk.nodes {
             match node.account {
                 nimiq_rpc::primitives::Account::Basic(pow_account) => {
-                    let pos_basic_account = pos_basic_account_from_account(&pow_account)?;
+                    let mut pos_basic_account = pos_basic_account_from_account(&pow_account)?;
+                    if pos_basic_account.address == Address::burn_address() {
+                        // In order to not alter the total supply, we must decrease the balances
+                        // that were burnt in PoW to register validators and stakers (from the burn
+                        // address balance).
+                        pos_basic_account.balance -= burnt_registration_balance;
+                    }
                     genesis_accounts.basic_accounts.push(pos_basic_account);
                 }
                 nimiq_rpc::primitives::Account::Vesting(pow_account) => {

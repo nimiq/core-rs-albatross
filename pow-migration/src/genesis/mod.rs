@@ -6,7 +6,7 @@ use nimiq_database::DatabaseProxy;
 use nimiq_genesis_builder::config::GenesisConfig;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{KeyPair, SecureGenerate};
-use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_rpc::Client;
 use nimiq_vrf::VrfSeed;
 use rand::{rngs::StdRng, SeedableRng};
@@ -88,7 +88,6 @@ pub async fn get_pos_genesis(
     let vrf_seed = VrfSeed::default().sign_next_with_rng(&KeyPair::generate(&mut rng), &mut rng);
 
     log::info!("Getting PoW account state");
-    let genesis_accounts = get_accounts(client, &final_block, pos_genesis_ts).await?;
 
     let (genesis_stakers, genesis_validators) =
         if let Some(registered_agents) = pos_registered_agents {
@@ -109,6 +108,22 @@ pub async fn get_pos_genesis(
             )
             .await?
         };
+
+    // Calculate how much stake was burnt into registering validators and stakers
+    let mut burnt_registration_balance = genesis_stakers
+        .iter()
+        .fold(Coin::ZERO, |acc, staker| acc + staker.balance);
+    burnt_registration_balance += genesis_validators
+        .iter()
+        .fold(Coin::ZERO, |acc, validator| acc + validator.balance);
+
+    let genesis_accounts = get_accounts(
+        client,
+        &final_block,
+        pos_genesis_ts,
+        burnt_registration_balance,
+    )
+    .await?;
 
     Ok(GenesisConfig {
         network: network_id,
