@@ -267,7 +267,7 @@ where
             if (matches!(staking_state, ValidatorStakingState::Inactive(..)))
                 && blockchain.block_number()
                     >= tx_validity_window_start + Policy::blocks_per_epoch()
-                && !blockchain.tx_in_validity_window(
+                && !blockchain.history_store.tx_in_validity_window(
                     &validator_state.inactive_tx_hash,
                     tx_validity_window_start,
                     None,

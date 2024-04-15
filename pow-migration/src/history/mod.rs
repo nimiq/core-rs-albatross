@@ -110,11 +110,12 @@ pub async fn migrate_history(
     mut rx_candidate_block: mpsc::Receiver<u32>,
     tx_migration_completed: watch::Sender<u32>,
     env: DatabaseProxy,
+    network_id: NetworkId,
     pow_client: Client,
     block_confirmations: u32,
 ) {
-    let mut history_store_height = get_history_store_height(env.clone()).await;
-    let history_store = HistoryStore::new(env.clone());
+    let mut history_store_height = get_history_store_height(env.clone(), network_id).await;
+    let history_store = HistoryStore::new(env.clone(), network_id);
     let mut pow_head_height = pow_client.block_number().await.unwrap();
 
     while let Some(candidate_block) = rx_candidate_block.recv().await {
@@ -218,15 +219,20 @@ pub async fn migrate_history(
 
 /// Get the PoS genesis history root by getting all of the transactions from the
 /// PoW chain and building a single history tree.
-pub async fn get_history_root(env: DatabaseProxy) -> Result<Blake2bHash, Error> {
-    HistoryStore::new(env.clone())
+pub async fn get_history_root(
+    env: DatabaseProxy,
+    network_id: NetworkId,
+) -> Result<Blake2bHash, Error> {
+    HistoryStore::new(env.clone(), network_id)
         .get_history_tree_root(0, None)
         .ok_or(Error::HistoryRootError)
 }
 
 /// Get the current block height of the PoS history store
-pub async fn get_history_store_height(env: DatabaseProxy) -> u32 {
-    if let Some(block_height) = HistoryStore::new(env.clone()).get_last_leaf_block_number(None) {
+pub async fn get_history_store_height(env: DatabaseProxy, network_id: NetworkId) -> u32 {
+    if let Some(block_height) =
+        HistoryStore::new(env.clone(), network_id).get_last_leaf_block_number(None)
+    {
         block_height
     } else {
         1

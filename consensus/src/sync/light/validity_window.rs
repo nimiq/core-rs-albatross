@@ -225,7 +225,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
                                 let history_root = Blockchain::extend_validity_sync(
                                     blockchain.upgradable_read(),
-                                    Policy::epoch_at(verifier_block_number),
                                     &chunk.history[starting_index..],
                                 )
                                 .unwrap();

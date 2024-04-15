@@ -192,32 +192,6 @@ impl Blockchain {
             .release_balance(account, transaction, reserved_balance, None)
     }
 
-    /// Checks if we have seen some transaction with this hash inside the a validity window.
-    pub fn tx_in_validity_window(
-        &self,
-        tx_hash: &Blake2bHash,
-        validity_window_start: u32,
-        txn_opt: Option<&DBTransaction>,
-    ) -> bool {
-        // Get a vector with all transactions corresponding to the given hash.
-        let ext_hash_vec = self.history_store.get_hist_tx_by_hash(tx_hash, txn_opt);
-
-        // If the vector is empty then we have never seen a transaction with this hash.
-        if ext_hash_vec.is_empty() {
-            return false;
-        }
-
-        for hist_tx in ext_hash_vec {
-            // If the transaction is inside the validity window, return true.
-            if hist_tx.block_number >= validity_window_start {
-                return true;
-            }
-        }
-
-        // If we didn't see any transaction inside the validity window then we can return false.
-        false
-    }
-
     /// Checks if we have seen some transaction with this hash inside the validity window. This is
     /// used to prevent replay attacks.
     pub fn contains_tx_in_validity_window(
@@ -228,7 +202,8 @@ impl Blockchain {
         let max_block_number = self
             .block_number()
             .saturating_sub(Policy::transaction_validity_window_blocks());
-        self.tx_in_validity_window(tx_hash, max_block_number, txn_opt)
+        self.history_store
+            .tx_in_validity_window(tx_hash, max_block_number, txn_opt)
     }
 
     pub fn staking_contract_address(&self) -> Address {
@@ -265,10 +240,11 @@ impl Blockchain {
             true
         } else {
             // We can enforce the validity window when our history store root equals our head one.
+
             *self.head().history_root()
                 == self
                     .history_store
-                    .get_history_tree_root(Policy::epoch_at(self.block_number()), None)
+                    .get_history_tree_root(self.block_number(), None)
                     .unwrap()
         }
     }

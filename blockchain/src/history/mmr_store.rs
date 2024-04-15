@@ -6,6 +6,7 @@ use nimiq_database::{
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_mmr::store::{LightStore, Store};
+use nimiq_primitives::policy::Policy;
 
 #[derive(Debug)]
 enum Tx<'a, 'env> {
@@ -190,6 +191,14 @@ impl<'a, 'env> LightMMRStore<'a, 'env> {
         block_number: u32,
     ) -> Self {
         let size = get_size(hist_tree_table, tx, block_number);
+
+        // If size is 0 we need to copy the entries from the previous block number to the new one
+        if size == 0 {
+            init_mmr_from_block_number(hist_tree_table, tx, block_number);
+        }
+
+        let size = get_size(hist_tree_table, tx, block_number);
+
         LightMMRStore {
             hist_tree_table,
             tx: Tx::Write(tx),
@@ -226,6 +235,75 @@ pub fn remove_block_from_store(
         };
 
         // Deconstruct the key into a block number and a node index.
+        let (new_block_number, _) = key_to_index(next_key).unwrap();
+
+        current_block_number = new_block_number;
+    }
+}
+
+/// Copies the mmr entries of the previous block number
+/// This is used to initialize the tree for the given block number, using the previous tree as a baseline
+pub fn init_mmr_from_block_number(
+    hist_tree_table: &TableProxy,
+    txn: &mut WriteTransactionProxy,
+    block_number: u32,
+) {
+    // Initialize the cursor for the database.
+    let mut cursor = WriteTransaction::cursor(txn, hist_tree_table);
+
+    // The first block number of the epoch
+    let first_bn = Policy::first_block_of(Policy::epoch_at(block_number)).unwrap();
+
+    // If the block we recieved is the first block of the epoch then there is nothing to do
+    if first_bn == block_number {
+        return;
+    }
+
+    let mut prev_block_number = block_number - 1;
+
+    // We seek the previous block number that was added to the history store
+    while prev_block_number >= first_bn {
+        // Calculate the key for the beginning of the previous block `prev_block_number || 0`.
+        let prev_block_start = index_to_key(prev_block_number, 0);
+
+        if cursor
+            .seek_key::<_, Blake2bHash>(&prev_block_start)
+            .is_none()
+        {
+            if prev_block_number == first_bn {
+                return;
+            } else {
+                prev_block_number -= 1;
+            }
+        } else {
+            break;
+        }
+    }
+
+    let mut current_block_number = prev_block_number;
+
+    // We copy the entries from the previous block number to the new one.
+    while current_block_number == prev_block_number {
+        let (key, value) = match cursor.get_current::<Vec<u8>, Blake2bHash>() {
+            Some((key, value)) => (key, value),
+            None => return,
+        };
+
+        let (_, pos) = key_to_index(key).unwrap();
+
+        let new_key = index_to_key(block_number, pos);
+
+        txn.put(hist_tree_table, &new_key, &value);
+
+        let (next_key, _) = match cursor.next::<Vec<u8>, Blake2bHash>() {
+            Some(v) => v,
+            None => return,
+        };
+
+        // Deconstruct the key into a block number and a node index.
+        // Here we use the same function that the regular history store uses
+        // to construct keys based on {epoch_number, index} however, for the light mmr,
+        // we use {block_numer, index} keys but the logic is the same.
         let (new_block_number, _) = key_to_index(next_key).unwrap();
 
         current_block_number = new_block_number;

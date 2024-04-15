@@ -195,6 +195,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                             let previous_election_block =
                                 blockchain_rg.election_head().header.parent_election_hash;
                             drop(blockchain_rg);
+
                             self.request_single_macro_block(
                                 epoch_ids.sender,
                                 previous_election_block,

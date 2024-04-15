@@ -19,7 +19,8 @@ use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 use crate::chain_metrics::BlockchainMetrics;
 use crate::{
     blockchain_state::BlockchainState, chain_store::ChainStore, history::HistoryStore,
-    interface::HistoryInterface, reward::genesis_parameters,
+    interface::HistoryInterface, light_history_store::LightHistoryStore,
+    reward::genesis_parameters,
 };
 
 const BROADCAST_MAX_CAPACITY: usize = 256;
@@ -69,6 +70,9 @@ pub struct BlockchainConfig {
     /// Maximum number of epochs (other than the current one) that the ChainStore will store fully.
     /// Epochs older than this number will be pruned.
     pub max_epochs_stored: u32,
+    /// The history store that is used by the full blockchain.
+    /// If this is set to true, the light history store is used.
+    pub light_history_store: bool,
 }
 
 impl Default for BlockchainConfig {
@@ -76,6 +80,7 @@ impl Default for BlockchainConfig {
         Self {
             keep_history: true,
             max_epochs_stored: Policy::MIN_EPOCHS_STORED,
+            light_history_store: false,
         }
     }
 }
@@ -133,14 +138,12 @@ impl Blockchain {
         }
 
         let chain_store = ChainStore::new(env.clone());
-        let history_store = HistoryStore::new(env.clone());
 
         Ok(match chain_store.get_head(None) {
             Some(head_hash) => Blockchain::load(
                 env,
                 config,
                 chain_store,
-                history_store,
                 time,
                 network_id,
                 genesis_block,
@@ -150,7 +153,6 @@ impl Blockchain {
                 env,
                 config,
                 chain_store,
-                history_store,
                 time,
                 network_id,
                 genesis_block,
@@ -164,7 +166,7 @@ impl Blockchain {
         env: DatabaseProxy,
         config: BlockchainConfig,
         chain_store: ChainStore,
-        history_store: HistoryStore,
+
         time: Arc<OffsetTime>,
         network_id: NetworkId,
         genesis_block: Block,
@@ -265,6 +267,14 @@ impl Blockchain {
         let (tx_fork, _rx_fork) = broadcast(BROADCAST_MAX_CAPACITY);
         let (tx_log, _rx_log) = broadcast(BROADCAST_MAX_CAPACITY);
 
+        let history_store = if config.light_history_store {
+            Box::new(LightHistoryStore::new(env.clone(), network_id))
+                as Box<dyn HistoryInterface + Sync + Send>
+        } else {
+            Box::new(HistoryStore::new(env.clone(), network_id))
+                as Box<dyn HistoryInterface + Sync + Send>
+        };
+
         Ok(Blockchain {
             env,
             config,
@@ -274,7 +284,7 @@ impl Blockchain {
             fork_notifier: tx_fork,
             log_notifier: tx_log,
             chain_store,
-            history_store: Box::new(history_store) as Box<dyn HistoryInterface + Sync + Send>,
+            history_store,
             state: BlockchainState {
                 accounts,
                 main_chain,
@@ -301,7 +311,7 @@ impl Blockchain {
         env: DatabaseProxy,
         config: BlockchainConfig,
         chain_store: ChainStore,
-        history_store: HistoryStore,
+
         time: Arc<OffsetTime>,
         network_id: NetworkId,
         genesis_block: Block,
@@ -332,6 +342,14 @@ impl Blockchain {
         let (tx_fork, _rx_fork) = broadcast(BROADCAST_MAX_CAPACITY);
         let (tx_log, _rx_log) = broadcast(BROADCAST_MAX_CAPACITY);
 
+        let history_store = if config.light_history_store {
+            Box::new(LightHistoryStore::new(env.clone(), network_id))
+                as Box<dyn HistoryInterface + Sync + Send>
+        } else {
+            Box::new(HistoryStore::new(env.clone(), network_id))
+                as Box<dyn HistoryInterface + Sync + Send>
+        };
+
         Ok(Blockchain {
             env,
             config,
@@ -341,7 +359,7 @@ impl Blockchain {
             fork_notifier: tx_fork,
             log_notifier: tx_log,
             chain_store,
-            history_store: Box::new(history_store) as Box<dyn HistoryInterface + Sync + Send>,
+            history_store,
             state: BlockchainState {
                 accounts,
                 macro_info: main_chain.clone(),

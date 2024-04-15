@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use nimiq_block::MicroBlock;
 use nimiq_database::{
     traits::{Database, WriteTransaction},
     DatabaseProxy, TableProxy, TransactionProxy, WriteTransactionProxy,
@@ -5,7 +8,9 @@ use nimiq_database::{
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
 use nimiq_mmr::mmr::PeaksMerkleMountainRange;
+use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{historic_transaction::HistoricTransaction, inherent::Inherent};
+use parking_lot::RwLock;
 
 use super::{
     interface::HistoryInterface,
@@ -25,21 +30,29 @@ pub struct LightHistoryStore {
     /// A database of all history trees indexed by their epoch number.
     hist_tree_table: TableProxy,
     /// The container of all the validity window transaction hashes.
-    _validity_store: ValidityStore,
+    validity_store: Arc<RwLock<ValidityStore>>,
 }
 
 impl LightHistoryStore {
     /// Creates a new LightHistoryStore.
-    pub fn _new(db: DatabaseProxy) -> Self {
+    pub fn new(db: DatabaseProxy, network_id: NetworkId) -> Self {
         let hist_tree_table = db.open_table("LightHistoryTrees".to_string());
-        let validity_store = ValidityStore::_new();
+        let validity_store = Arc::new(RwLock::new(ValidityStore::new()));
 
         LightHistoryStore {
             db,
             hist_tree_table,
-            _validity_store: validity_store,
-            network_id: NetworkId::Main,
+            validity_store,
+            network_id,
         }
+    }
+
+    fn remove_block_light_history_store(&self, txn: &mut WriteTransactionProxy, block_number: u32) {
+        remove_block_from_store(&self.hist_tree_table, txn, block_number);
+
+        let mut validity_store = self.validity_store.write();
+
+        validity_store.delete_block_transactions(block_number);
     }
 }
 
@@ -62,8 +75,7 @@ impl HistoryInterface for LightHistoryStore {
                     vec![],
                 );
 
-                self.add_to_history(txn, macro_block.epoch_number(), &hist_txs)
-                    .expect("Failed to store history")
+                self.add_to_history(txn, macro_block.block_number(), &hist_txs)
             }
             nimiq_block::Block::Micro(micro_block) => {
                 // Get the body of the block.
@@ -85,25 +97,44 @@ impl HistoryInterface for LightHistoryStore {
                         .collect(),
                 );
 
-                self.add_to_history(txn, micro_block.epoch_number(), &hist_txs)
-                    .expect("Failed to store history")
+                self.add_to_history(txn, micro_block.block_number(), &hist_txs)
             }
-        };
-
-        None
+        }
     }
 
-    fn remove_block(&self, txn: &mut WriteTransactionProxy, block_number: u32) {
-        remove_block_from_store(&self.hist_tree_table, txn, block_number);
+    fn remove_block(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        block: &MicroBlock,
+        _inherents: Vec<Inherent>,
+    ) -> Option<u64> {
+        remove_block_from_store(&self.hist_tree_table, txn, block.block_number());
+
+        let mut validity_store = self.validity_store.write();
+
+        validity_store.delete_block_transactions(block.block_number());
+
+        // TODO: We dont keep track of the size of the txns that we removed, is this necessary?
+        Some(0)
     }
 
-    fn remove_history(&self, _txn: &mut WriteTransactionProxy, _epoch_number: u32) -> Option<()> {
-        todo!()
+    // Remove the history of the given epoch
+    fn remove_history(&self, txn: &mut WriteTransactionProxy, epoch_number: u32) -> Option<()> {
+        log::debug!("Removing history");
+
+        for bn in Policy::first_block_of(epoch_number).unwrap()
+            ..(Policy::first_block_of(epoch_number + 1).unwrap() - 1)
+        {
+            log::debug!("Removing history from {}", bn);
+            self.remove_block_light_history_store(txn, bn);
+        }
+
+        Some(())
     }
 
     fn get_history_tree_root(
         &self,
-        epoch_number: u32,
+        block_number: u32,
         txn_option: Option<&TransactionProxy>,
     ) -> Option<Blake2bHash> {
         let read_txn: TransactionProxy;
@@ -119,7 +150,7 @@ impl HistoryInterface for LightHistoryStore {
         let tree = PeaksMerkleMountainRange::new(LightMMRStore::with_read_transaction(
             &self.hist_tree_table,
             txn,
-            epoch_number,
+            block_number,
         ));
 
         // Return the history root.
@@ -130,13 +161,13 @@ impl HistoryInterface for LightHistoryStore {
         txn.clear_database(&self.hist_tree_table);
     }
 
-    fn length_at(&self, _block_number: u32, _txn_option: Option<&TransactionProxy>) -> u32 {
-        todo!()
+    fn length_at(&self, block_number: u32, txn_option: Option<&TransactionProxy>) -> u32 {
+        self.total_len_at_epoch(block_number, txn_option) as u32
     }
 
     fn total_len_at_epoch(
         &self,
-        epoch_number: u32,
+        epoch_number: u32, //TODO change this to block number
         txn_option: Option<&TransactionProxy>,
     ) -> usize {
         let read_txn: TransactionProxy;
@@ -161,19 +192,33 @@ impl HistoryInterface for LightHistoryStore {
     fn add_to_history(
         &self,
         txn: &mut WriteTransactionProxy,
-        epoch_number: u32,
+        block_number: u32,
         hist_txs: &[HistoricTransaction],
     ) -> Option<(Blake2bHash, u64)> {
         // Get the history tree.
         let mut tree = PeaksMerkleMountainRange::new(LightMMRStore::with_write_transaction(
             &self.hist_tree_table,
             txn,
-            epoch_number,
+            block_number,
         ));
+
+        let mut validity_store = self.validity_store.write();
+
+        validity_store.update_validity_store(block_number);
 
         for tx in hist_txs {
             tree.push(tx).ok()?;
+
+            validity_store.add_transaction(block_number, tx.tx_hash().into())
         }
+
+        log::trace!(
+            num_txns = hist_txs.len(),
+            " Added txns to the history store"
+        );
+
+        // Prune the validity store after adding txns for some specific block
+        validity_store.prune_validity_store();
 
         let root = tree.get_root().ok()?;
 
@@ -188,6 +233,15 @@ impl HistoryInterface for LightHistoryStore {
         _num_hist_txs: usize,
     ) -> Option<(Blake2bHash, u64)> {
         None
+    }
+
+    fn tx_in_validity_window(
+        &self,
+        tx_hash: &Blake2bHash,
+        _validity_window_start: u32,
+        _txn_opt: Option<&TransactionProxy>,
+    ) -> bool {
+        self.validity_store.read().has_transaction(tx_hash.clone())
     }
 
     fn get_hist_tx_by_hash(
@@ -335,7 +389,7 @@ mod tests {
     use nimiq_hash::Blake2bHash;
     use nimiq_keys::Address;
     use nimiq_mmr::hash::Merge;
-    use nimiq_primitives::coin::Coin;
+    use nimiq_primitives::{coin::Coin, policy::Policy};
     use nimiq_transaction::{
         historic_transaction::{HistoricTransaction, HistoricTransactionData},
         ExecutedTransaction, Transaction as BlockchainTransaction,
@@ -347,103 +401,126 @@ mod tests {
     fn length_at_works() {
         // Initialize History Store.
         let env = VolatileDatabase::new(20).unwrap();
-        let history_store = LightHistoryStore::_new(env.clone());
+        let history_store = LightHistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
 
         // Create historic transactions.
-        let ext_0 = create_transaction(1, 0);
-        let ext_1 = create_transaction(1, 1);
-        let ext_2 = create_transaction(2, 2);
-        let ext_3 = create_transaction(3, 3);
-        let ext_4 = create_transaction(3, 4);
-        let ext_5 = create_transaction(3, 5);
-        let ext_6 = create_transaction(3, 6);
-        let ext_7 = create_transaction(3, 7);
+        let ext_0 = create_transaction(Policy::genesis_block_number() + 1, 0);
+        let ext_1 = create_transaction(Policy::genesis_block_number() + 1, 1);
+        let ext_2 = create_transaction(Policy::genesis_block_number() + 2, 2);
+        let ext_3 = create_transaction(Policy::genesis_block_number() + 3, 3);
+        let ext_4 = create_transaction(Policy::genesis_block_number() + 3, 4);
+        let ext_5 = create_transaction(Policy::genesis_block_number() + 3, 5);
+        let ext_6 = create_transaction(Policy::genesis_block_number() + 3, 6);
+        let ext_7 = create_transaction(Policy::genesis_block_number() + 3, 7);
 
         let hist_txs = vec![ext_0, ext_1];
 
         // Add historic transactions to History Store.
         let mut txn = env.write_transaction();
-        history_store.add_to_history(&mut txn, 1, &hist_txs);
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 1, &hist_txs);
 
         let hist_txs = vec![ext_2];
-        history_store.add_to_history(&mut txn, 2, &hist_txs);
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 2, &hist_txs);
 
         let hist_txs = vec![ext_3, ext_4, ext_5, ext_6, ext_7];
-        history_store.add_to_history(&mut txn, 3, &hist_txs);
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 3, &hist_txs);
 
-        let len_1 = history_store.total_len_at_epoch(1, Some(&txn));
-        let len_2 = history_store.total_len_at_epoch(2, Some(&txn));
-        let len_3 = history_store.total_len_at_epoch(3, Some(&txn));
+        let len_1 =
+            history_store.total_len_at_epoch(Policy::genesis_block_number() + 1, Some(&txn));
+        let len_2 =
+            history_store.total_len_at_epoch(Policy::genesis_block_number() + 2, Some(&txn));
+        let len_3 =
+            history_store.total_len_at_epoch(Policy::genesis_block_number() + 3, Some(&txn));
 
+        // Lengths are cumulative because they are block number based
         assert_eq!(len_1, 3);
-        assert_eq!(len_2, 1);
-        assert_eq!(len_3, 8);
+        assert_eq!(len_2, 4);
+        assert_eq!(len_3, 15);
     }
 
     #[test]
     fn it_can_remove_a_block() {
         // Initialize History Store.
         let env = VolatileDatabase::new(20).unwrap();
-        let history_store = LightHistoryStore::_new(env.clone());
+        let history_store = LightHistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
         let mut txn = env.write_transaction();
 
         // Create historic transactions for block 1
-        let ext_0 = create_transaction(1, 0);
-        let ext_1 = create_transaction(1, 1);
+        let ext_0 = create_transaction(Policy::genesis_block_number() + 1, 0);
+        let ext_1 = create_transaction(Policy::genesis_block_number() + 1, 1);
         let hist_txs = vec![ext_0, ext_1];
 
-        // Add historic transactions to History Store.
-        history_store.add_to_history(&mut txn, 1, &hist_txs);
+        // Add historic transactions to History Stor  e.
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 1, &hist_txs);
 
         // Create historic transactions for block 2
-        let ext_0 = create_transaction(2, 0);
-        let ext_1 = create_transaction(2, 1);
-        let ext_2 = create_transaction(2, 2);
+        let ext_0 = create_transaction(Policy::genesis_block_number() + 2, 0);
+        let ext_1 = create_transaction(Policy::genesis_block_number() + 2, 1);
+        let ext_2 = create_transaction(Policy::genesis_block_number() + 2, 2);
         let hist_txs = vec![ext_0, ext_1, ext_2];
 
         // Add historic transactions to History Store.
-        history_store.add_to_history(&mut txn, 2, &hist_txs);
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 2, &hist_txs);
 
         // Create historic transactions for block 3
-        let ext_0 = create_transaction(3, 0);
-        let ext_1 = create_transaction(3, 1);
-        let ext_2 = create_transaction(3, 2);
-        let ext_3 = create_transaction(3, 3);
+        let ext_0 = create_transaction(Policy::genesis_block_number() + 3, 0);
+        let ext_1 = create_transaction(Policy::genesis_block_number() + 3, 1);
+        let ext_2 = create_transaction(Policy::genesis_block_number() + 3, 2);
+        let ext_3 = create_transaction(Policy::genesis_block_number() + 3, 3);
         let hist_txs = vec![ext_0, ext_1, ext_2, ext_3];
 
         // Add historic transactions to History Store.
-        history_store.add_to_history(&mut txn, 3, &hist_txs);
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 3, &hist_txs);
 
-        let size_1 = history_store.total_len_at_epoch(1, Some(&txn));
-        let size_2 = history_store.total_len_at_epoch(2, Some(&txn));
-        let size_3 = history_store.total_len_at_epoch(3, Some(&txn));
-
-        assert_eq!(size_1, 3);
-        assert_eq!(size_2, 4);
-        assert_eq!(size_3, 7);
-
-        let prev_root_1 = history_store.get_history_tree_root(1, Some(&txn)).unwrap();
-        let _prev_root_2 = history_store.get_history_tree_root(2, Some(&txn)).unwrap();
-        let prev_root_3 = history_store.get_history_tree_root(3, Some(&txn)).unwrap();
-
-        history_store.remove_block(&mut txn, 2);
-
-        let size_1 = history_store.total_len_at_epoch(1, Some(&txn));
-        let size_2 = history_store.total_len_at_epoch(2, Some(&txn));
-        let size_3 = history_store.total_len_at_epoch(3, Some(&txn));
+        let size_1 =
+            history_store.total_len_at_epoch(Policy::genesis_block_number() + 1, Some(&txn));
+        let size_2 =
+            history_store.total_len_at_epoch(Policy::genesis_block_number() + 2, Some(&txn));
+        let size_3 =
+            history_store.total_len_at_epoch(Policy::genesis_block_number() + 3, Some(&txn));
 
         assert_eq!(size_1, 3);
-        assert_eq!(size_2, 0);
-        assert_eq!(size_3, 7);
+        assert_eq!(size_2, 8);
+        assert_eq!(size_3, 16);
+
+        let prev_root_1 = history_store
+            .get_history_tree_root(Policy::genesis_block_number() + 1, Some(&txn))
+            .unwrap();
+        let prev_root_2 = history_store
+            .get_history_tree_root(Policy::genesis_block_number() + 2, Some(&txn))
+            .unwrap();
+        let _prev_root_3 = history_store
+            .get_history_tree_root(Policy::genesis_block_number() + 3, Some(&txn))
+            .unwrap();
+
+        history_store
+            .remove_block_light_history_store(&mut txn, Policy::genesis_block_number() + 3);
+
+        let size_1 =
+            history_store.total_len_at_epoch(Policy::genesis_block_number() + 1, Some(&txn));
+        let size_2 =
+            history_store.total_len_at_epoch(Policy::genesis_block_number() + 2, Some(&txn));
+        let size_3 =
+            history_store.total_len_at_epoch(Policy::genesis_block_number() + 3, Some(&txn));
+
+        assert_eq!(size_1, 3);
+        assert_eq!(size_2, 8);
+        assert_eq!(size_3, 0);
 
         let empty_root = Blake2bHash::empty(0);
-        let root_1 = history_store.get_history_tree_root(1, Some(&txn)).unwrap();
-        let root_2 = history_store.get_history_tree_root(2, Some(&txn)).unwrap();
-        let root_3 = history_store.get_history_tree_root(3, Some(&txn)).unwrap();
+        let root_1 = history_store
+            .get_history_tree_root(Policy::genesis_block_number() + 1, Some(&txn))
+            .unwrap();
+        let root_2 = history_store
+            .get_history_tree_root(Policy::genesis_block_number() + 2, Some(&txn))
+            .unwrap();
+        let root_3 = history_store
+            .get_history_tree_root(Policy::genesis_block_number() + 3, Some(&txn))
+            .unwrap();
 
         assert_eq!(prev_root_1, root_1);
-        assert_eq!(empty_root, root_2);
-        assert_eq!(prev_root_3, root_3);
+        assert_eq!(prev_root_2, root_2);
+        assert_eq!(empty_root, root_3);
     }
 
     fn create_transaction(block: u32, value: u64) -> HistoricTransaction {

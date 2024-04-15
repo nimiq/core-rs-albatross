@@ -1,4 +1,4 @@
-use nimiq_block::Block;
+use nimiq_block::{Block, MicroBlock};
 use nimiq_database::{TransactionProxy, WriteTransactionProxy};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
@@ -24,15 +24,20 @@ pub trait HistoryInterface {
     ) -> Option<(Blake2bHash, u64)>;
 
     /// Removes all transactions, from a given block number, from the history store.
-    fn remove_block(&self, txn: &mut WriteTransactionProxy, block_number: u32);
+    fn remove_block(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        block: &MicroBlock,
+        inherents: Vec<Inherent>,
+    ) -> Option<u64>;
 
     /// Removes the full history associated with a given epoch.
     fn remove_history(&self, txn: &mut WriteTransactionProxy, epoch_number: u32) -> Option<()>;
 
-    /// Obtains the current history root at the given epoch.
+    /// Obtains the current history root at the given block.
     fn get_history_tree_root(
         &self,
-        epoch_number: u32,
+        block_number: u32,
         txn_option: Option<&TransactionProxy>,
     ) -> Option<Blake2bHash>;
 
@@ -59,7 +64,7 @@ pub trait HistoryInterface {
     fn add_to_history(
         &self,
         txn: &mut WriteTransactionProxy,
-        epoch_number: u32,
+        block_number: u32,
         hist_txs: &[HistoricTransaction],
     ) -> Option<(Blake2bHash, u64)>;
 
@@ -71,6 +76,13 @@ pub trait HistoryInterface {
         epoch_number: u32,
         num_hist_txs: usize,
     ) -> Option<(Blake2bHash, u64)>;
+
+    fn tx_in_validity_window(
+        &self,
+        tx_hash: &Blake2bHash,
+        validity_window_start: u32,
+        txn_opt: Option<&TransactionProxy>,
+    ) -> bool;
 
     /// Gets an historic transaction given its transaction hash.
     fn get_hist_tx_by_hash(

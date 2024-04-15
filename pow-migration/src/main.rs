@@ -234,13 +234,14 @@ async fn main() {
         // Create channels in order to communicate with the PoW-to-PoS history migrator
         let (tx_candidate_block, rx_candidate_block) = mpsc::channel(16);
         let (tx_migration_completed, rx_migration_completed) =
-            watch::channel(get_history_store_height(env.clone()).await);
+            watch::channel(get_history_store_height(env.clone(), config.network_id).await);
 
         // Spawn PoW-to-PoS migrator as seperate task
         tokio::spawn(migrate_history(
             rx_candidate_block,
             tx_migration_completed,
             env.clone(),
+            config.network_id,
             pow_client.clone(),
             block_windows.block_confirmations,
         ));

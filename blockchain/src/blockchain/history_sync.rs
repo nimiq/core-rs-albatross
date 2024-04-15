@@ -1,5 +1,6 @@
-use std::error::Error;
+use std::{collections::HashMap, error::Error};
 
+use itertools::Itertools;
 use nimiq_account::{BlockLogger, BlockState};
 use nimiq_block::{Block, BlockError};
 use nimiq_blockchain_interface::{
@@ -96,24 +97,41 @@ impl Blockchain {
     /// Extends the current chain with transactions from the validity sync process
     pub fn extend_validity_sync(
         this: RwLockUpgradableReadGuard<Blockchain>,
-        epoch: u32,
         history: &[HistoricTransaction],
     ) -> Option<Blake2bHash> {
         let mut txn = this.write_transaction();
 
-        // Store the new historic transactions into the History tree.
-        if let Some((root, _)) = this.history_store.add_to_history(&mut txn, epoch, history) {
-            txn.commit();
+        let mut txns_per_block: HashMap<u32, Vec<HistoricTransaction>> = HashMap::new();
+
+        for txn in history {
+            let bn = txn.block_number;
+
+            if let Some(txns) = txns_per_block.get_mut(&bn) {
+                txns.push(txn.clone());
+            } else {
+                let new_txns = vec![txn.clone()];
+                txns_per_block.insert(bn, new_txns);
+            }
+        }
+
+        let mut root = Blake2bHash::default();
+        for bn in txns_per_block.keys().sorted() {
+            let hist_txs = txns_per_block.get(bn).unwrap();
+
+            root = this
+                .history_store
+                .add_to_history(&mut txn, *bn, hist_txs)
+                .expect("Pushing txns to the history store failed")
+                .0;
 
             debug!(
-                num_transactions = history.len(),
+                num_transactions = hist_txs.len(),
+                block = bn,
                 "Pushed txns to the history store during validity sync"
             );
-            Some(root)
-        } else {
-            txn.abort();
-            None
         }
+        txn.commit();
+        Some(root)
     }
 
     /// Extends the current chain with a macro block (election or checkpoint) during history sync.
@@ -347,7 +365,7 @@ impl Blockchain {
         // Store the new historic transactions into the History tree.
         this.history_store.add_to_history(
             &mut txn,
-            block.epoch_number(),
+            block.block_number(),
             &history[first_new_hist_tx..],
         );
 
@@ -370,7 +388,7 @@ impl Blockchain {
 
         let wanted_history_root = this
             .history_store
-            .get_history_tree_root(block.epoch_number(), Some(&txn))
+            .get_history_tree_root(block.block_number(), Some(&txn))
             .ok_or(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))?;
 
         if *block.history_root() != wanted_history_root {

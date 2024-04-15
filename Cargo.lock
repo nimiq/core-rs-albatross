@@ -3601,6 +3601,7 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "hex",
+ "itertools 0.10.5",
  "nimiq-account",
  "nimiq-block",
  "nimiq-blockchain-interface",

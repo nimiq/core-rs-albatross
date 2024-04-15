@@ -169,7 +169,7 @@ impl Blockchain {
         // Verify the history root when we have the full transaction history of the epoch.
         let real_history_root = self
             .history_store
-            .get_history_tree_root(block.epoch_number(), Some(txn))
+            .get_history_tree_root(block.block_number(), Some(txn))
             .ok_or_else(|| {
                 error!(
                     %block,

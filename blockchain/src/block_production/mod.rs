@@ -150,7 +150,7 @@ impl BlockProducer {
 
         let (history_root, _) = blockchain
             .history_store
-            .add_to_history(&mut txn, Policy::epoch_at(block_number), &hist_txs)
+            .add_to_history(&mut txn, block_number, &hist_txs)
             .expect("Failed to compute history root during block production.");
 
         // Not strictly necessary to drop the lock here, but sign as well as compress might be somewhat expensive
@@ -327,7 +327,7 @@ impl BlockProducer {
 
         macro_block.header.history_root = blockchain
             .history_store
-            .add_to_history(&mut txn, Policy::epoch_at(block_number), &hist_txs)
+            .add_to_history(&mut txn, block_number, &hist_txs)
             .expect("Failed to compute history root during block production.")
             .0;
 

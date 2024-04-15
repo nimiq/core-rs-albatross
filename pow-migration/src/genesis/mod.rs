@@ -55,7 +55,7 @@ pub async fn get_pos_genesis(
         "Building history tree. This may take some time"
     );
     let start = Instant::now();
-    let history_root = get_history_root(env)
+    let history_root = get_history_root(env, network_id)
         .await
         .map(|history_root| {
             let duration = start.elapsed();

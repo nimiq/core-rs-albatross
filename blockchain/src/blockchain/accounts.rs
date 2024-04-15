@@ -10,7 +10,6 @@ use nimiq_primitives::{
     trie::{error::IncompleteTrie, trie_diff::TrieDiff, trie_proof::TrieProof},
 };
 use nimiq_serde::Deserialize;
-use nimiq_transaction::historic_transaction::HistoricTransaction;
 use nimiq_trie::WriteTransactionProxy;
 
 use crate::Blockchain;
@@ -58,18 +57,9 @@ impl Blockchain {
                 // as rebranching across this block is not possible.
                 self.chain_store.clear_revert_infos(txn.raw());
 
-                // Store the transactions and the inherents into the History tree.
-                let hist_txs = HistoricTransaction::from(
-                    self.network_id,
-                    macro_block.header.block_number,
-                    macro_block.header.timestamp,
-                    vec![],
-                    inherents,
-                    vec![],
-                );
                 let total_tx_size = self
                     .history_store
-                    .add_to_history(txn.raw(), macro_block.epoch_number(), &hist_txs)
+                    .add_block(txn.raw(), block, inherents)
                     .expect("Failed to store history")
                     .1;
 
@@ -136,21 +126,9 @@ impl Blockchain {
                     &revert_info,
                 );
 
-                // Store the transactions and the inherents into the History tree.
-                let hist_txs = HistoricTransaction::from(
-                    self.network_id,
-                    micro_block.header.block_number,
-                    micro_block.header.timestamp,
-                    body.transactions.clone(),
-                    inherents,
-                    body.equivocation_proofs
-                        .iter()
-                        .map(|proof| proof.locator())
-                        .collect(),
-                );
                 let total_tx_size = self
                     .history_store
-                    .add_to_history(txn.raw(), micro_block.epoch_number(), &hist_txs)
+                    .add_block(txn.raw(), block, inherents)
                     .expect("Failed to store history")
                     .1;
 
@@ -221,20 +199,10 @@ impl Blockchain {
             panic!("Failed to revert {block} - {e:?}");
         }
 
-        // Remove the transactions from the History tree. For this you only need to calculate the
-        // number of transactions that you want to remove.
-        let num_txs = HistoricTransaction::count(
-            body.transactions.len(),
-            &inherents,
-            body.equivocation_proofs
-                .iter()
-                .map(|proof| proof.locator())
-                .collect(),
-        );
-        let (_, total_size) = self
+        let total_size = self
             .history_store
-            .remove_partial_history(txn.raw(), block.epoch_number(), num_txs)
-            .expect("Failed to remove partial history");
+            .remove_block(txn.raw(), block, inherents)
+            .expect("Failed to remove block from history");
 
         Ok(total_size)
     }
