@@ -14,7 +14,10 @@ use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_keys::{Address, PublicKey};
 use nimiq_network_interface::network::Topic;
 use nimiq_primitives::{
-    account::AccountType, coin::Coin, networks::NetworkId, policy::Policy,
+    account::AccountType,
+    coin::{Coin, CoinBe},
+    networks::NetworkId,
+    policy::Policy,
     transaction::TransactionError,
 };
 use nimiq_serde::{Deserialize, Serialize};
@@ -588,8 +591,8 @@ impl SerializeContent for Transaction {
         self.sender_type.serialize_to_writer(writer)?;
         self.recipient.serialize_to_writer(writer)?;
         self.recipient_type.serialize_to_writer(writer)?;
-        self.value.serialize_to_writer(writer)?;
-        self.fee.serialize_to_writer(writer)?;
+        CoinBe::from(self.value).serialize_to_writer(writer)?;
+        CoinBe::from(self.fee).serialize_to_writer(writer)?;
         writer.write_all(&self.validity_start_height.to_be_bytes())?;
         self.network_id.serialize_to_writer(writer)?;
         self.flags.serialize_to_writer(writer)?;
