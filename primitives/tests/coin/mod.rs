@@ -20,13 +20,13 @@ impl NonFailingTest {
 }
 
 static NON_FAILING_TESTS: [NonFailingTest; 7] = [
-    NonFailingTest::new("0000000000000000", 0u64),
-    NonFailingTest::new("0000000000000001", 1u64),
-    NonFailingTest::new("0000000000000005", 5u64),
-    NonFailingTest::new("0000000100000005", 4294967301),
-    NonFailingTest::new("000000000001e240", 123456u64),
-    NonFailingTest::new("0000001234561234", 78187467316u64),
-    NonFailingTest::new("001fffffffffffff", Coin::MAX_SAFE_VALUE),
+    NonFailingTest::new("00", 0u64),
+    NonFailingTest::new("01", 1u64),
+    NonFailingTest::new("05", 5u64),
+    NonFailingTest::new("8580808010", 4294967301),
+    NonFailingTest::new("c0c407", 123456u64),
+    NonFailingTest::new("b4a4d8a2a302", 78187467316u64),
+    NonFailingTest::new("ffffffffffffff0f", Coin::MAX_SAFE_VALUE),
 ];
 
 #[test]
@@ -45,7 +45,7 @@ fn test_non_failing() {
 fn test_deserialize_out_of_bounds() {
     use nimiq_serde::DeserializeError;
 
-    match Coin::deserialize_from_vec(&hex::decode("0020000000000000").unwrap()) {
+    match Coin::deserialize_from_vec(&hex::decode("8080808080808010").unwrap()) {
         Ok(coin) => panic!("Instead of failing, got {}", coin),
         Err(err) => assert_eq!(err, DeserializeError::serde_custom()),
     }

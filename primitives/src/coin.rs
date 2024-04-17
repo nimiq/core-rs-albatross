@@ -259,7 +259,7 @@ impl FromStr for Coin {
 
 #[cfg(feature = "serde-derive")]
 mod serialization {
-    use nimiq_serde::SerializedSize;
+    use nimiq_serde::SerializedMaxSize;
     use serde::{
         de::{Error as DeError, Unexpected},
         ser::Error as SerError,
@@ -268,8 +268,10 @@ mod serialization {
 
     use super::*;
 
-    impl SerializedSize for Coin {
-        const SIZE: usize = 8;
+    impl SerializedMaxSize for Coin {
+        // u64::MAX takes up 10 bytes, but Coin is limited to Javascript's Number.MAX_SAFE_INTEGER,
+        // which only takes up 8 bytes.
+        const MAX_SIZE: usize = 8;
     }
 
     impl Serialize for Coin {
@@ -278,11 +280,7 @@ mod serialization {
             S: Serializer,
         {
             if self.0 <= Coin::MAX_SAFE_VALUE {
-                if serializer.is_human_readable() {
-                    self.0.serialize(serializer)
-                } else {
-                    nimiq_serde::fixint::be::serialize(&self.0, serializer)
-                }
+                self.0.serialize(serializer)
             } else {
                 Err(S::Error::custom("Overflow detected for a Coin value"))
             }
@@ -294,11 +292,7 @@ mod serialization {
         where
             D: Deserializer<'de>,
         {
-            let value: u64 = if deserializer.is_human_readable() {
-                Deserialize::deserialize(deserializer)?
-            } else {
-                nimiq_serde::fixint::be::deserialize(deserializer)?
-            };
+            let value: u64 = Deserialize::deserialize(deserializer)?;
             Coin::try_from(value).map_err(|_| {
                 D::Error::invalid_value(
                     Unexpected::Unsigned(value),
