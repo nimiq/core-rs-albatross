@@ -6,7 +6,7 @@ use std::{
 
 use clear_on_drop::clear::Clear;
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_hash::argon2kdf::{compute_argon2_kdf, Argon2Error};
+use nimiq_hash::argon2kdf::{compute_argon2_kdf, Argon2Error, Argon2Variant};
 use nimiq_serde::{Deserialize, Serialize};
 use rand::{rngs::OsRng, RngCore};
 
@@ -81,8 +81,9 @@ impl<T: Clear + Deserialize + Serialize> Unlocked<T> {
         password: &[u8],
         iterations: u32,
         salt_length: usize,
+        algorithm: Algorithm,
     ) -> Result<Self, Argon2Error> {
-        let locked = Locked::create(&secret, password, iterations, salt_length)?;
+        let locked = Locked::create(&secret, password, iterations, salt_length, algorithm)?;
         Ok(Unlocked {
             data: ClearOnDrop::new(secret),
             lock: locked,
@@ -96,6 +97,7 @@ impl<T: Clear + Deserialize + Serialize> Unlocked<T> {
             password,
             OtpLock::<T>::DEFAULT_ITERATIONS,
             OtpLock::<T>::DEFAULT_SALT_LENGTH,
+            Algorithm::default(),
         )
     }
 
@@ -130,12 +132,43 @@ impl<T: Clear + Deserialize + Serialize> Deref for Unlocked<T> {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum Algorithm {
+    Argon2d = 0,
+
+    /// With side-channel protection.
+    Argon2id = 2,
+}
+
+impl Algorithm {
+    pub fn backwards_compatible_default() -> Algorithm {
+        Self::Argon2d
+    }
+}
+
+impl From<Algorithm> for Argon2Variant {
+    fn from(value: Algorithm) -> Self {
+        match value {
+            Algorithm::Argon2d => Argon2Variant::Argon2d,
+            Algorithm::Argon2id => Argon2Variant::Argon2id,
+        }
+    }
+}
+
+impl Default for Algorithm {
+    fn default() -> Self {
+        Self::Argon2id
+    }
+}
+
 // Locked container
 #[derive(Serialize, Deserialize)]
 pub struct Locked<T: Clear + Deserialize + Serialize> {
     lock: Vec<u8>,
     salt: Vec<u8>,
     iterations: u32,
+    #[serde(default = "Algorithm::backwards_compatible_default")]
+    algorithm: Algorithm,
     phantom: PhantomData<T>,
 }
 
@@ -146,8 +179,9 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
         password: &[u8],
         iterations: u32,
         salt_length: usize,
+        algorithm: Algorithm,
     ) -> Result<Self, Argon2Error> {
-        let result = Locked::create(&secret, password, iterations, salt_length)?;
+        let result = Locked::create(&secret, password, iterations, salt_length, algorithm)?;
 
         // Remove secret from memory.
         secret.clear();
@@ -162,13 +196,21 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
             password,
             OtpLock::<T>::DEFAULT_ITERATIONS,
             OtpLock::<T>::DEFAULT_SALT_LENGTH,
+            Algorithm::default(),
         )
     }
 
     /// Calling code should make sure to clear the password from memory after use.
     /// The integrity of the output value is not checked.
     pub fn unlock_unchecked(self, password: &[u8]) -> Result<Unlocked<T>, Locked<T>> {
-        let key_opt = Self::otp(&self.lock, password, self.iterations, &self.salt).ok();
+        let key_opt = Self::otp(
+            &self.lock,
+            password,
+            self.iterations,
+            &self.salt,
+            self.algorithm,
+        )
+        .ok();
         let mut key = if let Some(key_content) = key_opt {
             key_content
         } else {
@@ -197,8 +239,10 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
         password: &[u8],
         iterations: u32,
         salt: &[u8],
+        algorithm: Algorithm,
     ) -> Result<Vec<u8>, Argon2Error> {
-        let mut key = compute_argon2_kdf(password, salt, iterations, secret.len())?;
+        let mut key =
+            compute_argon2_kdf(password, salt, iterations, secret.len(), algorithm.into())?;
         assert_eq!(key.len(), secret.len());
 
         for (key_byte, secret_byte) in key.iter_mut().zip(secret.iter()) {
@@ -213,9 +257,10 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
         password: &[u8],
         iterations: u32,
         salt: Vec<u8>,
+        algorithm: Algorithm,
     ) -> Result<Self, Argon2Error> {
         let mut data = secret.serialize_to_vec();
-        let lock = Self::otp(&data, password, iterations, &salt)?;
+        let lock = Self::otp(&data, password, iterations, &salt, algorithm)?;
 
         // Always overwrite unencrypted vector.
         for byte in data.iter_mut() {
@@ -226,6 +271,7 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
             lock,
             salt,
             iterations,
+            algorithm,
             phantom: PhantomData,
         })
     }
@@ -235,10 +281,11 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
         password: &[u8],
         iterations: u32,
         salt_length: usize,
+        algorithm: Algorithm,
     ) -> Result<Self, Argon2Error> {
         let mut salt = vec![0; salt_length];
         OsRng.fill_bytes(salt.as_mut_slice());
-        Self::lock(secret, password, iterations, salt)
+        Self::lock(secret, password, iterations, salt, algorithm)
     }
 
     pub fn into_otp_lock(self) -> OtpLock<T> {
@@ -301,12 +348,14 @@ impl<T: Clear + Deserialize + Serialize> OtpLock<T> {
         password: &[u8],
         iterations: u32,
         salt_length: usize,
+        algorithm: Algorithm,
     ) -> Result<Self, Argon2Error> {
         Ok(OtpLock::Unlocked(Unlocked::new(
             secret,
             password,
             iterations,
             salt_length,
+            algorithm,
         )?))
     }
 
@@ -317,6 +366,7 @@ impl<T: Clear + Deserialize + Serialize> OtpLock<T> {
             password,
             Self::DEFAULT_ITERATIONS,
             Self::DEFAULT_SALT_LENGTH,
+            Algorithm::default(),
         )
     }
 
@@ -326,12 +376,14 @@ impl<T: Clear + Deserialize + Serialize> OtpLock<T> {
         password: &[u8],
         iterations: u32,
         salt_length: usize,
+        algorithm: Algorithm,
     ) -> Result<Self, Argon2Error> {
         Ok(OtpLock::Locked(Locked::new(
             secret,
             password,
             iterations,
             salt_length,
+            algorithm,
         )?))
     }
 
@@ -342,6 +394,7 @@ impl<T: Clear + Deserialize + Serialize> OtpLock<T> {
             password,
             Self::DEFAULT_ITERATIONS,
             Self::DEFAULT_SALT_LENGTH,
+            Algorithm::default(),
         )
     }
 

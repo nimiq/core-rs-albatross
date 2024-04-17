@@ -101,7 +101,13 @@ fn it_can_compute_argon2_kdf() {
     let password = "test";
     let salt = "nimiqrocks!";
 
-    let res = argon2kdf::compute_argon2_kdf(password.as_bytes(), salt.as_bytes(), 1, 32);
+    let res = argon2kdf::compute_argon2_kdf(
+        password.as_bytes(),
+        salt.as_bytes(),
+        1,
+        32,
+        argon2::Variant::Argon2d,
+    );
     assert_eq!(
         res.unwrap(),
         hex::decode("8c259fdcc2ad6799df728c11e895a3369e9dbae6a3166ebc3b353399fc565524").unwrap()
