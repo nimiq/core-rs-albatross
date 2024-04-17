@@ -8,7 +8,7 @@ use nimiq_database::traits::Database;
 use nimiq_keys::{Address, KeyPair};
 use nimiq_primitives::{
     account::{AccountError, AccountType},
-    coin::Coin,
+    coin::{Coin, CoinBe},
     networks::NetworkId,
     transaction::TransactionError,
 };
@@ -18,7 +18,7 @@ use nimiq_test_utils::{accounts_revert::TestCommitRevert, test_rng::test_rng};
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_utils::key_rng::SecureGenerate;
 
-const CONTRACT: &str = "00002fbf9bd9c800fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a220000000000000001000000000003f480000002632e314a0000002fbf9bd9c800";
+const CONTRACT: &str = "8090e7def9f70bfd34ab7265a0e48c454ccbf4c9c61dfdf68f9a220000000000000001000000000003f4808094c5f1b24c8090e7def9f70b";
 
 fn init_tree() -> (TestCommitRevert, VestingContract, KeyPair, KeyPair) {
     let mut rng = test_rng(true);
@@ -172,7 +172,7 @@ fn it_can_create_contract_from_transaction() {
     Serialize::serialize_to_writer(&owner, &mut data);
     Serialize::serialize_to_writer(&0u64.to_be_bytes(), &mut data);
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
-    Serialize::serialize_to_writer(&Coin::try_from(50).unwrap(), &mut data);
+    Serialize::serialize_to_writer(&CoinBe::from(Coin::try_from(50).unwrap()), &mut data);
     tx.recipient_data = data;
     tx.recipient = tx.contract_creation_address();
 
@@ -206,8 +206,8 @@ fn it_can_create_contract_from_transaction() {
     Serialize::serialize_to_writer(&owner, &mut data);
     Serialize::serialize_to_writer(&0u64.to_be_bytes(), &mut data);
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
-    Serialize::serialize_to_writer(&Coin::try_from(50).unwrap(), &mut data);
-    Serialize::serialize_to_writer(&Coin::try_from(150).unwrap(), &mut data);
+    Serialize::serialize_to_writer(&CoinBe::from(Coin::try_from(50).unwrap()), &mut data);
+    Serialize::serialize_to_writer(&CoinBe::from(Coin::try_from(150).unwrap()), &mut data);
     tx.recipient_data = data;
     tx.recipient = tx.contract_creation_address();
 

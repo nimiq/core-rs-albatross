@@ -1,8 +1,8 @@
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
-use nimiq_serde::{Deserialize, Serialize, SerializedSize};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedSize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
 pub struct RewardTransaction {
     /// The validator address of the rewarded validator.
     pub validator_address: Address,
