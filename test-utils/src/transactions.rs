@@ -567,8 +567,8 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                     owner: Address(self.rng.gen()),
                     start_time: 0,
                     time_step: 1,
-                    step_amount: balance,
-                    total_amount: balance,
+                    step_amount: balance.into(),
+                    total_amount: balance.into(),
                 },
             },
             IncomingType::CreateHTLC => IncomingAccountData::Htlc {
