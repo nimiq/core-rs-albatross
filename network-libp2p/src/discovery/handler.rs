@@ -379,14 +379,6 @@ impl ConnectionHandler for Handler {
                                         );
                                     }
 
-                                    let mut peer_contact_book = self.peer_contact_book.write();
-
-                                    // Update our own peer contact given the observed addresses we received
-                                    peer_contact_book.add_own_addresses(
-                                        vec![observed_address.clone()],
-                                        &self.keypair,
-                                    );
-
                                     // Send the HandshakeAck
                                     let response_signature =
                                         self.keypair.tagged_sign(&challenge_nonce);
@@ -394,6 +386,8 @@ impl ConnectionHandler for Handler {
                                     // Remember peer's filter
                                     self.peer_list_limit = Some(limit);
                                     self.services_filter = services;
+
+                                    let peer_contact_book = self.peer_contact_book.read();
 
                                     let msg = DiscoveryMessage::HandshakeAck {
                                         peer_contact: peer_contact_book
