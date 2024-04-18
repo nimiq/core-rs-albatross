@@ -37,8 +37,8 @@ impl TaggedSignable for ChallengeNonce {
 #[repr(u8)]
 pub enum DiscoveryMessage {
     Handshake {
-        /// The addresses of the receiver as observed by the sender.
-        observed_addresses: Vec<Multiaddr>,
+        /// The address of the receiver as observed by the sender.
+        observed_address: Multiaddr,
 
         /// The challenge that the receiver must use for the response in `HandshakeAck`.
         challenge_nonce: ChallengeNonce,

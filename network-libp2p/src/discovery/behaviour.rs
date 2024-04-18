@@ -11,8 +11,7 @@ use libp2p::{
     identity::Keypair,
     swarm::{
         behaviour::{ConnectionClosed, ConnectionEstablished},
-        CloseConnection, ConnectionDenied, ConnectionId, FromSwarm, NetworkBehaviour,
-        NotifyHandler, ToSwarm,
+        CloseConnection, ConnectionDenied, ConnectionId, FromSwarm, NetworkBehaviour, ToSwarm,
     },
     Multiaddr, PeerId,
 };
@@ -22,7 +21,7 @@ use nimiq_time::{interval, Interval};
 use parking_lot::RwLock;
 
 use super::{
-    handler::{Handler, HandlerInEvent, HandlerOutEvent},
+    handler::{Handler, HandlerOutEvent},
     peer_contacts::{PeerContact, PeerContactBook},
 };
 
@@ -87,7 +86,7 @@ pub enum Event {
     Update,
 }
 
-type DiscoveryToSwarm = ToSwarm<Event, HandlerInEvent>;
+type DiscoveryToSwarm = ToSwarm<Event, ()>;
 
 /// Network behaviour for peer exchange.
 ///
@@ -170,13 +169,14 @@ impl NetworkBehaviour for Behaviour {
         _connection_id: ConnectionId,
         peer: PeerId,
         _local_addr: &Multiaddr,
-        _remote_addr: &Multiaddr,
+        remote_addr: &Multiaddr,
     ) -> Result<Handler, ConnectionDenied> {
         Ok(Handler::new(
             peer,
             self.config.clone(),
             self.keypair.clone(),
             self.peer_contact_book(),
+            remote_addr.clone(),
         ))
     }
 
@@ -184,7 +184,7 @@ impl NetworkBehaviour for Behaviour {
         &mut self,
         _connection_id: ConnectionId,
         peer: PeerId,
-        _addr: &Multiaddr,
+        addr: &Multiaddr,
         _role_override: Endpoint,
     ) -> Result<Handler, ConnectionDenied> {
         Ok(Handler::new(
@@ -192,6 +192,7 @@ impl NetworkBehaviour for Behaviour {
             self.config.clone(),
             self.keypair.clone(),
             self.peer_contact_book(),
+            addr.clone(),
         ))
     }
 
@@ -254,28 +255,13 @@ impl NetworkBehaviour for Behaviour {
                 failed_addresses,
                 other_established,
             }) => {
-                let peer_address = endpoint.get_remote_address().clone();
-
-                // Signal to the handler the address that got us a connection
-                self.events.push_back(ToSwarm::NotifyHandler {
-                    peer_id,
-                    handler: NotifyHandler::One(connection_id),
-                    event: HandlerInEvent::ConnectionAddress(peer_address.clone()),
-                });
-
                 if other_established == 0 {
                     trace!(%peer_id, ?connection_id, ?endpoint, "Behaviour::inject_connection_established:");
 
                     // This is the first connection to this peer
                     self.connected_peers.insert(peer_id);
 
-                    // Report the observed addresses of the endpoint if a peer successfully connected to us
                     if endpoint.is_listener() {
-                        self.events.push_back(ToSwarm::NotifyHandler {
-                            peer_id,
-                            handler: NotifyHandler::One(connection_id),
-                            event: HandlerInEvent::ObservedAddress(peer_address),
-                        });
                         // Peer failed to connect with some of our own addresses, remove them from our own addresses
                         if !failed_addresses.is_empty() {
                             debug!(
@@ -318,11 +304,9 @@ impl NetworkBehaviour for Behaviour {
                         }));
                 }
             }
-            HandlerOutEvent::ObservedAddresses { observed_addresses } => {
-                for address in observed_addresses {
-                    self.events
-                        .push_back(ToSwarm::NewExternalAddrCandidate(address));
-                }
+            HandlerOutEvent::ObservedAddress { observed_address } => {
+                self.events
+                    .push_back(ToSwarm::NewExternalAddrCandidate(observed_address));
             }
             HandlerOutEvent::Update => self.events.push_back(ToSwarm::GenerateEvent(Event::Update)),
             HandlerOutEvent::Error(_) => self.events.push_back(ToSwarm::CloseConnection {

@@ -33,19 +33,11 @@ use super::{
     protocol::{ChallengeNonce, DiscoveryMessage, DiscoveryProtocol},
 };
 
-#[derive(Clone, Debug)]
-pub enum HandlerInEvent {
-    /// Peer address that got us a connection
-    ConnectionAddress(Multiaddr),
-    /// Address seen from peer
-    ObservedAddress(Multiaddr),
-}
-
 #[derive(Debug)]
 pub enum HandlerOutEvent {
     /// List of observed addresses for the peer
-    ObservedAddresses {
-        observed_addresses: Vec<Multiaddr>,
+    ObservedAddress {
+        observed_address: Multiaddr,
     },
     /// A peer discovery exchange protocol with a peer has finalized
     PeerExchangeEstablished {
@@ -135,10 +127,7 @@ pub struct Handler {
     peer_contact_book: Arc<RwLock<PeerContactBook>>,
 
     /// The peer address we're connected to (address that got us connected).
-    peer_address: Option<Multiaddr>,
-
-    /// The addresses which we observed for the other peer.
-    observed_addresses: Vec<Multiaddr>,
+    peer_address: Multiaddr,
 
     /// The challenge nonce we send to this peer.
     challenge_nonce: ChallengeNonce,
@@ -174,14 +163,14 @@ impl Handler {
         config: Config,
         keypair: Keypair,
         peer_contact_book: Arc<RwLock<PeerContactBook>>,
+        peer_address: Multiaddr,
     ) -> Self {
         Self {
             peer_id,
             config,
             keypair,
             peer_contact_book,
-            peer_address: None,
-            observed_addresses: vec![],
+            peer_address,
             challenge_nonce: ChallengeNonce::generate(),
             state: HandlerState::Init,
             services_filter: Services::empty(),
@@ -230,11 +219,10 @@ impl Handler {
     /// Checks if the handler is ready to start the discovery protocol.
     /// This basically checks that:
     /// - Both inbound and outbound are available
-    /// - The connection peer address is already resolved.
     /// If these conditions are met, it transitions to sending a handshake and waking
     /// the waker.
     fn check_initialized(&mut self) {
-        if self.inbound.is_some() && self.outbound.is_some() && self.peer_address.is_some() {
+        if self.inbound.is_some() && self.outbound.is_some() {
             self.state = HandlerState::SendHandshake;
 
             self.waker
@@ -246,7 +234,7 @@ impl Handler {
 }
 
 impl ConnectionHandler for Handler {
-    type FromBehaviour = HandlerInEvent;
+    type FromBehaviour = ();
     type ToBehaviour = HandlerOutEvent;
     type InboundProtocol = DiscoveryProtocol;
     type OutboundProtocol = DiscoveryProtocol;
@@ -295,18 +283,7 @@ impl ConnectionHandler for Handler {
         }
     }
 
-    fn on_behaviour_event(&mut self, event: HandlerInEvent) {
-        match event {
-            HandlerInEvent::ConnectionAddress(address) => {
-                self.peer_address = Some(address);
-                self.check_initialized();
-            }
-            HandlerInEvent::ObservedAddress(address) => {
-                // We only use this during handshake and are not waiting on it, so we don't need to wake anything.
-                self.observed_addresses.push(address);
-            }
-        }
-    }
+    fn on_behaviour_event(&mut self, _event: ()) {}
 
     fn connection_keep_alive(&self) -> bool {
         self.config.keep_alive
@@ -360,7 +337,7 @@ impl ConnectionHandler for Handler {
                     // Send out a handshake message.
 
                     let msg = DiscoveryMessage::Handshake {
-                        observed_addresses: self.observed_addresses.clone(),
+                        observed_address: self.peer_address.clone(),
                         challenge_nonce: self.challenge_nonce.clone(),
                         genesis_hash: self.config.genesis_hash.clone(),
                         limit: self.config.update_limit,
@@ -382,7 +359,7 @@ impl ConnectionHandler for Handler {
                         Poll::Ready(Some(Ok(message))) => {
                             match message {
                                 DiscoveryMessage::Handshake {
-                                    observed_addresses,
+                                    observed_address,
                                     challenge_nonce,
                                     genesis_hash,
                                     limit,
@@ -406,7 +383,7 @@ impl ConnectionHandler for Handler {
 
                                     // Update our own peer contact given the observed addresses we received
                                     peer_contact_book.add_own_addresses(
-                                        observed_addresses.clone(),
+                                        vec![observed_address.clone()],
                                         &self.keypair,
                                     );
 
@@ -446,7 +423,7 @@ impl ConnectionHandler for Handler {
                                     self.state = HandlerState::ReceiveHandshakeAck;
 
                                     return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
-                                        HandlerOutEvent::ObservedAddresses { observed_addresses },
+                                        HandlerOutEvent::ObservedAddress { observed_address },
                                     ));
                                 }
 
@@ -554,10 +531,7 @@ impl ConnectionHandler for Handler {
                                     return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
                                         HandlerOutEvent::PeerExchangeEstablished {
                                             peer_contact,
-                                            peer_address: self
-                                                .peer_address
-                                                .clone()
-                                                .expect("Address should have been resolved"),
+                                            peer_address: self.peer_address.clone(),
                                         },
                                     ));
                                 }
