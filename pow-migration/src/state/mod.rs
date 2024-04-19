@@ -20,8 +20,12 @@ use nimiq_transaction::account::htlc_contract::{AnyHash, AnyHash32, AnyHash64};
 
 use crate::state::types::{Error, GenesisAccounts, GenesisValidator};
 
-// POW estimated block time in milliseconds
+// PoW estimated block time in milliseconds
 const POW_BLOCK_TIME_MS: u64 = 60 * 1000; // 1 min
+
+// PoW maximum amount of snapshots. This is a constant that needs to be set in the PoW client
+// such that we can get accounts snapshots of blocks within [head - `POW_MAX_SNAPSHOTS`, head].
+const POW_MAX_SNAPSHOTS: u64 = 2000;
 
 fn pos_basic_account_from_account(pow_account: &PoWBasicAccount) -> Result<GenesisAccount, Error> {
     let address = Address::from_user_friendly_address(&pow_account.address)?;
@@ -111,6 +115,18 @@ fn pos_anyhash_from_hash_root(hash_root: &str, algorithm: u8) -> Result<AnyHash,
     }
 }
 
+/// Sets up the POW RPC server for migrating accounts
+pub async fn setup_pow_rpc_server(client: &Client) -> Result<(), Error> {
+    let _ = client
+        .set_constant("Policy.NUM_SNAPSHOTS_MAX", POW_MAX_SNAPSHOTS)
+        .await
+        .map_err(|e| {
+            log::error!("Could not set `Policy.NUM_SNAPSHOTS_MAX` constant. Check your client or try updating it.");
+            e
+        })?;
+    Ok(())
+}
+
 /// Gets the set of the Genesis Accounts by taking a snapshot of the accounts in
 /// a specific block number defined by `cutting_block`.
 pub async fn get_accounts(
@@ -125,6 +141,15 @@ pub async fn get_accounts(
         htlc_accounts: vec![],
     };
     let mut start_prefix = "".to_string();
+
+    // Check that the PoW client is already set up
+    if client.get_constant("Policy.NUM_SNAPSHOTS_MAX").await? != POW_MAX_SNAPSHOTS {
+        log::error!(
+            "RPC client is not set up for accounts migration. Call `setup_pow_rpc_server` first"
+        );
+        return Err(Error::RPCServerNotReady);
+    }
+
     loop {
         let chunk = client
             .get_accounts_tree_chunk(&cutting_block.hash, &start_prefix)

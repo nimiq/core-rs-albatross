@@ -25,6 +25,9 @@ pub enum Error {
     /// Invalid Genesis timestamp
     #[error("Invalid genesis timestamp: {0}")]
     InvalidTimestamp(u64),
+    /// RPC server not ready
+    #[error("RPC server is not ready")]
+    RPCServerNotReady,
 }
 
 /// Genesis accounts for the genesis state

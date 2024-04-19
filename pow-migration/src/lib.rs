@@ -22,7 +22,7 @@ use crate::{
         check_validators_ready, generate_ready_tx, get_ready_txns, send_tx,
         types::ValidatorsReadiness,
     },
-    state::{get_stakers, get_validators},
+    state::{get_stakers, get_validators, setup_pow_rpc_server},
 };
 
 static TESTNET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
@@ -150,7 +150,10 @@ pub async fn migrate(
     validator_address: &Address,
     network_id: NetworkId,
 ) -> Result<Option<GenesisConfig>, Error> {
-    // First we obtain the list of registered validators
+    // First set up the PoW client for accounts migration
+    setup_pow_rpc_server(pow_client).await?;
+
+    // Now we obtain the list of registered validators
     let registered_validators = get_validators(
         pow_client,
         block_windows.registration_start..block_windows.registration_end,
