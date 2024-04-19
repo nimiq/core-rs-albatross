@@ -5,7 +5,8 @@ use std::{
     time::Duration,
 };
 
-use futures::{Sink, SinkExt, StreamExt};
+use futures::{FutureExt, Sink, SinkExt, StreamExt};
+use futures_timer::Delay;
 use instant::Instant;
 use libp2p::{
     identity::Keypair,
@@ -62,6 +63,9 @@ pub enum Error {
         state: HandlerState,
         message: DiscoveryMessage,
     },
+
+    #[error("Timeout reached for {state:?}: peer might not be responding")]
+    StateTransitionTimeout { state: HandlerState },
 
     #[error("Mismatch for genesis hash: Expected {expected}, but received {received}")]
     GenesisHashMismatch {
@@ -135,6 +139,9 @@ pub struct Handler {
     /// Connection state
     state: HandlerState,
 
+    /// Future that fires on a state change timeout
+    state_timeout: Option<Delay>,
+
     /// Services filter sent to us by this peer.
     services_filter: Services,
 
@@ -158,6 +165,7 @@ pub struct Handler {
 }
 
 impl Handler {
+    const STATE_TRANSITION_TIMEOUT: Duration = Duration::from_millis(3000);
     pub fn new(
         peer_id: PeerId,
         config: Config,
@@ -173,6 +181,7 @@ impl Handler {
             peer_address,
             challenge_nonce: ChallengeNonce::generate(),
             state: HandlerState::Init,
+            state_timeout: None,
             services_filter: Services::empty(),
             peer_list_limit: None,
             periodic_update_interval: None,
@@ -224,6 +233,7 @@ impl Handler {
     fn check_initialized(&mut self) {
         if self.inbound.is_some() && self.outbound.is_some() {
             self.state = HandlerState::SendHandshake;
+            self.state_timeout = Some(Delay::new(Self::STATE_TRANSITION_TIMEOUT));
 
             self.waker
                 .take()
@@ -294,6 +304,15 @@ impl ConnectionHandler for Handler {
         cx: &mut Context,
     ) -> Poll<ConnectionHandlerEvent<Self::OutboundProtocol, (), HandlerOutEvent>> {
         loop {
+            // Check if we hit the state transition timeout
+            if let Some(ref mut state_timeout) = self.state_timeout {
+                if state_timeout.poll_unpin(cx).is_ready() {
+                    return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
+                        HandlerOutEvent::Error(Error::StateTransitionTimeout { state: self.state }),
+                    ));
+                }
+            }
+
             // Send message
             // This should be done first, so we can flush the outbound sink's buffer.
             if let Some(outbound) = self.outbound.as_mut() {
@@ -317,6 +336,7 @@ impl ConnectionHandler for Handler {
                 HandlerState::Init => {
                     // Request outbound substream
                     self.state = HandlerState::OpenSubstream;
+                    self.state_timeout = Some(Delay::new(Self::STATE_TRANSITION_TIMEOUT));
 
                     return Poll::Ready(ConnectionHandlerEvent::OutboundSubstreamRequest {
                         protocol: SubstreamProtocol::new(DiscoveryProtocol, ()),
@@ -351,6 +371,7 @@ impl ConnectionHandler for Handler {
                     }
 
                     self.state = HandlerState::ReceiveHandshake;
+                    self.state_timeout = Some(Delay::new(Self::STATE_TRANSITION_TIMEOUT));
                 }
 
                 HandlerState::ReceiveHandshake => {
@@ -415,6 +436,8 @@ impl ConnectionHandler for Handler {
                                     }
 
                                     self.state = HandlerState::ReceiveHandshakeAck;
+                                    self.state_timeout =
+                                        Some(Delay::new(Self::STATE_TRANSITION_TIMEOUT));
 
                                     return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
                                         HandlerOutEvent::ObservedAddress { observed_address },
@@ -520,6 +543,7 @@ impl ConnectionHandler for Handler {
 
                                     // Switch to established state
                                     self.state = HandlerState::Established;
+                                    self.state_timeout = None;
 
                                     // Return an event that we established PEX with a new peer.
                                     return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
