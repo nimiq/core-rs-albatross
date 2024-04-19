@@ -145,10 +145,11 @@ pub fn get_block_windows(network_id: NetworkId) -> Result<&'static BlockWindows,
 pub async fn migrate(
     pow_client: &Client,
     block_windows: &BlockWindows,
+    candidate_block: u32,
     env: DatabaseProxy,
     validator_address: &Address,
     network_id: NetworkId,
-) -> Result<GenesisConfig, Error> {
+) -> Result<Option<GenesisConfig>, Error> {
     // First we obtain the list of registered validators
     let registered_validators = get_validators(
         pow_client,
@@ -222,27 +223,65 @@ pub async fn migrate(
     }
 
     let mut reported_ready = false;
-    let mut next_election_block;
-    let mut previous_election_block;
+    let genesis_config;
+
     loop {
         let current_height = pow_client.block_number().await.unwrap();
         log::info!(current_height);
 
         // We are past the election candidate, so we are now in one of the activation windows
-        if current_height > block_windows.election_candidate {
-            // First we calculate how many blocks past the candidate we are currently at
-            let diff = current_height - block_windows.election_candidate;
-            // TODO: We need to iterate all the previous readiness windows to know if the
-            // readiness condition was hit before.
-            let mul = diff / block_windows.readiness_window;
+        if current_height > candidate_block + block_windows.block_confirmations {
+            // Start the PoS genesis generation process
 
-            previous_election_block =
-                block_windows.election_candidate + mul * block_windows.readiness_window;
-            next_election_block =
-                block_windows.election_candidate + (mul + 1) * block_windows.readiness_window;
-        } else {
-            next_election_block = block_windows.election_candidate;
-            previous_election_block = block_windows.pre_stake_end;
+            // Obtain the genesis candidate block
+            let block = pow_client
+                .get_block_by_number(block_windows.election_candidate, false)
+                .await
+                .unwrap();
+
+            let current_hash = block.hash.clone();
+            log::info!("We are ready to start the genesis generation process");
+            log::info!(current_hash = current_hash, "Current genesis hash");
+
+            // Start the genesis generation process
+            let pow_registration_window = PoWRegistrationWindow {
+                pre_stake_start: block_windows.pre_stake_start,
+                pre_stake_end: block_windows.pre_stake_end,
+                validator_start: block_windows.registration_start,
+                final_block: block.hash,
+                confirmations: block_windows.block_confirmations,
+            };
+
+            genesis_config = get_pos_genesis(
+                pow_client,
+                &pow_registration_window,
+                network_id,
+                env.clone(),
+                Some(PoSRegisteredAgents {
+                    validators: validators.clone(),
+                    stakers: stakers.clone(),
+                }),
+            )
+            .await?;
+
+            log::info!("PoS Genesis generation is completed");
+
+            break;
+        }
+
+        sleep(Duration::from_secs(60)).await;
+    }
+
+    loop {
+        let current_height = pow_client.block_number().await.unwrap();
+        log::info!(current_height);
+
+        let next_candidate = candidate_block + block_windows.readiness_window;
+
+        if current_height > next_candidate {
+            log::info!("The activation window finished and we didn't find enough validators ready");
+
+            return Ok(None);
         }
 
         if !reported_ready && registered_validator {
@@ -250,14 +289,14 @@ pub async fn migrate(
             let transactions = get_ready_txns(
                 pow_client,
                 validator_address.to_user_friendly_address(),
-                previous_election_block..next_election_block,
+                candidate_block..next_candidate,
             )
             .await;
 
             if transactions.is_empty() {
                 log::info!(
-                    previous_election_block,
-                    next_election_block,
+                    candidate_block,
+                    next_candidate,
                     "We didn't find a ready transaction from our validator in this window"
                 );
                 // Report we are ready to the Nimiq PoW chain:
@@ -277,7 +316,7 @@ pub async fn migrate(
         let validators_status = check_validators_ready(
             pow_client,
             validators.clone(),
-            previous_election_block..next_election_block,
+            candidate_block..next_candidate,
         )
         .await;
         match validators_status {
@@ -289,96 +328,12 @@ pub async fn migrate(
                     stake_ready = %stake,
                     "Enough validators are ready to start the PoS chain",
                 );
-                break;
+                log::info!("We are ready to start the Nimiq PoS Client..");
+                return Ok(Some(genesis_config));
             }
         }
 
         sleep(Duration::from_secs(60)).await;
-
-        // We need to check if we are still in the same readiness window.
-        if next_election_block < pow_client.block_number().await.unwrap() {
-            reported_ready = false;
-        }
-    }
-
-    // Now that we have enough validators ready, we know the exact block that we are going to use
-    let candidate = next_election_block;
-
-    log::info!(next_election_candidate = candidate);
-
-    // We wait until the candidate block is mined
-    loop {
-        if pow_client.block_number().await.unwrap() >= candidate {
-            log::info!("We are ready to start the migration process..");
-            break;
-        } else {
-            log::info!(
-                election_candidate = candidate,
-                current_height = pow_client.block_number().await.unwrap()
-            );
-            sleep(Duration::from_secs(60)).await;
-        }
-    }
-
-    let mut previous_hash = "0".to_string();
-    let mut genesis_config: Option<GenesisConfig> = None;
-
-    loop {
-        // If we have enough confirmations, we can start the 2.0 client
-        if pow_client.block_number().await.unwrap() >= candidate + block_windows.block_confirmations
-        {
-            log::info!("We are ready to start the Nimiq PoS Client..");
-            if let Some(genesis_config) = genesis_config {
-                return Ok(genesis_config);
-            }
-        } else {
-            // Start the PoS genesis generation process
-
-            // Obtain the genesis candidate block
-            let block = pow_client
-                .get_block_by_number(candidate, false)
-                .await
-                .unwrap();
-
-            let current_hash = block.hash.clone();
-            log::info!(current_hash = current_hash, "Current genesis hash");
-
-            if previous_hash != current_hash {
-                // Start the genesis generation process
-                let pow_registration_window = PoWRegistrationWindow {
-                    pre_stake_start: block_windows.pre_stake_start,
-                    pre_stake_end: block_windows.pre_stake_end,
-                    validator_start: block_windows.registration_start,
-                    final_block: block.hash,
-                    confirmations: block_windows.block_confirmations,
-                };
-
-                genesis_config = Some(
-                    get_pos_genesis(
-                        pow_client,
-                        &pow_registration_window,
-                        network_id,
-                        env.clone(),
-                        Some(PoSRegisteredAgents {
-                            validators: validators.clone(),
-                            stakers: stakers.clone(),
-                        }),
-                    )
-                    .await?,
-                );
-
-                // Update block hash
-                previous_hash = current_hash;
-            } else {
-                // Wait for more confirmations
-                let current_confirmations = pow_client.block_number().await.unwrap() - candidate;
-                log::info!(
-                    current_confirmations,
-                    "Waiting for more confirmations to start the Nimiq PoS client"
-                );
-                sleep(Duration::from_secs(60)).await;
-            }
-        }
     }
 }
 

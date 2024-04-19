@@ -23,7 +23,7 @@ pub const READY_PERCENTAGE: u8 = 80;
 /// The transaction format is defined as follow:
 ///   Sender: Validator address
 ///   Recipient: Burn address
-///   Value: 100 Lunas
+///   Value: 1 Luna
 ///   Data: TBD
 ///
 pub fn generate_ready_tx(validator: String) -> OutgoingTransaction {
