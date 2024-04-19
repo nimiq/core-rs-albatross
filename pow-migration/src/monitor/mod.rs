@@ -83,7 +83,10 @@ pub async fn check_validators_ready(
     activation_block_window: Range<u32>,
 ) -> ValidatorsReadiness {
     // First calculate the total amount of stake
-    let total_stake: Coin = validators.iter().map(|validator| validator.balance).sum();
+    let total_stake: Coin = validators
+        .iter()
+        .map(|validator| validator.total_stake)
+        .sum();
 
     log::debug!(registered_stake = %total_stake);
 
@@ -127,14 +130,14 @@ pub async fn check_validators_ready(
     let mut ready_stake = Coin::ZERO;
 
     for ready_validator in ready_validators {
-        ready_stake += ready_validator.balance;
+        ready_stake += ready_validator.total_stake;
 
         info!(
             address = ready_validator
                 .validator
                 .validator_address
                 .to_user_friendly_address(),
-            stake = %ready_validator.balance,
+            stake = %ready_validator.total_stake,
             "Validator is ready",
         );
     }

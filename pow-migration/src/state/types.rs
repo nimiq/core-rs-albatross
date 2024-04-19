@@ -47,5 +47,5 @@ pub struct GenesisValidator {
     pub validator: nimiq_genesis_builder::config::GenesisValidator,
 
     /// Validator stake
-    pub balance: Coin,
+    pub total_stake: Coin,
 }

@@ -110,12 +110,10 @@ pub async fn get_pos_genesis(
         };
 
     // Calculate how much stake was burnt into registering validators and stakers
-    let mut burnt_registration_balance = genesis_stakers
+    // (the validator's `total_stake` here already includes its staker's delegated balance)
+    let burnt_registration_balance = genesis_validators
         .iter()
-        .fold(Coin::ZERO, |acc, staker| acc + staker.balance);
-    burnt_registration_balance += genesis_validators
-        .iter()
-        .fold(Coin::ZERO, |acc, validator| acc + validator.balance);
+        .fold(Coin::ZERO, |acc, validator| acc + validator.total_stake);
 
     let genesis_accounts = get_accounts(
         client,

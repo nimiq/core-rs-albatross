@@ -248,7 +248,7 @@ pub async fn get_validators(
             }
             if let Ok(voting_key) = BlsPublicKey::deserialize_from_vec(&voting_key_bytes) {
                 let possible_validator = GenesisValidator {
-                    balance: Coin::ZERO,
+                    total_stake: Coin::ZERO,
                     validator: nimiq_genesis_builder::config::GenesisValidator {
                         validator_address: address.clone(),
                         signing_key,
@@ -284,7 +284,7 @@ pub async fn get_validators(
                                 log::info!(%address, "Found commit transaction for validator");
                                 // If the transaction had a value greater than the deposit, the excess will be converted
                                 // to stake by `get_stakers`.
-                                validator.balance = Coin::from_u64_unchecked(txn.value);
+                                validator.total_stake = Coin::from_u64_unchecked(txn.value);
                                 validators.push(validator);
                             } else {
                                 log::warn!(
@@ -305,7 +305,9 @@ pub async fn get_validators(
 /// Gets the set of stakers registered in the PoW chain by parsing the required
 /// transactions within the pre-stake registration window defined by the
 /// `block_window` range. It uses a set of already registered validators and
-/// returns an updated set of validators along with the stakers.
+/// returns an updated set of validators along with the stakers. Note that this
+/// function returns an updated `total_stake` (`GenesisValidator.total_slake`)
+/// which includes the validator deposit and the staker's delegated stake.
 pub async fn get_stakers(
     client: &Client,
     registered_validators: &[GenesisValidator],
@@ -323,7 +325,7 @@ pub async fn get_stakers(
         // Only add a staker for this validator if the validator was registered with more than the validator
         // deposit and if the deposit exceeds the minimum stake. Otherwise, the extra needs to be burnt.
         let extra_validator_deposit = registered_validator
-            .balance
+            .total_stake
             .saturating_sub(Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT));
         let balance_to_burn = if extra_validator_deposit > Coin::ZERO
             && extra_validator_deposit >= Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
@@ -333,7 +335,7 @@ pub async fn get_stakers(
                 staker_address.clone(),
                 GenesisStaker {
                     staker_address,
-                    balance: registered_validator.balance
+                    balance: registered_validator.total_stake
                         - Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
                     delegation: registered_validator.validator.validator_address.clone(),
                     inactive_balance: Coin::ZERO,
@@ -347,7 +349,7 @@ pub async fn get_stakers(
 
         // Update the validator balance with the burnt balance
         let mut updated_registered_validator = registered_validator.clone();
-        updated_registered_validator.balance -= balance_to_burn;
+        updated_registered_validator.total_stake -= balance_to_burn;
         validators.insert(
             updated_registered_validator
                 .validator
@@ -382,7 +384,7 @@ pub async fn get_stakers(
                                 if let Ok(staker_address) = Address::from_str(&txn.from_address) {
                                     let stake = Coin::from_u64_unchecked(txn.value);
                                     if stake >= Coin::from_u64_unchecked(Policy::MINIMUM_STAKE) {
-                                        validator.balance += stake;
+                                        validator.total_stake += stake;
                                         stakers
                                             .entry(staker_address.clone())
                                             .and_modify(|staker| {
