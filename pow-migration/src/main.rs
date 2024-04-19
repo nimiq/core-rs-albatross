@@ -227,22 +227,43 @@ async fn main() {
         let genesis_file =
             genesis_dir.join(config.network_id.to_string().to_case(Case::Kebab) + ".toml");
 
+        let mut candidate_block = block_windows.election_candidate;
+
+        let genesis_config;
+
         // Do the migration
-        let genesis_config = match migrate(
-            &pow_client,
-            block_windows,
-            env,
-            &validator_address,
-            config.network_id,
-        )
-        .await
-        {
-            Ok(genesis_config) => genesis_config,
-            Err(error) => {
-                log::error!(?error, "Could not migrate");
-                exit(1);
+        loop {
+            match migrate(
+                &pow_client,
+                block_windows,
+                candidate_block,
+                env.clone(),
+                &validator_address,
+                config.network_id,
+            )
+            .await
+            {
+                Ok(obtained_genesis_config) => match obtained_genesis_config {
+                    Some(genesis_cfg) => {
+                        // We obtained the genesis configuration so we are done
+                        genesis_config = genesis_cfg;
+                        break;
+                    }
+                    None => {
+                        candidate_block += block_windows.readiness_window;
+
+                        log::info!(
+                            new_candidate = candidate_block,
+                            " Moving to the next activation window",
+                        );
+                    }
+                },
+                Err(error) => {
+                    log::error!(?error, "Could not migrate");
+                    exit(1);
+                }
             }
-        };
+        }
 
         // Write the genesis into the FS
         if let Err(error) = write_pos_genesis(&genesis_file, genesis_config) {
