@@ -78,9 +78,7 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         while let Some((tx, pubsub_id)) = ready!(self.txn_stream.as_mut().poll_next_unpin(cx)) {
-            if self.verification_tasks.fetch_add(0, AtomicOrdering::SeqCst)
-                >= CONCURRENT_VERIF_TASKS
-            {
+            if self.verification_tasks.load(AtomicOrdering::SeqCst) >= CONCURRENT_VERIF_TASKS {
                 log::debug!("Reached the max number of verification tasks");
                 continue;
             }
