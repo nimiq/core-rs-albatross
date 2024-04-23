@@ -20,8 +20,11 @@ use nimiq_transaction::account::htlc_contract::{AnyHash, AnyHash32, AnyHash64};
 
 use crate::state::types::{Error, GenesisAccounts, GenesisValidator};
 
-// PoW estimated block time in milliseconds
-const POW_BLOCK_TIME_MS: u64 = 60 * 1000; // 1 min
+// POW estimated block time in seconds
+pub(crate) const POW_BLOCK_TIME: u64 = 60; // 1 min
+
+// POW estimated block time in milliseconds
+pub(crate) const POW_BLOCK_TIME_MS: u64 = POW_BLOCK_TIME * 1000; // 1 min
 
 // PoW maximum amount of snapshots. This is a constant that needs to be set in the PoW client
 // such that we can get accounts snapshots of blocks within [head - `POW_MAX_SNAPSHOTS`, head].

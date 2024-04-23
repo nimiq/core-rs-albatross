@@ -15,11 +15,8 @@ use time::OffsetDateTime;
 use crate::{
     genesis::types::{Error, PoSRegisteredAgents, PoWRegistrationWindow},
     history::get_history_root,
-    state::{get_accounts, get_stakers, get_validators},
+    state::{get_accounts, get_stakers, get_validators, POW_BLOCK_TIME},
 };
-
-// POW estimated block time in milliseconds
-const POW_BLOCK_TIME_MS: u64 = 60 * 1000; // 1 min
 
 /// Gets the genesis config file
 pub async fn get_pos_genesis(
@@ -75,7 +72,7 @@ pub async fn get_pos_genesis(
 
     // The PoS genesis timestamp is the cutting block timestamp plus a custom delay
     let pos_genesis_ts =
-        pow_reg_window.confirmations as u64 * POW_BLOCK_TIME_MS + final_block.timestamp as u64;
+        pow_reg_window.confirmations as u64 * POW_BLOCK_TIME + final_block.timestamp as u64;
     // The parent election hash of the PoS genesis is the hash of the PoW genesis block
     let parent_election_hash = Blake2bHash::from_str(&pow_genesis.hash)?;
     // The parent hash of the PoS genesis is the hash of cutting block
