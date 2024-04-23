@@ -232,6 +232,17 @@ pub async fn migrate(
         let current_height = pow_client.block_number().await.unwrap();
         log::info!(current_height);
 
+        let next_candidate = candidate_block + block_windows.readiness_window;
+
+        if current_height > next_candidate {
+            log::info!(
+                next_candidate = next_candidate,
+                "The activation window already finished, moving to the next one"
+            );
+
+            return Ok(None);
+        }
+
         // We are past the election candidate, so we are now in one of the activation windows
         if current_height > candidate_block + block_windows.block_confirmations {
             // Start the PoS genesis generation process
