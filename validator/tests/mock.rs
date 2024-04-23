@@ -49,6 +49,7 @@ async fn one_validator_can_create_micro_blocks() {
     let signing_key = KeyPair::generate(&mut seeded_rng(0));
     let genesis = GenesisBuilder::default()
         .with_network(NetworkId::UnitAlbatross)
+        .with_genesis_block_number(Policy::genesis_block_number())
         .with_genesis_validator(
             Address::from(&validator_key),
             signing_key.public,

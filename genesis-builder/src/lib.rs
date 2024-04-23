@@ -114,7 +114,7 @@ impl GenesisBuilder {
             basic_accounts: vec![],
             vesting_accounts: vec![],
             htlc_accounts: vec![],
-            block_number: Policy::genesis_block_number(),
+            block_number: 0,
         }
     }
 
@@ -139,6 +139,14 @@ impl GenesisBuilder {
     /// Sets [`MacroHeader::network`].
     pub fn with_network(&mut self, network: NetworkId) -> &mut Self {
         self.network = network;
+        self
+    }
+
+    /// The block number for the genesis block.
+    ///
+    /// Sets [`MacroHeader::block_number`].
+    pub fn with_genesis_block_number(&mut self, block_number: u32) -> &mut Self {
+        self.block_number = block_number;
         self
     }
 

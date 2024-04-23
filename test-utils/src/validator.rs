@@ -10,7 +10,7 @@ use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, SecureGenerate};
 use nimiq_mempool::config::MempoolConfig;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
-use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_validator::validator::Validator;
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
@@ -90,15 +90,17 @@ where
     let mut genesis_builder = GenesisBuilder::default();
     genesis_builder.with_network(NetworkId::UnitAlbatross);
     for i in 0..num_validators {
-        genesis_builder.with_genesis_validator(
-            Address::from(&validator_keys[i]),
-            signing_keys[i].public,
-            voting_keys[i].public_key,
-            Address::default(),
-            None,
-            None,
-            false,
-        );
+        genesis_builder
+            .with_genesis_validator(
+                Address::from(&validator_keys[i]),
+                signing_keys[i].public,
+                voting_keys[i].public_key,
+                Address::default(),
+                None,
+                None,
+                false,
+            )
+            .with_genesis_block_number(Policy::genesis_block_number());
     }
     let genesis = genesis_builder.generate(env).unwrap();
 
