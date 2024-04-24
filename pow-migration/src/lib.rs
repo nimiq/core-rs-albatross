@@ -252,12 +252,16 @@ pub async fn migrate(
 
         if current_height > next_candidate {
             log::info!(
+                previous_candidate = candidate_block,
                 next_candidate = next_candidate,
+                current_pow_height = current_height,
                 "The activation window already finished, moving to the next one"
             );
 
             return Ok(None);
         }
+
+        log::info!("Waiting for more confirmations...");
 
         // We are past the election candidate, so we are now in one of the activation windows
         if current_height > candidate_block + block_windows.block_confirmations {
@@ -270,8 +274,11 @@ pub async fn migrate(
                 .unwrap();
 
             let current_hash = block.hash.clone();
-            log::info!("We are ready to start the genesis generation process");
-            log::info!(current_hash = current_hash, "Current genesis hash");
+            log::info!(
+                candidate_block = candidate_block,
+                current_hash = current_hash,
+                "We are ready to start the genesis generation process"
+            );
 
             // Start the genesis generation process
             let pow_registration_window = PoWRegistrationWindow {
@@ -309,7 +316,12 @@ pub async fn migrate(
         let next_candidate = candidate_block + block_windows.readiness_window;
 
         if current_height > next_candidate {
-            log::info!("The activation window finished and we didn't find enough validators ready");
+            log::info!(
+                current_height = current_height,
+                current_candidate = candidate_block,
+                next_candidate = next_candidate,
+                "The activation window finished and we didn't find enough validators ready"
+            );
 
             return Ok(None);
         }
@@ -341,7 +353,7 @@ pub async fn migrate(
                     Err(error) => return Err(error.into()),
                 }
             } else {
-                log::info!("We found a ready transaction from our validator");
+                log::info!("We found a ready transaction from our validator in the current window");
                 reported_ready = true;
             }
         }
