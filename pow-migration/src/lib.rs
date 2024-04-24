@@ -151,7 +151,7 @@ pub async fn migrate(
     block_windows: &BlockWindows,
     candidate_block: u32,
     env: DatabaseProxy,
-    validator_address: &Address,
+    validator_address: &Option<Address>,
     network_id: NetworkId,
 ) -> Result<Option<GenesisConfig>, Error> {
     // First set up the PoW client for accounts migration
@@ -168,47 +168,53 @@ pub async fn migrate(
 
     let mut registered_validator = false;
 
-    for validator in &registered_validators {
-        if validator.validator.validator_address == *validator_address {
-            registered_validator = true;
+    // Check if we are running the tool as validator and if so, make sure we are
+    // ready to send transactions to the PoW chain.
+    if let Some(validator_address) = validator_address {
+        for validator in &registered_validators {
+            if validator.validator.validator_address == *validator_address {
+                registered_validator = true;
+            }
+
+            log::debug!(
+                validator_address = validator
+                    .validator
+                    .validator_address
+                    .to_user_friendly_address()
+            );
         }
 
-        log::debug!(
-            validator_address = validator
-                .validator
-                .validator_address
-                .to_user_friendly_address()
-        );
-    }
+        if !registered_validator {
+            log::warn!("The validator address that is being used was not registered before!");
+            log::warn!(
+                "Therefore this validator cannot participate in the readiness voting process"
+            );
+        } else {
+            // If the validator was registered we need to check if the RPC server we are connected to
+            // has the account of the validator address in the PoW client wallet.
+            // This is necessary to send validator readiness transactions.
+            let wallet_addresses = pow_client
+                .accounts()
+                .await
+                .expect("Failed obtaining the list of accounts owned by the RPC server");
 
-    if !registered_validator {
-        log::warn!("The validator address that is being used was not registered before!");
-        log::warn!("Therefore this validator cannot participate in the readiness voting process");
-    } else {
-        // If the validator was registered we need to check if the RPC server we are connected to
-        // has the account of the validator address in the PoW client wallet.
-        // This is necessary to send validator readiness transactions.
-        let wallet_addresses = pow_client
-            .accounts()
-            .await
-            .expect("Failed obtaining the list of accounts owned by the RPC server");
+            let mut imported_address = false;
 
-        let mut imported_address = false;
-
-        for account in wallet_addresses {
-            if let nimiq_rpc::primitives::Account::Basic(basic_account) = account {
-                if basic_account.address == validator_address.to_user_friendly_address() {
-                    imported_address = true;
-                    break;
+            for account in wallet_addresses {
+                if let nimiq_rpc::primitives::Account::Basic(basic_account) = account {
+                    if basic_account.address == validator_address.to_user_friendly_address() {
+                        imported_address = true;
+                        break;
+                    }
                 }
             }
-        }
 
-        if !imported_address {
-            log::error!(
+            if !imported_address {
+                log::error!(
                 "The validator was registered but its account was not imported into the PoW client"
             );
-            return Err(Error::ValidatorKey(validator_address.clone()));
+                return Err(Error::ValidatorKey(validator_address.clone()));
+            }
         }
     }
 
@@ -303,6 +309,10 @@ pub async fn migrate(
         }
 
         if !reported_ready && registered_validator {
+            let validator_address = validator_address
+                .as_ref()
+                .expect("Validator needs to be some to be reported as `registered_validator`");
+
             // Obtain all the transactions that we have sent previously.
             let transactions = get_ready_txns(
                 pow_client,

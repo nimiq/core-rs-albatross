@@ -170,13 +170,17 @@ async fn main() {
         }
     } else {
         let validator_address = if let Some(validator_settings) = config.validator {
-            validator_settings.validator_address
+            info!(
+                validator_address = %validator_settings.validator_address,
+                "This is our validator address"
+            );
+            Some(validator_settings.validator_address)
         } else {
-            log::error!("Missing validator section in the configuration file");
-            exit(1);
+            log::warn!(
+                "Missing validator section in the configuration file. Running in 'viewer' mode."
+            );
+            None
         };
-
-        info!("This is our validator address: {}", validator_address);
 
         // Create DB environment
         let env = match config.storage.database(
