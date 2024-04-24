@@ -240,9 +240,15 @@ pub async fn migrate(
 
     loop {
         let current_height = pow_client.block_number().await.unwrap();
-        log::info!(current_height);
 
         let next_candidate = candidate_block + block_windows.readiness_window;
+
+        log::info!(
+            current_pow_height = current_height,
+            current_candidate = candidate_block,
+            next_candidate = next_candidate,
+            "Current status"
+        );
 
         if current_height > next_candidate {
             log::info!(
@@ -259,7 +265,7 @@ pub async fn migrate(
 
             // Obtain the genesis candidate block
             let block = pow_client
-                .get_block_by_number(block_windows.election_candidate, false)
+                .get_block_by_number(candidate_block, false)
                 .await
                 .unwrap();
 
