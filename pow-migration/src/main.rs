@@ -3,13 +3,14 @@ use std::{fs, process::exit, time::Duration};
 use clap::Parser;
 use convert_case::{Case, Casing};
 use log::{info, level_filters::LevelFilter};
+use nimiq_keys::Address;
 use nimiq_lib::config::{config::ClientConfig, config_file::ConfigFile};
 use nimiq_pow_migration::{
     genesis::write_pos_genesis,
     get_block_windows,
     history::{get_history_store_height, migrate_history},
     launch_pos_client, migrate,
-    state::get_validators,
+    state::{get_stakers, get_validators},
 };
 use nimiq_primitives::networks::NetworkId;
 use nimiq_rpc::Client;
@@ -27,8 +28,15 @@ struct Args {
     /// Path to the PoS configuration file
     #[arg(short, long)]
     config: String,
+    /// Output a list of registered validators
     #[arg(short, long)]
     list_validators: bool,
+    /// Output a list of pre-stakers
+    #[arg(short = 's', long)]
+    list_stakers: bool,
+    /// Only show the pre-stakers for a specific validator. This argument is only intended to be used in conjunction with list-stakers
+    #[arg(long)]
+    validator: Option<String>,
     /// PoW RPC server URL
     #[arg(long)]
     url: String,
@@ -157,7 +165,7 @@ async fn main() {
         sleep(Duration::from_secs(10)).await;
     }
 
-    if args.list_validators {
+    if args.list_validators || args.list_stakers {
         let registered_validators = match get_validators(
             &pow_client,
             block_windows.registration_start..block_windows.registration_end,
@@ -170,9 +178,54 @@ async fn main() {
                 std::process::exit(1);
             }
         };
-        println!("Registered validators:");
-        for validator in registered_validators {
-            println!("{}", validator.validator.validator_address);
+
+        if args.list_validators {
+            println!("Registered validators:");
+            for validator in registered_validators {
+                println!("{}", validator.validator.validator_address);
+            }
+        } else {
+            if pow_client.block_number().await.unwrap()
+                < block_windows.pre_stake_end + block_windows.block_confirmations
+            {
+                log::error!("The pre-staking window is not closed yet, generating the list is not possible at this time.");
+                std::process::exit(1);
+            }
+
+            let pre_stakers = match get_stakers(
+                &pow_client,
+                &registered_validators,
+                block_windows.pre_stake_start..block_windows.pre_stake_end,
+            )
+            .await
+            {
+                Ok((pre_stakers, _)) => match args.validator {
+                    Some(address) => {
+                        if let Ok(address) = Address::from_any_str(&address) {
+                            pre_stakers
+                                .into_iter()
+                                .filter(|pre_staker| pre_staker.delegation == address)
+                                .collect()
+                        } else {
+                            log::error!(%address, "Invalid address provided as argument ('--validator, -v')");
+                            std::process::exit(1);
+                        }
+                    }
+                    None => pre_stakers,
+                },
+                Err(error) => {
+                    log::error!(?error, "Couldn't get pre-stakers list");
+                    std::process::exit(1);
+                }
+            };
+
+            println!("Pre-stakers:");
+            for pre_staker in pre_stakers {
+                println!(
+                    "{} has delegated stake to {} with a prestake of {} NIM",
+                    pre_staker.staker_address, pre_staker.delegation, pre_staker.balance,
+                );
+            }
         }
     } else {
         let validator_address = if let Some(validator_settings) = config.validator {
