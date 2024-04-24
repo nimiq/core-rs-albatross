@@ -20,10 +20,10 @@ use nimiq_transaction::account::htlc_contract::{AnyHash, AnyHash32, AnyHash64};
 
 use crate::state::types::{Error, GenesisAccounts, GenesisValidator};
 
-// POW estimated block time in seconds
+/// PoW target block time in seconds
 pub(crate) const POW_BLOCK_TIME: u64 = 60; // 1 min
 
-// POW estimated block time in milliseconds
+/// PoW target block time in milliseconds
 pub(crate) const POW_BLOCK_TIME_MS: u64 = POW_BLOCK_TIME * 1000; // 1 min
 
 // PoW maximum amount of snapshots. This is a constant that needs to be set in the PoW client
@@ -39,24 +39,16 @@ fn pos_basic_account_from_account(pow_account: &PoWBasicAccount) -> Result<Genes
 fn pos_vesting_account_from_account(
     pow_account: &PoWVestingAccount,
     cutting_block: &Block,
-    pos_genesis_ts: u64,
 ) -> Result<GenesisVestingContract, Error> {
-    if pos_genesis_ts < cutting_block.timestamp as u64 {
-        log::error!(
-            pos_genesis_ts,
-            cutting_block_number_ts = cutting_block.timestamp,
-            "Provided PoS genesis timestamp is less than the timestamp of the provided cutting block"
-        );
-        return Err(Error::InvalidTimestamp(pos_genesis_ts));
-    }
     let owner = Address::from_user_friendly_address(&pow_account.owner_address)?;
     let address = Address::from_user_friendly_address(&pow_account.address)?;
     let balance = Coin::try_from(pow_account.balance)?;
     let start_time = if pow_account.vesting_start <= cutting_block.number {
-        cutting_block.timestamp as u64
+        cutting_block.timestamp as u64 * 1000
+            - (cutting_block.number - pow_account.vesting_start) as u64 * POW_BLOCK_TIME_MS
     } else {
-        (pow_account.vesting_start - cutting_block.number) as u64 * POW_BLOCK_TIME_MS
-            + pos_genesis_ts
+        cutting_block.timestamp as u64 * 1000
+            + (pow_account.vesting_start - cutting_block.number) as u64 * POW_BLOCK_TIME_MS
     };
     let time_step = pow_account.vesting_step_blocks as u64 * POW_BLOCK_TIME_MS;
     let step_amount = Coin::try_from(pow_account.vesting_step_amount)?;
@@ -75,25 +67,18 @@ fn pos_vesting_account_from_account(
 fn pos_htlc_account_from_account(
     pow_account: &PoWHTLCAccount,
     cutting_block: &Block,
-    pos_genesis_ts: u64,
 ) -> Result<GenesisHTLC, Error> {
-    if pos_genesis_ts < cutting_block.timestamp as u64 {
-        log::error!(
-            pos_genesis_ts,
-            cutting_block_number_ts = cutting_block.timestamp,
-            "Provided PoS genesis timestamp is less than the timestamp of the provided cutting block"
-        );
-        return Err(Error::InvalidTimestamp(pos_genesis_ts));
-    }
     let address = Address::from_user_friendly_address(&pow_account.address)?;
     let recipient = Address::from_user_friendly_address(&pow_account.recipient_address)?;
     let sender = Address::from_user_friendly_address(&pow_account.sender_address)?;
     let balance = Coin::try_from(pow_account.balance)?;
     let hash_count = pow_account.hash_count;
     let timeout = if pow_account.timeout <= cutting_block.number {
-        cutting_block.timestamp as u64
+        cutting_block.timestamp as u64 * 1000
+            - (cutting_block.number - pow_account.timeout) as u64 * POW_BLOCK_TIME_MS
     } else {
-        (pow_account.timeout - cutting_block.number) as u64 * POW_BLOCK_TIME_MS + pos_genesis_ts
+        cutting_block.timestamp as u64 * 1000
+            + (pow_account.timeout - cutting_block.number) as u64 * POW_BLOCK_TIME_MS
     };
     let total_amount = Coin::try_from(pow_account.total_amount)?;
     let hash_root = pos_anyhash_from_hash_root(&pow_account.hash_root, pow_account.hash_algorithm)?;
@@ -135,7 +120,6 @@ pub async fn setup_pow_rpc_server(client: &Client) -> Result<(), Error> {
 pub async fn get_accounts(
     client: &Client,
     cutting_block: &Block,
-    pos_genesis_ts: u64,
     burnt_registration_balance: Coin,
 ) -> Result<GenesisAccounts, Error> {
     let mut genesis_accounts = GenesisAccounts {
@@ -175,16 +159,13 @@ pub async fn get_accounts(
                     genesis_accounts.basic_accounts.push(pos_basic_account);
                 }
                 nimiq_rpc::primitives::Account::Vesting(pow_account) => {
-                    let pos_vesting_account = pos_vesting_account_from_account(
-                        &pow_account,
-                        cutting_block,
-                        pos_genesis_ts,
-                    )?;
+                    let pos_vesting_account =
+                        pos_vesting_account_from_account(&pow_account, cutting_block)?;
                     genesis_accounts.vesting_accounts.push(pos_vesting_account);
                 }
                 nimiq_rpc::primitives::Account::HTLC(pow_account) => {
                     let pos_htlc_account =
-                        pos_htlc_account_from_account(&pow_account, cutting_block, pos_genesis_ts)?;
+                        pos_htlc_account_from_account(&pow_account, cutting_block)?;
                     genesis_accounts.htlc_accounts.push(pos_htlc_account);
                 }
             }
@@ -541,6 +522,18 @@ mod test {
     "vestingStepBlocks": 129600,
     "vestingStepAmount": 2052050000,
     "vestingTotalAmount": 4104100000
+  },
+  {
+    "id": "bb5049c1620eec25285e91ad1273713eb892def9",
+    "address": "NQ50 PD84 KGB2 1TN2 AA2X J6NH 4UTH 7SU9 5PPR",
+    "balance": 4104100000,
+    "type": 1,
+    "owner": "8a417d7cceb41b0084356247d2bc0cc3f7fb3464",
+    "ownerAddress": "NQ73 H90P SY6E NGDG 111M C93V 5F0C QFTY ND34",
+    "vestingStart": 2915496,
+    "vestingStepBlocks": 129600,
+    "vestingStepAmount": 2052050000,
+    "vestingTotalAmount": 4104100000
   }
 ]"#;
     static HTLC_ACCOUNTS: &str = r#"
@@ -604,6 +597,21 @@ mod test {
     "hashCount": 255,
     "timeout": 421796,
     "totalAmount": 1
+  },
+  {
+    "id": "c628c8e2a77637138672fdf90d8c63c1c04c2722",
+    "address": "NQ37 QQLC HQM7 EQTH 71KJ YPUG T333 Q704 Q9R2",
+    "balance": 1,
+    "type": 2,
+    "sender": "deec92cf871f08269a9c43574965b997386750be",
+    "senderAddress": "NQ94 TTN9 5KU7 3U42 D6LU 8DBL JRDR JUU6 EL5X",
+    "recipient": "026ef67bfe3e9bfcd2c6010cb9f8a46e9b2cb386",
+    "recipientAddress": "NQ24 09PF CXYX 7SDY RLN6 046B KX54 DSDJ RCU6",
+    "hashRoot": "4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d",
+    "hashAlgorithm": 3,
+    "hashCount": 255,
+    "timeout": 2835496,
+    "totalAmount": 1
   }
 ]"#;
 
@@ -649,15 +657,17 @@ mod test {
         let pow_accounts: Vec<VestingAccount> = serde_json::from_str(VESTING_ACCOUNTS).unwrap();
         let cutting_block = get_block();
 
-        // First test that we fail if we pass a timestamp that is less than the one in the cutting block number
-        let ts = cutting_block.timestamp as u64 - 10;
-        assert!(pos_vesting_account_from_account(&pow_accounts[0], &cutting_block, ts).is_err());
+        let start_times_ms = [
+            1524499913000,
+            1524499913000,
+            1524499913000,
+            1524499913000,
+            1699429613000,
+        ];
 
-        // Now test with a proper TS
-        let ts = cutting_block.timestamp as u64 + 10;
-        for pow_account in pow_accounts {
+        for (i, pow_account) in pow_accounts.into_iter().enumerate() {
             let pos_account =
-                pos_vesting_account_from_account(&pow_account, &cutting_block, ts).unwrap();
+                pos_vesting_account_from_account(&pow_account, &cutting_block).unwrap();
             assert_eq!(
                 pos_account.balance,
                 Coin::try_from(pow_account.balance).unwrap()
@@ -676,14 +686,7 @@ mod test {
                 pos_account.time_step,
                 pow_account.vesting_step_blocks as u64 * POW_BLOCK_TIME_MS
             );
-            if pow_account.vesting_start < cutting_block.timestamp {
-                assert_eq!(pos_account.start_time, cutting_block.timestamp as u64);
-            } else {
-                let timeout = (pow_account.vesting_start - cutting_block.timestamp) as u64
-                    * POW_BLOCK_TIME_MS
-                    + ts;
-                assert_eq!(pos_account.start_time, timeout);
-            }
+            assert_eq!(pos_account.start_time, start_times_ms[i],);
         }
     }
 
@@ -692,15 +695,16 @@ mod test {
         let pow_accounts: Vec<HTLCAccount> = serde_json::from_str(HTLC_ACCOUNTS).unwrap();
         let cutting_block = get_block();
 
-        // First test that we fail if we pass a timestamp that is less than the one in the cutting block number
-        let ts = cutting_block.timestamp as u64 - 10;
-        assert!(pos_htlc_account_from_account(&pow_accounts[0], &cutting_block, ts).is_err());
+        let timeouts_ms = [
+            1549808153000,
+            1541597933000,
+            1549808153000,
+            1549807613000,
+            1694629613000,
+        ];
 
-        // Now test with a proper TS
-        let ts = cutting_block.timestamp as u64 + 10;
-        for pow_account in pow_accounts {
-            let pos_account =
-                pos_htlc_account_from_account(&pow_account, &cutting_block, ts).unwrap();
+        for (i, pow_account) in pow_accounts.into_iter().enumerate() {
+            let pos_account = pos_htlc_account_from_account(&pow_account, &cutting_block).unwrap();
             assert_eq!(
                 pos_account.balance,
                 Coin::try_from(pow_account.balance).unwrap()
@@ -717,13 +721,7 @@ mod test {
             );
             assert_eq!(pos_account.hash_root.to_hex(), pow_account.hash_root);
             assert_eq!(pos_account.hash_count, pow_account.hash_count);
-            if pow_account.timeout < cutting_block.timestamp {
-                assert_eq!(pos_account.timeout, cutting_block.timestamp as u64);
-            } else {
-                let timeout =
-                    (pow_account.timeout - cutting_block.timestamp) as u64 * POW_BLOCK_TIME_MS + ts;
-                assert_eq!(pos_account.timeout, timeout);
-            }
+            assert_eq!(pos_account.timeout, timeouts_ms[i],);
         }
     }
 }

@@ -71,7 +71,7 @@ pub async fn get_pos_genesis(
     };
 
     // The PoS genesis timestamp is the cutting block timestamp plus a custom delay
-    let pos_genesis_ts =
+    let pos_genesis_ts_unix =
         pow_reg_window.confirmations as u64 * POW_BLOCK_TIME + final_block.timestamp as u64;
     // The parent election hash of the PoS genesis is the hash of the PoW genesis block
     let parent_election_hash = Blake2bHash::from_str(&pow_genesis.hash)?;
@@ -112,13 +112,7 @@ pub async fn get_pos_genesis(
         .iter()
         .fold(Coin::ZERO, |acc, validator| acc + validator.total_stake);
 
-    let genesis_accounts = get_accounts(
-        client,
-        &final_block,
-        pos_genesis_ts,
-        burnt_registration_balance,
-    )
-    .await?;
+    let genesis_accounts = get_accounts(client, &final_block, burnt_registration_balance).await?;
 
     Ok(GenesisConfig {
         network: network_id,
@@ -127,7 +121,9 @@ pub async fn get_pos_genesis(
         parent_hash: Some(parent_hash),
         history_root: Some(history_root),
         block_number: final_block.number,
-        timestamp: Some(OffsetDateTime::from_unix_timestamp(pos_genesis_ts as i64)?),
+        timestamp: Some(OffsetDateTime::from_unix_timestamp(
+            pos_genesis_ts_unix as i64,
+        )?),
         validators: genesis_validators
             .into_iter()
             .map(|validator| validator.validator)
