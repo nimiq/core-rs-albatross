@@ -3,7 +3,11 @@ pub mod history;
 pub mod monitor;
 pub mod state;
 
-use std::{path::PathBuf, process::Command, time::Duration};
+use std::{
+    path::PathBuf,
+    process::{Command, ExitStatus},
+    time::Duration,
+};
 
 use nimiq_database::DatabaseProxy;
 use nimiq_genesis_builder::config::GenesisConfig;
@@ -359,7 +363,7 @@ pub fn launch_pos_client(
     genesis_file: &PathBuf,
     config_file: &str,
     genesis_env_var_name: &str,
-) -> Result<u32, Error> {
+) -> Result<ExitStatus, Error> {
     // Start the nimiq PoS client with the generated genesis file
     log::info!(
         filename = ?genesis_file,
@@ -391,7 +395,7 @@ pub fn launch_pos_client(
         Ok(None) => {
             let pid = child.id();
             log::info!(pid, "Pos client running");
-            Ok(pid)
+            Ok(child.wait()?)
         }
         Err(error) => {
             log::error!(?error, "Error waiting for the PoS client to run");
