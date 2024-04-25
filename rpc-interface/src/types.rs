@@ -156,27 +156,19 @@ pub enum BlockAdditionalFields {
     #[serde(rename_all = "camelCase")]
     Macro {
         is_election_block: bool,
-
         parent_election_hash: Blake2bHash,
 
         // None if not an election block.
-        #[serde(skip_serializing_if = "Option::is_none")]
         interlink: Option<Vec<Blake2bHash>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
         slots: Option<Vec<Slots>>,
         next_batch_initial_punished_set: BitSet,
 
-        #[serde(skip_serializing_if = "Option::is_none")]
         justification: Option<TendermintProof>,
     },
     #[serde(rename_all = "camelCase")]
     Micro {
         producer: Slot,
-
-        #[serde(skip_serializing_if = "Option::is_none")]
         equivocation_proofs: Option<Vec<EquivocationProof>>,
-
-        #[serde(skip_serializing_if = "Option::is_none")]
         justification: Option<MicroJustification>,
     },
 }
@@ -603,11 +595,8 @@ impl ExecutedTransaction {
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     pub hash: Blake2bHash,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub block_number: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub confirmations: Option<u32>,
     pub size: usize,
     pub related_addresses: BTreeSet<Address>,
@@ -1202,33 +1191,19 @@ impl ZKPState {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MempoolInfo {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _0: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _1: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _2: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _5: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _10: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _20: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _50: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _100: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _200: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _500: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _1000: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _2000: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _5000: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _10000: Option<u32>,
     pub total: u32,
     pub buckets: Vec<u32>,
