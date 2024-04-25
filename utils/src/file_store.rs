@@ -1,6 +1,5 @@
 use std::{
-    fs,
-    fs::OpenOptions,
+    fs::{self, create_dir, OpenOptions},
     io::{BufWriter, Error as IoError, Write},
     path::{Path, PathBuf},
 };
@@ -39,7 +38,12 @@ impl FileStore {
     }
 
     pub fn store<T: Serialize>(&self, item: &T) -> Result<(), Error> {
-        log::debug!(path = ?self.path.display(), "Writing tof file");
+        log::debug!(path = ?self.path.display(), "Writing to file");
+        let parent_folder = self.path.parent().expect("File must have a parent folder");
+        if !parent_folder.exists() {
+            create_dir(parent_folder)?;
+        }
+
         let file = OpenOptions::new()
             .write(true)
             .create(true)
