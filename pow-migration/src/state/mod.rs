@@ -1,6 +1,11 @@
 pub mod types;
 
-use std::{collections::HashMap, ops::Range, str::FromStr, vec};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    ops::Range,
+    str::FromStr,
+    vec,
+};
 
 use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_genesis_builder::config::{
@@ -336,7 +341,7 @@ pub async fn get_stakers(
         let extra_validator_deposit = registered_validator
             .total_stake
             .saturating_sub(Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT));
-        let balance_to_burn = if extra_validator_deposit > Coin::ZERO
+        if extra_validator_deposit > Coin::ZERO
             && extra_validator_deposit >= Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
         {
             let staker_address = registered_validator.validator.validator_address.clone();
@@ -351,14 +356,12 @@ pub async fn get_stakers(
                     inactive_from: None,
                 },
             );
-            Coin::ZERO
-        } else {
-            extra_validator_deposit
         };
 
         // Update the validator balance with the burnt balance
         let mut updated_registered_validator = registered_validator.clone();
-        updated_registered_validator.total_stake -= balance_to_burn;
+        updated_registered_validator.total_stake =
+            Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
         validators.insert(
             updated_registered_validator
                 .validator
@@ -388,31 +391,38 @@ pub async fn get_stakers(
                 if let Ok(address_bytes) = hex::decode(data) {
                     if let Ok(address_str) = std::str::from_utf8(&address_bytes) {
                         if let Ok(address) = Address::from_str(address_str) {
-                            if let Some(validator) = validators.get_mut(address_str) {
+                            if let Some(validator) = validators.get(address_str) {
                                 log::info!(staker_address=txn.from_address, validator_address=%address, "Found pre-stake transaction for validator");
                                 if let Ok(staker_address) = Address::from_str(&txn.from_address) {
                                     let stake = Coin::from_u64_unchecked(txn.value);
-                                    if stake >= Coin::from_u64_unchecked(Policy::MINIMUM_STAKE) {
-                                        validator.total_stake += stake;
-                                        stakers
-                                            .entry(staker_address.clone())
-                                            .and_modify(|staker| {
-                                                // If we have an entry for this staker, treat this as a switch to another
-                                                // validator or an increase of the stake (if the validator isn't changed)
-                                                staker.delegation =
-                                                    validator.validator.validator_address.clone();
-                                                staker.balance += stake;
-                                            })
-                                            .or_insert(GenesisStaker {
-                                                staker_address,
-                                                balance: stake,
-                                                delegation: validator
-                                                    .validator
-                                                    .validator_address
-                                                    .clone(),
-                                                inactive_balance: Coin::ZERO,
-                                                inactive_from: None,
-                                            });
+                                    match stakers.entry(staker_address.clone()) {
+                                        Entry::Occupied(mut entry) => {
+                                            // If we have an entry for this staker, treat this as a switch to another
+                                            // validator or an increase of the stake (if the validator isn't changed)
+                                            let staker = entry.get_mut();
+
+                                            // Update the staker entry
+                                            staker.delegation =
+                                                validator.validator.validator_address.clone();
+                                            staker.balance += stake;
+                                        }
+                                        Entry::Vacant(entry) => {
+                                            // If there wasn't a staker registered for this address, check minimum stake
+                                            if stake
+                                                >= Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
+                                            {
+                                                entry.insert(GenesisStaker {
+                                                    staker_address,
+                                                    balance: stake,
+                                                    delegation: validator
+                                                        .validator
+                                                        .validator_address
+                                                        .clone(),
+                                                    inactive_balance: Coin::ZERO,
+                                                    inactive_from: None,
+                                                });
+                                            }
+                                        }
                                     }
                                 } else {
                                     log::error!(
@@ -431,6 +441,23 @@ pub async fn get_stakers(
                 }
             }
         }
+    }
+
+    // Now that we have the stakers, recompute the validator's total stake
+    for genesis_validator in validators.values_mut() {
+        let stakers: Vec<&GenesisStaker> = stakers
+            .iter()
+            .filter_map(|staker| {
+                if staker.1.delegation == genesis_validator.validator.validator_address {
+                    return Some(staker.1);
+                }
+                None
+            })
+            .collect();
+        genesis_validator.total_stake = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT)
+            + stakers
+                .iter()
+                .fold(Coin::ZERO, |acc, staker| acc + staker.balance);
     }
 
     Ok((
