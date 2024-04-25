@@ -117,11 +117,9 @@ pub struct Block {
     #[serde(with = "crate::serde_helpers::hex")]
     pub extra_data: Vec<u8>,
     pub state_hash: Blake2bHash,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub body_hash: Option<Blake2sHash>,
     pub history_hash: Blake2bHash,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
     transactions: Option<Vec<ExecutedTransaction>>,
 
     #[serde(flatten)]
@@ -134,28 +132,19 @@ pub enum BlockAdditionalFields {
     #[serde(rename_all = "camelCase")]
     Macro {
         is_election_block: bool,
-
         parent_election_hash: Blake2bHash,
 
         // None if not an election block.
-        #[serde(skip_serializing_if = "Option::is_none")]
         interlink: Option<Vec<Blake2bHash>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
         slots: Option<Vec<Slots>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
         next_batch_initial_punished_set: Option<BitSet>,
 
-        #[serde(skip_serializing_if = "Option::is_none")]
         justification: Option<TendermintProof>,
     },
     #[serde(rename_all = "camelCase")]
     Micro {
         producer: Slot,
-
-        #[serde(skip_serializing_if = "Option::is_none")]
         equivocation_proofs: Option<Vec<EquivocationProof>>,
-
-        #[serde(skip_serializing_if = "Option::is_none")]
         justification: Option<MicroJustification>,
     },
 }
@@ -520,11 +509,8 @@ impl ExecutedTransaction {
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     pub hash: Blake2bHash,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub block_number: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub confirmations: Option<u32>,
 
     pub from: Address,
@@ -817,7 +803,6 @@ impl Account {
 pub struct Staker {
     pub address: Address,
     pub balance: Coin,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub delegation: Option<Address>,
     pub inactive_balance: Coin,
     pub inactive_from: Option<u32>,
@@ -844,14 +829,11 @@ pub struct Validator {
     pub signing_key: Ed25519PublicKey,
     pub voting_key: CompressedPublicKey,
     pub reward_address: Address,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub signal_data: Option<Blake2bHash>,
     pub balance: Coin,
     pub num_stakers: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub inactivity_flag: Option<u32>,
     pub retired: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub jailed_from: Option<u32>,
 }
 
@@ -1098,33 +1080,19 @@ impl ZKPState {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MempoolInfo {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _0: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _1: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _2: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _5: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _10: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _20: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _50: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _100: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _200: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _500: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _1000: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _2000: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _5000: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub _10000: Option<u32>,
     pub total: u32,
     pub buckets: Vec<u32>,
