@@ -212,7 +212,13 @@ impl Block {
         let block_number = micro_block.block_number();
 
         let (equivocation_proofs, transactions) = match micro_block.body {
-            None => (None, None),
+            None => {
+                if include_body {
+                    return Err(BlockchainError::BlockBodyNotFound);
+                } else {
+                    (None, None)
+                }
+            },
             Some(ref body) => (
                 Some(
                     body.equivocation_proofs
