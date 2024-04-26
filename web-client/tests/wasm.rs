@@ -15,8 +15,9 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen_test::wasm_bindgen_test;
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_dedicated_worker);
+
 #[wasm_bindgen_test]
-#[ignore]
 pub async fn it_can_initialize_with_mock_network() {
     let mut hub = MockHub::new();
 

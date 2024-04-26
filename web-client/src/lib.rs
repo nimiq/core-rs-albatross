@@ -21,6 +21,8 @@ mod tests {
         },
     };
 
+    wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
     #[wasm_bindgen_test]
     pub fn it_can_create_and_sign_basic_transactions() {
         let keypair = KeyPair::generate();
