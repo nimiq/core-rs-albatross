@@ -4833,12 +4833,12 @@ dependencies = [
 
 [[package]]
 name = "nimiq_rpc"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd0757b8e74892e86407afba6601ebcd647832feb4f2360d2ffcf9e28866665d"
+checksum = "604c4d59f680cd821a72d2a8ba57609d68c6b747a5228018370a2da8700760c3"
 dependencies = [
  "async-trait",
- "base64 0.21.7",
+ "base64 0.22.0",
  "jsonrpsee",
  "serde",
  "serde_json",
