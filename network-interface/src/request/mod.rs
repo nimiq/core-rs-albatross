@@ -217,27 +217,20 @@ pub fn request_handler<T: Send + Sync + Clone + 'static, Req: Handle<N, T>, N: N
                 let network = Arc::clone(&network);
                 let req_environment = req_environment.clone();
                 async move {
-                    let req_environment = req_environment.clone();
-                    let network = Arc::clone(&network);
+                    log::trace!("[{:?}] {:?} {:#?}", request_id, peer_id, msg);
 
-                    tokio::spawn(async move {
-                        log::trace!("[{:?}] {:?} {:#?}", request_id, peer_id, msg);
-
-                        // Try to send the response, logging to debug if it fails
-                        if let Err(err) = network
-                            .respond::<Req>(request_id, msg.handle(peer_id, &req_environment))
-                            .await
-                        {
-                            log::debug!(
-                                "[{:?}] Failed to send {} response: {:?}",
-                                request_id,
-                                std::any::type_name::<Req>(),
-                                err
-                            );
-                        };
-                    })
-                    .await
-                    .expect("Request handler panicked")
+                    // Try to send the response, logging to debug if it fails
+                    if let Err(err) = network
+                        .respond::<Req>(request_id, msg.handle(peer_id, &req_environment))
+                        .await
+                    {
+                        log::debug!(
+                            "[{:?}] Failed to send {} response: {:?}",
+                            request_id,
+                            std::any::type_name::<Req>(),
+                            err
+                        );
+                    };
                 }
             })
             .await
