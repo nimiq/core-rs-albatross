@@ -253,16 +253,10 @@ pub fn message_handler<
             .for_each_concurrent(MAX_CONCURRENT_HANDLERS, |(msg, peer_id)| {
                 let req_environment = req_environment.clone();
                 async move {
-                    let req_environment = req_environment.clone();
+                    log::trace!("{:?} {:#?}", peer_id, msg);
 
-                    tokio::spawn(async move {
-                        log::trace!("{:?} {:#?}", peer_id, msg);
-
-                        // Messages do not have a response (so the response is ignored)
-                        msg.message_handle(peer_id, &req_environment);
-                    })
-                    .await
-                    .expect("Request handler panicked")
+                    // Messages do not have a response (so the response is ignored)
+                    msg.message_handle(peer_id, &req_environment);
                 }
             })
             .await
