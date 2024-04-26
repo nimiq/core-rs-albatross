@@ -2,7 +2,7 @@ version: "3.8"
 
 networks:
   devnet:
-    name: nimiq.local
+    name: {{ network_name }}
     driver: bridge
     ipam:
       driver: default
@@ -16,7 +16,7 @@ services:
     environment:
       - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
     ports:
-      - 8443
+      - "{{ loop.index + 8400 }}:8443"
         {% if seed.enable_rpc %}
       - {{ loop.index + 8647 }}:8648
         {% endif %}
@@ -36,7 +36,7 @@ services:
     environment:
       - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
     ports:
-      - 8443
+      - "{{ loop.index + 8500 }}:8443"
         {% if validator.enable_rpc %}
       - {{ loop.index + 9000 }}:8648
         {% endif %}
@@ -54,7 +54,7 @@ services:
     environment:
       - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
     ports:
-      - 8443
+      - "{{ loop.index + 8600 }}:8443"
         {% if regular_node.enable_rpc %}
       - {{ loop.index + 9000 }}:8648
         {% endif %}
@@ -74,7 +74,7 @@ services:
     environment:
       - NIMIQ_OVERRIDE_DEVNET_CONFIG={{ internal_genesis_file }}
     ports:
-      - 8443
+      - "{{ loop.index + 8700 }}:8443"
         {% if spammer.enable_rpc %}
       - {{ loop.index + 9000 }}:8648
         {% endif %}

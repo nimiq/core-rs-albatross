@@ -102,6 +102,8 @@ class TopologySettings:
     :type namespace: str
     :param env: Type of environment this topology will be run in.
     :type env: Environment
+    :param network_name: Name of the Docker network.
+    :type network_name: str
     :param spammer_profile: Spammer profile to be used (if any)
     :type spammer_profile: str
     :param loki_settings: Optional Loki settings.
@@ -111,6 +113,7 @@ class TopologySettings:
     def __init__(
             self, nimiq_dir: str, logs_dir: str, conf_dir: str, state_dir: str,
             release: bool, namespace: str, env: Environment,
+            network_name: str,
             spammer_profile: str,
             loki_settings: Optional[LokiSettings] = None):
         self.nimiq_dir = nimiq_dir
@@ -119,6 +122,7 @@ class TopologySettings:
         self.state_dir = state_dir
         self.release = release
         self.namespace = namespace
+        self.network_name = network_name
         self.loki_settings = loki_settings
         self.env = env
         self.spammer_profile = spammer_profile
@@ -267,3 +271,12 @@ class TopologySettings:
         :rtype: Optional[LokiSettings]
         """
         return self.loki_settings
+
+    def get_network_name(self):
+        """
+        Gets the name of the Docker network
+
+        :return: The name of the Docker network
+        :rtype: str
+        """
+        return self.network_name

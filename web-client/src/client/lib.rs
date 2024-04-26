@@ -155,9 +155,11 @@ impl Client {
             .collect::<Vec<Seed>>();
 
         config.network.seeds = seed_nodes;
-        config.network.only_secure_ws_connections = true;
+        config.network.only_secure_ws_connections = false;
         config.network_id = web_config.network_id;
         config.network.desired_peer_count = 12;
+        config.network.allow_loopback_addresses = true;
+        config.network.autonat_allow_non_global_ips = true;
 
         log::info!(?config, "Final configuration");
 

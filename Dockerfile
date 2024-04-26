@@ -20,9 +20,9 @@ RUN mkdir -p /home/nimiq/.nimiq
 COPY ./client.toml /home/nimiq/.nimiq
 
 COPY ./target/release/nimiq-client /usr/local/bin/nimiq-client
-COPY ./target/release/nimiq-bls /usr/local/bin/nimiq-bls
-COPY ./target/release/nimiq-address /usr/local/bin/nimiq-address
-COPY ./target/release/nimiq-rpc /usr/local/bin/nimiq-rpc
+# COPY ./target/release/nimiq-bls /usr/local/bin/nimiq-bls
+# COPY ./target/release/nimiq-address /usr/local/bin/nimiq-address
+# COPY ./target/release/nimiq-rpc /usr/local/bin/nimiq-rpc
 
 # Expose the incoming connections port
 EXPOSE 8443
@@ -43,4 +43,3 @@ LABEL \
     org.opencontainers.image.vendor="Nimiq Foundation" \
     org.opencontainers.image.licenses="Apache-2.0" \
     org.opencontainers.image.source="https://github.com/nimiq/core-rs-albatross/"
-
