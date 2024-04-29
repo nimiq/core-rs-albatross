@@ -27,7 +27,7 @@ curve25519-dalek = { version = "4", features = [
     "digest",
     "legacy_compatibility",
 ] }
-data-encoding = "2.5"
+data-encoding = "2.6"
 ed25519-zebra = "4.0"
 hex = "0.4"
 p256 = "0.13"
