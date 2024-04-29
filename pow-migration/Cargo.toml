@@ -24,7 +24,6 @@ clap = { version = "4.5", features = ["derive"] }
 convert_case = "0.6"
 hex = "0.4"
 humantime = "2.1"
-indicatif = "0.17"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 nimiq-blockchain = { workspace = true }
 nimiq-bls = { workspace = true }
@@ -47,11 +46,11 @@ nimiq-lib = { workspace = true, features = [
     "zkp-prover",
     "parallel",
 ] }
-nimiq-primitives = { workspace = true, features = ["policy"]}
+nimiq-primitives = { workspace = true, features = ["policy"] }
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
 nimiq-vrf = { workspace = true }
-nimiq_rpc = "0.3"
+nimiq_rpc = "0.3.1"
 percentage = "0.1"
 rand = "0.8"
 serde = "1.0"

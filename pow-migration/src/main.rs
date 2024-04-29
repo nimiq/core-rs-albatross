@@ -5,12 +5,18 @@ use convert_case::{Case, Casing};
 use log::{info, level_filters::LevelFilter};
 use nimiq_lib::config::{config::ClientConfig, config_file::ConfigFile};
 use nimiq_pow_migration::{
-    genesis::write_pos_genesis, get_block_windows, launch_pos_client, migrate,
+    genesis::write_pos_genesis,
+    get_block_windows,
+    history::{get_history_store_height, migrate_history},
+    launch_pos_client, migrate,
     state::get_validators,
 };
 use nimiq_primitives::networks::NetworkId;
 use nimiq_rpc::Client;
-use tokio::time::sleep;
+use tokio::{
+    sync::{mpsc, watch},
+    time::sleep,
+};
 use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 use url::Url;
 
@@ -205,20 +211,26 @@ async fn main() {
             }
         };
 
+        // Create channels in order to communicate with the PoW-to-PoS history migrator
+        let (tx_candidate_block, rx_candidate_block) = mpsc::channel(16);
+        let (tx_migration_completed, rx_migration_completed) =
+            watch::channel(get_history_store_height(env.clone()).await);
+
+        // Spawn PoW-to-PoS migrator as seperate task
+        tokio::spawn(migrate_history(
+            rx_candidate_block,
+            tx_migration_completed,
+            env.clone(),
+            pow_client.clone(),
+            block_windows.block_confirmations,
+        ));
+
         // Check that the `nimiq-client` exists
         let pos_client = current_exe_dir.join("nimiq-client");
         if !pos_client.exists() {
             log::error!("Could not find PoS client, run `cargo build [--release]`");
             exit(1);
         };
-
-        // This tool is intended to be used past the pre-stake window
-        if pow_client.block_number().await.unwrap()
-            < block_windows.pre_stake_end + block_windows.block_confirmations
-        {
-            log::error!("This tool is intended to be used during the activation period");
-            exit(1);
-        }
 
         // Create directory where the genesis file will be written if it doesn't exist
         let genesis_dir = current_exe_dir.join("genesis");
@@ -233,10 +245,40 @@ async fn main() {
 
         let mut candidate_block = block_windows.election_candidate;
 
+        // Eagerly instruct to migrate the PoW history up to the first candidate block
+        if let Err(error) = tx_candidate_block.send(candidate_block).await {
+            log::error!(error = ?error, "Failed instructing to migrate to the next candidate block");
+            exit(1);
+        }
+
+        // Continue the migration process once the pre-stake window is closed and confirmed
+        loop {
+            if pow_client.block_number().await.unwrap()
+                > block_windows.pre_stake_end + block_windows.block_confirmations
+            {
+                break;
+            }
+            sleep(Duration::from_secs(60)).await;
+        }
+
         let genesis_config;
 
-        // Do the migration
         loop {
+            let pos_history_store_height = rx_migration_completed.borrow();
+            // Wait for the PoW to PoS history migration to be caught up with the candidate block
+            if *pos_history_store_height != candidate_block {
+                log::info!(
+                    candidate_block,
+                    current_migrated_block = *pos_history_store_height,
+                    "Waiting for the PoW history to be migrated up until candidate block",
+                );
+
+                drop(pos_history_store_height);
+                sleep(Duration::from_secs(60)).await;
+                continue;
+            }
+
+            // Do the migration
             match migrate(
                 &pow_client,
                 block_windows,
@@ -255,6 +297,11 @@ async fn main() {
                     }
                     None => {
                         candidate_block += block_windows.readiness_window;
+                        // Instruct to migrate the PoW history up until the next candidate block
+                        if let Err(error) = tx_candidate_block.send(candidate_block).await {
+                            log::error!(error = ?error, "Failed instructing to migrate to the next candidate block");
+                            exit(1);
+                        }
 
                         log::info!(
                             new_candidate = candidate_block,

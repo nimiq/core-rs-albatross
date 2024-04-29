@@ -54,7 +54,7 @@ pub async fn get_pos_genesis(
         "Building history tree. This may take some time"
     );
     let start = Instant::now();
-    let history_root = match get_history_root(client, final_block.number, env).await {
+    let history_root = match get_history_root(env).await {
         Ok(history_root) => {
             let duration = start.elapsed();
             log::info!(
