@@ -1,0 +1,30 @@
+name: Publish OpenRPC document
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build_release_binary_and_publish_document:
+    name: Build nimiq-rpc-schema with release flag
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build binary in release mode
+        run: |
+          cargo build --release --bin nimiq-rpc-schema
+      - name: Get release information
+        id: get_release
+        uses: bruceadams/get-release@v1.3.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run nimiq-rpc-schema and save JSON output
+        run: |
+          cargo run --release --bin nimiq-rpc-schema -- -o ${{ steps.get_release.outputs.tag_name }} > openrpc-document.json
+      - name: Upload OpenRPC document to latest release
+        uses: JasonEtco/upload-to-release@v0.1.1
+        with:
+          args: openrpc-document.json application/json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
