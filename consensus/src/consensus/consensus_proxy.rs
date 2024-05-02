@@ -352,9 +352,25 @@ impl<N: Network> ConsensusProxy<N> {
                         if response.block.block_number() <= election_head.block_number() {
                             let block_hash = response.block.hash();
                             let mut already_proven = false;
+
+                            if response.block.block_number() == Policy::genesis_block_number() {
+                                let genesis_hash = self
+                                    .blockchain
+                                    .read()
+                                    .get_block_at(Policy::genesis_block_number(), false)
+                                    .unwrap()
+                                    .hash();
+
+                                if genesis_hash == response.block.hash() {
+                                    already_proven = true;
+                                } else {
+                                    log::warn!(peer = %peer_id, "The genesis hash from the peer does not match our own");
+                                    continue;
+                                }
+                            }
+
                             if election_head.hash() == block_hash
                                 || election_head.header.parent_election_hash == block_hash
-                                || response.block.block_number() == Policy::genesis_block_number()
                             {
                                 already_proven = true;
                             } else if let Some(ref interlink) = election_head.header.interlink {
