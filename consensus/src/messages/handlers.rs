@@ -724,6 +724,7 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBlocksProof {
             if !Policy::is_election_block_at(block_number)
                 || block_number > self.election_head
                 || self.election_head > blockchain.election_head().block_number()
+                || block_number == Policy::genesis_block_number()
             {
                 return Err(ResponseBlocksProofError::BadBlockNumber(block_number));
             }
