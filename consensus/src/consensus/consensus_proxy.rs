@@ -354,6 +354,7 @@ impl<N: Network> ConsensusProxy<N> {
                             let mut already_proven = false;
                             if election_head.hash() == block_hash
                                 || election_head.header.parent_election_hash == block_hash
+                                || response.block.block_number() == Policy::genesis_block_number()
                             {
                                 already_proven = true;
                             } else if let Some(ref interlink) = election_head.header.interlink {
