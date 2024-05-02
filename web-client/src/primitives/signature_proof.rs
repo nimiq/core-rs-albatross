@@ -38,24 +38,17 @@ impl SignatureProof {
         public_keys: &PublicKeyUnionArray,
         signature: &Signature,
     ) -> Result<SignatureProof, JsError> {
-        let mut public_keys: Vec<_> = SignatureProof::unpack_public_keys(public_keys)?
-            .into_iter()
-            .map(|k| match k {
-                nimiq_keys::PublicKey::Ed25519(ref public_key) => public_key.serialize_to_vec(),
-                nimiq_keys::PublicKey::ES256(ref public_key) => public_key.serialize_to_vec(),
-            })
-            .collect();
-        public_keys.sort_unstable();
+        let signer_key = nimiq_keys::PublicKey::Ed25519(*signer_key.native_ref());
+        let public_keys: Vec<_> = SignatureProof::unpack_public_keys(public_keys)?;
 
-        let merkle_path = nimiq_utils::merkle::Blake2bMerklePath::new::<
-            nimiq_hash::Blake2bHasher,
-            Vec<u8>,
-        >(&public_keys, &signer_key.native_ref().serialize_to_vec());
+        let merkle_path = SignatureProof::make_merkle_path(&public_keys, &signer_key);
+
+        let signature = nimiq_keys::Signature::Ed25519(signature.native_ref().clone());
 
         Ok(SignatureProof::from(nimiq_transaction::SignatureProof {
-            public_key: nimiq_keys::PublicKey::Ed25519(*signer_key.native_ref()),
+            public_key: signer_key,
             merkle_path,
-            signature: nimiq_keys::Signature::Ed25519(signature.native_ref().clone()),
+            signature,
             webauthn_fields: None,
         }))
     }
@@ -95,21 +88,11 @@ impl SignatureProof {
         client_data_json: &[u8],
     ) -> Result<SignatureProof, JsError> {
         let signer_key = SignatureProof::unpack_public_key(signer_key)?;
+        let public_keys = SignatureProof::unpack_public_keys(public_keys)?;
+
+        let merkle_path = SignatureProof::make_merkle_path(&public_keys, &signer_key);
+
         let signature = SignatureProof::unpack_signature(signature)?;
-
-        let mut public_keys: Vec<_> = SignatureProof::unpack_public_keys(public_keys)?
-            .into_iter()
-            .map(|k| match k {
-                nimiq_keys::PublicKey::Ed25519(ref public_key) => public_key.serialize_to_vec(),
-                nimiq_keys::PublicKey::ES256(ref public_key) => public_key.serialize_to_vec(),
-            })
-            .collect();
-        public_keys.sort_unstable();
-
-        let merkle_path = nimiq_utils::merkle::Blake2bMerklePath::new::<
-            nimiq_hash::Blake2bHasher,
-            Vec<u8>,
-        >(&public_keys, &signer_key.serialize_to_vec());
 
         let client_data_json = str::from_utf8(client_data_json)
             .map_err(|e| JsError::new(&format!("Invalid clientDataJSON: {e}")))?;
@@ -123,6 +106,25 @@ impl SignatureProof {
                 client_data_json,
             )?,
         ))
+    }
+
+    fn make_merkle_path(
+        values: &[nimiq_keys::PublicKey],
+        leaf_value: &nimiq_keys::PublicKey,
+    ) -> nimiq_utils::merkle::Blake2bMerklePath {
+        let mut public_keys: Vec<_> = values
+            .iter()
+            .map(|k| match k {
+                nimiq_keys::PublicKey::Ed25519(public_key) => public_key.serialize_to_vec(),
+                nimiq_keys::PublicKey::ES256(public_key) => public_key.serialize_to_vec(),
+            })
+            .collect();
+        public_keys.sort_unstable();
+
+        nimiq_utils::merkle::Blake2bMerklePath::new::<nimiq_hash::Blake2bHasher, Vec<u8>>(
+            &public_keys,
+            &leaf_value.serialize_to_vec(),
+        )
     }
 
     /// Verifies the signature proof against the provided data.
@@ -249,6 +251,7 @@ extern "C" {
 
 #[cfg(test)]
 mod tests {
+    use nimiq_serde::Deserialize;
     use wasm_bindgen::prelude::JsValue;
     use wasm_bindgen_test::*;
 
@@ -314,5 +317,33 @@ mod tests {
         // if proof.is_err() {
         //     console_log!("{:?}", proof.map_err(JsValue::from).err().unwrap());
         // }
+    }
+
+    #[test]
+    fn it_can_create_correct_merkle_paths() {
+        let public_keys = vec![
+            nimiq_keys::PublicKey::Ed25519(
+                nimiq_keys::Ed25519PublicKey::deserialize_from_vec(
+                    &hex::decode(
+                        "02af70ae2e8232eb5ca2f8a4c47a71d9cd6ea62f552467f0d3c56428be47d638",
+                    )
+                    .unwrap(),
+                )
+                .unwrap(),
+            ),
+            nimiq_keys::PublicKey::ES256(
+                nimiq_keys::ES256PublicKey::deserialize_from_vec(
+                    &hex::decode(
+                        "0327e1f7995bde5df8a22bd9c27833b532d79c2350e61fc9a85621d1438eabeb7c",
+                    )
+                    .unwrap(),
+                )
+                .unwrap(),
+            ),
+        ];
+
+        let merkle_path = SignatureProof::make_merkle_path(&public_keys, &public_keys[0]);
+
+        assert_eq!(merkle_path.len(), 1);
     }
 }
