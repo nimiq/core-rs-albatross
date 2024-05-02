@@ -123,7 +123,10 @@ impl SignatureProof {
 
         nimiq_utils::merkle::Blake2bMerklePath::new::<nimiq_hash::Blake2bHasher, Vec<u8>>(
             &public_keys,
-            &leaf_value.serialize_to_vec(),
+            &match leaf_value {
+                nimiq_keys::PublicKey::Ed25519(public_key) => public_key.serialize_to_vec(),
+                nimiq_keys::PublicKey::ES256(public_key) => public_key.serialize_to_vec(),
+            },
         )
     }
 
