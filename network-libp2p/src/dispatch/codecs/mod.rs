@@ -11,8 +11,8 @@ use std::io;
 use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use libp2p::{request_response, StreamProtocol};
 
-/// Maximum request size in bytes (5 kB)
-const MAX_REQUEST_SIZE: u64 = 5 * 1024;
+/// Maximum request size in bytes (20 kB)
+const MAX_REQUEST_SIZE: u64 = 20 * 1024;
 /// Maximum response size in bytes (10 MB)
 const MAX_RESPONSE_SIZE: u64 = 10 * 1024 * 1024;
 /// Size of a u64
