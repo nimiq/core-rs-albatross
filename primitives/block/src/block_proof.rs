@@ -19,6 +19,11 @@ impl BlockInclusionProof {
         let target_number = Policy::epoch_at(target);
         let latest_number = Policy::epoch_at(latest_election_number);
 
+        // This means the target is the genesis block.
+        if target_number == 0 {
+            return Vec::new();
+        }
+
         // Compute the hops
         let mut hops = vec![];
 
