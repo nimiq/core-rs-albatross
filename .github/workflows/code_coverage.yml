@@ -55,8 +55,6 @@ jobs:
     - uses: taiki-e/install-action@cargo-llvm-cov
     - uses: taiki-e/install-action@nextest
     - uses: Swatinem/rust-cache@v2
-    - name: Install Protoc
-      run: sudo apt-get install protobuf-compiler
     - name: Remove possible stale artifacts
       run: cargo llvm-cov clean --workspace
     - name: Disk Space

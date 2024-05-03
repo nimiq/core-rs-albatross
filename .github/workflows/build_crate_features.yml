@@ -14,8 +14,6 @@ jobs:
     - name: Set up Rust toolchain
       uses: dtolnay/rust-toolchain@stable
     - uses: Swatinem/rust-cache@v2
-    - name: Install Protoc
-      run: sudo apt-get install protobuf-compiler
     - name: Set up python
       uses: actions/setup-python@v5
       with:

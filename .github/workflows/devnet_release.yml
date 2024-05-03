@@ -63,8 +63,6 @@ jobs:
     - uses: Swatinem/rust-cache@v2
     - name: Optionally patch the source
       run: ${{ matrix.pre }}
-    - name: Install Protoc
-      run: sudo apt-get install protobuf-compiler
     - name: Build the code
       run: cargo build --release
     - name: Retrieve initial timestamp
