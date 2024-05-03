@@ -4800,9 +4800,9 @@ dependencies = [
 
 [[package]]
 name = "nimiq_rpc"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "604c4d59f680cd821a72d2a8ba57609d68c6b747a5228018370a2da8700760c3"
+checksum = "bb80a3b3d63f71bfbe5445b9668b8db1334c826e8a4bafbfcbf59ee8f5662a38"
 dependencies = [
  "async-trait",
  "base64 0.22.1",

@@ -36,6 +36,7 @@ pub fn generate_ready_tx(validator: String) -> OutgoingTransaction {
         to: Address::burn_address().to_user_friendly_address(),
         value: 1, //Lunas
         fee: 0,
+        data: None,
     }
 }
 
