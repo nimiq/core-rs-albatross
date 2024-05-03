@@ -30,5 +30,6 @@ thiserror = "1.0"
 tokio = { version = "1.37", features = ["rt"] }
 tokio-stream = { version = "0.1", features = ["default", "sync"] }
 
+nimiq-primitives = { workspace = true }
 nimiq-serde = { workspace = true }
 nimiq-utils = { workspace = true, features = ["tagged-signing"] }

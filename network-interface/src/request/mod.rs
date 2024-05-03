@@ -1,6 +1,7 @@
 use std::{fmt, sync::Arc, time::Duration};
 
 use futures::{stream::BoxStream, Future, StreamExt};
+use nimiq_primitives::task_executor::TaskExecutor;
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use thiserror::Error;
 
@@ -206,6 +207,7 @@ const MAX_CONCURRENT_HANDLERS: usize = 64;
 
 pub fn request_handler<T: Send + Sync + Clone + 'static, Req: Handle<N, T>, N: Network>(
     network: &Arc<N>,
+    executor: impl TaskExecutor + Send + 'static,
     stream: BoxStream<'static, (Req, N::RequestId, N::PeerId)>,
     req_environment: &T,
 ) -> impl Future<Output = ()> {
@@ -216,11 +218,12 @@ pub fn request_handler<T: Send + Sync + Clone + 'static, Req: Handle<N, T>, N: N
             .for_each_concurrent(MAX_CONCURRENT_HANDLERS, |(msg, request_id, peer_id)| {
                 let network = Arc::clone(&network);
                 let req_environment = req_environment.clone();
+                let executor = executor.clone();
                 async move {
                     let req_environment = req_environment.clone();
                     let network = Arc::clone(&network);
 
-                    tokio::spawn(async move {
+                    executor.exec(Box::pin(async move {
                         log::trace!("[{:?}] {:?} {:#?}", request_id, peer_id, msg);
 
                         // Try to send the response, logging to debug if it fails
@@ -235,9 +238,7 @@ pub fn request_handler<T: Send + Sync + Clone + 'static, Req: Handle<N, T>, N: N
                                 err
                             );
                         };
-                    })
-                    .await
-                    .expect("Request handler panicked")
+                    }))
                 }
             })
             .await
@@ -251,6 +252,7 @@ pub fn message_handler<
     N: Network,
 >(
     _network: &Arc<N>,
+    executor: impl TaskExecutor + Send + 'static,
     stream: BoxStream<'static, (Msg, N::PeerId)>,
     req_environment: &T,
 ) -> impl Future<Output = ()> {

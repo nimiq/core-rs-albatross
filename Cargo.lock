@@ -3965,6 +3965,7 @@ dependencies = [
  "bitflags 2.5.0",
  "futures-util",
  "multiaddr",
+ "nimiq-primitives",
  "nimiq-serde",
  "nimiq-utils",
  "serde",
