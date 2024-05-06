@@ -66,9 +66,7 @@ impl Services {
                     | Services::TRANSACTION_INDEX
             }
             NodeType::Light => Services::empty(),
-            NodeType::Full => {
-                Services::ACCOUNTS_PROOF | Services::FULL_BLOCKS | Services::ACCOUNTS_CHUNKS
-            }
+            NodeType::Full => Services::ACCOUNTS_PROOF | Services::FULL_BLOCKS,
         }
     }
 

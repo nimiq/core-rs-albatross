@@ -105,6 +105,26 @@ fn get_size(hist_tree_table: &TableProxy, tx: &TransactionProxy, epoch_number: u
     }
 }
 
+/// Obtains the first and last block number stored in the history tree table
+pub fn get_range(hist_tree_table: &TableProxy, tx: &TransactionProxy) -> (u32, u32) {
+    // Initialize the cursor for the database.
+    let mut cursor = tx.cursor(&hist_tree_table);
+
+    let first = if let Some((key, _)) = cursor.first::<Vec<u8>, Blake2bHash>() {
+        key_to_index(key).unwrap().0
+    } else {
+        0
+    };
+
+    let last = if let Some((key, _)) = cursor.last::<Vec<u8>, Blake2bHash>() {
+        key_to_index(key).unwrap().0
+    } else {
+        0
+    };
+
+    (first, last)
+}
+
 /// Transforms an epoch number and a node index into the corresponding database key.
 fn index_to_key(epoch_number: u32, index: usize) -> Vec<u8> {
     let mut bytes = epoch_number.to_be_bytes().to_vec();
@@ -193,7 +213,8 @@ impl<'a, 'env> LightMMRStore<'a, 'env> {
         let size = get_size(hist_tree_table, tx, block_number);
 
         // If size is 0 we need to copy the entries from the previous block number to the new one
-        if size == 0 {
+        // Except when this is the first block number of the epoch (in which case we start a new mmr)
+        if size == 0 && !Policy::is_election_block_at(block_number - 1) {
             init_mmr_from_block_number(hist_tree_table, tx, block_number);
         }
 

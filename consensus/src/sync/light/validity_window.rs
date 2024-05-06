@@ -51,17 +51,71 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         election_in_window: bool,
     ) {
         if self.validity_requests.is_none() {
-            // In this case we are going to start a new request
-            let epoch_number = Policy::epoch_at(verifier_block_number);
-            let chunk_index = 0;
+            // By default we set the parameters assuming we are starting from stratch
+            let mut epoch_number = Policy::epoch_at(verifier_block_number);
+            let mut chunk_index = 0;
+            let mut root_hash = expected_root.clone();
+            let mut last_chunk_items: Option<usize> = None;
+            let mut verifier_block_number = verifier_block_number;
+            let mut election_in_window = election_in_window;
+
+            // First we need to check if we already have items in the history store, and request only the remaining portion (if any)
+            match &self.blockchain {
+                BlockchainProxy::Full(blockchain) => {
+                    let blockchain_wr = blockchain.read();
+
+                    let (first_bn, last_bn) = blockchain_wr.history_store.history_store_range();
+
+                    // This means we already know the first epoch so we need to request the missing items from the current epoch
+                    if last_bn >= verifier_block_number {
+                        epoch_number = Policy::epoch_at(last_bn);
+
+                        let current_length = blockchain_wr
+                            .history_store
+                            .total_len_at_epoch(epoch_number, None);
+
+                        log::debug!(
+                            first_bn = first_bn,
+                            last_bn = last_bn,
+                            current_items = current_length,
+                            "We already have items in our history store, moving to the current epoch",
+                        );
+
+                        chunk_index = (current_length / CHUNK_SIZE) as u32;
+                        last_chunk_items = Some(current_length % CHUNK_SIZE);
+                        root_hash = blockchain_wr.macro_head().header.history_root.clone();
+                        verifier_block_number = blockchain_wr.macro_head().block_number();
+                        election_in_window = false;
+                    } else if last_bn >= validity_window_start {
+                        epoch_number = Policy::epoch_at(last_bn);
+
+                        let current_length = blockchain_wr
+                            .history_store
+                            .total_len_at_epoch(epoch_number, None);
+
+                        log::debug!(
+                            first_bn = first_bn,
+                            last_bn = last_bn,
+                            current_items = current_length,
+                            "We already have items in our history store",
+                        );
+
+                        chunk_index = (current_length / CHUNK_SIZE) as u32;
+                        last_chunk_items = Some(current_length % CHUNK_SIZE);
+                    }
+                }
+                BlockchainProxy::Light(_) => {
+                    unreachable!()
+                }
+            };
 
             self.validity_requests = Some(ValidityChunkRequest {
                 verifier_block_number,
-                root_hash: expected_root.clone(),
+                root_hash,
                 chunk_index,
                 validity_start: validity_window_start,
                 election_in_window,
-                last_chunk_items: None,
+                last_chunk_items,
             });
 
             // Add the peer
@@ -77,31 +131,13 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             log::debug!(
                 target_macro = verifier_block_number,
                 chunk_index = chunk_index,
+                last_chunk_items = last_chunk_items,
                 epoch = epoch_number,
                 validity_start = validity_window_start,
                 election_in_between = election_in_window,
                 expected_root = %expected_root,
                 "Starting validity window synchronization process"
             );
-
-            // If we already have some history, we need to do a cleanup before starting the sync process
-            match &self.blockchain {
-                BlockchainProxy::Full(blockchain) => {
-                    let mut blockchain_wr = blockchain.write();
-                    if blockchain_wr
-                        .history_store
-                        .length_at(verifier_block_number, None)
-                        > 0
-                    {
-                        blockchain_wr.remove_epoch_history(epoch_number);
-
-                        log::debug!(epoch = epoch_number, "Removing existing history from epoch");
-                    }
-                }
-                BlockchainProxy::Light(_) => {
-                    unreachable!()
-                }
-            };
 
             // Request the chunk
             self.validity_queue.add_ids(vec![(request, None)]);

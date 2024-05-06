@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use nimiq_block::MicroBlock;
 use nimiq_database::{
     traits::{Database, WriteTransaction},
@@ -10,11 +8,10 @@ use nimiq_hash::Blake2bHash;
 use nimiq_mmr::mmr::PeaksMerkleMountainRange;
 use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{historic_transaction::HistoricTransaction, inherent::Inherent};
-use parking_lot::RwLock;
 
 use super::{
     interface::HistoryInterface,
-    mmr_store::{remove_block_from_store, LightMMRStore},
+    mmr_store::{get_range, remove_block_from_store, LightMMRStore},
     validity_store::ValidityStore,
 };
 
@@ -27,17 +24,17 @@ pub struct LightHistoryStore {
     pub network_id: NetworkId,
     /// Database handle.
     db: DatabaseProxy,
-    /// A database of all history trees indexed by their epoch number.
+    /// A database of all history trees indexed by their block number.
     hist_tree_table: TableProxy,
     /// The container of all the validity window transaction hashes.
-    validity_store: Arc<RwLock<ValidityStore>>,
+    validity_store: ValidityStore,
 }
 
 impl LightHistoryStore {
     /// Creates a new LightHistoryStore.
     pub fn new(db: DatabaseProxy, network_id: NetworkId) -> Self {
         let hist_tree_table = db.open_table("LightHistoryTrees".to_string());
-        let validity_store = Arc::new(RwLock::new(ValidityStore::new()));
+        let validity_store = ValidityStore::new(db.clone());
 
         LightHistoryStore {
             db,
@@ -50,9 +47,8 @@ impl LightHistoryStore {
     fn remove_block_light_history_store(&self, txn: &mut WriteTransactionProxy, block_number: u32) {
         remove_block_from_store(&self.hist_tree_table, txn, block_number);
 
-        let mut validity_store = self.validity_store.write();
-
-        validity_store.delete_block_transactions(block_number);
+        self.validity_store
+            .delete_block_transactions(txn, block_number);
     }
 }
 
@@ -110,9 +106,8 @@ impl HistoryInterface for LightHistoryStore {
     ) -> Option<u64> {
         remove_block_from_store(&self.hist_tree_table, txn, block.block_number());
 
-        let mut validity_store = self.validity_store.write();
-
-        validity_store.delete_block_transactions(block.block_number());
+        self.validity_store
+            .delete_block_transactions(txn, block.block_number());
 
         // TODO: We dont keep track of the size of the txns that we removed, is this necessary?
         Some(0)
@@ -120,12 +115,13 @@ impl HistoryInterface for LightHistoryStore {
 
     // Remove the history of the given epoch
     fn remove_history(&self, txn: &mut WriteTransactionProxy, epoch_number: u32) -> Option<()> {
-        log::debug!("Removing history");
+        if epoch_number == 0 {
+            return Some(());
+        }
 
         for bn in Policy::first_block_of(epoch_number).unwrap()
             ..(Policy::first_block_of(epoch_number + 1).unwrap() - 1)
         {
-            log::debug!("Removing history from {}", bn);
             self.remove_block_light_history_store(txn, bn);
         }
 
@@ -162,14 +158,6 @@ impl HistoryInterface for LightHistoryStore {
     }
 
     fn length_at(&self, block_number: u32, txn_option: Option<&TransactionProxy>) -> u32 {
-        self.total_len_at_epoch(block_number, txn_option) as u32
-    }
-
-    fn total_len_at_epoch(
-        &self,
-        epoch_number: u32, //TODO change this to block number
-        txn_option: Option<&TransactionProxy>,
-    ) -> usize {
         let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -182,11 +170,63 @@ impl HistoryInterface for LightHistoryStore {
         let tree = PeaksMerkleMountainRange::new(LightMMRStore::with_read_transaction(
             &self.hist_tree_table,
             txn,
-            epoch_number,
+            block_number,
         ));
 
         // Get the Merkle tree length
-        tree.len()
+        tree.len() as u32
+    }
+
+    fn history_store_range(&self) -> (u32, u32) {
+        let read_txn = self.db.read_transaction();
+
+        get_range(&self.hist_tree_table, &read_txn)
+    }
+
+    fn total_len_at_epoch(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&TransactionProxy>,
+    ) -> usize {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        let (first_bn, last_bn) = self.history_store_range();
+
+        let length = if Policy::epoch_at(last_bn) == epoch_number {
+            // Get peaks mmr of the latest block stored
+            let tree = PeaksMerkleMountainRange::new(LightMMRStore::with_read_transaction(
+                &self.hist_tree_table,
+                txn,
+                last_bn,
+            ));
+
+            // Get the Merkle tree length
+            tree.num_leaves()
+        } else {
+            if first_bn < (Policy::first_block_of(epoch_number + 1).unwrap() - 1) {
+                // Get peaks mmr of the latest block stored
+                let tree = PeaksMerkleMountainRange::new(LightMMRStore::with_read_transaction(
+                    &self.hist_tree_table,
+                    txn,
+                    Policy::first_block_of(epoch_number + 1).unwrap() - 1,
+                ));
+
+                // Get the Merkle tree length
+                tree.num_leaves()
+            } else {
+                log::debug!(" validity out of bounds!");
+                0
+            }
+        };
+
+        length
     }
 
     fn add_to_history(
@@ -202,25 +242,18 @@ impl HistoryInterface for LightHistoryStore {
             block_number,
         ));
 
-        let mut validity_store = self.validity_store.write();
-
-        validity_store.update_validity_store(block_number);
-
         for tx in hist_txs {
             tree.push(tx).ok()?;
-
-            validity_store.add_transaction(block_number, tx.tx_hash().into())
         }
 
-        log::trace!(
-            num_txns = hist_txs.len(),
-            " Added txns to the history store"
-        );
-
-        // Prune the validity store after adding txns for some specific block
-        validity_store.prune_validity_store();
-
         let root = tree.get_root().ok()?;
+
+        for tx in hist_txs {
+            self.validity_store
+                .add_transaction(txn, block_number, tx.tx_hash().into())
+        }
+
+        self.validity_store.update_validity_store(txn, block_number);
 
         // Return the history root.
         Some((root, 0))
@@ -239,9 +272,10 @@ impl HistoryInterface for LightHistoryStore {
         &self,
         tx_hash: &Blake2bHash,
         _validity_window_start: u32,
-        _txn_opt: Option<&TransactionProxy>,
+        txn_opt: Option<&TransactionProxy>,
     ) -> bool {
-        self.validity_store.read().has_transaction(tx_hash.clone())
+        self.validity_store
+            .has_transaction(txn_opt, tx_hash.clone())
     }
 
     fn get_hist_tx_by_hash(
@@ -425,12 +459,9 @@ mod tests {
         let hist_txs = vec![ext_3, ext_4, ext_5, ext_6, ext_7];
         history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 3, &hist_txs);
 
-        let len_1 =
-            history_store.total_len_at_epoch(Policy::genesis_block_number() + 1, Some(&txn));
-        let len_2 =
-            history_store.total_len_at_epoch(Policy::genesis_block_number() + 2, Some(&txn));
-        let len_3 =
-            history_store.total_len_at_epoch(Policy::genesis_block_number() + 3, Some(&txn));
+        let len_1 = history_store.length_at(Policy::genesis_block_number() + 1, Some(&txn));
+        let len_2 = history_store.length_at(Policy::genesis_block_number() + 2, Some(&txn));
+        let len_3 = history_store.length_at(Policy::genesis_block_number() + 3, Some(&txn));
 
         // Lengths are cumulative because they are block number based
         assert_eq!(len_1, 3);
@@ -472,12 +503,9 @@ mod tests {
         // Add historic transactions to History Store.
         history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 3, &hist_txs);
 
-        let size_1 =
-            history_store.total_len_at_epoch(Policy::genesis_block_number() + 1, Some(&txn));
-        let size_2 =
-            history_store.total_len_at_epoch(Policy::genesis_block_number() + 2, Some(&txn));
-        let size_3 =
-            history_store.total_len_at_epoch(Policy::genesis_block_number() + 3, Some(&txn));
+        let size_1 = history_store.length_at(Policy::genesis_block_number() + 1, Some(&txn));
+        let size_2 = history_store.length_at(Policy::genesis_block_number() + 2, Some(&txn));
+        let size_3 = history_store.length_at(Policy::genesis_block_number() + 3, Some(&txn));
 
         assert_eq!(size_1, 3);
         assert_eq!(size_2, 8);
@@ -496,12 +524,9 @@ mod tests {
         history_store
             .remove_block_light_history_store(&mut txn, Policy::genesis_block_number() + 3);
 
-        let size_1 =
-            history_store.total_len_at_epoch(Policy::genesis_block_number() + 1, Some(&txn));
-        let size_2 =
-            history_store.total_len_at_epoch(Policy::genesis_block_number() + 2, Some(&txn));
-        let size_3 =
-            history_store.total_len_at_epoch(Policy::genesis_block_number() + 3, Some(&txn));
+        let size_1 = history_store.length_at(Policy::genesis_block_number() + 1, Some(&txn));
+        let size_2 = history_store.length_at(Policy::genesis_block_number() + 2, Some(&txn));
+        let size_3 = history_store.length_at(Policy::genesis_block_number() + 3, Some(&txn));
 
         assert_eq!(size_1, 3);
         assert_eq!(size_2, 8);
