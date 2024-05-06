@@ -1,6 +1,7 @@
 use std::{
     future::Future,
     marker::PhantomData,
+    mem,
     pin::Pin,
     sync::{
         atomic::{AtomicU32, Ordering as AtomicOrdering},
@@ -77,8 +78,20 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        struct Decrementer(Arc<AtomicU32>);
+        impl Drop for Decrementer {
+            fn drop(&mut self) {
+                self.0.fetch_sub(1, AtomicOrdering::Relaxed);
+            }
+        }
+
         while let Some((tx, pubsub_id)) = ready!(self.txn_stream.as_mut().poll_next_unpin(cx)) {
-            if self.verification_tasks.load(AtomicOrdering::SeqCst) >= CONCURRENT_VERIF_TASKS {
+            let decrement = Decrementer(Arc::clone(&self.verification_tasks));
+            if self
+                .verification_tasks
+                .fetch_add(1, AtomicOrdering::Relaxed)
+                >= CONCURRENT_VERIF_TASKS
+            {
                 log::debug!("Reached the max number of verification tasks");
                 continue;
             }
@@ -86,14 +99,11 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
             let blockchain = Arc::clone(&self.blockchain);
             let mempool_state = Arc::clone(&self.state);
             let filter = Arc::clone(&self.filter);
-            let tasks_count = Arc::clone(&self.verification_tasks);
             let network = Arc::clone(&self.network);
             let network_id = self.network_id;
 
             // Spawn the transaction verification task
             tokio::task::spawn(async move {
-                tasks_count.fetch_add(1, AtomicOrdering::SeqCst);
-
                 let verify_tx_ret = verify_tx(
                     &tx,
                     blockchain,
@@ -115,7 +125,7 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
 
                 network.validate_message::<T>(pubsub_id, acceptance);
 
-                tasks_count.fetch_sub(1, AtomicOrdering::SeqCst);
+                mem::drop(decrement);
             });
         }
 
