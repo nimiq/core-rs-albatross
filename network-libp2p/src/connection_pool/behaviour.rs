@@ -171,7 +171,7 @@ impl<T: Ord> ConnectionState<T> {
 
     /// Returns whether a connection ID is banned
     fn is_banned(&self, id: T) -> bool {
-        self.banned.get(&id).is_some()
+        self.banned.contains(&id)
     }
 
     /// Marks a connection ID as failed

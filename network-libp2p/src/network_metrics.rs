@@ -18,11 +18,6 @@ struct TopicLabels {
     topic: String,
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-struct RequestIdLabels {
-    request_id: String,
-}
-
 impl Default for NetworkMetrics {
     fn default() -> Self {
         NetworkMetrics {

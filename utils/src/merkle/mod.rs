@@ -241,40 +241,6 @@ impl<'de, H: HashOutput> Deserialize<'de> for MerklePath<H> {
         )
     }
 }
-struct MerklePathNodesVisitor<H: HashOutput> {
-    left_bits: Vec<u8>,
-    count: usize,
-    phantom: PhantomData<H>,
-}
-
-impl<'de, H: HashOutput> Visitor<'de> for MerklePathNodesVisitor<H> {
-    type Value = Vec<MerklePathNode<H>>;
-
-    fn expecting(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "a set Merkle Path nodes")
-    }
-
-    fn visit_seq<A>(self, mut seq: A) -> Result<Vec<MerklePathNode<H>>, A::Error>
-    where
-        A: SeqAccess<'de>,
-    {
-        let mut nodes: Vec<MerklePathNode<H>> = Vec::with_capacity(self.count);
-        let mut curr = 0usize;
-        while let Some(hash) = seq.next_element::<H>()? {
-            nodes.push(MerklePathNode {
-                left: MerklePath::<H>::decompress(curr, &self.left_bits),
-                hash,
-            });
-            curr += 1;
-            if curr > self.count {
-                return Err(A::Error::custom(
-                    "Size mismatch for a set of MerklePath nodes",
-                ));
-            }
-        }
-        Ok(nodes)
-    }
-}
 
 pub type Blake2bMerklePath = MerklePath<Blake2bHash>;
 

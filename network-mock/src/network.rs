@@ -392,7 +392,7 @@ impl MockNetwork {
         }
     }
 
-    async fn publish_with_name<T: Topic>(
+    async fn publish_with_name<T>(
         &self,
         topic_name: String,
         item: T::Item,

@@ -8,6 +8,7 @@ use nimiq_zkp_circuits::metadata::VerifyingKeyMetadata;
 use nimiq_zkp_primitives::VerifyingData;
 use once_cell::sync::OnceCell;
 
+#[derive(Default)]
 pub struct ZKPVerifyingKey {
     cell: OnceCell<VerifyingData>,
 }

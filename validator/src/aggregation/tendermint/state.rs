@@ -142,22 +142,6 @@ impl MacroState {
     }
 }
 
-struct State<TValidatorNetwork: ValidatorNetwork + 'static>(
-    pub u32,
-    pub TendermintState<TendermintProtocol<TValidatorNetwork>>,
-)
-where
-    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin;
-
-impl<TValidatorNetwork: ValidatorNetwork + 'static> Clone for State<TValidatorNetwork>
-where
-    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
-{
-    fn clone(&self) -> Self {
-        Self(self.0, self.1.clone())
-    }
-}
-
 impl IntoDatabaseValue for MacroState {
     fn database_byte_size(&self) -> usize {
         self.serialized_size()

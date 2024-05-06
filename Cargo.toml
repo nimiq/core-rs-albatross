@@ -164,6 +164,8 @@ keywords = ["nimiq", "cryptocurrency", "blockchain"]
 clippy.large_enum_variant = "allow"
 clippy.too_many_arguments = "allow"
 clippy.type_complexity = "allow"
+clippy.empty_docs = "allow" # false positives: https://github.com/rust-lang/rust-clippy/issues/12377
+clippy.assigning_clones = "allow" # false positives: https://github.com/rust-lang/rust-clippy/issues/12709
 
 [workspace.dependencies]
 nimiq-account = { path = "primitives/account", default-features = false }
