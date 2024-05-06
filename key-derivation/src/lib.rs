@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::OnceLock};
 
 use byteorder::{BigEndian, WriteBytesExt};
 use nimiq_hash::{hmac::*, sha512::Sha512Hash};
@@ -26,8 +26,11 @@ impl ExtendedPrivateKey {
 
     /// Checks whether a string is a valid derivation path.
     pub fn is_valid_path(path: &str) -> bool {
-        let re = Regex::new(r"^m(/[0-9]+')*$").unwrap();
-        if !re.is_match(path) {
+        static REGEX: OnceLock<Regex> = OnceLock::new();
+        if !REGEX
+            .get_or_init(|| Regex::new(r"^m(/[0-9]+')*$").unwrap())
+            .is_match(path)
+        {
             return false;
         }
 
