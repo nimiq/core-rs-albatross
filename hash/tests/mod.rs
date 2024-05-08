@@ -3,8 +3,7 @@ use std::io::Write;
 use nimiq_hash::{
     argon2kdf,
     sha512::{Sha512Hash, Sha512Hasher},
-    Argon2dHash, Argon2dHasher, Blake2bHash, Blake2bHasher, Blake2sHash, Blake2sHasher, Hasher,
-    Sha256Hash, Sha256Hasher,
+    Blake2bHash, Blake2bHasher, Blake2sHash, Blake2sHasher, Hasher, Sha256Hash, Sha256Hasher,
 };
 use nimiq_test_log::test;
 
@@ -25,23 +24,6 @@ fn it_can_compute_sha256() {
     assert_eq!(
         h.finish(),
         Sha256Hash::from("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08")
-    );
-}
-
-#[test]
-fn it_can_compute_argon2d() {
-    // argon2d('test') = '8c259fdcc2ad6799df728c11e895a3369e9dbae6a3166ebc3b353399fc565524'
-
-    assert_eq!(
-        Argon2dHasher::default().digest(b"test"),
-        Argon2dHash::from("8c259fdcc2ad6799df728c11e895a3369e9dbae6a3166ebc3b353399fc565524")
-    );
-    let mut h = Argon2dHasher::default();
-    h.write_all(b"te").unwrap();
-    h.write_all(b"st").unwrap();
-    assert_eq!(
-        h.finish(),
-        Argon2dHash::from("8c259fdcc2ad6799df728c11e895a3369e9dbae6a3166ebc3b353399fc565524")
     );
 }
 
