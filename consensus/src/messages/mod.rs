@@ -120,6 +120,7 @@ impl RequestCommon for RequestMacroChain {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestBatchSet {
+    /// The hash of the macro block.
     pub hash: Blake2bHash,
 }
 
@@ -140,6 +141,8 @@ pub struct BatchSet {
 pub enum BatchSetError {
     #[error("target hash not found")]
     TargetHashNotFound,
+    #[error("the hash of a micro block was given")]
+    MicroBlockGiven,
     #[error("unknown error")]
     #[serde(other)]
     Other,
@@ -413,6 +416,7 @@ pub struct ResponseTransactionReceiptsByAddress {
     pub receipts: Vec<(Blake2bHash, u32)>,
 }
 
+/// Request a proof for the values corresponding to some keys or their absence from the accounts trie.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestTrieProof {
     /// Addresses for which the accounts trie proof is requested for
@@ -426,6 +430,7 @@ impl RequestCommon for RequestTrieProof {
     const MAX_REQUESTS: u32 = MAX_REQUEST_TRIE_PROOF;
 }
 
+/// Response to [`RequestTrieProof`].
 #[derive(Serialize, Deserialize)]
 pub struct ResponseTrieProof {
     // The accounts proof

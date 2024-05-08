@@ -97,7 +97,8 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
 
         let block = match blockchain.get_block(&self.hash, true, None) {
             Ok(Block::Macro(block)) => block,
-            _ => return Err(BatchSetError::TargetHashNotFound),
+            Ok(Block::Micro(_)) => return Err(BatchSetError::MicroBlockGiven),
+            Err(_) => return Err(BatchSetError::TargetHashNotFound),
         };
 
         let batch_sets = if let Ok(macro_hashes) = blockchain
