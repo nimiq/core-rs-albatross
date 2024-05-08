@@ -9,6 +9,7 @@ use nimiq_network_interface::{
     request::{InboundRequestError, Message, Request, RequestCommon, RequestError},
 };
 use nimiq_serde::{Deserialize, Serialize};
+use nimiq_utils::spawn::spawn;
 use parking_lot::RwLock;
 use time::OffsetDateTime;
 
@@ -211,7 +212,7 @@ where
             }
         }
         let self_ = self.arc_clone();
-        tokio::spawn(async move {
+        spawn(async move {
             Self::update_peer_id_cache(&self_, validator_id, &public_key).await;
         });
         new_cache_state

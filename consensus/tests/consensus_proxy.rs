@@ -45,16 +45,10 @@ async fn test_request_transactions_by_address() {
     produce_macro_blocks(&producer, &blockchain1, num_macro_blocks);
 
     let net1 = Arc::new(hub.new_network());
-    let zkp_prover1 = ZKPComponent::new(
-        BlockchainProxy::from(&blockchain1),
-        Arc::clone(&net1),
-        Box::new(|fut| {
-            tokio::spawn(fut);
-        }),
-        None,
-    )
-    .await
-    .proxy();
+    let zkp_prover1 =
+        ZKPComponent::new(BlockchainProxy::from(&blockchain1), Arc::clone(&net1), None)
+            .await
+            .proxy();
     let blockchain1_proxy = BlockchainProxy::from(&blockchain1);
 
     let syncer1 = SyncerProxy::new_history(

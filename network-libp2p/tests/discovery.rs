@@ -22,6 +22,7 @@ use nimiq_network_libp2p::discovery::{
     peer_contacts::{PeerContact, PeerContactBook, SignedPeerContact},
 };
 use nimiq_test_log::test;
+use nimiq_utils::spawn::spawn;
 use parking_lot::RwLock;
 use rand::{thread_rng, Rng};
 
@@ -224,7 +225,7 @@ pub async fn test_dialing_peer_from_contacts() {
     node1.dial_peer_id(&peer2_id);
 
     // Just run node 2
-    tokio::spawn(async move {
+    spawn(async move {
         node2.swarm.for_each(|_| async {}).await;
     });
 

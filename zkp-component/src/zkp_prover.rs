@@ -15,6 +15,7 @@ use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction}
 use nimiq_genesis::NetworkInfo;
 use nimiq_network_interface::network::Network;
 use nimiq_primitives::policy::Policy;
+use nimiq_utils::spawn::spawn;
 use parking_lot::{lock_api::RwLockUpgradableReadGuard, RwLock, RwLockWriteGuard};
 use tokio::sync::oneshot::{channel, Sender};
 
@@ -126,7 +127,7 @@ impl<N: Network> ZKProver<N> {
     /// The broadcasting of the generated zk proof.
     fn broadcast_zk_proof(network: &Arc<N>, zk_proof: ZKProof) {
         let network = Arc::clone(network);
-        tokio::spawn(async move {
+        spawn(async move {
             if let Err(e) = network.publish::<ZKProofTopic>(zk_proof).await {
                 log::warn!(error = &e as &dyn Error, "Failed to publish the zk proof");
             }

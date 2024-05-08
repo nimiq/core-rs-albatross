@@ -26,7 +26,7 @@ use nimiq_network_libp2p::{
     discovery::peer_contacts::PeerContact, Config as NetworkConfig, Network,
     TlsConfig as NetworkTls,
 };
-use nimiq_primitives::{policy::Policy, task_executor::TaskExecutor};
+use nimiq_primitives::policy::Policy;
 use nimiq_utils::time::OffsetTime;
 #[cfg(feature = "validator")]
 use nimiq_validator::validator::Validator as AbstractValidator;
@@ -128,10 +128,7 @@ pub fn generate_service_flags(sync_mode: SyncMode) -> (Services, Services) {
 }
 
 impl ClientInner {
-    async fn from_config(
-        config: ClientConfig,
-        executor: impl TaskExecutor + Send + 'static + Clone,
-    ) -> Result<Client, Error> {
+    async fn from_config(config: ClientConfig) -> Result<Client, Error> {
         // Get network info (i.e. which specific blockchain we're on)
         if !config.network_id.is_albatross() {
             return Err(Error::config_error(format!(
@@ -315,7 +312,7 @@ impl ClientInner {
             "Advertised addresses",
         );
 
-        let network = Arc::new(Network::new(network_config, executor.clone()).await);
+        let network = Arc::new(Network::new(network_config).await);
 
         // Start buffering network events as early as possible
         let network_events = network.subscribe_events();
@@ -374,7 +371,6 @@ impl ClientInner {
                     ZKPComponent::with_prover(
                         blockchain_proxy.clone(),
                         Arc::clone(&network),
-                        executor.clone(),
                         config.zkp.prover_active,
                         None,
                         config.zkp.prover_keys_path,
@@ -382,13 +378,8 @@ impl ClientInner {
                     )
                     .await
                 } else {
-                    ZKPComponent::new(
-                        blockchain_proxy.clone(),
-                        Arc::clone(&network),
-                        executor.clone(),
-                        zkp_storage,
-                    )
-                    .await
+                    ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&network), zkp_storage)
+                        .await
                 };
                 #[cfg(not(feature = "zkp-prover"))]
                 let zkp_component = ZKPComponent::new(
@@ -430,7 +421,6 @@ impl ClientInner {
                     ZKPComponent::with_prover(
                         blockchain_proxy.clone(),
                         Arc::clone(&network),
-                        executor.clone(),
                         config.zkp.prover_active,
                         None,
                         config.zkp.prover_keys_path,
@@ -438,13 +428,8 @@ impl ClientInner {
                     )
                     .await
                 } else {
-                    ZKPComponent::new(
-                        blockchain_proxy.clone(),
-                        Arc::clone(&network),
-                        executor.clone(),
-                        zkp_storage,
-                    )
-                    .await
+                    ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&network), zkp_storage)
+                        .await
                 };
                 #[cfg(not(feature = "zkp-prover"))]
                 let zkp_component = ZKPComponent::new(
@@ -469,20 +454,15 @@ impl ClientInner {
             SyncMode::Light => {
                 let blockchain = Arc::new(RwLock::new(LightBlockchain::new(config.network_id)));
                 let blockchain_proxy = BlockchainProxy::from(&blockchain);
-                let zkp_component = ZKPComponent::new(
-                    blockchain_proxy.clone(),
-                    Arc::clone(&network),
-                    executor.clone(),
-                    zkp_storage,
-                )
-                .await;
+                let zkp_component =
+                    ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&network), zkp_storage)
+                        .await;
                 let syncer = SyncerProxy::new_light(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
                     bls_cache,
                     zkp_component.proxy(),
                     network_events,
-                    executor.clone(),
                 )
                 .await;
                 (blockchain_proxy, syncer, zkp_component)
@@ -500,7 +480,6 @@ impl ClientInner {
             syncer_proxy,
             config.consensus.min_peers,
             zkp_component.proxy(),
-            executor,
         );
 
         #[cfg(feature = "validator")]
@@ -601,11 +580,8 @@ pub struct Client {
 }
 
 impl Client {
-    pub async fn from_config(
-        config: ClientConfig,
-        executor: impl TaskExecutor + Send + 'static + Clone,
-    ) -> Result<Self, Error> {
-        ClientInner::from_config(config, executor).await
+    pub async fn from_config(config: ClientConfig) -> Result<Self, Error> {
+        ClientInner::from_config(config).await
     }
 
     pub fn take_consensus(&mut self) -> Option<Consensus> {

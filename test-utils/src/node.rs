@@ -10,7 +10,7 @@ use nimiq_genesis_builder::GenesisInfo;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::{networks::NetworkId, trie::TrieItem};
-use nimiq_utils::time::OffsetTime;
+use nimiq_utils::{spawn::spawn, time::OffsetTime};
 use nimiq_zkp_component::{
     proof_store::{DBProofStore, ProofStore},
     ZKPComponent,
@@ -82,9 +82,6 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
         let zkp_proxy = ZKPComponent::with_prover(
             BlockchainProxy::from(&blockchain),
             Arc::clone(&network),
-            Box::new(|fut| {
-                tokio::spawn(fut);
-            }),
             is_prover_active,
             prover_path,
             PathBuf::from(ZKP_TEST_KEYS_PATH),
@@ -108,9 +105,6 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
             syncer,
             1,
             zkp_proxy.proxy(),
-            Box::new(|fut| {
-                tokio::spawn(fut);
-            }),
         );
 
         Node {
@@ -123,7 +117,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
 
     pub fn consume(&mut self) {
         if let Some(consensus) = self.consensus.take() {
-            tokio::spawn(consensus);
+            spawn(consensus);
         }
     }
 }

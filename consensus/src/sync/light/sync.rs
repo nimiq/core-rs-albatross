@@ -12,7 +12,7 @@ use nimiq_network_interface::{
     network::{CloseReason, Network, SubscribeEvents},
     request::RequestError,
 };
-use nimiq_primitives::task_executor::TaskExecutor;
+use nimiq_utils::spawn::spawn;
 use nimiq_zkp_component::{
     types::{Error, ZKPRequestEvent},
     zkp_component::ZKPComponentProxy,
@@ -186,8 +186,6 @@ pub struct LightMacroSync<TNetwork: Network> {
     pub(crate) synced_validity_peers: Vec<TNetwork::PeerId>,
     /// Minimum distance to light sync in #blocks from the peers head.
     pub(crate) full_sync_threshold: u32,
-    /// Task executor to be compatible with wasm and not wasm environments,
-    pub(crate) executor: Box<dyn TaskExecutor + Send + 'static>,
     /// Waker used for the poll next function
     pub(crate) waker: Option<Waker>,
 }
@@ -199,7 +197,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         network_event_rx: SubscribeEvents<TNetwork::PeerId>,
         zkp_component_proxy: ZKPComponentProxy<TNetwork>,
         full_sync_threshold: u32,
-        executor: impl TaskExecutor + Send + 'static,
     ) -> Self {
         #[cfg(feature = "full")]
         let peers = Arc::new(RwLock::new(PeerList::default()));
@@ -235,7 +232,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             zkp_component_proxy,
             zkp_requests: FuturesUnordered::new(),
             waker: None,
-            executor: Box::new(executor),
             full_sync_threshold,
             block_headers: Default::default(),
             validity_requests: None,
@@ -259,7 +255,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         self.remove_peer_requests(peer_id);
         let network = Arc::clone(&self.network);
         // We disconnect from this peer
-        self.executor.exec(Box::pin({
+        spawn(Box::pin({
             async move {
                 network.disconnect_peer(peer_id, reason).await;
             }

@@ -471,7 +471,7 @@ mod tests {
     use nimiq_primitives::{networks::NetworkId, policy::Policy};
     use nimiq_test_log::test;
     use nimiq_test_utils::blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key};
-    use nimiq_utils::time::OffsetTime;
+    use nimiq_utils::{spawn::spawn, time::OffsetTime};
     use parking_lot::RwLock;
 
     use crate::{
@@ -503,13 +503,13 @@ mod tests {
         network: &Arc<TNetwork>,
         blockchain: &BlockchainProxy,
     ) {
-        tokio::spawn(request_handler(
+        spawn(request_handler(
             network,
             network.receive_requests::<RequestMacroChain>(),
             blockchain,
         ));
 
-        tokio::spawn(request_handler(
+        spawn(request_handler(
             network,
             network.receive_requests::<RequestBlock>(),
             blockchain,
@@ -517,7 +517,7 @@ mod tests {
 
         match blockchain {
             BlockchainProxy::Full(full_blockchain) => {
-                tokio::spawn(request_handler(
+                spawn(request_handler(
                     network,
                     network.receive_requests::<RequestHistoryChunk>(),
                     full_blockchain,
@@ -534,19 +534,13 @@ mod tests {
             let net1 = Arc::new(hub.new_network());
             let net2 = Arc::new(hub.new_network());
 
-            let zkp_component = nimiq_zkp_component::ZKPComponent::new(
-                chain1.clone(),
-                Arc::clone(&net1),
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
-                None,
-            )
-            .await;
+            let zkp_component =
+                nimiq_zkp_component::ZKPComponent::new(chain1.clone(), Arc::clone(&net1), None)
+                    .await;
 
             let zkp_component_proxy = zkp_component.proxy();
 
-            tokio::spawn(zkp_component);
+            spawn(zkp_component);
 
             let mut sync = LightMacroSync::<MockNetwork>::new(
                 chain1.clone(),
@@ -554,9 +548,6 @@ mod tests {
                 net1.subscribe_events(),
                 zkp_component_proxy,
                 0,
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
             );
 
             spawn_request_handlers(&net2, &chain2.clone());
@@ -586,19 +577,13 @@ mod tests {
             let net1 = Arc::new(hub.new_network());
             let net2 = Arc::new(hub.new_network());
 
-            let zkp_component = nimiq_zkp_component::ZKPComponent::new(
-                chain1.clone(),
-                Arc::clone(&net1),
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
-                None,
-            )
-            .await;
+            let zkp_component =
+                nimiq_zkp_component::ZKPComponent::new(chain1.clone(), Arc::clone(&net1), None)
+                    .await;
 
             let zkp_component_proxy = zkp_component.proxy();
 
-            tokio::spawn(zkp_component);
+            spawn(zkp_component);
 
             let mut sync = LightMacroSync::<MockNetwork>::new(
                 chain1.clone(),
@@ -606,22 +591,13 @@ mod tests {
                 net1.subscribe_events(),
                 zkp_component_proxy,
                 0,
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
             );
 
-            let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
-                chain2.clone(),
-                Arc::clone(&net2),
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
-                None,
-            )
-            .await;
+            let zkp_component2 =
+                nimiq_zkp_component::ZKPComponent::new(chain2.clone(), Arc::clone(&net2), None)
+                    .await;
 
-            tokio::spawn(zkp_component2);
+            spawn(zkp_component2);
 
             spawn_request_handlers(&net2, &chain2.clone());
             net1.dial_mock(&net2);
@@ -665,19 +641,13 @@ mod tests {
                 Policy::blocks_per_epoch() + Policy::genesis_block_number()
             );
 
-            let zkp_component = nimiq_zkp_component::ZKPComponent::new(
-                chain1.clone(),
-                Arc::clone(&net1),
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
-                None,
-            )
-            .await;
+            let zkp_component =
+                nimiq_zkp_component::ZKPComponent::new(chain1.clone(), Arc::clone(&net1), None)
+                    .await;
 
             let zkp_component_proxy = zkp_component.proxy();
 
-            tokio::spawn(zkp_component);
+            spawn(zkp_component);
 
             let mut sync = LightMacroSync::<MockNetwork>::new(
                 chain1.clone(),
@@ -685,22 +655,13 @@ mod tests {
                 net1.subscribe_events(),
                 zkp_component_proxy,
                 0,
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
             );
 
-            let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
-                chain2.clone(),
-                Arc::clone(&net2),
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
-                None,
-            )
-            .await;
+            let zkp_component2 =
+                nimiq_zkp_component::ZKPComponent::new(chain2.clone(), Arc::clone(&net2), None)
+                    .await;
 
-            tokio::spawn(zkp_component2);
+            spawn(zkp_component2);
 
             spawn_request_handlers(&net2, &chain2.clone());
             net1.dial_mock(&net2);
@@ -743,19 +704,13 @@ mod tests {
                     + Policy::genesis_block_number()
             );
 
-            let zkp_component = nimiq_zkp_component::ZKPComponent::new(
-                chain1.clone(),
-                Arc::clone(&net1),
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
-                None,
-            )
-            .await;
+            let zkp_component =
+                nimiq_zkp_component::ZKPComponent::new(chain1.clone(), Arc::clone(&net1), None)
+                    .await;
 
             let zkp_component_proxy = zkp_component.proxy();
 
-            tokio::spawn(zkp_component);
+            spawn(zkp_component);
 
             let mut sync = LightMacroSync::<MockNetwork>::new(
                 chain1.clone(),
@@ -763,22 +718,13 @@ mod tests {
                 net1.subscribe_events(),
                 zkp_component_proxy,
                 0,
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
             );
 
-            let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
-                chain2.clone(),
-                Arc::clone(&net2),
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
-                None,
-            )
-            .await;
+            let zkp_component2 =
+                nimiq_zkp_component::ZKPComponent::new(chain2.clone(), Arc::clone(&net2), None)
+                    .await;
 
-            tokio::spawn(zkp_component2);
+            spawn(zkp_component2);
 
             spawn_request_handlers(&net2, &chain2.clone());
             net1.dial_mock(&net2);
@@ -814,19 +760,13 @@ mod tests {
                 num_batches as u32 * Policy::blocks_per_batch() + Policy::genesis_block_number()
             );
 
-            let zkp_component = nimiq_zkp_component::ZKPComponent::new(
-                chain1.clone(),
-                Arc::clone(&net1),
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
-                None,
-            )
-            .await;
+            let zkp_component =
+                nimiq_zkp_component::ZKPComponent::new(chain1.clone(), Arc::clone(&net1), None)
+                    .await;
 
             let zkp_component_proxy = zkp_component.proxy();
 
-            tokio::spawn(zkp_component);
+            spawn(zkp_component);
 
             let mut sync = LightMacroSync::<MockNetwork>::new(
                 chain1.clone(),
@@ -834,22 +774,13 @@ mod tests {
                 net1.subscribe_events(),
                 zkp_component_proxy,
                 0,
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
             );
 
-            let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
-                chain2.clone(),
-                Arc::clone(&net2),
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
-                None,
-            )
-            .await;
+            let zkp_component2 =
+                nimiq_zkp_component::ZKPComponent::new(chain2.clone(), Arc::clone(&net2), None)
+                    .await;
 
-            tokio::spawn(zkp_component2);
+            spawn(zkp_component2);
 
             spawn_request_handlers(&net2, &chain2.clone());
             net1.dial_mock(&net2);
@@ -929,19 +860,13 @@ mod tests {
                 chain1_wg.state.previous_slots = None;
             }
 
-            let zkp_component = nimiq_zkp_component::ZKPComponent::new(
-                chain1.clone(),
-                Arc::clone(&net1),
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
-                None,
-            )
-            .await;
+            let zkp_component =
+                nimiq_zkp_component::ZKPComponent::new(chain1.clone(), Arc::clone(&net1), None)
+                    .await;
 
             let zkp_component_proxy = zkp_component.proxy();
 
-            tokio::spawn(zkp_component);
+            spawn(zkp_component);
 
             let mut sync = LightMacroSync::<MockNetwork>::new(
                 chain1.clone(),
@@ -949,22 +874,13 @@ mod tests {
                 net1.subscribe_events(),
                 zkp_component_proxy,
                 0,
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
             );
 
-            let zkp_component2 = nimiq_zkp_component::ZKPComponent::new(
-                chain2.clone(),
-                Arc::clone(&net2),
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
-                None,
-            )
-            .await;
+            let zkp_component2 =
+                nimiq_zkp_component::ZKPComponent::new(chain2.clone(), Arc::clone(&net2), None)
+                    .await;
 
-            tokio::spawn(zkp_component2);
+            spawn(zkp_component2);
 
             spawn_request_handlers(&net2, &chain2.clone());
             net1.dial_mock(&net2);

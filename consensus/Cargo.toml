@@ -23,7 +23,7 @@ workspace = true
 async-trait = "0.1"
 futures = { workspace = true }
 futures-executor = { version = "0.3" }
-instant = { version = "0.1", features = [ "wasm-bindgen" ] }
+instant = { version = "0.1", features = ["wasm-bindgen"] }
 log = { workspace = true }
 parking_lot = "0.12"
 pin-project = "1.1"
@@ -51,6 +51,7 @@ nimiq-transaction = { workspace = true }
 nimiq-utils = { workspace = true, features = [
     "math",
     "merkle",
+    "spawn",
     "time",
 ] }
 nimiq-zkp-component = { workspace = true }

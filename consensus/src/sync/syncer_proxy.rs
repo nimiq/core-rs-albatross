@@ -11,7 +11,7 @@ use nimiq_block::Block;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_network_interface::network::{Network, SubscribeEvents};
-use nimiq_primitives::{policy::Policy, task_executor::TaskExecutor};
+use nimiq_primitives::policy::Policy;
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 use parking_lot::Mutex;
 use pin_project::pin_project;
@@ -149,9 +149,6 @@ impl<N: Network> SyncerProxy<N> {
             network_event_rx,
             zkp_component_proxy,
             full_sync_threshold,
-            Box::new(|fut| {
-                tokio::spawn(fut);
-            }),
         );
 
         Self::Full(Syncer::new(
@@ -169,7 +166,6 @@ impl<N: Network> SyncerProxy<N> {
         bls_cache: Arc<Mutex<PublicKeyCache>>,
         zkp_component_proxy: ZKPComponentProxy<N>,
         network_event_rx: SubscribeEvents<N::PeerId>,
-        executor: impl TaskExecutor + Send + 'static,
     ) -> Self {
         let block_queue_config = QueueConfig {
             include_micro_bodies: false,
@@ -196,7 +192,6 @@ impl<N: Network> SyncerProxy<N> {
             network_event_rx,
             zkp_component_proxy,
             0, // Since the light sync does not keep state, we ignore the threshold.
-            executor,
         );
 
         Self::Light(Syncer::new(

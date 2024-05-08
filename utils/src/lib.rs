@@ -10,6 +10,8 @@ pub mod math;
 pub mod merkle;
 #[cfg(feature = "otp")]
 pub mod otp;
+#[cfg(feature = "spawn")]
+pub mod spawn;
 #[cfg(feature = "tagged-signing")]
 pub mod tagged_signing;
 #[cfg(feature = "time")]

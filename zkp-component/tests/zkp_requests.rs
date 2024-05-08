@@ -50,9 +50,6 @@ async fn peers_do_not_reply_with_outdated_proof() {
     let _zkp_prover2 = ZKPComponent::new(
         BlockchainProxy::from(&blockchain),
         Arc::clone(&network2),
-        Box::new(|fut| {
-            tokio::spawn(fut);
-        }),
         None,
     )
     .await;
@@ -60,9 +57,6 @@ async fn peers_do_not_reply_with_outdated_proof() {
     let _zkp_prover3 = ZKPComponent::new(
         BlockchainProxy::from(&blockchain),
         Arc::clone(&network3),
-        Box::new(|fut| {
-            tokio::spawn(fut);
-        }),
         None,
     )
     .await;
@@ -125,9 +119,6 @@ async fn peers_reply_with_valid_proof() {
     let _zkp_prover2 = ZKPComponent::new(
         BlockchainProxy::from(&blockchain2),
         Arc::clone(&network2),
-        Box::new(|fut| {
-            tokio::spawn(fut);
-        }),
         proof_store_2,
     )
     .await;
@@ -135,9 +126,6 @@ async fn peers_reply_with_valid_proof() {
     let _zkp_prover3 = ZKPComponent::new(
         BlockchainProxy::from(&blockchain3),
         Arc::clone(&network3),
-        Box::new(|fut| {
-            tokio::spawn(fut);
-        }),
         proof_store_3,
     )
     .await;
@@ -209,9 +197,6 @@ async fn peers_reply_with_valid_proof_and_election_block() {
     let _zkp_prover2 = ZKPComponent::new(
         BlockchainProxy::from(&blockchain2),
         Arc::clone(&network2),
-        Box::new(|fut| {
-            tokio::spawn(fut);
-        }),
         proof_store_2,
     )
     .await;
@@ -219,9 +204,6 @@ async fn peers_reply_with_valid_proof_and_election_block() {
     let _zkp_prover3 = ZKPComponent::new(
         BlockchainProxy::from(&blockchain3),
         Arc::clone(&network3),
-        Box::new(|fut| {
-            tokio::spawn(fut);
-        }),
         proof_store_3,
     )
     .await;

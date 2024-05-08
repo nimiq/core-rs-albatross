@@ -22,6 +22,7 @@ use nimiq_network_libp2p::{
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_time::sleep;
+use nimiq_utils::spawn::spawn;
 use rand::{thread_rng, Rng};
 
 mod helper;
@@ -112,22 +113,10 @@ impl TestNetwork {
         let addr1 = multiaddr![Memory(rng.gen::<u64>())];
         let addr2 = multiaddr![Memory(rng.gen::<u64>())];
 
-        let net1 = Network::new(
-            network_config(addr1.clone()),
-            Box::new(|fut| {
-                tokio::spawn(fut);
-            }),
-        )
-        .await;
+        let net1 = Network::new(network_config(addr1.clone())).await;
         net1.listen_on(vec![addr1.clone()]).await;
 
-        let net2 = Network::new(
-            network_config(addr2.clone()),
-            Box::new(|fut| {
-                tokio::spawn(fut);
-            }),
-        )
-        .await;
+        let net2 = Network::new(network_config(addr2.clone())).await;
         net2.listen_on(vec![addr2.clone()]).await;
 
         log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
@@ -165,40 +154,16 @@ impl TestNetwork {
         let addr3 = multiaddr![Memory(rng.gen::<u64>())];
         let addr4 = multiaddr![Memory(rng.gen::<u64>())];
 
-        let net1 = Network::new(
-            network_config(addr1.clone()),
-            Box::new(|fut| {
-                tokio::spawn(fut);
-            }),
-        )
-        .await;
+        let net1 = Network::new(network_config(addr1.clone())).await;
         net1.listen_on(vec![addr1.clone()]).await;
 
-        let net2 = Network::new(
-            network_config(addr2.clone()),
-            Box::new(|fut| {
-                tokio::spawn(fut);
-            }),
-        )
-        .await;
+        let net2 = Network::new(network_config(addr2.clone())).await;
         net2.listen_on(vec![addr2.clone()]).await;
 
-        let net3 = Network::new(
-            network_config(addr3.clone()),
-            Box::new(|fut| {
-                tokio::spawn(fut);
-            }),
-        )
-        .await;
+        let net3 = Network::new(network_config(addr3.clone())).await;
         net3.listen_on(vec![addr3.clone()]).await;
 
-        let net4 = Network::new(
-            network_config(addr4.clone()),
-            Box::new(|fut| {
-                tokio::spawn(fut);
-            }),
-        )
-        .await;
+        let net4 = Network::new(network_config(addr4.clone())).await;
         net4.listen_on(vec![addr4.clone()]).await;
 
         log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
@@ -323,7 +288,7 @@ async fn test_valid_request_valid_response() {
     let net1 = Arc::new(net1);
 
     // Subscribe for receiving requests
-    tokio::spawn({
+    spawn({
         let net1 = Arc::clone(&net1);
         let test_request = test_request.clone();
         let test_response = test_response.clone();
@@ -381,7 +346,7 @@ async fn test_multiple_valid_requests_valid_responses() {
         });
 
     // Spawn the request listener future
-    tokio::spawn(request_listener_future);
+    spawn(request_listener_future);
 
     sleep(Duration::from_secs(1)).await;
 
@@ -417,7 +382,7 @@ async fn test_valid_request_no_response() {
 
     // Subscribe for receiving requests and don't let the function to respond to the request
     // (pass `None` to the response parameter)
-    tokio::spawn({
+    spawn({
         let net1 = Arc::clone(&net1);
         let test_request = test_request.clone();
         async move { respond_requests::<TestRequest, TestRequest>(net1, None, test_request).await }
@@ -458,7 +423,7 @@ async fn test_valid_request_no_response_close_connection() {
 
     // Subscribe for receiving requests and don't let the function to respond to the request
     // (pass `None` to the response parameter)
-    tokio::spawn({
+    spawn({
         let net1 = Arc::clone(&net1);
         let test_request = test_request.clone();
         async move { respond_requests::<TestRequest, TestRequest>(net1, None, test_request).await }
@@ -471,7 +436,7 @@ async fn test_valid_request_no_response_close_connection() {
     // Send the request and get future for the response
     let response = net2.request::<TestRequest>(test_request.clone(), net1.get_local_peer_id());
 
-    tokio::spawn(async move {
+    spawn(async move {
         sleep(Duration::from_secs(1)).await;
         let net1 = Arc::clone(&net1);
         net1.disconnect_peer(net2_peer_id, CloseReason::MaliciousPeer)
@@ -654,7 +619,7 @@ async fn it_can_limit_requests_rate() {
         });
 
     // Spawn the request listener future.
-    tokio::spawn(request_listener_future);
+    spawn(request_listener_future);
 
     sleep(Duration::from_secs(1)).await;
 
@@ -716,7 +681,7 @@ async fn it_can_limit_requests_rate_after_reconnection() {
         });
 
     // Spawn the request listener future.
-    tokio::spawn(request_listener_future);
+    spawn(request_listener_future);
 
     sleep(Duration::from_secs(1)).await;
 
@@ -776,7 +741,7 @@ async fn it_can_reset_requests_rate_with_reconnections() {
         });
 
     // Spawn the request listener future.
-    tokio::spawn(request_listener_future);
+    spawn(request_listener_future);
 
     sleep(Duration::from_secs(1)).await;
 

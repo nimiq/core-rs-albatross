@@ -16,7 +16,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::request_handler};
-use nimiq_primitives::task_executor::TaskExecutor;
+use nimiq_utils::spawn::spawn;
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 use tokio::sync::{
     broadcast::{channel as broadcast, Sender as BroadcastSender},
@@ -174,9 +174,6 @@ impl<N: Network> Consensus<N> {
             syncer,
             Self::MIN_PEERS_ESTABLISHED,
             zkp_proxy,
-            Box::new(|fut| {
-                tokio::spawn(fut);
-            }),
         )
     }
 
@@ -186,11 +183,10 @@ impl<N: Network> Consensus<N> {
         syncer: SyncerProxy<N>,
         min_peers: usize,
         zkp_proxy: ZKPComponentProxy<N>,
-        executor: impl TaskExecutor + Send + 'static,
     ) -> Self {
         let (tx, _rx) = broadcast(256);
 
-        Self::init_network_request_receivers(&network, &blockchain, executor);
+        Self::init_network_request_receivers(&network, &blockchain);
 
         #[cfg(feature = "full")]
         Self::init_remote_event_dispatcher(&network, &blockchain);
@@ -222,7 +218,7 @@ impl<N: Network> Consensus<N> {
                 let blockchain = Arc::clone(blockchain);
                 let remote_event_dispatcher = RemoteEventDispatcher::new(network, blockchain);
 
-                tokio::spawn(remote_event_dispatcher);
+                spawn(remote_event_dispatcher);
             }
             BlockchainProxy::Light(_) => {
                 // The light blockchain does not provide this functionality
@@ -230,48 +226,44 @@ impl<N: Network> Consensus<N> {
         }
     }
 
-    fn init_network_request_receivers(
-        network: &Arc<N>,
-        blockchain: &BlockchainProxy,
-        executor: impl TaskExecutor + Send + 'static,
-    ) {
+    fn init_network_request_receivers(network: &Arc<N>, blockchain: &BlockchainProxy) {
         let stream = network.receive_requests::<RequestMacroChain>();
-        executor.exec(Box::pin(request_handler(network, stream, blockchain)));
+        spawn(Box::pin(request_handler(network, stream, blockchain)));
 
         let stream = network.receive_requests::<RequestBlock>();
-        executor.exec(Box::pin(request_handler(network, stream, blockchain)));
+        spawn(Box::pin(request_handler(network, stream, blockchain)));
 
         let stream = network.receive_requests::<RequestMissingBlocks>();
-        executor.exec(Box::pin(request_handler(network, stream, blockchain)));
+        spawn(Box::pin(request_handler(network, stream, blockchain)));
 
         let stream = network.receive_requests::<RequestHead>();
-        executor.exec(Box::pin(request_handler(network, stream, blockchain)));
+        spawn(Box::pin(request_handler(network, stream, blockchain)));
         match blockchain {
             #[cfg(feature = "full")]
             BlockchainProxy::Full(blockchain) => {
                 let stream = network.receive_requests::<RequestBatchSet>();
-                executor.exec(Box::pin(request_handler(network, stream, blockchain)));
+                spawn(Box::pin(request_handler(network, stream, blockchain)));
 
                 let stream = network.receive_requests::<RequestHistoryChunk>();
-                executor.exec(Box::pin(request_handler(network, stream, blockchain)));
+                spawn(Box::pin(request_handler(network, stream, blockchain)));
 
                 let stream = network.receive_requests::<RequestTrieDiff>();
-                executor.exec(Box::pin(request_handler(network, stream, blockchain)));
+                spawn(Box::pin(request_handler(network, stream, blockchain)));
 
                 let stream = network.receive_requests::<RequestChunk>();
-                executor.exec(Box::pin(request_handler(network, stream, blockchain)));
+                spawn(Box::pin(request_handler(network, stream, blockchain)));
 
                 let stream = network.receive_requests::<RequestTransactionsProof>();
-                executor.exec(Box::pin(request_handler(network, stream, blockchain)));
+                spawn(Box::pin(request_handler(network, stream, blockchain)));
 
                 let stream = network.receive_requests::<RequestTransactionReceiptsByAddress>();
-                executor.exec(Box::pin(request_handler(network, stream, blockchain)));
+                spawn(Box::pin(request_handler(network, stream, blockchain)));
 
                 let stream = network.receive_requests::<RequestTrieProof>();
-                executor.exec(Box::pin(request_handler(network, stream, blockchain)));
+                spawn(Box::pin(request_handler(network, stream, blockchain)));
 
                 let stream = network.receive_requests::<RequestBlocksProof>();
-                executor.exec(Box::pin(request_handler(network, stream, blockchain)));
+                spawn(Box::pin(request_handler(network, stream, blockchain)));
             }
             BlockchainProxy::Light(_) => {}
         }

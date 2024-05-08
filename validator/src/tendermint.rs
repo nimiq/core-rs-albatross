@@ -23,6 +23,7 @@ use nimiq_tendermint::{
     Proposal, ProposalError, ProposalMessage, Protocol, ProtocolError, SignedProposalMessage, Step,
     TaggedAggregationMessage,
 };
+use nimiq_utils::spawn::spawn;
 use nimiq_validator_network::{
     single_response_requester::SingleResponseRequester, PubsubId, ValidatorNetwork,
 };
@@ -239,7 +240,7 @@ where
         proposal: SignedProposalMessage<Self::Proposal, Self::ProposalSignature>,
     ) {
         let nw = Arc::clone(&self.network);
-        tokio::spawn(async move {
+        spawn(async move {
             nw.publish::<ProposalTopic<TValidatorNetwork>>(proposal.into())
                 .await
         });

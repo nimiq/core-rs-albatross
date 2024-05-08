@@ -16,6 +16,7 @@ use nimiq_test_utils::{
     validator::seeded_rng,
 };
 use nimiq_time::{interval, sleep};
+use nimiq_utils::spawn::spawn;
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 4))]
 #[ignore]
@@ -55,7 +56,7 @@ async fn test_request_component() {
     // let node1 produce blocks again
     {
         let prod_blockchain = Arc::clone(&node1.blockchain);
-        tokio::spawn(async move {
+        spawn(async move {
             loop {
                 produce_macro_blocks(&producer1, &prod_blockchain, 1);
                 sleep(Duration::from_secs(5)).await;

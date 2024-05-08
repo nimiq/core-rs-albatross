@@ -29,6 +29,7 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_transaction_builder::TransactionBuilder;
+use nimiq_utils::spawn::spawn;
 use nimiq_validator_network::{PubsubId, ValidatorNetwork};
 use parking_lot::RwLock;
 #[cfg(feature = "metrics")]
@@ -187,7 +188,7 @@ where
         Self::init_network_request_receivers(&consensus.network, &macro_state);
 
         let network1 = Arc::clone(&network);
-        tokio::spawn(async move {
+        spawn(async move {
             network1
                 .subscribe::<ProposalTopic<TValidatorNetwork>>()
                 .await
@@ -240,7 +241,7 @@ where
         macro_state: &Arc<RwLock<Option<MacroState>>>,
     ) {
         let stream = network.receive_requests::<RequestProposal>();
-        tokio::spawn(Box::pin(request_handler(network, stream, macro_state)));
+        spawn(Box::pin(request_handler(network, stream, macro_state)));
     }
 
     fn init(&mut self, head_hash: Option<&Blake2bHash>) {
@@ -308,7 +309,7 @@ where
         let network = Arc::clone(&self.network);
 
         // TODO might better be done without the task.
-        tokio::spawn(async move {
+        spawn(async move {
             network.set_validators(voting_keys).await;
         });
     }
@@ -393,7 +394,7 @@ where
         let mempool = Arc::clone(&self.mempool);
         let network = Arc::clone(&self.consensus.network);
         #[cfg(not(feature = "metrics"))]
-        tokio::spawn({
+        spawn({
             async move {
                 // The mempool is not updated while consensus is lost.
                 // Thus, we need to check all transactions if they are still valid.
@@ -402,7 +403,7 @@ where
             }
         });
         #[cfg(feature = "metrics")]
-        tokio::spawn({
+        spawn({
             let mempool_monitor = self.mempool_monitor.clone();
             let ctrl_mempool_monitor = self.control_mempool_monitor.clone();
             async move {
@@ -430,7 +431,7 @@ where
 
         let mempool = Arc::clone(&self.mempool);
         let network = Arc::clone(&self.consensus.network);
-        tokio::spawn(async move {
+        spawn(async move {
             mempool.stop_executors(network).await;
         });
 
@@ -683,7 +684,7 @@ where
         let key = self.voting_key();
         let network = Arc::clone(&self.network);
 
-        tokio::spawn(async move {
+        spawn(async move {
             if let Err(err) = network
                 .set_public_key(&key.public_key.compress(), &key.secret_key)
                 .await
@@ -698,7 +699,7 @@ where
         trace!(%block, "Publishing block");
 
         let network = Arc::clone(&self.network);
-        tokio::spawn(async move {
+        spawn(async move {
             let block_id = format!("{}", block);
 
             if let Err(e) = network.publish::<BlockTopic>(block.clone()).await {
@@ -774,7 +775,7 @@ where
         let tx_hash = reactivate_transaction.hash();
 
         let cn = self.consensus.clone();
-        tokio::spawn(async move {
+        spawn(async move {
             debug!("Sending reactivate transaction to the network");
             if cn
                 .send_transaction(reactivate_transaction.clone())

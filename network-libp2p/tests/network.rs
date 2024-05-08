@@ -19,7 +19,7 @@ use nimiq_network_libp2p::{
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng::test_rng;
 use nimiq_time::{sleep, timeout};
-use nimiq_utils::{key_rng::SecureGenerate, tagged_signing::TaggedSignable};
+use nimiq_utils::{key_rng::SecureGenerate, spawn::spawn, tagged_signing::TaggedSignable};
 use nimiq_validator_network::validator_record::ValidatorRecord;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
@@ -88,13 +88,7 @@ impl TestNetwork {
         let address = multiaddr![Memory(self.next_address)];
         self.next_address += 1;
 
-        let net = Network::new(
-            network_config(address.clone()),
-            Box::new(|fut| {
-                tokio::spawn(fut);
-            }),
-        )
-        .await;
+        let net = Network::new(network_config(address.clone())).await;
         net.listen_on(vec![address.clone()]).await;
 
         log::debug!(address = %address, peer_id = %net.get_local_peer_id(), "Creating node");
@@ -122,22 +116,10 @@ async fn create_connected_networks() -> (Network, Network) {
     let addr1 = multiaddr![Memory(rng.gen::<u64>())];
     let addr2 = multiaddr![Memory(rng.gen::<u64>())];
 
-    let net1 = Network::new(
-        network_config(addr1.clone()),
-        Box::new(|fut| {
-            tokio::spawn(fut);
-        }),
-    )
-    .await;
+    let net1 = Network::new(network_config(addr1.clone())).await;
     net1.listen_on(vec![addr1.clone()]).await;
 
-    let net2 = Network::new(
-        network_config(addr2.clone()),
-        Box::new(|fut| {
-            tokio::spawn(fut);
-        }),
-    )
-    .await;
+    let net2 = Network::new(network_config(addr2.clone())).await;
     net2.listen_on(vec![addr2.clone()]).await;
 
     log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
@@ -168,22 +150,10 @@ async fn create_double_connected_networks() -> (Network, Network) {
     let addr1 = multiaddr![Memory(rng.gen::<u64>())];
     let addr2 = multiaddr![Memory(rng.gen::<u64>())];
 
-    let net1 = Network::new(
-        network_config(addr1.clone()),
-        Box::new(|fut| {
-            tokio::spawn(fut);
-        }),
-    )
-    .await;
+    let net1 = Network::new(network_config(addr1.clone())).await;
     net1.listen_on(vec![addr1.clone()]).await;
 
-    let net2 = Network::new(
-        network_config(addr2.clone()),
-        Box::new(|fut| {
-            tokio::spawn(fut);
-        }),
-    )
-    .await;
+    let net2 = Network::new(network_config(addr2.clone())).await;
     net2.listen_on(vec![addr2.clone()]).await;
 
     log::debug!(address = %addr1, peer_id = %net1.get_local_peer_id(), "Network 1");
@@ -222,13 +192,7 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
 
         addresses.push(addr.clone());
 
-        let network = Network::new(
-            network_config(addr.clone()),
-            Box::new(|fut| {
-                tokio::spawn(fut);
-            }),
-        )
-        .await;
+        let network = Network::new(network_config(addr.clone())).await;
         network.listen_on(vec![addr.clone()]).await;
 
         log::debug!(address = %addr, peer_id = %network.get_local_peer_id(), "Network {}", peer);
@@ -506,7 +470,7 @@ impl Topic for TestTopic {
 }
 
 fn consume_stream<T: std::fmt::Debug>(mut stream: impl Stream<Item = T> + Unpin + Send + 'static) {
-    tokio::spawn(async move { while stream.next().await.is_some() {} });
+    spawn(async move { while stream.next().await.is_some() {} });
 }
 
 #[test(tokio::test)]

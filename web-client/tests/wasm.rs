@@ -27,15 +27,8 @@ pub async fn it_can_initialize_with_mock_network() {
 
     let blockchain_proxy = BlockchainProxy::from(&blockchain);
 
-    let zkp_component = ZKPComponent::new(
-        blockchain_proxy.clone(),
-        Arc::clone(&mock_network),
-        Box::new(|fut| {
-            spawn_local(fut);
-        }),
-        None,
-    )
-    .await;
+    let zkp_component =
+        ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&mock_network), None).await;
 
     let bls_cache = Arc::new(Mutex::new(PublicKeyCache::new(
         Policy::BLS_CACHE_MAX_CAPACITY,
@@ -49,9 +42,6 @@ pub async fn it_can_initialize_with_mock_network() {
         bls_cache,
         zkp_component.proxy(),
         network_events,
-        Box::new(|fut| {
-            spawn_local(fut);
-        }),
     )
     .await;
 
@@ -62,9 +52,6 @@ pub async fn it_can_initialize_with_mock_network() {
         syncer,
         3,
         zkp_component.proxy(),
-        Box::new(|fut| {
-            spawn_local(fut);
-        }),
     );
 
     if let Poll::Ready(_) = poll!(consensus) {

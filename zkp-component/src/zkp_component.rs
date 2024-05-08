@@ -15,7 +15,7 @@ use nimiq_network_interface::{
     network::{MsgAcceptance, Network, PubsubId},
     request::request_handler,
 };
-use nimiq_primitives::task_executor::TaskExecutor;
+use nimiq_utils::spawn::spawn;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use tokio::sync::{
     broadcast::{channel as broadcast, Sender as BroadcastSender},
@@ -123,7 +123,6 @@ impl<N: Network> ZKPComponent<N> {
     pub async fn new(
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        executor: impl TaskExecutor + Send + 'static,
         proof_storage: Option<Box<dyn ProofStore>>,
     ) -> Self {
         // Defaults zkp state to genesis.
@@ -155,7 +154,7 @@ impl<N: Network> ZKPComponent<N> {
         zkp_component.load_proof_from_db();
 
         // The handler for zkp request is launched.
-        zkp_component.launch_request_handler(executor);
+        zkp_component.launch_request_handler();
         zkp_component
     }
 
@@ -163,13 +162,12 @@ impl<N: Network> ZKPComponent<N> {
     pub async fn with_prover(
         blockchain: BlockchainProxy,
         network: Arc<N>,
-        executor: impl TaskExecutor + Send + 'static,
         is_prover_active: bool,
         prover_path: Option<PathBuf>,
         prover_keys_path: PathBuf,
         proof_storage: Option<Box<dyn ProofStore>>,
     ) -> Self {
-        let mut zkp_component = Self::new(blockchain, network, executor, proof_storage).await;
+        let mut zkp_component = Self::new(blockchain, network, proof_storage).await;
 
         // Activates the prover based on the configuration provided.
         zkp_component.zk_prover = match (is_prover_active, &zkp_component.blockchain) {
@@ -194,10 +192,10 @@ impl<N: Network> ZKPComponent<N> {
     }
 
     /// Launches thread that processes the zkp requests and replies to them.
-    fn launch_request_handler(&self, executor: impl TaskExecutor + Send + 'static) {
+    fn launch_request_handler(&self) {
         let stream = self.network.receive_requests::<RequestZKP>();
         let env = Arc::new(ZKPStateEnvironment::from(self));
-        executor.exec(Box::pin(request_handler(&self.network, stream, &env)));
+        spawn(Box::pin(request_handler(&self.network, stream, &env)));
     }
 
     /// Gets a proxy for the current ZKP Component.

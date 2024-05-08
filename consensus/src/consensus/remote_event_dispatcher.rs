@@ -17,6 +17,7 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::account::AccountType;
 use nimiq_transaction::account::staking_contract::IncomingStakingTransactionData;
+use nimiq_utils::spawn::spawn;
 use parking_lot::RwLock;
 
 use crate::{
@@ -197,7 +198,7 @@ impl<N: Network> RemoteEventDispatcher<N> {
         // Spawn the network receiver that will take care of processing address subscription requests
         let stream = network.receive_requests::<RequestSubscribeToAddress>();
 
-        tokio::spawn(request_handler(&network, stream, &Arc::clone(&state)));
+        spawn(request_handler(&network, stream, &Arc::clone(&state)));
 
         let blockchain_event_rx = blockchain.read().notifier_as_stream();
 
@@ -314,7 +315,7 @@ impl<N: Network> Future for RemoteEventDispatcher<N> {
             // Notify all interested peers
             for (peer_id, receipts) in peer_receipts {
                 let network = Arc::clone(&self.network);
-                tokio::spawn({
+                spawn({
                     async move {
                         let _ = network
                             .publish_subtopic::<AddressSubscriptionTopic>(

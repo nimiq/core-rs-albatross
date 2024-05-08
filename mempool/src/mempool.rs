@@ -17,6 +17,7 @@ use nimiq_keys::Address;
 use nimiq_network_interface::network::{Network, Topic};
 use nimiq_serde::Serialize;
 use nimiq_transaction::{ControlTransactionTopic, Transaction, TransactionTopic};
+use nimiq_utils::spawn::spawn;
 use parking_lot::RwLock;
 use tokio_metrics::TaskMonitor;
 
@@ -111,9 +112,9 @@ impl Mempool {
 
         // if a monitor was given, instrument the spawned task
         if let Some(monitor) = monitor {
-            tokio::spawn(monitor.instrument(future));
+            spawn(monitor.instrument(future));
         } else {
-            tokio::spawn(future);
+            spawn(future);
         }
 
         // Set the executor handle

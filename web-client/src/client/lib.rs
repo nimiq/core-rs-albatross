@@ -165,14 +165,9 @@ impl Client {
 
         // Create client from config.
         log::info!("Initializing light client");
-        let mut client = nimiq::client::Client::from_config(
-            config,
-            Box::new(|fut| {
-                spawn_local(fut);
-            }),
-        )
-        .await
-        .expect("Client initialization failed");
+        let mut client = nimiq::client::Client::from_config(config)
+            .await
+            .expect("Client initialization failed");
         log::info!("Web client initialized");
 
         // Start consensus.

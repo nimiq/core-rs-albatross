@@ -64,13 +64,7 @@ async fn main_inner() -> Result<(), Error> {
     let metrics_enabled = metrics_config.is_some();
 
     // Create client from config.
-    let mut client: Client = Client::from_config(
-        config,
-        Box::new(|fut| {
-            tokio::spawn(fut);
-        }),
-    )
-    .await?;
+    let mut client: Client = Client::from_config(config).await?;
 
     // Initialize RPC server
     if let Some(rpc_config) = rpc_config {

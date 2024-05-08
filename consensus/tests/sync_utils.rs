@@ -22,10 +22,9 @@ use nimiq_test_utils::{
     node::TESTING_BLS_CACHE_MAX_CAPACITY,
     test_network::TestNetwork,
 };
-use nimiq_utils::time::OffsetTime;
+use nimiq_utils::{spawn::spawn, time::OffsetTime};
 use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
-use tokio::spawn;
 
 #[allow(dead_code)]
 pub enum SyncMode {
@@ -74,9 +73,6 @@ async fn syncer(
                 ))),
                 zkp_prover.proxy(),
                 network.subscribe_events(),
-                Box::new(|fut| {
-                    spawn(fut);
-                }),
             )
             .await
         }
@@ -125,15 +121,8 @@ pub async fn sync_two_peers(
         net1.subscribe_events(),
     )
     .await;
-    let zkp_prover1 = ZKPComponent::new(
-        BlockchainProxy::from(&blockchain1),
-        Arc::clone(&net1),
-        Box::new(|fut| {
-            spawn(fut);
-        }),
-        None,
-    )
-    .await;
+    let zkp_prover1 =
+        ZKPComponent::new(BlockchainProxy::from(&blockchain1), Arc::clone(&net1), None).await;
     let consensus1 = Consensus::from_network(
         BlockchainProxy::from(&blockchain1),
         Arc::clone(&net1),
@@ -172,15 +161,7 @@ pub async fn sync_two_peers(
     .await;
     networks.push(Arc::clone(&net2));
 
-    let zkp_prover2 = ZKPComponent::new(
-        blockchain2_proxy.clone(),
-        Arc::clone(&net2),
-        Box::new(|fut| {
-            spawn(fut);
-        }),
-        None,
-    )
-    .await;
+    let zkp_prover2 = ZKPComponent::new(blockchain2_proxy.clone(), Arc::clone(&net2), None).await;
 
     let mut syncer2 = syncer(&sync_mode, &net2, &blockchain2_proxy, &zkp_prover2).await;
 
@@ -220,9 +201,6 @@ pub async fn sync_two_peers(
         syncer2,
         1,
         zkp_prover2_proxy,
-        Box::new(|fut| {
-            spawn(fut);
-        }),
     );
     let consensus2_proxy = consensus2.proxy();
     let events = blockchain2_proxy.read().notifier_as_stream();

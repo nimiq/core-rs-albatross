@@ -197,16 +197,10 @@ async fn sync_ingredients() {
     let net1: Arc<Network> =
         TestNetwork::build_network(2, Default::default(), &mut Some(hub)).await;
     networks.push(Arc::clone(&net1));
-    let zkp_prover1 = ZKPComponent::new(
-        BlockchainProxy::from(&blockchain1),
-        Arc::clone(&net1),
-        Box::new(|fut| {
-            tokio::spawn(fut);
-        }),
-        None,
-    )
-    .await
-    .proxy();
+    let zkp_prover1 =
+        ZKPComponent::new(BlockchainProxy::from(&blockchain1), Arc::clone(&net1), None)
+            .await
+            .proxy();
     let blockchain1_proxy = BlockchainProxy::from(&blockchain1);
     let syncer1 = SyncerProxy::new_history(
         blockchain1_proxy.clone(),
@@ -240,16 +234,10 @@ async fn sync_ingredients() {
     let net2: Arc<Network> =
         TestNetwork::build_network(3, Default::default(), &mut Some(MockHub::default())).await;
     networks.push(Arc::clone(&net2));
-    let zkp_prover2 = ZKPComponent::new(
-        BlockchainProxy::from(&blockchain2),
-        Arc::clone(&net2),
-        Box::new(|fut| {
-            tokio::spawn(fut);
-        }),
-        None,
-    )
-    .await
-    .proxy();
+    let zkp_prover2 =
+        ZKPComponent::new(BlockchainProxy::from(&blockchain2), Arc::clone(&net2), None)
+            .await
+            .proxy();
     let blockchain2_proxy = BlockchainProxy::from(&blockchain2);
     let syncer2 = SyncerProxy::new_history(
         blockchain2_proxy.clone(),

@@ -27,6 +27,7 @@ use nimiq_network_interface::{
 };
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_test_log::test;
+use nimiq_utils::spawn::spawn;
 use parking_lot::RwLock;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
@@ -251,7 +252,7 @@ async fn it_can_aggregate() {
         );
 
         let r = stopped.clone();
-        tokio::spawn(async move {
+        spawn(async move {
             // have them just run until the aggregation is finished
             while let Some(_contribution) = aggregation.next().await {
                 if *r.read() {

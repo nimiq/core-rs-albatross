@@ -76,15 +76,7 @@ impl TestNetwork for Network {
             true,
             NonZeroU8::new(1).unwrap(),
         );
-        let network = Arc::new(
-            Network::new(
-                config,
-                Box::new(|fut| {
-                    tokio::spawn(fut);
-                }),
-            )
-            .await,
-        );
+        let network = Arc::new(Network::new(config).await);
         network.listen_on(vec![peer_address]).await;
         network
     }

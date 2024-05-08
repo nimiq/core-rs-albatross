@@ -22,7 +22,6 @@ mod tree_proof;
 pub mod trie;
 
 pub mod merkle_tree;
-pub mod task_executor;
 
 #[cfg(feature = "tendermint")]
 pub use self::signed::*;

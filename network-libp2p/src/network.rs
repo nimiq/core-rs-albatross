@@ -50,10 +50,12 @@ use nimiq_network_interface::{
         RequestError, RequestSerialize, RequestType,
     },
 };
-use nimiq_primitives::task_executor::TaskExecutor;
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_time::{interval, timeout, Interval};
-use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned};
+use nimiq_utils::{
+    spawn::spawn,
+    tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned},
+};
 use nimiq_validator_network::validator_record::ValidatorRecord;
 use parking_lot::{Mutex, RwLock};
 use thiserror::Error;
@@ -340,7 +342,7 @@ impl Network {
     ///
     ///  - `config`: The network configuration, containing key pair, and other behavior-specific configuration.
     ///
-    pub async fn new(config: Config, executor: impl TaskExecutor + Send + Clone + 'static) -> Self {
+    pub async fn new(config: Config) -> Self {
         let required_services = config.required_services;
         // TODO: persist to disk
         let own_peer_contact = config.peer_contact.clone();
@@ -381,7 +383,7 @@ impl Network {
         #[cfg(feature = "metrics")]
         let metrics = Arc::new(NetworkMetrics::default());
 
-        executor.exec(Box::pin(Self::swarm_task(
+        spawn(Box::pin(Self::swarm_task(
             swarm,
             events_tx.clone(),
             action_rx,

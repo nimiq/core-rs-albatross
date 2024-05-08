@@ -75,7 +75,7 @@ pub mod tests {
     use nimiq_network_interface::network::{Network, NetworkEvent, SubscribeEvents, Topic};
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng::test_rng;
-    use nimiq_utils::tagged_signing::TaggedSignable;
+    use nimiq_utils::{spawn::spawn, tagged_signing::TaggedSignable};
     use serde::{Deserialize, Serialize};
 
     use super::{network::MockNetworkError, MockHub, MockPeerId};
@@ -185,7 +185,7 @@ pub mod tests {
     fn consume_stream<T: std::fmt::Debug>(
         mut stream: impl Stream<Item = T> + Unpin + Send + 'static,
     ) {
-        tokio::spawn(async move { while stream.next().await.is_some() {} });
+        spawn(async move { while stream.next().await.is_some() {} });
     }
 
     #[test(tokio::test)]

@@ -17,6 +17,7 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId};
 use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
+use nimiq_utils::spawn::spawn;
 use parking_lot::RwLock;
 use tokio::sync::oneshot::Sender as OneshotSender;
 
@@ -466,7 +467,7 @@ impl<N: Network> BlockQueue<N> {
     fn publish_block_header(&self, mut block: Block) {
         let network = Arc::clone(&self.network);
 
-        tokio::spawn(async move {
+        spawn(async move {
             let block_id = format!("{}", block);
             log::debug!(block = block_id, "Broadcasting on BlockHeaderTopic",);
 

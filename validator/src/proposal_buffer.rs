@@ -574,6 +574,7 @@ mod test {
         test_network::TestNetwork,
     };
     use nimiq_time::{sleep, timeout};
+    use nimiq_utils::spawn::spawn;
     use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
     use nimiq_zkp_component::ZKPComponent;
     use parking_lot::{Mutex, RwLock};
@@ -591,16 +592,9 @@ mod test {
     ) -> Consensus<N> {
         let blockchain_proxy = BlockchainProxy::from(&blockchain);
 
-        let zkp_proxy = ZKPComponent::new(
-            blockchain_proxy.clone(),
-            Arc::clone(&net),
-            Box::new(|fut| {
-                tokio::spawn(fut);
-            }),
-            None,
-        )
-        .await
-        .proxy();
+        let zkp_proxy = ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&net), None)
+            .await
+            .proxy();
 
         let syncer = SyncerProxy::new_history(
             blockchain_proxy.clone(),
@@ -610,16 +604,7 @@ mod test {
         )
         .await;
 
-        Consensus::new(
-            blockchain_proxy,
-            net,
-            syncer,
-            0,
-            zkp_proxy,
-            Box::new(|fut| {
-                tokio::spawn(fut);
-            }),
-        )
+        Consensus::new(blockchain_proxy, net, syncer, 0, zkp_proxy)
     }
 
     async fn setup() -> (
@@ -660,8 +645,8 @@ mod test {
         let mut deadline = sleep(Duration::from_millis(200)).boxed().fuse();
 
         // Spawn both consensus before connecting them.
-        tokio::spawn(consensus1);
-        tokio::spawn(consensus2);
+        spawn(consensus1);
+        spawn(consensus2);
 
         // connect the networks, such that the consensus can answer each others requests.
         nw1.dial_mock(&nw2);

@@ -271,7 +271,7 @@ mod tests {
     use nimiq_primitives::{networks::NetworkId, policy::Policy};
     use nimiq_test_log::test;
     use nimiq_test_utils::blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key};
-    use nimiq_utils::time::OffsetTime;
+    use nimiq_utils::{spawn::spawn, time::OffsetTime};
     use parking_lot::RwLock;
 
     use crate::{
@@ -336,17 +336,17 @@ mod tests {
         network: &Arc<TNetwork>,
         blockchain: &Arc<RwLock<Blockchain>>,
     ) {
-        tokio::spawn(request_handler(
+        spawn(request_handler(
             network,
             network.receive_requests::<RequestMacroChain>(),
             &BlockchainProxy::from(blockchain),
         ));
-        tokio::spawn(request_handler(
+        spawn(request_handler(
             network,
             network.receive_requests::<RequestBatchSet>(),
             blockchain,
         ));
-        tokio::spawn(request_handler(
+        spawn(request_handler(
             network,
             network.receive_requests::<RequestHistoryChunk>(),
             blockchain,

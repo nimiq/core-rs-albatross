@@ -4591,7 +4591,9 @@ dependencies = [
  "rand_core",
  "serde",
  "thiserror",
+ "tokio",
  "tracing",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]

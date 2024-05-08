@@ -16,7 +16,7 @@ use nimiq_test_utils::{
     validator::build_validators,
 };
 use nimiq_transaction_builder::TransactionBuilder;
-use nimiq_utils::{key_rng::SecureGenerate, time::OffsetTime};
+use nimiq_utils::{key_rng::SecureGenerate, spawn::spawn, time::OffsetTime};
 use parking_lot::RwLock;
 
 #[test(tokio::test)]
@@ -89,7 +89,7 @@ async fn four_validators_can_create_an_epoch() {
 
     let blockchain = Arc::clone(&validators.first().unwrap().blockchain);
 
-    tokio::spawn(future::join_all(validators));
+    spawn(future::join_all(validators));
 
     let events = blockchain.read().notifier_as_stream();
 
