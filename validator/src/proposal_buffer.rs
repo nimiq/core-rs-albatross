@@ -17,11 +17,11 @@ use nimiq_consensus::consensus::{
     consensus_proxy::ConsensusProxy, ResolveBlockError as ConsensusResolveBlockError,
 };
 use nimiq_keys::Ed25519Signature as SchnorrSignature;
-use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{CloseReason, MsgAcceptance, Network, PubsubId as _, Topic};
 use nimiq_primitives::policy::Policy;
 use nimiq_serde::Serialize;
 use nimiq_tendermint::SignedProposalMessage;
+use nimiq_utils::WakerExt as _;
 use nimiq_validator_network::{PubsubId, ValidatorNetwork};
 use parking_lot::{Mutex, RwLock};
 
@@ -528,7 +528,7 @@ where
 
         // Before returning, check if the buffer is empty, if so, store a waker.
         if shared.buffer.is_empty() {
-            store_waker!(shared, waker, cx);
+            shared.waker.store_waker(cx);
         }
         // The futures unordered do not need checking as they can only populate via send or the buffer not being empty.
 

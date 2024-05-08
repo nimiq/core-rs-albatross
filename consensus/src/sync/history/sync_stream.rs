@@ -7,8 +7,8 @@ use std::{
 use futures::{FutureExt, Stream, StreamExt};
 use nimiq_block::Block;
 use nimiq_blockchain::Blockchain;
-use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{Network, NetworkEvent};
+use nimiq_utils::WakerExt as _;
 use tokio::task::spawn_blocking;
 
 use crate::sync::{
@@ -239,7 +239,7 @@ impl<TNetwork: Network> Stream for HistoryMacroSync<TNetwork> {
     type Item = MacroSyncReturn<TNetwork::PeerId>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        store_waker!(self, waker, cx);
+        self.waker.store_waker(cx);
 
         if let Poll::Ready(o) = self.poll_network_events(cx) {
             return Poll::Ready(o);

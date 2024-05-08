@@ -50,7 +50,6 @@ nimiq-genesis = { workspace = true, default-features = false }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true }
 nimiq-log = { workspace = true, optional = true }
-nimiq-macros = { workspace = true }
 nimiq-network-interface = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["policy"] }
 nimiq-serde = { workspace = true }

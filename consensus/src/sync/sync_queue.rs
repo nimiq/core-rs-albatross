@@ -12,8 +12,8 @@ use std::{
 use futures::{
     future, future::BoxFuture, ready, stream::FuturesUnordered, FutureExt, Stream, StreamExt,
 };
-use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{Network, PubsubId};
+use nimiq_utils::WakerExt as _;
 use parking_lot::RwLock;
 use pin_project::pin_project;
 
@@ -360,7 +360,7 @@ where
     type Item = Result<TOutput, TId>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        store_waker!(self, waker, cx);
+        self.waker.store_waker(cx);
 
         // Try to request more objects.
         self.try_push_futures();

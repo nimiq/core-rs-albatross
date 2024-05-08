@@ -5,7 +5,7 @@ use core::{
 use std::{collections::HashSet, fmt, sync::Arc, task::Waker};
 
 use futures::{stream::BoxStream, Stream, StreamExt};
-use nimiq_macros::store_waker;
+use nimiq_utils::WakerExt as _;
 
 use crate::{
     contribution::AggregatableContribution, evaluator::Evaluator, protocol::Protocol,
@@ -266,7 +266,7 @@ where
                 unreachable!(" Score was higher than 0 but there was no best TodoItem.");
             }
         } else {
-            store_waker!(self, waker, cx);
+            self.waker.store_waker(cx);
             Poll::Pending
         }
     }

@@ -26,7 +26,7 @@ tokio = { version = "1.37", features = [
 tokio-stream = "0.1"
 
 nimiq-collections = { workspace = true }
-nimiq-macros = { workspace = true }
+nimiq-utils = { workspace = true }
 
 [dev-dependencies]
 nimiq-test-log = { workspace = true }

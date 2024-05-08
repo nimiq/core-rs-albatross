@@ -14,3 +14,7 @@ pub mod otp;
 pub mod tagged_signing;
 #[cfg(feature = "time")]
 pub mod time;
+
+mod waker;
+
+pub use self::waker::WakerExt;

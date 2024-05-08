@@ -8,7 +8,7 @@ use futures::{
     stream::{FuturesUnordered, StreamExt},
     Stream,
 };
-use nimiq_macros::store_waker;
+use nimiq_utils::WakerExt as _;
 
 use crate::{contribution::AggregatableContribution, update::LevelUpdate};
 
@@ -148,7 +148,7 @@ impl<TNetwork: Network + Unpin> Stream for LevelUpdateSender<TNetwork> {
                 // Store a waker in case a message is added.
                 // This is necessary as this future will always return `Poll::Pending`, while the
                 // buffer might be empty and the pending futures might be empty as well.
-                store_waker!(self, waker, cx);
+                self.waker.store_waker(cx);
 
                 // Return `Poll::Pending` as this stream is neither allowed to produce items nor to terminate.
                 return Poll::Pending;

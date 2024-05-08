@@ -27,7 +27,6 @@ tokio-stream = "0.1"
 nimiq-bls = { workspace = true }
 nimiq-collections = { workspace = true }
 nimiq-hash = { workspace = true }
-nimiq-macros = { workspace = true }
 nimiq-serde = { workspace = true }
 nimiq-utils = { workspace = true, features = [
     "math",

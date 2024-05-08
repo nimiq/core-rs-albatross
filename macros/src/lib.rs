@@ -179,14 +179,3 @@ macro_rules! upgrade_weak {
         }
     };
 }
-
-#[macro_export]
-macro_rules! store_waker {
-    ($self: ident, $field: ident, $cx: expr) => {
-        match &mut $self.$field {
-            Some(waker) if !waker.will_wake($cx.waker()) => *waker = $cx.waker().clone(),
-            None => $self.$field = Some($cx.waker().clone()),
-            _ => {}
-        }
-    };
-}

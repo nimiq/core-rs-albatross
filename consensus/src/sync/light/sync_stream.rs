@@ -11,9 +11,9 @@ use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_light_blockchain::LightBlockchain;
-use nimiq_macros::store_waker;
 use nimiq_network_interface::network::{CloseReason, Network, NetworkEvent};
 use nimiq_primitives::policy::Policy;
+use nimiq_utils::WakerExt as _;
 use nimiq_zkp_component::types::ZKPRequestEvent::{OutdatedProof, Proof};
 
 use crate::sync::{
@@ -424,7 +424,7 @@ impl<TNetwork: Network> Stream for LightMacroSync<TNetwork> {
     type Item = MacroSyncReturn<TNetwork::PeerId>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        store_waker!(self, waker, cx);
+        self.waker.store_waker(cx);
 
         if let Poll::Ready(o) = self.poll_network_events(cx) {
             return Poll::Ready(o);

@@ -6,8 +6,8 @@ use std::{
 
 use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, Stream, StreamExt};
 use nimiq_block::MacroBlock;
-use nimiq_macros::store_waker;
 use nimiq_network_interface::{network::Network, request::RequestError};
+use nimiq_utils::WakerExt as _;
 use tokio::sync::oneshot::{channel, Receiver, Sender};
 
 use crate::types::*;
@@ -122,7 +122,8 @@ impl<N: Network + 'static> Stream for ZKPRequests<N> {
     type Item = ZKPRequestsItem<N>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        store_waker!(self, waker, cx);
+        self.waker.store_waker(cx);
+
         // We poll the zkp requests and return the proof.
         while let Poll::Ready(result) = self.zkp_request_results.poll_next_unpin(cx) {
             match result {

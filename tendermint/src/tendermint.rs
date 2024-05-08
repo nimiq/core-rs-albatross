@@ -12,7 +12,7 @@ use futures::{
     stream::{BoxStream, FuturesUnordered, SelectAll, Stream, StreamExt},
 };
 use nimiq_collections::BitSet;
-use nimiq_macros::store_waker;
+use nimiq_utils::WakerExt as _;
 use rand::{thread_rng, Rng};
 use tokio::{
     sync::mpsc,
@@ -629,7 +629,7 @@ impl<TProtocol: Protocol> Stream for Tendermint<TProtocol> {
     type Item = Return<TProtocol>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        store_waker!(self, waker, cx);
+        self.waker.store_waker(cx);
 
         // If a decision was returned previously this stream is terminated.
         if self.decision {

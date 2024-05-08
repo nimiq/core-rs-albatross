@@ -19,8 +19,8 @@ use libp2p::{
     },
     Multiaddr, PeerId, TransportError,
 };
-use nimiq_macros::store_waker;
 use nimiq_network_interface::{network::CloseReason, peer_info::Services};
+use nimiq_utils::WakerExt as _;
 use parking_lot::RwLock;
 use rand::{seq::IteratorRandom, thread_rng};
 use void::Void;
@@ -961,7 +961,7 @@ impl NetworkBehaviour for Behaviour {
             self.housekeeping();
         }
 
-        store_waker!(self, waker, cx);
+        self.waker.store_waker(cx);
 
         Poll::Pending
     }

@@ -44,7 +44,6 @@ nimiq-genesis = { workspace = true }
 nimiq-handel = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true }
-nimiq-macros = { workspace = true }
 nimiq-mempool = { workspace = true }
 nimiq-network-interface = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["tendermint"] }
