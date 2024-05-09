@@ -21,7 +21,7 @@ workspace = true
 
 [dependencies]
 byteorder = "1.5"
-regex = "1"
+regex = "1.10"
 serde = "1.0"
 
 nimiq-hash = { workspace = true }
