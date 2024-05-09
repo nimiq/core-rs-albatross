@@ -5,6 +5,7 @@ use futures::{
     future::{BoxFuture, FutureExt},
     stream::StreamExt,
 };
+use instant::Instant;
 use nimiq_bls::PublicKey;
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::{
@@ -286,7 +287,11 @@ async fn it_can_aggregate() {
     );
 
     // aggregating should not take more than 300 ms per each 7 contributors
-    let timeout = Duration::from_millis(300u64 * (contributor_num / 7 + 1) as u64);
+    let timeout_ms = 300u64 * (contributor_num / 7 + 1) as u64;
+
+    let deadline = Instant::now()
+        .checked_add(Duration::from_millis(timeout_ms))
+        .unwrap();
 
     // The final value needs to be the sum of all contributions.
     // For instance for `contributor_num = 7: 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 = 36`
@@ -296,7 +301,12 @@ async fn it_can_aggregate() {
     }
 
     loop {
-        match nimiq_time::timeout(timeout, aggregation.next()).await {
+        match nimiq_time::timeout(
+            deadline.saturating_duration_since(Instant::now()),
+            aggregation.next(),
+        )
+        .await
+        {
             Ok(Some(aggregate)) => {
                 if aggregate.num_contributors() == contributor_num + 1
                     && aggregate.value == exp_agg_value
