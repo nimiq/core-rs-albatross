@@ -13,14 +13,6 @@ global.WebSocket = w3cwebsocket;
 // a WorkerGlobalScope object available which is checked within the libp2p's websocket-websys transport.
 global.WorkerGlobalScope = global;
 
-// Clean up performance measurements created by tracing.
-// TODO: find a solution to disable creating these measurements.
-setInterval(() => {
-    global.performance.clearMarks();
-    global.performance.clearMeasures();
-    global.performance.clearResourceTimings();
-}, 300 * 1000);
-
 // Prevent NodeJS exiting on an uncaught exception that we currently expect,
 // until it is fixed in upstream libp2p websocket-websys transport.
 process.on('uncaughtException', error => {

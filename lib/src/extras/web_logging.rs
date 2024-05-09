@@ -1,9 +1,7 @@
 use log::{level_filters::LevelFilter, Level};
 use nimiq_log::{Formatting, MaybeSystemTime, TargetsExt};
-use tracing_subscriber::{
-    filter::Targets, fmt::format::Pretty, layer::SubscriberExt, util::SubscriberInitExt, Layer,
-};
-use tracing_web::{performance_layer, MakeConsoleWriter};
+use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt, Layer};
+use tracing_web::MakeWebConsoleWriter;
 
 use crate::{config::config_file::LogSettings, error::Error};
 
@@ -48,17 +46,14 @@ pub fn initialize_web_logging(settings_opt: Option<&LogSettings>) -> Result<(), 
     // Set logging level from the environment
     filter = filter.with_env();
 
-    let perf_layer = performance_layer().with_details_from_fields(Pretty::default());
-
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::fmt::layer()
-                .with_writer(MakeConsoleWriter)
+                .with_writer(MakeWebConsoleWriter::new())
                 .with_ansi(false)
                 .event_format(Formatting(MaybeSystemTime(settings.timestamps)))
                 .with_filter(filter),
         )
-        .with(perf_layer)
         .init();
     Ok(())
 }
