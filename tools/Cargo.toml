@@ -34,7 +34,7 @@ anyhow = "1.0"
 clap = { version = "4.5", features = ["cargo"] }
 convert_case = "0.6"
 hex = "0.4"
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 quote = "1.0"
 rand = "0.8"
 schemars = "0.8"

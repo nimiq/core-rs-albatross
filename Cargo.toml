@@ -169,6 +169,7 @@ clippy.assigning_clones = "allow" # false positives: https://github.com/rust-lan
 
 [workspace.dependencies]
 futures = { package = "futures-util", version = "0.3.30" }
+log = { package = "tracing", version = "0.1.40", features = ["log"] }
 
 nimiq-account = { path = "primitives/account", default-features = false }
 nimiq-block = { path = "primitives/block", default-features = false }

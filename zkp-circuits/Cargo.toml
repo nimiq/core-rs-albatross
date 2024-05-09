@@ -26,7 +26,7 @@ required-features = ["zkp-prover", "parallel", "cli"]
 [dependencies]
 clap = { version = "4.5", features = ["cargo", "string", "derive"] }
 hex = "0.4"
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 rand = { version = "0.8", features = ["small_rng"] }
 rand_chacha = "0.3.1"
 rayon = { version = "^1.10", optional = true }

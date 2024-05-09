@@ -24,7 +24,7 @@ async-trait = "0.1"
 futures = { workspace = true }
 futures-executor = { version = "0.3" }
 instant = { version = "0.1", features = [ "wasm-bindgen" ] }
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 parking_lot = "0.12"
 pin-project = "1.1"
 rand = "0.8"

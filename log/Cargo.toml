@@ -15,7 +15,7 @@ workspace = true
 
 [dependencies]
 ansi_term = "0.12"
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 time = { version = "0.3", features = ["formatting"] }
 tracing-log = "0.2"
 tracing-subscriber = { version = "0.3", features = ["time"] }

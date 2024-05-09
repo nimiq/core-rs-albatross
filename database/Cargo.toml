@@ -22,7 +22,7 @@ workspace = true
 [dependencies]
 bitflags = "2.5"
 libmdbx = "0.5.0"
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 tempfile = "3"
 thiserror = "1.0"
 

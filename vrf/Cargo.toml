@@ -17,7 +17,7 @@ workspace = true
 byteorder = "1.5"
 curve25519-dalek = { version = "4", features = ["digest"] }
 hex = "0.4"
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 rand = "0.8"
 serde = { version = "1.0", optional = true }
 sha2 = "0.10"

@@ -21,7 +21,7 @@ ark-serialize = "0.4"
 async-trait = "0.1"
 futures = { workspace = true }
 hex = "0.4"
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 parking_lot = "0.12"
 paste = "1.0"
 rand = "0.8"

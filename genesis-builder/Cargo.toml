@@ -15,7 +15,7 @@ workspace = true
 
 [dependencies]
 hex = "0.4"
-log = { package = "tracing", version = "0.1" }
+log = { workspace = true }
 serde = "1.0"
 thiserror = "1.0"
 time = { version = "0.3", features = ["formatting", "parsing", "serde"] }

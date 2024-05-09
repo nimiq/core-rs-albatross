@@ -22,7 +22,7 @@ ark-ec = "0.4"
 bitflags = { version = "2.5", features = ["serde"] }
 byteorder = "1.5"
 hex = "0.4"
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 serde = "1.0"
 serde_repr = "0.1"
 thiserror = "1.0"

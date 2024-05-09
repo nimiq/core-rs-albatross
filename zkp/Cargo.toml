@@ -24,7 +24,7 @@ ark-relations = "0.4"
 ark-r1cs-std = "0.4"
 ark-serialize = "0.4"
 ark-std = "0.4"
-log = { package = "tracing", version = "0.1", features = ["log", "attributes"] }
+log = { workspace = true }
 once_cell = "1.19"
 parking_lot = "0.12"
 rand = { version = "0.8", features = ["small_rng"] }

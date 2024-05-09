@@ -22,7 +22,7 @@ workspace = true
 
 [dependencies]
 futures = { workspace = true }
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 tokio = { version = "1.37", features = ["macros", "rt-multi-thread", "time", "tracing"] }
 tokio-metrics = "0.3"
 

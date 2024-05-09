@@ -23,7 +23,7 @@ workspace = true
 async-trait = "0.1"
 bitflags = { version = "2.5", features = ["serde"] }
 futures = { workspace = true }
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 multiaddr = "0.18"
 serde = "1.0"
 thiserror = "1.0"

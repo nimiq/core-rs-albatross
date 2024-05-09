@@ -18,7 +18,7 @@ workspace = true
 
 [dependencies]
 hex = "0.4"
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 serde = "1.0"
 
 nimiq-bls = { workspace = true, features = ["serde-derive"] }

@@ -19,7 +19,7 @@ workspace = true
 [dependencies]
 base64 = "0.22"
 bitflags = { version = "2.5", features = ["serde"] }
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 serde = "1.0"
 serde_json = "1.0"
 strum_macros = "0.26"

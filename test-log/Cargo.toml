@@ -14,7 +14,7 @@ keywords.workspace = true
 workspace = true
 
 [dependencies]
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 parking_lot = "0.12"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

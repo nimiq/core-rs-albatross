@@ -26,7 +26,7 @@ ark-serialize = "0.4"
 byteorder = "1.5"
 cfg_eval = "0.1"
 hex = { version = "0.4", optional = true }
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 once_cell = "1.19"
 parking_lot = { version = "0.12.2", optional = true }
 regex = { version = "1.10", optional = true }

@@ -39,7 +39,7 @@ nimiq-transaction = { workspace = true }
 nimiq-utils = { workspace = true, features = ["time"] }
 
 [build-dependencies]
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 nimiq-database = { workspace = true }

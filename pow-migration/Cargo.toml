@@ -24,7 +24,7 @@ clap = { version = "4.5", features = ["derive"] }
 convert_case = "0.6"
 hex = "0.4"
 humantime = "2.1"
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 nimiq-blockchain = { workspace = true }
 nimiq-bls = { workspace = true }
 nimiq-database = { workspace = true }

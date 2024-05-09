@@ -23,7 +23,7 @@ workspace = true
 async-trait = "0.1"
 futures = { workspace = true }
 hex = "0.4.2"
-log = { package = "tracing", version = "0.1", features = ["log"] }
+log = { workspace = true }
 parking_lot = "0.12"
 serde = "1.0"
 serde_json = "1.0"
