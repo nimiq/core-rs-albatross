@@ -28,7 +28,7 @@ async-trait = "0.1"
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 dotenv = "0.15"
-futures = { package = "futures-util", version = "0.3" }
+futures = { workspace = true }
 tokio = { version = "1.37", features = [
     "macros",
     "rt-multi-thread",

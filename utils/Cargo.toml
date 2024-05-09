@@ -21,7 +21,7 @@ workspace = true
 
 [dependencies]
 clear_on_drop = { version = "0.2", optional = true }
-futures = { package = "futures-util", version = "0.3" }
+futures = { workspace = true }
 hex = { version = "0.4", optional = true }
 libp2p-identity = { version = "0.2", optional = true }
 log = { package = "tracing", version = "0.1", optional = true, features = ["log"] }

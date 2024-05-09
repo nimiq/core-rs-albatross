@@ -29,7 +29,7 @@ ark-mnt4-753 = "0.4"
 ark-mnt6-753 = "0.4"
 ark-serialize = "0.4"
 async-trait = "0.1"
-futures = { package = "futures-util", version = "0.3" }
+futures = { workspace = true }
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"

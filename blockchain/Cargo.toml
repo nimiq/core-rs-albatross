@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-futures = { package = "futures-util", version = "0.3" }
+futures = { workspace = true }
 hex = "0.4"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = "0.12"

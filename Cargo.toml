@@ -168,6 +168,8 @@ clippy.empty_docs = "allow" # false positives: https://github.com/rust-lang/rust
 clippy.assigning_clones = "allow" # false positives: https://github.com/rust-lang/rust-clippy/issues/12709
 
 [workspace.dependencies]
+futures = { package = "futures-util", version = "0.3.30" }
+
 nimiq-account = { path = "primitives/account", default-features = false }
 nimiq-block = { path = "primitives/block", default-features = false }
 nimiq-blockchain = { path = "blockchain", default-features = false }

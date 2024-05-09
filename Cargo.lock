@@ -4578,7 +4578,6 @@ dependencies = [
 name = "nimiq-web-client"
 version = "0.1.0"
 dependencies = [
- "futures",
  "futures-util",
  "hex",
  "js-sys",
@@ -4604,6 +4603,7 @@ dependencies = [
  "parking_lot 0.12.2",
  "serde",
  "serde-wasm-bindgen 0.6.5",
+ "tokio",
  "tracing",
  "tsify",
  "wasm-bindgen",

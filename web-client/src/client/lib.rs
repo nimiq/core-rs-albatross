@@ -10,10 +10,9 @@ use std::{
 };
 
 use futures::{
-    channel::oneshot,
     future::{select, Either},
+    StreamExt,
 };
-use futures_util::StreamExt;
 use js_sys::{global, Array, Function, JsString};
 use log::level_filters::LevelFilter;
 pub use nimiq::{
@@ -31,6 +30,7 @@ use nimiq_network_interface::{
     Multiaddr,
 };
 use nimiq_primitives::policy::Policy;
+use tokio::sync::oneshot;
 use tsify::Tsify;
 use wasm_bindgen::{prelude::*, JsCast};
 use wasm_bindgen_futures::spawn_local;
