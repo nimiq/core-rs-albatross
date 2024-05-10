@@ -120,7 +120,7 @@ impl FromStr for ConfigFile {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Default)]
+#[derive(Clone, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkSettings {
     pub peer_key_file: Option<String>,
@@ -152,6 +152,28 @@ pub struct NetworkSettings {
 impl NetworkSettings {
     pub fn default_desired_peer_count() -> usize {
         12
+    }
+}
+
+impl Debug for NetworkSettings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NetworkSettings")
+            .field("peer_key_file", &self.peer_key_file)
+            .field("peer_key", &self.peer_key.as_ref().map(|_| "***"))
+            .field("listen_addresses", &self.listen_addresses)
+            .field("advertised_addresses", &self.advertised_addresses)
+            .field("seed_nodes", &self.seed_nodes)
+            .field("user_agent", &self.user_agent)
+            .field("tls", &self.tls)
+            .field("instant_inbound", &self.instant_inbound)
+            .field("desired_peer_count", &self.desired_peer_count)
+            .field(
+                "autonat_allow_non_global_ips",
+                &self.autonat_allow_non_global_ips,
+            )
+            .field("allow_loopback_addresses", &self.allow_loopback_addresses)
+            .field("dht_quorum", &self.dht_quorum)
+            .finish()
     }
 }
 
@@ -227,7 +249,7 @@ impl From<SyncMode> for config::SyncMode {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Default)]
+#[derive(Clone, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct RpcServerSettings {
     #[serde(deserialize_with = "deserialize_string_option")]
@@ -244,7 +266,21 @@ pub struct RpcServerSettings {
     pub password: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize, Default)]
+impl Debug for RpcServerSettings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RpcServerSettings")
+            .field("bind", &self.bind)
+            .field("port", &self.port)
+            .field("corsdomain", &self.corsdomain)
+            .field("allowip", &self.allowip)
+            .field("methods", &self.methods)
+            .field("username", &self.username)
+            .field("password", &self.password.as_ref().map(|_| "***"))
+            .finish()
+    }
+}
+
+#[derive(Clone, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct MetricsServerSettings {
     #[serde(deserialize_with = "deserialize_string_option")]
@@ -253,6 +289,17 @@ pub struct MetricsServerSettings {
     pub port: Option<u16>,
     pub username: Option<String>,
     pub password: Option<String>,
+}
+
+impl Debug for MetricsServerSettings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MetricsServerSettings")
+            .field("bind", &self.bind)
+            .field("port", &self.port)
+            .field("username", &self.username)
+            .field("password", &self.password.as_ref().map(|_| "***"))
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]

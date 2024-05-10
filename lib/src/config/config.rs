@@ -520,7 +520,7 @@ pub struct ValidatorConfig {
 }
 
 /// Credentials for JSON RPC server, metrics server or websocket RPC server
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Credentials {
     /// Username
     pub username: String,
@@ -538,6 +538,15 @@ impl Credentials {
 
     pub fn check<U: AsRef<str>, P: AsRef<str>>(&self, username: U, password: P) -> bool {
         self.username == username.as_ref() && self.password == password.as_ref()
+    }
+}
+
+impl Debug for Credentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Credentials")
+            .field("username", &self.username)
+            .field("password", &"***")
+            .finish()
     }
 }
 
