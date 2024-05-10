@@ -20,13 +20,17 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
+bytes = "1.6"
 futures = "0.3"
-hyper = { version = "0.14.28", features = ["server", "tcp", "http2"] }
+http-body-util = { version = "0.1" }
+hyper = { version = "1.3", features = ["server", "http2"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
 log = { workspace = true }
 parking_lot = "0.12"
 prometheus-client = "0.22.2"
 tokio = { version = "1.37", features = [
     "macros",
+    "net",
     "rt-multi-thread",
     "tracing",
 ] }
