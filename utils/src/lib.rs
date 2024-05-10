@@ -15,6 +15,7 @@ pub mod tagged_signing;
 #[cfg(feature = "time")]
 pub mod time;
 
+mod sensitive;
 mod waker;
 
-pub use self::waker::WakerExt;
+pub use self::{sensitive::Sensitive, waker::WakerExt};

@@ -23,7 +23,7 @@ pub fn initialize_rpc_server(
     // Configure RPC server
     let basic_auth = config.credentials.map(|credentials| Credentials {
         username: credentials.username,
-        password: credentials.password,
+        password: credentials.password.0,
     });
 
     let allowed_methods = config.allowed_methods.unwrap_or_default();

@@ -22,9 +22,9 @@ use nimiq_network_interface::Multiaddr;
 use nimiq_network_libp2p::{Keypair as IdentityKeypair, Libp2pKeyPair};
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_serde::Deserialize;
-use nimiq_utils::file_store::FileStore;
 #[cfg(feature = "validator")]
 use nimiq_utils::key_rng::SecureGenerate;
+use nimiq_utils::{file_store::FileStore, Sensitive};
 use nimiq_zkp_circuits::DEFAULT_KEYS_PATH;
 use strum_macros::Display;
 
@@ -161,7 +161,7 @@ impl From<TlsSettings> for TlsConfig {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct FileStorageConfig {
     /// The parent directory where the database will be stored. The database directory name
     /// is determined by the network ID and consensus type using the `database_name` static
@@ -172,7 +172,7 @@ pub struct FileStorageConfig {
     pub peer_key_path: PathBuf,
 
     /// The key used for the peer key, if the file is not present.
-    pub peer_key: Option<String>,
+    pub peer_key: Option<Sensitive<String>>,
 
     /// Path to voting key.
     #[cfg(feature = "validator")]
@@ -180,7 +180,7 @@ pub struct FileStorageConfig {
 
     /// The voting key used for the validator, if the file is not present.
     #[cfg(feature = "validator")]
-    pub voting_key: Option<String>,
+    pub voting_key: Option<Sensitive<String>>,
 
     /// Path to signing key.
     #[cfg(feature = "validator")]
@@ -188,7 +188,7 @@ pub struct FileStorageConfig {
 
     /// The signing key used for the validator, if the file is not present.
     #[cfg(feature = "validator")]
-    pub signing_key: Option<String>,
+    pub signing_key: Option<Sensitive<String>>,
 
     /// Path to fee key.
     #[cfg(feature = "validator")]
@@ -196,7 +196,7 @@ pub struct FileStorageConfig {
 
     /// The fee key used for the validator, if the file is not present.
     #[cfg(feature = "validator")]
-    pub fee_key: Option<String>,
+    pub fee_key: Option<Sensitive<String>>,
 }
 
 impl FileStorageConfig {
@@ -238,28 +238,6 @@ impl FileStorageConfig {
 impl Default for FileStorageConfig {
     fn default() -> Self {
         Self::home()
-    }
-}
-
-impl Debug for FileStorageConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut debug_struct = f.debug_struct("FileStorageConfig");
-        debug_struct
-            .field("database_parent", &self.database_parent)
-            .field("peer_key_path", &self.peer_key_path)
-            .field("peer_key", &self.peer_key.as_ref().map(|_| "***"));
-
-        #[cfg(feature = "validator")]
-        {
-            debug_struct
-                .field("voting_key_path", &self.voting_key_path)
-                .field("voting_key", &self.voting_key.as_ref().map(|_| "***"))
-                .field("signing_key_path", &self.signing_key_path)
-                .field("signing_key", &self.signing_key.as_ref().map(|_| "***"))
-                .field("fee_key_path", &self.fee_key_path)
-                .field("fee_key", &self.fee_key.as_ref().map(|_| "***"));
-        }
-        debug_struct.finish()
     }
 }
 
@@ -525,24 +503,24 @@ pub struct Credentials {
     /// Username
     pub username: String,
     /// Password
-    pub password: String,
+    pub password: Sensitive<String>,
 }
 
 impl Credentials {
     pub fn new<U: AsRef<str>, P: AsRef<str>>(username: U, password: P) -> Self {
         Self {
             username: username.as_ref().to_owned(),
-            password: password.as_ref().to_owned(),
+            password: Sensitive(password.as_ref().to_owned()),
         }
     }
 
     pub fn check<U: AsRef<str>, P: AsRef<str>>(&self, username: U, password: P) -> bool {
-        self.username == username.as_ref() && self.password == password.as_ref()
+        self.username == username.as_ref() && *self.password == password.as_ref()
     }
 }
 
 #[cfg(feature = "rpc-server")]
-#[derive(Clone, Builder)]
+#[derive(Builder, Clone, Debug)]
 #[builder(setter(into))]
 pub struct RpcServerConfig {
     /// Bind the RPC server to the specified IP address.
@@ -578,22 +556,8 @@ pub struct RpcServerConfig {
     pub credentials: Option<Credentials>,
 }
 
-#[cfg(feature = "rpc-server")]
-impl Debug for RpcServerConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RpcServerConfig")
-            .field("bind_to", &self.bind_to)
-            .field("port", &self.port)
-            .field("corsdomain", &self.corsdomain)
-            .field("allow_ips", &self.allow_ips)
-            .field("allowed_methods", &self.allowed_methods)
-            .field("credentials", &self.credentials.as_ref().map(|_| "***"))
-            .finish()
-    }
-}
-
 #[cfg(feature = "metrics-server")]
-#[derive(Clone, Builder)]
+#[derive(Builder, Clone, Debug)]
 #[builder(setter(into))]
 pub struct MetricsServerConfig {
     /// Bind the server to the specified ip and port.
@@ -605,16 +569,6 @@ pub struct MetricsServerConfig {
     /// If specified, require HTTP basic auth with these credentials
     #[builder(setter(strip_option))]
     pub credentials: Option<Credentials>,
-}
-
-#[cfg(feature = "metrics-server")]
-impl Debug for MetricsServerConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MetricsServerConfig")
-            .field("addr", &self.addr)
-            .field("credentials", &self.credentials.as_ref().map(|_| "***"))
-            .finish()
-    }
 }
 
 /// Client configuration
@@ -895,7 +849,7 @@ impl ClientConfigBuilder {
                 };
 
                 let credentials = match (&rpc_config.username, &rpc_config.password) {
-                    (Some(u), Some(p)) => Some(Credentials::new(u.clone(), p.clone())),
+                    (Some(u), Some(p)) => Some(Credentials::new(u, p)),
                     (None, None) => None,
                     _ => {
                         return Err(Error::config_error(
@@ -938,7 +892,7 @@ impl ClientConfigBuilder {
 
                 let credentials =
                     match (&metrics_config.username, &metrics_config.password) {
-                        (Some(u), Some(p)) => Some(Credentials::new(u.clone(), p.clone())),
+                        (Some(u), Some(p)) => Some(Credentials::new(u, p)),
                         (None, None) => None,
                         _ => return Err(Error::config_error(
                             "Metrics: Either both username and password have to be set or none.",

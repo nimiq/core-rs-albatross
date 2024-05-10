@@ -1,5 +1,6 @@
 use std::{
     collections::VecDeque,
+    ops::Deref,
     path::PathBuf,
     str::FromStr,
     sync::{Arc, RwLock},
@@ -181,7 +182,11 @@ async fn main_inner() -> Result<(), Error> {
     let private_key = match config.network_id {
         NetworkId::UnitAlbatross => UNIT_KEY,
         // First try to get it from the "fee_key" field in the config file, if that's not set, then use the hardcoded default.
-        NetworkId::DevAlbatross => validator_settings.fee_key.as_deref().unwrap_or(DEV_KEY),
+        NetworkId::DevAlbatross => validator_settings
+            .fee_key
+            .as_deref()
+            .map(Deref::deref)
+            .unwrap_or(DEV_KEY),
         _ => panic!("Unsupported network"),
     };
 

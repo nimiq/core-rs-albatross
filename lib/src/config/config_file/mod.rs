@@ -12,6 +12,7 @@ use nimiq_mempool::{
 use nimiq_network_interface::Multiaddr;
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_serde::Deserialize;
+use nimiq_utils::Sensitive;
 use thiserror::Error;
 use url::Url;
 
@@ -124,7 +125,7 @@ impl FromStr for ConfigFile {
 #[serde(deny_unknown_fields)]
 pub struct NetworkSettings {
     pub peer_key_file: Option<String>,
-    pub peer_key: Option<String>,
+    pub peer_key: Option<Sensitive<String>>,
 
     #[serde(default)]
     pub listen_addresses: Vec<String>,
@@ -241,7 +242,7 @@ pub struct RpcServerSettings {
     #[serde(default)]
     pub methods: Vec<String>,
     pub username: Option<String>,
-    pub password: Option<String>,
+    pub password: Option<Sensitive<String>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]
@@ -252,7 +253,7 @@ pub struct MetricsServerSettings {
     pub bind: Option<String>,
     pub port: Option<u16>,
     pub username: Option<String>,
-    pub password: Option<String>,
+    pub password: Option<Sensitive<String>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -403,33 +404,18 @@ impl From<MempoolFilterSettings> for MempoolRules {
     }
 }
 
-#[derive(Clone, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct ValidatorSettings {
     pub validator_address: String,
     pub signing_key_file: Option<String>,
-    pub signing_key: Option<String>,
+    pub signing_key: Option<Sensitive<String>>,
     pub voting_key_file: Option<String>,
-    pub voting_key: Option<String>,
+    pub voting_key: Option<Sensitive<String>>,
     pub fee_key_file: Option<String>,
-    pub fee_key: Option<String>,
+    pub fee_key: Option<Sensitive<String>>,
     #[serde(default)]
     pub automatic_reactivate: bool,
-}
-
-impl Debug for ValidatorSettings {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ValidatorSettings")
-            .field("validator_address", &self.validator_address)
-            .field("signing_key_file", &self.signing_key_file)
-            .field("signing_key", &self.signing_key.as_ref().map(|_| "***"))
-            .field("voting_key_file", &self.voting_key_file)
-            .field("voting_key", &self.voting_key.as_ref().map(|_| "***"))
-            .field("fee_key_file", &self.fee_key_file)
-            .field("fee_key", &self.fee_key.as_ref().map(|_| "***"))
-            .field("automatic_reactivate", &self.automatic_reactivate)
-            .finish()
-    }
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]
