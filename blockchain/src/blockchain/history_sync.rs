@@ -1,6 +1,5 @@
-use std::{collections::HashMap, error::Error};
+use std::{collections::BTreeMap, error::Error};
 
-use itertools::Itertools;
 use nimiq_account::{BlockLogger, BlockState};
 use nimiq_block::{Block, BlockError};
 use nimiq_blockchain_interface::{
@@ -101,26 +100,23 @@ impl Blockchain {
     ) -> Option<Blake2bHash> {
         let mut txn = this.write_transaction();
 
-        let mut txns_per_block: HashMap<u32, Vec<HistoricTransaction>> = HashMap::new();
+        //let mut txns_per_block: HashMap<u32, Vec<HistoricTransaction>> = HashMap::new();
+
+        let mut txns_per_block: BTreeMap<u32, Vec<HistoricTransaction>> = BTreeMap::new();
 
         for txn in history {
-            let bn = txn.block_number;
-
-            if let Some(txns) = txns_per_block.get_mut(&bn) {
-                txns.push(txn.clone());
-            } else {
-                let new_txns = vec![txn.clone()];
-                txns_per_block.insert(bn, new_txns);
-            }
+            txns_per_block
+                .entry(txn.block_number)
+                .or_default()
+                .push(txn.clone());
         }
 
         let mut root = Blake2bHash::default();
-        for bn in txns_per_block.keys().sorted() {
-            let hist_txs = txns_per_block.get(bn).unwrap();
 
+        for (bn, hist_txs) in txns_per_block {
             root = this
                 .history_store
-                .add_to_history(&mut txn, *bn, hist_txs)
+                .add_to_history(&mut txn, bn, &hist_txs)
                 .expect("Pushing txns to the history store failed")
                 .0;
 
@@ -130,6 +126,7 @@ impl Blockchain {
                 "Pushed txns to the history store during validity sync"
             );
         }
+
         txn.commit();
         Some(root)
     }
