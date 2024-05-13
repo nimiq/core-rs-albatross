@@ -63,6 +63,10 @@ impl AbstractBlockchain for LightBlockchain {
             .map(|chain_info| chain_info.head.clone())
     }
 
+    fn get_genesis_hash(&self) -> Blake2bHash {
+        self.genesis_block.hash()
+    }
+
     fn get_blocks(
         &self,
         start_block_hash: &Blake2bHash,

@@ -70,6 +70,10 @@ impl AbstractBlockchain for Blockchain {
         self.get_block(hash, include_body, None)
     }
 
+    fn get_genesis_hash(&self) -> Blake2bHash {
+        self.genesis_hash.clone()
+    }
+
     fn get_blocks(
         &self,
         start_block_hash: &Blake2bHash,

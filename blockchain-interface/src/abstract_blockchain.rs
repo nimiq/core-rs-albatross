@@ -89,6 +89,9 @@ pub trait AbstractBlockchain {
     /// Fetches a given block, by its block number.
     fn get_block_at(&self, height: u32, include_body: bool) -> Result<Block, BlockchainError>;
 
+    /// Obtains the hash associated with the genesis block.
+    fn get_genesis_hash(&self) -> Blake2bHash;
+
     /// Fetches a given block, by its hash.
     fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Result<Block, BlockchainError>;
 

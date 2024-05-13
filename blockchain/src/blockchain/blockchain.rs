@@ -58,6 +58,8 @@ pub struct Blockchain {
     pub(crate) genesis_timestamp: u64,
     /// The Genesis block number
     pub(crate) genesis_block_number: u32,
+    /// The Genesis hash used for various checks
+    pub(crate) genesis_hash: Blake2bHash,
 }
 
 /// Contains various blockchain configuration knobs
@@ -179,6 +181,7 @@ impl Blockchain {
         }
 
         let genesis_block_number = genesis_block.block_number();
+        let genesis_hash = genesis_block.hash();
 
         let (genesis_supply, genesis_timestamp) =
             genesis_parameters(&genesis_block.unwrap_macro().header);
@@ -289,6 +292,7 @@ impl Blockchain {
             genesis_supply,
             genesis_timestamp,
             genesis_block_number,
+            genesis_hash,
         })
     }
 
@@ -308,6 +312,7 @@ impl Blockchain {
 
         let genesis_macro_block = genesis_block.unwrap_macro_ref().clone();
         let genesis_block_number = genesis_block.block_number();
+        let genesis_hash = genesis_block.hash();
         let current_slots = genesis_macro_block.get_validators().expect("Slots missing");
         let (genesis_supply, genesis_timestamp) = genesis_parameters(&genesis_macro_block.header);
 
@@ -354,6 +359,7 @@ impl Blockchain {
             genesis_supply,
             genesis_timestamp,
             genesis_block_number,
+            genesis_hash,
         })
     }
 

@@ -145,6 +145,10 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         gen_blockchain_match!(self, BlockchainReadProxy, get_block, hash, include_body)
     }
 
+    fn get_genesis_hash(&self) -> Blake2bHash {
+        gen_blockchain_match!(self, BlockchainReadProxy, get_genesis_hash)
+    }
+
     fn get_blocks(
         &self,
         start_block_hash: &Blake2bHash,

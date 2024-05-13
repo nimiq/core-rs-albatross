@@ -354,12 +354,7 @@ impl<N: Network> ConsensusProxy<N> {
                             let mut already_proven = false;
 
                             if response.block.block_number() == Policy::genesis_block_number() {
-                                let genesis_hash = self
-                                    .blockchain
-                                    .read()
-                                    .get_block_at(Policy::genesis_block_number(), false)
-                                    .unwrap()
-                                    .hash();
+                                let genesis_hash = self.blockchain.read().get_genesis_hash();
 
                                 if genesis_hash == response.block.hash() {
                                     already_proven = true;
