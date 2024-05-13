@@ -6,6 +6,7 @@ use log::{info, level_filters::LevelFilter};
 use nimiq_keys::Address;
 use nimiq_lib::config::{config::ClientConfig, config_file::ConfigFile};
 use nimiq_pow_migration::{
+    exit_with_error,
     genesis::write_pos_genesis,
     get_block_windows,
     history::{get_history_store_height, migrate_history},
@@ -75,66 +76,41 @@ async fn main() {
 
     let args = Args::parse();
 
-    let current_exe_dir = match std::env::current_exe() {
-        Ok(mut path) => {
+    let current_exe_dir = std::env::current_exe()
+        .map(|mut path| {
             path.pop();
             path
-        }
-        Err(error) => {
-            log::error!(
-                ?error,
-                "Could not find full filesystem path of the current running executable"
-            );
-            exit(1);
-        }
-    };
+        })
+        .unwrap_or_else(|error| {
+            exit_with_error(
+                error,
+                "Could not find full filesystem path of the current running executable",
+            )
+        });
 
-    let contents = match fs::read_to_string(&args.config) {
-        Ok(c) => c,
+    let contents = fs::read_to_string(&args.config)
+        .unwrap_or_else(|error| exit_with_error(error, "Could not read file"));
 
-        Err(_) => {
-            log::error!(file = args.config, "Could not read file");
-            exit(1);
-        }
-    };
+    let config_file: ConfigFile = toml::from_str(&contents).unwrap_or_else(|error| {
+        log::error!(file = args.config);
+        exit_with_error(error, "Unable to read configuration file");
+    });
 
-    let config_file: ConfigFile = match toml::from_str(&contents) {
-        Ok(d) => d,
-        Err(error) => {
-            log::error!(
-                file = args.config,
-                ?error,
-                "Unable to read configuration file"
-            );
-            exit(1);
-        }
-    };
+    let config = ClientConfig::builder()
+        .config_file(&config_file)
+        .map(|config_builder| {
+            config_builder.build().unwrap_or_else(|error| {
+                log::error!(file = args.config);
+                exit_with_error(error, "Error building configuration");
+            })
+        })
+        .unwrap_or_else(|error| {
+            log::error!(file = args.config);
+            exit_with_error(error, "Error parsing configuration file");
+        });
 
-    let config = match ClientConfig::builder().config_file(&config_file) {
-        Ok(config) => match config.build() {
-            Ok(config) => config,
-            Err(error) => {
-                log::error!(file = args.config, ?error, "Error building configuration");
-                exit(1);
-            }
-        },
-        Err(error) => {
-            log::error!(
-                file = args.config,
-                ?error,
-                "Error parsing configuration file"
-            );
-            exit(1);
-        }
-    };
-
-    let url = match Url::parse(&args.url) {
-        Ok(url) => url,
-        Err(error) => {
-            log::error!(?error, "Invalid RPC URL");
-            std::process::exit(1);
-        }
-    };
+    let url =
+        Url::parse(&args.url).unwrap_or_else(|error| exit_with_error(error, "Invalid RPC URL"));
 
     let pow_client = if args.username.is_some() && args.password.is_some() {
         Client::new_with_credentials(url, args.username.unwrap(), args.password.unwrap())
@@ -142,13 +118,8 @@ async fn main() {
         Client::new(url)
     };
 
-    let block_windows = match get_block_windows(config.network_id) {
-        Ok(block_windows) => block_windows,
-        Err(error) => {
-            log::error!(?error, "Couldn't get block windows");
-            std::process::exit(1);
-        }
-    };
+    let block_windows = get_block_windows(config.network_id)
+        .unwrap_or_else(|error| exit_with_error(error, "Couldn't get block windows"));
 
     // Check to see if the client already has consensus
     loop {
@@ -166,18 +137,12 @@ async fn main() {
     }
 
     if args.list_validators || args.list_stakers {
-        let registered_validators = match get_validators(
+        let registered_validators = get_validators(
             &pow_client,
             block_windows.registration_start..block_windows.registration_end,
         )
         .await
-        {
-            Ok(validators) => validators,
-            Err(error) => {
-                log::error!(?error, "Couldn't get validators list");
-                std::process::exit(1);
-            }
-        };
+        .unwrap_or_else(|error| exit_with_error(error, "Couldn't get validators list"));
 
         if args.list_validators {
             println!("Registered validators:");
@@ -189,35 +154,33 @@ async fn main() {
                 < block_windows.pre_stake_end + block_windows.block_confirmations
             {
                 log::error!("The pre-staking window is not closed yet, generating the list is not possible at this time.");
-                std::process::exit(1);
+                exit(1);
             }
 
-            let pre_stakers = match get_stakers(
+            let pre_stakers = get_stakers(
                 &pow_client,
                 &registered_validators,
                 block_windows.pre_stake_start..block_windows.pre_stake_end,
             )
             .await
-            {
-                Ok((pre_stakers, _)) => match args.validator {
-                    Some(address) => {
-                        if let Ok(address) = Address::from_any_str(&address) {
-                            pre_stakers
-                                .into_iter()
-                                .filter(|pre_staker| pre_staker.delegation == address)
-                                .collect()
-                        } else {
-                            log::error!(%address, "Invalid address provided as argument ('--validator, -v')");
-                            std::process::exit(1);
-                        }
-                    }
-                    None => pre_stakers,
-                },
-                Err(error) => {
-                    log::error!(?error, "Couldn't get pre-stakers list");
-                    std::process::exit(1);
-                }
-            };
+            .map(|(pre_stakers, _)| match args.validator {
+                Some(address) => Address::from_any_str(&address)
+                    .map(|address| {
+                        pre_stakers
+                            .into_iter()
+                            .filter(|pre_staker| pre_staker.delegation == address)
+                            .collect()
+                    })
+                    .unwrap_or_else(|error| {
+                        log::error!(%address);
+                        exit_with_error(
+                            error,
+                            "Invalid address provided as argument ('--validator, -v')",
+                        );
+                    }),
+                None => pre_stakers,
+            })
+            .unwrap_or_else(|error| exit_with_error(error, "Couldn't get pre-stakers list"));
 
             println!("Pre-stakers:");
             for pre_staker in pre_stakers {
@@ -242,17 +205,14 @@ async fn main() {
         };
 
         // Create DB environment
-        let env = match config.storage.database(
-            config.network_id,
-            config.consensus.sync_mode,
-            config.database,
-        ) {
-            Ok(env) => env,
-            Err(error) => {
-                log::error!(?error, "Unable to create DB environment");
-                exit(1);
-            }
-        };
+        let env = config
+            .storage
+            .database(
+                config.network_id,
+                config.consensus.sync_mode,
+                config.database,
+            )
+            .unwrap_or_else(|error| exit_with_error(error, "Unable to create DB environment"));
 
         // Check that we are doing the migration for a supported network ID and set the genesis environment variable name
         let genesis_env_var_name = match config.network_id {
@@ -288,10 +248,9 @@ async fn main() {
         // Create directory where the genesis file will be written if it doesn't exist
         let genesis_dir = current_exe_dir.join("genesis");
         if !genesis_dir.exists() {
-            if let Err(error) = std::fs::create_dir(genesis_dir.clone()) {
-                log::error!(?error, "Could not create genesis directory");
-                exit(1);
-            }
+            std::fs::create_dir(genesis_dir.clone()).unwrap_or_else(|error| {
+                exit_with_error(error, "Could not create genesis directory")
+            });
         }
         let genesis_file =
             genesis_dir.join(config.network_id.to_string().to_case(Case::Kebab) + ".toml");
@@ -299,10 +258,15 @@ async fn main() {
         let mut candidate_block = block_windows.election_candidate;
 
         // Eagerly instruct to migrate the PoW history up to the first candidate block
-        if let Err(error) = tx_candidate_block.send(candidate_block).await {
-            log::error!(error = ?error, "Failed instructing to migrate to the next candidate block");
-            exit(1);
-        }
+        tx_candidate_block
+            .send(candidate_block)
+            .await
+            .unwrap_or_else(|error| {
+                exit_with_error(
+                    error,
+                    "Failed instructing to migrate to the next candidate block",
+                )
+            });
 
         // Continue the migration process once the pre-stake window is closed and confirmed
         loop {
@@ -351,11 +315,15 @@ async fn main() {
                     None => {
                         candidate_block += block_windows.readiness_window;
                         // Instruct to migrate the PoW history up until the next candidate block
-                        if let Err(error) = tx_candidate_block.send(candidate_block).await {
-                            log::error!(error = ?error, "Failed instructing to migrate to the next candidate block");
-                            exit(1);
-                        }
-
+                        tx_candidate_block
+                            .send(candidate_block)
+                            .await
+                            .unwrap_or_else(|error| {
+                                exit_with_error(
+                                    error,
+                                    "Failed instructing to migrate to the next candidate block",
+                                )
+                            });
                         log::info!(
                             new_candidate = candidate_block,
                             "Moving to the next activation window",
@@ -370,24 +338,20 @@ async fn main() {
         }
 
         // Write the genesis into the FS
-        if let Err(error) = write_pos_genesis(&genesis_file, genesis_config) {
-            log::error!(?error, "Could not write genesis config file");
-            exit(1);
-        }
+        write_pos_genesis(&genesis_file, genesis_config)
+            .unwrap_or_else(|error| exit_with_error(error, "Could not write genesis config file"));
         log::info!(
             filename = ?genesis_file,
             "Finished writing PoS genesis to file"
         );
 
         // Launch PoS client
-        if let Err(error) = launch_pos_client(
+        launch_pos_client(
             &pos_client,
             &genesis_file,
             &args.config,
             genesis_env_var_name,
-        ) {
-            log::error!(?error, "Failed to launch POS client");
-            exit(1);
-        }
+        )
+        .unwrap_or_else(|error| exit_with_error(error, "Failed to launch POS client"));
     }
 }

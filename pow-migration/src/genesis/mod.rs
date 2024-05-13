@@ -13,6 +13,7 @@ use rand::{rngs::StdRng, SeedableRng};
 use time::OffsetDateTime;
 
 use crate::{
+    exit_with_error,
     genesis::types::{Error, PoSRegisteredAgents, PoWRegistrationWindow},
     history::get_history_root,
     state::{get_accounts, get_stakers, get_validators, POW_BLOCK_TIME},
@@ -54,8 +55,9 @@ pub async fn get_pos_genesis(
         "Building history tree. This may take some time"
     );
     let start = Instant::now();
-    let history_root = match get_history_root(env).await {
-        Ok(history_root) => {
+    let history_root = get_history_root(env)
+        .await
+        .map(|history_root| {
             let duration = start.elapsed();
             log::info!(
                 duration = humantime::format_duration(duration).to_string(),
@@ -63,12 +65,8 @@ pub async fn get_pos_genesis(
                 "Finished building history tree"
             );
             history_root
-        }
-        Err(e) => {
-            log::error!(error = ?e, "Failed to build history root");
-            std::process::exit(1);
-        }
-    };
+        })
+        .unwrap_or_else(|error| exit_with_error(error, "Failed to build history root"));
 
     // The PoS genesis timestamp is the cutting block timestamp plus a custom delay
     let pos_genesis_ts_unix =

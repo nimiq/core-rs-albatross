@@ -4,8 +4,9 @@ pub mod monitor;
 pub mod state;
 
 use std::{
+    fmt::Debug,
     path::PathBuf,
-    process::{Command, ExitStatus},
+    process::{exit, Command, ExitStatus},
     time::Duration,
 };
 
@@ -430,4 +431,10 @@ pub fn launch_pos_client(
             Err(error.into())
         }
     }
+}
+
+/// Logs the error message and exits the program with exit code 1.
+pub fn exit_with_error<E: Debug>(error: E, message: &'static str) -> ! {
+    log::error!(?error, "{}", message);
+    exit(1);
 }
