@@ -6,6 +6,7 @@ use wasm_bindgen::prelude::*;
 #[derive(serde::Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainPeerInfo {
+    pub peer_id: String,
     /// Address of the peer in `Multiaddr` format
     address: String,
     /// Node type of the peer
@@ -14,8 +15,8 @@ pub struct PlainPeerInfo {
     node_type: String,
 }
 
-impl From<nimiq_network_interface::peer_info::PeerInfo> for PlainPeerInfo {
-    fn from(peer_info: nimiq_network_interface::peer_info::PeerInfo) -> Self {
+impl PlainPeerInfo {
+    pub fn from(peer_id: String, peer_info: nimiq_network_interface::peer_info::PeerInfo) -> Self {
         let node_type = if peer_info
             .get_services()
             .contains(Services::provided(NodeType::History))
@@ -31,6 +32,7 @@ impl From<nimiq_network_interface::peer_info::PeerInfo> for PlainPeerInfo {
         };
 
         Self {
+            peer_id,
             address: peer_info.get_address().to_string(),
             node_type: node_type.to_string(),
         }

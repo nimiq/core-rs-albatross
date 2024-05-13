@@ -439,19 +439,22 @@ impl PeerContactBook {
     /// Additional addresses aside from the first are omitted.
     ///
     /// The returned Vec may be empty.
-    pub fn known_peers(&self) -> Vec<PeerInfo> {
+    pub fn known_peers(&self) -> Vec<(PeerId, PeerInfo)> {
         self.peer_contacts
-            .values()
-            .map(|contact| {
-                PeerInfo::new(
-                    contact
-                        .contact
-                        .inner
-                        .addresses
-                        .first()
-                        .expect("every peer should have at least one address")
-                        .clone(),
-                    contact.contact.inner.services,
+            .iter()
+            .map(|(peer_id, contact)| {
+                (
+                    *peer_id,
+                    PeerInfo::new(
+                        contact
+                            .contact
+                            .inner
+                            .addresses
+                            .first()
+                            .expect("every peer should have at least one address")
+                            .clone(),
+                        contact.contact.inner.services,
+                    ),
                 )
             })
             .collect()

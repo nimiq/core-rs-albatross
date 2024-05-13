@@ -46,7 +46,7 @@ init().then(async () => {
 
     document.querySelector('#address-book').addEventListener("click", async () => {
         let contacts = await client.getAddressBook();
-        console.log(contacts);
+        console.table(contacts);
     });
 
     /**

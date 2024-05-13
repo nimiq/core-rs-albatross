@@ -154,7 +154,7 @@ impl Network {
 
     /// Retrieves a single PeerInfo peer existing in the PeerAddressBook.
     /// If that peer has multiple associated addresses all but the first are omitted.
-    pub fn get_address_book(&self) -> Vec<PeerInfo> {
+    pub fn get_address_book(&self) -> Vec<(PeerId, PeerInfo)> {
         self.contacts.read().known_peers()
     }
 

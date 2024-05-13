@@ -402,7 +402,7 @@ impl Client {
             .network()
             .get_address_book()
             .into_iter()
-            .map(PlainPeerInfo::from)
+            .map(|(peer_id, peer_info)| PlainPeerInfo::from(peer_id.to_string(), peer_info))
             .collect();
 
         serde_wasm_bindgen::to_value(&contacts).unwrap().into()
@@ -966,8 +966,11 @@ impl Client {
                             peer_id.to_string(),
                             "joined",
                             Some(
-                                serde_wasm_bindgen::to_value(&PlainPeerInfo::from(peer_info))
-                                    .unwrap(),
+                                serde_wasm_bindgen::to_value(&PlainPeerInfo::from(
+                                    peer_id.to_string(),
+                                    peer_info,
+                                ))
+                                .unwrap(),
                             ),
                         ))
                     }
