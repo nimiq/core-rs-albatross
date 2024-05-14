@@ -24,7 +24,6 @@ use nimiq_transaction::{
     historic_transaction::{
         HistoricTransaction, HistoricTransactionData, JailEvent, PenalizeEvent, RewardEvent,
     },
-    reward::RewardTransaction,
 };
 use nimiq_vrf::VrfSeed;
 use serde::{Deserialize, Serialize};
@@ -162,6 +161,7 @@ pub enum BlockAdditionalFields {
 
 impl Block {
     pub fn from_macro_block(
+        cur_block_height: Option<u32>,
         macro_block: nimiq_block::MacroBlock,
         include_body: bool,
     ) -> Result<Self, BlockchainError> {
@@ -178,13 +178,40 @@ impl Block {
         let mut transactions = None;
         if include_body {
             transactions = macro_block.body.as_ref().map(|body| {
-                body.transactions
-                    .iter()
-                    .map(|tx| ExecutedTransaction {
-                        transaction: Transaction::from_reward_tx(tx, block_number),
-                        execution_result: true,
-                    })
-                    .collect()
+                HistoricTransaction::from(
+                    macro_block.network(),
+                    macro_block.block_number(),
+                    macro_block.timestamp(),
+                    vec![],
+                    body.transactions
+                        .iter()
+                        .map(nimiq_transaction::inherent::Inherent::from)
+                        .collect(),
+                    vec![],
+                )
+                .into_iter()
+                .map(|tx| ExecutedTransaction {
+                    transaction: Transaction {
+                        hash: tx.tx_hash().into(),
+                        block_number: Some(macro_block.block_number()),
+                        timestamp: Some(macro_block.timestamp()),
+                        confirmations: cur_block_height.map(|h| h - macro_block.block_number()),
+                        from: Address::default(),
+                        from_type: 0,
+                        to: tx.unwrap_reward().reward_address.clone(),
+                        to_type: 0,
+                        value: tx.unwrap_reward().value,
+                        fee: Coin::ZERO,
+                        sender_data: vec![],
+                        recipient_data: vec![],
+                        flags: 0,
+                        validity_start_height: macro_block.block_number(),
+                        proof: vec![],
+                        network_id: macro_block.network() as u8,
+                    },
+                    execution_result: true,
+                })
+                .collect()
             });
         }
 
@@ -288,7 +315,7 @@ impl Block {
     ) -> Result<Self, BlockchainError> {
         match block {
             nimiq_block::Block::Macro(macro_block) => {
-                Self::from_macro_block(macro_block, include_body)
+                Self::from_macro_block(Some(blockchain.block_number()), macro_block, include_body)
             }
             nimiq_block::Block::Micro(micro_block) => {
                 Self::from_micro_block(blockchain, micro_block, include_body)
@@ -589,18 +616,6 @@ impl Transaction {
             validity_start_height: transaction.validity_start_height,
             proof: transaction.proof,
             network_id: transaction.network_id as u8,
-        }
-    }
-
-    fn from_reward_tx(reward_tx: &RewardTransaction, block_number: u32) -> Self {
-        Self {
-            block_number: Some(block_number),
-            from: Policy::COINBASE_ADDRESS,
-            to: reward_tx.recipient.clone(),
-            value: reward_tx.value,
-            fee: Coin::ZERO,
-            validity_start_height: block_number,
-            ..Default::default()
         }
     }
 }
@@ -1082,7 +1097,8 @@ pub struct ZKPState {
 
 impl ZKPState {
     pub fn with_zkp_state(zkp_state: &nimiq_zkp_component::types::ZKPState) -> Self {
-        let latest_block = Block::from_macro_block(zkp_state.latest_block.clone(), true).unwrap();
+        let latest_block =
+            Block::from_macro_block(None, zkp_state.latest_block.clone(), true).unwrap();
         let latest_proof = zkp_state
             .latest_proof
             .as_ref()
