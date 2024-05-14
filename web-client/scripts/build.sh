@@ -7,7 +7,7 @@ set -e
 # Defaults
 CARGO_PROFILE="release-wasm"
 CARGO_TARGET="wasm32-unknown-unknown"
-TARGETS="bundler,web,nodejs"
+TARGETS="bundler,web,nodejs,deno"
 RUN_WASM_OPT=true
 BUILD_TYPES=true
 BUILD_LAUNCHER=true
@@ -90,6 +90,9 @@ fi
 if contains "nodejs" "$TARGETS"; then
     generate "main" "nodejs"
 fi
+if contains "deno" "$TARGETS"; then
+    generate "main" "deno"
+fi
 
 # Client
 compile "client"
@@ -101,6 +104,9 @@ if contains "web" "$TARGETS"; then
 fi
 if contains "nodejs" "$TARGETS"; then
     generate "worker" "nodejs"
+fi
+if contains "deno" "$TARGETS"; then
+    generate "worker" "deno"
 fi
 
 # Types
