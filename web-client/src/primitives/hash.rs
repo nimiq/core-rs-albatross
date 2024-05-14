@@ -1,3 +1,4 @@
+use nimiq_hash::argon2kdf::{compute_argon2_kdf, Argon2Variant};
 use nimiq_serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -23,5 +24,37 @@ impl Hash {
     pub fn compute_sha512(data: &[u8]) -> Vec<u8> {
         nimiq_hash::Hasher::digest(nimiq_hash::sha512::Sha512Hasher::default(), data)
             .serialize_to_vec()
+    }
+
+    #[wasm_bindgen(js_name = computeNimiqArgon2d)]
+    pub fn compute_nimiq_argon2d(
+        password: &[u8],
+        salt: &[u8],
+        iterations: u32,
+        derived_key_length: usize,
+    ) -> Result<Vec<u8>, JsError> {
+        Ok(compute_argon2_kdf(
+            password,
+            salt,
+            iterations,
+            derived_key_length,
+            Argon2Variant::Argon2d,
+        )?)
+    }
+
+    #[wasm_bindgen(js_name = computeNimiqArgon2id)]
+    pub fn compute_nimiq_argon2id(
+        password: &[u8],
+        salt: &[u8],
+        iterations: u32,
+        derived_key_length: usize,
+    ) -> Result<Vec<u8>, JsError> {
+        Ok(compute_argon2_kdf(
+            password,
+            salt,
+            iterations,
+            derived_key_length,
+            Argon2Variant::Argon2id,
+        )?)
     }
 }
