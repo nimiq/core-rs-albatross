@@ -138,7 +138,7 @@ async fn run_app(opt: Opt) -> Result<(), Error> {
 
 #[tokio::main]
 async fn main() {
-    if let Err(e) = dotenv::dotenv() {
+    if let Err(e) = dotenvy::dotenv() {
         if !e.not_found() {
             panic!("could not read .env file: {e}");
         }
