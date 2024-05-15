@@ -1,6 +1,6 @@
 use std::{env, fmt};
 
-use ansi_term::{Color, Style};
+use ansiterm::{Color, Style};
 use log::{level_filters::LevelFilter, Event, Level, Subscriber};
 use time::format_description::well_known::Iso8601;
 use tracing_log::NormalizeEvent;

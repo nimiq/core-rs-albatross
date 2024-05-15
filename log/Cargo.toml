@@ -14,7 +14,7 @@ keywords.workspace = true
 workspace = true
 
 [dependencies]
-ansi_term = "0.12"
+ansiterm = "0.12"
 log = { workspace = true }
 time = { version = "0.3", features = ["formatting"] }
 tracing-log = "0.2"
