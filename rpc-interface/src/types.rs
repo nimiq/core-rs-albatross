@@ -196,6 +196,7 @@ impl Block {
                         block_number: Some(macro_block.block_number()),
                         timestamp: Some(macro_block.timestamp()),
                         confirmations: cur_block_height.map(|h| h - macro_block.block_number()),
+                        size: tx.serialized_size(),
                         from: Address::default(),
                         from_type: 0,
                         to: tx.unwrap_reward().reward_address.clone(),
@@ -553,6 +554,7 @@ pub struct Transaction {
     pub timestamp: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub confirmations: Option<u32>,
+    pub size: usize,
 
     pub from: Address,
     pub from_type: u8,
@@ -604,6 +606,7 @@ impl Transaction {
                 Some(height) => block_number.map(|block| height.saturating_sub(block) + 1),
                 None => None,
             },
+            size: transaction.serialized_size(),
             from: transaction.sender,
             from_type: transaction.sender_type as u8,
             to: transaction.recipient,
