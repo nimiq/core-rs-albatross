@@ -135,7 +135,7 @@ impl ValidityStore {
             // We need to prune the validity store
             let count = num_blocks - Policy::transaction_validity_window_blocks();
 
-            for bn in [first_bn, first_bn + count] {
+            for bn in first_bn..first_bn + count {
                 self.delete_block_transactions(db_txn, bn);
             }
         }
