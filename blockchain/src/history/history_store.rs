@@ -1257,9 +1257,17 @@ impl HistoryInterface for HistoryStore {
         Some(total_size)
     }
 
-    fn history_store_range(&self) -> (u32, u32) {
-        let read_txn = self.db.read_transaction();
-        let mut cursor = read_txn.cursor(&self.last_leaf_table);
+    fn history_store_range(&self, txn_option: Option<&TransactionProxy>) -> (u32, u32) {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        let mut cursor = txn.cursor(&self.last_leaf_table);
 
         let first = if let Some((key, _)) = cursor.first::<u32, u32>() {
             key

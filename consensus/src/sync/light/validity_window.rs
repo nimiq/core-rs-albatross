@@ -64,7 +64,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 BlockchainProxy::Full(blockchain) => {
                     let blockchain_wr = blockchain.read();
 
-                    let (first_bn, last_bn) = blockchain_wr.history_store.history_store_range();
+                    let (first_bn, last_bn) = blockchain_wr.history_store.history_store_range(None);
 
                     // This means we already know the first epoch so we need to request the missing items from the current epoch
                     if last_bn >= verifier_block_number {

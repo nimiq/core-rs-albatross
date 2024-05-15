@@ -56,7 +56,7 @@ pub trait HistoryInterface {
         -> usize;
 
     /// Returns the first and last block number stored in the history store
-    fn history_store_range(&self) -> (u32, u32);
+    fn history_store_range(&self, txn_option: Option<&TransactionProxy>) -> (u32, u32);
 
     /// Add a list of historic transactions to an existing history tree. It returns the root of the
     /// resulting tree and the total size of the transactions added.

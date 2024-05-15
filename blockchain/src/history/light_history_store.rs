@@ -177,10 +177,17 @@ impl HistoryInterface for LightHistoryStore {
         tree.len() as u32
     }
 
-    fn history_store_range(&self) -> (u32, u32) {
-        let read_txn = self.db.read_transaction();
+    fn history_store_range(&self, txn_option: Option<&TransactionProxy>) -> (u32, u32) {
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
 
-        get_range(&self.hist_tree_table, &read_txn)
+        get_range(&self.hist_tree_table, &txn)
     }
 
     fn total_len_at_epoch(
@@ -197,7 +204,7 @@ impl HistoryInterface for LightHistoryStore {
             }
         };
 
-        let (first_bn, last_bn) = self.history_store_range();
+        let (first_bn, last_bn) = self.history_store_range(Some(txn));
 
         let length = if Policy::epoch_at(last_bn) == epoch_number {
             // Get peaks mmr of the latest block stored
@@ -467,6 +474,43 @@ mod tests {
         assert_eq!(len_1, 3);
         assert_eq!(len_2, 4);
         assert_eq!(len_3, 15);
+    }
+
+    #[test]
+    fn total_len_at_epoch() {
+        // Initialize History Store.
+        let env = VolatileDatabase::new(20).unwrap();
+        let history_store = LightHistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create historic transactions.
+        let ext_0 = create_transaction(Policy::genesis_block_number() + 1, 0);
+        let ext_1 = create_transaction(Policy::genesis_block_number() + 1, 1);
+        let ext_2 = create_transaction(Policy::genesis_block_number() + 2, 2);
+        let ext_3 = create_transaction(Policy::genesis_block_number() + 3, 3);
+        let ext_4 = create_transaction(Policy::genesis_block_number() + 3, 4);
+        let ext_5 = create_transaction(Policy::genesis_block_number() + 3, 5);
+        let ext_6 = create_transaction(Policy::genesis_block_number() + 3, 6);
+        let ext_7 = create_transaction(Policy::genesis_block_number() + 3, 7);
+
+        let hist_txs = vec![ext_0, ext_1];
+
+        // Add historic transactions to History Store.
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 1, &hist_txs);
+
+        let hist_txs = vec![ext_2];
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 2, &hist_txs);
+
+        let hist_txs = vec![ext_3, ext_4, ext_5, ext_6, ext_7];
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 3, &hist_txs);
+
+        let total_length = history_store.total_len_at_epoch(
+            Policy::epoch_at(Policy::genesis_block_number() + 1),
+            Some(&txn),
+        );
+
+        // Lengths are cumulative because they are block number based
+        assert_eq!(total_length, 8);
     }
 
     #[test]
