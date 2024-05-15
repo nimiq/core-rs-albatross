@@ -1148,7 +1148,7 @@ impl PlainTransactionDetails {
             execution_result: Some(executed_transaction.succeeded()),
             block_height: Some(block_number),
             timestamp: Some(block_time),
-            confirmations: Some(block_number - current_block + 1),
+            confirmations: Some(current_block - block_number + 1),
         }
     }
 }
