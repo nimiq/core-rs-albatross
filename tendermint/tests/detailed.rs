@@ -1376,3 +1376,99 @@ async fn it_accepts_vr_proposal() {
 
     expect_nothing_observed(&mut observe_receiver);
 }
+
+/// The validator sees a proposal and a good prevote aggregation, but the precommit aggregations times out without a result.
+/// At a later time it sees the good precommit and should produce a decision even though it has progressed into a later round.
+#[test(tokio::test)]
+async fn it_accepts_late_polka() {
+    // Validator shall not propose.
+    let (proposer, mut observe_receiver) = create_validator(vec![false, false], vec![]);
+    let (mut sender, receiver) = mpsc::channel(10);
+
+    let mut tendermint = Tendermint::new(
+        proposer.clone(),
+        None,
+        ReceiverStream::new(receiver).boxed(),
+        stream::iter(vec![]).boxed(),
+    );
+
+    // Send good proposal for round 0
+    send_proposal(&mut sender, 0, 0, None, true);
+    // Proposal must be accepted
+    let _original_proposal = expect_proposal(&mut tendermint, Acceptance::Accept);
+
+    // Pending state, as previously only the proposal acceptance was returned.
+    let _state = expect_state(&mut tendermint);
+
+    // Starting 0-prevote
+    expect_nothing_observed(&mut observe_receiver);
+    let _state = expect_state(&mut tendermint);
+    let _original_prevote = expect_observe_aggregate(&mut observe_receiver);
+
+    // Vote with 2f+1 for the proposal.
+    aggregate(
+        &proposer,
+        (0, Step::Prevote),
+        vec![(Some(0), 0..Validator::TWO_F_PLUS_ONE)],
+    );
+
+    // See the vote
+    let _state = expect_state(&mut tendermint);
+
+    // Start 0-precommit aggregation. As the vote could improve an await is necessary here, to wait the timeout.
+    let _recoverable_state = expect_state(&mut tendermint);
+    let _precommit = expect_observe_aggregate(&mut observe_receiver);
+
+    // Vote with 2f for the proposal and 1 against.
+    aggregate(
+        &proposer,
+        (0, Step::Precommit),
+        vec![
+            (Some(0), 0..Validator::TWO_F_PLUS_ONE - 1),
+            (
+                None,
+                Validator::TWO_F_PLUS_ONE + 1..Validator::TWO_F_PLUS_ONE + 2,
+            ),
+        ],
+    );
+
+    // See the vote
+    let _state = expect_state(&mut tendermint);
+
+    // Wait for the improvement timeout to expire.
+    let _state = await_state(&mut tendermint).await;
+
+    // Send good proposal for round 1
+    send_proposal(&mut sender, 1, 1, None, true);
+    // Proposal must be accepted
+    let _original_proposal = expect_proposal(&mut tendermint, Acceptance::Accept);
+
+    // Pending state, as previously only the proposal acceptance was returned.
+    let _state = expect_state(&mut tendermint);
+
+    // Starting 0-prevote
+    expect_nothing_observed(&mut observe_receiver);
+    let _state = expect_state(&mut tendermint);
+    let _prevote_1 = expect_observe_aggregate(&mut observe_receiver);
+
+    // Vote with 2f+1 for the proposal.
+    aggregate(
+        &proposer,
+        (0, Step::Precommit),
+        vec![
+            (Some(0), 0..Validator::TWO_F_PLUS_ONE),
+            (
+                None,
+                Validator::TWO_F_PLUS_ONE + 1..Validator::TWO_F_PLUS_ONE + 2,
+            ),
+        ],
+    );
+
+    // Witness improved precommit, produce decision even though it is in round 1 now.
+    let decision = expect_decision(&mut tendermint);
+
+    assert_eq!(decision.proposal.0, 0);
+    assert_eq!(decision.inherents.0, 0);
+    assert_eq!(decision.round, 0);
+    assert_eq!(decision.sig.len(), Validator::TWO_F_PLUS_ONE);
+}
