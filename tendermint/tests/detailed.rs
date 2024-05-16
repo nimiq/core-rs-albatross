@@ -4,7 +4,7 @@ use futures::stream::{self, StreamExt};
 use nimiq_collections::BitSet;
 use nimiq_tendermint::*;
 use nimiq_test_log::test;
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, time::timeout};
 use tokio_stream::wrappers::ReceiverStream;
 
 pub mod common;
@@ -1471,4 +1471,101 @@ async fn it_accepts_late_polka() {
     assert_eq!(decision.inherents.0, 0);
     assert_eq!(decision.round, 0);
     assert_eq!(decision.sig.len(), Validator::TWO_F_PLUS_ONE);
+}
+
+/// Only sees the proposal for a polka after it has progressed to a further round.
+#[test(tokio::test)]
+async fn it_accepts_late_proposal() {
+    // Validator shall not propose.
+    let (proposer, mut observe_receiver) = create_validator(vec![false, false], vec![]);
+    let (mut sender, receiver) = mpsc::channel(10);
+
+    let mut tendermint = Tendermint::new(
+        proposer.clone(),
+        None,
+        ReceiverStream::new(receiver).boxed(),
+        stream::iter(vec![]).boxed(),
+    );
+
+    // Do not send a proposal and wait the timeout
+    let _state = await_state(&mut tendermint).await;
+    let _state = expect_state(&mut tendermint);
+
+    // Starting 0-prevote
+    let _original_prevote = expect_observe_aggregate(&mut observe_receiver);
+
+    // Vote with 2f+1 for the proposal and 1 against.
+    aggregate(
+        &proposer,
+        (0, Step::Prevote),
+        vec![(None, 0..1), (Some(0), 1..Validator::TWO_F_PLUS_ONE + 1)],
+    );
+
+    // See the vote
+    let _state = expect_state(&mut tendermint);
+
+    // wait for the improvement timeout to expire.
+    let _state = await_state(&mut tendermint).await;
+    // Start 0-precommit aggregation.
+    let _recoverable_state = expect_state(&mut tendermint);
+    let _precommit = expect_observe_aggregate(&mut observe_receiver);
+
+    // Vote with 2f+1 for the proposal and 1 against.
+    // (This is conclusive and would produce a decision if the proposal was known, which it is not)
+    aggregate(
+        &proposer,
+        (0, Step::Precommit),
+        vec![(None, 0..1), (Some(0), 1..Validator::TWO_F_PLUS_ONE + 1)],
+    );
+
+    // See the vote
+    let _state = expect_state(&mut tendermint);
+
+    // Wait for the improvement timeout to expire.
+    let _state = await_state(&mut tendermint).await;
+
+    // Send good proposal for round 1 (should be inconsequential)
+    send_proposal(&mut sender, 1, 1, None, true);
+    // Proposal must be accepted
+    let _original_proposal = expect_proposal(&mut tendermint, Acceptance::Accept);
+
+    // Pending state, as previously only the proposal acceptance was returned.
+    let _state = expect_state(&mut tendermint);
+
+    // Starting 0-prevote
+    expect_nothing_observed(&mut observe_receiver);
+    let _state = expect_state(&mut tendermint);
+    let _prevote_1 = expect_observe_aggregate(&mut observe_receiver);
+
+    // Vote any kind of vote for 1-prevote
+    aggregate(&proposer, (1, Step::Prevote), vec![(Some(0), 0..2)]);
+
+    // Send good proposal for round 0
+    send_proposal(&mut sender, 0, 0, None, true);
+
+    // From here on out we expect to see a decision value.
+    // Give it 2 seconds to produce one and ignore everything else.
+    loop {
+        match timeout(
+            tokio::time::Duration::from_millis(2000),
+            (&mut tendermint).next(),
+        )
+        .await
+        {
+            Ok(Some(Return::Decision(decision))) => {
+                // A decision was reached. Check for correctness:
+                assert_eq!(decision.proposal.0, 0);
+                assert_eq!(decision.inherents.0, 0);
+                assert_eq!(decision.round, 0);
+                assert_eq!(decision.sig.len(), Validator::TWO_F_PLUS_ONE);
+
+                // Exit loop as the test succeeded.
+                break;
+            }
+            Err(_elapsed) => panic!("Tendermint should have produced a state quicker."),
+            _t => {
+                // Do nothing
+            }
+        }
+    }
 }
