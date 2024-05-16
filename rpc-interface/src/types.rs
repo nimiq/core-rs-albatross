@@ -653,21 +653,20 @@ pub enum Inherent {
 
 impl Inherent {
     pub fn try_from(hist_tx: HistoricTransaction) -> Option<Self> {
-        let hash = hist_tx.data.hash();
         Some(match hist_tx.data {
             HistoricTransactionData::Basic(_) => return None,
             HistoricTransactionData::Equivocation(_) => return None,
             HistoricTransactionData::Reward(RewardEvent {
-                validator_address,
-                reward_address,
+                ref validator_address,
+                ref reward_address,
                 value,
             }) => Inherent::Reward {
                 block_number: hist_tx.block_number,
                 block_time: hist_tx.block_time,
-                validator_address,
-                target: reward_address,
+                validator_address: validator_address.clone(),
+                target: reward_address.clone(),
                 value,
-                hash,
+                hash: hist_tx.tx_hash().into(),
             },
             HistoricTransactionData::Penalize(PenalizeEvent {
                 validator_address,
