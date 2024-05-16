@@ -36,7 +36,7 @@ use nimiq_validator::validator::ValidatorProxy as AbstractValidatorProxy;
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 #[cfg(feature = "wallet")]
 use nimiq_wallet::WalletStore;
-use nimiq_zkp::ZKP_VERIFYING_DATA;
+use example::ZKP_VERIFYING_DATA;
 #[cfg(feature = "zkp-prover")]
 use nimiq_zkp_circuits::setup::{all_files_created, load_verifying_data, setup, DEVELOPMENT_SEED};
 #[cfg(feature = "database-storage")]

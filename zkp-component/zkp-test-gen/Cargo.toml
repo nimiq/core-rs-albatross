@@ -34,7 +34,7 @@ nimiq-test-utils = { workspace = true }
 nimiq-utils = { workspace = true, features = [
     "time",
 ] }
-nimiq-zkp = { workspace = true, features = ["zkp-prover"] }
+example = { workspace = true, features = ["zkp-prover"] }
 nimiq-zkp-circuits = { workspace = true, features = ["zkp-prover"] }
 nimiq-zkp-component = { workspace = true, features = ["zkp-prover"] }
 nimiq-zkp-primitives = { workspace = true, features = ["zkp-prover"] }

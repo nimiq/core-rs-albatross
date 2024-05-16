@@ -64,7 +64,7 @@ pub static NIMIQ_MODULES: &[&str] = &[
     "nimiq_vrf",
     "nimiq_wallet",
     "nimiq_web_client",
-    "nimiq_zkp",
+    "example",
     "nimiq_zkp_circuits",
     "nimiq_zkp_component",
     "nimiq_zkp_primitives",

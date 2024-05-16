@@ -12,7 +12,7 @@ use nimiq_test_utils::{
     zkp_test_data::{get_base_seed, simulate_merger_wrapper, ZKP_TEST_KEYS_PATH},
 };
 use nimiq_utils::time::OffsetTime;
-use nimiq_zkp::ZKP_VERIFYING_DATA;
+use example::ZKP_VERIFYING_DATA;
 use nimiq_zkp_component::{
     proof_store::{DBProofStore, ProofStore},
     proof_utils::validate_proof,

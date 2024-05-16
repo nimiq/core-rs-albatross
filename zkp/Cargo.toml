@@ -1,5 +1,5 @@
 [package]
-name = "nimiq-zkp"
+name = "example"
 version.workspace = true
 authors.workspace = true
 license.workspace = true

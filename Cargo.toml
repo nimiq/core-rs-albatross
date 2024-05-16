@@ -64,7 +64,7 @@ members = [
 
 resolver = "2"
 
-# Force nimiq-bls and nimiq-zkp to be built with optimization level 2 in
+# Force nimiq-bls and example to be built with optimization level 2 in
 # the test profiles. This is necessary in order to have decent tests
 # performance. We do the same with nimiq-bls dev profile because it is compiled
 # for a lot of other crates's tests.
@@ -88,10 +88,10 @@ opt-level = 2
 [profile.test.package.nimiq-zkp-primitives]
 opt-level = 2
 
-[profile.dev.package.nimiq-zkp]
+[profile.dev.package.example]
 opt-level = 2
 
-[profile.test.package.nimiq-zkp]
+[profile.test.package.example]
 opt-level = 2
 
 [profile.dev.package.nimiq-pedersen-generators]
@@ -219,7 +219,7 @@ nimiq-validator-network = { path = "validator-network", default-features = false
 nimiq-vrf = { path = "vrf", default-features = false }
 nimiq-wallet = { path = "wallet", default-features = false }
 nimiq-web-client = { path = "web-client", default-features = false }
-nimiq-zkp = { path = "zkp", default-features = false }
+example = { path = "zkp", default-features = false }
 nimiq-zkp-circuits = { path = "zkp-circuits", default-features = false }
 nimiq-zkp-component = { path = "zkp-component", default-features = false }
 nimiq-zkp-primitives = { path = "zkp-primitives", default-features = false }

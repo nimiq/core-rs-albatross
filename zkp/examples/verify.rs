@@ -13,7 +13,7 @@ use nimiq_test_utils::{
     block_production::TemporaryBlockProducer, blockchain_with_rng::produce_macro_blocks_with_rng,
     test_rng::test_rng,
 };
-use nimiq_zkp::{verify::verify, ZKP_VERIFYING_DATA};
+use example::{verify::verify, ZKP_VERIFYING_DATA};
 use nimiq_zkp_circuits::setup::load_verifying_data;
 use tracing_subscriber::{filter::Targets, prelude::*};
 

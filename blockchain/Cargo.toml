@@ -48,7 +48,7 @@ nimiq-transaction = { workspace = true }
 nimiq-trie = { workspace = true }
 nimiq-utils = { workspace = true, features = ["math", "time"] }
 nimiq-vrf = { workspace = true }
-nimiq-zkp = { workspace = true }
+example = { workspace = true }
 
 [dev-dependencies]
 rand_chacha = "0.3.1"

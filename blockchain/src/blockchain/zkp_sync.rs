@@ -6,7 +6,7 @@ use nimiq_blockchain_interface::{
 };
 use nimiq_database::traits::{ReadTransaction, WriteTransaction};
 use nimiq_primitives::policy::Policy;
-use nimiq_zkp::{verify::verify, NanoProof, ZKP_VERIFYING_DATA};
+use example::{verify::verify, NanoProof, ZKP_VERIFYING_DATA};
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 use crate::Blockchain;

@@ -59,7 +59,7 @@ nimiq-utils = { workspace = true, features = [
     "merkle",
     "time",
 ] }
-nimiq-zkp = { workspace = true }
+example = { workspace = true }
 nimiq-zkp-circuits = { workspace = true }
 nimiq-zkp-primitives = { workspace = true }
 
@@ -78,6 +78,6 @@ nimiq-test-utils = { workspace = true }
 
 [features]
 database-storage = ["nimiq-database"]
-parallel = ["nimiq-zkp/parallel", "nimiq-zkp-circuits/parallel",  "nimiq-zkp-primitives/parallel", "ark-groth16/parallel"]
+parallel = ["example/parallel", "nimiq-zkp-circuits/parallel",  "nimiq-zkp-primitives/parallel", "ark-groth16/parallel"]
 test-prover = ["nimiq-log", "zkp-prover", "tracing-subscriber"]
-zkp-prover = ["nimiq-blockchain", "nimiq-blockchain-proxy/full", "nimiq-zkp/zkp-prover", "nimiq-zkp-circuits/zkp-prover", "nimiq-zkp-primitives/zkp-prover", "tokio/io-util", "tokio/process"]
+zkp-prover = ["nimiq-blockchain", "nimiq-blockchain-proxy/full", "example/zkp-prover", "nimiq-zkp-circuits/zkp-prover", "nimiq-zkp-primitives/zkp-prover", "tokio/io-util", "tokio/process"]

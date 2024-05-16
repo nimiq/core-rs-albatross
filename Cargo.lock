@@ -1609,6 +1609,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "example"
+version = "0.1.0"
+dependencies = [
+ "ark-crypto-primitives",
+ "ark-ec",
+ "ark-ff",
+ "ark-groth16",
+ "ark-mnt4-753",
+ "ark-mnt6-753",
+ "ark-r1cs-std",
+ "ark-relations",
+ "ark-serialize",
+ "ark-std",
+ "nimiq-block",
+ "nimiq-bls",
+ "nimiq-genesis",
+ "nimiq-hash",
+ "nimiq-keys",
+ "nimiq-log",
+ "nimiq-primitives",
+ "nimiq-serde",
+ "nimiq-test-log",
+ "nimiq-test-utils",
+ "nimiq-zkp-circuits",
+ "nimiq-zkp-primitives",
+ "once_cell",
+ "parking_lot 0.12.2",
+ "rand",
+ "rand_chacha",
+ "serde",
+ "thiserror",
+ "tracing",
+ "tracing-subscriber 0.3.18",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3381,6 +3417,7 @@ dependencies = [
 name = "nimiq-blockchain"
 version = "0.1.0"
 dependencies = [
+ "example",
  "futures-util",
  "hex",
  "nimiq-account",
@@ -3404,7 +3441,6 @@ dependencies = [
  "nimiq-trie",
  "nimiq-utils",
  "nimiq-vrf",
- "nimiq-zkp",
  "nimiq-zkp-primitives",
  "parking_lot 0.12.2",
  "prometheus-client",
@@ -3774,6 +3810,7 @@ dependencies = [
  "console-subscriber",
  "derive_builder",
  "directories",
+ "example",
  "hex",
  "log-panics",
  "nimiq-block",
@@ -3801,7 +3838,6 @@ dependencies = [
  "nimiq-validator",
  "nimiq-validator-network",
  "nimiq-wallet",
- "nimiq-zkp",
  "nimiq-zkp-circuits",
  "nimiq-zkp-component",
  "nimiq-zkp-primitives",
@@ -3828,6 +3864,7 @@ dependencies = [
 name = "nimiq-light-blockchain"
 version = "0.1.0"
 dependencies = [
+ "example",
  "futures-util",
  "nimiq-block",
  "nimiq-blockchain",
@@ -3841,7 +3878,6 @@ dependencies = [
  "nimiq-test-utils",
  "nimiq-utils",
  "nimiq-vrf",
- "nimiq-zkp",
  "parking_lot 0.12.2",
  "rand",
  "thiserror",
@@ -4615,42 +4651,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nimiq-zkp"
-version = "0.1.0"
-dependencies = [
- "ark-crypto-primitives",
- "ark-ec",
- "ark-ff",
- "ark-groth16",
- "ark-mnt4-753",
- "ark-mnt6-753",
- "ark-r1cs-std",
- "ark-relations",
- "ark-serialize",
- "ark-std",
- "nimiq-block",
- "nimiq-bls",
- "nimiq-genesis",
- "nimiq-hash",
- "nimiq-keys",
- "nimiq-log",
- "nimiq-primitives",
- "nimiq-serde",
- "nimiq-test-log",
- "nimiq-test-utils",
- "nimiq-zkp-circuits",
- "nimiq-zkp-primitives",
- "once_cell",
- "parking_lot 0.12.2",
- "rand",
- "rand_chacha",
- "serde",
- "thiserror",
- "tracing",
- "tracing-subscriber 0.3.18",
-]
-
-[[package]]
 name = "nimiq-zkp-circuits"
 version = "0.1.0"
 dependencies = [
@@ -4699,6 +4699,7 @@ dependencies = [
  "ark-mnt6-753",
  "ark-serialize",
  "async-trait",
+ "example",
  "futures-util",
  "hex",
  "nimiq-block",
@@ -4722,7 +4723,6 @@ dependencies = [
  "nimiq-test-utils",
  "nimiq-transaction",
  "nimiq-utils",
- "nimiq-zkp",
  "nimiq-zkp-circuits",
  "nimiq-zkp-primitives",
  "parking_lot 0.12.2",
@@ -4770,6 +4770,7 @@ dependencies = [
 name = "nimiq-zkp-test-gen"
 version = "0.1.0"
 dependencies = [
+ "example",
  "hex",
  "nimiq-block",
  "nimiq-blockchain",
@@ -4782,7 +4783,6 @@ dependencies = [
  "nimiq-serde",
  "nimiq-test-utils",
  "nimiq-utils",
- "nimiq-zkp",
  "nimiq-zkp-circuits",
  "nimiq-zkp-component",
  "nimiq-zkp-primitives",

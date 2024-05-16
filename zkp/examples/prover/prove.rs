@@ -15,7 +15,7 @@ use nimiq_test_utils::{
     block_production::TemporaryBlockProducer, blockchain_with_rng::produce_macro_blocks_with_rng,
     test_rng::test_rng,
 };
-use nimiq_zkp::prove::prove;
+use example::prove::prove;
 use tracing_subscriber::{filter::Targets, prelude::*};
 
 fn initialize() {

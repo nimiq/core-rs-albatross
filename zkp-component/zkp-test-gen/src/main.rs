@@ -18,7 +18,7 @@ use nimiq_test_utils::{
     zkp_test_data::{get_base_seed, DEFAULT_TEST_KEYS_PATH},
 };
 use nimiq_utils::time::OffsetTime;
-use nimiq_zkp::ZKP_VERIFYING_DATA;
+use example::ZKP_VERIFYING_DATA;
 use nimiq_zkp_circuits::setup::{load_verifying_data, setup};
 use nimiq_zkp_component::{
     proof_gen_utils::generate_new_proof, proof_utils::validate_proof, types::ZKPState,

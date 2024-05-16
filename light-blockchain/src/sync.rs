@@ -2,7 +2,7 @@ use nimiq_block::{Block, BlockError};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
 };
-use nimiq_zkp::{verify::verify, NanoProof, ZKP_VERIFYING_DATA};
+use example::{verify::verify, NanoProof, ZKP_VERIFYING_DATA};
 use parking_lot::RwLockUpgradableReadGuard;
 
 use crate::blockchain::LightBlockchain;

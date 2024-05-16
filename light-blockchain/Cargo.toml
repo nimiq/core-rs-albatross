@@ -30,7 +30,7 @@ nimiq-keys = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["policy"] }
 nimiq-utils = { workspace = true, features = ["time"] }
 nimiq-vrf = { workspace = true }
-nimiq-zkp = { workspace = true }
+example = { workspace = true }
 
 [dev-dependencies]
 rand = "^0.8"

@@ -69,7 +69,7 @@ nimiq-utils = { workspace = true, features = ["time", "key-store"] }
 nimiq-validator = { workspace = true, optional = true, features = ["trusted_push"] }
 nimiq-validator-network = { workspace = true, optional = true }
 nimiq-wallet = { workspace = true, optional = true, features = ["store"] }
-nimiq-zkp = { workspace = true }
+example = { workspace = true }
 nimiq-zkp-circuits = { workspace = true }
 nimiq-zkp-component = { workspace = true }
 nimiq-zkp-primitives = { workspace = true }
@@ -87,7 +87,7 @@ logging = ["nimiq-log", "serde_json", "tokio", "tracing-subscriber"]
 loki = ["logging", "tracing-loki"]
 metrics-server = ["nimiq-metrics-server", "nimiq-network-libp2p/metrics", "nimiq-validator/metrics"]
 panic = ["log-panics"]
-parallel = ["nimiq-zkp/parallel", "nimiq-zkp-circuits/parallel", "nimiq-zkp-component/parallel", "nimiq-zkp-primitives/parallel"]
+parallel = ["example/parallel", "nimiq-zkp-circuits/parallel", "nimiq-zkp-component/parallel", "nimiq-zkp-primitives/parallel"]
 rpc-server = ["nimiq-jsonrpc-core", "nimiq-jsonrpc-server", "nimiq-rpc-server", "nimiq-wallet", "validator"]
 signal-handling = ["signal-hook", "tokio"]
 tokio-console = ["console-subscriber", "logging", "tokio/tracing"]
@@ -95,4 +95,4 @@ tokio-websocket = ["nimiq-network-libp2p/tokio-websocket"]
 validator = ["database-storage", "nimiq-mempool", "nimiq-validator", "nimiq-validator-network", "nimiq-rpc-server"]
 wallet = ["database-storage", "nimiq-wallet"]
 web-logging = ["nimiq-log", "time/wasm-bindgen", "tracing-subscriber", "tracing-web"]
-zkp-prover = ["nimiq-zkp/zkp-prover", "nimiq-zkp-circuits/zkp-prover", "nimiq-zkp-component/zkp-prover", "nimiq-zkp-primitives/zkp-prover"]
+zkp-prover = ["example/zkp-prover", "nimiq-zkp-circuits/zkp-prover", "nimiq-zkp-component/zkp-prover", "nimiq-zkp-primitives/zkp-prover"]

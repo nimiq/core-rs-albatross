@@ -8,7 +8,7 @@ use ark_groth16::Proof;
 use ark_mnt6_753::MNT6_753;
 use nimiq_block::MacroBlock;
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_zkp::prove::prove;
+use example::prove::prove;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     process::Command,

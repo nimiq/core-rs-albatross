@@ -5,7 +5,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::policy::Policy;
-use nimiq_zkp::{verify::verify, ZKP_VERIFYING_DATA};
+use example::{verify::verify, ZKP_VERIFYING_DATA};
 use nimiq_zkp_primitives::NanoZKPError;
 
 use super::types::ZKPState;

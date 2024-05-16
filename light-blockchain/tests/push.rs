@@ -16,7 +16,7 @@ use nimiq_test_utils::{
     zkp_test_data::{get_base_seed, simulate_merger_wrapper, ZKP_TEST_KEYS_PATH},
 };
 use nimiq_vrf::VrfSeed;
-use nimiq_zkp::ZKP_VERIFYING_DATA;
+use example::ZKP_VERIFYING_DATA;
 use parking_lot::RwLock;
 
 fn remove_micro_body(block: Block) -> Block {
