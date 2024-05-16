@@ -130,7 +130,9 @@ pub async fn migrate_history(
         );
 
         // Get transactions of each block and add them to the PoS history store
-        for block_height in (history_store_height + 1)..=candidate_block {
+        // Migrate up to the candidate_block (exclusive) as this block number eventually becomes
+        // the block number for the genesis block on the PoS chain.
+        for block_height in (history_store_height + 1)..candidate_block {
             // Check if we are closing in on the PoW head block.
             // If this is true, we may need to take some extra time in order to make sure
             // that blocks leading up to the head block are confirmed before we
