@@ -525,7 +525,14 @@ impl Client {
         transaction: &TransactionAnyType,
     ) -> Result<PlainTransactionDetailsType, JsError> {
         let tx = Transaction::from_any(transaction)?;
+        let details = self.send_web_transaction(tx).await?;
+        Ok(serde_wasm_bindgen::to_value(&details)?.into())
+    }
 
+    async fn send_web_transaction(
+        &self,
+        tx: Transaction,
+    ) -> Result<PlainTransactionDetails, JsError> {
         tx.verify(Some(self.network_id))?;
 
         // Check if we are already subscribed to the sender or recipient
@@ -614,12 +621,12 @@ impl Client {
 
         if let Some(details) = maybe_details {
             // If we got a transactions, return it
-            Ok(serde_wasm_bindgen::to_value(&details)?.into())
+            Ok(details)
         } else {
             // If the transaction did not get included, return it as `TransactionState::New`
             let details =
                 PlainTransactionDetails::new(&tx, TransactionState::New, None, None, None, None);
-            Ok(serde_wasm_bindgen::to_value(&details)?.into())
+            Ok(details)
         }
     }
 
@@ -708,6 +715,9 @@ impl Client {
         limit: Option<u16>,
         min_peers: Option<usize>,
     ) -> Result<PlainTransactionDetailsArrayType, JsError> {
+        let mut since_block_height = since_block_height.unwrap_or(0);
+        let min_peers = min_peers.unwrap_or(1);
+
         if let Some(max) = limit {
             if max > MAX_TRANSACTIONS_BY_ADDRESS {
                 return Err(JsError::new(
@@ -716,47 +726,133 @@ impl Client {
             }
         }
 
-        let mut known_hashes = vec![];
+        let address = Address::from_any(address)?.take_native();
+        let mut known_txs = HashMap::new();
 
         if let Some(array) = known_transaction_details {
-            let plain_tx_details =
+            let known_transaction_details =
                 serde_wasm_bindgen::from_value::<Vec<PlainTransactionDetails>>(array.into())?;
-            for obj in plain_tx_details {
-                match obj.state {
-                    // Do not skip unconfirmed transactions
-                    TransactionState::New
-                    | TransactionState::Pending
-                    | TransactionState::Included => continue,
-                    _ => {
-                        known_hashes.push(Blake2bHash::from_str(&obj.transaction.transaction_hash)?)
-                    }
-                }
+            for details in known_transaction_details {
+                known_txs.insert(
+                    Blake2bHash::from_str(&details.transaction.transaction_hash)?,
+                    details,
+                );
             }
         }
 
-        let transactions = self
+        // TODO: Get pending transactions?
+
+        let mut earliest_receipt_block_height: u32 = u32::MAX;
+
+        // Fetch transaction receipts.
+        let receipts: HashMap<_, _> = self
             .inner
             .consensus_proxy()
-            .request_transactions_by_address(
-                Address::from_any(address)?.take_native(),
-                since_block_height.unwrap_or(0),
-                known_hashes,
-                min_peers.unwrap_or(1),
-                limit,
-            )
+            .request_transaction_receipts_by_address(address, min_peers, limit)
+            .await?
+            .into_iter()
+            .collect();
+
+        let mut receipts_to_fetch = vec![];
+        for (hash, block_number) in receipts.iter() {
+            if block_number < &earliest_receipt_block_height {
+                earliest_receipt_block_height = *block_number;
+            }
+
+            // Skip known transactions that are already considered confirmed.
+            if let Some(known_tx) = known_txs.get(hash) {
+                if matches!(known_tx.state, TransactionState::Confirmed)
+                    && known_tx.block_height == Some(*block_number)
+                {
+                    continue;
+                }
+            }
+
+            // Ignore all receipts that are older than since_block_height.
+            if block_number < &since_block_height {
+                continue;
+            }
+
+            // Add the transaction to the list of transactions to fetch.
+            receipts_to_fetch.push((hash.clone(), Some(*block_number)));
+        }
+
+        // If we receive the maximum receipts possible, set since_block_height to the earliest
+        // received block height to not re-request older known transactions.
+        if receipts.len() >= MAX_TRANSACTIONS_BY_ADDRESS.into() {
+            since_block_height = earliest_receipt_block_height + 1;
+        }
+
+        // Re-check known (included or confirmed) transactions that are not contained in the receipts.
+        for (hash, details) in &known_txs {
+            if !matches!(
+                details.state,
+                TransactionState::Included | TransactionState::Confirmed
+            ) {
+                continue;
+            }
+            if let Some(block_height) = details.block_height {
+                if block_height < since_block_height {
+                    continue;
+                }
+            }
+            if receipts.contains_key(hash) {
+                continue;
+            }
+
+            receipts_to_fetch.push((hash.clone(), details.block_height));
+        }
+
+        // Retrieve proofs for the transactions we want to check.
+        let ext_txs = self
+            .inner
+            .consensus_proxy()
+            .prove_transactions_from_receipts(receipts_to_fetch, min_peers)
             .await?;
 
         let current_height = self.get_head_height().await;
 
-        let plain_tx_details: Vec<_> = transactions
+        let mut txs: Vec<_> = ext_txs
             .into_iter()
             .map(|hist_tx| {
+                // TODO: Track unconfirmed transactions for confirmation by next macro block
                 PlainTransactionDetails::try_from_historic_transaction(hist_tx, current_height)
                     .expect("no non-reward inherent")
             })
             .collect();
 
-        Ok(serde_wasm_bindgen::to_value(&plain_tx_details)?.into())
+        // Track known (new or pending) transactions
+        for details in known_txs.values() {
+            if !matches!(
+                details.state,
+                TransactionState::New | TransactionState::Pending
+            ) {
+                continue;
+            }
+            if txs
+                .iter()
+                .any(|tx| tx.transaction.transaction_hash == details.transaction.transaction_hash)
+            {
+                continue;
+            }
+
+            if details.transaction.validity_start_height
+                <= current_height - Policy::transaction_validity_window()
+            {
+                let mut expired_details = details.clone();
+                expired_details.state = TransactionState::Expired;
+                txs.push(expired_details);
+            } else {
+                txs.push(
+                    self.send_web_transaction(Transaction::from_plain_transaction(
+                        &details.transaction,
+                    )?)
+                    .await?,
+                );
+            }
+        }
+
+        Ok(serde_wasm_bindgen::to_value(&txs)?.into())
     }
 
     fn setup_offline_online_event_handlers(&self) {
