@@ -55,7 +55,7 @@ pub struct GenesisConfig {
     pub htlc_accounts: Vec<GenesisHTLC>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GenesisValidator {
     pub validator_address: Address,
     pub signing_key: SchnorrPublicKey,
@@ -67,7 +67,7 @@ pub struct GenesisValidator {
     pub retired: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GenesisStaker {
     pub staker_address: Address,
     pub balance: Coin,
@@ -77,14 +77,14 @@ pub struct GenesisStaker {
     pub inactive_from: Option<u32>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GenesisAccount {
     pub address: Address,
     pub balance: Coin,
 }
 
 /// Struct that represents a vesting contract in the toml file that is used to generate the genesis
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GenesisVestingContract {
     /// Vesting contract account address
     pub address: Address,
@@ -103,7 +103,7 @@ pub struct GenesisVestingContract {
 }
 
 /// Struct that represents an HTLC in the toml file that is used to generate the genesis
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GenesisHTLC {
     /// HTLC account address
     pub address: Address,

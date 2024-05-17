@@ -12,9 +12,11 @@ use std::{
 
 use nimiq_database::DatabaseProxy;
 use nimiq_genesis_builder::config::GenesisConfig;
+use nimiq_hash::{Blake2bHasher, Hasher};
 use nimiq_keys::Address;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_rpc::Client;
+use nimiq_serde::Serialize;
 use thiserror::Error;
 use tokio::time::sleep;
 
@@ -237,7 +239,8 @@ pub async fn migrate(
     }
 
     let mut reported_ready = false;
-    let genesis_config;
+    let mut genesis_config;
+    let genesis_config_hash;
 
     loop {
         let current_height = pow_client.block_number().await.unwrap();
@@ -302,7 +305,24 @@ pub async fn migrate(
             )
             .await?;
 
-            log::info!("PoS Genesis generation is completed");
+            // Sort vectors for a consistent hash digest
+            genesis_config.validators.sort();
+            genesis_config.stakers.sort();
+            genesis_config.basic_accounts.sort();
+            genesis_config.vesting_accounts.sort();
+            genesis_config.htlc_accounts.sort();
+
+            let mut hasher = Blake2bHasher::new();
+            genesis_config
+                .serialize_to_writer(&mut hasher)
+                .unwrap_or_else(|error| {
+                    exit_with_error(error, "Failed to serialize genesis config")
+                });
+            genesis_config_hash = hasher.finish();
+            log::info!(
+                genesis_config_hash = %genesis_config_hash,
+                "PoS Genesis generation is completed"
+            );
 
             break;
         }
@@ -337,6 +357,7 @@ pub async fn migrate(
                 pow_client,
                 validator_address.to_user_friendly_address(),
                 candidate_block..next_candidate,
+                &genesis_config_hash,
             )
             .await;
 
@@ -347,7 +368,10 @@ pub async fn migrate(
                     "We didn't find a ready transaction from our validator in this window"
                 );
                 // Report we are ready to the Nimiq PoW chain:
-                let transaction = generate_ready_tx(validator_address.to_user_friendly_address());
+                let transaction = generate_ready_tx(
+                    validator_address.to_user_friendly_address(),
+                    &genesis_config_hash,
+                );
 
                 match send_tx(pow_client, transaction).await {
                     Ok(_) => reported_ready = true,
@@ -364,6 +388,7 @@ pub async fn migrate(
             pow_client,
             validators.clone(),
             candidate_block..next_candidate,
+            &genesis_config_hash,
         )
         .await;
         match validators_status {
@@ -418,12 +443,12 @@ pub fn launch_pos_client(
     // Check that we were able to launch the PoS client
     match child.try_wait() {
         Ok(Some(status)) => {
-            log::error!(%status, "Pos client unexpectedly exited");
+            log::error!(%status, "PoS client unexpectedly exited");
             Err(Error::PoSUnexpectedExit(status))
         }
         Ok(None) => {
             let pid = child.id();
-            log::info!(pid, "Pos client running");
+            log::info!(pid, "PoS client running");
             Ok(child.wait()?)
         }
         Err(error) => {

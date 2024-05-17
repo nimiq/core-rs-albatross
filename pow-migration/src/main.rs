@@ -338,8 +338,7 @@ async fn main() {
                     }
                 },
                 Err(error) => {
-                    log::error!(?error, "Could not migrate");
-                    exit(1);
+                    exit_with_error(error, "Could not migrate");
                 }
             }
         }

@@ -3,6 +3,7 @@ pub mod types;
 use std::ops::Range;
 
 use log::{error, info};
+use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_rpc::{
@@ -24,11 +25,12 @@ pub const READY_PERCENTAGE: u8 = 80;
 ///   Sender: Validator address
 ///   Recipient: Burn address
 ///   Value: 1 Luna
-///   Data: TBD
+///   Data: Hash of the generated `GenesisConfig`
 ///
-pub fn generate_ready_tx(validator: String) -> OutgoingTransaction {
+pub fn generate_ready_tx(validator: String, hash: &Blake2bHash) -> OutgoingTransaction {
     info!(
         validator_address = validator,
+        pos_genesis_hash = %hash,
         "Generating ready transaction"
     );
     OutgoingTransaction {
@@ -36,7 +38,7 @@ pub fn generate_ready_tx(validator: String) -> OutgoingTransaction {
         to: Address::burn_address().to_user_friendly_address(),
         value: 1, //Lunas
         fee: 0,
-        data: None,
+        data: Some(hash.to_hex()),
     }
 }
 
@@ -45,21 +47,41 @@ pub async fn get_ready_txns(
     client: &Client,
     validator: String,
     block_window: Range<u32>,
+    pos_genesis_config_hash: &Blake2bHash,
 ) -> Vec<TransactionDetails> {
     if let Ok(transactions) = client.get_transactions_by_address(&validator, 10).await {
+        let genesis_config_hash_hex = pos_genesis_config_hash.to_hex();
+
         let filtered_txns: Vec<TransactionDetails> = transactions
             .into_iter()
-            .filter(|txn| {
-                // Here we filter by current epoch
-                block_window.contains(&txn.block_number)
-                    && txn.to_address == Address::burn_address().to_user_friendly_address()
-                    && txn.value == 1
-            })
+            .filter(|txn| is_valid_ready_txn(txn, &block_window, &genesis_config_hash_hex))
             .collect();
         filtered_txns
     } else {
         Vec::new()
     }
+}
+
+/// Checks if the provided transaction meets the criteria in order to be
+/// considered a valid ready-transaction
+fn is_valid_ready_txn(
+    txn: &TransactionDetails,
+    block_window: &Range<u32>,
+    genesis_config_hash: &String,
+) -> bool {
+    // Check if the txn contains extra data and matches our genesis config hash
+    if let Some(txn_data) = &txn.data {
+        if txn_data != genesis_config_hash {
+            return false;
+        }
+    } else {
+        return false;
+    }
+
+    // Check for the other readiness criteria
+    block_window.contains(&txn.block_number)
+        && txn.to_address == Address::burn_address().to_user_friendly_address()
+        && txn.value == 1
 }
 
 /// Sends a transaction into the Nimiq PoW chain
@@ -82,6 +104,7 @@ pub async fn check_validators_ready(
     client: &Client,
     validators: Vec<GenesisValidator>,
     activation_block_window: Range<u32>,
+    pos_genesis_config_hash: &Blake2bHash,
 ) -> ValidatorsReadiness {
     // First calculate the total amount of stake
     let total_stake: Coin = validators
@@ -92,6 +115,7 @@ pub async fn check_validators_ready(
     log::debug!(registered_stake = %total_stake);
 
     let mut ready_validators = Vec::new();
+    let genesis_config_hash_hex = pos_genesis_config_hash.to_hex();
 
     log::info!("Starting to collect transactions from validators...");
 
@@ -111,10 +135,7 @@ pub async fn check_validators_ready(
             let filtered_txns: Vec<TransactionDetails> = transactions
                 .into_iter()
                 .filter(|txn| {
-                    // Here we filter by the readiness criteria, TBD
-                    activation_block_window.contains(&txn.block_number)
-                        && txn.to_address == Address::burn_address().to_user_friendly_address()
-                        && txn.value == 1
+                    is_valid_ready_txn(txn, &activation_block_window, &genesis_config_hash_hex)
                 })
                 .collect();
             info!(
