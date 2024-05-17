@@ -4,6 +4,7 @@ use std::{
         hash_map::{Entry, HashMap},
         HashSet,
     },
+    mem,
     rc::Rc,
     str::FromStr,
     time::Duration,
@@ -15,6 +16,7 @@ use futures::{
 };
 use js_sys::{global, Array, Function, JsString};
 use log::level_filters::LevelFilter;
+use nimiq::client::ConsensusProxy;
 pub use nimiq::{
     config::{
         config::ClientConfig,
@@ -526,23 +528,47 @@ impl Client {
                 .subscribed_addresses
                 .borrow()
                 .contains_key(tx.recipient().native_ref());
-        let mut subscribed_address = None;
 
         let consensus = self.inner.consensus_proxy();
+
+        struct AddressSubscription {
+            address: nimiq_keys::Address,
+            consensus: ConsensusProxy,
+        }
+        impl AddressSubscription {
+            pub async fn subscribe(
+                address: nimiq_keys::Address,
+                consensus: ConsensusProxy,
+            ) -> Result<Self, JsError> {
+                consensus
+                    .subscribe_to_addresses(vec![address.clone()], 1, None)
+                    .await?;
+                Ok(Self { address, consensus })
+            }
+        }
+        impl Drop for AddressSubscription {
+            fn drop(&mut self) {
+                let address = self.address.clone();
+                let consensus = self.consensus.clone();
+                // Unsubscribe from the address without caring about the result
+                spawn_local(async move {
+                    let _ = consensus.unsubscribe_from_addresses(vec![address], 1).await;
+                });
+            }
+        }
+        let mut address_subscription: Option<AddressSubscription> = None;
 
         // If not subscribed, subscribe to the sender or recipient
         if !already_subscribed {
             // Subscribe to the recipient by default
-            subscribed_address = Some(tx.recipient().native());
-            if subscribed_address == Some(Policy::STAKING_CONTRACT_ADDRESS) {
+            let mut subscribed_address = tx.recipient().native();
+            if subscribed_address == Policy::STAKING_CONTRACT_ADDRESS {
                 // If the recipient is the staking contract, subscribe to the sender instead
                 // to not get flooded with notifications.
-                subscribed_address = Some(tx.sender().native());
+                subscribed_address = tx.sender().native();
             }
-            let address = subscribed_address.clone().unwrap();
-            consensus
-                .subscribe_to_addresses(vec![address], 1, None)
-                .await?;
+            address_subscription =
+                Some(AddressSubscription::subscribe(subscribed_address, consensus.clone()).await?);
         }
 
         let hash = &tx.hash();
@@ -569,15 +595,7 @@ impl Client {
             None
         };
 
-        // Unsubscribe from any address we subscribed to, without caring about the result
-        if let Some(address) = subscribed_address {
-            let owned_consensus = consensus.clone();
-            spawn_local(async move {
-                let _ = owned_consensus
-                    .unsubscribe_from_addresses(vec![address], 1)
-                    .await;
-            });
-        }
+        mem::drop(address_subscription);
 
         if let Some(details) = maybe_details {
             // If we got a transactions, return it
