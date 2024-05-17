@@ -7,16 +7,18 @@ use std::{
 
 use ark_groth16::Proof;
 use ark_serialize::CanonicalSerialize;
-use log::metadata::LevelFilter;
+use log::{info, metadata::LevelFilter};
 use nimiq_genesis::{NetworkId, NetworkInfo};
 use nimiq_log::TargetsExt;
-use nimiq_primitives::policy::{Policy, TEST_POLICY};
+use nimiq_primitives::policy::Policy;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer, blockchain_with_rng::produce_macro_blocks_with_rng,
     test_rng::test_rng,
 };
 use nimiq_zkp::prove::prove;
 use tracing_subscriber::{filter::Targets, prelude::*};
+
+const DEFAULT_EXAMPLE_PATH: &str = ".zkp_example";
 
 fn initialize() {
     tracing_subscriber::registry()
@@ -33,7 +35,7 @@ fn initialize() {
     let genesis_block = network_info.genesis_block();
 
     // Run tests with different policy values:
-    let mut policy_config = TEST_POLICY;
+    let mut policy_config = Policy::default();
     // The genesis block number must be set accordingly
     policy_config.genesis_block_number = genesis_block.block_number();
 
@@ -59,11 +61,15 @@ fn main() {
 
     println!("====== Proof generation for Nano Sync initiated ======");
 
-    let start = Instant::now();
-
     let mut genesis_header_hash = [0; 32];
     let mut genesis_data = None;
     let mut proof = Proof::default();
+
+    info!(
+        "Generating blocks: {} * {}",
+        number_epochs,
+        Policy::blocks_per_epoch()
+    );
 
     let block_producer = TemporaryBlockProducer::new();
     produce_macro_blocks_with_rng(
@@ -74,6 +80,8 @@ fn main() {
     );
 
     let offset = Policy::genesis_block_number();
+    let path = &PathBuf::from(DEFAULT_EXAMPLE_PATH);
+    let total_start = Instant::now();
 
     for i in 0..number_epochs {
         // Get random parameters.
@@ -87,9 +95,6 @@ fn main() {
             .unwrap()
             .unwrap_macro();
 
-        log::error!("Block 1 {:?}", prev_block);
-        log::error!("Block 2 {:?}", final_block);
-
         // Create genesis data.
         if i == 0 {
             genesis_header_hash = prev_block.hash_blake2s().0;
@@ -98,6 +103,7 @@ fn main() {
         }
 
         println!("Proving epoch {}", i + 1);
+        let proving_start = Instant::now();
 
         // Generate proof.
         proof = prove(
@@ -106,22 +112,26 @@ fn main() {
             genesis_data.clone(),
             true,
             true,
-            &PathBuf::new(), // use the current directory
+            path,
         )
         .unwrap();
 
-        // Save proof to file.
-        if !Path::new("proofs/").is_dir() {
-            DirBuilder::new().create("proofs/").unwrap();
+        let proofs_path = format!("{}/{}", DEFAULT_EXAMPLE_PATH, "proofs");
+        if !Path::new(&proofs_path).is_dir() {
+            DirBuilder::new().create(proofs_path.clone()).unwrap();
         }
 
-        let mut file = File::create(format!("proofs/proof_epoch_{}.bin", i + 1)).unwrap();
-
+        // Save proof to file.
+        let mut file = File::create(format!("{}/proof_epoch_{}.bin", proofs_path, i + 1)).unwrap();
         proof.serialize_uncompressed(&mut file).unwrap();
-
         file.sync_all().unwrap();
+
+        println!(
+            "Proof generated! Elapsed time: {:?}",
+            proving_start.elapsed()
+        );
     }
 
     println!("====== Proof generation for Nano Sync finished ======");
-    println!("Total time elapsed: {:?}", start.elapsed());
+    println!("Total time elapsed: {:?}", total_start.elapsed());
 }

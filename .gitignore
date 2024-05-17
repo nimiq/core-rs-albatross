@@ -13,6 +13,7 @@ target
 proving_keys
 .zkp*/verifying_keys/*
 .zkp_testing
+.zkp_example
 proofs
 !.zkp*/verifying_keys/merger_wrapper.bin
 temp-logs

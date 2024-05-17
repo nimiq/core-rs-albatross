@@ -5,10 +5,7 @@ use ark_serialize::CanonicalDeserialize;
 use log::metadata::LevelFilter;
 use nimiq_genesis::NetworkInfo;
 use nimiq_log::TargetsExt;
-use nimiq_primitives::{
-    networks::NetworkId,
-    policy::{Policy, TEST_POLICY},
-};
+use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer, blockchain_with_rng::produce_macro_blocks_with_rng,
     test_rng::test_rng,
@@ -16,6 +13,8 @@ use nimiq_test_utils::{
 use nimiq_zkp::{verify::verify, ZKP_VERIFYING_DATA};
 use nimiq_zkp_circuits::setup::load_verifying_data;
 use tracing_subscriber::{filter::Targets, prelude::*};
+
+const DEFAULT_EXAMPLE_PATH: &str = ".zkp_example";
 
 fn initialize() {
     tracing_subscriber::registry()
@@ -30,7 +29,7 @@ fn initialize() {
         .init();
 
     // Run tests with different policy values:
-    let mut policy_config = TEST_POLICY;
+    let mut policy_config = Policy::default();
     // The genesis block number must be set accordingly
     let network_info = NetworkInfo::from_network_id(NetworkId::UnitAlbatross);
     let genesis_block = network_info.genesis_block();
@@ -45,10 +44,11 @@ fn initialize() {
 /// Run this example with `cargo run --release --example verify`.
 fn main() {
     initialize();
-    // use the current directory
-    ZKP_VERIFYING_DATA.init_with_data(
-        load_verifying_data(&PathBuf::new()).expect("No keys in current directory"),
-    );
+    // The default directory
+    let path = &PathBuf::from(DEFAULT_EXAMPLE_PATH);
+
+    ZKP_VERIFYING_DATA
+        .init_with_data(load_verifying_data(&path).expect("No keys in current directory"));
 
     // Ask user for the number of epochs.
     println!("Enter the number of epochs to verify:");
@@ -92,7 +92,10 @@ fn main() {
         .hash_blake2s();
 
     // Load the proof from file.
-    let mut file = File::open(format!("proofs/proof_epoch_{number_epochs}.bin")).unwrap();
+    let mut file = File::open(format!(
+        "{DEFAULT_EXAMPLE_PATH}/proofs/proof_epoch_{number_epochs}.bin"
+    ))
+    .unwrap();
 
     let proof = Proof::deserialize_uncompressed_unchecked(&mut file).unwrap();
 
