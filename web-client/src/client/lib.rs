@@ -123,7 +123,7 @@ impl Client {
         let web_config = ClientConfiguration::try_from(plain_config)?;
 
         let log_settings = LogSettings {
-            level: Some(LevelFilter::from_str(web_config.log_level.as_str()).unwrap()),
+            level: Some(LevelFilter::from_str(web_config.log_level.as_str())?),
             ..Default::default()
         };
 
@@ -149,10 +149,12 @@ impl Client {
         let seed_nodes = web_config
             .seed_nodes
             .iter()
-            .map(|seed| Seed {
-                address: Multiaddr::from_str(seed).unwrap(),
+            .map(|seed| {
+                Ok(Seed {
+                    address: Multiaddr::from_str(seed)?,
+                })
             })
-            .collect::<Vec<Seed>>();
+            .collect::<Result<Vec<Seed>, JsError>>()?;
 
         config.network.seeds = seed_nodes;
         config.network.only_secure_ws_connections = true;
