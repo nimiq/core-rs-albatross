@@ -1171,9 +1171,7 @@ impl PlainTransactionDetails {
         let block_number = hist_tx.block_number;
         let block_time = hist_tx.block_time;
 
-        let last_macro_block = Policy::last_macro_block(current_block);
-
-        let state = if last_macro_block >= block_number {
+        let state = if Policy::last_macro_block(current_block) >= block_number {
             TransactionState::Confirmed
         } else {
             TransactionState::Included
