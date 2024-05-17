@@ -184,40 +184,40 @@ impl From<&nimiq_account::Staker> for PlainStaker {
 #[serde(rename_all = "camelCase")]
 pub struct PlainValidator {
     /// The public key used to sign blocks. It is also used to retire and reactivate the validator.
-    pub signing_public_key: String,
+    signing_public_key: String,
     /// The voting public key, it is used to vote for skip and macro blocks.
-    pub voting_public_key: String,
+    voting_public_key: String,
     /// The reward address of the validator. All the block rewards are paid to this address.
-    pub reward_address: String,
+    reward_address: String,
     /// Signaling field. Can be used to do chain upgrades or for any other purpose that requires
     /// validators to coordinate among themselves.
-    pub signal_data: Option<String>,
+    signal_data: Option<String>,
     /// The total stake assigned to this validator. It includes the validator deposit as well as the
     /// coins delegated to him by stakers.
-    pub total_stake: u64,
+    total_stake: u64,
     /// The amount of coins deposited by this validator. The initial deposit is a fixed amount,
     /// however this value can be decremented by failing staking transactions due to fees.
-    pub deposit: u64,
+    deposit: u64,
     /// The number of stakers that are delegating to this validator.
-    pub num_stakers: u64,
+    num_stakers: u64,
     /// An option indicating if the validator is marked as inactive. If it is, then it contains the
     /// block height at which it becomes inactive.
     /// A validator can only effectively become inactive on the next election block. Thus, this may
     /// contain a block height in the future.
-    pub inactive_from: Option<u32>,
+    inactive_from: Option<u32>,
     /// An option indicating if the validator is marked as inactive. If it is, then it contains the
     /// block height at which the inactive stake gets released and the validator can be retired.
-    pub inactive_release: Option<u32>,
+    inactive_release: Option<u32>,
     /// A flag indicating if the validator is retired.
-    pub retired: bool,
+    retired: bool,
     /// An option indicating if the validator is jailed. If it is, then it contains the
     /// block height at which it became jailed.
     /// Opposed to `inactive_from`, jailing can and should take effect immediately to prevent
     /// the validator and its stakers from modifying their funds and or delegation.
-    pub jailed_from: Option<u32>,
+    jailed_from: Option<u32>,
     /// An option indicating if the validator is jailed. If it is, then it contains the
     /// block height at which the jail period ends and the validator becomes interactive again.
-    pub jailed_release: Option<u32>,
+    jailed_release: Option<u32>,
 }
 
 impl From<&nimiq_account::Validator> for PlainValidator {

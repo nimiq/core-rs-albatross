@@ -1186,9 +1186,6 @@ extern "C" {
     #[wasm_bindgen(typescript_type = "PlainTransactionDetails[]")]
     pub type PlainTransactionDetailsArrayType;
 
-    #[wasm_bindgen(typescript_type = "PlainTransactionReceipt")]
-    pub type PlainTransactionReceiptType;
-
     #[wasm_bindgen(typescript_type = "PlainTransactionReceipt[]")]
     pub type PlainTransactionReceiptArrayType;
 }

@@ -10,60 +10,60 @@ use wasm_bindgen::prelude::*;
 #[serde(rename_all = "camelCase")]
 pub struct PlainBlockCommonFields {
     /// The block's unique hash, used as its identifier, in HEX format.
-    pub hash: String,
+    hash: String,
     /// The block's on-chain size, in bytes.
-    pub size: u32,
+    size: u32,
     /// The block's block height, also called block number.
-    pub height: u32,
+    height: u32,
     /// The batch number that the block is in.
-    pub batch: u32,
+    batch: u32,
     /// The epoch number that the block is in.
-    pub epoch: u32,
+    epoch: u32,
     /// The timestamp of the block. It follows the Unix time and has millisecond precision.
-    pub timestamp: u64,
+    timestamp: u64,
 
     /// The network that this block is valid for.
-    pub network: &'static str,
+    network: &'static str,
     /// The protocol version that this block is valid for.
-    pub version: u16,
+    version: u16,
     /// The hash of the header of the immediately preceding block (either micro or macro), in HEX format.
-    pub prev_hash: String,
+    prev_hash: String,
     /// The seed of the block. This is the BLS signature of the seed of the immediately preceding
     /// block (either micro or macro) using the validator key of the block producer.
-    pub seed: String,
+    seed: String,
     /// The extra data of the block, in HEX format. Up to 32 raw bytes.
     ///
     /// In the genesis block, it encodes the initial supply as a big-endian `u64`.
     ///
     /// No planned use otherwise.
-    pub extra_data: String,
+    extra_data: String,
     /// The root of the Merkle tree of the blockchain state, in HEX format. It acts as a commitment to the state.
-    pub state_hash: String,
+    state_hash: String,
     /// The root of the Merkle tree of the body, in HEX format. It acts as a commitment to the body.
-    pub body_hash: String,
+    body_hash: String,
     /// A Merkle root over all of the transactions that happened in the current epoch, in HEX format.
-    pub history_hash: String,
+    history_hash: String,
 }
 
 #[derive(Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainMacroBlock {
     #[serde(flatten)]
-    pub common: PlainBlockCommonFields,
+    common: PlainBlockCommonFields,
 
     /// If true, this macro block is an election block finalizing an epoch.
-    pub is_election_block: bool,
+    is_election_block: bool,
     /// The round number this block was proposed in.
-    pub round: u32,
+    round: u32,
     /// The hash of the header of the preceding election macro block, in HEX format.
-    pub prev_election_hash: String,
+    prev_election_hash: String,
 }
 
 #[derive(Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PlainMicroBlock {
     #[serde(flatten)]
-    pub common: PlainBlockCommonFields,
+    common: PlainBlockCommonFields,
 }
 
 #[derive(Tsify)]

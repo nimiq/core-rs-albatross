@@ -6,11 +6,11 @@ use tsify::Tsify;
 #[serde(rename_all = "camelCase")]
 pub struct PlainPeerInfo {
     /// Address of the peer in `Multiaddr` format
-    pub address: String,
+    address: String,
     /// Node type of the peer
     #[tsify(type = "'full' | 'history' | 'light'")]
     #[serde(rename = "type")]
-    pub node_type: String,
+    node_type: String,
 }
 
 impl From<nimiq_network_interface::peer_info::PeerInfo> for PlainPeerInfo {
