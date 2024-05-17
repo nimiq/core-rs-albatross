@@ -368,8 +368,8 @@ impl Transaction {
         Ok(serde_wasm_bindgen::to_value(&plain)?.into())
     }
 
-    /// Parses a transaction from a {@link Transaction} instance, a plain object, or a serialized
-    /// string representation.
+    /// Parses a transaction from a {@link Transaction} instance, a plain object, a hex string
+    /// representation, or a byte array.
     ///
     /// Throws when a transaction cannot be parsed from the argument.
     #[wasm_bindgen(js_name = fromAny)]

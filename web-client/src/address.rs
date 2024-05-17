@@ -1,5 +1,7 @@
 use std::str::FromStr;
 
+use nimiq_serde::Deserialize;
+#[cfg(feature = "primitives")]
 use nimiq_serde::Serialize;
 use wasm_bindgen::prelude::*;
 #[cfg(feature = "primitives")]
@@ -23,7 +25,7 @@ impl Address {
         )))
     }
 
-    /// Parses an address from an {@link Address} instance or a string representation.
+    /// Parses an address from an {@link Address} instance, a hex string representation, or a byte array.
     ///
     /// Throws when an address cannot be parsed from the argument.
     #[wasm_bindgen(js_name = fromAny)]
@@ -37,6 +39,10 @@ impl Address {
 
         if let Ok(string) = serde_wasm_bindgen::from_value::<String>(js_value.to_owned()) {
             Ok(Address::from_string(&string)?)
+        } else if let Ok(bytes) = serde_wasm_bindgen::from_value::<Vec<u8>>(js_value.to_owned()) {
+            Ok(Address::from(nimiq_keys::Address::deserialize_from_vec(
+                &bytes,
+            )?))
         } else {
             Err(JsError::new("Could not parse address"))
         }
@@ -112,19 +118,19 @@ impl Address {
 #[cfg(feature = "primitives")]
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(typescript_type = "Address | string")]
+    #[wasm_bindgen(typescript_type = "Address | string | Uint8Array")]
     pub type AddressAnyType;
 
-    #[wasm_bindgen(typescript_type = "(Address | string)[]")]
+    #[wasm_bindgen(typescript_type = "(Address | string | Uint8Array)[]")]
     pub type AddressAnyArrayType;
 }
 
 #[cfg(not(feature = "primitives"))]
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(typescript_type = "string")]
+    #[wasm_bindgen(typescript_type = "string | Uint8Array")]
     pub type AddressAnyType;
 
-    #[wasm_bindgen(typescript_type = "string[]")]
+    #[wasm_bindgen(typescript_type = "(string | Uint8Array)[]")]
     pub type AddressAnyArrayType;
 }
