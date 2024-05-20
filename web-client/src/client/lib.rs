@@ -660,6 +660,9 @@ impl Client {
     ///
     /// Up to a `limit` number of transactions are returned from newest to oldest.
     /// If the network does not have at least `min_peers` to query, then an error is returned.
+    ///
+    /// The `known_transaction_details` parameter is used as a filter to avoid fetching
+    /// transactions that are already known and confirmed.
     #[wasm_bindgen(js_name = getTransactionsByAddress)]
     pub async fn get_transactions_by_address(
         &self,
