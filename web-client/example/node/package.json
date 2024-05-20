@@ -1,10 +1,10 @@
 {
-  "name": "@nimiq/core-web-example",
-  "description": "A NodeJS example for @nimiq/core-web Albatross",
+  "name": "@nimiq/core-example",
+  "description": "A NodeJS example for @nimiq/core Albatross",
   "main": "index.js",
   "module": "index.mjs",
   "dependencies": {
-    "@nimiq/core-web": "../../dist"
+    "@nimiq/core": "../../dist"
   },
   "scripts": {
     "preinstall": "cd ../.. && ./scripts/build-launcher.sh"

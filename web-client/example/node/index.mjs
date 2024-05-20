@@ -1,4 +1,4 @@
-import * as Nimiq from "@nimiq/core-web";
+import * as Nimiq from "@nimiq/core";
 
 const config = new Nimiq.ClientConfiguration();
 // config.logLevel('debug');

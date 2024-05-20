@@ -10,13 +10,13 @@ A very light Nimiq Proof-of-Stake client for browsers and NodeJS, compiled from 
 You need to install this package from the `next` tag:
 
 ```sh
-npm install @nimiq/core-web@next
+npm install @nimiq/core@next
 ```
 
 or
 
 ```sh
-yarn add @nimiq/core-web@next
+yarn add @nimiq/core@next
 ```
 
 ## 🛠️ Usage
@@ -39,7 +39,7 @@ If you use any bundler for your project, like Webpack or Vite, you should probab
 > ```ts
 > // vite.config.ts
 > optimizeDeps: {
->    exclude: ['@nimiq/core-web'],
+>    exclude: ['@nimiq/core'],
 > }
 > ```
 
@@ -51,7 +51,7 @@ If you use any bundler for your project, like Webpack or Vite, you should probab
 > // nuxt.config.ts
 > vite: {
 >   optimizeDeps: {
->      exclude: ['@nimiq/core-web'],
+>      exclude: ['@nimiq/core'],
 >   }
 > }
 > ```
@@ -59,9 +59,9 @@ If you use any bundler for your project, like Webpack or Vite, you should probab
 
 ```js
 // With Webpack: import the package asynchronously:
-const Nimiq = await import('@nimiq/core-web');
+const Nimiq = await import('@nimiq/core');
 // With Vite, import at the top of your file:
-import * as Nimiq from '@nimiq/core-web';
+import * as Nimiq from '@nimiq/core';
 
 // Create a configuration builder:
 const config = new Nimiq.ClientConfiguration();
@@ -86,7 +86,7 @@ const client = await Nimiq.Client.create(config.build());
 
 ```js
 // Import the loader and package from the /web path:
-import init, * as Nimiq from '@nimiq/core-web/web';
+import init, * as Nimiq from '@nimiq/core/web';
 
 // Load and initialize the WASM file
 init().then(() => {
@@ -107,9 +107,9 @@ For NodeJS, this package includes both CommonJS and ESM builds. You can either `
 
 ```js
 // Import as CommonJS module
-const Nimiq = require("@nimiq/core-web");
+const Nimiq = require("@nimiq/core");
 // Or import as ESM module
-import * as Nimiq from "@nimiq/core-web";
+import * as Nimiq from "@nimiq/core";
 
 // In ESM modules you can use await at the top-level and do not need an async wrapper function.
 async function main() {

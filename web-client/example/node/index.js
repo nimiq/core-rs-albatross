@@ -1,4 +1,4 @@
-const Nimiq = require("@nimiq/core-web");
+const Nimiq = require("@nimiq/core");
 
 async function main() {
     const config = new Nimiq.ClientConfiguration();
