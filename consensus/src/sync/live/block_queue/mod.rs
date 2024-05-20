@@ -432,12 +432,17 @@ impl<N: Network> BlockQueue<N> {
             );
         }
 
-        // Check whether the blockchain can push the missing blocks. This might not be the case if the reference
-        // block used in the request is from a batch that we have not adopted yet.
-        let parent_known = self
-            .blockchain
-            .read()
-            .contains(blocks[0].parent_hash(), true);
+        let parent_known = {
+            let blockchain = self.blockchain.read();
+            // Check if the block is still relevant if not discard it
+            if blockchain.macro_head().block_number() >= target_block_number {
+                return None;
+            } else {
+                // If the block is relevant, check if the predecessor is known.
+                blockchain.contains(blocks[0].parent_hash(), true)
+            }
+        };
+
         if !parent_known {
             // The blockchain cannot process the blocks right away, put them in the buffer.
             // Recursively request missing blocks for the first block we received.
