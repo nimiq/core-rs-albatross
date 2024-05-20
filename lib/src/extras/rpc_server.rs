@@ -1,7 +1,8 @@
 use std::{collections::HashSet, iter::FromIterator, sync::Arc};
 
-use nimiq_jsonrpc_core::Credentials;
-use nimiq_jsonrpc_server::{AllowListDispatcher, Config, ModularDispatcher, Server as _Server};
+use nimiq_jsonrpc_server::{
+    AllowListDispatcher, Config, Credentials, ModularDispatcher, Server as _Server,
+};
 use nimiq_rpc_server::dispatchers::*;
 use nimiq_wallet::WalletStore;
 
@@ -21,9 +22,8 @@ pub fn initialize_rpc_server(
     log::info!("Initializing RPC server: {}:{}", ip, config.port);
 
     // Configure RPC server
-    let basic_auth = config.credentials.map(|credentials| Credentials {
-        username: credentials.username,
-        password: credentials.password.0,
+    let basic_auth = config.credentials.map(|credentials| {
+        Credentials::new_from_blake2b(credentials.username, credentials.password_hash.0 .0)
     });
 
     let allowed_methods = config.allowed_methods.unwrap_or_default();

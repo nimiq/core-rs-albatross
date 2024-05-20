@@ -1,7 +1,8 @@
 use anyhow::{bail, Error};
 use clap::Parser;
-use nimiq_jsonrpc_client::{websocket::WebsocketClient, ArcClient, Client as RPCclient};
-use nimiq_jsonrpc_core::Credentials;
+use nimiq_jsonrpc_client::{
+    websocket::WebsocketClient, ArcClient, Client as RPCclient, Credentials,
+};
 use nimiq_rpc_interface::{
     blockchain::BlockchainProxy, consensus::ConsensusProxy, mempool::MempoolProxy,
     network::NetworkProxy, policy::PolicyProxy, validator::ValidatorProxy, wallet::WalletProxy,
@@ -121,10 +122,7 @@ async fn run_app(opt: Opt) -> Result<(), Error> {
         .parse()?;
 
     let credentials = match (&opt.username, &opt.password) {
-        (Some(username), Some(password)) => Some(Credentials {
-            username: username.to_string(),
-            password: password.to_string(),
-        }),
+        (Some(username), Some(password)) => Some(Credentials::new(username, password)),
         (None, None) => None,
         _ => bail!("Both username and password needs to be specified."),
     };

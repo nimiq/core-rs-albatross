@@ -26,6 +26,7 @@ hex = "0.4"
 rust-argon2 = "2.1"
 serde = "1.0"
 sha2 = "0.10"
+subtle = "2.5"
 
 nimiq-database-value = { workspace = true }
 nimiq-macros = { workspace = true }

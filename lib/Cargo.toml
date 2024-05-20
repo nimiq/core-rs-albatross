@@ -36,6 +36,7 @@ serde = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"], optional = true }
 signal-hook = { version = "0.3", optional = true }
 strum_macros = "0.26"
+subtle = "2.5"
 thiserror = "1.0"
 time = { version = "0.3", optional = true }
 tokio = { version = "1.37", features = ["rt"], optional = true }
@@ -53,6 +54,7 @@ nimiq-bls = { workspace = true }
 nimiq-consensus = { workspace = true, default-features = false }
 nimiq-database = { workspace = true, optional = true }
 nimiq-genesis = { workspace = true, default-features = false }
+nimiq-hash = { workspace = true }
 nimiq-jsonrpc-core = { workspace = true, optional = true }
 nimiq-jsonrpc-server = { workspace = true, optional = true }
 nimiq-keys = { workspace = true }

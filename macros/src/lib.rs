@@ -8,6 +8,9 @@ pub extern crate serde;
 pub extern crate serde_big_array;
 
 #[doc(hidden)]
+pub extern crate subtle;
+
+#[doc(hidden)]
 pub extern crate nimiq_serde;
 
 #[macro_export]
@@ -164,6 +167,17 @@ macro_rules! add_hex_io_fns_typed_arr {
         impl ::std::fmt::Debug for $name {
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
                 f.write_str(&::nimiq_macros::hex::encode(&self.0))
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! add_constant_time_eq_typed_arr {
+    ($name: ident) => {
+        impl ::nimiq_macros::subtle::ConstantTimeEq for $name {
+            fn ct_eq(&self, other: &$name) -> ::nimiq_macros::subtle::Choice {
+                self.0.ct_eq(&other.0)
             }
         }
     };

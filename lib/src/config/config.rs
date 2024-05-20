@@ -14,6 +14,7 @@ use derive_builder::Builder;
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 #[cfg(feature = "database-storage")]
 use nimiq_database::{mdbx::MdbxDatabase, volatile::VolatileDatabase, DatabaseProxy};
+use nimiq_hash::{Blake2bHash, Hash};
 #[cfg(feature = "validator")]
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 #[cfg(feature = "nimiq-mempool")]
@@ -27,6 +28,7 @@ use nimiq_utils::key_rng::SecureGenerate;
 use nimiq_utils::{file_store::FileStore, Sensitive};
 use nimiq_zkp_circuits::DEFAULT_KEYS_PATH;
 use strum_macros::Display;
+use subtle::ConstantTimeEq;
 
 #[cfg(feature = "database-storage")]
 use crate::config::config_file::DatabaseSettings;
@@ -500,22 +502,24 @@ pub struct ValidatorConfig {
 /// Credentials for JSON RPC server, metrics server or websocket RPC server
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Credentials {
-    /// Username
+    /// Username.
     pub username: String,
-    /// Password
-    pub password: Sensitive<String>,
+    /// Hash of the password.
+    pub password_hash: Sensitive<Blake2bHash>,
 }
 
 impl Credentials {
     pub fn new<U: AsRef<str>, P: AsRef<str>>(username: U, password: P) -> Self {
         Self {
             username: username.as_ref().to_owned(),
-            password: Sensitive(password.as_ref().to_owned()),
+            password_hash: Sensitive(password.as_ref().hash()),
         }
     }
 
     pub fn check<U: AsRef<str>, P: AsRef<str>>(&self, username: U, password: P) -> bool {
-        self.username == username.as_ref() && *self.password == password.as_ref()
+        (self.username.as_bytes().ct_eq(username.as_ref().as_bytes())
+            & self.password_hash.0.ct_eq(&password.as_ref().hash()))
+        .into()
     }
 }
 

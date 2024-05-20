@@ -1,4 +1,4 @@
-use nimiq_macros::add_serialization_fns_typed_arr;
+use nimiq_macros::{add_constant_time_eq_typed_arr, add_serialization_fns_typed_arr};
 
 use super::*;
 
@@ -8,6 +8,7 @@ pub(super) const SHA512_LENGTH: usize = 64;
 pub struct Sha512Hash([u8; SHA512_LENGTH]);
 
 add_serialization_fns_typed_arr!(Sha512Hash, SHA512_LENGTH);
+add_constant_time_eq_typed_arr!(Sha512Hash);
 
 impl<'a> From<&'a [u8]> for Sha512Hash {
     fn from(slice: &'a [u8]) -> Self {
