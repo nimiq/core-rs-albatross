@@ -52,6 +52,11 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+    - name: Free Disk Space (Ubuntu)
+      uses: jlumbroso/free-disk-space@main
+      with:
+        tool-cache: true
+        large-packages: false
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5
       with:
