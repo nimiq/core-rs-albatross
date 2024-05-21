@@ -532,8 +532,10 @@ impl Client {
         let consensus = self.inner.consensus_proxy();
 
         struct AddressSubscription {
-            address: nimiq_keys::Address,
-            consensus: ConsensusProxy,
+            // Use Options to be able to take the address and consensus out of the
+            // struct during drop, avoiding another clone.
+            address: Option<nimiq_keys::Address>,
+            consensus: Option<ConsensusProxy>,
         }
         impl AddressSubscription {
             pub async fn subscribe(
@@ -543,13 +545,16 @@ impl Client {
                 consensus
                     .subscribe_to_addresses(vec![address.clone()], 1, None)
                     .await?;
-                Ok(Self { address, consensus })
+                Ok(Self {
+                    address: Some(address),
+                    consensus: Some(consensus),
+                })
             }
         }
         impl Drop for AddressSubscription {
             fn drop(&mut self) {
-                let address = self.address.clone();
-                let consensus = self.consensus.clone();
+                let address = self.address.take().unwrap();
+                let consensus = self.consensus.take().unwrap();
                 // Unsubscribe from the address without caring about the result
                 spawn_local(async move {
                     let _ = consensus.unsubscribe_from_addresses(vec![address], 1).await;
