@@ -3,9 +3,9 @@ extern crate log;
 
 use std::{
     cmp::{Ord, Ordering},
+    collections::BTreeSet,
     convert::TryFrom,
-    io,
-    io::Write,
+    io::{self, Write},
     sync::Arc,
 };
 
@@ -23,7 +23,12 @@ use nimiq_utils::merkle::Blake2bMerkleProof;
 pub use signature_proof::*;
 use thiserror::Error;
 
-use crate::account::AccountTransactionVerification;
+use crate::account::{
+    htlc_contract::{CreationTransactionData as HtlcCreationData, OutgoingHTLCTransactionProof},
+    staking_contract::IncomingStakingTransactionData,
+    vesting_contract::CreationTransactionData as VestingCreationData,
+    AccountTransactionVerification,
+};
 
 mod equivocation_locator;
 
@@ -431,6 +436,169 @@ impl Transaction {
 
     pub fn recipient(&self) -> &Address {
         &self.recipient
+    }
+
+    pub fn related_addresses(&self) -> BTreeSet<Address> {
+        let mut addresses = BTreeSet::new();
+
+        // Add sender and recipient
+        addresses.insert(self.sender.clone());
+        addresses.insert(self.recipient.clone());
+
+        // If proof is a regular signature proof, add signer of the proof
+        if let Ok(proof) = SignatureProof::deserialize_from_vec(&self.proof) {
+            addresses.insert(proof.compute_signer());
+        }
+
+        match self.sender_type {
+            AccountType::Basic | AccountType::Vesting => {}
+            AccountType::HTLC => {
+                if let Ok(proof) = OutgoingHTLCTransactionProof::deserialize_from_vec(&self.proof) {
+                    match proof {
+                        OutgoingHTLCTransactionProof::RegularTransfer {
+                            signature_proof, ..
+                        } => {
+                            // Add signer of the proof ("recipient" of the HTLC)
+                            addresses.insert(signature_proof.compute_signer());
+                        }
+                        OutgoingHTLCTransactionProof::EarlyResolve {
+                            signature_proof_recipient,
+                            signature_proof_sender,
+                        } => {
+                            // Add signers of the proof (both "sender" and "recipient" of the HTLC)
+                            addresses.insert(signature_proof_recipient.compute_signer());
+                            addresses.insert(signature_proof_sender.compute_signer());
+                        }
+                        OutgoingHTLCTransactionProof::TimeoutResolve {
+                            signature_proof_sender,
+                        } => {
+                            // Add signer of the proof ("sender" of the HTLC)
+                            addresses.insert(signature_proof_sender.compute_signer());
+                        }
+                    }
+                }
+            }
+            AccountType::Staking => {
+                // Transactions from the staking contract are signed with a regular signature proof
+                // by the validator or staker. Signers of regular transaction proofs have already
+                // been added to the set above.
+            }
+        }
+
+        match self.recipient_type {
+            AccountType::Basic => {}
+            AccountType::Vesting => {
+                if let Ok(contract_data) =
+                    VestingCreationData::deserialize_from_vec(&self.recipient_data)
+                {
+                    // Add the owner of the new vesting contract
+                    addresses.insert(contract_data.owner);
+                }
+            }
+            AccountType::HTLC => {
+                if let Ok(contract_data) =
+                    HtlcCreationData::deserialize_from_vec(&self.recipient_data)
+                {
+                    // Add both the "sender" and "recipient" of the new HTLC
+                    addresses.insert(contract_data.sender);
+                    addresses.insert(contract_data.recipient);
+                }
+            }
+            AccountType::Staking => {
+                if let Ok(contract_data) =
+                    IncomingStakingTransactionData::deserialize_from_vec(&self.recipient_data)
+                {
+                    match contract_data {
+                        IncomingStakingTransactionData::CreateValidator {
+                            signing_key,
+                            reward_address,
+                            proof,
+                            ..
+                        } => {
+                            // Add the new validator's signing key
+                            addresses.insert(Address::from(&signing_key));
+                            // Add the new validator's reward address
+                            addresses.insert(reward_address);
+                            // The signer of the internal proof is the validator address
+                            addresses.insert(proof.compute_signer());
+                        }
+                        IncomingStakingTransactionData::UpdateValidator {
+                            new_signing_key,
+                            new_reward_address,
+                            proof,
+                            ..
+                        } => {
+                            if let Some(new_signing_key) = new_signing_key {
+                                // If the signing key is updated, add the new signing key
+                                addresses.insert(Address::from(&new_signing_key));
+                            }
+                            if let Some(new_reward_address) = new_reward_address {
+                                // If the reward address is updated, add the new reward address
+                                addresses.insert(new_reward_address);
+                            }
+                            // The signer of the internal proof is the validator address
+                            addresses.insert(proof.compute_signer());
+                        }
+                        IncomingStakingTransactionData::DeactivateValidator {
+                            validator_address,
+                            proof,
+                        } => {
+                            // Add the validator address
+                            addresses.insert(validator_address);
+                            // The signer of the internal proof is the validator's signing key
+                            addresses.insert(proof.compute_signer());
+                        }
+                        IncomingStakingTransactionData::ReactivateValidator {
+                            validator_address,
+                            proof,
+                        } => {
+                            // Add the validator address
+                            addresses.insert(validator_address);
+                            // The signer of the internal proof is the validator's signing key
+                            addresses.insert(proof.compute_signer());
+                        }
+                        IncomingStakingTransactionData::RetireValidator { proof } => {
+                            // The signer of the internal proof is the validator address
+                            addresses.insert(proof.compute_signer());
+                        }
+                        IncomingStakingTransactionData::CreateStaker { delegation, proof } => {
+                            if let Some(delegation) = delegation {
+                                // Add the validator address the new staker is delegating to
+                                addresses.insert(delegation);
+                            }
+                            // The signer of the internal proof is the staker address
+                            addresses.insert(proof.compute_signer());
+                        }
+                        IncomingStakingTransactionData::AddStake { staker_address } => {
+                            // Add the staker address
+                            addresses.insert(staker_address);
+                        }
+                        IncomingStakingTransactionData::UpdateStaker {
+                            new_delegation,
+                            proof,
+                            ..
+                        } => {
+                            if let Some(new_delegation) = new_delegation {
+                                // If the delegation is updated, add the new validator address
+                                addresses.insert(new_delegation);
+                            }
+                            // The signer of the internal proof is the staker address
+                            addresses.insert(proof.compute_signer());
+                        }
+                        IncomingStakingTransactionData::SetActiveStake { proof, .. } => {
+                            // The signer of the internal proof is the staker address
+                            addresses.insert(proof.compute_signer());
+                        }
+                        IncomingStakingTransactionData::RetireStake { proof, .. } => {
+                            // The signer of the internal proof is the staker address
+                            addresses.insert(proof.compute_signer());
+                        }
+                    }
+                }
+            }
+        }
+
+        addresses
     }
 }
 
