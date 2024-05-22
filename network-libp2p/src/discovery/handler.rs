@@ -516,6 +516,32 @@ impl ConnectionHandler for Handler {
                                         );
                                     }
 
+                                    // Check and verify the peer contacts received
+                                    if peer_contacts.len() > self.config.update_limit as usize {
+                                        return Poll::Ready(
+                                            ConnectionHandlerEvent::NotifyBehaviour(
+                                                HandlerOutEvent::Error(
+                                                    Error::UpdateLimitExceeded {
+                                                        num_peer_contacts: peer_contacts.len(),
+                                                    },
+                                                ),
+                                            ),
+                                        );
+                                    }
+                                    for peer_contact in &peer_contacts {
+                                        if !peer_contact.verify() {
+                                            return Poll::Ready(
+                                                ConnectionHandlerEvent::NotifyBehaviour(
+                                                    HandlerOutEvent::Error(
+                                                        Error::InvalidPeerContactSignature {
+                                                            peer_contact: peer_contact.clone(),
+                                                        },
+                                                    ),
+                                                ),
+                                            );
+                                        }
+                                    }
+
                                     let mut peer_contact_book = self.peer_contact_book.write();
 
                                     // Insert the peer into the peer contact book.
@@ -601,7 +627,7 @@ impl ConnectionHandler for Handler {
                                     }
                                     self.last_update_time = Some(now);
 
-                                    // Check if the update is not too large.
+                                    // Check if the update is not too large and if the peer contacts verify
                                     if peer_contacts.len() > self.config.update_limit as usize {
                                         return Poll::Ready(
                                             ConnectionHandlerEvent::NotifyBehaviour(
@@ -612,6 +638,19 @@ impl ConnectionHandler for Handler {
                                                 ),
                                             ),
                                         );
+                                    }
+                                    for peer_contact in &peer_contacts {
+                                        if !peer_contact.verify() {
+                                            return Poll::Ready(
+                                                ConnectionHandlerEvent::NotifyBehaviour(
+                                                    HandlerOutEvent::Error(
+                                                        Error::InvalidPeerContactSignature {
+                                                            peer_contact: peer_contact.clone(),
+                                                        },
+                                                    ),
+                                                ),
+                                            );
+                                        }
                                     }
 
                                     // Insert the new peer contacts into the peer contact book.

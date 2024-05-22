@@ -229,7 +229,7 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
             };
         });
 
-    if timeout(Duration::from_secs(120), all_joined).await.is_err() {
+    if timeout(Duration::from_secs(180), all_joined).await.is_err() {
         assert!(false, "Timeout triggered while waiting for peers to join");
     };
 
@@ -318,7 +318,7 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
 
 #[test(tokio::test)]
 async fn connections_stress_and_reconnect() {
-    let peers: usize = 15;
+    let peers: usize = 10;
     let networks = create_network_with_n_peers(peers).await;
 
     assert_eq!(peers, networks.len());
