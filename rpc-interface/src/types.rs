@@ -2,6 +2,7 @@
 //!
 //! [JSON RPC API]: https://github.com/nimiq/core-js/wiki/JSON-RPC-API#common-data-types
 use std::{
+    collections::BTreeSet,
     fmt::{self, Display, Formatter},
     str::FromStr,
 };
@@ -191,25 +192,14 @@ impl Block {
                 )
                 .into_iter()
                 .map(|tx| ExecutedTransaction {
-                    transaction: Transaction {
-                        hash: tx.tx_hash().into(),
-                        block_number: Some(macro_block.block_number()),
-                        timestamp: Some(macro_block.timestamp()),
-                        confirmations: cur_block_height.map(|h| h - macro_block.block_number()),
-                        size: tx.serialized_size(),
-                        from: Policy::COINBASE_ADDRESS,
-                        from_type: 0,
-                        to: tx.unwrap_reward().reward_address.clone(),
-                        to_type: 0,
-                        value: tx.unwrap_reward().value,
-                        fee: Coin::ZERO,
-                        sender_data: vec![],
-                        recipient_data: vec![],
-                        flags: 0,
-                        validity_start_height: macro_block.block_number(),
-                        proof: vec![],
-                        network_id: macro_block.network() as u8,
-                    },
+                    transaction: Transaction::from_reward_event(
+                        tx.unwrap_reward(),
+                        tx.tx_hash().into(),
+                        macro_block.network(),
+                        macro_block.block_number(),
+                        macro_block.timestamp(),
+                        cur_block_height,
+                    ),
                     execution_result: true,
                 })
                 .collect()
@@ -543,7 +533,7 @@ impl ExecutedTransaction {
         }
     }
     pub fn from_reward_event(
-        ev: RewardEvent,
+        ev: &RewardEvent,
         hash: Blake2bHash,
         network: NetworkId,
         block_number: u32,
@@ -571,7 +561,7 @@ impl ExecutedTransaction {
                 Self::from_blockchain(inner, tx.block_number, tx.block_time, cur_block_height)
             }
             HistoricTransactionData::Reward(ref ev) => Self::from_reward_event(
-                ev.clone(),
+                ev,
                 tx.tx_hash().into(),
                 tx.network_id,
                 tx.block_number,
@@ -596,6 +586,7 @@ pub struct Transaction {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub confirmations: Option<u32>,
     pub size: usize,
+    pub related_addresses: BTreeSet<Address>,
 
     pub from: Address,
     pub from_type: u8,
@@ -648,6 +639,7 @@ impl Transaction {
                 None => None,
             },
             size: transaction.serialized_size(),
+            related_addresses: transaction.related_addresses(),
             from: transaction.sender,
             from_type: transaction.sender_type as u8,
             to: transaction.recipient,
@@ -664,19 +656,24 @@ impl Transaction {
     }
 
     pub fn from_reward_event(
-        ev: RewardEvent,
+        ev: &RewardEvent,
         hash: Blake2bHash,
         network: NetworkId,
         block_number: u32,
         timestamp: u64,
         cur_block_height: Option<u32>,
     ) -> Transaction {
+        let mut related_addresses = BTreeSet::new();
+        related_addresses.insert(Policy::COINBASE_ADDRESS);
+        related_addresses.insert(ev.reward_address.clone());
+        related_addresses.insert(ev.validator_address.clone());
         Transaction {
             hash,
             block_number: Some(block_number),
             timestamp: Some(timestamp),
             confirmations: cur_block_height.map(|h| h - block_number),
             size: ev.serialized_size(), // TODO: changed
+            related_addresses,
             from: Policy::COINBASE_ADDRESS,
             from_type: 0,
             to: ev.reward_address.clone(),
