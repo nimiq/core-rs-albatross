@@ -197,7 +197,7 @@ impl Block {
                         timestamp: Some(macro_block.timestamp()),
                         confirmations: cur_block_height.map(|h| h - macro_block.block_number()),
                         size: tx.serialized_size(),
-                        from: Address::default(),
+                        from: Policy::COINBASE_ADDRESS,
                         from_type: 0,
                         to: tx.unwrap_reward().reward_address.clone(),
                         to_type: 0,
