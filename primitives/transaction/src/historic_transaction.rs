@@ -10,13 +10,10 @@ use nimiq_hash::{Blake2bHash, Blake2bHasher, Hash, Hasher};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::Address;
 use nimiq_mmr::hash::Hash as MMRHash;
-use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
+use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_serde::{Deserialize, Serialize};
 
-use crate::{
-    inherent::Inherent, EquivocationLocator, ExecutedTransaction,
-    Transaction as BlockchainTransaction,
-};
+use crate::{inherent::Inherent, EquivocationLocator, ExecutedTransaction};
 
 /// The raw transaction hash is a type wrapper.
 /// This corresponds to the hash of the transaction without the execution result.
@@ -292,29 +289,6 @@ impl HistoricTransaction {
         match &self.data {
             HistoricTransactionData::Basic(tx) => tx.raw_tx_hash(),
             _ => self.executed_tx_hash().hash::<Blake2bHash>().into(),
-        }
-    }
-
-    /// Tries to convert an historic transaction into a regular transaction. This will work for all
-    /// historic transactions that wrap over regular transactions and reward inherents.
-    pub fn into_transaction(self) -> Result<ExecutedTransaction, IntoTransactionError> {
-        match self.data {
-            HistoricTransactionData::Basic(tx) => Ok(tx),
-            HistoricTransactionData::Reward(ev) => {
-                Ok(ExecutedTransaction::Ok(BlockchainTransaction::new_basic(
-                    Policy::COINBASE_ADDRESS,
-                    ev.reward_address,
-                    ev.value,
-                    Coin::ZERO,
-                    self.block_number,
-                    self.network_id,
-                )))
-            }
-            HistoricTransactionData::Penalize(_)
-            | HistoricTransactionData::Jail(_)
-            | HistoricTransactionData::Equivocation(_) => {
-                Err(IntoTransactionError::NoBasicTransactionMapping)
-            }
         }
     }
 }

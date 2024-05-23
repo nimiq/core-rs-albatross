@@ -622,10 +622,11 @@ impl Client {
             .into_iter()
             .next()
             .map(|hist_tx| {
-                PlainTransactionDetails::from_historic_transaction(
-                    &hist_tx,
+                PlainTransactionDetails::try_from_historic_transaction(
+                    hist_tx,
                     self.inner.blockchain_head().block_number(),
                 )
+                .expect("no non-reward inherent")
             })
             .ok_or_else(|| JsError::new("Transaction not found"))?;
         Ok(serde_wasm_bindgen::to_value(&details)?.into())
@@ -733,7 +734,8 @@ impl Client {
         let plain_tx_details: Vec<_> = transactions
             .into_iter()
             .map(|hist_tx| {
-                PlainTransactionDetails::from_historic_transaction(&hist_tx, current_height)
+                PlainTransactionDetails::try_from_historic_transaction(hist_tx, current_height)
+                    .expect("no non-reward inherent")
             })
             .collect();
 
@@ -1038,19 +1040,11 @@ impl Client {
 
                     for hist_tx in hist_txs {
                         let block_number = hist_tx.block_number;
-                        let block_time = hist_tx.block_time;
-
-                        let exe_tx = hist_tx.into_transaction().unwrap();
-                        let tx = exe_tx.get_raw_transaction();
-
-                        let details = PlainTransactionDetails::new(
-                            &Transaction::from(tx.clone()),
-                            TransactionState::Included,
-                            Some(exe_tx.succeeded()),
-                            Some(block_number),
-                            Some(block_time),
-                            Some(1),
-                        );
+                        let details = PlainTransactionDetails::try_from_historic_transaction(
+                            hist_tx,
+                            block_number,
+                        )
+                        .expect("no non-reward inherent");
 
                         if let Some(sender) = transaction_oneshots
                             .borrow_mut()
@@ -1059,21 +1053,24 @@ impl Client {
                             let _ = sender.send(details.clone());
                         }
 
+                        fn from_user(addr: &str) -> nimiq_keys::Address {
+                            nimiq_keys::Address::from_user_friendly_address(addr).unwrap()
+                        }
+
+                        let sender = from_user(&details.transaction.sender);
+                        let recipient = from_user(&details.transaction.recipient);
                         let staker_address = if let PlainTransactionRecipientData::AddStake(data) =
                             &details.transaction.data
                         {
-                            Some(
-                                nimiq_keys::Address::from_user_friendly_address(&data.staker)
-                                    .unwrap(),
-                            )
+                            Some(from_user(&data.staker))
                         } else {
                             None
                         };
 
                         if let Ok(js_value) = serde_wasm_bindgen::to_value(&details) {
                             for (listener, addresses) in transaction_listeners.borrow().values() {
-                                if addresses.contains(&tx.sender)
-                                    || addresses.contains(&tx.recipient)
+                                if addresses.contains(&sender)
+                                    || addresses.contains(&recipient)
                                     || if let Some(ref address) = staker_address {
                                         addresses.contains(address)
                                     } else {

@@ -273,7 +273,7 @@ impl Block {
                                     tx,
                                     block_number,
                                     micro_block.header.timestamp,
-                                    head_height,
+                                    Some(head_height),
                                 )
                             })
                             .collect(),
@@ -526,7 +526,7 @@ impl ExecutedTransaction {
         transaction: nimiq_transaction::ExecutedTransaction,
         block_number: u32,
         timestamp: u64,
-        head_height: u32,
+        head_height: Option<u32>,
     ) -> Self {
         // We obtain an internal executed transaction
         // We need to grab the internal transaction and map it to the RPC transaction structure
@@ -541,6 +541,47 @@ impl ExecutedTransaction {
                 execution_result: false,
             },
         }
+    }
+    pub fn from_reward_event(
+        ev: RewardEvent,
+        hash: Blake2bHash,
+        network: NetworkId,
+        block_number: u32,
+        timestamp: u64,
+        cur_block_height: Option<u32>,
+    ) -> ExecutedTransaction {
+        ExecutedTransaction {
+            transaction: Transaction::from_reward_event(
+                ev,
+                hash,
+                network,
+                block_number,
+                timestamp,
+                cur_block_height,
+            ),
+            execution_result: true,
+        }
+    }
+    pub fn try_from_historic_transaction(
+        tx: HistoricTransaction,
+        cur_block_height: Option<u32>,
+    ) -> Option<ExecutedTransaction> {
+        Some(match tx.data {
+            HistoricTransactionData::Basic(inner) => {
+                Self::from_blockchain(inner, tx.block_number, tx.block_time, cur_block_height)
+            }
+            HistoricTransactionData::Reward(ref ev) => Self::from_reward_event(
+                ev.clone(),
+                tx.tx_hash().into(),
+                tx.network_id,
+                tx.block_number,
+                tx.block_time,
+                cur_block_height,
+            ),
+            HistoricTransactionData::Penalize(_) => return None,
+            HistoricTransactionData::Jail(_) => return None,
+            HistoricTransactionData::Equivocation(_) => return None,
+        })
     }
 }
 
@@ -582,13 +623,13 @@ impl Transaction {
         transaction: nimiq_transaction::Transaction,
         block_number: u32,
         timestamp: u64,
-        head_height: u32,
+        head_height: Option<u32>,
     ) -> Self {
         Transaction::from(
             transaction,
             Some(block_number),
             Some(timestamp),
-            Some(head_height),
+            head_height,
         )
     }
 
@@ -619,6 +660,35 @@ impl Transaction {
             validity_start_height: transaction.validity_start_height,
             proof: transaction.proof,
             network_id: transaction.network_id as u8,
+        }
+    }
+
+    pub fn from_reward_event(
+        ev: RewardEvent,
+        hash: Blake2bHash,
+        network: NetworkId,
+        block_number: u32,
+        timestamp: u64,
+        cur_block_height: Option<u32>,
+    ) -> Transaction {
+        Transaction {
+            hash,
+            block_number: Some(block_number),
+            timestamp: Some(timestamp),
+            confirmations: cur_block_height.map(|h| h - block_number),
+            size: ev.serialized_size(), // TODO: changed
+            from: Policy::COINBASE_ADDRESS,
+            from_type: 0,
+            to: ev.reward_address.clone(),
+            to_type: 0,
+            value: ev.value,
+            fee: Coin::ZERO,
+            sender_data: vec![],
+            recipient_data: vec![],
+            flags: 0,
+            validity_start_height: block_number,
+            proof: vec![],
+            network_id: network as u8,
         }
     }
 }

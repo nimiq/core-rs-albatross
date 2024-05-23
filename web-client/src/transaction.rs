@@ -6,8 +6,6 @@ use nimiq_keys::{PublicKey, Signature};
 use nimiq_primitives::policy::Policy;
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
 use nimiq_serde::{Deserialize, Serialize};
-#[cfg(feature = "client")]
-use nimiq_transaction::historic_transaction::HistoricTransaction;
 use nimiq_transaction::{
     account::{
         htlc_contract::{
@@ -18,6 +16,11 @@ use nimiq_transaction::{
         vesting_contract::CreationTransactionData as VestingCreationTransactionData,
     },
     SignatureProof, TransactionFlags, TransactionFormat,
+};
+#[cfg(feature = "client")]
+use nimiq_transaction::{
+    historic_transaction::{HistoricTransaction, HistoricTransactionData, RewardEvent},
+    ExecutedTransaction,
 };
 #[cfg(feature = "primitives")]
 use nimiq_transaction_builder::TransactionProofBuilder;
@@ -1019,6 +1022,41 @@ pub struct PlainTransaction {
     pub valid: bool,
 }
 
+#[cfg(feature = "client")]
+impl PlainTransaction {
+    pub fn from_reward_event(
+        ev: RewardEvent,
+        hash: Blake2bHash,
+        network: NetworkId,
+        block_number: u32,
+    ) -> PlainTransaction {
+        let size = ev.serialized_size();
+        PlainTransaction {
+            transaction_hash: hash.to_hex(),
+            format: TransactionFormat::Basic, // TODO: bogus: not encoded as transaction on the block chain
+            sender: Address::from(Policy::COINBASE_ADDRESS).to_plain(),
+            sender_type: AccountType::Basic,
+            recipient: Address::from(ev.reward_address).to_plain(),
+            recipient_type: AccountType::Basic,
+            value: ev.value.into(),
+            fee: Coin::ZERO.into(),
+            fee_per_byte: 0.0,
+            validity_start_height: block_number,
+            network: network.to_string().to_lowercase(),
+            flags: 0,
+            sender_data: PlainTransactionSenderData::Raw(PlainRawData {
+                raw: String::from(""),
+            }),
+            data: PlainTransactionRecipientData::Raw(PlainRawData {
+                raw: String::from(""),
+            }),
+            proof: PlainTransactionProof::Empty(PlainEmptyProof {}),
+            size,
+            valid: true,
+        }
+    }
+}
+
 /// Describes the state of a transaction as known by the client.
 #[cfg(feature = "client")]
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
@@ -1125,9 +1163,11 @@ impl PlainTransactionDetails {
             confirmations,
         }
     }
-
     /// Creates a PlainTransactionDetails struct that can be serialized to JS from a native [HistoricTransaction].
-    pub fn from_historic_transaction(hist_tx: &HistoricTransaction, current_block: u32) -> Self {
+    pub fn try_from_historic_transaction(
+        hist_tx: HistoricTransaction,
+        current_block: u32,
+    ) -> Option<PlainTransactionDetails> {
         let block_number = hist_tx.block_number;
         let block_time = hist_tx.block_time;
 
@@ -1139,17 +1179,35 @@ impl PlainTransactionDetails {
             TransactionState::Included
         };
 
-        let executed_transaction = hist_tx.clone().into_transaction().unwrap();
+        let (succeeded, transaction) = match hist_tx.data {
+            HistoricTransactionData::Basic(ExecutedTransaction::Ok(inner)) => {
+                (true, Transaction::from(inner).to_plain_transaction())
+            }
+            HistoricTransactionData::Basic(ExecutedTransaction::Err(inner)) => {
+                (false, Transaction::from(inner).to_plain_transaction())
+            }
+            HistoricTransactionData::Reward(ref ev) => (
+                true,
+                PlainTransaction::from_reward_event(
+                    ev.clone(),
+                    hist_tx.tx_hash().into(),
+                    hist_tx.network_id,
+                    hist_tx.block_number,
+                ),
+            ),
+            HistoricTransactionData::Penalize(_) => return None,
+            HistoricTransactionData::Jail(_) => return None,
+            HistoricTransactionData::Equivocation(_) => return None,
+        };
 
-        Self {
-            transaction: Transaction::from(executed_transaction.get_raw_transaction().clone())
-                .to_plain_transaction(),
+        Some(PlainTransactionDetails {
+            transaction,
             state,
-            execution_result: Some(executed_transaction.succeeded()),
+            execution_result: Some(succeeded),
             block_height: Some(block_number),
             timestamp: Some(block_time),
             confirmations: Some(current_block - block_number + 1),
-        }
+        })
     }
 }
 

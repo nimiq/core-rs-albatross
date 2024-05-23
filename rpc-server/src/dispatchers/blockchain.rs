@@ -156,36 +156,25 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<ExecutedTransaction, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
             // Get all the historic transactions that correspond to this hash.
-            let mut historic_tx_vec = blockchain.history_store.get_hist_tx_by_hash(&hash, None);
+            let mut hist_txs = blockchain.history_store.get_hist_tx_by_hash(&hash, None);
 
             // Unpack the transaction or raise an error.
-            let historic_tx = match historic_tx_vec.len() {
-                0 => {
-                    return Err(Error::TransactionNotFound(hash));
-                }
-                1 => historic_tx_vec.pop().unwrap(),
-                _ => {
-                    return Err(Error::MultipleTransactionsFound(hash));
-                }
+            let hist_tx = match (hist_txs.pop(), hist_txs.len()) {
+                (Some(hist_tx), 0) => hist_tx,
+                (Some(_), _) => return Err(Error::MultipleTransactionsFound(hash)),
+                (None, _) => return Err(Error::TransactionNotFound(hash)),
             };
 
             // Convert the historic transaction into a regular transaction. This will also convert
             // reward inherents.
-            let block_number = historic_tx.block_number;
-            let timestamp = historic_tx.block_time;
-
-            return match historic_tx.into_transaction() {
-                Ok(tx) => Ok(ExecutedTransaction::from_blockchain(
-                    tx,
-                    block_number,
-                    timestamp,
-                    blockchain.block_number(),
-                )
-                .into()),
-                Err(_) => Err(Error::TransactionNotFound(hash)),
-            };
+            Ok(ExecutedTransaction::try_from_historic_transaction(
+                hist_tx,
+                Some(blockchain.block_number()),
+            )
+            .ok_or(Error::TransactionNotFound(hash))?
+            .into())
         } else {
-            return Err(Error::NotSupportedForLightBlockchain);
+            Err(Error::NotSupportedForLightBlockchain)
         }
     }
 
@@ -195,30 +184,21 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
             // Get all the historic transactions that correspond to this block.
-            let historic_tx_vec = blockchain
+            let hist_txs = blockchain
                 .history_store
                 .get_block_transactions(block_number, None);
 
-            // Get the timestamp of the block from one of the historic transactions. This complicated
-            // setup is because we might not have any transactions.
-            let timestamp = historic_tx_vec.first().map(|x| x.block_time).unwrap_or(0);
-
-            // Convert the historic transactions into regular transactions. This will also convert
-            // reward inherents.
-            let mut transactions = vec![];
-
-            for hist_tx in historic_tx_vec {
-                if let Ok(tx) = hist_tx.into_transaction() {
-                    transactions.push(ExecutedTransaction::from_blockchain(
-                        tx,
-                        block_number,
-                        timestamp,
-                        blockchain.block_number(),
-                    ));
-                }
-            }
-
-            Ok(transactions.into())
+            let cur_block_height = blockchain.block_number();
+            let result: Vec<_> = hist_txs
+                .into_iter()
+                .filter_map(|hist_tx| {
+                    ExecutedTransaction::try_from_historic_transaction(
+                        hist_tx,
+                        Some(cur_block_height),
+                    )
+                })
+                .collect();
+            Ok(result.into())
         } else {
             Err(Error::NotSupportedForLightBlockchain)
         }
@@ -265,25 +245,15 @@ impl BlockchainInterface for BlockchainDispatcher {
             // Search all micro blocks of the batch to find the transactions.
             let mut transactions = vec![];
 
+            let cur_block_height = blockchain.block_number();
             for i in first_block..=last_block {
                 let hist_txs = blockchain.history_store.get_block_transactions(i, None);
-
-                // Get the timestamp of the block from one of the historic transactions. This complicated
-                // setup is because we might not have any transactions.
-                let timestamp = hist_txs.first().map(|x| x.block_time).unwrap_or(0);
-
-                // Convert the historic transactions into regular transactions. This will also convert
-                // reward inherents.
-                for hist_tx in hist_txs {
-                    if let Ok(tx) = hist_tx.into_transaction() {
-                        transactions.push(ExecutedTransaction::from_blockchain(
-                            tx,
-                            i,
-                            timestamp,
-                            blockchain.block_number(),
-                        ));
-                    }
-                }
+                transactions.extend(hist_txs.into_iter().filter_map(|hist_tx| {
+                    ExecutedTransaction::try_from_historic_transaction(
+                        hist_tx,
+                        Some(cur_block_height),
+                    )
+                }));
             }
 
             Ok(transactions.into())
@@ -367,32 +337,24 @@ impl BlockchainInterface for BlockchainDispatcher {
 
             for hash in tx_hashes {
                 // Get all the historic transactions that correspond to this hash.
-                let mut historic_tx_vec = blockchain.history_store.get_hist_tx_by_hash(&hash, None);
+                let mut hist_txs = blockchain.history_store.get_hist_tx_by_hash(&hash, None);
 
                 // Unpack the transaction or raise an error.
-                let historic_tx = match historic_tx_vec.len() {
-                    0 => {
-                        return Err(Error::TransactionNotFound(hash));
-                    }
-                    1 => historic_tx_vec.pop().unwrap(),
-                    _ => {
-                        return Err(Error::MultipleTransactionsFound(hash));
-                    }
+                let hist_tx = match (hist_txs.pop(), hist_txs.len()) {
+                    (Some(hist_tx), 0) => hist_tx,
+                    (Some(_), _) => return Err(Error::MultipleTransactionsFound(hash)),
+                    (None, _) => return Err(Error::TransactionNotFound(hash)),
                 };
 
                 // Convert the historic transaction into a regular transaction. This will also convert
                 // reward inherents.
-                let block_number = historic_tx.block_number;
-                let timestamp = historic_tx.block_time;
-
-                if let Ok(tx) = historic_tx.into_transaction() {
-                    txs.push(ExecutedTransaction::from_blockchain(
-                        tx,
-                        block_number,
-                        timestamp,
-                        blockchain.block_number(),
-                    ));
-                }
+                txs.push(
+                    ExecutedTransaction::try_from_historic_transaction(
+                        hist_tx,
+                        Some(blockchain.block_number()),
+                    )
+                    .ok_or(Error::TransactionNotFound(hash))?,
+                )
             }
 
             Ok(txs.into())
