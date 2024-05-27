@@ -10,15 +10,15 @@ pub use self::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde-derive", derive(Serialize, Deserialize))]
 pub enum PublicKey {
-    Ed25519(public_key::Ed25519PublicKey),
-    ES256(es256_public_key::ES256PublicKey),
+    Ed25519(Ed25519PublicKey),
+    ES256(ES256PublicKey),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde-derive", derive(Serialize, Deserialize))]
 pub enum Signature {
-    Ed25519(signature::Ed25519Signature),
-    ES256(es256_signature::ES256Signature),
+    Ed25519(Ed25519Signature),
+    ES256(ES256Signature),
 }
 
 #[macro_export]

@@ -29,7 +29,7 @@ use serde::{
 
 /// Wrapper to libp2p Keypair identity that implements SerDe Serialize/Deserialize
 #[derive(Clone, Debug)]
-pub struct Libp2pKeyPair(pub libp2p::identity::Keypair);
+pub struct Libp2pKeyPair(pub Keypair);
 
 impl Serialize for Libp2pKeyPair {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

@@ -138,7 +138,7 @@ where
 
 impl PlainBlock {
     /// Creates a PlainBlock struct that can be serialized to JS from a native [nimiq_block::Block].
-    pub fn from_block(block: &nimiq_block::Block) -> Self {
+    pub fn from_block(block: &Block) -> Self {
         let block_number = block.block_number();
 
         let common_fields = PlainBlockCommonFields {

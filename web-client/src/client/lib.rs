@@ -4,7 +4,6 @@ use std::{
         hash_map::{Entry, HashMap},
         HashSet,
     },
-    mem,
     rc::Rc,
     str::FromStr,
     time::Duration,
@@ -600,7 +599,7 @@ impl Client {
             None
         };
 
-        mem::drop(address_subscription);
+        drop(address_subscription);
 
         if let Some(details) = maybe_details {
             // If we got a transactions, return it
@@ -1242,10 +1241,10 @@ extern "C" {
         this: &GlobalScope,
         event: &str,
         callback: &Function,
-    ) -> Result<(), wasm_bindgen::JsValue>;
+    ) -> Result<(), JsValue>;
 }
 
-fn add_event_listener(event: &str, callback: &Function) -> Result<(), wasm_bindgen::JsValue> {
+fn add_event_listener(event: &str, callback: &Function) -> Result<(), JsValue> {
     let global_this = global();
     let global_scope = global_this.unchecked_ref::<GlobalScope>();
     global_scope.add_event_listener_with_callback(event, callback)

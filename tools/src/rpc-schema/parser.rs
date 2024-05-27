@@ -261,7 +261,7 @@ impl ParsedTraitItemFn {
     /// Extract the identity of a parameter.
     fn param_ident(pat: &Pat) -> PatIdent {
         match pat {
-            syn::Pat::Ident(ident) => ident.clone(),
+            Pat::Ident(ident) => ident.clone(),
             _ => unreachable!(),
         }
     }

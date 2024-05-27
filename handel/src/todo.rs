@@ -37,7 +37,7 @@ impl<C: AggregatableContribution> TodoItem<C> {
     ///
     /// * `evaluator` - The evaluator used for the score computation
     pub fn evaluate<
-        TId: Clone + std::fmt::Debug + 'static,
+        TId: Clone + fmt::Debug + 'static,
         TProtocol: Protocol<TId, Contribution = C>,
     >(
         &self,
@@ -69,7 +69,7 @@ impl<C: AggregatableContribution> std::hash::Hash for TodoItem<C> {
 /// Will dry the input stream every time a TodoItem is polled.
 pub(crate) struct TodoList<TId, TProtocol>
 where
-    TId: Clone + std::fmt::Debug + 'static,
+    TId: Clone + fmt::Debug + 'static,
     TProtocol: Protocol<TId>,
 {
     /// The ID of this aggregation
@@ -86,7 +86,7 @@ where
 
 impl<TId, TProtocol> TodoList<TId, TProtocol>
 where
-    TId: Clone + std::fmt::Debug + 'static,
+    TId: Clone + fmt::Debug + 'static,
     TProtocol: Protocol<TId>,
 {
     /// Create a new TodoList
@@ -127,7 +127,7 @@ where
 
 impl<TId, TProtocol> Stream for TodoList<TId, TProtocol>
 where
-    TId: Clone + std::fmt::Debug + Unpin + 'static,
+    TId: Clone + fmt::Debug + Unpin + 'static,
     TProtocol: Protocol<TId>,
 {
     type Item = TodoItem<TProtocol::Contribution>;

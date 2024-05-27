@@ -100,17 +100,17 @@ pub(crate) struct ClientInner {
 pub fn generate_service_flags(sync_mode: SyncMode) -> (Services, Services) {
     let provided_services = match sync_mode {
         // Services provided by history nodes
-        crate::config::config::SyncMode::History => {
+        SyncMode::History => {
             log::info!("Client configured as a history node");
             Services::provided(NodeType::History)
         }
         // Services provided by full nodes
-        crate::config::config::SyncMode::Full => {
+        SyncMode::Full => {
             log::info!("Client configured as a full node");
             Services::provided(NodeType::Full)
         }
         // Services provided by light nodes
-        crate::config::config::SyncMode::Light => {
+        SyncMode::Light => {
             log::info!("Client configured as a light node");
             Services::provided(NodeType::Light)
         }
@@ -118,11 +118,11 @@ pub fn generate_service_flags(sync_mode: SyncMode) -> (Services, Services) {
 
     let required_services = match sync_mode {
         // Services required by history nodes
-        crate::config::config::SyncMode::History => Services::required(NodeType::History),
+        SyncMode::History => Services::required(NodeType::History),
         // Services required by full nodes
-        crate::config::config::SyncMode::Full => Services::required(NodeType::Full),
+        SyncMode::Full => Services::required(NodeType::Full),
         // Services required by light nodes
-        crate::config::config::SyncMode::Light => Services::required(NodeType::Light),
+        SyncMode::Light => Services::required(NodeType::Light),
     };
     (provided_services, required_services)
 }
@@ -141,7 +141,7 @@ impl ClientInner {
         }
         let network_info = NetworkInfo::from_network_id(config.network_id);
 
-        let policy_config = nimiq_primitives::policy::Policy {
+        let policy_config = Policy {
             genesis_block_number: network_info.genesis_block().block_number(),
             ..Default::default()
         };

@@ -109,10 +109,10 @@ fn push_rebranch(config: &BlockConfig, expected_res: &Result<PushResult, PushErr
     let expected_result = match &expected_res {
         // Skip blocks carry over the seed of the previous block. An incorrect seed if it matches
         // the previous block seed would fail as an invalid skip block proof
-        Err(PushError::InvalidBlock(BlockError::InvalidSeed)) => {
-            &Err(PushError::InvalidBlock(BlockError::InvalidSkipBlockProof))
+        Err(InvalidBlock(BlockError::InvalidSeed)) => {
+            &Err(InvalidBlock(BlockError::InvalidSkipBlockProof))
         }
-        Err(PushError::InvalidEquivocationProof(_)) => &Ok(PushResult::Rebranched),
+        Err(InvalidEquivocationProof(_)) => &Ok(PushResult::Rebranched),
         _ => expected_res,
     };
 
@@ -375,10 +375,7 @@ fn it_validates_history_root() {
         history_root: Some(Blake2bHash::default()),
         ..Default::default()
     };
-    push_micro_after_micro(
-        &config,
-        &Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot)),
-    );
+    push_micro_after_micro(&config, &Err(InvalidBlock(BlockError::InvalidHistoryRoot)));
 
     push_rebranch(&config, &Err(PushError::InvalidFork));
 
@@ -393,9 +390,7 @@ fn it_validates_parent_election_hash() {
             parent_election_hash: Some(Blake2bHash::default()),
             ..Default::default()
         },
-        Err(PushError::InvalidBlock(
-            BlockError::InvalidParentElectionHash,
-        )),
+        Err(InvalidBlock(BlockError::InvalidParentElectionHash)),
     );
 }
 

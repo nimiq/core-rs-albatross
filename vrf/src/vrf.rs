@@ -51,7 +51,7 @@ impl VrfEntropy {
     }
 }
 
-impl std::fmt::Debug for VrfEntropy {
+impl fmt::Debug for VrfEntropy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("VrfEntropy")
             .field(&hex::encode(self.0))

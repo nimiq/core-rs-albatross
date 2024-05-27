@@ -93,7 +93,7 @@ mod serde_derive {
             self.secret_key
                 .serialize_uncompressed(&mut compressed[..])
                 .map_err(|_| S::Error::custom("Couldn't compress secret key"))?;
-            serde::Serialize::serialize(
+            Serialize::serialize(
                 &nimiq_serde::FixedSizeByteArray::from(compressed),
                 serializer,
             )

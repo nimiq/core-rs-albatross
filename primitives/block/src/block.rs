@@ -612,7 +612,7 @@ impl FromDatabaseValue for Block {
         Self: Sized,
     {
         Deserialize::deserialize_from_vec(bytes)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }
 

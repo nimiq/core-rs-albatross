@@ -102,7 +102,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
 
     fn send_to(
         &self,
-        (msg, recipient): (nimiq_handel::update::LevelUpdate<Self::Contribution>, u16),
+        (msg, recipient): (LevelUpdate<Self::Contribution>, u16),
     ) -> futures::future::BoxFuture<'static, ()> {
         // Create the update.
         let update_message = SkipBlockUpdate(msg, self.tag.clone());
@@ -146,7 +146,7 @@ impl RequestCommon for SkipBlockUpdate {
     type Kind = MessageMarker;
     const TYPE_ID: u16 = 123;
     const MAX_REQUESTS: u32 = 500;
-    const TIME_WINDOW: std::time::Duration = Duration::from_millis(500);
+    const TIME_WINDOW: Duration = Duration::from_millis(500);
     type Response = ();
 }
 

@@ -71,7 +71,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
     fn send_to(
         &self,
         (msg, recipient): (nimiq_handel::update::LevelUpdate<Self::Contribution>, u16),
-    ) -> futures::future::BoxFuture<'static, ()> {
+    ) -> BoxFuture<'static, ()> {
         // wrap the level update in the AggregateMessage
         let aggregation = AggregateMessage(msg);
         // tag it
@@ -250,10 +250,8 @@ where
         proposal_hash: Self::ProposalHash,
         round_number: u32,
         candidates: BitSet,
-    ) -> futures::future::BoxFuture<
-        'static,
-        Option<SignedProposalMessage<Self::Proposal, Self::ProposalSignature>>,
-    > {
+    ) -> BoxFuture<'static, Option<SignedProposalMessage<Self::Proposal, Self::ProposalSignature>>>
+    {
         let identity = self.validator_registry.signers_identity(&candidates);
         if identity.is_empty() {
             return future::ready(None).boxed();
@@ -366,7 +364,7 @@ where
     fn create_aggregation(
         &self,
         round: u32,
-        step: nimiq_tendermint::Step,
+        step: Step,
         proposal_hash: Option<Self::ProposalHash>,
         update_stream: BoxStream<'static, Self::AggregationMessage>,
     ) -> BoxStream<'static, Self::Aggregation> {

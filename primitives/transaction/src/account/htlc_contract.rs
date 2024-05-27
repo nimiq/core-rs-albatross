@@ -173,7 +173,7 @@ impl From<Sha512Hash> for PreImage {
 }
 
 impl FromStr for PreImage {
-    type Err = nimiq_macros::hex::FromHexError;
+    type Err = hex::FromHexError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.len() == AnyHash32::SIZE * 2 {
@@ -181,7 +181,7 @@ impl FromStr for PreImage {
         } else if s.len() == AnyHash64::SIZE * 2 {
             Ok(PreImage::PreImage64(AnyHash64::from_str(s)?))
         } else {
-            Err(nimiq_macros::hex::FromHexError::InvalidStringLength)
+            Err(hex::FromHexError::InvalidStringLength)
         }
     }
 }

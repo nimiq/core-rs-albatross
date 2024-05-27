@@ -55,7 +55,7 @@ impl Config {
             .mesh_n_low(3)
             .validate_messages()
             .max_transmit_size(1_000_000) // TODO find a reasonable value for this parameter
-            .validation_mode(libp2p::gossipsub::ValidationMode::Permissive)
+            .validation_mode(gossipsub::ValidationMode::Permissive)
             .heartbeat_interval(Duration::from_millis(700))
             // Use the message hash as the message ID instead of the default PeerId + sequence_number
             // to avoid duplicated messages

@@ -8,13 +8,7 @@ pub enum ContributionError {
 }
 
 pub trait AggregatableContribution:
-    Clone
-    + std::fmt::Debug
-    + std::marker::Send
-    + std::marker::Sync
-    + nimiq_serde::Serialize
-    + nimiq_serde::Deserialize
-    + Unpin
+    Clone + std::fmt::Debug + Send + Sync + nimiq_serde::Serialize + nimiq_serde::Deserialize + Unpin
 {
     /// A BitSet signaling which contributors have contributed in this Contribution
     fn contributors(&self) -> BitSet;

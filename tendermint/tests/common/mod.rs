@@ -193,10 +193,8 @@ impl Protocol for Validator {
         proposal_hash: Self::ProposalHash,
         round: u32,
         _candidates: BitSet,
-    ) -> futures::future::BoxFuture<
-        'static,
-        Option<SignedProposalMessage<Self::Proposal, Self::ProposalSignature>>,
-    > {
+    ) -> BoxFuture<'static, Option<SignedProposalMessage<Self::Proposal, Self::ProposalSignature>>>
+    {
         future::ready(self.known_proposals.get(&(round, proposal_hash)).cloned()).boxed()
     }
 
@@ -206,7 +204,7 @@ impl Protocol for Validator {
         step: Step,
         vote: Option<Self::ProposalHash>,
         _update_stream: BoxStream<'static, Self::AggregationMessage>,
-    ) -> futures::stream::BoxStream<'static, Self::Aggregation> {
+    ) -> BoxStream<'static, Self::Aggregation> {
         let (sender, receiver) = mpsc::channel(100);
 
         let mut b = BitSet::default();

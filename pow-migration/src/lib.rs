@@ -115,22 +115,22 @@ pub enum Error {
     InvalidNetworkID(NetworkId),
     /// PoS client unexpectedly exited
     #[error("PoS client unexpectedly exited with status: {0}")]
-    PoSUnexpectedExit(std::process::ExitStatus),
+    PoSUnexpectedExit(ExitStatus),
     /// I/O error
     #[error("I/O error: {0}")]
     IO(#[from] std::io::Error),
     /// Genesis building error
     #[error("Error building genesis: {0}")]
-    Genesis(#[from] crate::genesis::types::Error),
+    Genesis(#[from] genesis::types::Error),
     /// State migration error
     #[error("State migration error: {0}")]
-    State(#[from] crate::state::types::Error),
+    State(#[from] state::types::Error),
     /// Migration monitor error
     #[error("Migration monitor error: {0}")]
-    Monitor(#[from] crate::monitor::types::Error),
+    Monitor(#[from] monitor::types::Error),
     /// History migration error
     #[error("History migration error: {0}")]
-    History(#[from] crate::history::Error),
+    History(#[from] history::Error),
     /// Validator key hasn't been imported
     #[error("Validator key hasn't been imported: {0}")]
     ValidatorKey(Address),

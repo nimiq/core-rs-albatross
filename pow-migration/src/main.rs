@@ -255,7 +255,7 @@ async fn main() {
         // Create directory where the genesis file will be written if it doesn't exist
         let genesis_dir = current_exe_dir.join("genesis");
         if !genesis_dir.exists() {
-            std::fs::create_dir(genesis_dir.clone()).unwrap_or_else(|error| {
+            fs::create_dir(genesis_dir.clone()).unwrap_or_else(|error| {
                 exit_with_error(error, "Could not create genesis directory")
             });
         }

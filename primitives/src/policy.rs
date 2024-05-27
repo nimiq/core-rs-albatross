@@ -310,14 +310,14 @@ impl Policy {
     #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = electionBlockBefore))]
     pub fn election_block_before(block_number: u32) -> u32 {
         match block_number.cmp(&Self::genesis_block_number()) {
-            std::cmp::Ordering::Less => {
+            cmp::Ordering::Less => {
                 panic!("No election blocks before the genesis block");
             }
-            std::cmp::Ordering::Equal => {
+            cmp::Ordering::Equal => {
                 // The genesis is the first election block
                 Self::genesis_block_number()
             }
-            std::cmp::Ordering::Greater => {
+            cmp::Ordering::Greater => {
                 let blocks_per_epoch = Self::blocks_per_epoch();
                 let block_number = block_number - Self::genesis_block_number();
                 ((block_number - 1) / blocks_per_epoch * blocks_per_epoch)

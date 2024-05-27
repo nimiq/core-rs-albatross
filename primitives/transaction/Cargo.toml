@@ -19,6 +19,7 @@ workspace = true
 [dependencies]
 base64 = "0.22"
 bitflags = { version = "2.5", features = ["serde"] }
+hex = "0.4"
 log = { workspace = true }
 serde = "1.0"
 serde_json = "1.0"
@@ -41,7 +42,6 @@ nimiq-serde = { workspace = true }
 nimiq-utils = { workspace = true, features = ["merkle"] }
 
 [dev-dependencies]
-hex = "0.4"
 serde_json = "1.0"
 
 nimiq-test-log = { workspace = true }

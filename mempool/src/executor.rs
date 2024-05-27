@@ -1,7 +1,6 @@
 use std::{
     future::Future,
     marker::PhantomData,
-    mem,
     pin::Pin,
     sync::{
         atomic::{AtomicU32, Ordering as AtomicOrdering},
@@ -125,7 +124,7 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
 
                 network.validate_message::<T>(pubsub_id, acceptance);
 
-                mem::drop(decrement);
+                drop(decrement);
             });
         }
 

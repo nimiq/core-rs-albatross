@@ -64,7 +64,7 @@ impl<T: EncodeGaugeValue + Sized + Debug> EncodeMetric for NumericClosureMetric<
         Ok(())
     }
 
-    fn metric_type(&self) -> prometheus_client::metrics::MetricType {
+    fn metric_type(&self) -> MetricType {
         self.metric_type
     }
 }

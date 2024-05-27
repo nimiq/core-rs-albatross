@@ -337,7 +337,7 @@ impl<H: HashOutput> IncrementalMerkleProof<H> {
             }
 
             // Update parameters for next level.
-            current_level_owned = std::mem::take(&mut next_level);
+            current_level_owned = mem::take(&mut next_level);
             current_level = &current_level_owned;
             current_proof_nodes = mem::replace(&mut next_proof_nodes, BitSet::new());
 

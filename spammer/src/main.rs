@@ -146,7 +146,7 @@ async fn main_inner() -> Result<(), Error> {
     let config_file = ConfigFile::find(Some(&command_line))?;
     log::trace!("Config file: {:#?}", config_file);
 
-    let state = std::sync::Arc::new(RwLock::new(SpammerState {
+    let state = Arc::new(RwLock::new(SpammerState {
         balances: Vec::new(),
         current_block_number: 0,
         vesting_contracs: Vec::new(),
@@ -243,7 +243,7 @@ async fn main_inner() -> Result<(), Error> {
     // Start Spammer
     let mempool = if let Some(validator) = client.take_validator() {
         log::info!("Spawning spammer");
-        let mempool = std::sync::Arc::clone(&validator.mempool);
+        let mempool = Arc::clone(&validator.mempool);
         tokio::spawn(validator);
         mempool
     } else {
@@ -296,11 +296,11 @@ async fn main_inner() -> Result<(), Error> {
                 log::info!("\n");
                 if consensus.is_established() {
                     spam(
-                        std::sync::Arc::clone(&mempool),
+                        Arc::clone(&mempool),
                         consensus.clone(),
                         key_pair.clone(),
                         conf_options.clone(),
-                        std::sync::Arc::clone(&state),
+                        Arc::clone(&state),
                     )
                     .await;
                 }
@@ -376,7 +376,7 @@ async fn main_inner() -> Result<(), Error> {
 }
 
 async fn spam(
-    mempool: std::sync::Arc<Mempool>,
+    mempool: Arc<Mempool>,
     consensus: ConsensusProxy,
     key_pair: KeyPair,
     config: Arc<SpammerGenerationOptions>,
@@ -428,7 +428,7 @@ async fn spam(
 
         for tx in txs {
             let consensus1 = consensus.clone();
-            let mp = std::sync::Arc::clone(&mempool);
+            let mp = Arc::clone(&mempool);
             tokio::spawn(async move {
                 if let Err(e) = mp.add_transaction(tx.clone(), None).await {
                     log::warn!("Mempool rejected transaction: {:?} - {:#?}", e, tx);
@@ -450,7 +450,7 @@ fn generate_basic_transactions(
     network_id: NetworkId,
     count: usize,
     config: Arc<SpammerGenerationOptions>,
-    state: std::sync::Arc<RwLock<SpammerState>>,
+    state: Arc<RwLock<SpammerState>>,
 ) -> Vec<Transaction> {
     let mut txs = Vec::new();
 

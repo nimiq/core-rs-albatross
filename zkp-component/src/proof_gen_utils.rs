@@ -56,7 +56,7 @@ pub async fn launch_generate_new_proof(
 ) -> Result<ZKPState, ZKProofGenerationError> {
     let path = match prover_path {
         Some(path) => path,
-        None => std::env::current_exe()?,
+        None => env::current_exe()?,
     };
     log::debug!("Launching the prover process at path {:?}", path);
 

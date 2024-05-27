@@ -168,8 +168,8 @@ fn push_rebranch(config: BlockConfig, expected_res: &Result<PushResult, PushErro
     let expected_result = match &expected_res {
         // Skip blocks carry over the seed of the previous block. An incorrect seed if it matches
         // the previous block seed would fail as an invalid skip block proof
-        Err(PushError::InvalidBlock(BlockError::InvalidSeed)) => {
-            &Err(PushError::InvalidBlock(BlockError::InvalidSkipBlockProof))
+        Err(InvalidBlock(BlockError::InvalidSeed)) => {
+            &Err(InvalidBlock(BlockError::InvalidSkipBlockProof))
         }
         _ => expected_res,
     };
@@ -380,9 +380,7 @@ fn it_validates_parent_election_hash() {
             parent_election_hash: Some(Blake2bHash::default()),
             ..Default::default()
         },
-        Err(PushError::InvalidBlock(
-            BlockError::InvalidParentElectionHash,
-        )),
+        Err(InvalidBlock(BlockError::InvalidParentElectionHash)),
     );
 }
 

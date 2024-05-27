@@ -34,7 +34,7 @@ impl RequestCommon for SkipBlockMessage {
     type Kind = MessageMarker;
     const TYPE_ID: u16 = 2;
     const MAX_REQUESTS: u32 = 500;
-    const TIME_WINDOW: std::time::Duration = Duration::from_millis(500);
+    const TIME_WINDOW: Duration = Duration::from_millis(500);
     type Response = ();
 }
 

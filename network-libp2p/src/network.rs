@@ -930,7 +930,7 @@ impl Network {
                                                 swarm.behaviour_mut().dht.put_record_to(
                                                     signed_best_record.clone(),
                                                     outdated_peers,
-                                                    kad::Quorum::One,
+                                                    Quorum::One,
                                                 );
                                             }
                                             // Push the best result to the cache candidates
@@ -941,7 +941,7 @@ impl Network {
                                                 swarm.behaviour_mut().dht.put_record_to(
                                                     signed_best_record,
                                                     peers,
-                                                    kad::Quorum::One,
+                                                    Quorum::One,
                                                 );
                                             }
                                         } else {

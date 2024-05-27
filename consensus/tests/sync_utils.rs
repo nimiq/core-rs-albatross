@@ -75,7 +75,7 @@ async fn syncer(
                 zkp_prover.proxy(),
                 network.subscribe_events(),
                 Box::new(|fut| {
-                    tokio::spawn(fut);
+                    spawn(fut);
                 }),
             )
             .await
@@ -129,7 +129,7 @@ pub async fn sync_two_peers(
         BlockchainProxy::from(&blockchain1),
         Arc::clone(&net1),
         Box::new(|fut| {
-            tokio::spawn(fut);
+            spawn(fut);
         }),
         None,
     )
@@ -176,7 +176,7 @@ pub async fn sync_two_peers(
         blockchain2_proxy.clone(),
         Arc::clone(&net2),
         Box::new(|fut| {
-            tokio::spawn(fut);
+            spawn(fut);
         }),
         None,
     )
@@ -221,7 +221,7 @@ pub async fn sync_two_peers(
         1,
         zkp_prover2_proxy,
         Box::new(|fut| {
-            tokio::spawn(fut);
+            spawn(fut);
         }),
     );
     let consensus2_proxy = consensus2.proxy();

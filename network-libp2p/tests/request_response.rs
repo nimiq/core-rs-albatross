@@ -258,7 +258,7 @@ fn network_config(address: Multiaddr) -> Config {
     peer_contact.set_current_time();
 
     let gossipsub = gossipsub::ConfigBuilder::default()
-        .validation_mode(libp2p::gossipsub::ValidationMode::Permissive)
+        .validation_mode(gossipsub::ValidationMode::Permissive)
         .build()
         .expect("Invalid Gossipsub config");
 
@@ -292,7 +292,7 @@ fn network_config(address: Multiaddr) -> Config {
 
 /// Listens to requests of type `ExpReq` and if `response` is `Some` then it
 /// replies to the request using the `Req` type.
-async fn respond_requests<Req: Request, ExpReq: Request + std::cmp::PartialEq>(
+async fn respond_requests<Req: Request, ExpReq: Request + PartialEq>(
     network: Arc<Network>,
     response: Option<Req::Response>,
     expected_request: ExpReq,

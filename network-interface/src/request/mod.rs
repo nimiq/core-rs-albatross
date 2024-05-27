@@ -131,7 +131,7 @@ impl RequestKind for MessageMarker {
 }
 
 pub trait RequestCommon:
-    Serialize + Deserialize + Send + Sync + Unpin + std::fmt::Debug + 'static
+    Serialize + Deserialize + Send + Sync + Unpin + fmt::Debug + 'static
 {
     type Kind: RequestKind;
     const TYPE_ID: u16;

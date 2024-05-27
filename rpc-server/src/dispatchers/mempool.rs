@@ -32,8 +32,7 @@ impl MempoolInterface for MempoolDispatcher {
         &mut self,
         raw_tx: String,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
-        let tx: nimiq_transaction::Transaction =
-            Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
+        let tx: Transaction = Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
         let txid = tx.hash::<Blake2bHash>();
 
         match self.mempool.add_transaction(tx, None).await {
@@ -46,8 +45,7 @@ impl MempoolInterface for MempoolDispatcher {
         &mut self,
         raw_tx: String,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
-        let tx: nimiq_transaction::Transaction =
-            Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
+        let tx: Transaction = Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
         let txid = tx.hash::<Blake2bHash>();
 
         match self

@@ -335,7 +335,7 @@ async fn push_same_tx_twice() {
     let genesis_block = match genesis_block {
         Block::Macro(mut block) => {
             block.header.block_number = Policy::genesis_block_number();
-            nimiq_block::Block::Macro(block)
+            Block::Macro(block)
         }
         Block::Micro(_) => panic!(),
     };
@@ -458,7 +458,7 @@ async fn push_tx_with_wrong_signature() {
     let genesis_block = match genesis_block {
         Block::Macro(mut block) => {
             block.header.block_number = Policy::genesis_block_number();
-            nimiq_block::Block::Macro(block)
+            Block::Macro(block)
         }
         Block::Micro(_) => panic!(),
     };
@@ -533,7 +533,7 @@ async fn mempool_get_txn_max_size() {
     let genesis_block = match genesis_block {
         Block::Macro(mut block) => {
             block.header.block_number = Policy::genesis_block_number();
-            nimiq_block::Block::Macro(block)
+            Block::Macro(block)
         }
         Block::Micro(_) => panic!(),
     };
@@ -618,7 +618,7 @@ async fn mempool_get_txn_ordered() {
     let genesis_block = match genesis_block {
         Block::Macro(mut block) => {
             block.header.block_number = Policy::genesis_block_number();
-            nimiq_block::Block::Macro(block)
+            Block::Macro(block)
         }
         Block::Micro(_) => panic!(),
     };
@@ -704,7 +704,7 @@ async fn push_tx_with_insufficient_balance() {
     let genesis_block = match genesis_block {
         Block::Macro(mut block) => {
             block.header.block_number = Policy::genesis_block_number();
-            nimiq_block::Block::Macro(block)
+            Block::Macro(block)
         }
         Block::Micro(_) => panic!(),
     };
@@ -780,7 +780,7 @@ async fn multiple_transactions_multiple_senders() {
     let genesis_block = match genesis_block {
         Block::Macro(mut block) => {
             block.header.block_number = Policy::genesis_block_number();
-            nimiq_block::Block::Macro(block)
+            Block::Macro(block)
         }
         Block::Micro(_) => panic!(),
     };
@@ -867,7 +867,7 @@ async fn mempool_tps() {
     let genesis_block = match genesis_block {
         Block::Macro(mut block) => {
             block.header.block_number = Policy::genesis_block_number();
-            nimiq_block::Block::Macro(block)
+            Block::Macro(block)
         }
         Block::Micro(_) => panic!(),
     };
@@ -959,7 +959,7 @@ async fn multiple_start_stop() {
     let genesis_block = match genesis_block {
         Block::Macro(mut block) => {
             block.header.block_number = Policy::genesis_block_number();
-            nimiq_block::Block::Macro(block)
+            Block::Macro(block)
         }
         Block::Micro(_) => panic!(),
     };
@@ -1109,7 +1109,7 @@ async fn mempool_update() {
     let genesis_block = match genesis_block {
         Block::Macro(mut block) => {
             block.header.block_number = Policy::genesis_block_number();
-            nimiq_block::Block::Macro(block)
+            Block::Macro(block)
         }
         Block::Micro(_) => panic!(),
     };
@@ -1237,7 +1237,7 @@ async fn mempool_update_aged_transaction() {
     let genesis_block = match genesis_block {
         Block::Macro(mut block) => {
             block.header.block_number = Policy::genesis_block_number();
-            nimiq_block::Block::Macro(block)
+            Block::Macro(block)
         }
         Block::Micro(_) => panic!(),
     };
@@ -1388,7 +1388,7 @@ async fn mempool_update_not_enough_balance() {
     let genesis_block = match genesis_block {
         Block::Macro(mut block) => {
             block.header.block_number = Policy::genesis_block_number();
-            nimiq_block::Block::Macro(block)
+            Block::Macro(block)
         }
         Block::Micro(_) => panic!(),
     };
@@ -1548,7 +1548,7 @@ async fn mempool_update_pruned_account() {
     let genesis_block = match genesis_block {
         Block::Macro(mut block) => {
             block.header.block_number = Policy::genesis_block_number();
-            nimiq_block::Block::Macro(block)
+            Block::Macro(block)
         }
         Block::Micro(_) => panic!(),
     };
@@ -1758,7 +1758,7 @@ async fn mempool_regular_and_control_tx() {
     let genesis_block = match genesis_block {
         Block::Macro(mut block) => {
             block.header.block_number = Policy::genesis_block_number();
-            nimiq_block::Block::Macro(block)
+            Block::Macro(block)
         }
         Block::Micro(_) => panic!(),
     };
@@ -1899,7 +1899,7 @@ async fn applies_total_tx_size_limits() {
     let genesis_block = match genesis_block {
         Block::Macro(mut block) => {
             block.header.block_number = Policy::genesis_block_number();
-            nimiq_block::Block::Macro(block)
+            Block::Macro(block)
         }
         Block::Micro(_) => panic!(),
     };

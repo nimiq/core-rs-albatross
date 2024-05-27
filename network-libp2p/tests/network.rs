@@ -38,7 +38,7 @@ fn network_config(address: Multiaddr) -> Config {
     peer_contact.set_current_time();
 
     let gossipsub = gossipsub::ConfigBuilder::default()
-        .validation_mode(libp2p::gossipsub::ValidationMode::Permissive)
+        .validation_mode(gossipsub::ValidationMode::Permissive)
         .build()
         .expect("Invalid Gossipsub config");
 

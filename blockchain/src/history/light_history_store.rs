@@ -105,7 +105,7 @@ impl HistoryInterface for LightHistoryStore {
         &self,
         epoch_number: u32,
         txn_option: Option<&TransactionProxy>,
-    ) -> Option<nimiq_hash::Blake2bHash> {
+    ) -> Option<Blake2bHash> {
         let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -186,15 +186,15 @@ impl HistoryInterface for LightHistoryStore {
         _txn: &mut WriteTransactionProxy,
         _epoch_number: u32,
         _num_hist_txs: usize,
-    ) -> Option<(nimiq_hash::Blake2bHash, u64)> {
+    ) -> Option<(Blake2bHash, u64)> {
         None
     }
 
     fn get_hist_tx_by_hash(
         &self,
-        _tx_hash: &nimiq_hash::Blake2bHash,
+        _tx_hash: &Blake2bHash,
         _txn_option: Option<&TransactionProxy>,
-    ) -> Vec<nimiq_transaction::historic_transaction::HistoricTransaction> {
+    ) -> Vec<HistoricTransaction> {
         todo!()
     }
 
@@ -202,7 +202,7 @@ impl HistoryInterface for LightHistoryStore {
         &self,
         _block_number: u32,
         _txn_option: Option<&TransactionProxy>,
-    ) -> Vec<nimiq_transaction::historic_transaction::HistoricTransaction> {
+    ) -> Vec<HistoricTransaction> {
         todo!()
     }
 
@@ -210,7 +210,7 @@ impl HistoryInterface for LightHistoryStore {
         &self,
         _epoch_number: u32,
         _txn_option: Option<&TransactionProxy>,
-    ) -> Vec<nimiq_transaction::historic_transaction::HistoricTransaction> {
+    ) -> Vec<HistoricTransaction> {
         unimplemented!()
     }
 
@@ -242,7 +242,7 @@ impl HistoryInterface for LightHistoryStore {
         &self,
         _epoch_number: u32,
         _txn_option: Option<&TransactionProxy>,
-    ) -> Vec<nimiq_transaction::historic_transaction::HistoricTransaction> {
+    ) -> Vec<HistoricTransaction> {
         unimplemented!()
     }
 
@@ -258,7 +258,7 @@ impl HistoryInterface for LightHistoryStore {
         &self,
         _epoch_number: u32,
         _txn_option: Option<&TransactionProxy>,
-    ) -> Vec<nimiq_transaction::historic_transaction::HistoricTransaction> {
+    ) -> Vec<HistoricTransaction> {
         unimplemented!()
     }
 
@@ -267,14 +267,14 @@ impl HistoryInterface for LightHistoryStore {
         _address: &nimiq_keys::Address,
         _max: u16,
         _txn_option: Option<&TransactionProxy>,
-    ) -> Vec<nimiq_hash::Blake2bHash> {
+    ) -> Vec<Blake2bHash> {
         unimplemented!()
     }
 
     fn prove(
         &self,
         _epoch_number: u32,
-        _hashes: Vec<&nimiq_hash::Blake2bHash>,
+        _hashes: Vec<&Blake2bHash>,
         _verifier_state: Option<usize>,
         _txn_option: Option<&TransactionProxy>,
     ) -> Option<nimiq_transaction::history_proof::HistoryTreeProof> {
@@ -296,11 +296,11 @@ impl HistoryInterface for LightHistoryStore {
         &self,
         _epoch_number: u32,
         _chunks: Vec<(
-            Vec<nimiq_transaction::historic_transaction::HistoricTransaction>,
-            nimiq_mmr::mmr::proof::RangeProof<nimiq_hash::Blake2bHash>,
+            Vec<HistoricTransaction>,
+            nimiq_mmr::mmr::proof::RangeProof<Blake2bHash>,
         )>,
         _txn: &mut WriteTransactionProxy,
-    ) -> Result<nimiq_hash::Blake2bHash, nimiq_mmr::error::Error> {
+    ) -> Result<Blake2bHash, nimiq_mmr::error::Error> {
         unimplemented!()
     }
 
@@ -321,10 +321,7 @@ impl HistoryInterface for LightHistoryStore {
         _block_number: u32,
         _txn_option: Option<&TransactionProxy>,
     ) -> Result<
-        nimiq_mmr::mmr::proof::SizeProof<
-            nimiq_hash::Blake2bHash,
-            nimiq_transaction::historic_transaction::HistoricTransaction,
-        >,
+        nimiq_mmr::mmr::proof::SizeProof<Blake2bHash, HistoricTransaction>,
         nimiq_mmr::error::Error,
     > {
         unimplemented!()

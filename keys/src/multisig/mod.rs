@@ -36,7 +36,7 @@ where
     D: serde::Deserializer<'de>,
 {
     use serde::Deserialize as _;
-    let buf: [u8; commitment::Nonce::SIZE] =
+    let buf: [u8; Nonce::SIZE] =
         nimiq_serde::FixedSizeByteArray::deserialize(deserializer)?.into_inner();
     Ok(Scalar::from_bytes_mod_order(buf))
 }
@@ -255,11 +255,11 @@ impl KeyPair {
     /// It multiplies it with a scalar derived from the hash and the public key itself.
     pub(crate) fn delinearize_private_key(&self, public_keys_hash: &[u8; 64]) -> Scalar {
         // Compute H(C||P).
-        let mut h: sha2::Sha512 = sha2::Sha512::default();
+        let mut h: Sha512 = Sha512::default();
 
         h.update(&public_keys_hash[..]);
         h.update(self.public.as_bytes());
-        let s = Scalar::from_hash::<sha2::Sha512>(h);
+        let s = Scalar::from_hash::<Sha512>(h);
 
         // Get a scalar representation of the private key
         let sk = self.private.0.to_scalar();
@@ -282,11 +282,11 @@ impl Ed25519PublicKey {
     /// Effective delinearization for multisigs should use the hash over all public keys as an input.
     pub(crate) fn delinearize(&self, public_keys_hash: &[u8; 64]) -> EdwardsPoint {
         // Compute H(C||P).
-        let mut h: sha2::Sha512 = sha2::Sha512::default();
+        let mut h: Sha512 = Sha512::default();
 
         h.update(&public_keys_hash[..]);
         h.update(self.as_bytes());
-        let s = Scalar::from_hash::<sha2::Sha512>(h);
+        let s = Scalar::from_hash::<Sha512>(h);
 
         // Should always work, since we come from a valid public key.
         let p = self.to_edwards_point().unwrap();
@@ -335,7 +335,7 @@ impl Ed25519PublicKey {
 
 /// Compute hash over public keys public_keys_hash = C = H(P_1 || ... || P_n).
 pub fn hash_public_keys(public_keys: &[Ed25519PublicKey]) -> [u8; 64] {
-    let mut h: sha2::Sha512 = sha2::Sha512::default();
+    let mut h: Sha512 = Sha512::default();
     let mut public_keys_hash: [u8; 64] = [0u8; 64];
     for public_key in public_keys {
         h.update(public_key.as_bytes());

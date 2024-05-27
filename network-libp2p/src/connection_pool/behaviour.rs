@@ -347,7 +347,7 @@ impl Behaviour {
             desired_peer_count,
             ..Default::default()
         };
-        let housekeeping_timer = wasm_timer::Interval::new(config.housekeeping_interval);
+        let housekeeping_timer = Interval::new(config.housekeeping_interval);
 
         Self {
             contacts,

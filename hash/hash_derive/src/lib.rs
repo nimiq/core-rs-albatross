@@ -10,7 +10,7 @@ pub fn derive_serialize(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     proc_macro::TokenStream::from(impl_serialize_content(&ast))
 }
 
-fn impl_serialize_content(ast: &syn::DeriveInput) -> TokenStream {
+fn impl_serialize_content(ast: &DeriveInput) -> TokenStream {
     let name = &ast.ident;
     let (impl_generics, ty_generics, _) = ast.generics.split_for_impl();
 

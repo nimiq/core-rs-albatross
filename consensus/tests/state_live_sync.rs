@@ -854,10 +854,9 @@ async fn clears_buffer_after_macro_block() {
     mock_node
         .request_chunk_handler
         .set(|mock_id, request, blockchain| {
-            let mut chunk = <RequestChunk as nimiq_network_interface::request::Handle<
-                MockNetwork,
-                Arc<RwLock<Blockchain>>,
-            >>::handle(request, mock_id, blockchain);
+            let mut chunk = <RequestChunk as Handle<MockNetwork, Arc<RwLock<Blockchain>>>>::handle(
+                request, mock_id, blockchain,
+            );
             match chunk {
                 ResponseChunk::Chunk(ref mut inner_chunk) => {
                     inner_chunk.block_hash = Blake2bHash::default();

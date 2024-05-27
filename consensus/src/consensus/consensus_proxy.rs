@@ -571,11 +571,9 @@ impl<N: Network> ConsensusProxy<N> {
         if success {
             Ok(())
         } else {
-            Err(
-                nimiq_network_interface::request::RequestError::OutboundRequest(
-                    OutboundRequestError::NoReceiver,
-                ),
-            )
+            Err(RequestError::OutboundRequest(
+                OutboundRequestError::NoReceiver,
+            ))
         }
     }
 
