@@ -161,11 +161,12 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [workspace.lints]
+clippy.assigning_clones = "allow" # false positives: https://github.com/rust-lang/rust-clippy/issues/12709
+clippy.empty_docs = "allow" # false positives: https://github.com/rust-lang/rust-clippy/issues/12377
 clippy.large_enum_variant = "allow"
 clippy.too_many_arguments = "allow"
 clippy.type_complexity = "allow"
-clippy.empty_docs = "allow" # false positives: https://github.com/rust-lang/rust-clippy/issues/12377
-clippy.assigning_clones = "allow" # false positives: https://github.com/rust-lang/rust-clippy/issues/12709
+rust.unused_qualifications = "warn"
 
 [workspace.dependencies]
 futures = { package = "futures-util", version = "0.3.30" }
