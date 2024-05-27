@@ -4,7 +4,6 @@ use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, ForkEvent,
 };
-use nimiq_collections::BitSet;
 use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::{
     networks::NetworkId,
@@ -12,7 +11,7 @@ use nimiq_primitives::{
     slots_allocation::{Slot, Validators},
 };
 use nimiq_utils::time::OffsetTime;
-use nimiq_vrf::{Rng, VrfEntropy, VrfUseCase};
+use nimiq_vrf::VrfEntropy;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 
 use crate::chain_store::ChainStore;
@@ -101,7 +100,7 @@ impl LightBlockchain {
         }
     }
 
-    // FIXME Duplicated function (also exists in full blockchain)
+    // A similar function exists in full blockchain, however the light blockchain does not use any database txn.
     pub fn get_proposer(
         &self,
         block_number: u32,
@@ -135,33 +134,5 @@ impl LightBlockchain {
             band: slot_band,
             validator: validator.clone(),
         })
-    }
-
-    // FIXME Duplicated function (also exists in full blockchain)
-    fn compute_slot_number(offset: u32, vrf_entropy: VrfEntropy, disabled_slots: BitSet) -> u16 {
-        // RNG for slot selection
-        let mut rng = vrf_entropy.rng(VrfUseCase::ViewSlotSelection);
-
-        // Create a list of viable slots.
-        let mut slots: Vec<u16> = if disabled_slots.len() == Policy::SLOTS as usize {
-            // If all slots are disabled, we will accept any slot, since we want the
-            // chain to progress.
-            (0..Policy::SLOTS).collect()
-        } else {
-            // Otherwise, we will only accept slots that are not disabled.
-            (0..Policy::SLOTS)
-                .filter(|slot| !disabled_slots.contains(*slot as usize))
-                .collect()
-        };
-
-        // Shuffle the slots vector using the Fisher–Yates shuffle.
-        for i in (1..slots.len()).rev() {
-            let r = rng.next_u64_below((i + 1) as u64) as usize;
-            slots.swap(r, i);
-        }
-
-        // Now simply take the offset modulo the number of viable slots and that will give us
-        // the chosen slot.
-        slots[offset as usize % slots.len()]
     }
 }

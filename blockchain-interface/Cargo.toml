@@ -28,8 +28,10 @@ thiserror = "1.0"
 tokio-stream = { version = "0.1", features = ["sync"] }
 
 nimiq-block = { workspace = true }
+nimiq-collections = { workspace = true }
 nimiq-database-value = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["coin", "key-nibbles", "policy"] }
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
+nimiq-vrf = { workspace = true }

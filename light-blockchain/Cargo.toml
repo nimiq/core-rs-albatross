@@ -23,7 +23,6 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 
 nimiq-block = { workspace = true }
 nimiq-blockchain-interface = { workspace = true }
-nimiq-collections = { workspace = true }
 nimiq-genesis = { workspace = true, default-features = false }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true }

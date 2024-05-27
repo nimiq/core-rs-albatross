@@ -1,11 +1,13 @@
 use futures::stream::BoxStream;
 use nimiq_block::{Block, BlockType, MacroBlock};
+use nimiq_collections::BitSet;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{
     networks::NetworkId,
     policy::Policy,
     slots_allocation::{Slot, Validators},
 };
+use nimiq_vrf::{Rng, VrfEntropy, VrfUseCase};
 
 use crate::{
     error::{BlockchainError, BlockchainEvent, Direction},
@@ -115,7 +117,36 @@ pub trait AbstractBlockchain {
     /// block number and offset.
     fn get_proposer_at(&self, block_number: u32, offset: u32) -> Result<Slot, BlockchainError>;
 
+    /// Obtains the slow owner at a given block hash.
     fn get_proposer_of(&self, block_hash: &Blake2bHash) -> Result<Slot, BlockchainError>;
+
+    /// Obtains the slot number, given an offset and vrf entropy, not considering the ones in the disable_slots bitmap.
+    fn compute_slot_number(offset: u32, vrf_entropy: VrfEntropy, disabled_slots: BitSet) -> u16 {
+        // RNG for slot selection
+        let mut rng = vrf_entropy.rng(VrfUseCase::ViewSlotSelection);
+
+        // Create a list of viable slots.
+        let mut slots: Vec<u16> = if disabled_slots.len() == Policy::SLOTS as usize {
+            // If all slots are disabled, we will accept any slot, since we want the
+            // chain to progress.
+            (0..Policy::SLOTS).collect()
+        } else {
+            // Otherwise, we will only accept slots that are not disabled.
+            (0..Policy::SLOTS)
+                .filter(|slot| !disabled_slots.contains(*slot as usize))
+                .collect()
+        };
+
+        // Shuffle the slots vector using the Fisher–Yates shuffle.
+        for i in (1..slots.len()).rev() {
+            let r = rng.next_u64_below((i + 1) as u64) as usize;
+            slots.swap(r, i);
+        }
+
+        // Now simply take the offset modulo the number of viable slots and that will give us
+        // the chosen slot.
+        slots[offset as usize % slots.len()]
+    }
 
     /// Fetches a given number of macro blocks, starting at a specific block (by its hash).
     /// It can fetch only election macro blocks if desired.
