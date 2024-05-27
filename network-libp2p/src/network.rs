@@ -1650,13 +1650,18 @@ impl Network {
                 }
             };
 
-            // let timeout = Req::TIME_WINDOW.mul_f32(1.5f32);
-            // let future = response_rx.map_err(std::io::Error::other);
-            //match wasm_timer::TryFutureExt::timeout(future, timeout).await {
             match result {
-                Err(_) => Err(RequestError::OutboundRequest(
-                    OutboundRequestError::SenderFutureDropped,
-                )),
+                Err(_) => {
+                    debug!(
+                        %request_id,
+                        request_type = std::any::type_name::<Req>(),
+                        %peer_id,
+                        "Request failed - sender future dropped"
+                    );
+                    Err(RequestError::OutboundRequest(
+                        OutboundRequestError::SenderFutureDropped,
+                    ))
+                }
                 Ok(result) => {
                     let data = result?;
                     if let Ok((message, left_over)) =
