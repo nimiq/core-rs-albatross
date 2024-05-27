@@ -252,9 +252,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         + Policy::blocks_per_batch()
                         - 1;
 
-                    if peer_head_upper_bound.saturating_sub(our_head) <= self.full_sync_threshold
-                        && blockchain.accounts_complete()
-                    {
+                    if peer_head_upper_bound.saturating_sub(our_head) <= self.full_sync_threshold {
                         log::debug!(
                             our_head,
                             peer_head = peer_head_upper_bound,
