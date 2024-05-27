@@ -9,8 +9,8 @@ use crate::{Ed25519PublicKey, Ed25519Signature, PrivateKey};
 #[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde-derive", derive(Serialize, Deserialize))]
 pub struct KeyPair {
-    pub public: Ed25519PublicKey,
     pub private: PrivateKey,
+    pub public: Ed25519PublicKey,
 }
 
 impl KeyPair {
@@ -34,9 +34,10 @@ impl SecureGenerate for KeyPair {
 
 impl From<PrivateKey> for KeyPair {
     fn from(private_key: PrivateKey) -> Self {
+        let public_key = Ed25519PublicKey::from(&private_key);
         KeyPair {
-            public: Ed25519PublicKey::from(&private_key),
             private: private_key,
+            public: public_key,
         }
     }
 }
