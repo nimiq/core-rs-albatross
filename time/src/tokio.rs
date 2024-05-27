@@ -6,6 +6,8 @@ use tokio::time::{
 pub use tokio_stream::wrappers::IntervalStream as Interval;
 
 pub fn interval(period: Duration) -> Interval {
+    // Limit the period to the maximum allowed by gloo-timers to get consistent behaviour
+    // across both implementations.
     assert!(
         period.as_millis() <= u32::MAX as u128,
         "Period as millis must fit in u32"
