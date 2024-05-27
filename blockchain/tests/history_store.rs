@@ -2,7 +2,6 @@ use nimiq_block::{
     Block, DoubleProposalProof, DoubleVoteProof, EquivocationProof, ForkProof, MacroHeader,
     MicroHeader,
 };
-use nimiq_blockchain::interface::HistoryInterface;
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::AggregateSignature;
 use nimiq_database::traits::WriteTransaction;

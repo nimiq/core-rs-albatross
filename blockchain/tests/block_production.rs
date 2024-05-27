@@ -1,7 +1,7 @@
 use std::{convert::TryInto, sync::Arc};
 
 use nimiq_block::{Block, ForkProof, MicroJustification};
-use nimiq_blockchain::{interface::HistoryInterface, BlockProducer, Blockchain, BlockchainConfig};
+use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::{mdbx::MdbxDatabase, traits::WriteTransaction, volatile::VolatileDatabase};
