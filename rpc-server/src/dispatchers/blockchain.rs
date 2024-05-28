@@ -159,11 +159,12 @@ impl BlockchainInterface for BlockchainDispatcher {
             let mut hist_txs = blockchain.history_store.get_hist_tx_by_hash(&hash, None);
 
             // Unpack the transaction or raise an error.
-            let hist_tx = match (hist_txs.pop(), hist_txs.len()) {
-                (Some(hist_tx), 0) => hist_tx,
-                (Some(_), _) => return Err(Error::MultipleTransactionsFound(hash)),
-                (None, _) => return Err(Error::TransactionNotFound(hash)),
-            };
+            if hist_txs.len() > 1 {
+                return Err(Error::MultipleTransactionsFound(hash));
+            }
+            let hist_tx = hist_txs
+                .pop()
+                .ok_or_else(|| Error::TransactionNotFound(hash.clone()))?;
 
             // Convert the historic transaction into a regular transaction. This will also convert
             // reward inherents.
@@ -171,7 +172,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                 hist_tx,
                 Some(blockchain.block_number()),
             )
-            .ok_or(Error::TransactionNotFound(hash))?
+            .ok_or_else(|| Error::TransactionNotFound(hash.clone()))?
             .into())
         } else {
             Err(Error::NotSupportedForLightBlockchain)
@@ -340,11 +341,12 @@ impl BlockchainInterface for BlockchainDispatcher {
                 let mut hist_txs = blockchain.history_store.get_hist_tx_by_hash(&hash, None);
 
                 // Unpack the transaction or raise an error.
-                let hist_tx = match (hist_txs.pop(), hist_txs.len()) {
-                    (Some(hist_tx), 0) => hist_tx,
-                    (Some(_), _) => return Err(Error::MultipleTransactionsFound(hash)),
-                    (None, _) => return Err(Error::TransactionNotFound(hash)),
-                };
+                if hist_txs.len() > 1 {
+                    return Err(Error::MultipleTransactionsFound(hash));
+                }
+                let hist_tx = hist_txs
+                    .pop()
+                    .ok_or_else(|| Error::TransactionNotFound(hash.clone()))?;
 
                 // Convert the historic transaction into a regular transaction. This will also convert
                 // reward inherents.
@@ -353,7 +355,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                         hist_tx,
                         Some(blockchain.block_number()),
                     )
-                    .ok_or(Error::TransactionNotFound(hash))?,
+                    .ok_or_else(|| Error::TransactionNotFound(hash.clone()))?,
                 )
             }
 
