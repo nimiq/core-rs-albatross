@@ -1,11 +1,14 @@
 use std::{num::NonZeroU8, time::Duration};
 
-use libp2p::{gossipsub, identity::Keypair, kad, Multiaddr};
+use libp2p::{gossipsub, identity::Keypair, kad, Multiaddr, StreamProtocol};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::peer_info::Services;
 use sha2::{Digest, Sha256};
 
-use crate::discovery::{self, peer_contacts::PeerContact};
+use crate::{
+    discovery::{self, peer_contacts::PeerContact},
+    DHT_PROTOCOL,
+};
 
 /// TLS settings for configuring a secure WebSocket
 pub struct TlsConfig {
@@ -69,13 +72,14 @@ impl Config {
             .expect("Invalid Gossipsub config");
 
         let mut kademlia = kad::Config::default();
+        kademlia.set_protocol_names(std::iter::once(StreamProtocol::new(DHT_PROTOCOL)).collect());
         kademlia.set_kbucket_inserts(kad::BucketInserts::OnConnected);
-        kademlia.set_record_ttl(Some(Duration::from_secs(5 * 60)));
-        kademlia.set_publication_interval(Some(Duration::from_secs(60)));
+        kademlia.set_record_ttl(Some(Duration::from_secs(2 * 60 * 60))); // 2h
+        kademlia.set_publication_interval(Some(Duration::from_secs(10 * 60))); // 10 min
+        kademlia.set_replication_interval(Some(Duration::from_secs(60))); // 1 min
+        kademlia.set_provider_record_ttl(Some(Duration::from_secs(60 * 60))); // 1h
+        kademlia.set_provider_publication_interval(Some(Duration::from_secs(5 * 60))); // 5 min
         kademlia.set_query_timeout(Duration::from_secs(10));
-
-        // Since we have a record TTL of 5 minutes, record replication is not needed right now
-        kademlia.set_replication_interval(None);
         kademlia.set_record_filtering(kad::StoreInserts::FilterBoth);
 
         Self {

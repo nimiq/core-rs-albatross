@@ -15,6 +15,7 @@ mod rate_limiting;
 mod swarm;
 
 pub const DISCOVERY_PROTOCOL: &str = "/nimiq/discovery/0.0.1";
+pub const DHT_PROTOCOL: &str = "/nimiq/kad/0.0.1";
 
 pub use config::{Config, TlsConfig};
 pub use error::NetworkError;

@@ -911,7 +911,7 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
                 key: key.into(),
                 value,
                 publisher: Some(*local_peer_id),
-                expires: None, // TODO: Records should expire at some point in time
+                expires: None, // This only affects local storage. Records are replicated with configured TTL.
             };
 
             match swarm.behaviour_mut().dht.put_record(record, Quorum::One) {
