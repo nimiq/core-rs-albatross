@@ -99,7 +99,7 @@ pub struct SyncQueue<
     ids_to_request: VecDeque<(TId, Option<TNetwork::PubsubId>)>,
     pending_futures:
         FuturesUnordered<OrderWrapper<TId, BoxFuture<'static, Option<Result<TOutput, TError>>>>>,
-    queued_outputs: BinaryHeap<OrderWrapper<TId, TOutput>>,
+    queued_outputs: BinaryHeap<OrderWrapper<TId, Option<TOutput>>>,
     next_incoming_index: usize,
     next_outgoing_index: usize,
     current_peer_index: PeerListIndex,
@@ -369,19 +369,29 @@ where
         if let Some(next_output) = self.queued_outputs.peek() {
             if next_output.index == self.next_outgoing_index {
                 let request = self.queued_outputs.pop().unwrap();
-                if (self.verify_fn)(&request.id, &request.data, &mut self.verify_state) {
-                    self.next_outgoing_index += 1;
-                    return Poll::Ready(Some(Ok(request.data)));
-                } else {
-                    debug!(peer_id = %request.peer, id = ?request.id, "Verification failed");
-                    let id = request.id.clone();
-                    if !self.retry_request(
-                        request.id,
-                        request.index,
-                        request.peer,
-                        request.num_tries,
-                    ) {
-                        return Poll::Ready(Some(Err(id)));
+
+                match request.data {
+                    Some(data) => {
+                        if (self.verify_fn)(&request.id, &data, &mut self.verify_state) {
+                            self.next_outgoing_index += 1;
+                            return Poll::Ready(Some(Ok(data)));
+                        } else {
+                            debug!(peer_id = %request.peer, id = ?request.id, "Verification failed");
+                            let id = request.id.clone();
+                            if !self.retry_request(
+                                request.id,
+                                request.index,
+                                request.peer,
+                                request.num_tries,
+                            ) {
+                                self.next_outgoing_index += 1;
+                                return Poll::Ready(Some(Err(id)));
+                            }
+                        }
+                    }
+                    None => {
+                        self.next_outgoing_index += 1;
+                        return Poll::Ready(Some(Err(request.id)));
                     }
                 }
             }
@@ -402,7 +412,7 @@ where
                             } else {
                                 self.queued_outputs.push(OrderWrapper {
                                     id: result.id,
-                                    data: output,
+                                    data: Some(output),
                                     index: result.index,
                                     peer: result.peer,
                                     num_tries: result.num_tries,
@@ -420,8 +430,20 @@ where
 
                     // The request or verification failed.
                     let id = result.id.clone();
+                    let peer = result.peer.clone();
                     if !self.retry_request(result.id, result.index, result.peer, result.num_tries) {
-                        return Poll::Ready(Some(Err(id)));
+                        if result.index == self.next_outgoing_index {
+                            self.next_outgoing_index += 1;
+                            return Poll::Ready(Some(Err(id)));
+                        } else {
+                            self.queued_outputs.push(OrderWrapper {
+                                id,
+                                data: None,
+                                index: result.index,
+                                peer,
+                                num_tries: result.num_tries,
+                            });
+                        }
                     }
                 }
                 None => {
