@@ -535,7 +535,6 @@ impl Blockchain {
         txn: &mut WriteTransactionProxy,
         block_logger: &mut BlockLogger,
     ) -> Result<u64, PushError> {
-        // TODO: check block.network somewhere!
         // Check transactions against replay attacks. This is only necessary for micro blocks.
         if block.is_micro() {
             let transactions = block.transactions();
