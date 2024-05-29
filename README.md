@@ -44,13 +44,13 @@ For more detailed information about how to connect and use the testnet network, 
 - 5GB of free disk space, an SSD is highly recommended (100GB or more is required for history nodes)
 - File systems with sparse file support.
 - It is highly recommended to run a clock synchronization protocol such as NTP. This
-  is needed to properly accept blocks according to the timestamp and it is especially
-  important for validators in order to produce blocks in the expected timestamps.
+  is needed to properly accept blocks according to the timestamp, and it is especially
+  important for validators in order to produce blocks with the expected timestamps.
 
 ## Installation
 
 Besides [Rust stable](https://www.rust-lang.org/learn/get-started#installing-rust) itself,
-the following packages are required to be able to compile the source code:
+The following packages are required to be able to compile the source code:
 
 - `clang`
 - `cmake`
