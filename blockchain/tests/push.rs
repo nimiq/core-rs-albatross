@@ -13,7 +13,8 @@ use nimiq_bls::AggregateSignature;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
 use nimiq_keys::KeyPair;
 use nimiq_primitives::{
-    key_nibbles::KeyNibbles, policy::Policy, TendermintIdentifier, TendermintStep,
+    key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy, TendermintIdentifier,
+    TendermintStep,
 };
 use nimiq_test_log::test;
 use nimiq_test_utils::{
@@ -265,6 +266,17 @@ fn it_works_with_valid_blocks() {
 
     // A simple push of a macro block
     simply_push_macro_block(&config, &Ok(PushResult::Extended));
+}
+
+#[test]
+fn it_validates_network() {
+    expect_push_micro_block(
+        BlockConfig {
+            network: Some(NetworkId::Main),
+            ..Default::default()
+        },
+        Err(InvalidBlock(BlockError::NetworkMismatch)),
+    );
 }
 
 #[test]
