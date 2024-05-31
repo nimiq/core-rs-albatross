@@ -1,5 +1,5 @@
 use futures::stream::BoxStream;
-use nimiq_block::{Block, BlockType, MacroBlock};
+use nimiq_block::{Block, MacroBlock};
 use nimiq_collections::BitSet;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{
@@ -64,16 +64,6 @@ pub trait AbstractBlockchain {
     /// Returns the timestamp at the head of the main chain.
     fn timestamp(&self) -> u64 {
         self.head().timestamp()
-    }
-
-    /// Returns the block type of the next block.
-    // FIXME Get rid of this
-    fn get_next_block_type(last_block_number: u32) -> BlockType {
-        if Policy::is_macro_block_at(last_block_number + 1) {
-            BlockType::Macro
-        } else {
-            BlockType::Micro
-        }
     }
 
     /// Returns a flag indicating if the accounts tree is complete.

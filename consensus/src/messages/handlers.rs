@@ -214,7 +214,7 @@ impl RequestMissingBlocks {
         blockchain: &BlockchainProxy,
     ) -> Result<ResponseBlocks, ResponseBlocksError> {
         // TODO We might want to do a sanity check on the locator hashes and reject the request if
-        // they they don't match up with the given target hash.
+        //  they they don't match up with the given target hash.
 
         // Build a HashSet from the given locator hashes.
         let locators = HashSet::<Blake2bHash>::from_iter(self.locators.iter().cloned());
@@ -278,7 +278,6 @@ impl RequestMissingBlocks {
                 }
             } else {
                 // This can only happen if the target hash is unknown or after the chain was pruned.
-                // TODO Return the blocks we found instead of failing here?
                 debug!(
                     blocks_found = blocks.len(),
                     unknown_block_hash = %block_hash,

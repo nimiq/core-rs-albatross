@@ -120,7 +120,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
     }
 }
 
-// TODO once actual state sync is implemented this can be removed again as it serves the same purpose.
 /// The SignedSkipBlockMessage containing the current skip block proof.
 /// Contains the actual information of block_height and prev_seed as tag (SkipBlockInfo).
 #[derive(Clone, Deserialize, Serialize, std::fmt::Debug)]

@@ -47,7 +47,7 @@ enum RemoteDataStoreOps {
 }
 
 impl<N: Network> RemoteDataStore<N> {
-    /// Gets a proof for an deserializable item in a remote accounts trie and returns
+    /// Gets a proof for a deserializable item in a remote accounts trie and returns
     /// the item if a valid proof was obtained or `None` if not.
     pub(crate) async fn get_trie<T: Deserialize>(
         network: Arc<N>,
@@ -110,8 +110,8 @@ impl<N: Network> RemoteDataStore<N> {
                             break;
                         }
                     } else {
-                        // TODO: A malicious peer could just send random hashes.
                         // If we couldn't find the block, then we cannot verify the proof
+                        // A malicious peer could just send random hashes.
                         log::debug!(block_hash = %response.block_hash, "Received an accounts proof, but we could not find the block that was used to generate the proof");
                     }
                 }

@@ -244,9 +244,9 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         let latest_history_root = latest_macro_head.header.history_root;
 
                         if latest_macro_head_number > verifier_block_number {
-                            // A new macro head was adopted
+                            // A new macro head was adopted.
                             // TODO: We could keep track of the latest macro heads on a per peer basis
-                            // because not all peers have the latest state.
+                            //  because not all peers have the latest state.
                             if Policy::epoch_at(verifier_block_number)
                                 < Policy::epoch_at(latest_macro_head_number)
                             {

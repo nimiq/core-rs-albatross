@@ -337,8 +337,8 @@ impl<N: Network> Stream for BlockRequestComponent<N> {
                         "Failed to retrieve missing blocks"
                     );
                     // TODO: Do we need to do anything else?
-                    // We might want to delete the target hash from our buffer
-                    // since none of our peers is sending us a good response.
+                    //  We might want to delete the target hash from our buffer
+                    //  since none of our peers is sending us a good response.
                 }
             }
         }

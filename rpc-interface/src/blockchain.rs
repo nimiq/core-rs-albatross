@@ -94,7 +94,6 @@ pub trait BlockchainInterface {
     /// where the given address is listed as a recipient or as a sender are considered. Reward
     /// transactions are also returned. It has an option to specify the maximum number of hashes to
     /// fetch, it defaults to 500.
-    // TODO: includes reward txs
     async fn get_transaction_hashes_by_address(
         &mut self,
         address: Address,

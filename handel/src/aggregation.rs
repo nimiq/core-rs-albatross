@@ -158,7 +158,6 @@ impl<
     }
 
     /// Check if a level was completed
-    /// TODO: remove contribution parameter as it is not used at all.
     fn check_completed_level(&mut self, level_id: usize) {
         let num_peers = {
             let level = self
