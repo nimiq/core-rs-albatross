@@ -319,7 +319,7 @@ async fn validator_can_catch_up() {
         if let Ok(block) = blockchain.read().get_block_at(1, false, None) {
             // the hash needs to be the one the extended event returned.
             // (the chain itself i.e blockchain.header_hash() might have already progressed further)
-            assert_eq!(block.header().hash(), hash);
+            assert_eq!(block.hash(), hash);
             // now in that case the validator producing this block has progressed the 2nd skip block without having seen the first skip block.
             return;
         }

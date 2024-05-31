@@ -1,8 +1,7 @@
 use ark_ec::Group;
 use nimiq_block::{
-    Block, BlockError, BlockHeader, EquivocationProof, ForkProof, MacroBlock, MacroBody,
-    MacroHeader, MicroBlock, MicroBody, MicroHeader, MicroJustification, MultiSignature,
-    SkipBlockProof,
+    Block, BlockError, EquivocationProof, ForkProof, MacroBlock, MacroBody, MacroHeader,
+    MicroBlock, MicroBody, MicroHeader, MicroJustification, MultiSignature, SkipBlockProof,
 };
 use nimiq_bls::{AggregateSignature, G2Projective, PublicKey as BlsPublicKey};
 use nimiq_collections::BitSet;
@@ -16,32 +15,29 @@ use nimiq_vrf::VrfSeed;
 
 #[test]
 fn test_verify_header_network() {
-    let mut micro_header = MicroHeader {
-        network: NetworkId::DevAlbatross,
-        version: Policy::VERSION,
-        block_number: 1,
-        timestamp: 0,
-        parent_hash: Blake2bHash::default(),
-        seed: VrfSeed::default(),
-        extra_data: [].to_vec(),
-        state_root: Blake2bHash::default(),
-        body_root: Blake2sHash::default(),
-        diff_root: Blake2bHash::default(),
-        history_root: Blake2bHash::default(),
-    };
-    let header = BlockHeader::Micro(micro_header.clone());
-
-    // Check version at header level
-    assert_eq!(
-        header.verify(NetworkId::UnitAlbatross, false),
-        Err(BlockError::NetworkMismatch)
-    );
-
-    let block = Block::Micro(MicroBlock {
-        header: micro_header.clone(),
+    let mut block = Block::Micro(MicroBlock {
+        header: MicroHeader {
+            network: NetworkId::DevAlbatross,
+            version: Policy::VERSION,
+            block_number: 1,
+            timestamp: 0,
+            parent_hash: Blake2bHash::default(),
+            seed: VrfSeed::default(),
+            extra_data: [].to_vec(),
+            state_root: Blake2bHash::default(),
+            body_root: Blake2sHash::default(),
+            diff_root: Blake2bHash::default(),
+            history_root: Blake2bHash::default(),
+        },
         justification: None,
         body: None,
     });
+
+    // Check version at header level
+    assert_eq!(
+        block.verify_header(NetworkId::UnitAlbatross, false),
+        Err(BlockError::NetworkMismatch)
+    );
 
     // Error should remain at block level
     assert_eq!(
@@ -50,39 +46,35 @@ fn test_verify_header_network() {
     );
 
     // Fix the version and check that it passes
-    micro_header.network = NetworkId::UnitAlbatross;
-    let header = BlockHeader::Micro(micro_header);
-    assert_eq!(header.verify(NetworkId::UnitAlbatross, false), Ok(()));
+    block.unwrap_micro_ref_mut().header.network = NetworkId::UnitAlbatross;
+    assert_eq!(block.verify_header(NetworkId::UnitAlbatross, false), Ok(()));
 }
 
 #[test]
 fn test_verify_header_version() {
-    let mut micro_header = MicroHeader {
-        network: NetworkId::UnitAlbatross,
-        version: Policy::VERSION - 1,
-        block_number: 1,
-        timestamp: 0,
-        parent_hash: Blake2bHash::default(),
-        seed: VrfSeed::default(),
-        extra_data: [].to_vec(),
-        state_root: Blake2bHash::default(),
-        body_root: Blake2sHash::default(),
-        diff_root: Blake2bHash::default(),
-        history_root: Blake2bHash::default(),
-    };
-    let header = BlockHeader::Micro(micro_header.clone());
-
-    // Check version at header level
-    assert_eq!(
-        header.verify(NetworkId::UnitAlbatross, false),
-        Err(BlockError::UnsupportedVersion)
-    );
-
-    let block = Block::Micro(MicroBlock {
-        header: micro_header.clone(),
+    let mut block = Block::Micro(MicroBlock {
+        header: MicroHeader {
+            network: NetworkId::UnitAlbatross,
+            version: Policy::VERSION - 1,
+            block_number: 1,
+            timestamp: 0,
+            parent_hash: Blake2bHash::default(),
+            seed: VrfSeed::default(),
+            extra_data: [].to_vec(),
+            state_root: Blake2bHash::default(),
+            body_root: Blake2sHash::default(),
+            diff_root: Blake2bHash::default(),
+            history_root: Blake2bHash::default(),
+        },
         justification: None,
         body: None,
     });
+
+    // Check version at header level
+    assert_eq!(
+        block.verify_header(NetworkId::UnitAlbatross, false),
+        Err(BlockError::UnsupportedVersion)
+    );
 
     // Error should remain at block level
     assert_eq!(
@@ -91,44 +83,40 @@ fn test_verify_header_version() {
     );
 
     // Fix the version and check that it passes
-    micro_header.version = Policy::VERSION;
-    let header = BlockHeader::Micro(micro_header);
-    assert_eq!(header.verify(NetworkId::UnitAlbatross, false), Ok(()));
+    block.unwrap_micro_ref_mut().header.version = Policy::VERSION;
+    assert_eq!(block.verify_header(NetworkId::UnitAlbatross, false), Ok(()));
 }
 
 #[test]
 fn test_verify_header_extra_data() {
-    let mut micro_header = MicroHeader {
-        network: NetworkId::UnitAlbatross,
-        version: Policy::VERSION,
-        block_number: 1,
-        timestamp: 0,
-        parent_hash: Blake2bHash::default(),
-        seed: VrfSeed::default(),
-        extra_data: vec![0; 33],
-        state_root: Blake2bHash::default(),
-        body_root: Blake2sHash::default(),
-        diff_root: Blake2bHash::default(),
-        history_root: Blake2bHash::default(),
-    };
-    let header = BlockHeader::Micro(micro_header.clone());
+    let mut block = Block::Micro(MicroBlock {
+        header: MicroHeader {
+            network: NetworkId::UnitAlbatross,
+            version: Policy::VERSION,
+            block_number: 1,
+            timestamp: 0,
+            parent_hash: Blake2bHash::default(),
+            seed: VrfSeed::default(),
+            extra_data: vec![0; 33],
+            state_root: Blake2bHash::default(),
+            body_root: Blake2sHash::default(),
+            diff_root: Blake2bHash::default(),
+            history_root: Blake2bHash::default(),
+        },
+        justification: None,
+        body: None,
+    });
 
     // Check extra data field at header level
     assert_eq!(
-        header.verify(NetworkId::UnitAlbatross, false),
+        block.verify_header(NetworkId::UnitAlbatross, false),
         Err(BlockError::ExtraDataTooLarge)
     );
     // Error should remain for a skip block
     assert_eq!(
-        header.verify(NetworkId::UnitAlbatross, true),
+        block.verify_header(NetworkId::UnitAlbatross, true),
         Err(BlockError::ExtraDataTooLarge)
     );
-
-    let block = Block::Micro(MicroBlock {
-        header: micro_header.clone(),
-        justification: None,
-        body: None,
-    });
 
     // Error should remain at block level
     assert_eq!(
@@ -137,19 +125,17 @@ fn test_verify_header_extra_data() {
     );
 
     // Fix the extra data field and check that it passes
-    micro_header.extra_data = vec![0; 32];
-    let header = BlockHeader::Micro(micro_header.clone());
-    assert_eq!(header.verify(NetworkId::UnitAlbatross, false), Ok(()));
+    block.unwrap_micro_ref_mut().header.extra_data = vec![0; 32];
+    assert_eq!(block.verify_header(NetworkId::UnitAlbatross, false), Ok(()));
     // Error should remain for a skip block
     assert_eq!(
-        header.verify(NetworkId::UnitAlbatross, true),
+        block.verify_header(NetworkId::UnitAlbatross, true),
         Err(BlockError::ExtraDataTooLarge)
     );
 
     // Fix the extra data field for a skip block and check that it passes
-    micro_header.extra_data = [].to_vec();
-    let header = BlockHeader::Micro(micro_header);
-    assert_eq!(header.verify(NetworkId::UnitAlbatross, true), Ok(()));
+    block.unwrap_micro_ref_mut().header.extra_data = [].to_vec();
+    assert_eq!(block.verify_header(NetworkId::UnitAlbatross, true), Ok(()));
 }
 
 #[test]

@@ -232,8 +232,8 @@ impl LightBlockchain {
         // Upgrade the blockchain lock
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
-        let target_block = chain_info.head.header();
-        log::debug!(block = %target_block, "Rebranching");
+        let target_block = chain_info.head.to_string();
+        log::debug!(block = target_block, "Rebranching");
 
         // Find the common ancestor between our current main chain and the fork chain.
         // Walk up the fork chain until we find a block that is part of the main chain.
@@ -255,7 +255,7 @@ impl LightBlockchain {
         }
 
         log::debug!(
-            block = %target_block,
+            block = target_block,
             common_ancestor = %current.1.head,
             no_blocks_up = fork_chain.len(),
             "Found common ancestor",
@@ -268,7 +268,7 @@ impl LightBlockchain {
         // Check if ancestor is in current batch.
         if ancestor.1.head.block_number() < this.macro_head.block_number() {
             log::warn!(
-                block = %target_block,
+                block = target_block,
                 reason = "ancestor block already finalized",
                 ancestor_block = %ancestor.1.head,
                 "Rejecting block",

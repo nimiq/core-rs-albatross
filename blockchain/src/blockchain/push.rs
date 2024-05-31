@@ -403,8 +403,8 @@ impl Blockchain {
         diff: Option<TrieDiff>,
         chunks: Vec<TrieChunkWithStart>,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
-        let target_block = chain_info.head.header();
-        debug!(block = %target_block, "Rebranching");
+        let target_block = chain_info.head.to_string();
+        debug!(block = target_block, "Rebranching");
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
         let read_txn = this.read_transaction();
         // Find the common ancestor between our current main chain and the fork chain.
@@ -414,7 +414,7 @@ impl Blockchain {
         read_txn.close();
 
         debug!(
-            block = %target_block,
+            block = target_block,
             common_ancestor = %ancestor.1.head,
             no_blocks_up = fork_chain.len(),
             "Found common ancestor",

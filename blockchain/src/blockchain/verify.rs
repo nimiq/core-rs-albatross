@@ -1,5 +1,5 @@
 use nimiq_account::BlockLogger;
-use nimiq_block::{Block, BlockError, BlockHeader, MacroBlock, MacroBody};
+use nimiq_block::{Block, BlockError, MacroBlock, MacroBody};
 use nimiq_blockchain_interface::{AbstractBlockchain, ChainInfo, PushError};
 use nimiq_database::{
     traits::{ReadTransaction, WriteTransaction},
@@ -45,9 +45,9 @@ impl Blockchain {
         }
 
         // Verify the interlink (or its absence)
-        if let BlockHeader::Macro(macro_header) = block.header() {
-            if block.is_election() {
-                if let Some(interlink) = &macro_header.interlink {
+        if let Block::Macro(macro_) = &block {
+            if macro_.is_election_block() {
+                if let Some(interlink) = &macro_.header.interlink {
                     let expected_interlink = self.election_head().get_next_interlink().unwrap();
 
                     if interlink != &expected_interlink {
@@ -60,7 +60,7 @@ impl Blockchain {
                 }
             }
 
-            if !block.is_election() && macro_header.interlink.is_some() {
+            if !macro_.is_election_block() && macro_.header.interlink.is_some() {
                 warn!(reason = "Superfluous Interlink", "Rejecting block");
                 return Err(PushError::InvalidBlock(BlockError::InvalidInterlink));
             }
@@ -312,10 +312,11 @@ impl Blockchain {
         }
 
         // Get the seed of the preceding block.
-        let prev_header = self
+        let prev_header_seed_entropy = self
             .get_block(&proposed_block.header.parent_hash, false, None)
             .map_err(PushError::BlockchainError)?
-            .header();
+            .seed()
+            .entropy();
 
         // The VRF seed will be signed by the proposer of the original round the proposal was proposed in.
         // The round is specified within the header itself, and it should only ever differ from the round
@@ -359,7 +360,7 @@ impl Blockchain {
             .get_proposer(
                 proposed_block.block_number(),
                 proposed_block.header.round,
-                prev_header.seed().entropy(),
+                prev_header_seed_entropy,
                 Some(&txn),
             )
             .expect("Couldn't find slot owner!")
@@ -378,7 +379,7 @@ impl Blockchain {
         let mut block = Block::Macro(proposed_block);
 
         // Make sure the header verifies
-        if let Err(error) = block.header().verify(self.network_id, false) {
+        if let Err(error) = block.verify_header(self.network_id, false) {
             debug!(%error, %block, "Tendermint - await_proposal: Invalid block header");
             return Err(PushError::InvalidBlock(error));
         }

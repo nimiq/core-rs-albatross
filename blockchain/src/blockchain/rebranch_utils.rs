@@ -29,7 +29,7 @@ impl Blockchain {
     > {
         // Walk up the fork chain until we find a block that is part of the main chain.
         // Store the chain along the way
-        let target = chain_info.head.header();
+        let target = chain_info.head.to_string();
 
         // Collects the chain on the way back to the common ancestor
         let mut fork_chain = vec![];
@@ -65,7 +65,7 @@ impl Blockchain {
         // Check if ancestor is in current batch.
         if current.1.head.block_number() < self.state.macro_info.head.block_number() {
             warn!(
-                block = %target,
+                block = target,
                 reason = "ancestor block already finalized",
                 ancestor_block = %current.1.head,
                 "Rejecting block",

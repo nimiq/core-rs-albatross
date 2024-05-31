@@ -1,10 +1,8 @@
-use std::{convert::TryFrom, fmt, io};
+use std::{fmt, io};
 
-use bitflags::bitflags;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
-use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::Ed25519PublicKey;
 use nimiq_network_interface::network::Topic;
 use nimiq_primitives::{
@@ -15,9 +13,8 @@ use nimiq_transaction::ExecutedTransaction;
 use nimiq_vrf::VrfSeed;
 
 use crate::{
-    macro_block::{MacroBlock, MacroHeader},
-    micro_block::{MicroBlock, MicroHeader},
-    BlockError, MacroBody, MicroBody, MicroJustification, TendermintProof,
+    macro_block::MacroBlock, micro_block::MicroBlock, BlockError, MacroBody, MicroBody,
+    MicroJustification, TendermintProof,
 };
 
 /// These network topics are used to subscribe and request Blocks and Block Headers respectively
@@ -213,15 +210,6 @@ impl Block {
         }
     }
 
-    /// Returns the header of the block.
-    pub fn header(&self) -> BlockHeader {
-        // TODO: Can we eliminate the clone()s here?
-        match self {
-            Block::Macro(ref block) => BlockHeader::Macro(block.header.clone()),
-            Block::Micro(ref block) => BlockHeader::Micro(block.header.clone()),
-        }
-    }
-
     /// Returns the justification of the block. If the block has no justification then it returns
     /// None.
     pub fn justification(&self) -> Option<BlockJustification> {
@@ -395,22 +383,21 @@ impl Block {
     /// are needed when completely verifying a block.
     pub fn verify(&self, network: NetworkId) -> Result<(), BlockError> {
         // Check the block type.
-        if self.ty() != BlockType::of(self.header().block_number()) {
+        if self.ty() != BlockType::of(self.block_number()) {
             return Err(BlockError::InvalidBlockType);
         }
 
         // Perform header intrinsic verification.
-        let header = self.header();
-        header.verify(network, self.is_skip())?;
+        self.verify_header(network, self.is_skip())?;
 
         // Verify body if it exists.
         if let Some(body) = self.body() {
             // Check the body root.
             let body_hash = body.hash();
-            if *header.body_root() != body_hash {
+            if *self.body_root() != body_hash {
                 warn!(
-                    %header,
-                    body_root = %header.body_root(),
+                    %self,
+                    body_root = %self.body_root(),
                     expected_body_hash = %body_hash,
                     reason = "Header body_root doesn't match actual body hash",
                     "Invalid block"
@@ -420,9 +407,55 @@ impl Block {
 
             // Perform block type specific body verification.
             match body {
-                BlockBody::Micro(body) => body.verify(self.is_skip(), header.block_number())?,
+                BlockBody::Micro(body) => body.verify(self.is_skip(), self.block_number())?,
                 BlockBody::Macro(body) => body.verify(self.is_election())?,
             };
+        }
+
+        Ok(())
+    }
+
+    /// Verifies the header.
+    /// Note that only header intrinsic verifications are performed and further checks
+    /// are needed when completely verifying a block header.
+    pub fn verify_header(&self, network: NetworkId, is_skip: bool) -> Result<(), BlockError> {
+        // Check whether the block is from the correct network.
+        if self.network() != network {
+            return Err(BlockError::NetworkMismatch);
+        }
+
+        // Check the version
+        if self.version() != Policy::VERSION {
+            warn!(
+                header = %self,
+                obtained_version = self.version(),
+                expected_version = Policy::VERSION,
+                reason = "wrong version",
+                "Invalid block header"
+            );
+
+            return Err(BlockError::UnsupportedVersion);
+        }
+
+        // Check that the extra data does not exceed the permitted size.
+        // This is also checked during deserialization.
+        if self.extra_data().len() > 32 {
+            warn!(
+                header = %self,
+                reason = "too much extra data",
+                "Invalid block header"
+            );
+            return Err(BlockError::ExtraDataTooLarge);
+        }
+
+        // Check that skip blocks doesn't have any extra data
+        if is_skip && !self.extra_data().is_empty() {
+            warn!(
+                header = %self,
+                reason = "Skip block extra data is not empty",
+                "Invalid block"
+            );
+            return Err(BlockError::ExtraDataTooLarge);
         }
 
         Ok(())
@@ -616,213 +649,6 @@ impl FromDatabaseValue for Block {
     }
 }
 
-/// The enum representing a block header. Blocks can either be Micro blocks or Macro blocks (which
-/// includes both checkpoint and election blocks).
-#[derive(Clone, Debug, Eq, PartialEq, SerializeContent, Serialize, Deserialize)]
-pub enum BlockHeader {
-    Micro(MicroHeader),
-    Macro(MacroHeader),
-}
-
-impl BlockHeader {
-    /// Returns the type of the block.
-    pub fn ty(&self) -> BlockType {
-        match self {
-            BlockHeader::Macro(_) => BlockType::Macro,
-            BlockHeader::Micro(_) => BlockType::Micro,
-        }
-    }
-
-    /// Returns the network ID of the block.
-    pub fn network(&self) -> NetworkId {
-        match self {
-            BlockHeader::Macro(ref header) => header.network,
-            BlockHeader::Micro(ref header) => header.network,
-        }
-    }
-
-    /// Returns the version number of the block.
-    pub fn version(&self) -> u16 {
-        match self {
-            BlockHeader::Macro(ref header) => header.version,
-            BlockHeader::Micro(ref header) => header.version,
-        }
-    }
-
-    /// Returns the block number of the block.
-    pub fn block_number(&self) -> u32 {
-        match self {
-            BlockHeader::Macro(ref header) => header.block_number,
-            BlockHeader::Micro(ref header) => header.block_number,
-        }
-    }
-
-    /// Returns the timestamp of the block.
-    pub fn timestamp(&self) -> u64 {
-        match self {
-            BlockHeader::Macro(ref header) => header.timestamp,
-            BlockHeader::Micro(ref header) => header.timestamp,
-        }
-    }
-
-    /// Returns the parent hash of the block. The parent hash is the hash of the header of the
-    /// immediately preceding block.
-    pub fn parent_hash(&self) -> &Blake2bHash {
-        match self {
-            BlockHeader::Macro(ref header) => &header.parent_hash,
-            BlockHeader::Micro(ref header) => &header.parent_hash,
-        }
-    }
-
-    /// Returns the parent election hash of the block. The parent election hash is the hash of the
-    /// header of the preceding election macro block.
-    pub fn parent_election_hash(&self) -> Option<&Blake2bHash> {
-        match self {
-            BlockHeader::Macro(ref header) => Some(&header.parent_election_hash),
-            BlockHeader::Micro(ref _header) => None,
-        }
-    }
-
-    /// Returns the seed of the block.
-    pub fn seed(&self) -> &VrfSeed {
-        match self {
-            BlockHeader::Macro(ref header) => &header.seed,
-            BlockHeader::Micro(ref header) => &header.seed,
-        }
-    }
-
-    /// Returns the extra data of the block.
-    pub fn extra_data(&self) -> &[u8] {
-        match self {
-            BlockHeader::Macro(ref header) => &header.extra_data,
-            BlockHeader::Micro(ref header) => &header.extra_data,
-        }
-    }
-
-    /// Returns the state root of the block.
-    pub fn state_root(&self) -> &Blake2bHash {
-        match self {
-            BlockHeader::Macro(ref header) => &header.state_root,
-            BlockHeader::Micro(ref header) => &header.state_root,
-        }
-    }
-
-    /// Returns the body root of the block.
-    pub fn body_root(&self) -> &Blake2sHash {
-        match self {
-            BlockHeader::Macro(ref header) => &header.body_root,
-            BlockHeader::Micro(ref header) => &header.body_root,
-        }
-    }
-
-    /// Returns the Blake2b hash of the block header.
-    pub fn hash(&self) -> Blake2bHash {
-        match self {
-            BlockHeader::Macro(ref header) => header.hash(),
-            BlockHeader::Micro(ref header) => header.hash(),
-        }
-    }
-
-    /// Returns the Blake2s hash of the block header.
-    pub fn hash_blake2s(&self) -> Blake2sHash {
-        match self {
-            BlockHeader::Macro(ref header) => header.hash(),
-            BlockHeader::Micro(ref header) => header.hash(),
-        }
-    }
-
-    /// Unwraps the header and returns a reference to the underlying Macro header.
-    pub fn unwrap_macro_ref(&self) -> &MacroHeader {
-        if let BlockHeader::Macro(ref header) = self {
-            header
-        } else {
-            unreachable!()
-        }
-    }
-
-    /// Unwraps the header and returns a reference to the underlying Micro header.
-    pub fn unwrap_micro_ref(&self) -> &MicroHeader {
-        if let BlockHeader::Micro(ref header) = self {
-            header
-        } else {
-            unreachable!()
-        }
-    }
-
-    /// Unwraps the header and returns the underlying Macro header.
-    pub fn unwrap_macro(self) -> MacroHeader {
-        if let BlockHeader::Macro(header) = self {
-            header
-        } else {
-            unreachable!()
-        }
-    }
-
-    /// Unwraps the header and returns the underlying Micro header.
-    pub fn unwrap_micro(self) -> MicroHeader {
-        if let BlockHeader::Micro(header) = self {
-            header
-        } else {
-            unreachable!()
-        }
-    }
-
-    /// Verifies the header.
-    /// Note that only header intrinsic verifications are performed and further checks
-    /// are needed when completely verifying a block header.
-    pub fn verify(&self, network: NetworkId, is_skip: bool) -> Result<(), BlockError> {
-        // Check whether the block is from the correct network.
-        if self.network() != network {
-            return Err(BlockError::NetworkMismatch);
-        }
-
-        // Check the version
-        if self.version() != Policy::VERSION {
-            warn!(
-                header = %self,
-                obtained_version = self.version(),
-                expected_version = Policy::VERSION,
-                reason = "wrong version",
-                "Invalid block header"
-            );
-
-            return Err(BlockError::UnsupportedVersion);
-        }
-
-        // Check that the extra data does not exceed the permitted size.
-        // This is also checked during deserialization.
-        if self.extra_data().len() > 32 {
-            warn!(
-                header = %self,
-                reason = "too much extra data",
-                "Invalid block header"
-            );
-            return Err(BlockError::ExtraDataTooLarge);
-        }
-
-        // Check that skip blocks doesn't have any extra data
-        if is_skip && !self.extra_data().is_empty() {
-            warn!(
-                header = %self,
-                reason = "Skip block extra data is not empty",
-                "Invalid block"
-            );
-            return Err(BlockError::ExtraDataTooLarge);
-        }
-
-        Ok(())
-    }
-}
-
-impl fmt::Display for BlockHeader {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match self {
-            BlockHeader::Macro(header) => fmt::Display::fmt(header, f),
-            BlockHeader::Micro(header) => fmt::Display::fmt(header, f),
-        }
-    }
-}
-
 /// Struct representing the justification of a block.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum BlockJustification {
@@ -879,109 +705,6 @@ impl BlockBody {
             body
         } else {
             unreachable!()
-        }
-    }
-}
-
-bitflags! {
-    #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-    pub struct BlockComponentFlags: u8 {
-        const HEADER  = 0b0000_0001;
-        const JUSTIFICATION = 0b0000_0010;
-        const BODY = 0b0000_0100;
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BlockComponents {
-    pub header: Option<BlockHeader>,
-    pub justification: Option<BlockJustification>,
-    pub body: Option<BlockBody>,
-}
-
-impl BlockComponents {
-    pub fn from_block(block: &Block, flags: BlockComponentFlags) -> Self {
-        let header = if flags.contains(BlockComponentFlags::HEADER) {
-            Some(block.header())
-        } else {
-            None
-        };
-
-        let justification = if flags.contains(BlockComponentFlags::JUSTIFICATION) {
-            block.justification()
-        } else {
-            None
-        };
-
-        let body = if flags.contains(BlockComponentFlags::BODY) {
-            block.body()
-        } else {
-            None
-        };
-
-        BlockComponents {
-            header,
-            justification,
-            body,
-        }
-    }
-}
-
-impl TryFrom<BlockComponents> for Block {
-    type Error = ();
-
-    fn try_from(value: BlockComponents) -> Result<Self, Self::Error> {
-        match (value.header, value.justification) {
-            (
-                Some(BlockHeader::Micro(micro_header)),
-                Some(BlockJustification::Micro(micro_justification)),
-            ) => {
-                let body = value
-                    .body
-                    .map(|body| {
-                        if let BlockBody::Micro(micro_body) = body {
-                            Ok(micro_body)
-                        } else {
-                            Err(())
-                        }
-                    })
-                    .transpose()?;
-
-                Ok(Block::Micro(MicroBlock {
-                    header: micro_header,
-                    justification: Some(micro_justification),
-                    body,
-                }))
-            }
-            (Some(BlockHeader::Macro(macro_header)), macro_justification) => {
-                let justification = macro_justification
-                    .map(|justification| {
-                        if let BlockJustification::Macro(pbft_proof) = justification {
-                            Ok(pbft_proof)
-                        } else {
-                            Err(())
-                        }
-                    })
-                    .transpose()?;
-
-                let body = value
-                    .body
-                    .map(|body| {
-                        if let BlockBody::Macro(macro_body) = body {
-                            Ok(macro_body)
-                        } else {
-                            Err(())
-                        }
-                    })
-                    .transpose()?;
-
-                Ok(Block::Macro(MacroBlock {
-                    header: macro_header,
-                    justification,
-                    body,
-                }))
-            }
-            _ => Err(()),
         }
     }
 }

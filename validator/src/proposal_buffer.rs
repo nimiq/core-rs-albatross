@@ -747,8 +747,13 @@ mod test {
         );
 
         // Create a proposal from node 1 for node 2.
-        let proposal =
-            create_proposal_msg(nw1, nw2, signing_key, macro_block.header().unwrap_macro()).await;
+        let proposal = create_proposal_msg(
+            nw1,
+            nw2,
+            signing_key,
+            macro_block.unwrap_macro_ref().header.clone(),
+        )
+        .await;
 
         // Push the proposal into the ProposalBuffer
         proposal_sender.send(proposal);
@@ -791,8 +796,13 @@ mod test {
         );
 
         // Create a proposal from node 1 for node 2.
-        let proposal =
-            create_proposal_msg(nw1, nw2, signing_key, macro_block.header().unwrap_macro()).await;
+        let proposal = create_proposal_msg(
+            nw1,
+            nw2,
+            signing_key,
+            macro_block.unwrap_macro_ref().header.clone(),
+        )
+        .await;
 
         // Push the proposal into the ProposalBuffer
         proposal_sender.send(proposal);
@@ -850,8 +860,13 @@ mod test {
         );
 
         // Create a proposal from node 1 for node 2.
-        let proposal =
-            create_proposal_msg(nw1, nw2, signing_key, macro_block.header().unwrap_macro()).await;
+        let proposal = create_proposal_msg(
+            nw1,
+            nw2,
+            signing_key,
+            macro_block.unwrap_macro_ref().header.clone(),
+        )
+        .await;
 
         // Push the proposal into the ProposalBuffer
         proposal_sender.send(proposal);
@@ -912,8 +927,13 @@ mod test {
         );
 
         // Create a proposal from node 1 for node 2.
-        let proposal =
-            create_proposal_msg(nw1, nw2, signing_key, macro_block.header().unwrap_macro()).await;
+        let proposal = create_proposal_msg(
+            nw1,
+            nw2,
+            signing_key,
+            macro_block.unwrap_macro_ref().header.clone(),
+        )
+        .await;
 
         // Push the proposal into the ProposalBuffer
         proposal_sender.send(proposal);

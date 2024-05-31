@@ -299,7 +299,7 @@ async fn main_inner() -> Result<(), Error> {
                     .await;
                 }
 
-                let time = std::time::Duration::from_millis(block.header().timestamp());
+                let time = std::time::Duration::from_millis(block.timestamp());
                 let tx_count = block.transactions().map(|txs| txs.len()).unwrap_or(0);
                 let mempool_count = mempool.num_transactions();
 
