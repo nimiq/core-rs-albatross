@@ -7,10 +7,8 @@ use libp2p::{
     gossipsub,
     identity::Keypair,
 };
-#[cfg(feature = "tokio-time")]
-use nimiq_network_interface::network::CloseReason;
 use nimiq_network_interface::{
-    network::Network as NetworkInterface,
+    network::{CloseReason, Network as NetworkInterface},
     peer_info::Services,
     request::{
         InboundRequestError, OutboundRequestError, Request, RequestCommon, RequestError,
@@ -154,7 +152,6 @@ impl TestNetwork {
         (net1, net2)
     }
 
-    #[cfg(feature = "tokio-time")]
     async fn create_4_connected_networks() -> (
         (Network, Multiaddr),
         (Network, Multiaddr),
@@ -527,7 +524,6 @@ async fn test_valid_request_no_response_no_receiver() {
     };
 }
 
-#[cfg(feature = "tokio-time")]
 async fn disconnect_successfully(net1: &Arc<Network>, net2: &Arc<Network>) {
     log::debug!("Creating connected test networks");
 
@@ -549,7 +545,6 @@ async fn disconnect_successfully(net1: &Arc<Network>, net2: &Arc<Network>) {
     helper::assert_peer_left(&event2, &net1.get_local_peer_id());
 }
 
-#[cfg(feature = "tokio-time")]
 async fn reconnect_successfully(net1: &Arc<Network>, addr1: Multiaddr, net2: &Arc<Network>) {
     log::debug!("Creating connected test networks");
 
@@ -570,7 +565,6 @@ async fn reconnect_successfully(net1: &Arc<Network>, addr1: Multiaddr, net2: &Ar
     helper::assert_peer_joined(&event2, &net1.get_local_peer_id());
 }
 
-#[cfg(feature = "tokio-time")]
 async fn send_n_request_to_succeed(net1: &Arc<Network>, net2: &Arc<Network>, n: u32) {
     let test_request = TestRequest4 { request: 42 };
     let test_response = TestResponse4 { response: 43 };
@@ -606,7 +600,6 @@ async fn send_n_request_to_succeed(net1: &Arc<Network>, net2: &Arc<Network>, n: 
     }
 }
 
-#[cfg(feature = "tokio-time")]
 async fn send_n_request_to_fail(net1: &Arc<Network>, net2: &Arc<Network>, n: u32) {
     for i in 0..n {
         let test_request = TestRequest4 { request: 42 };
@@ -637,7 +630,6 @@ async fn send_n_request_to_fail(net1: &Arc<Network>, net2: &Arc<Network>, n: u32
     }
 }
 
-#[cfg(feature = "tokio-time")]
 #[test(tokio::test)]
 #[ignore]
 async fn it_can_limit_requests_rate() {
@@ -698,7 +690,6 @@ async fn it_can_limit_requests_rate() {
     send_n_request_to_succeed(&net1, &net2, TestRequest4::MAX_REQUESTS).await;
 }
 
-#[cfg(feature = "tokio-time")]
 #[test(tokio::test)]
 async fn it_can_limit_requests_rate_after_reconnection() {
     let ((net1, addr1), (net2, _), (net3, _), (net4, _)) =
@@ -760,7 +751,6 @@ async fn it_can_limit_requests_rate_after_reconnection() {
     send_n_request_to_succeed(&net1, &net4, TestRequest4::MAX_REQUESTS).await;
 }
 
-#[cfg(feature = "tokio-time")]
 #[test(tokio::test)]
 #[ignore]
 async fn it_can_reset_requests_rate_with_reconnections() {

@@ -25,13 +25,13 @@ base64 = "0.22"
 bytes = "1.6"
 futures = { workspace = true }
 hex = "0.4"
-instant = { version = "0.1", features = [ "wasm-bindgen" ] }
+instant = { version = "0.1", features = ["wasm-bindgen"] }
 ip_network = "0.4"
 log = { workspace = true }
 parking_lot = "0.12"
 pin-project = "1.1"
 pin-project-lite = "0.2.14"
-prometheus-client = { version = "0.22.2", optional = true}
+prometheus-client = { version = "0.22.2", optional = true }
 rand = "0.8"
 serde = "1.0"
 sha2 = "0.10"
@@ -92,7 +92,5 @@ nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }
 
 [features]
-default = ["tokio-time"]
 metrics = ["prometheus-client"]
-tokio-time = ["tokio/time"]
 tokio-websocket = ["libp2p/dns", "libp2p/tcp", "libp2p/tokio", "libp2p/websocket"]
