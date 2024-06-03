@@ -27,7 +27,7 @@ log = { workspace = true }
 multiaddr = "0.18"
 serde = "1.0"
 thiserror = "1.0"
-tokio = { version = "1.37", features = ["rt"] }
+tokio = { version = "1.38", features = ["rt"] }
 tokio-stream = { version = "0.1", features = ["default", "sync"] }
 
 nimiq-serde = { workspace = true }

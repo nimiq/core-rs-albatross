@@ -39,7 +39,7 @@ strum_macros = "0.26"
 subtle = "2.5"
 thiserror = "1.0"
 time = { version = "0.3", optional = true }
-tokio = { version = "1.37", features = ["rt"], optional = true }
+tokio = { version = "1.38", features = ["rt"], optional = true }
 toml = "0.8"
 tracing-loki = { version = "0.2.4", optional = true }
 tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "std"] }
