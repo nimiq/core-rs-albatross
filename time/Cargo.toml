@@ -17,5 +17,5 @@ workspace = true
 futures = "0.3"
 gloo-timers = { version = "0.3", features = ["futures"] }
 send_wrapper = { version = "0.6", features = ["futures"] }
-tokio = { version = "1.36", features = ["time"] }
+tokio = { version = "1.38", features = ["time"] }
 tokio-stream = { version = "0.1", features = ["time"] }

@@ -36,7 +36,7 @@ rand = "0.8"
 serde = "1.0"
 sha2 = "0.10"
 thiserror = "1.0"
-tokio = { version = "1.37", features = ["macros", "rt", "tracing"] }
+tokio = { version = "1.38", features = ["macros", "rt", "tracing"] }
 tokio-stream = "0.1"
 unsigned-varint = "0.8"
 void = "1.0"
@@ -86,7 +86,7 @@ libp2p = { version = "0.53.2", default-features = false, features = [
 
 [dev-dependencies]
 # In dev/testing we require more tokio features
-tokio = { version = "1.37", features = ["macros", "rt", "rt-multi-thread", "test-util", "time", "tracing"] }
+tokio = { version = "1.38", features = ["macros", "rt", "rt-multi-thread", "test-util", "time", "tracing"] }
 
 nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }
