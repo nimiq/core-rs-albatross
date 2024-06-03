@@ -110,24 +110,28 @@ impl<N: Network, Q: LiveSyncQueue<N>> Stream for LiveSyncer<N, Q> {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         Poll::Ready(loop {
+            // Poll the current future if there is one.
             if let Some(p) = self.pending.front_mut() {
-                // We have an item in progress, poll that until it's done
-                let item = ready!(p.as_mut().poll(cx));
-                self.pending.pop_front();
-                if let Some(event) = self.queue.process_push_result(item) {
-                    break Some(event);
+                if let Poll::Ready(item) = p.as_mut().poll(cx) {
+                    self.pending.pop_front();
+                    if let Some(event) = self.queue.process_push_result(item) {
+                        break Some(event);
+                    }
                 }
-            } else if let Some(item) = ready!(self.queue.poll_next_unpin(cx)) {
-                // No item in progress, but the stream is still going
-                self.pending = Q::push_queue_result(
+            }
+
+            // Poll the queue and buffer futures.
+            if let Some(item) = ready!(self.queue.poll_next_unpin(cx)) {
+                let mut futures = Q::push_queue_result(
                     Arc::clone(&self.network),
                     self.blockchain.clone(),
                     Arc::clone(&self.bls_cache),
                     item,
                     self.queue.include_micro_bodies(),
                 );
+                self.pending.append(&mut futures);
             } else {
-                // The stream is done
+                // The stream is done.
                 break None;
             }
         })
