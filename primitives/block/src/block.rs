@@ -355,7 +355,7 @@ impl Block {
     /// Returns true if the block is an election block, false otherwise.
     pub fn is_election(&self) -> bool {
         match self {
-            Block::Macro(block) => block.is_election_block(),
+            Block::Macro(block) => block.is_election(),
             Block::Micro(_) => false,
         }
     }
@@ -545,7 +545,7 @@ impl Block {
         //   parent election hash
         // - Predecessor is a checkpoint block: this block must have the same
         //   parent election hash
-        let expected_parent_election_hash = if predecessor.is_election_block() {
+        let expected_parent_election_hash = if predecessor.is_election() {
             predecessor.hash()
         } else {
             predecessor.header.parent_election_hash.clone()

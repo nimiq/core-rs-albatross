@@ -411,7 +411,7 @@ impl Blockchain {
         this.state.macro_head_hash = block_hash.clone();
 
         // Check if this block is an election block.
-        let is_election_block = macro_block.is_election_block();
+        let is_election_block = macro_block.is_election();
         if is_election_block {
             this.state.election_head = macro_block.clone();
             this.state.election_head_hash = block_hash.clone();

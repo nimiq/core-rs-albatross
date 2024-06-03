@@ -70,7 +70,7 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMacroChain {
         let checkpoint_hash = blockchain.macro_head_hash();
         let caught_up = epochs.is_empty()
             || *epochs.last().unwrap() == checkpoint_block.header.parent_election_hash;
-        let checkpoint = if !checkpoint_block.is_election_block()
+        let checkpoint = if !checkpoint_block.is_election()
             && checkpoint_hash != start_block_hash
             && caught_up
         {
@@ -137,7 +137,7 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
         };
 
         // FIXME Don't send the same macro block twice.
-        let election_macro_block = if block.is_election_block() {
+        let election_macro_block = if block.is_election() {
             Some(block)
         } else {
             None

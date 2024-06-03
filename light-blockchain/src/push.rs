@@ -187,7 +187,7 @@ impl LightBlockchain {
             this.macro_head = macro_block.clone();
 
             // If the block is also an election block, then we have more fields to update.
-            if macro_block.is_election_block() {
+            if macro_block.is_election() {
                 this.election_head = macro_block.clone();
 
                 this.current_validators = macro_block.get_validators();

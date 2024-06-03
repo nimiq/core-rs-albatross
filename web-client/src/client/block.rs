@@ -163,7 +163,7 @@ impl PlainBlock {
             Block::Macro(block) => PlainBlock::Macro(PlainMacroBlock {
                 common: common_fields,
 
-                is_election_block: block.is_election_block(),
+                is_election_block: block.is_election(),
                 round: block.round(),
                 prev_election_hash: block.header.parent_election_hash.to_hex(),
             }),

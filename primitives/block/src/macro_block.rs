@@ -54,7 +54,7 @@ impl MacroBlock {
 
     /// Computes the next interlink from self.header.interlink
     pub fn get_next_interlink(&self) -> Result<Vec<Blake2bHash>, BlockError> {
-        if !self.is_election_block() {
+        if !self.is_election() {
             return Err(BlockError::InvalidBlockType);
         }
         let mut interlink = self
@@ -86,7 +86,7 @@ impl MacroBlock {
     }
 
     /// Returns whether or not this macro block is an election block.
-    pub fn is_election_block(&self) -> bool {
+    pub fn is_election(&self) -> bool {
         Policy::is_election_block_at(self.header.block_number)
     }
 

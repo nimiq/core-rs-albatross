@@ -46,7 +46,7 @@ impl Blockchain {
 
         // Verify the interlink (or its absence)
         if let Block::Macro(macro_) = &block {
-            if macro_.is_election_block() {
+            if macro_.is_election() {
                 if let Some(interlink) = &macro_.header.interlink {
                     let expected_interlink = self.election_head().get_next_interlink().unwrap();
 
@@ -60,7 +60,7 @@ impl Blockchain {
                 }
             }
 
-            if !macro_.is_election_block() && macro_.header.interlink.is_some() {
+            if !macro_.is_election() && macro_.header.interlink.is_some() {
                 warn!(reason = "Superfluous Interlink", "Rejecting block");
                 return Err(PushError::InvalidBlock(BlockError::InvalidInterlink));
             }
@@ -258,7 +258,7 @@ impl Blockchain {
             .expect("Block body must be present");
 
         // Verify validators.
-        let validators = match macro_block.is_election_block() {
+        let validators = match macro_block.is_election() {
             true => Some(self.next_validators(&macro_block.header.seed)),
             false => None,
         };

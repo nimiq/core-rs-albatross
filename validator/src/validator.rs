@@ -620,7 +620,7 @@ where
                     if result == Some(PushResult::Extended)
                         || result == Some(PushResult::Rebranched)
                     {
-                        if block_copy.is_election_block() {
+                        if block_copy.is_election() {
                             info!(
                                 block_number = &block_copy.header.block_number,
                                 "Publishing Election MacroBlock"

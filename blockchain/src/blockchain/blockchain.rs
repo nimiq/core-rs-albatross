@@ -236,7 +236,7 @@ impl Blockchain {
             Block::Micro(_) => return Err(BlockchainError::InconsistentState),
         };
 
-        if !election_head.is_election_block() {
+        if !election_head.is_election() {
             return Err(BlockchainError::InconsistentState);
         }
 

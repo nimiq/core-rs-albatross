@@ -236,7 +236,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
                 let macro_block = batch_set_info.final_macro_block();
                 verify_state.predecessor = Block::Macro(macro_block.clone());
 
-                if macro_block.is_election_block() {
+                if macro_block.is_election() {
                     match macro_block.get_validators() {
                         Some(validators) => verify_state.validators = validators,
                         None => {

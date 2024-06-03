@@ -57,7 +57,7 @@ impl BlockInclusionProof {
 
     // Checks whether the BlockInclusionProof proofs `target` when starting from `election_head`
     pub fn is_block_proven(&self, election_head: &MacroBlock, target: &MacroBlock) -> bool {
-        if !target.is_election_block() {
+        if !target.is_election() {
             return false;
         }
 
