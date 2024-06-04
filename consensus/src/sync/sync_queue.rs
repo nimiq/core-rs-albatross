@@ -143,6 +143,9 @@ where
     TError: Debug + Display + Send,
     TNetwork: Network,
 {
+    const MIN_ATTEMPTS: usize = 4;
+    const MAX_ATTEMPTS: usize = 12;
+
     pub fn with_verification(
         network: Arc<TNetwork>,
         ids: Vec<(TId, Option<TNetwork::PubsubId>)>,
@@ -270,9 +273,16 @@ where
         mut peer_index: PeerListIndex,
         num_tries: usize,
     ) -> bool {
-        // If we tried all peers for this hash, return an error.
-        // TODO max number of tries
-        if num_tries >= self.peers.read().len() {
+        // If we tried all peers for this id, return an error.
+        // Bound the number of tries such that
+        //   - we don't send an excessive number of requests when we have many peers
+        //   - we try multiple times with the same peer if we only have few peers
+        let max_tries = self
+            .peers
+            .read()
+            .len()
+            .clamp(Self::MIN_ATTEMPTS, Self::MAX_ATTEMPTS);
+        if num_tries >= max_tries {
             return false;
         }
 
