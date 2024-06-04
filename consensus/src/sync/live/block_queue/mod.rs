@@ -231,14 +231,6 @@ impl<N: Network> BlockQueue<N> {
             if self.request_component.take_peer(&peer_id).is_some() {
                 return Some(QueuedBlock::TooFarAhead(block, peer_id));
             }
-        } else if self.buffer.len() >= self.config.buffer_max {
-            // TODO: This does not account for the nested map
-            log::warn!(
-                "Discarding block {} - buffer full (max {})",
-                block,
-                self.buffer.len(),
-            );
-            self.report_validation_result(pubsub_id, MsgAcceptance::Ignore);
         } else if block_number <= macro_height {
             // Block is from a previous batch/epoch, discard it.
             log::warn!(
