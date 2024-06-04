@@ -236,7 +236,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
                     // Calculate an upper bound on the peer's head block.
                     // The upper bound is the last micro block of the latest batch of the peer.
-                    #[cfg(feature = "full")]
                     let peer_head_upper_bound = epoch_ids
                         .checkpoint
                         .as_ref()
@@ -245,12 +244,11 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                             if epoch_ids.checkpoint_epoch_number() == 0 {
                                 return 0;
                             }
-                            // FIXME: Ban peer if it sends an invalid epoch_number instead of panicking.
                             Policy::first_block_of(epoch_ids.checkpoint_epoch_number() as u32)
-                                .expect("The supplied epoch number is out of bounds")
+                                .unwrap_or(u32::MAX)
                         })
-                        + Policy::blocks_per_batch()
-                        - 1;
+                        .saturating_add(Policy::blocks_per_batch())
+                        .saturating_sub(1);
 
                     if peer_head_upper_bound.saturating_sub(our_head) <= self.full_sync_threshold {
                         log::debug!(
