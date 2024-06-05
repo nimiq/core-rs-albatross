@@ -100,6 +100,8 @@ pub struct BlockQueue<N: Network> {
 }
 
 impl<N: Network> BlockQueue<N> {
+    const MAX_BUFFERED_PER_PEER_PER_HEIGHT: usize = 5;
+
     pub async fn new(network: Arc<N>, blockchain: BlockchainProxy, config: QueueConfig) -> Self {
         let block_stream = if config.include_micro_bodies {
             network.subscribe::<BlockTopic>().await.unwrap().boxed()
@@ -259,11 +261,14 @@ impl<N: Network> BlockQueue<N> {
         let mut parent_block_number = block_number - 1;
 
         // Insert block into buffer. If we already know the block, we're done.
-        let block_known = self.insert_block_into_buffer(block, pubsub_id.clone());
-        log::trace!("Buffering block #{}, known={}", block_number, block_known);
-        if block_known {
+        if !self.insert_block_into_buffer(block, pubsub_id.clone()) {
+            log::trace!(
+                block_number,
+                "Not buffering block - already known or exceeded the per peer limit",
+            );
             return;
         }
+        log::trace!(block_number, "Buffering block");
 
         // If the parent of this block is already in the buffer, follow the chain to see whether there are still blocks missing.
         while let Some(parent_block_hash) =
@@ -296,12 +301,76 @@ impl<N: Network> BlockQueue<N> {
         );
     }
 
+    /// Attempts to insert a block into the buffer.
+    /// This may fail due to the peer who propagated the block as given in the optional `pubsub_id` parameter
+    /// is already having too many blocks buffered. Blocks without a pubsub_id will always be buffered.
+    ///
+    /// At most `MAX_BUFFERED_PER_PEER_PER_HEIGHT` block per peer per block height will be buffered leaving enough
+    /// room for a bock and the skip block making it obsolete. For benign peers that is sufficient, as they will
+    /// more than that.
+    ///
+    /// ## Returns
+    /// * `true` if the block was added to the buffer
+    /// * `false` otherwise
     fn insert_block_into_buffer(&mut self, block: Block, pubsub_id: Option<N::PubsubId>) -> bool {
-        self.buffer
-            .entry(block.block_number())
-            .or_default()
-            .insert(block.hash(), (block, pubsub_id))
-            .is_some()
+        let peer_id = match pubsub_id {
+            // Blocks without a pubsub_id are requested and will always be buffered.
+            None => {
+                let map = self.buffer.entry(block.block_number()).or_default();
+                if map.contains_key(&block.hash()) {
+                    return false;
+                }
+                assert!(map.insert(block.hash(), (block, None)).is_none());
+                return true;
+            }
+            // For blocks with a pubsub id the propagation source is the peer which can
+            // only have MAX_BUFFERED_PER_PEER_PER_HEIGHT items buffered.
+            Some(ref pubsub_id) => pubsub_id.propagation_source(),
+        };
+
+        // Get the entry for the block number if it exists.
+        // Otherwise add the entry and add the block to it and return.
+        let map = match self.buffer.entry(block.block_number()) {
+            BTreeMapEntry::Occupied(occupied_entry) => occupied_entry.into_mut(),
+            BTreeMapEntry::Vacant(vacant_entry) => {
+                // Trivially okay to buffer as nothing is buffered yet.
+                vacant_entry.insert(HashMap::from([(block.hash(), (block, pubsub_id))]));
+                return true;
+            }
+        };
+
+        let mut blocks_by_peer = 0;
+        for (hash, (_block, pubsub)) in map.iter() {
+            if *hash == block.hash() {
+                // Block is already buffered. Ignore it here.
+                return false;
+            }
+
+            // Extract the propagation source or move on to the next item
+            let propagation_source = match pubsub {
+                Some(pubsub_id) => pubsub_id.propagation_source(),
+                None => continue,
+            };
+
+            // Check if the source is the current peer
+            if propagation_source == peer_id {
+                // Increase the counter
+                blocks_by_peer += 1;
+                // Check if the count exceeds the maximum buffer count
+                if blocks_by_peer == Self::MAX_BUFFERED_PER_PEER_PER_HEIGHT {
+                    log::debug!(
+                        ?peer_id, block_number=block.block_number(), dropped_block=?block,
+                        "Peer buffer exceeded limit, dropping block",
+                    );
+                    // If so return, as the peer cannot buffer any additional items.
+                    return false;
+                }
+            }
+        }
+        // Insert the block. Strictly speaking the .is_none() is redundant with previous checks
+        // and could be replaced with return true;
+        assert!(map.insert(block.hash(), (block, pubsub_id)).is_none());
+        true
     }
 
     fn get_parent_from_buffer(&self, block_number: u32, hash: &Blake2bHash) -> Option<Blake2bHash> {
