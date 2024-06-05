@@ -31,6 +31,12 @@ pub struct MacroBlock {
 }
 
 impl MacroBlock {
+    #[allow(clippy::identity_op)]
+    pub const MAX_SIZE: usize = 0
+        + /*header*/ MacroHeader::MAX_SIZE
+        + /*body*/ nimiq_serde::option_max_size(MacroBody::MAX_SIZE)
+        + /*justification*/ nimiq_serde::option_max_size(TendermintProof::MAX_SIZE);
+
     /// Returns the network ID of this macro block.
     pub fn network(&self) -> NetworkId {
         self.header.network
@@ -292,6 +298,12 @@ pub struct MacroBody {
 }
 
 impl MacroBody {
+    #[allow(clippy::identity_op)]
+    pub const MAX_SIZE: usize = 0
+        + /*validators*/ nimiq_serde::option_max_size(Validators::MAX_SIZE)
+        + /*next_batch_initial_punished_set*/ BitSet::max_size(Policy::SLOTS as usize)
+        + /*transactions*/ nimiq_serde::vec_max_size(RewardTransaction::SIZE, Policy::SLOTS as usize);
+
     pub(crate) fn verify(&self, is_election: bool) -> Result<(), BlockError> {
         if is_election != self.validators.is_some() {
             return Err(BlockError::InvalidValidators);

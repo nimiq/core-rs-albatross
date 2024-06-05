@@ -52,6 +52,13 @@ pub struct Validator {
 }
 
 impl Validator {
+    #[allow(clippy::identity_op)]
+    pub const MAX_SIZE: usize = 0
+        + /*address*/ Address::SIZE
+        + /*voting_key*/ LazyBlsPublicKey::SIZE
+        + /*signing_key*/ SchnorrPublicKey::SIZE
+        + /*slots*/ 2 * nimiq_serde::U16_MAX_SIZE;
+
     /// Creates a new Validator.
     pub fn new<TBlsKey: Into<LazyBlsPublicKey>, TSchnorrKey: Into<SchnorrPublicKey>>(
         address: Address,
@@ -292,6 +299,11 @@ impl ValidatorsBuilder {
 
         Validators::new(validators)
     }
+}
+
+impl Validators {
+    pub const MAX_SIZE: usize =
+        nimiq_serde::vec_max_size(Validator::MAX_SIZE, Policy::SLOTS as usize);
 }
 
 #[cfg(feature = "serde-derive")]

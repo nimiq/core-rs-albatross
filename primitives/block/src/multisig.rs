@@ -1,6 +1,7 @@
 use nimiq_bls::AggregateSignature;
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
+use nimiq_primitives::policy::Policy;
 use serde::{Deserialize, Serialize};
 
 /*
@@ -15,6 +16,11 @@ pub struct MultiSignature {
 }
 
 impl MultiSignature {
+    #[allow(clippy::identity_op)]
+    pub const MAX_SIZE: usize = 0
+        + /*signature*/ AggregateSignature::SIZE
+        + /*signers*/ BitSet::max_size(Policy::SLOTS as usize);
+
     pub fn new(signature: AggregateSignature, signers: BitSet) -> Self {
         Self { signature, signers }
     }

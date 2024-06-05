@@ -11,3 +11,11 @@ pub struct RewardTransaction {
     /// The reward amount.
     pub value: Coin,
 }
+
+impl RewardTransaction {
+    #[allow(clippy::identity_op)]
+    pub const SIZE: usize = 0
+        + /*validator_address*/ Address::SIZE
+        + /*recipient*/ Address::SIZE
+        + /*value*/ Coin::SIZE;
+}

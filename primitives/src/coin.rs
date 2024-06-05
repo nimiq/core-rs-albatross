@@ -257,6 +257,10 @@ impl FromStr for Coin {
     }
 }
 
+impl Coin {
+    pub const SIZE: usize = 8;
+}
+
 #[cfg(feature = "serde-derive")]
 mod serialization {
     use serde::{

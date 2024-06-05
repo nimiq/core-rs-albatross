@@ -18,6 +18,11 @@ pub struct TendermintProof {
 }
 
 impl TendermintProof {
+    #[allow(clippy::identity_op)]
+    pub const MAX_SIZE: usize = 0
+        + /*round*/ nimiq_serde::U32_MAX_SIZE
+        + /*sig*/ MultiSignature::MAX_SIZE;
+
     /// This simply returns the number of slots that voted (precommitted) to this block.
     pub fn votes(&self) -> u16 {
         self.sig.signers.len() as u16

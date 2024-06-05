@@ -139,6 +139,10 @@ impl From<LazyPublicKey> for CompressedPublicKey {
     }
 }
 
+impl LazyPublicKey {
+    pub const SIZE: usize = CompressedPublicKey::SIZE;
+}
+
 #[cfg(feature = "serde-derive")]
 mod serialization {
     use serde::{Deserialize, Serialize};
