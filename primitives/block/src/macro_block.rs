@@ -343,3 +343,16 @@ pub enum IntoSlotsError {
     #[error("Not an election macro block")]
     NoElection,
 }
+
+#[cfg(test)]
+mod test {
+    use super::MacroBlock;
+
+    #[test]
+    fn size_well_below_msg_limit() {
+        assert!(
+            2 * dbg!(MacroBlock::MAX_SIZE) + 16384
+                <= dbg!(nimiq_network_interface::network::MIN_SUPPORTED_MSG_SIZE)
+        );
+    }
+}

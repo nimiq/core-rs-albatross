@@ -2,7 +2,7 @@ use std::{num::NonZeroU8, time::Duration};
 
 use libp2p::{gossipsub, identity::Keypair, kad, Multiaddr, StreamProtocol};
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::peer_info::Services;
+use nimiq_network_interface::{network::MIN_SUPPORTED_MSG_SIZE, peer_info::Services};
 use sha2::{Digest, Sha256};
 
 use crate::{
@@ -57,7 +57,7 @@ impl Config {
         let gossipsub = gossipsub::ConfigBuilder::default()
             .mesh_n_low(3)
             .validate_messages()
-            .max_transmit_size(1_000_000) // TODO find a reasonable value for this parameter
+            .max_transmit_size(MIN_SUPPORTED_MSG_SIZE)
             .validation_mode(gossipsub::ValidationMode::Permissive)
             .heartbeat_interval(Duration::from_millis(700))
             // Use the message hash as the message ID instead of the default PeerId + sequence_number

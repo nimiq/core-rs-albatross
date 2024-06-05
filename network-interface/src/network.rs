@@ -37,6 +37,9 @@ pub trait Topic {
     const VALIDATE: bool;
 }
 
+/// Network implementations have to at least support messages of this size.
+pub const MIN_SUPPORTED_MSG_SIZE: usize = 1024 * 1024;
+
 #[derive(Clone, Debug)]
 pub enum MsgAcceptance {
     Accept,
