@@ -52,7 +52,7 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
             Arc::clone(&network),
             peer_id,
             locators,
-            1000, // TODO: Use other value
+            Self::MAX_REQUEST_EPOCHS,
         )
         .await;
 
@@ -68,6 +68,19 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
                 })
             }
             Ok(Ok(mut macro_chain)) => {
+                // Validate that the maximum number of epochs is not exceeded.
+                if macro_chain.epochs.len() > Self::MAX_REQUEST_EPOCHS as usize {
+                    log::warn!(
+                        num_epochs = macro_chain.epochs.len(),
+                        %peer_id,
+                        "Request macro chain failed: too many epochs returned"
+                    );
+                    network
+                        .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
+                        .await;
+                    return None;
+                }
+
                 // Clear checkpoint if epochs were returned. This avoids processing checkpoints that
                 // become outdated while the epochs preceding it are being downloaded and applied.
                 if !macro_chain.epochs.is_empty() {
@@ -86,7 +99,7 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
                         || Policy::is_election_block_at(checkpoint.block_number)
                     {
                         // Peer provided an invalid checkpoint block number, close connection.
-                        log::error!(
+                        log::warn!(
                             given_checkpoint_epoch,
                             expected_checkpoint_epoch,
                             peer = %peer_id,
@@ -116,7 +129,7 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
                 })
             }
             Err(e) => {
-                log::error!("Request macro chain failed: {:?}", e);
+                log::warn!("Request macro chain failed: {:?}", e);
                 network.disconnect_peer(peer_id, CloseReason::Error).await;
                 None
             }

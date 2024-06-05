@@ -56,6 +56,8 @@ impl Stream for MockHistorySyncStream {
 }
 
 impl MacroSync<MockPeerId> for MockHistorySyncStream {
+    const MAX_REQUEST_EPOCHS: u16 = 3;
+
     fn add_peer(&mut self, peer_id: MockPeerId) {
         self.peers.write().push(peer_id);
     }

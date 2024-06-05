@@ -258,6 +258,8 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 }
 
 impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for LightMacroSync<TNetwork> {
+    const MAX_REQUEST_EPOCHS: u16 = 1000; // TODO: Use other value
+
     fn add_peer(&mut self, peer_id: TNetwork::PeerId) {
         info!(%peer_id, "Requesting zkp from peer");
 

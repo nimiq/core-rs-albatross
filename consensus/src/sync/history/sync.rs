@@ -100,6 +100,8 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
 }
 
 impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for HistoryMacroSync<TNetwork> {
+    const MAX_REQUEST_EPOCHS: u16 = 1000; // TODO: Use other value
+
     fn add_peer(&mut self, peer_id: TNetwork::PeerId) {
         // Ignore peer if we already know it.
         if self.peers.contains_key(&peer_id) {

@@ -24,6 +24,8 @@ use crate::{consensus::ResolveBlockRequest, messages::RequestHead};
 /// The quantity of macro blocks needed or extra metadata associated are defined by each
 /// implementor of these trait.
 pub trait MacroSync<TPeerId>: Stream<Item = MacroSyncReturn<TPeerId>> + Unpin + Send {
+    /// The maximum amount of epochs we request for MacroSync
+    const MAX_REQUEST_EPOCHS: u16;
     /// Adds a peer to synchronize macro blocks
     fn add_peer(&mut self, peer_id: TPeerId);
 }

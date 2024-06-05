@@ -247,8 +247,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                             Policy::first_block_of(epoch_ids.checkpoint_epoch_number() as u32)
                                 .unwrap_or(u32::MAX)
                         })
-                        .saturating_add(Policy::blocks_per_batch())
-                        .saturating_sub(1);
+                        .saturating_add(Policy::blocks_per_batch() - 1);
 
                     if peer_head_upper_bound.saturating_sub(our_head) <= self.full_sync_threshold {
                         log::debug!(
