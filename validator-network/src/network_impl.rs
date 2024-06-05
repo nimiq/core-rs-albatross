@@ -231,9 +231,13 @@ where
             RequestError::InboundRequest(InboundRequestError::NoReceiver) => {}
             // In all other cases, clear the Peer ID cache for this validator
             _ => {
-                if let Some(validator_key) =
-                    self.validator_keys.read().get(usize::from(validator_id))
-                {
+                // Make sure to drop the `self.validator_keys` lock after this line.
+                let validator_key = self
+                    .validator_keys
+                    .read()
+                    .get(usize::from(validator_id))
+                    .cloned();
+                if let Some(validator_key) = validator_key {
                     // Clear the peer ID cache only if the error happened for the same Peer ID that we have cached
                     let mut validator_peer_id_cache = self.validator_peer_id_cache.write();
                     if let Some(cache_entry) =
