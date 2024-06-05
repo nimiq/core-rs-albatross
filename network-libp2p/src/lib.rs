@@ -10,7 +10,9 @@ mod error;
 mod network;
 #[cfg(feature = "metrics")]
 mod network_metrics;
+mod network_types;
 mod rate_limiting;
+mod swarm;
 
 pub const DISCOVERY_PROTOCOL: &str = "/nimiq/discovery/0.0.1";
 

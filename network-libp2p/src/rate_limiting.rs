@@ -1,11 +1,14 @@
 use std::{
     cmp::Ordering,
     collections::{BTreeSet, HashMap},
+    sync::Arc,
     time::Duration,
 };
 
 use instant::Instant;
-use libp2p::PeerId;
+use libp2p::{request_response::InboundRequestId, PeerId};
+use nimiq_network_interface::request::RequestCommon;
+use parking_lot::Mutex;
 
 /// Holds the expiration time for a given peer and request type. This struct defines the ordering for the btree set.
 /// The smaller expiration times come first.
@@ -134,5 +137,118 @@ impl RateLimit {
     /// Returns the timestamp for the next reset of the counters.
     pub fn next_reset_time(&self) -> Instant {
         self.last_reset + self.time_window
+    }
+}
+
+// Network helpers for rate limiting
+
+pub(crate) fn is_under_the_rate_limits<Req: RequestCommon>(
+    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
+    peer_id: PeerId,
+    request_id: InboundRequestId,
+) -> bool {
+    // Gets lock of peer requests limits read and write on it.
+    let mut peer_request_limits = peer_request_limits.lock();
+
+    // If the peer has never sent a request of this type, creates a new entry.
+    let requests_limit = peer_request_limits
+        .entry(peer_id)
+        .or_default()
+        .entry(Req::TYPE_ID)
+        .or_insert_with(|| RateLimit::new(Req::MAX_REQUESTS, Req::TIME_WINDOW, Instant::now()));
+
+    // Ensures that the request is allowed based on the set limits and updates the counter.
+    // Returns early if not allowed.
+    if !requests_limit.increment_and_is_allowed(1) {
+        log::debug!(
+            "[{:?}][{:?}] {:?} Exceeded max requests rate {:?} requests per {:?} seconds",
+            request_id,
+            peer_id,
+            std::any::type_name::<Req>(),
+            Req::MAX_REQUESTS,
+            Req::TIME_WINDOW,
+        );
+        return false;
+    }
+    true
+}
+
+pub(crate) fn remove_rate_limits(
+    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
+    rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
+    peer_id: PeerId,
+) {
+    // Every time a peer disconnects, we delete all expired pending limits.
+    clean_up(
+        Arc::clone(&peer_request_limits),
+        Arc::clone(&rate_limits_pending_deletion),
+    );
+
+    // Firstly we must acquire the lock of the pending deletes to avoid deadlocks.
+    let mut rate_limits_pending_deletion_l = rate_limits_pending_deletion.lock();
+    let mut peer_request_limits_l = peer_request_limits.lock();
+
+    // Go through all existing request types of the given peer and deletes the limit counters if possible or marks it for deletion.
+    if let Some(request_limits) = peer_request_limits_l.get_mut(&peer_id) {
+        request_limits.retain(|req_type, rate_limit| {
+            // Gets the requests limit and deletes it if no counter info would be lost, otherwise places it as pending deletion.
+            if !rate_limit.can_delete(Instant::now()) {
+                rate_limits_pending_deletion_l.insert(peer_id, *req_type, rate_limit);
+                true
+            } else {
+                false
+            }
+        });
+        // If the peer no longer has any pending rate limits, then it gets removed.
+        if request_limits.is_empty() {
+            peer_request_limits_l.remove(&peer_id);
+        }
+    }
+}
+
+/// Deletes the rate limits that were previously marked as pending if its expiration time has passed.
+pub(crate) fn clean_up(
+    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
+    rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
+) {
+    let mut rate_limits_pending_deletion_l = rate_limits_pending_deletion.lock();
+
+    // Iterates from the oldest to the most recent expiration date and deletes the entries that have expired.
+    // The pending to deletion is ordered from the oldest to the most recent expiration date, thus we break early
+    // from the loop once we find a non expired rate limit.
+    while let Some(peer_expiration) = rate_limits_pending_deletion_l.first() {
+        let current_timestamp = Instant::now();
+        if peer_expiration.expiration_time <= current_timestamp {
+            let mut peer_request_limits_l = peer_request_limits.lock();
+
+            if let Some(peer_req_limits) = peer_request_limits_l
+                .get_mut(&peer_expiration.peer_id)
+                .and_then(|peer_req_limits| {
+                    if let Some(rate_limit) = peer_req_limits.get(&peer_expiration.req_type) {
+                        // If the peer has reconnected the rate limit may be enforcing a new limit. In this case we only remove
+                        // the pending deletion.
+                        if rate_limit.can_delete(current_timestamp) {
+                            peer_req_limits.remove(&peer_expiration.req_type);
+                        }
+                        return Some(peer_req_limits);
+                    }
+                    // Only returns None if no request type was found.
+                    None
+                })
+            {
+                // If the peer no longer has any pending rate limits, then it gets removed from both rate limits and pending deletion.
+                if peer_req_limits.is_empty() {
+                    peer_request_limits_l.remove(&peer_expiration.peer_id);
+                }
+            } else {
+                // If the information is in pending deletion, that should mean it was not deleted from peer_request_limits yet, so that
+                // reconnection doesn't bypass the limits we are enforcing.
+                unreachable!("Tried to remove a non existing rate limit from peer_request_limits.");
+            }
+            // Removes the entry from the pending for deletion.
+            rate_limits_pending_deletion_l.remove_first();
+        } else {
+            break;
+        }
     }
 }
