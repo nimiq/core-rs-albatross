@@ -529,7 +529,7 @@ impl<N: Network> Stream for StateQueue<N> {
                     let percentage = (key as f32 / u32::MAX as f32) * 100.0;
                     log::debug!(
                         ?start_key,
-                        "Received state sync chunk, ~{}% complete",
+                        "Received state sync chunk, ~{:.2}% complete",
                         percentage,
                     );
 
