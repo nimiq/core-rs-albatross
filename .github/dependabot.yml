@@ -2,6 +2,12 @@ version: 2
 updates:
 - package-ecosystem: github-actions
   directory: "/"
+  groups:
+    minor-and-patch-updates:
+    applies-to: version-updates
+    update-types:
+    - "minor"
+    - "patch"
   schedule:
     interval: daily
     timezone: America/Costa_Rica
@@ -12,6 +18,12 @@ updates:
   - jsdanielh
 - package-ecosystem: cargo
   directory: "/"
+  groups:
+    minor-and-patch-updates:
+    applies-to: version-updates
+    update-types:
+    - "minor"
+    - "patch"
   schedule:
     interval: daily
     timezone: America/Costa_Rica
