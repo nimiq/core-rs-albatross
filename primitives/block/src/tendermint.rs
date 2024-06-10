@@ -4,12 +4,12 @@ use nimiq_primitives::{
     policy::Policy, slots_allocation::Validators, TendermintIdentifier, TendermintStep,
     TendermintVote,
 };
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 
 use crate::{MacroBlock, MultiSignature};
 
 /// The proof for a block produced by Tendermint.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
 pub struct TendermintProof {
     // The round when the block was completed. This is necessary to verify the signature.
     pub round: u32,
@@ -18,11 +18,6 @@ pub struct TendermintProof {
 }
 
 impl TendermintProof {
-    #[allow(clippy::identity_op)]
-    pub const MAX_SIZE: usize = 0
-        + /*round*/ nimiq_serde::U32_MAX_SIZE
-        + /*sig*/ MultiSignature::MAX_SIZE;
-
     /// This simply returns the number of slots that voted (precommitted) to this block.
     pub fn votes(&self) -> u16 {
         self.sig.signers.len() as u16

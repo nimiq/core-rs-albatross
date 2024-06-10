@@ -139,15 +139,16 @@ impl From<LazyPublicKey> for CompressedPublicKey {
     }
 }
 
-impl LazyPublicKey {
-    pub const SIZE: usize = CompressedPublicKey::SIZE;
-}
-
 #[cfg(feature = "serde-derive")]
 mod serialization {
+    use nimiq_serde::SerializedSize;
     use serde::{Deserialize, Serialize};
 
     use super::*;
+
+    impl SerializedSize for LazyPublicKey {
+        const SIZE: usize = CompressedPublicKey::SIZE;
+    }
 
     impl Serialize for LazyPublicKey {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

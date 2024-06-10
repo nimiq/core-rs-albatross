@@ -6,7 +6,7 @@ use std::{
 
 use bytes::{Buf, BufMut, BytesMut};
 use futures::{ready, AsyncWrite, Sink};
-use nimiq_serde::Serialize;
+use nimiq_serde::{Serialize, SerializedSize as _};
 use pin_project::pin_project;
 
 use super::header::Header;
@@ -141,7 +141,7 @@ where
 #[cfg(test)]
 mod tests {
     use futures::SinkExt;
-    use nimiq_serde::{Deserialize, Serialize};
+    use nimiq_serde::{Deserialize, Serialize, SerializedSize};
     use nimiq_test_log::test;
 
     use super::{Header, MessageWriter};

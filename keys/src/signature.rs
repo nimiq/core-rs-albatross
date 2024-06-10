@@ -78,12 +78,17 @@ impl FromStr for Ed25519Signature {
 mod serde_derive {
     use std::borrow::Cow;
 
+    use nimiq_serde::SerializedSize;
     use serde::{
         de::{Deserialize, Deserializer, Error},
         ser::{Serialize, Serializer},
     };
 
     use super::Ed25519Signature;
+
+    impl SerializedSize for Ed25519Signature {
+        const SIZE: usize = Ed25519Signature::SIZE;
+    }
 
     impl Serialize for Ed25519Signature {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

@@ -114,6 +114,10 @@ mod serde_derive {
 
     use super::NetworkId;
 
+    impl nimiq_serde::SerializedSize for NetworkId {
+        const SIZE: usize = 1;
+    }
+
     impl serde::Serialize for NetworkId {
         fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
             if serializer.is_human_readable() {

@@ -5,7 +5,7 @@ use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::{Ed25519PublicKey, Ed25519Signature};
 use nimiq_primitives::{networks::NetworkId, policy::Policy, slots_allocation::Validators};
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize, SerializedSize};
 use nimiq_transaction::{ExecutedTransaction, Transaction};
 use nimiq_vrf::VrfSeed;
 
@@ -196,18 +196,18 @@ pub struct MicroHeader {
     pub history_root: Blake2bHash,
 }
 
-impl MicroHeader {
+impl SerializedMaxSize for MicroHeader {
     /// Returns the size, in bytes, of a Micro block header. This represents the maximum possible
     /// size since we assume that the extra_data field is completely filled.
     #[allow(clippy::identity_op)]
-    pub const MAX_SIZE: usize = 0
-        + /*network*/ nimiq_serde::U8_SIZE
-        + /*version*/ nimiq_serde::U16_MAX_SIZE
-        + /*block_number*/ nimiq_serde::U32_MAX_SIZE
-        + /*timestamp*/ nimiq_serde::U64_MAX_SIZE
+    const MAX_SIZE: usize = 0
+        + /*network*/ NetworkId::SIZE
+        + /*version*/ u16::MAX_SIZE
+        + /*block_number*/ u32::MAX_SIZE
+        + /*timestamp*/ u64::MAX_SIZE
         + /*parent_hash*/ Blake2bHash::SIZE
         + /*seed*/ VrfSeed::SIZE
-        + /*extra_data*/ nimiq_serde::vec_max_size(nimiq_serde::U8_SIZE, 32)
+        + /*extra_data*/ nimiq_serde::seq_max_size(u8::SIZE, 32)
         + /*state_root*/ Blake2bHash::SIZE
         + /*body_root*/ Blake2sHash::SIZE
         + /*diff_root*/ Blake2bHash::SIZE

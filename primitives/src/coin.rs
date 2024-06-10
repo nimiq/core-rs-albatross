@@ -257,12 +257,9 @@ impl FromStr for Coin {
     }
 }
 
-impl Coin {
-    pub const SIZE: usize = 8;
-}
-
 #[cfg(feature = "serde-derive")]
 mod serialization {
+    use nimiq_serde::SerializedSize;
     use serde::{
         de::{Error as DeError, Unexpected},
         ser::Error as SerError,
@@ -270,6 +267,10 @@ mod serialization {
     };
 
     use super::*;
+
+    impl SerializedSize for Coin {
+        const SIZE: usize = 8;
+    }
 
     impl Serialize for Coin {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

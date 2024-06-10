@@ -60,7 +60,14 @@ impl fmt::Debug for VrfEntropy {
 }
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde-derive",
+    derive(
+        nimiq_serde::Deserialize,
+        nimiq_serde::Serialize,
+        nimiq_serde::SerializedSize,
+    )
+)]
 #[cfg_attr(feature = "serde-derive", serde(transparent))]
 /// A struct containing a VRF Seed. It is simply the serialized output of the VXEdDSA algorithm.
 ///
@@ -79,7 +86,7 @@ pub struct VrfSeed {
 }
 
 impl VrfSeed {
-    pub const SIZE: usize = 96;
+    const SIZE: usize = 96;
 
     /// Verifies the current VRF Seed given the previous VRF Seed (which is part of the message)
     /// and the signer's public key.

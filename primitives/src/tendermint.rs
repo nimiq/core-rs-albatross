@@ -1,7 +1,7 @@
 use std::io;
 
 use nimiq_hash::{Blake2sHash, SerializeContent};
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedSize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::{
@@ -21,9 +21,8 @@ pub enum TendermintStep {
     Propose = PREFIX_TENDERMINT_PROPOSAL,
 }
 
-impl TendermintStep {
-    /// Size in bytes for a `TendermintStep` in binary serialization.
-    pub const SIZE: usize = 1;
+impl SerializedSize for TendermintStep {
+    const SIZE: usize = 1;
 }
 
 /// Unique identifier for a single instance of TendermintAggregation
@@ -39,9 +38,8 @@ pub struct TendermintIdentifier {
     pub step: TendermintStep,
 }
 
-impl TendermintIdentifier {
-    /// Maximum size in bytes for a `TendermintIdentifier` in binary serialization.
-    pub const MAX_SIZE: usize = nimiq_serde::U8_SIZE + 2 * 4 + TendermintStep::SIZE;
+impl SerializedSize for TendermintIdentifier {
+    const SIZE: usize = u8::SIZE + 2 * 4 + TendermintStep::SIZE;
 }
 
 // Multiple things this needs to take care of when it comes to what needs signing here:

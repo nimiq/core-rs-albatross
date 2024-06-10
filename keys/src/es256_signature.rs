@@ -75,12 +75,17 @@ impl FromStr for ES256Signature {
 mod serde_derive {
     use std::borrow::Cow;
 
+    use nimiq_serde::SerializedSize;
     use serde::{
         de::{Deserialize, Deserializer, Error},
         ser::{Serialize, Serializer},
     };
 
     use super::ES256Signature;
+
+    impl SerializedSize for ES256Signature {
+        const SIZE: usize = ES256Signature::SIZE;
+    }
 
     impl Serialize for ES256Signature {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

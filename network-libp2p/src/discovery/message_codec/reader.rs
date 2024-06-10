@@ -6,7 +6,7 @@ use std::{
 
 use bytes::BytesMut;
 use futures::{AsyncRead, Stream};
-use nimiq_serde::{Deserialize, DeserializeError};
+use nimiq_serde::{Deserialize, DeserializeError, SerializedSize as _};
 use pin_project::pin_project;
 
 use super::header::Header;
@@ -230,7 +230,7 @@ mod tests {
 
     use bytes::{BufMut, BytesMut};
     use futures::{io::Cursor, StreamExt};
-    use nimiq_serde::{Deserialize, Serialize};
+    use nimiq_serde::{Deserialize, Serialize, SerializedSize};
     use nimiq_test_log::test;
 
     use super::{Header, MessageReader};

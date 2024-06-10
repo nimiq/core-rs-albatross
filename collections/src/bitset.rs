@@ -4,6 +4,7 @@ use std::{
     ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign},
 };
 
+use nimiq_serde::SerializedMaxSize as _;
 use serde::{
     de::{Error as _, SeqAccess, Visitor},
     ser::SerializeSeq,
@@ -374,7 +375,7 @@ impl BitSet {
     /// Maximum size in bytes for a single `BitSet` in binary serialization.
     pub const fn max_size(largest_bit_index: usize) -> usize {
         let num_u64 = (largest_bit_index + 63) / 64;
-        nimiq_serde::vec_max_size(nimiq_serde::U64_MAX_SIZE, num_u64)
+        nimiq_serde::seq_max_size(u64::MAX_SIZE, num_u64)
     }
 }
 

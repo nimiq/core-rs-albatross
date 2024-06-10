@@ -1,5 +1,6 @@
-use std::{error::Error, fmt, io, io::Write};
+use std::{error::Error, fmt, io, io::Write, ops};
 
+pub use nimiq_serde_derive::{SerializedMaxSize, SerializedSize};
 pub use postcard::{fixint, FixedSizeByteArray};
 use serde::{
     de::{Deserializer, Error as _},
@@ -44,23 +45,64 @@ impl fmt::Display for DeserializeError {
 
 impl Error for DeserializeError {}
 
-/// Size in bytes for a single `i8` in binary serialization.
-pub const I8_SIZE: usize = 1;
-/// Size in bytes for a single `u8` in binary serialization.
-pub const U8_SIZE: usize = 1;
+/// Types implementing this trait have a constant binary serialization size.
+///
+/// It can be `#[derive]`d using the [`SerializedSize`] derive macro.
+pub trait SerializedSize {
+    /// Size in bytes of the serialization.
+    const SIZE: usize;
+}
+/// Types implementing this trait have a maximum binary serialization size.
+///
+/// It can be `#[derive]`d using the [`SerializedMaxSize`] derive macro.
+pub trait SerializedMaxSize {
+    /// Maximum size in bytes of the serialization.
+    const MAX_SIZE: usize;
+}
 
-/// Maximum size in bytes for a single `i16` in binary serialization.
-pub const I16_MAX_SIZE: usize = (16 + 6) / 7;
-/// Maximum size in bytes for a single `u16` in binary serialization.
-pub const U16_MAX_SIZE: usize = (16 + 6) / 7;
-/// Maximum size in bytes for a single `i32` in binary serialization.
-pub const I32_MAX_SIZE: usize = (32 + 6) / 7;
-/// Maximum size in bytes for a single `u32` in binary serialization.
-pub const U32_MAX_SIZE: usize = (32 + 6) / 7;
-/// Maximum size in bytes for a single `i64` in binary serialization.
-pub const I64_MAX_SIZE: usize = (64 + 6) / 7;
-/// Maximum size in bytes for a single `u64` in binary serialization.
-pub const U64_MAX_SIZE: usize = (64 + 6) / 7;
+impl<T: SerializedSize> SerializedMaxSize for T {
+    const MAX_SIZE: usize = T::SIZE;
+}
+
+#[rustfmt::skip]
+mod integer_impls {
+    use super::SerializedSize;
+    use super::SerializedMaxSize;
+
+    impl SerializedSize for i8 { const SIZE: usize = 1; }
+    impl SerializedSize for u8 { const SIZE: usize = 1; }
+
+    impl SerializedMaxSize for i16 { const MAX_SIZE: usize = (16 + 6) / 7; }
+    impl SerializedMaxSize for u16 { const MAX_SIZE: usize = (16 + 6) / 7; }
+    impl SerializedMaxSize for i32 { const MAX_SIZE: usize = (32 + 6) / 7; }
+    impl SerializedMaxSize for u32 { const MAX_SIZE: usize = (32 + 6) / 7; }
+    impl SerializedMaxSize for i64 { const MAX_SIZE: usize = (64 + 6) / 7; }
+    impl SerializedMaxSize for u64 { const MAX_SIZE: usize = (64 + 6) / 7; }
+}
+
+impl<T: SerializedMaxSize> SerializedMaxSize for Option<T> {
+    const MAX_SIZE: usize = option_max_size(T::MAX_SIZE);
+}
+
+impl<T: SerializedMaxSize, E: SerializedMaxSize> SerializedMaxSize for Result<T, E> {
+    const MAX_SIZE: usize = 1 + max(T::MAX_SIZE, E::MAX_SIZE);
+}
+
+impl<T: SerializedMaxSize> SerializedMaxSize for ops::Range<T> {
+    const MAX_SIZE: usize = 2 * T::MAX_SIZE;
+}
+
+impl<const NUM: usize, T: SerializedMaxSize> SerializedMaxSize for [T; NUM] {
+    const MAX_SIZE: usize = NUM * T::MAX_SIZE;
+}
+
+pub trait SerializeSeqMaxSize {
+    type Element;
+}
+
+impl<T> SerializeSeqMaxSize for Vec<T> {
+    type Element = T;
+}
 
 /// Maximum size in bytes for a integer value in binary serialization, given its maximum value.
 pub const fn uint_max_size(max_value: u64) -> usize {
@@ -70,18 +112,28 @@ pub const fn uint_max_size(max_value: u64) -> usize {
     };
     ((bits + 6) / 7) as usize
 }
+
 /// Maximum size in bytes for an `Option<T>` value in binary serialization.
 ///
 /// `inner_size` is the maximum size of its inner value `T`.
 pub const fn option_max_size(inner_size: usize) -> usize {
     1 + inner_size
 }
+
 /// Maximum size in bytes for a `Vec<T>` value in binary serialization.
 ///
 /// `inner_size` is the maximum size of its inner value `T`. `max_elems` is the maximum number of
 /// elements in that `Vec<T>`.
-pub const fn vec_max_size(inner_size: usize, max_elems: usize) -> usize {
+pub const fn seq_max_size(inner_size: usize, max_elems: usize) -> usize {
     uint_max_size(max_elems as u64) + inner_size * max_elems
+}
+
+pub const fn max(a: usize, b: usize) -> usize {
+    if a >= b {
+        a
+    } else {
+        b
+    }
 }
 
 /// The Nimiq human readable array serialization helper trait

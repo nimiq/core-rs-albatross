@@ -19,14 +19,15 @@ use crate::PublicKey;
     feature = "serde-derive",
     derive(
         nimiq_hash_derive::SerializeContent,
-        nimiq_serde::Serialize,
         nimiq_serde::Deserialize,
+        nimiq_serde::Serialize,
+        nimiq_serde::SerializedMaxSize,
     )
 )]
 #[cfg_attr(feature = "serde-derive", serde(transparent))]
 pub struct CompressedPublicKey {
     #[cfg_attr(feature = "serde-derive", serde(with = "nimiq_serde::HexArray"))]
-    pub public_key: [u8; 285],
+    pub public_key: [u8; CompressedPublicKey::SIZE],
 }
 
 impl CompressedPublicKey {

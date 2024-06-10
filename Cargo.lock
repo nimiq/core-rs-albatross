@@ -4450,9 +4450,21 @@ name = "nimiq-serde"
 version = "0.1.0"
 dependencies = [
  "hex",
+ "nimiq-collections",
+ "nimiq-serde-derive",
  "postcard",
  "serde",
  "serde_derive",
+]
+
+[[package]]
+name = "nimiq-serde-derive"
+version = "0.1.0"
+dependencies = [
+ "darling",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.66",
 ]
 
 [[package]]
