@@ -1,4 +1,4 @@
-use nimiq_serde::{fixint, Deserialize, Serialize};
+use nimiq_serde::{fixint, Deserialize, Serialize, SerializedSize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Header {
@@ -10,10 +10,12 @@ pub struct Header {
     pub checksum: u32,
 }
 
+impl SerializedSize for Header {
+    const SIZE: usize = 12;
+}
+
 impl Header {
     pub const MAGIC: u32 = 0x4204_2042;
-
-    pub const SIZE: usize = 12;
 
     pub fn new(size: u32) -> Self {
         Self {

@@ -5,6 +5,8 @@ use nimiq_utils::key_rng::{CryptoRng, RngCore, SecureGenerate};
 
 use crate::{CompressedSignature, SigHash, Signature};
 
+const SIZE: usize = 95;
+
 #[derive(Clone, Copy)]
 pub struct SecretKey {
     /// This is simply a number in the finite field Fr.
@@ -13,8 +15,6 @@ pub struct SecretKey {
 }
 
 impl SecretKey {
-    pub const SIZE: usize = 95;
-
     /// Creates a signature given a message.
     pub fn sign<M: Hash>(&self, msg: &M) -> Signature {
         self.sign_hash(msg.hash())
@@ -64,13 +64,13 @@ mod serde_derive {
 
     use ark_mnt6_753::Fr;
     use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-    use nimiq_serde::Serialize as NimiqSerialize;
+    use nimiq_serde::{Serialize as _, SerializedSize};
     use serde::{
         de::{Deserialize, Deserializer, Error as SerializationError},
         ser::{Error as DeSerializationError, Serialize, Serializer},
     };
 
-    use super::SecretKey;
+    use super::{SecretKey, SIZE};
 
     impl fmt::Display for SecretKey {
         fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -84,12 +84,16 @@ mod serde_derive {
         }
     }
 
+    impl SerializedSize for SecretKey {
+        const SIZE: usize = SIZE;
+    }
+
     impl Serialize for SecretKey {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
         {
-            let mut compressed = [0u8; Self::SIZE];
+            let mut compressed = [0u8; SIZE];
             self.secret_key
                 .serialize_uncompressed(&mut compressed[..])
                 .map_err(|_| S::Error::custom("Couldn't compress secret key"))?;
@@ -105,7 +109,7 @@ mod serde_derive {
         where
             D: Deserializer<'de>,
         {
-            let compressed: [u8; Self::SIZE] =
+            let compressed: [u8; SIZE] =
                 nimiq_serde::FixedSizeByteArray::deserialize(deserializer)?.into_inner();
             Ok(SecretKey {
                 secret_key: Fr::deserialize_uncompressed(&*compressed.to_vec())

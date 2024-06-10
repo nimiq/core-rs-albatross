@@ -1,5 +1,5 @@
 use nimiq_keys::SecureGenerate;
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedSize};
 use wasm_bindgen::prelude::*;
 
 /// The secret part of the BLS keypair.

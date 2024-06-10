@@ -93,12 +93,17 @@ impl std::hash::Hash for ES256PublicKey {
 mod serde_derive {
     use std::borrow::Cow;
 
+    use nimiq_serde::SerializedSize;
     use serde::{
         de::{Deserialize, Deserializer, Error},
         ser::{Serialize, Serializer},
     };
 
     use super::ES256PublicKey;
+
+    impl SerializedSize for ES256PublicKey {
+        const SIZE: usize = ES256PublicKey::SIZE;
+    }
 
     impl Serialize for ES256PublicKey {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

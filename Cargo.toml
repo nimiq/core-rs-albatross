@@ -41,6 +41,7 @@ members = [
   "rpc-interface",
   "rpc-server",
   "serde",
+  "serde/derive",
   "spammer",
   "tendermint",
   "test-log",

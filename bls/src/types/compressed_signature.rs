@@ -10,6 +10,8 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
 use crate::Signature;
 
+const SIZE: usize = 95;
+
 /// The serialized compressed form of a signature.
 /// This form consists of the x-coordinate of the point (in the affine form),
 /// one bit indicating the sign of the y-coordinate
@@ -19,18 +21,17 @@ use crate::Signature;
     feature = "serde-derive",
     derive(
         nimiq_hash_derive::SerializeContent,
-        nimiq_serde::Serialize,
         nimiq_serde::Deserialize,
+        nimiq_serde::Serialize,
+        nimiq_serde::SerializedSize,
     )
 )]
 pub struct CompressedSignature {
     #[cfg_attr(feature = "serde-derive", serde(with = "nimiq_serde::HexArray"))]
-    pub signature: [u8; 95],
+    pub signature: [u8; SIZE],
 }
 
 impl CompressedSignature {
-    pub const SIZE: usize = 95;
-
     /// Transforms the compressed form back into the projective form.
     pub fn uncompress(&self) -> Result<Signature, Error> {
         let affine_point: G1Affine =
@@ -72,7 +73,7 @@ impl PartialOrd<CompressedSignature> for CompressedSignature {
 impl Default for CompressedSignature {
     fn default() -> Self {
         CompressedSignature {
-            signature: [0u8; CompressedSignature::SIZE],
+            signature: [0u8; SIZE],
         }
     }
 }
@@ -91,7 +92,7 @@ impl fmt::Display for CompressedSignature {
 
 impl From<G1Projective> for CompressedSignature {
     fn from(signature: G1Projective) -> Self {
-        let mut buffer = [0u8; CompressedSignature::SIZE];
+        let mut buffer = [0u8; SIZE];
         CanonicalSerialize::serialize_compressed(&signature.into_affine(), &mut &mut buffer[..])
             .unwrap();
         CompressedSignature { signature: buffer }
@@ -122,7 +123,7 @@ mod serde_derive {
 
     use std::str::FromStr;
 
-    use nimiq_serde::Deserialize;
+    use nimiq_serde::{Deserialize, SerializedSize};
 
     use super::CompressedSignature;
     use crate::ParseError;

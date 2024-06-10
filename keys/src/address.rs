@@ -227,12 +227,17 @@ impl FromDatabaseValue for Address {
 mod serde_derive {
     use std::borrow::Cow;
 
+    use nimiq_serde::SerializedSize;
     use serde::{
         de::{Deserialize, Deserializer, Error},
         ser::{Serialize, Serializer},
     };
 
     use super::Address;
+
+    impl SerializedSize for Address {
+        const SIZE: usize = Address::SIZE;
+    }
 
     impl Serialize for Address {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

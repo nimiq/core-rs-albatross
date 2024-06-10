@@ -1,8 +1,8 @@
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
-use serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedSize};
 
-#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedSize)]
 pub struct RewardTransaction {
     /// The validator address of the rewarded validator.
     pub validator_address: Address,
@@ -10,12 +10,4 @@ pub struct RewardTransaction {
     pub recipient: Address,
     /// The reward amount.
     pub value: Coin,
-}
-
-impl RewardTransaction {
-    #[allow(clippy::identity_op)]
-    pub const SIZE: usize = 0
-        + /*validator_address*/ Address::SIZE
-        + /*recipient*/ Address::SIZE
-        + /*value*/ Coin::SIZE;
 }

@@ -11,7 +11,7 @@ use nimiq_primitives::{
     slots_allocation::{Validators, ValidatorsBuilder},
     Message, PREFIX_TENDERMINT_PROPOSAL,
 };
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize, SerializedSize};
 use nimiq_transaction::reward::RewardTransaction;
 use nimiq_vrf::VrfSeed;
 use thiserror::Error;
@@ -19,7 +19,7 @@ use thiserror::Error;
 use crate::{tendermint::TendermintProof, BlockError};
 
 /// The struct representing a Macro block (can be either checkpoint or election).
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
 pub struct MacroBlock {
     /// The header, contains some basic information and commitments to the body and the state.
     pub header: MacroHeader,
@@ -31,12 +31,6 @@ pub struct MacroBlock {
 }
 
 impl MacroBlock {
-    #[allow(clippy::identity_op)]
-    pub const MAX_SIZE: usize = 0
-        + /*header*/ MacroHeader::MAX_SIZE
-        + /*body*/ nimiq_serde::option_max_size(MacroBody::MAX_SIZE)
-        + /*justification*/ nimiq_serde::option_max_size(TendermintProof::MAX_SIZE);
-
     /// Returns the network ID of this macro block.
     pub fn network(&self) -> NetworkId {
         self.header.network
@@ -211,21 +205,19 @@ pub struct MacroHeader {
     pub history_root: Blake2bHash,
 }
 
-impl MacroHeader {
-    /// Returns the size, in bytes, of a Macro block header. This represents the maximum possible
-    /// size since we assume that the extra_data field is completely filled.
+impl SerializedMaxSize for MacroHeader {
     #[allow(clippy::identity_op)]
-    pub const MAX_SIZE: usize = 0
-        + /*network*/ nimiq_serde::U8_SIZE
-        + /*version*/ nimiq_serde::U16_MAX_SIZE
-        + /*block_number*/ nimiq_serde::U32_MAX_SIZE
-        + /*round*/ nimiq_serde::U32_MAX_SIZE
-        + /*timestamp*/ nimiq_serde::U64_MAX_SIZE
+    const MAX_SIZE: usize = 0
+        + /*network*/ NetworkId::SIZE
+        + /*version*/ u16::MAX_SIZE
+        + /*block_number*/ u32::MAX_SIZE
+        + /*round*/ u32::MAX_SIZE
+        + /*timestamp*/ u64::MAX_SIZE
         + /*parent_hash*/ Blake2bHash::SIZE
         + /*parent_election_hash*/ Blake2bHash::SIZE
-        + /*interlink*/ nimiq_serde::option_max_size(nimiq_serde::vec_max_size(Blake2bHash::SIZE, 32))
+        + /*interlink*/ nimiq_serde::option_max_size(nimiq_serde::seq_max_size(Blake2bHash::SIZE, 32))
         + /*seed*/ VrfSeed::SIZE
-        + /*extra_data*/ nimiq_serde::vec_max_size(nimiq_serde::U8_SIZE, 32)
+        + /*extra_data*/ nimiq_serde::seq_max_size(u8::SIZE, 32)
         + /*state_root*/ Blake2bHash::SIZE
         + /*body_root*/ Blake2sHash::SIZE
         + /*diff_root*/ Blake2bHash::SIZE
@@ -282,7 +274,7 @@ impl SerializeContent for MacroHeader {
 }
 
 /// The struct representing the body of a Macro block (can be either checkpoint or election).
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
 pub struct MacroBody {
     /// Contains all the information regarding the next validator set, i.e. their validator
     /// public key, their reward address and their assigned validator slots.
@@ -292,18 +284,14 @@ pub struct MacroBody {
     /// proposing macro blocks in the batch following this macro block.
     /// This set is needed for nodes that do not have the state as it is normally computed
     /// inside the staking contract.
+    #[serialize_size(bitset_max_elem = Policy::SLOTS as usize)]
     pub next_batch_initial_punished_set: BitSet,
     /// The reward related transactions of this block.
+    #[serialize_size(seq_max_elems = Policy::SLOTS as usize)]
     pub transactions: Vec<RewardTransaction>,
 }
 
 impl MacroBody {
-    #[allow(clippy::identity_op)]
-    pub const MAX_SIZE: usize = 0
-        + /*validators*/ nimiq_serde::option_max_size(Validators::MAX_SIZE)
-        + /*next_batch_initial_punished_set*/ BitSet::max_size(Policy::SLOTS as usize)
-        + /*transactions*/ nimiq_serde::vec_max_size(RewardTransaction::SIZE, Policy::SLOTS as usize);
-
     pub(crate) fn verify(&self, is_election: bool) -> Result<(), BlockError> {
         if is_election != self.validators.is_some() {
             return Err(BlockError::InvalidValidators);
@@ -350,6 +338,7 @@ mod test {
 
     #[test]
     fn size_well_below_msg_limit() {
+        use nimiq_serde::SerializedMaxSize;
         assert!(
             2 * dbg!(MacroBlock::MAX_SIZE) + 16384
                 <= dbg!(nimiq_network_interface::network::MIN_SUPPORTED_MSG_SIZE)

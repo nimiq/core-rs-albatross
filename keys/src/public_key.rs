@@ -112,12 +112,17 @@ impl std::hash::Hash for Ed25519PublicKey {
 mod serde_derive {
     use std::borrow::Cow;
 
+    use nimiq_serde::SerializedSize;
     use serde::{
         de::{Deserialize, Deserializer, Error},
         ser::{Serialize, Serializer},
     };
 
     use super::Ed25519PublicKey;
+
+    impl SerializedSize for Ed25519PublicKey {
+        const SIZE: usize = Ed25519PublicKey::SIZE;
+    }
 
     impl Serialize for Ed25519PublicKey {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

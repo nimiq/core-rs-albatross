@@ -41,7 +41,14 @@ pub struct Slot {
 
 /// A validator that owns some slots.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde-derive",
+    derive(
+        nimiq_serde::Deserialize,
+        nimiq_serde::Serialize,
+        nimiq_serde::SerializedMaxSize,
+    )
+)]
 pub struct Validator {
     pub address: Address,
     pub voting_key: LazyBlsPublicKey,
@@ -52,13 +59,6 @@ pub struct Validator {
 }
 
 impl Validator {
-    #[allow(clippy::identity_op)]
-    pub const MAX_SIZE: usize = 0
-        + /*address*/ Address::SIZE
-        + /*voting_key*/ LazyBlsPublicKey::SIZE
-        + /*signing_key*/ SchnorrPublicKey::SIZE
-        + /*slots*/ 2 * nimiq_serde::U16_MAX_SIZE;
-
     /// Creates a new Validator.
     pub fn new<TBlsKey: Into<LazyBlsPublicKey>, TSchnorrKey: Into<SchnorrPublicKey>>(
         address: Address,
@@ -301,19 +301,21 @@ impl ValidatorsBuilder {
     }
 }
 
-impl Validators {
-    pub const MAX_SIZE: usize =
-        nimiq_serde::vec_max_size(Validator::MAX_SIZE, Policy::SLOTS as usize);
-}
-
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
+    use nimiq_serde::SerializedMaxSize;
     use serde::{
         de::{Deserialize, Deserializer},
         ser::{Serialize, Serializer},
     };
 
     use super::{Validator, Validators};
+    use crate::policy::Policy;
+
+    impl SerializedMaxSize for Validators {
+        const MAX_SIZE: usize =
+            nimiq_serde::seq_max_size(Validator::MAX_SIZE, Policy::SLOTS as usize);
+    }
 
     impl Serialize for Validators {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

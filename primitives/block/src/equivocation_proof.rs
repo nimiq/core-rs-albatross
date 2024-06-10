@@ -12,7 +12,7 @@ use nimiq_primitives::{
     slots_allocation::{Validator, Validators},
     TendermintIdentifier, TendermintStep, TendermintVote,
 };
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 use nimiq_transaction::{
     DoubleProposalLocator, DoubleVoteLocator, EquivocationLocator, ForkLocator,
 };
@@ -24,21 +24,11 @@ use crate::{MacroHeader, MicroHeader};
 ///
 /// This can come in several forms, but e.g. producing two blocks in a single slot or voting twice
 /// in the same round.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
 pub enum EquivocationProof {
     Fork(ForkProof),
     DoubleProposal(DoubleProposalProof),
     DoubleVote(DoubleVoteProof),
-}
-
-const fn max3(a: usize, b: usize, c: usize) -> usize {
-    if a > b && a > c {
-        a
-    } else if b > c {
-        b
-    } else {
-        c
-    }
 }
 
 fn get_validator<'a>(
@@ -51,13 +41,6 @@ fn get_validator<'a>(
 }
 
 impl EquivocationProof {
-    /// The size of a single equivocation proof. This is the maximum possible size.
-    pub const MAX_SIZE: usize = 1 + max3(
-        ForkProof::MAX_SIZE,
-        DoubleProposalProof::MAX_SIZE,
-        DoubleVoteProof::MAX_SIZE,
-    );
-
     /// Locator of this proof.
     ///
     /// It is used to check that only one proof of an equivocation can be
@@ -184,7 +167,7 @@ impl SerializeContent for EquivocationProof {
 /// Struct representing a fork proof. A fork proof proves that a given validator created or
 /// continued a fork. For this it is enough to provide two different headers, with the same block
 /// number, signed by the same validator.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
 pub struct ForkProof {
     /// Address of the offending validator.
     validator_address: Address,
@@ -199,12 +182,6 @@ pub struct ForkProof {
 }
 
 impl ForkProof {
-    /// The size of a single fork proof. This is the maximum possible size, since the Micro header
-    /// has a variable size (because of the extra data field) and here we assume that the header
-    /// has the maximum size.
-    pub const MAX_SIZE: usize =
-        Address::SIZE + 2 * MicroHeader::MAX_SIZE + 2 * SchnorrSignature::SIZE;
-
     pub fn new(
         validator_address: Address,
         mut header1: MicroHeader,
@@ -332,7 +309,7 @@ pub enum EquivocationProofError {
 
 /// Struct representing a double proposal proof. A double proposal proof proves that a given
 /// validator created two macro block proposals at the same height, in the same round.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
 pub struct DoubleProposalProof {
     /// Address of the offending validator.
     validator_address: Address,
@@ -347,10 +324,6 @@ pub struct DoubleProposalProof {
 }
 
 impl DoubleProposalProof {
-    /// The maximum size of a double proposal proof.
-    pub const MAX_SIZE: usize =
-        Address::SIZE + 2 * MacroHeader::MAX_SIZE + 2 * SchnorrSignature::SIZE;
-
     pub fn new(
         validator_address: Address,
         mut header1: MacroHeader,
@@ -461,7 +434,7 @@ impl SerializeContent for DoubleProposalProof {
 
 /// Struct representing a double vote proof. A double vote proof proves that a given
 /// validator voted twice at same height, in the same round.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
 pub struct DoubleVoteProof {
     /// Address of the offending validator.
     validator_address: Address,
@@ -476,18 +449,14 @@ pub struct DoubleVoteProof {
     /// Aggregate signature for proposal 2.
     signature2: AggregateSignature,
     /// Signers for proposal 1.
+    #[serialize_size(bitset_max_elem = Policy::SLOTS as usize)]
     signers1: BitSet,
     /// Signers for proposal 2.
+    #[serialize_size(bitset_max_elem = Policy::SLOTS as usize)]
     signers2: BitSet,
 }
 
 impl DoubleVoteProof {
-    /// The maximum size of a double proposal proof.
-    pub const MAX_SIZE: usize = 2 * MacroHeader::MAX_SIZE
-        + 2 * nimiq_serde::option_max_size(Blake2sHash::SIZE)
-        + 2 * AggregateSignature::SIZE
-        + 2 * BitSet::max_size(Policy::SLOTS as usize);
-
     pub fn new(
         tendermint_id: TendermintIdentifier,
         validator_address: Address,

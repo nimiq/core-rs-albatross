@@ -9,15 +9,12 @@ use crate::{CompressedSignature, Signature};
 #[derive(Clone, Copy)]
 #[cfg_attr(
     feature = "serde-derive",
-    derive(serde::Serialize, serde::Deserialize),
+    derive(serde::Serialize, serde::Deserialize, nimiq_serde::SerializedSize),
     serde(transparent)
 )]
 pub struct AggregateSignature(pub Signature);
 
 impl AggregateSignature {
-    /// Maximum size in bytes for a single `AggregateSignature` in binary serialization.
-    pub const SIZE: usize = Signature::SIZE;
-
     /// Creates a new "empty" aggregate signature. It is simply the identity element of the elliptic curve, also known as the point at infinity.
     pub fn new() -> Self {
         let signature = G1Projective::zero();

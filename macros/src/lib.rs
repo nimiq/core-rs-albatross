@@ -76,6 +76,10 @@ macro_rules! create_typed_array {
 #[macro_export]
 macro_rules! add_serialization_fns_typed_arr {
     ($name: ident, $len: expr) => {
+        impl ::nimiq_macros::nimiq_serde::SerializedSize for $name {
+            const SIZE: usize = $len;
+        }
+
         impl ::nimiq_macros::serde::Serialize for $name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
