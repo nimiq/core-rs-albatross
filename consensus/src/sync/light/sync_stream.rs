@@ -169,24 +169,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         cx: &mut Context<'_>,
     ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
         while let Poll::Ready(Some(Some(epoch_ids))) = self.epoch_ids_stream.poll_next_unpin(cx) {
-            // Calculate an upper bound on the peer's head block.
-            // The upper bound is the last micro block of the latest batch of the peer.
-            #[cfg(feature = "full")]
-            let peer_head_upper_bound = epoch_ids
-                .checkpoint
-                .as_ref()
-                .map(|checkpoint| checkpoint.block_number)
-                .unwrap_or_else(|| {
-                    if epoch_ids.checkpoint_epoch_number() == 0 {
-                        return 0;
-                    }
-                    // FIXME: Ban peer if it sends an invalid epoch_number instead of panicking.
-                    Policy::first_block_of(epoch_ids.checkpoint_epoch_number() as u32)
-                        .expect("The supplied epoch number is out of bounds")
-                })
-                + Policy::blocks_per_batch()
-                - 1;
-
             // If the peer didn't find any of our locators, we are done with it and emit it.
             if !epoch_ids.locator_found {
                 debug!(
@@ -245,6 +227,25 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 if let BlockchainProxy::Full(_) = self.blockchain {
                     let blockchain = self.blockchain.read();
                     let our_head = blockchain.block_number();
+
+                    // Calculate an upper bound on the peer's head block.
+                    // The upper bound is the last micro block of the latest batch of the peer.
+                    #[cfg(feature = "full")]
+                    let peer_head_upper_bound = epoch_ids
+                        .checkpoint
+                        .as_ref()
+                        .map(|checkpoint| checkpoint.block_number)
+                        .unwrap_or_else(|| {
+                            if epoch_ids.checkpoint_epoch_number() == 0 {
+                                return 0;
+                            }
+                            // FIXME: Ban peer if it sends an invalid epoch_number instead of panicking.
+                            Policy::first_block_of(epoch_ids.checkpoint_epoch_number() as u32)
+                                .expect("The supplied epoch number is out of bounds")
+                        })
+                        + Policy::blocks_per_batch()
+                        - 1;
+
                     if peer_head_upper_bound.saturating_sub(our_head) <= self.full_sync_threshold
                         && blockchain.accounts_complete()
                     {
