@@ -252,7 +252,6 @@ fn can_ignore_chunks_with_invalid_start_key() {
 }
 
 #[test]
-#[ignore]
 fn can_rebranch_and_revert_chunks() {
     let temp_producer1 = TemporaryBlockProducer::new();
     let temp_producer2 = TemporaryBlockProducer::new_incomplete();
@@ -266,26 +265,64 @@ fn can_rebranch_and_revert_chunks() {
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 0))))
     );
 
+    let address_known = Address::from_hex("0000000000000000000000000000000000000000").unwrap();
+    let address_unknown = Address::from_hex("f000000000000000000000000000000000000000").unwrap();
+    assert!(
+        KeyNibbles::from(&address_known) < chunk2_start,
+        "Address should be in the known part of the trie"
+    );
+    assert!(
+        KeyNibbles::from(&address_unknown) > chunk2_start,
+        "Address should be in the unknown part of the trie"
+    );
+
+    let key_pair = key_pair_with_funds();
+    let tx1 = TransactionBuilder::new_basic(
+        &key_pair,
+        address_known,
+        100.try_into().unwrap(),
+        Coin::ZERO,
+        1 + Policy::genesis_block_number(),
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+    let tx2 = TransactionBuilder::new_basic(
+        &key_pair,
+        address_unknown,
+        100.try_into().unwrap(),
+        Coin::ZERO,
+        1 + Policy::genesis_block_number(),
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
     // Block 2b, 1 chunk (to be rebranched)
-    let block2b = temp_producer1.next_block_no_push(vec![], true);
+    let block2b = temp_producer1.next_block_no_push_with_txs(vec![], true, vec![]);
 
     // Block 2a, 1 chunk (to be reverted)
-    let block2a = temp_producer1.next_block(vec![], false);
+    let (block2a, diff2a) =
+        temp_producer1.next_block_and_diff_with_txs(vec![], false, vec![tx1, tx2]);
     let chunk2a = temp_producer1.get_chunk(chunk2_start.clone(), 2);
 
     assert_eq!(
         temp_producer1.push(block2b.clone()),
         Ok(PushResult::Rebranched)
     );
+    let diff2b = temp_producer1
+        .blockchain
+        .read()
+        .chain_store
+        .get_accounts_diff(&block2b.hash(), None)
+        .unwrap();
     let chunk2b = temp_producer1.get_chunk(chunk2_start, 3);
 
     assert_eq!(
-        temp_producer2.push_with_chunks(block2a, TrieDiff::default(), vec![chunk2a]),
+        temp_producer2.push_with_chunks(block2a, diff2a, vec![chunk2a]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 0))))
     );
 
     assert_eq!(
-        temp_producer2.push_with_chunks(block2b, TrieDiff::default(), vec![chunk2b]),
+        temp_producer2.push_with_chunks(block2b, diff2b, vec![chunk2b]),
         Ok((PushResult::Rebranched, Ok(ChunksPushResult::Chunks(1, 0))))
     );
 
