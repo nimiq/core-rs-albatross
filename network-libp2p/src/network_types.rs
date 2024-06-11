@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use bytes::Bytes;
-use instant::Instant;
+use instant::{Duration, Instant};
 use libp2p::{
     gossipsub,
     kad::{QueryId, Record},
@@ -71,6 +71,8 @@ pub(crate) enum NetworkAction {
     ReceiveRequests {
         type_id: RequestType,
         output: mpsc::Sender<(Bytes, InboundRequestId, PeerId)>,
+        max_requests: u32,
+        time_window: Duration,
     },
     SendRequest {
         peer_id: PeerId,
@@ -248,8 +250,14 @@ pub(crate) struct TaskState {
     pub(crate) response_channels:
         HashMap<InboundRequestId, ResponseChannel<Option<OutgoingResponse>>>,
     /// Senders for replying to requests per `RequestType` for request-response
-    pub(crate) receive_requests:
-        HashMap<RequestType, mpsc::Sender<(Bytes, InboundRequestId, PeerId)>>,
+    pub(crate) receive_requests: HashMap<
+        RequestType,
+        (
+            mpsc::Sender<(Bytes, InboundRequestId, PeerId)>,
+            u32,
+            Duration,
+        ),
+    >,
     /// DHT quorum value
     pub(crate) dht_quorum: u8,
 }
