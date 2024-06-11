@@ -81,6 +81,9 @@ pub struct ConsensusConfig {
     #[builder(default = "1")]
     /// Maximum number of epochs that are stored in the client
     pub max_epochs_stored: u32,
+    #[builder(default = "10800")]
+    /// Minimum distance away, in number of blocks, from the head to switch from state sync to live sync
+    pub full_sync_threshold: u32,
 }
 
 impl Default for ConsensusConfig {
@@ -89,6 +92,7 @@ impl Default for ConsensusConfig {
             sync_mode: SyncMode::default(),
             min_peers: 3,
             max_epochs_stored: Policy::MIN_EPOCHS_STORED,
+            full_sync_threshold: 10800,
         }
     }
 }
@@ -756,6 +760,9 @@ impl ClientConfigBuilder {
             .unwrap();
         if let Some(min_peers) = config_file.consensus.min_peers {
             consensus.min_peers = min_peers;
+        }
+        if let Some(full_sync_threshold) = config_file.consensus.full_sync_threshold {
+            consensus.full_sync_threshold = full_sync_threshold;
         }
         self.consensus(consensus);
 

@@ -186,6 +186,8 @@ pub struct ConsensusSettings {
     pub network: Option<NetworkId>,
     /// Minimum number of peers necessary to reach consensus
     pub min_peers: Option<usize>,
+    /// Minimum distance away, in number of blocks, from the head to switch from state sync to live sync
+    pub full_sync_threshold: Option<u32>,
 }
 
 #[derive(Clone, Copy, Deserialize, Debug, Default, Eq, PartialEq)]

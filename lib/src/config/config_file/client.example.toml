@@ -80,9 +80,15 @@ seed_nodes = [
 # Possible values: "main", "test", "dev", "test-albatross", "dev-albatross"
 # Default: "dev-albatross"
 network = "test-albatross"
+
 # Specify the sync menchanism according to the client type
 # Possible values: history, full or light
 sync_mode = "full"
+
+# Specify the minimum distance away, in number of blocks, from the head to switch from state sync to live sync.
+# This property only has an effect when the sync_mode has the value "full"
+# Default: 10800
+# full_sync_threshold = 1000
 
 ##############################################################################
 #
