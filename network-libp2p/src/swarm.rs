@@ -36,7 +36,7 @@ use nimiq_serde::{Deserialize, Serialize};
 use nimiq_time::Interval;
 use nimiq_utils::tagged_signing::{TaggedSignable, TaggedSigned};
 use nimiq_validator_network::validator_record::ValidatorRecord;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use tokio::sync::{broadcast, mpsc};
 
 #[cfg(feature = "metrics")]
@@ -47,7 +47,7 @@ use crate::{
     network_types::{
         DhtBootStrapState, DhtRecord, DhtResults, NetworkAction, TaskState, ValidateMessage,
     },
-    rate_limiting::{is_under_the_rate_limits, remove_rate_limits, PendingDeletion, RateLimit},
+    rate_limiting::RateLimits,
     Config, NetworkError, TlsConfig,
 };
 
@@ -91,8 +91,6 @@ pub(crate) async fn swarm_task(
     mut action_rx: mpsc::Receiver<NetworkAction>,
     mut validate_rx: mpsc::UnboundedReceiver<ValidateMessage<PeerId>>,
     connected_peers: Arc<RwLock<HashMap<PeerId, PeerInfo>>>,
-    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<RequestType, RateLimit>>>>,
-    rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
     mut update_scores: Interval,
     contacts: Arc<RwLock<PeerContactBook>>,
     force_dht_server_mode: bool,
@@ -104,6 +102,7 @@ pub(crate) async fn swarm_task(
         dht_quorum: dht_quorum.into(),
         ..Default::default()
     };
+    let mut rate_limiting = RateLimits::default();
 
     let peer_id = Swarm::local_peer_id(&swarm);
     let task_span = trace_span!("swarm task", peer_id=?peer_id);
@@ -132,7 +131,7 @@ pub(crate) async fn swarm_task(
                 },
                 event = swarm.next() => {
                     if let Some(event) = event {
-                        handle_event(event, &events_tx, &mut swarm, &mut task_state, &connected_peers, Arc::clone(&peer_request_limits), Arc::clone(&rate_limits_pending_deletion), #[cfg( feature = "metrics")] &metrics);
+                        handle_event(event, &events_tx, &mut swarm, &mut task_state, &connected_peers, &mut rate_limiting, #[cfg( feature = "metrics")] &metrics);
                     }
                 },
                 action = action_rx.recv() => {
@@ -240,8 +239,7 @@ fn handle_event(
     swarm: &mut NimiqSwarm,
     state: &mut TaskState,
     connected_peers: &RwLock<HashMap<PeerId, PeerInfo>>,
-    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<RequestType, RateLimit>>>>,
-    rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
+    rate_limiting: &mut RateLimits,
     #[cfg(feature = "metrics")] metrics: &Arc<NetworkMetrics>,
 ) {
     match event {
@@ -324,7 +322,7 @@ fn handle_event(
 
                 // Removes or marks to remove the respective rate limits.
                 // Also cleans up the expired rate limits pending to delete.
-                remove_rate_limits(peer_request_limits, rate_limits_pending_deletion, peer_id);
+                rate_limiting.remove_rate_limits(peer_id);
 
                 let _ = events_tx.send(NetworkEvent::PeerLeft(peer_id));
             }
@@ -693,7 +691,6 @@ fn handle_event(
                         } => {
                             // We might get empty requests (None) because of our codec implementation
                             if let Some(request) = request {
-                                // TODO Add rate limiting (per peer).
                                 if let Ok(type_id) = peek_type(&request) {
                                     trace!(
                                         %request_id,
@@ -704,28 +701,20 @@ fn handle_event(
                                     );
                                     // Check if we have a receiver registered for this message type
 
-                                    // Remove sender if not alive.
+                                    // Filter off sender if not alive.
                                     let sender_data = state
                                         .receive_requests
-                                        .get_mut(&type_id)
+                                        .get(&type_id)
                                         .filter(|(sender, ..)| !sender.is_closed());
 
                                     // If we have a receiver, pass the request. Otherwise send a default empty response
-                                    if let Some((sender, max_requests, time_window)) = sender_data {
-                                        if !is_under_the_rate_limits(
-                                            peer_request_limits,
+                                    if let Some((sender, request_rate_limit_data)) = sender_data {
+                                        if rate_limiting.exceeds_rate_limit(
                                             peer_id,
                                             type_id,
                                             request_id,
-                                            *max_requests,
-                                            *time_window,
+                                            request_rate_limit_data,
                                         ) {
-                                            info!(
-                                                %request_id,
-                                                %peer_id,
-                                                %type_id,
-                                                "Rate limit was exceeded!",
-                                            );
                                             respond_on_behalf(
                                                 swarm,
                                                 request_id,
@@ -784,6 +773,9 @@ fn handle_event(
                                                 "Could not send default response",
                                             );
                                         };
+
+                                        // We remove it in case the channel was already closed.
+                                        state.receive_requests.remove(&type_id);
                                     }
                                 } else {
                                     error!(
@@ -1082,12 +1074,11 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
         NetworkAction::ReceiveRequests {
             type_id,
             output,
-            max_requests,
-            time_window,
+            request_rate_limit_data,
         } => {
             state
                 .receive_requests
-                .insert(type_id, (output, max_requests, time_window));
+                .insert(type_id, (output, request_rate_limit_data));
         }
         NetworkAction::SendRequest {
             peer_id,

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use bytes::Bytes;
-use instant::{Duration, Instant};
+use instant::Instant;
 use libp2p::{
     gossipsub,
     kad::{QueryId, Record},
@@ -23,6 +23,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::{
     dispatch::codecs::{IncomingRequest, OutgoingResponse},
+    rate_limiting::RequestRateLimitData,
     NetworkError,
 };
 
@@ -71,8 +72,7 @@ pub(crate) enum NetworkAction {
     ReceiveRequests {
         type_id: RequestType,
         output: mpsc::Sender<(Bytes, InboundRequestId, PeerId)>,
-        max_requests: u32,
-        time_window: Duration,
+        request_rate_limit_data: RequestRateLimitData,
     },
     SendRequest {
         peer_id: PeerId,
@@ -254,8 +254,7 @@ pub(crate) struct TaskState {
         RequestType,
         (
             mpsc::Sender<(Bytes, InboundRequestId, PeerId)>,
-            u32,
-            Duration,
+            RequestRateLimitData,
         ),
     >,
     /// DHT quorum value
