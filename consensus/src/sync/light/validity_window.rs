@@ -45,10 +45,10 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
     fn start_validity_chunk_request(
         &mut self,
         peer_id: TNetwork::PeerId,
-        verifier_block_number: u32,
+        mut verifier_block_number: u32,
         expected_root: Blake2bHash,
         validity_window_start: u32,
-        election_in_window: bool,
+        mut election_in_window: bool,
     ) {
         if self.validity_requests.is_none() {
             // By default we set the parameters assuming we are starting from stratch
@@ -56,8 +56,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             let mut chunk_index = 0;
             let mut root_hash = expected_root.clone();
             let mut last_chunk_items: Option<usize> = None;
-            let mut verifier_block_number = verifier_block_number;
-            let mut election_in_window = election_in_window;
 
             // First we need to check if we already have items in the history store, and request only the remaining portion (if any)
             match &self.blockchain {
@@ -66,7 +64,8 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
                     let (first_bn, last_bn) = blockchain_wr.history_store.history_store_range(None);
 
-                    // This means we already know the first epoch so we need to request the missing items from the current epoch
+                    // This means we already have items for the first epoch of the validity window we are interested in
+                    // so we need to move to the next epoch to request the missing items.
                     if last_bn >= verifier_block_number {
                         epoch_number = Policy::epoch_at(last_bn);
 
@@ -87,6 +86,8 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         verifier_block_number = blockchain_wr.macro_head().block_number();
                         election_in_window = false;
                     } else if last_bn >= validity_window_start {
+                        // This is the case where we already have items in the start of the validity window
+                        // We need to request the missing items
                         epoch_number = Policy::epoch_at(last_bn);
 
                         let current_length = blockchain_wr
@@ -262,8 +263,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                 let history_root = Blockchain::extend_validity_sync(
                                     blockchain.upgradable_read(),
                                     &chunk.history[starting_index..],
-                                )
-                                .unwrap();
+                                );
 
                                 history_root == expected_root
                             }

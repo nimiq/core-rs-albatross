@@ -108,7 +108,7 @@ fn get_size(hist_tree_table: &TableProxy, tx: &TransactionProxy, epoch_number: u
 /// Obtains the first and last block number stored in the history tree table
 pub fn get_range(hist_tree_table: &TableProxy, tx: &TransactionProxy) -> (u32, u32) {
     // Initialize the cursor for the database.
-    let mut cursor = tx.cursor(&hist_tree_table);
+    let mut cursor = tx.cursor(hist_tree_table);
 
     let first = if let Some((key, _)) = cursor.first::<Vec<u8>, Blake2bHash>() {
         key_to_index(key).unwrap().0
@@ -263,7 +263,11 @@ pub fn remove_block_from_store(
 }
 
 /// Copies the mmr entries of the previous block number
-/// This is used to initialize the tree for the given block number, using the previous tree as a baseline
+/// Used to initialize the tree for the given block number, using the previous tree as a baseline
+/// This is because for the light history store, we are not mantaining a single tree for the
+/// entire epoch, instead, we are storing individual trees for each block, but the information from
+/// block number N needs to be propagated to block number N + 1, as we need to compute a root
+/// for the entire epoch.
 pub fn init_mmr_from_block_number(
     hist_tree_table: &TableProxy,
     txn: &mut WriteTransactionProxy,

@@ -187,9 +187,14 @@ impl HistoryInterface for LightHistoryStore {
             }
         };
 
-        get_range(&self.hist_tree_table, &txn)
+        get_range(&self.hist_tree_table, txn)
     }
 
+    // This returns the total length, in terms of number of leaves of the history store
+    // at the given epoch.
+    // There are two cases: complete epochs and incomplete epochs.
+    // For the first case, we return the length of the tree at the last block of the epoch
+    // For the latter, we return the length of the tree at the latest block that was pushed.
     fn total_len_at_epoch(
         &self,
         epoch_number: u32,
@@ -204,9 +209,11 @@ impl HistoryInterface for LightHistoryStore {
             }
         };
 
+        // First we get the first and last block number that have been stored.
         let (first_bn, last_bn) = self.history_store_range(Some(txn));
 
-        let length = if Policy::epoch_at(last_bn) == epoch_number {
+        if Policy::epoch_at(last_bn) == epoch_number {
+            // This is the case for an incomplete epoch, so we get the size of the tree at the last block that was stored
             // Get peaks mmr of the latest block stored
             let tree = PeaksMerkleMountainRange::new(LightMMRStore::with_read_transaction(
                 &self.hist_tree_table,
@@ -216,24 +223,21 @@ impl HistoryInterface for LightHistoryStore {
 
             // Get the Merkle tree length
             tree.num_leaves()
+        } else if first_bn < (Policy::first_block_of(epoch_number + 1).unwrap() - 1) {
+            // This is the case of a complete epoch, so we get the size of the tree
+            // at the last block of the epoch
+            let tree = PeaksMerkleMountainRange::new(LightMMRStore::with_read_transaction(
+                &self.hist_tree_table,
+                txn,
+                Policy::first_block_of(epoch_number + 1).unwrap() - 1,
+            ));
+
+            // Get the Merkle tree length
+            tree.num_leaves()
         } else {
-            if first_bn < (Policy::first_block_of(epoch_number + 1).unwrap() - 1) {
-                // Get peaks mmr of the latest block stored
-                let tree = PeaksMerkleMountainRange::new(LightMMRStore::with_read_transaction(
-                    &self.hist_tree_table,
-                    txn,
-                    Policy::first_block_of(epoch_number + 1).unwrap() - 1,
-                ));
-
-                // Get the Merkle tree length
-                tree.num_leaves()
-            } else {
-                log::debug!(" validity out of bounds!");
-                0
-            }
-        };
-
-        length
+            log::debug!("Total length at epoch out of bounds!");
+            0
+        }
     }
 
     fn add_to_history(

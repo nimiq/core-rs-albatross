@@ -97,11 +97,8 @@ impl Blockchain {
     pub fn extend_validity_sync(
         this: RwLockUpgradableReadGuard<Blockchain>,
         history: &[HistoricTransaction],
-    ) -> Option<Blake2bHash> {
+    ) -> Blake2bHash {
         let mut txn = this.write_transaction();
-
-        //let mut txns_per_block: HashMap<u32, Vec<HistoricTransaction>> = HashMap::new();
-
         let mut txns_per_block: BTreeMap<u32, Vec<HistoricTransaction>> = BTreeMap::new();
 
         for txn in history {
@@ -128,7 +125,7 @@ impl Blockchain {
         }
 
         txn.commit();
-        Some(root)
+        root
     }
 
     /// Extends the current chain with a macro block (election or checkpoint) during history sync.

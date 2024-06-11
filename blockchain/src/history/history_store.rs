@@ -678,7 +678,10 @@ impl HistoryInterface for HistoryStore {
 
         for hist_tx in ext_hash_vec {
             // If the transaction is inside the validity window, return true.
-            if hist_tx.block_number >= validity_window_start {
+            if hist_tx.block_number >= validity_window_start
+                && hist_tx.block_number
+                    <= validity_window_start + Policy::transaction_validity_window_blocks()
+            {
                 return true;
             }
         }
@@ -1194,7 +1197,7 @@ impl HistoryInterface for HistoryStore {
     ) -> Option<(Blake2bHash, u64)> {
         match block {
             nimiq_block::Block::Macro(macro_block) => {
-                // Store the transactions and the inherents into the History tree.
+                // Store the the inherents into the History tree.
                 let hist_txs = HistoricTransaction::from(
                     self.network_id,
                     macro_block.header.block_number,

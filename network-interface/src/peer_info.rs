@@ -66,7 +66,9 @@ impl Services {
                     | Services::TRANSACTION_INDEX
             }
             NodeType::Light => Services::empty(),
-            NodeType::Full => Services::ACCOUNTS_PROOF | Services::FULL_BLOCKS,
+            NodeType::Full => {
+                Services::ACCOUNTS_PROOF | Services::FULL_BLOCKS | Services::ACCOUNTS_CHUNKS
+            }
         }
     }
 
@@ -75,7 +77,7 @@ impl Services {
         match node_type {
             NodeType::History => Services::HISTORY | Services::FULL_BLOCKS,
             NodeType::Light => Services::ACCOUNTS_PROOF,
-            NodeType::Full => Services::FULL_BLOCKS | Services::ACCOUNTS_CHUNKS,
+            NodeType::Full => Services::FULL_BLOCKS | Services::HISTORY | Services::ACCOUNTS_CHUNKS,
         }
     }
 }
