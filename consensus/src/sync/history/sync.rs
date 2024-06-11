@@ -81,10 +81,6 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
         }
     }
 
-    pub fn peers(&self) -> impl Iterator<Item = &TNetwork::PeerId> {
-        self.peers.keys()
-    }
-
     pub fn remove_peer(&mut self, peer_id: TNetwork::PeerId) {
         for cluster in self.epoch_clusters.iter_mut() {
             cluster.remove_peer(&peer_id);

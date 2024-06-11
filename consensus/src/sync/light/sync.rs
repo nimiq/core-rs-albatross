@@ -242,10 +242,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         }
     }
 
-    pub fn peers(&self) -> impl Iterator<Item = &TNetwork::PeerId> {
-        self.peer_requests.keys()
-    }
-
     pub fn remove_peer_requests(&mut self, peer_id: TNetwork::PeerId) {
         self.peer_requests.remove(&peer_id);
     }

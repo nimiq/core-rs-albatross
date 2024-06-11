@@ -212,7 +212,7 @@ impl<N: Network> SyncerProxy<N> {
         gen_syncer_match!(self, num_peers)
     }
 
-    /// Returns the peers of peers doing live synchronization
+    /// Returns the peers doing live synchronization
     pub fn peers(&self) -> Vec<N::PeerId> {
         gen_syncer_match!(self, peers)
     }
