@@ -31,7 +31,7 @@ use nimiq_utils::{
     spawn::spawn,
     tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned},
 };
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 
@@ -40,7 +40,7 @@ use crate::network_metrics::NetworkMetrics;
 use crate::{
     discovery::peer_contacts::PeerContactBook,
     network_types::{GossipsubId, NetworkAction, ValidateMessage},
-    rate_limiting::PendingDeletion,
+    rate_limiting::RequestRateLimitData,
     swarm::{new_swarm, swarm_task},
     Config, NetworkError,
 };
@@ -107,8 +107,6 @@ impl Network {
         let (events_tx, _) = broadcast::channel(64);
         let (action_tx, action_rx) = mpsc::channel(64);
         let (validate_tx, validate_rx) = mpsc::unbounded_channel();
-        let peer_request_limits = Arc::new(Mutex::new(HashMap::new()));
-        let rate_limits_pending_deletion = Arc::new(Mutex::new(PendingDeletion::default()));
 
         let update_scores = interval(params.decay_interval);
 
@@ -121,8 +119,6 @@ impl Network {
             action_rx,
             validate_rx,
             Arc::clone(&connected_peers),
-            Arc::clone(&peer_request_limits),
-            Arc::clone(&rate_limits_pending_deletion),
             update_scores,
             Arc::clone(&contacts),
             force_dht_server_mode,
@@ -344,8 +340,7 @@ impl Network {
                 .send(NetworkAction::ReceiveRequests {
                     type_id: RequestType::from_request::<Req>(),
                     output: tx,
-                    max_requests: Req::MAX_REQUESTS,
-                    time_window: Req::TIME_WINDOW,
+                    request_rate_limit_data: RequestRateLimitData::new::<Req>(),
                 })
                 .await
                 .expect("Sending action to network task failed.");

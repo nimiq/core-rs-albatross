@@ -143,7 +143,7 @@ pub trait RequestCommon:
 pub trait RequestSerialize: RequestCommon {
     /// Serializes a request.
     /// A serialized request is composed of:
-    /// - A varint for the Type ID of the request
+    /// - A variant for the Type ID of the request
     /// - Serialized content of the inner type.
     fn serialize_request(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(self.serialized_request_size());
