@@ -26,17 +26,17 @@ impl fmt::Display for RequestType {
 }
 
 impl RequestType {
-    const fn new(type_id: u16, requires_response: bool) -> RequestType {
-        RequestType((type_id << 1) | requires_response as u16)
+    const fn new(type_id: u16, requires_response: bool) -> Self {
+        Self((type_id << 1) | requires_response as u16)
     }
-    pub fn from_request<R: RequestCommon>() -> RequestType {
-        RequestType::new(R::TYPE_ID, R::Kind::EXPECT_RESPONSE)
+    pub fn from_request<R: RequestCommon>() -> Self {
+        Self::new(R::TYPE_ID, R::Kind::EXPECT_RESPONSE)
     }
-    pub const fn request(type_id: u16) -> RequestType {
-        RequestType::new(type_id, true)
+    pub const fn request(type_id: u16) -> Self {
+        Self::new(type_id, true)
     }
-    pub const fn message(type_id: u16) -> RequestType {
-        RequestType::new(type_id, false)
+    pub const fn message(type_id: u16) -> Self {
+        Self::new(type_id, false)
     }
     pub const fn type_id(self) -> u16 {
         self.0 >> 1
@@ -167,7 +167,7 @@ pub trait RequestSerialize: RequestCommon {
 
     /// Deserializes a request
     /// A serialized request is composed of:
-    /// - A varint for the Type ID of the request
+    /// - A variant for the Type ID of the request
     /// - Serialized content of the inner type.
     fn deserialize_request(buffer: &[u8]) -> Result<Self, DeserializeError> {
         // Check for correct type.

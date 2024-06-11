@@ -15,7 +15,8 @@ use libp2p::{
     gossipsub,
     identity::Keypair,
     kad::{self, store::RecordStore, GetRecordOk, InboundRequest, QueryResult, Quorum, Record},
-    noise, request_response,
+    noise,
+    request_response::{self, InboundRequestId, ResponseChannel},
     swarm::{
         dial_opts::{DialOpts, PeerCondition},
         SwarmEvent,
@@ -29,7 +30,7 @@ use nimiq_bls::{CompressedPublicKey, KeyPair};
 use nimiq_network_interface::{
     network::{CloseReason, NetworkEvent},
     peer_info::PeerInfo,
-    request::{peek_type, InboundRequestError, OutboundRequestError, RequestError},
+    request::{peek_type, InboundRequestError, OutboundRequestError, RequestError, RequestType},
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_time::Interval;
@@ -46,7 +47,7 @@ use crate::{
     network_types::{
         DhtBootStrapState, DhtRecord, DhtResults, NetworkAction, TaskState, ValidateMessage,
     },
-    rate_limiting::{remove_rate_limits, PendingDeletion, RateLimit},
+    rate_limiting::{is_under_the_rate_limits, remove_rate_limits, PendingDeletion, RateLimit},
     Config, NetworkError, TlsConfig,
 };
 
@@ -90,7 +91,7 @@ pub(crate) async fn swarm_task(
     mut action_rx: mpsc::Receiver<NetworkAction>,
     mut validate_rx: mpsc::UnboundedReceiver<ValidateMessage<PeerId>>,
     connected_peers: Arc<RwLock<HashMap<PeerId, PeerInfo>>>,
-    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
+    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<RequestType, RateLimit>>>>,
     rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
     mut update_scores: Interval,
     contacts: Arc<RwLock<PeerContactBook>>,
@@ -239,7 +240,7 @@ fn handle_event(
     swarm: &mut NimiqSwarm,
     state: &mut TaskState,
     connected_peers: &RwLock<HashMap<PeerId, PeerInfo>>,
-    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
+    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<RequestType, RateLimit>>>>,
     rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
     #[cfg(feature = "metrics")] metrics: &Arc<NetworkMetrics>,
 ) {
@@ -702,52 +703,64 @@ fn handle_event(
                                         "Incoming request from peer",
                                     );
                                     // Check if we have a receiver registered for this message type
-                                    let sender = match state.receive_requests.get_mut(&type_id) {
-                                        // Check if the sender is still alive, if not remove it
-                                        Some(sender) if !sender.is_closed() => Some(sender),
-                                        Some(_) => {
-                                            state.receive_requests.remove(&type_id);
-                                            None
-                                        }
-                                        None => None,
-                                    };
+
+                                    // Remove sender if not alive.
+                                    let sender_data = state
+                                        .receive_requests
+                                        .get_mut(&type_id)
+                                        .filter(|(sender, ..)| !sender.is_closed());
+
                                     // If we have a receiver, pass the request. Otherwise send a default empty response
-                                    if let Some(sender) = sender {
-                                        if type_id.requires_response() {
-                                            state.response_channels.insert(request_id, channel);
+                                    if let Some((sender, max_requests, time_window)) = sender_data {
+                                        if !is_under_the_rate_limits(
+                                            peer_request_limits,
+                                            peer_id,
+                                            type_id,
+                                            request_id,
+                                            *max_requests,
+                                            *time_window,
+                                        ) {
+                                            info!(
+                                                %request_id,
+                                                %peer_id,
+                                                %type_id,
+                                                "Rate limit was exceeded!",
+                                            );
+                                            respond_on_behalf(
+                                                swarm,
+                                                request_id,
+                                                peer_id,
+                                                type_id,
+                                                channel,
+                                                Err(InboundRequestError::ExceedsRateLimit),
+                                            );
                                         } else {
-                                            // Respond on behalf of the actual
-                                            // receiver because the actual
-                                            // receiver isn't interested in
-                                            // responding.
-                                            let response: Result<(), InboundRequestError> = Ok(());
-                                            if swarm
-                                                .behaviour_mut()
-                                                .request_response
-                                                .send_response(
+                                            if type_id.requires_response() {
+                                                state.response_channels.insert(request_id, channel);
+                                            } else {
+                                                // Respond on behalf of the actual receiver because the actual receiver isn't interested in responding.
+                                                respond_on_behalf(
+                                                    swarm,
+                                                    request_id,
+                                                    peer_id,
+                                                    type_id,
                                                     channel,
-                                                    Some(response.serialize_to_vec()),
-                                                )
-                                                .is_err()
-                                            {
+                                                    Ok(()),
+                                                );
+                                            }
+                                            if let Err(e) = sender.try_send((
+                                                request.into(),
+                                                request_id,
+                                                peer_id,
+                                            )) {
                                                 error!(
                                                     %request_id,
                                                     %peer_id,
                                                     %type_id,
-                                                    "Could not send auto response",
+                                                    error = %e,
+                                                    "Failed to dispatch request from peer",
                                                 );
                                             }
-                                        }
-                                        if let Err(e) =
-                                            sender.try_send((request.into(), request_id, peer_id))
-                                        {
-                                            error!(
-                                                %request_id,
-                                                %peer_id,
-                                                %type_id,
-                                                error = %e,
-                                                "Failed to dispatch request from peer",
-                                            );
                                         }
                                     } else {
                                         trace!(
@@ -1066,8 +1079,15 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
                 );
             }
         }
-        NetworkAction::ReceiveRequests { type_id, output } => {
-            state.receive_requests.insert(type_id, output);
+        NetworkAction::ReceiveRequests {
+            type_id,
+            output,
+            max_requests,
+            time_window,
+        } => {
+            state
+                .receive_requests
+                .insert(type_id, (output, max_requests, time_window));
         }
         NetworkAction::SendRequest {
             peer_id,
@@ -1202,6 +1222,29 @@ pub(crate) fn verify_record(record: &Record) -> Option<DhtRecord> {
 
     // If we arrived here, it's because something failed in the record verification
     None
+}
+
+fn respond_on_behalf(
+    swarm: &mut NimiqSwarm,
+    request_id: InboundRequestId,
+    peer_id: PeerId,
+    type_id: RequestType,
+    channel: ResponseChannel<Option<Vec<u8>>>,
+    response: Result<(), InboundRequestError>,
+) {
+    if swarm
+        .behaviour_mut()
+        .request_response
+        .send_response(channel, Some(response.serialize_to_vec()))
+        .is_err()
+    {
+        error!(
+            %request_id,
+            %peer_id,
+            %type_id,
+            "Could not send response {:?}", response
+        );
+    }
 }
 
 fn to_response_error(error: OutboundFailure) -> RequestError {

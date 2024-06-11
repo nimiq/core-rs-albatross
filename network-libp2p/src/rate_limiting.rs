@@ -7,7 +7,7 @@ use std::{
 
 use instant::Instant;
 use libp2p::{request_response::InboundRequestId, PeerId};
-use nimiq_network_interface::request::RequestCommon;
+use nimiq_network_interface::request::RequestType;
 use parking_lot::Mutex;
 
 /// Holds the expiration time for a given peer and request type. This struct defines the ordering for the btree set.
@@ -15,12 +15,12 @@ use parking_lot::Mutex;
 #[derive(Debug, Eq, Hash, PartialEq, Clone)]
 pub(crate) struct Expiration {
     pub(crate) peer_id: PeerId,
-    pub(crate) req_type: u16,
+    pub(crate) req_type: RequestType,
     pub(crate) expiration_time: Instant,
 }
 
 impl Expiration {
-    pub(crate) fn new(peer_id: PeerId, req_type: u16, expiration_time: Instant) -> Self {
+    pub(crate) fn new(peer_id: PeerId, req_type: RequestType, expiration_time: Instant) -> Self {
         Self {
             peer_id,
             req_type,
@@ -50,7 +50,7 @@ impl PartialOrd for Expiration {
 #[derive(Debug, Default)]
 pub(crate) struct PendingDeletion {
     /// The hash map of the rate limits.
-    by_peer_and_req_type: HashMap<(PeerId, u16), RateLimit>,
+    by_peer_and_req_type: HashMap<(PeerId, RequestType), RateLimit>,
     /// The ordered set of rate limits by expiration time, peer id and request type.
     by_expiration_time: BTreeSet<Expiration>,
 }
@@ -62,7 +62,12 @@ impl PendingDeletion {
     }
 
     /// Adds to both structures the new entry. If the entry already exists we replace it on both structs.
-    pub(crate) fn insert(&mut self, peer_id: PeerId, req_type: u16, rate_limit: &RateLimit) {
+    pub(crate) fn insert(
+        &mut self,
+        peer_id: PeerId,
+        req_type: RequestType,
+        rate_limit: &RateLimit,
+    ) {
         if let Some(expiration_peer) = self
             .by_peer_and_req_type
             .insert((peer_id, req_type), rate_limit.clone())
@@ -142,10 +147,13 @@ impl RateLimit {
 
 // Network helpers for rate limiting
 
-pub(crate) fn is_under_the_rate_limits<Req: RequestCommon>(
-    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
+pub(crate) fn is_under_the_rate_limits(
+    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<RequestType, RateLimit>>>>,
     peer_id: PeerId,
+    request_type: RequestType,
     request_id: InboundRequestId,
+    max_requests: u32,
+    time_window: Duration,
 ) -> bool {
     // Gets lock of peer requests limits read and write on it.
     let mut peer_request_limits = peer_request_limits.lock();
@@ -154,8 +162,8 @@ pub(crate) fn is_under_the_rate_limits<Req: RequestCommon>(
     let requests_limit = peer_request_limits
         .entry(peer_id)
         .or_default()
-        .entry(Req::TYPE_ID)
-        .or_insert_with(|| RateLimit::new(Req::MAX_REQUESTS, Req::TIME_WINDOW, Instant::now()));
+        .entry(request_type)
+        .or_insert_with(|| RateLimit::new(max_requests, time_window, Instant::now()));
 
     // Ensures that the request is allowed based on the set limits and updates the counter.
     // Returns early if not allowed.
@@ -164,9 +172,9 @@ pub(crate) fn is_under_the_rate_limits<Req: RequestCommon>(
             "[{:?}][{:?}] {:?} Exceeded max requests rate {:?} requests per {:?} seconds",
             request_id,
             peer_id,
-            std::any::type_name::<Req>(),
-            Req::MAX_REQUESTS,
-            Req::TIME_WINDOW,
+            request_type,
+            max_requests,
+            time_window,
         );
         return false;
     }
@@ -174,7 +182,7 @@ pub(crate) fn is_under_the_rate_limits<Req: RequestCommon>(
 }
 
 pub(crate) fn remove_rate_limits(
-    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
+    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<RequestType, RateLimit>>>>,
     rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
     peer_id: PeerId,
 ) {
@@ -208,7 +216,7 @@ pub(crate) fn remove_rate_limits(
 
 /// Deletes the rate limits that were previously marked as pending if its expiration time has passed.
 pub(crate) fn clean_up(
-    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
+    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<RequestType, RateLimit>>>>,
     rate_limits_pending_deletion: Arc<Mutex<PendingDeletion>>,
 ) {
     let mut rate_limits_pending_deletion_l = rate_limits_pending_deletion.lock();

@@ -40,7 +40,7 @@ use crate::network_metrics::NetworkMetrics;
 use crate::{
     discovery::peer_contacts::PeerContactBook,
     network_types::{GossipsubId, NetworkAction, ValidateMessage},
-    rate_limiting::{is_under_the_rate_limits, PendingDeletion, RateLimit},
+    rate_limiting::PendingDeletion,
     swarm::{new_swarm, swarm_task},
     Config, NetworkError,
 };
@@ -58,9 +58,6 @@ pub struct Network {
     action_tx: mpsc::Sender<NetworkAction>,
     /// Stream used to send validation messages
     validate_tx: mpsc::UnboundedSender<ValidateMessage<PeerId>>,
-    /// Maintains the rate limits being enforced for our peers. The limits are enforced by
-    /// peer_id and request type.
-    peer_request_limits: Arc<Mutex<HashMap<PeerId, HashMap<u16, RateLimit>>>>,
     /// Metrics used for data analysis
     #[cfg(feature = "metrics")]
     metrics: Arc<NetworkMetrics>,
@@ -141,7 +138,6 @@ impl Network {
             events_tx,
             action_tx,
             validate_tx,
-            peer_request_limits,
             #[cfg(feature = "metrics")]
             metrics,
             required_services,
@@ -339,9 +335,7 @@ impl Network {
             // there are going to be more requests or none at all.
         }
 
-        let peer_request_limits = Arc::clone(&self.peer_request_limits);
         let action_tx = self.action_tx.clone();
-        let action_tx2 = self.action_tx.clone();
         ReceiveStream::WaitingForRegister(Box::pin(async move {
             // TODO Make buffer size configurable
             let (tx, rx) = mpsc::channel(1024);
@@ -350,6 +344,8 @@ impl Network {
                 .send(NetworkAction::ReceiveRequests {
                     type_id: RequestType::from_request::<Req>(),
                     output: tx,
+                    max_requests: Req::MAX_REQUESTS,
+                    time_window: Req::TIME_WINDOW,
                 })
                 .await
                 .expect("Sending action to network task failed.");
@@ -357,33 +353,7 @@ impl Network {
             rx
         }))
         .filter_map(move |(data, request_id, peer_id)| {
-            let peer_request_limits = Arc::clone(&peer_request_limits);
-            let action_tx2 = action_tx2.clone();
             async move {
-                // If the request is not respecting the rate limits for its request type, filters the request out
-                // and replies with the respective error message.
-                if !is_under_the_rate_limits::<Req>(peer_request_limits, peer_id, request_id) {
-                    info!(
-                        %request_id,
-                        %peer_id,
-                        type_id = std::any::type_name::<Req>(),
-                        "Rate limit was exceeded!",
-                    );
-                    if let Err(e) = Self::respond_with_error::<Req>(
-                        action_tx2,
-                        request_id,
-                        InboundRequestError::ExceedsRateLimit,
-                    )
-                    .await
-                    {
-                        trace!(
-                            "Error while sending a Exceeds Rate limit error to the sender {:?}",
-                            e
-                        );
-                    }
-                    return None;
-                }
-
                 // Map the (data, peer) stream to (message, peer) by deserializing the messages.
                 match Req::deserialize_request(&data) {
                     Ok(message) => Some((message, request_id, peer_id)),
@@ -401,30 +371,6 @@ impl Network {
             }
         })
         .boxed()
-    }
-
-    async fn respond_with_error<Req: RequestCommon>(
-        action_tx: mpsc::Sender<NetworkAction>,
-        request_id: InboundRequestId,
-        response: InboundRequestError,
-    ) -> Result<(), NetworkError> {
-        let (output_tx, output_rx) = oneshot::channel();
-
-        // Encapsulate it in a `Result` to signal the network that this
-        // was a unsuccessful response from the application.
-        let response: Result<Req::Response, InboundRequestError> = Err(response);
-        let buf = response.serialize_to_vec();
-
-        action_tx
-            .clone()
-            .send(NetworkAction::SendResponse {
-                request_id,
-                response: buf,
-                output: output_tx,
-            })
-            .await?;
-
-        output_rx.await?
     }
 
     /// Gets the number of connected peers
