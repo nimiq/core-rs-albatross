@@ -528,6 +528,6 @@ impl Topic for AddressSubscriptionTopic {
     type Item = AddressNotification;
 
     const BUFFER_SIZE: usize = 1024;
-    const NAME: &'static str = "AddressNotification";
+    const NAME: &'static str = "address-subscription";
     const VALIDATE: bool = false;
 }

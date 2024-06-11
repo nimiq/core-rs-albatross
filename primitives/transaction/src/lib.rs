@@ -46,7 +46,7 @@ impl Topic for TransactionTopic {
     type Item = Transaction;
 
     const BUFFER_SIZE: usize = 1024;
-    const NAME: &'static str = "transactions";
+    const NAME: &'static str = "regular-transaction";
     const VALIDATE: bool = true;
 }
 
@@ -58,7 +58,7 @@ impl Topic for ControlTransactionTopic {
     type Item = Transaction;
 
     const BUFFER_SIZE: usize = 1024;
-    const NAME: &'static str = "Controltransactions";
+    const NAME: &'static str = "control-transaction";
     const VALIDATE: bool = true;
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]

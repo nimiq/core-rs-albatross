@@ -159,7 +159,7 @@ impl Topic for ZKProofTopic {
     type Item = ZKProof;
 
     const BUFFER_SIZE: usize = 16;
-    const NAME: &'static str = "zkproofs";
+    const NAME: &'static str = "zk-proof";
     const VALIDATE: bool = true;
 }
 

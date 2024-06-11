@@ -71,7 +71,7 @@ impl Topic for TestTopic {
     type Item = TestRecord;
 
     const BUFFER_SIZE: usize = 8;
-    const NAME: &'static str = "hello_wasm";
+    const NAME: &'static str = "test-wasm";
     const VALIDATE: bool = false;
 }
 

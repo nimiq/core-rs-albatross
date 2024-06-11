@@ -178,7 +178,7 @@ pub mod tests {
         type Item = TestRecord;
 
         const BUFFER_SIZE: usize = 8;
-        const NAME: &'static str = "hello_world";
+        const NAME: &'static str = "test-wasm";
         const VALIDATE: bool = false;
     }
 

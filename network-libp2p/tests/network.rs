@@ -465,7 +465,7 @@ impl Topic for TestTopic {
     type Item = TestRecord;
 
     const BUFFER_SIZE: usize = 8;
-    const NAME: &'static str = "hello_world";
+    const NAME: &'static str = "test-libp2p";
     const VALIDATE: bool = true;
 }
 

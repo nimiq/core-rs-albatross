@@ -28,7 +28,7 @@ impl Topic for BlockTopic {
     type Item = Block;
 
     const BUFFER_SIZE: usize = 16;
-    const NAME: &'static str = "blocks";
+    const NAME: &'static str = "block";
     const VALIDATE: bool = true;
 }
 
@@ -39,7 +39,7 @@ impl Topic for BlockHeaderTopic {
     type Item = Block;
 
     const BUFFER_SIZE: usize = 16;
-    const NAME: &'static str = "block-headers";
+    const NAME: &'static str = "block-header";
     const VALIDATE: bool = true;
 }
 
