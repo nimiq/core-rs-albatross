@@ -1300,7 +1300,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Result<Transaction, TransactionBuilderError> {
+    ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder();
         recipient.update_validator(
             new_signing_key,
@@ -1318,13 +1318,13 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate()?;
+        let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
                 builder.sign_with_key_pair(cold_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
-                Ok(builder.generate().unwrap())
+                builder.generate().unwrap()
             }
             _ => unreachable!(),
         }
@@ -1358,7 +1358,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Result<Transaction, TransactionBuilderError> {
+    ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder();
         recipient.deactivate_validator(validator_address);
 
@@ -1371,13 +1371,13 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate()?;
+        let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
                 builder.sign_with_key_pair(signing_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
-                Ok(builder.generate().unwrap())
+                builder.generate().unwrap()
             }
             _ => unreachable!(),
         }
@@ -1411,7 +1411,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Result<Transaction, TransactionBuilderError> {
+    ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder();
         recipient.reactivate_validator(validator_address);
 
@@ -1424,13 +1424,13 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate()?;
+        let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
                 builder.sign_with_key_pair(signing_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
-                Ok(builder.generate().unwrap())
+                builder.generate().unwrap()
             }
             _ => unreachable!(),
         }
@@ -1462,7 +1462,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Result<Transaction, TransactionBuilderError> {
+    ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder();
         recipient.retire_validator();
 
@@ -1475,13 +1475,13 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate()?;
+        let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
                 builder.sign_with_key_pair(cold_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
-                Ok(builder.generate().unwrap())
+                builder.generate().unwrap()
             }
             _ => unreachable!(),
         }

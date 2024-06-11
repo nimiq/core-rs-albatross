@@ -202,8 +202,7 @@ fn it_can_create_validator_transactions() {
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,
-    )
-    .unwrap();
+    );
 
     assert_eq!(tx, tx2);
 
@@ -224,8 +223,7 @@ fn it_can_create_validator_transactions() {
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,
-    )
-    .unwrap();
+    );
 
     assert_eq!(tx, tx2);
 
@@ -246,8 +244,7 @@ fn it_can_create_validator_transactions() {
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,
-    )
-    .unwrap();
+    );
 
     assert_eq!(tx, tx2);
 

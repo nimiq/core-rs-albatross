@@ -920,7 +920,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             fee,
             self.validity_start_height(validity_start_height),
             self.get_network_id(),
-        )?;
+        );
 
         Ok(transaction_to_hex_string(&transaction).into())
     }
@@ -972,7 +972,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             fee,
             self.validity_start_height(validity_start_height),
             self.get_network_id(),
-        )?;
+        );
 
         Ok(transaction_to_hex_string(&transaction).into())
     }
@@ -1017,7 +1017,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             fee,
             self.validity_start_height(validity_start_height),
             self.get_network_id(),
-        )?;
+        );
 
         Ok(transaction_to_hex_string(&transaction).into())
     }
@@ -1080,7 +1080,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             fee,
             self.validity_start_height(validity_start_height),
             self.get_network_id(),
-        )?;
+        );
 
         Ok(transaction_to_hex_string(&transaction).into())
     }

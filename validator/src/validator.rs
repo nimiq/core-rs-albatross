@@ -770,8 +770,7 @@ where
             Coin::ZERO,
             validity_start_height,
             blockchain.network_id(),
-        )
-        .unwrap(); // TODO: Handle transaction creation error
+        );
         let tx_hash = reactivate_transaction.hash();
 
         let cn = self.consensus.clone();

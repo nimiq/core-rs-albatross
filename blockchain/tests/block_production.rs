@@ -246,8 +246,7 @@ fn it_can_produce_macro_block_after_punishment() {
         100.try_into().unwrap(),
         1 + Policy::genesis_block_number(),
         NetworkId::UnitAlbatross,
-    )
-    .unwrap();
+    );
     producer.next_block_with_txs(vec![], false, vec![reactivate_tx]);
 
     // Produce next checkpoint block.
@@ -826,8 +825,7 @@ fn it_can_revert_reactivate_transaction() {
         100.try_into().unwrap(),
         blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
-    )
-    .unwrap();
+    );
 
     transactions.push(tx.clone());
 
@@ -867,8 +865,7 @@ fn it_can_revert_reactivate_transaction() {
         100.try_into().unwrap(),
         blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
-    )
-    .unwrap();
+    );
 
     transactions.push(tx);
 
@@ -943,8 +940,7 @@ fn it_can_consume_all_validator_deposit() {
         Coin::ZERO,
         blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
-    )
-    .unwrap();
+    );
 
     // Create a vesting contract to make the delete transaction fail by causing a type mismatch.
     let vesting_tx = TransactionBuilder::new_create_vesting(
@@ -1156,8 +1152,7 @@ fn it_can_revert_failed_delete_validator() {
         Coin::ZERO,
         blockchain.read().block_number() + 1,
         NetworkId::UnitAlbatross,
-    )
-    .unwrap();
+    );
 
     // Create a vesting contract to make the delete transaction fail by causing a type mismatch.
     let vesting_tx = TransactionBuilder::new_create_vesting(

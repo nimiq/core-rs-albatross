@@ -1634,8 +1634,7 @@ async fn mempool_basic_prioritization_control_tx() {
         1.try_into().unwrap(),
         1 + Policy::genesis_block_number(),
         NetworkId::UnitAlbatross,
-    )
-    .unwrap();
+    );
 
     // This is the transaction produced in the block
     let tx = TransactionBuilder::new_create_staker(
