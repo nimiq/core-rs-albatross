@@ -65,7 +65,9 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
 
             if let Some(epoch_ids) = epoch_ids {
                 // The peer might have disconnected during the request.
-                // FIXME Check if the peer is still connected
+                if !self.network.has_peer(epoch_ids.sender) {
+                    continue;
+                }
 
                 // If the peer didn't find any of our locators, we are done with it and emit it.
                 if !epoch_ids.locator_found {

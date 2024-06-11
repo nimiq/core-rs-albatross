@@ -169,6 +169,11 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         cx: &mut Context<'_>,
     ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
         while let Poll::Ready(Some(Some(epoch_ids))) = self.epoch_ids_stream.poll_next_unpin(cx) {
+            // The peer might have disconnected during the request.
+            if !self.network.has_peer(epoch_ids.sender) {
+                continue;
+            }
+
             // If the peer didn't find any of our locators, we are done with it and emit it.
             if !epoch_ids.locator_found {
                 debug!(
