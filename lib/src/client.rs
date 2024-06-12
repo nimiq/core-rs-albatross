@@ -382,13 +382,9 @@ impl ClientInner {
                         .await
                 };
                 #[cfg(not(feature = "zkp-prover"))]
-                let zkp_component = ZKPComponent::new(
-                    blockchain_proxy.clone(),
-                    Arc::clone(&network),
-                    executor.clone(),
-                    zkp_storage,
-                )
-                .await;
+                let zkp_component =
+                    ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&network), zkp_storage)
+                        .await;
                 let syncer = SyncerProxy::new_history(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
@@ -432,13 +428,9 @@ impl ClientInner {
                         .await
                 };
                 #[cfg(not(feature = "zkp-prover"))]
-                let zkp_component = ZKPComponent::new(
-                    blockchain_proxy.clone(),
-                    Arc::clone(&network),
-                    executor.clone(),
-                    zkp_storage,
-                )
-                .await;
+                let zkp_component =
+                    ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&network), zkp_storage)
+                        .await;
 
                 let syncer = SyncerProxy::new_full(
                     blockchain_proxy.clone(),

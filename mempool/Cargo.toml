@@ -43,7 +43,7 @@ nimiq-network-interface = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["coin", "networks"] }
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
-nimiq-utils = { workspace = true, features = ["time"] }
+nimiq-utils = { workspace = true, features = ["spawn", "time"] }
 
 [dev-dependencies]
 hex = "0.4"

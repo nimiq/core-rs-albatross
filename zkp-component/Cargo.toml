@@ -57,6 +57,7 @@ nimiq-transaction = { workspace = true }
 nimiq-utils = { workspace = true, features = [
     "math",
     "merkle",
+    "spawn",
     "time",
 ] }
 nimiq-zkp = { workspace = true }

@@ -59,7 +59,7 @@ merkle = [
     "nimiq-hash",
 ]
 otp = ["clear_on_drop", "nimiq-hash", "rand"]
-spawn = ["tokio", "wasm-bindgen-futures"]
+spawn = ["tokio", "tokio/rt", "wasm-bindgen-futures"]
 tagged-signing = ["hex"]
 time = []
 
