@@ -8,7 +8,7 @@ use nimiq_network_interface::network::Topic;
 use nimiq_primitives::{
     coin::Coin, networks::NetworkId, policy::Policy, slots_allocation::Validators,
 };
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 use nimiq_transaction::ExecutedTransaction;
 use nimiq_vrf::VrfSeed;
 
@@ -61,7 +61,7 @@ impl BlockType {
 
 /// The enum representing a block. Blocks can either be Micro blocks or Macro blocks (which includes
 /// both checkpoint and election blocks).
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
 pub enum Block {
     Macro(MacroBlock),
     Micro(MicroBlock),

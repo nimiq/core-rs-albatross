@@ -6,16 +6,17 @@ use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_blockchain_interface::Direction;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
+use nimiq_macros::test_max_req_size;
 use nimiq_mmr::mmr::proof::SizeProof;
 use nimiq_network_interface::{
     network::Topic,
     request::{RequestCommon, RequestMarker},
 };
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 use nimiq_transaction::{
     historic_transaction::HistoricTransaction, history_proof::HistoryTreeProof,
 };
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::error::SubscribeToAddressesError;
@@ -76,7 +77,7 @@ pub struct MacroChain {
 }
 
 /// Error response to [`RequestMacroChain`]
-#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+#[derive(Clone, Debug, Deserialize, Error, Serialize, SerializedMaxSize)]
 pub enum MacroChainError {
     /// The locators of the request could not be found.
     #[error("unknown locators")]
@@ -228,7 +229,7 @@ pub enum HistoryChunkError {
 /// Request a specific block by hash.
 ///
 /// Can optionally omit the body if it's a micro block.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, SerializedMaxSize)]
 pub struct RequestBlock {
     /// The hash of the block that is requested.
     pub hash: Blake2bHash,
@@ -240,7 +241,7 @@ pub struct RequestBlock {
 }
 
 /// Error response for [`RequestBlock`].
-#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+#[derive(Clone, Debug, Deserialize, Error, Serialize, SerializedMaxSize)]
 pub enum BlockError {
     /// Block hash unknown to the responder.
     #[error("target hash not found")]
@@ -257,6 +258,11 @@ impl RequestCommon for RequestBlock {
     type Response = Result<Block, BlockError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_BLOCK;
 }
+test_max_req_size!(
+    RequestBlock,
+    request_block_req_size,
+    request_block_resp_size,
+);
 
 /// Response to [`RequestMissingBlocks`].
 #[derive(Clone, Deserialize, Serialize)]
@@ -342,10 +348,10 @@ impl RequestCommon for RequestMissingBlocks {
 }
 
 /// Request the current blockchain head block hash.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, SerializedMaxSize)]
 pub struct RequestHead {}
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, SerializedMaxSize)]
 pub struct ResponseHead {
     pub micro: Blake2bHash,
     pub r#macro: Blake2bHash,
@@ -358,6 +364,7 @@ impl RequestCommon for RequestHead {
     type Response = ResponseHead;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_HEAD;
 }
+test_max_req_size!(RequestHead, request_head_req_size, request_head_resp_size);
 
 #[derive(Serialize, Deserialize)]
 pub struct ResponseTransactionsProof {

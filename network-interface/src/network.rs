@@ -51,6 +51,11 @@ pub trait PubsubId<PeerId>: Clone + Send + Sync + Debug {
     fn propagation_source(&self) -> PeerId;
 }
 
+/// Network implementations have to at least support requests of this size.
+pub const MIN_SUPPORTED_REQ_SIZE: usize = 20 * 1024;
+/// Network implementations have to at least support responses of this size.
+pub const MIN_SUPPORTED_RESP_SIZE: usize = 10 * 1024 * 1024;
+
 #[derive(Copy, Clone, Debug)]
 /// Reasons for closing a connection
 pub enum CloseReason {

@@ -3742,6 +3742,7 @@ dependencies = [
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-light-blockchain",
+ "nimiq-macros",
  "nimiq-mmr",
  "nimiq-network-interface",
  "nimiq-network-libp2p",

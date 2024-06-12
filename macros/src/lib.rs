@@ -198,3 +198,25 @@ macro_rules! upgrade_weak {
         }
     };
 }
+
+#[macro_export]
+macro_rules! test_max_req_size {
+    ($name: ident, $test_name_req: ident, $test_name_resp: ident $(,)?) => {
+        #[test]
+        fn $test_name_req() {
+            use ::nimiq_macros::nimiq_serde::SerializedMaxSize;
+            use ::nimiq_network_interface::network::MIN_SUPPORTED_REQ_SIZE;
+            assert!(dbg!($name::MAX_SIZE) <= dbg!(MIN_SUPPORTED_REQ_SIZE));
+        }
+        #[test]
+        fn $test_name_resp() {
+            use ::nimiq_macros::nimiq_serde::SerializedMaxSize;
+            use ::nimiq_network_interface::{
+                network::MIN_SUPPORTED_RESP_SIZE, request::RequestCommon,
+            };
+            assert!(
+                dbg!(<$name as RequestCommon>::Response::MAX_SIZE) <= dbg!(MIN_SUPPORTED_RESP_SIZE)
+            );
+        }
+    };
+}

@@ -2,25 +2,21 @@ use nimiq_bls::AggregateSignature;
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
 use nimiq_primitives::policy::Policy;
-use serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 
 /*
 This does not really belong here, but as there would otherwise be a cyclic dependency it needs to be here for now.
 TODO: Move this out of primitives and into validator/aggregation once the messages crate is no longer required.
 */
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
 pub struct MultiSignature {
     pub signature: AggregateSignature,
+    #[serialize_size(bitset_max_elem = Policy::SLOTS as usize)]
     pub signers: BitSet,
 }
 
 impl MultiSignature {
-    #[allow(clippy::identity_op)]
-    pub const MAX_SIZE: usize = 0
-        + /*signature*/ AggregateSignature::SIZE
-        + /*signers*/ BitSet::max_size(Policy::SLOTS as usize);
-
     pub fn new(signature: AggregateSignature, signers: BitSet) -> Self {
         Self { signature, signers }
     }
