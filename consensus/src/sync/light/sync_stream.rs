@@ -11,7 +11,10 @@ use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_light_blockchain::LightBlockchain;
-use nimiq_network_interface::network::{CloseReason, Network, NetworkEvent};
+use nimiq_network_interface::{
+    network::{CloseReason, Network, NetworkEvent},
+    peer_info::Services,
+};
 use nimiq_primitives::policy::Policy;
 use nimiq_utils::WakerExt as _;
 use nimiq_zkp_component::types::ZKPRequestEvent::{OutdatedProof, Proof};
@@ -36,8 +39,23 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                     self.remove_peer_requests(peer_id);
                 }
                 Ok(NetworkEvent::PeerJoined(peer_id, _)) => {
-                    // Query if that peer provides the necessary services for syncing
-                    if self.network.peer_provides_required_services(peer_id) {
+                    // Query if that peer provides the necessary services for light macro sync
+                    let required_services = match self.blockchain {
+                        #[cfg(feature = "full")]
+                        BlockchainProxy::Full(_) => {
+                            // Full nodes and history nodes require history chunks
+                            Services::HISTORY
+                        }
+                        BlockchainProxy::Light(_) => {
+                            // Light nodes dont require any services for macro syncing
+                            Services::empty()
+                        }
+                    };
+
+                    if self
+                        .network
+                        .peer_provides_services(peer_id, required_services)
+                    {
                         // Request zkps and start the macro sync process
                         self.add_peer(peer_id);
                     } else {

@@ -12,7 +12,10 @@ use nimiq_block::Block;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::network::{CloseReason, Network};
+use nimiq_network_interface::{
+    network::{CloseReason, Network},
+    peer_info::Services,
+};
 use nimiq_time::{interval, Interval};
 
 use crate::{consensus::ResolveBlockRequest, messages::RequestHead};
@@ -214,6 +217,12 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
     fn check_incompatible_peer(&mut self, peer_id: N::PeerId) {
         let blockchain = self.blockchain.clone();
         let network = Arc::clone(&self.network);
+
+        // Light nodes do not provide accounts chunks, so they are classified as incompatible.
+        if !network.peer_provides_services(peer_id, Services::ACCOUNTS_CHUNKS) {
+            self.incompatible_peers.insert(peer_id);
+            return;
+        }
 
         debug!(%peer_id, "Checking if incompatible peer is in sync");
 

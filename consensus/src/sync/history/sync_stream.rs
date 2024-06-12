@@ -34,6 +34,8 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
                 }
                 Ok(NetworkEvent::PeerJoined(peer_id, _)) => {
                     // Query if that peer provides the necessary services for syncing
+                    // History sync is only used by history nodes, and they can only sync to other history nodes
+                    // So the following query is equivalent to asking if the peer provides HISTORY
                     if self.network.peer_provides_required_services(peer_id) {
                         // Request epoch_ids from the peer that joined.
                         self.add_peer(peer_id);
