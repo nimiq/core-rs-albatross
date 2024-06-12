@@ -97,7 +97,7 @@ async fn send_txn_to_mempool(
     .await
     .expect("Send failed");
 
-    sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(2)).await;
     mempool.stop_executor_without_unsubscribe().await;
 }
 
