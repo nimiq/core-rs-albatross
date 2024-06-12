@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// The struct representing a Micro block.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
 pub struct MicroBlock {
     /// The header, contains some basic information and commitments to the body and the state.
     pub header: MicroHeader,
@@ -147,7 +147,7 @@ impl fmt::Display for MicroBlock {
 }
 
 /// Enumeration representing the justification for a Micro block
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
 #[serde(rename_all = "camelCase")]
 #[repr(u8)]
 pub enum MicroJustification {
@@ -232,6 +232,10 @@ pub struct MicroBody {
     pub equivocation_proofs: Vec<EquivocationProof>,
     /// A vector containing the transactions for this block. It might be empty.
     pub transactions: Vec<ExecutedTransaction>,
+}
+
+impl SerializedMaxSize for MicroBody {
+    const MAX_SIZE: usize = Policy::MAX_SIZE_MICRO_BODY;
 }
 
 impl MicroBody {

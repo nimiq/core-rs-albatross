@@ -69,6 +69,8 @@ mod integer_impls {
     use super::SerializedSize;
     use super::SerializedMaxSize;
 
+    impl SerializedSize for bool { const SIZE: usize = 1; }
+
     impl SerializedSize for i8 { const SIZE: usize = 1; }
     impl SerializedSize for u8 { const SIZE: usize = 1; }
 

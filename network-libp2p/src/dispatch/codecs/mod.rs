@@ -6,17 +6,16 @@
 //! Note that this doesn't actually serialize/deserialize the message content, but
 //! only handles reading/writing the message.
 
-use std::io;
+use std::{io, mem};
 
 use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use libp2p::{request_response, StreamProtocol};
+use nimiq_network_interface::network;
 
-/// Maximum request size in bytes (20 kB)
-const MAX_REQUEST_SIZE: u64 = 20 * 1024;
-/// Maximum response size in bytes (10 MB)
-const MAX_RESPONSE_SIZE: u64 = 10 * 1024 * 1024;
 /// Size of a u64
-const U64_LENGTH: usize = std::mem::size_of::<u64>();
+const U64_LENGTH: usize = mem::size_of::<u64>();
+const MAX_REQUEST_SIZE: u64 = network::MIN_SUPPORTED_REQ_SIZE as u64 + U64_LENGTH as u64;
+const MAX_RESPONSE_SIZE: u64 = network::MIN_SUPPORTED_RESP_SIZE as u64 + U64_LENGTH as u64;
 
 #[derive(Default, Debug, Clone)]
 pub struct MessageCodec;

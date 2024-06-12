@@ -5,7 +5,7 @@ use nimiq_hash_derive::SerializeContent;
 use nimiq_primitives::{
     policy::Policy, slots_allocation::Validators, Message, SignedMessage, PREFIX_SKIP_BLOCK_INFO,
 };
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 use nimiq_vrf::VrfEntropy;
 
 use crate::{MicroBlock, MultiSignature};
@@ -44,7 +44,7 @@ impl Message for SkipBlockInfo {
     const PREFIX: u8 = PREFIX_SKIP_BLOCK_INFO;
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
 pub struct SkipBlockProof {
     // The aggregated signature of the validator's signatures for the skip block.
     pub sig: MultiSignature,
