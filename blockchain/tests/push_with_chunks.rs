@@ -1,3 +1,4 @@
+use nimiq_account::RevertInfo;
 use nimiq_blockchain_interface::{
     AbstractBlockchain, ChunksPushError, ChunksPushResult, PushResult,
 };
@@ -297,7 +298,7 @@ fn can_rebranch_and_revert_chunks() {
     .unwrap();
 
     // Block 2b, 1 chunk (to be rebranched)
-    let block2b = temp_producer1.next_block_no_push_with_txs(vec![], true, vec![]);
+    let block2b = temp_producer1.next_block_no_push(vec![], true);
 
     // Block 2a, 1 chunk (to be reverted)
     let (block2a, diff2a) =
@@ -316,10 +317,25 @@ fn can_rebranch_and_revert_chunks() {
         .unwrap();
     let chunk2b = temp_producer1.get_chunk(chunk2_start, 3);
 
+    let block2a_number = block2a.block_number();
     assert_eq!(
-        temp_producer2.push_with_chunks(block2a, diff2a, vec![chunk2a]),
+        temp_producer2.push_with_chunks(block2a, diff2a.clone(), vec![chunk2a]),
         Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 0))))
     );
+
+    {
+        let rev_info = temp_producer2
+            .blockchain
+            .read()
+            .chain_store
+            .get_revert_info(block2a_number, None);
+        match rev_info {
+            Some(RevertInfo::Diff(diff)) => {
+                assert_eq!(diff.0.len(), diff2a.0.len());
+            }
+            _ => panic!("Wrong revert info"),
+        }
+    }
 
     assert_eq!(
         temp_producer2.push_with_chunks(block2b, diff2b, vec![chunk2b]),

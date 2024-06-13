@@ -1,7 +1,7 @@
 use std::{fmt::Debug, io};
 
 use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_primitives::{account::FailReason, trie::trie_diff::TrieDiff};
+use nimiq_primitives::{account::FailReason, trie::trie_diff::RevertTrieDiff};
 use nimiq_serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,7 +71,7 @@ pub struct Receipts {
 #[repr(u8)]
 pub enum RevertInfo {
     Receipts(Receipts),
-    Diff(TrieDiff),
+    Diff(RevertTrieDiff),
 }
 
 impl From<Receipts> for RevertInfo {
@@ -80,8 +80,8 @@ impl From<Receipts> for RevertInfo {
     }
 }
 
-impl From<TrieDiff> for RevertInfo {
-    fn from(diff: TrieDiff) -> RevertInfo {
+impl From<RevertTrieDiff> for RevertInfo {
+    fn from(diff: RevertTrieDiff) -> RevertInfo {
         RevertInfo::Diff(diff)
     }
 }
