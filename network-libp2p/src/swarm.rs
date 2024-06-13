@@ -16,7 +16,7 @@ use libp2p::{
     identity::Keypair,
     kad::{self, store::RecordStore, GetRecordOk, InboundRequest, QueryResult, Quorum, Record},
     noise,
-    request_response::{self, InboundRequestId, ResponseChannel},
+    request_response::{self},
     swarm::{
         dial_opts::{DialOpts, PeerCondition},
         SwarmEvent,
@@ -30,7 +30,7 @@ use nimiq_bls::{CompressedPublicKey, KeyPair};
 use nimiq_network_interface::{
     network::{CloseReason, NetworkEvent},
     peer_info::PeerInfo,
-    request::{peek_type, InboundRequestError, OutboundRequestError, RequestError, RequestType},
+    request::{peek_type, InboundRequestError, OutboundRequestError, RequestError},
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_time::Interval;
@@ -712,30 +712,57 @@ fn handle_event(
                                         if rate_limiting.exceeds_rate_limit(
                                             peer_id,
                                             type_id,
-                                            request_id,
                                             request_rate_limit_data,
                                         ) {
-                                            respond_on_behalf(
-                                                swarm,
-                                                request_id,
-                                                peer_id,
-                                                type_id,
-                                                channel,
-                                                Err(InboundRequestError::ExceedsRateLimit),
+                                            log::debug!(
+                                                %request_id,
+                                                %peer_id,
+                                                %type_id,
+                                                max_requests=%request_rate_limit_data.max_requests,
+                                                time_window=?request_rate_limit_data.time_window,
+                                                "Exceeded max requests rate.",
                                             );
+                                            let response: Result<(), InboundRequestError> =
+                                                Err(InboundRequestError::ExceedsRateLimit);
+                                            if swarm
+                                                .behaviour_mut()
+                                                .request_response
+                                                .send_response(
+                                                    channel,
+                                                    Some(response.serialize_to_vec()),
+                                                )
+                                                .is_err()
+                                            {
+                                                error!(
+                                                    %request_id,
+                                                    %peer_id,
+                                                    %type_id,
+                                                    "Could not send rate limit error response"
+                                                );
+                                            }
                                         } else {
                                             if type_id.requires_response() {
                                                 state.response_channels.insert(request_id, channel);
                                             } else {
                                                 // Respond on behalf of the actual receiver because the actual receiver isn't interested in responding.
-                                                respond_on_behalf(
-                                                    swarm,
-                                                    request_id,
-                                                    peer_id,
-                                                    type_id,
-                                                    channel,
-                                                    Ok(()),
-                                                );
+                                                let response: Result<(), InboundRequestError> =
+                                                    Ok(());
+                                                if swarm
+                                                    .behaviour_mut()
+                                                    .request_response
+                                                    .send_response(
+                                                        channel,
+                                                        Some(response.serialize_to_vec()),
+                                                    )
+                                                    .is_err()
+                                                {
+                                                    error!(
+                                                        %request_id,
+                                                        %peer_id,
+                                                        %type_id,
+                                                        "Could not send auto response",
+                                                    );
+                                                }
                                             }
                                             if let Err(e) = sender.try_send((
                                                 request.into(),
@@ -1213,29 +1240,6 @@ pub(crate) fn verify_record(record: &Record) -> Option<DhtRecord> {
 
     // If we arrived here, it's because something failed in the record verification
     None
-}
-
-fn respond_on_behalf(
-    swarm: &mut NimiqSwarm,
-    request_id: InboundRequestId,
-    peer_id: PeerId,
-    type_id: RequestType,
-    channel: ResponseChannel<Option<Vec<u8>>>,
-    response: Result<(), InboundRequestError>,
-) {
-    if swarm
-        .behaviour_mut()
-        .request_response
-        .send_response(channel, Some(response.serialize_to_vec()))
-        .is_err()
-    {
-        error!(
-            %request_id,
-            %peer_id,
-            %type_id,
-            "Could not send response {:?}", response
-        );
-    }
 }
 
 fn to_response_error(error: OutboundFailure) -> RequestError {
