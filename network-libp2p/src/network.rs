@@ -66,6 +66,8 @@ pub struct Network {
     metrics: Arc<NetworkMetrics>,
     /// Required services from other peers. This is defined on init, based on our client type
     required_services: Services,
+    /// Reference to PeerContactBook, used to satisfy rpc requests for it.
+    contacts: Arc<RwLock<PeerContactBook>>,
 }
 
 impl Network {
@@ -125,7 +127,7 @@ impl Network {
             Arc::clone(&peer_request_limits),
             Arc::clone(&rate_limits_pending_deletion),
             update_scores,
-            contacts,
+            Arc::clone(&contacts),
             force_dht_server_mode,
             dht_quorum,
             #[cfg(feature = "metrics")]
@@ -133,6 +135,7 @@ impl Network {
         )));
 
         Self {
+            contacts,
             local_peer_id,
             connected_peers,
             events_tx,
@@ -147,6 +150,12 @@ impl Network {
 
     pub fn local_peer_id(&self) -> &PeerId {
         &self.local_peer_id
+    }
+
+    /// Retrieves a single PeerInfo peer existing in the PeerAddressBook.
+    /// If that peer has multiple associated addresses all but the first are omitted.
+    pub fn get_address_book(&self) -> Vec<PeerInfo> {
+        self.contacts.read().known_peers()
     }
 
     /// Gets the network information

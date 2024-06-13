@@ -11,7 +11,7 @@ use libp2p::{
     multiaddr::Protocol,
     Multiaddr, PeerId,
 };
-use nimiq_network_interface::peer_info::Services;
+use nimiq_network_interface::peer_info::{PeerInfo, Services};
 use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSignature};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -433,6 +433,28 @@ impl PeerContactBook {
                 .cloned()
                 .collect()
         })
+    }
+
+    /// Retrieves a single PeerInfo object for every known peer.
+    /// Additional addresses aside from the first are omitted.
+    ///
+    /// The returned Vec may be empty.
+    pub fn known_peers(&self) -> Vec<PeerInfo> {
+        self.peer_contacts
+            .values()
+            .map(|contact| {
+                PeerInfo::new(
+                    contact
+                        .contact
+                        .inner
+                        .addresses
+                        .first()
+                        .expect("every peer should have at least one address")
+                        .clone(),
+                    contact.contact.inner.services,
+                )
+            })
+            .collect()
     }
 
     /// Gets a set of peer contacts given a services filter.

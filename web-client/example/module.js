@@ -44,6 +44,11 @@ init().then(async () => {
         document.querySelector('#peers').textContent = numPeers;
     });
 
+    document.querySelector('#address-book').addEventListener("click", async () => {
+        let contacts = await client.getAddressBook();
+        console.log(contacts);
+    });
+
     /**
      * @param {string} privateKey
      * @param {string} recipient

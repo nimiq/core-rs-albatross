@@ -45,7 +45,7 @@ use crate::{
             PlainValidatorType,
         },
         block::{PlainBlock, PlainBlockType},
-        peer_info::PlainPeerInfo,
+        peer_info::{PlainPeerInfo, PlainPeerInfoArrayType},
     },
     client_configuration::{
         ClientConfiguration, PlainClientConfiguration, PlainClientConfigurationType,
@@ -389,6 +389,23 @@ impl Client {
     pub async fn get_head_block(&self) -> Result<PlainBlockType, JsError> {
         let block = self.inner.blockchain_head();
         Ok(serde_wasm_bindgen::to_value(&PlainBlock::from_block(&block))?.into())
+    }
+
+    /// Returns the current address books peers.
+    /// Each peer will have one address and currently no guarantee for the usefulness of that address can be given.
+    ///
+    /// The resulting Array may be empty if there is no peers in the address book.
+    #[wasm_bindgen(js_name = getAddressBook)]
+    pub async fn get_address_book(&self) -> PlainPeerInfoArrayType {
+        let contacts: Vec<_> = self
+            .inner
+            .network()
+            .get_address_book()
+            .into_iter()
+            .map(PlainPeerInfo::from)
+            .collect();
+
+        serde_wasm_bindgen::to_value(&contacts).unwrap().into()
     }
 
     /// Fetches a block by its hash.

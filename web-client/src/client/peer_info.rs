@@ -1,5 +1,6 @@
 use nimiq_network_interface::peer_info::{NodeType, Services};
 use tsify::Tsify;
+use wasm_bindgen::prelude::*;
 
 /// Information about a networking peer.
 #[derive(serde::Serialize, Tsify)]
@@ -34,4 +35,10 @@ impl From<nimiq_network_interface::peer_info::PeerInfo> for PlainPeerInfo {
             node_type: node_type.to_string(),
         }
     }
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(typescript_type = "PlainPeerInfo[]")]
+    pub type PlainPeerInfoArrayType;
 }
