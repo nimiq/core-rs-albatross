@@ -61,11 +61,7 @@ impl ValidityStore {
         // Initialize the cursor for the database.
         let mut cursor = db_tx.cursor(&self.block_txns);
 
-        if let Some((key, _)) = cursor.first::<u32, Blake2bHash>() {
-            key
-        } else {
-            0
-        }
+        cursor.first::<u32, Blake2bHash>().unwrap_or_default().0
     }
 
     /// Obtains the last block number stored in the validity store.
@@ -73,11 +69,7 @@ impl ValidityStore {
         // Initialize the cursor for the database.
         let mut cursor = db_tx.cursor(&self.block_txns);
 
-        if let Some((key, _)) = cursor.last::<u32, Blake2bHash>() {
-            key
-        } else {
-            0
-        }
+        cursor.last::<u32, Blake2bHash>().unwrap_or_default().0
     }
 
     /// Adds a transaction hash to the validity store

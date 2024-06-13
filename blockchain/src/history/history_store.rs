@@ -1272,17 +1272,8 @@ impl HistoryInterface for HistoryStore {
 
         let mut cursor = txn.cursor(&self.last_leaf_table);
 
-        let first = if let Some((key, _)) = cursor.first::<u32, u32>() {
-            key
-        } else {
-            0
-        };
-
-        let last = if let Some((key, _)) = cursor.last::<u32, u32>() {
-            key
-        } else {
-            0
-        };
+        let first = cursor.first::<u32, u32>().unwrap_or_default().0;
+        let last = cursor.last::<u32, u32>().unwrap_or_default().0;
 
         (first, last)
     }

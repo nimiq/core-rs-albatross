@@ -114,7 +114,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 verifier_block_number,
                 root_hash,
                 chunk_index,
-                validity_start: validity_window_start,
                 election_in_window,
                 last_chunk_items,
             });
