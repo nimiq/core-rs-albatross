@@ -544,7 +544,7 @@ mod serde_derive {
 
     struct TransactionVisitor;
     struct BasicTransactionVisitor;
-    struct HistoricTransactionVisitor;
+    struct ExtendedTransactionVisitor;
 
     impl serde::Serialize for Transaction {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -647,7 +647,7 @@ mod serde_derive {
             let (index, tx_variant) = value.variant()?;
             match index {
                 0 => tx_variant.struct_variant(BASIC_FIELDS, BasicTransactionVisitor),
-                1 => tx_variant.struct_variant(EXTENDED_FIELDS, HistoricTransactionVisitor),
+                1 => tx_variant.struct_variant(EXTENDED_FIELDS, ExtendedTransactionVisitor),
                 _ => Err(A::Error::custom("Undefined transaction type")),
             }
         }
@@ -741,11 +741,11 @@ mod serde_derive {
         }
     }
 
-    impl<'de> Visitor<'de> for HistoricTransactionVisitor {
+    impl<'de> Visitor<'de> for ExtendedTransactionVisitor {
         type Value = Transaction;
 
         fn expecting(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-            write!(f, "an HistoricTransaction")
+            write!(f, "an ExtendedTransaction")
         }
 
         fn visit_seq<A>(self, mut seq: A) -> Result<Transaction, A::Error>
