@@ -249,7 +249,7 @@ pub(crate) struct TaskState {
     /// Senders for receiving responses per `InboundRequestId` for request-response
     pub(crate) response_channels:
         HashMap<InboundRequestId, ResponseChannel<Option<OutgoingResponse>>>,
-    /// Senders for replying to requests per `RequestType` for request-response
+    /// Senders and respective rate limiting constants for replying to requests per `RequestType` for request-response
     pub(crate) receive_requests: HashMap<
         RequestType,
         (
