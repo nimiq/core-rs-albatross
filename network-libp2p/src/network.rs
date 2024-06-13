@@ -313,8 +313,7 @@ impl Network {
 
         let action_tx = self.action_tx.clone();
         ReceiveStream::WaitingForRegister(Box::pin(async move {
-            // TODO Make buffer size configurable
-            let (tx, rx) = mpsc::channel(1024);
+            let (tx, rx) = mpsc::channel(Req::CHANNEL_RESPONSE_SIZE as usize);
 
             action_tx
                 .send(NetworkAction::ReceiveRequests {

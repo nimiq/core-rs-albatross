@@ -160,6 +160,8 @@ impl RequestCommon for RequestProposal {
     const TYPE_ID: u16 = 199;
     type Response = Option<SignedProposal>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_PROPOSAL;
+
+    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 
 impl<N: Network> Handle<N, Arc<RwLock<Option<MacroState>>>> for RequestProposal {

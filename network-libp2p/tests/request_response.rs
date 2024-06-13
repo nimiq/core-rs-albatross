@@ -45,6 +45,7 @@ impl RequestCommon for TestRequest {
     type Response = TestResponse;
 
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_TEST_REQUEST;
+    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 struct TestResponse {
@@ -61,6 +62,7 @@ impl RequestCommon for TestRequest2 {
     type Response = TestResponse2;
 
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_TEST_REQUEST;
+    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -78,6 +80,7 @@ impl RequestCommon for TestRequest3 {
     type Response = TestResponse3;
 
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_TEST_REQUEST;
+    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -96,6 +99,7 @@ impl RequestCommon for TestRequest4 {
 
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_STRESS_TEST_REQUEST;
     const TIME_WINDOW: Duration = TEST_MAX_REQUEST_RESPONSE_STRESS_TEST_WINDOW;
+    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
