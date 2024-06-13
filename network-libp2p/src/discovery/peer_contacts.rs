@@ -296,7 +296,7 @@ pub struct PeerContactBook {
 
 impl PeerContactBook {
     /// If a peer's age exceeds this value in seconds, it is removed (30 minutes)
-    pub const MAX_PEER_AGE: u64 = 30 * 60;
+    pub const MAX_PEER_AGE: u64 = 3 * 60;
 
     /// Creates a new `PeerContactBook` given our own peer contact information.
     pub fn new(
@@ -324,6 +324,9 @@ impl PeerContactBook {
         }
 
         log::debug!(peer_id = %contact.peer_id(), addresses = ?contact.inner.addresses, "Adding peer contact");
+        let info = PeerContactInfo::from(contact);
+        let peer_id = info.peer_id;
+
         let current_ts = Some(
             SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
@@ -331,21 +334,30 @@ impl PeerContactBook {
                 .as_secs(),
         );
 
-        let info = PeerContactInfo::from(contact);
-        let peer_id = info.peer_id;
+        // Only update if the timestamp of the peer contact is not in the future
+        if info.contact().timestamp > current_ts {
+            log::debug!("Contact claims timestamp in the future {}", peer_id);
+            return;
+        }
 
         match self.peer_contacts.entry(peer_id) {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
                 let entry_value = entry.get_mut();
                 // Only update the contact if the timestamp is greater than the entry we have for this peer
-                // and if the timestamp of the peer contact is not in the future
-                if entry_value.contact().timestamp < info.contact().timestamp
-                    && info.contact().timestamp <= current_ts
-                {
+                if entry_value.contact().timestamp < info.contact().timestamp {
+                    log::debug!(
+                        "Updating peer {} from {} to {}",
+                        peer_id,
+                        entry_value.contact().timestamp.unwrap(),
+                        info.contact().timestamp.unwrap()
+                    );
                     *entry_value = Arc::new(info);
+                } else {
+                    log::debug!("Not newer {}", peer_id)
                 }
             }
             std::collections::hash_map::Entry::Vacant(entry) => {
+                log::debug!("Newly inserting peer {}", peer_id);
                 entry.insert(Arc::new(info));
             }
         }
@@ -361,6 +373,7 @@ impl PeerContactBook {
         services_filter: Services,
         only_secure_ws_connections: bool,
     ) {
+        let bla = contact.clone();
         let info = PeerContactInfo::from(contact);
 
         // A peer is interesting to us in two cases:
@@ -388,8 +401,7 @@ impl PeerContactBook {
                     only_secure_ws_connections,
                     "Inserting into my peer contacts, because the peer is also a validator or because it is interesting to us",
                 );
-                let peer_id = info.peer_id;
-                self.peer_contacts.insert(peer_id, Arc::new(info));
+                self.insert(bla);
             }
         }
     }

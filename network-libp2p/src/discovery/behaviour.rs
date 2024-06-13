@@ -66,10 +66,10 @@ impl Config {
             genesis_hash,
             update_interval: Duration::from_secs(60),
             min_send_update_interval: Duration::from_secs(30),
-            min_recv_update_interval: Duration::from_secs(30),
+            min_recv_update_interval: Duration::from_secs(25),
             update_limit: 64,
             required_services,
-            house_keeping_interval: Duration::from_secs(60),
+            house_keeping_interval: Duration::from_secs(25),
             keep_alive: true,
             only_secure_ws_connections,
         }

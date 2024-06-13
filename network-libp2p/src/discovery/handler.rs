@@ -610,12 +610,14 @@ impl ConnectionHandler for Handler {
                         Poll::Ready(Some(Ok(message))) => {
                             match message {
                                 DiscoveryMessage::PeerAddresses { peer_contacts } => {
+                                    log::debug!("got peer addresses from {}", self.peer_id);
                                     // Check if the update is actually not too frequent
                                     let now = Instant::now();
                                     if let Some(last_update_time) = self.last_update_time {
                                         let interval = now - last_update_time;
                                         if interval < self.config.min_recv_update_interval {
                                             // TODO: Should we just close, or ban?
+                                            log::debug!("too frequent");
                                             return Poll::Ready(
                                                 ConnectionHandlerEvent::NotifyBehaviour(
                                                     HandlerOutEvent::Error(
@@ -629,6 +631,7 @@ impl ConnectionHandler for Handler {
 
                                     // Check if the update is not too large and if the peer contacts verify
                                     if peer_contacts.len() > self.config.update_limit as usize {
+                                        log::debug!("too large");
                                         return Poll::Ready(
                                             ConnectionHandlerEvent::NotifyBehaviour(
                                                 HandlerOutEvent::Error(
@@ -641,6 +644,7 @@ impl ConnectionHandler for Handler {
                                     }
                                     for peer_contact in &peer_contacts {
                                         if !peer_contact.verify() {
+                                            log::debug!("not verified");
                                             return Poll::Ready(
                                                 ConnectionHandlerEvent::NotifyBehaviour(
                                                     HandlerOutEvent::Error(
@@ -653,6 +657,7 @@ impl ConnectionHandler for Handler {
                                         }
                                     }
 
+                                    log::debug!("insert all!");
                                     // Insert the new peer contacts into the peer contact book.
                                     self.peer_contact_book.write().insert_all_filtered(
                                         peer_contacts,
