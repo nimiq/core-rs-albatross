@@ -4,10 +4,12 @@ use bytes::Bytes;
 use futures::future::BoxFuture;
 use http_body_util::Full;
 use hyper::{
-    body::Incoming as IncomingBody, http::StatusCode, server::conn::http2, service::Service,
-    Method, Request, Response,
+    body::Incoming as IncomingBody, http::StatusCode, service::Service, Method, Request, Response,
 };
-use hyper_util::rt::tokio::{TokioExecutor, TokioIo};
+use hyper_util::{
+    rt::tokio::{TokioExecutor, TokioIo},
+    server::conn::auto::Builder,
+};
 use log::{error, info};
 use parking_lot::RwLock;
 use prometheus_client::{encoding::text::encode, registry::Registry};
@@ -22,7 +24,7 @@ pub async fn metrics_server(addr: SocketAddr, registry: Registry) -> Result<(), 
         let io = TokioIo::new(stream);
         let svc_clone = metrics_service.clone();
         tokio::spawn(async move {
-            if let Err(error) = http2::Builder::new(TokioExecutor::new())
+            if let Err(error) = Builder::new(TokioExecutor::new())
                 .serve_connection(io, svc_clone)
                 .await
             {
