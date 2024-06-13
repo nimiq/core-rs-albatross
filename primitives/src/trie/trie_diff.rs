@@ -112,3 +112,57 @@ impl FromDatabaseValue for TrieDiff {
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }
+
+/// A diff on an incomplete trie.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum RevertDiffValue {
+    /// Puts a value into the known part of the trie.
+    Put(Vec<u8>),
+    /// Removes a value from either the known or the unknown part of the trie.
+    Remove,
+    /// Updates a value in the unknown part of the trie.
+    UpdateStump,
+}
+
+impl RevertDiffValue {
+    /// Create an incomplete diff value for a value from the known part of the trie.
+    pub fn known_value(old_value: Option<Vec<u8>>) -> Self {
+        match old_value {
+            Some(v) => RevertDiffValue::Put(v),
+            None => RevertDiffValue::Remove,
+        }
+    }
+
+    /// Create an incomplete diff value for the unknown part of the trie.
+    pub fn unknown_value(new_stump: bool) -> Self {
+        match new_stump {
+            true => RevertDiffValue::Remove,
+            false => RevertDiffValue::UpdateStump,
+        }
+    }
+}
+
+/// A diff on an incomplete trie.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct RevertTrieDiff(pub BTreeMap<KeyNibbles, RevertDiffValue>);
+
+impl IntoDatabaseValue for RevertTrieDiff {
+    fn database_byte_size(&self) -> usize {
+        self.serialized_size()
+    }
+
+    fn copy_into_database(&self, mut bytes: &mut [u8]) {
+        Serialize::serialize(&self, &mut bytes).unwrap();
+    }
+}
+
+impl FromDatabaseValue for RevertTrieDiff {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        Deserialize::deserialize_from_vec(bytes)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+    }
+}

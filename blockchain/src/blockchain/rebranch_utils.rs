@@ -200,7 +200,7 @@ impl Blockchain {
                 Err(e) => {
                     // If a block fails to apply here it does not verify fully.
                     // This block and all blocks after this thus should be removed from the store
-                    // as they are not verifying. 
+                    // as they are not verifying.
                     warn!(
                         block = %block.1.head,
                         reason = "failed to apply fork block while rebranching",

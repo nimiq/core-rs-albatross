@@ -10,7 +10,7 @@ use nimiq_primitives::{
     trie::{
         error::IncompleteTrie,
         trie_chunk::{TrieChunk, TrieChunkPushResult},
-        trie_diff::TrieDiff,
+        trie_diff::{RevertTrieDiff, TrieDiff},
         trie_proof::TrieProof,
         TrieItem,
     },
@@ -307,7 +307,7 @@ impl Accounts {
         &self,
         txn: &mut WriteTransactionProxy,
         diff: TrieDiff,
-    ) -> Result<TrieDiff, AccountError> {
+    ) -> Result<RevertTrieDiff, AccountError> {
         let diff = self.tree.apply_diff(txn, diff)?;
         self.tree.update_root(txn).ok();
         Ok(diff)
@@ -569,9 +569,9 @@ impl Accounts {
     pub fn revert_diff(
         &self,
         txn: &mut WriteTransactionProxy,
-        diff: TrieDiff,
+        diff: RevertTrieDiff,
     ) -> Result<(), AccountError> {
-        self.tree.apply_diff(txn, diff)?;
+        self.tree.revert_diff(txn, diff)?;
         Ok(())
     }
 

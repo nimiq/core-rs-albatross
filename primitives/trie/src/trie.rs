@@ -16,7 +16,7 @@ use nimiq_primitives::{
     trie::{
         error::{IncompleteTrie, MerkleRadixTrieError},
         trie_chunk::{TrieChunk, TrieChunkPushResult, TrieItem},
-        trie_diff::TrieDiff,
+        trie_diff::{RevertDiffValue, RevertTrieDiff, TrieDiff},
         trie_node::{RootData, TrieNode, TrieNodeKind},
         trie_proof::TrieProof,
         trie_proof_node::TrieProofNode,
@@ -142,6 +142,41 @@ impl MerkleRadixTrie {
     pub fn reinitialize_as_incomplete(&self, txn: &mut WriteTransactionProxy) {
         txn.clear_database(&self.db);
         self.init_root(txn, true);
+    }
+
+    /// Prints a human friendly version of the subtrie for debugging.
+    /// Not to be used on large trees!
+    pub fn debug_print(&self, txn: &TransactionProxy) {
+        let missing_range = self.get_missing_range(txn);
+        println!("-> ROOT");
+        self.debug_print_subtrie(txn, &KeyNibbles::ROOT, &missing_range, 2)
+    }
+
+    /// Prints a human friendly version of the subtrie for debugging.
+    /// Not to be used on large trees!
+    pub fn debug_print_subtrie(
+        &self,
+        txn: &TransactionProxy,
+        key: &KeyNibbles,
+        missing_range: &Option<ops::RangeFrom<KeyNibbles>>,
+        depth: usize,
+    ) {
+        let prefix = "  ".repeat(depth);
+        let node = if let Some(node) = self.get_node(txn, key) {
+            node
+        } else {
+            println!("{}-> MISSING", prefix);
+            return;
+        };
+
+        for child in node.iter_children() {
+            println!("{}-> {} ({})", prefix, child.suffix, child.has_hash());
+            if let Ok(subkey) = child.key(key, missing_range) {
+                self.debug_print_subtrie(txn, &subkey, missing_range, depth + 2);
+            } else {
+                println!("{}  -> MISSING", prefix);
+            }
+        }
     }
 
     /// Returns the root hash of the Merkle Radix Trie.
@@ -433,13 +468,77 @@ impl MerkleRadixTrie {
         key: &KeyNibbles,
     ) -> Result<(), MerkleRadixTrieError> {
         let missing_range = self.get_missing_range(txn);
-        self.update_within_missing_part_raw(txn, key, &missing_range)
+        self.update_within_missing_part_raw(txn, key, &missing_range)?;
+        Ok(())
     }
 
     /// Resets the hashes for a path to a node in the missing part of the tree.
     /// This is used to indicate that the corresponding branch's hash has changed,
     /// but we cannot provide the accurate hash until a new chunk has been pushed.
+    ///
+    /// Returns `true` if a new stump has been added, otherwise `false`.
     fn update_within_missing_part_raw(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        key: &KeyNibbles,
+        missing_range: &Option<ops::RangeFrom<KeyNibbles>>,
+    ) -> Result<bool, MerkleRadixTrieError> {
+        let mut node = self
+            .get_root(txn)
+            .expect("The Merkle Radix Trie didn't have a root node!");
+
+        let mut root_path = Vec::new();
+        let mut new_stump = false;
+        // Descend down the tree and collect nodes to be updated.
+        loop {
+            // This function should only be called with keys in the missing range.
+            assert_ne!(&node.key, key);
+
+            // Check that the key we are trying to update can exist in this part of the tree.
+            if !node.key.is_prefix_of(key) {
+                return Err(MerkleRadixTrieError::ChildDoesNotExist);
+            }
+
+            // Descend to the corresponding child.
+            match node.child_key(key, missing_range) {
+                Ok(child_key) => {
+                    let child = self
+                        .get_node(txn, &child_key)
+                        .expect("Child should be present");
+                    let parent = mem::replace(&mut node, child);
+                    root_path.push(parent);
+                }
+                e @ Err(MerkleRadixTrieError::ChildIsStump)
+                | e @ Err(MerkleRadixTrieError::ChildDoesNotExist) => {
+                    // We cannot continue further down as the next node is outside our trie.
+                    // Update this node prior to `update_keys` (which only updates the other nodes in the root path).
+                    node.put_child_no_hash(key).expect("Prefix must be correct");
+                    self.put_node(txn, &node, OldValue::Unchanged);
+
+                    // Mark that a new stump has been added.
+                    if let Err(MerkleRadixTrieError::ChildDoesNotExist) = e {
+                        new_stump = true;
+                    }
+
+                    root_path.push(node);
+                    break;
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
+
+        self.update_keys(txn, root_path, CountUpdates::default());
+
+        Ok(new_stump)
+    }
+
+    /// Removes the corresponding stump and updates the hashes for a path
+    /// to a node in the missing part of the tree.
+    /// This is used to indicate that the corresponding branch's hash has changed,
+    /// but we cannot provide the accurate hash until a new chunk has been pushed.
+    fn remove_within_missing_part_raw(
         &self,
         txn: &mut WriteTransactionProxy,
         key: &KeyNibbles,
@@ -469,16 +568,16 @@ impl MerkleRadixTrie {
                     let parent = mem::replace(&mut node, child);
                     root_path.push(parent);
                 }
-                Err(MerkleRadixTrieError::ChildIsStump)
-                | Err(MerkleRadixTrieError::ChildDoesNotExist) => {
+                Err(MerkleRadixTrieError::ChildIsStump) => {
                     // We cannot continue further down as the next node is outside our trie.
-                    // Update this node prior to `update_keys` (which only updates the other nodes in the root path).
-                    node.put_child_no_hash(key).expect("Prefix must be correct");
+                    // Remove this stump.
+                    node.remove_child(key).expect("Prefix must be correct");
                     self.put_node(txn, &node, OldValue::Unchanged);
 
                     root_path.push(node);
                     break;
                 }
+                Err(MerkleRadixTrieError::ChildDoesNotExist) => unreachable!("Child must exist"),
                 Err(e) => {
                     return Err(e);
                 }
@@ -1196,7 +1295,7 @@ impl MerkleRadixTrie {
         &self,
         txn: &mut WriteTransactionProxy,
         diff: TrieDiff,
-    ) -> Result<TrieDiff, MerkleRadixTrieError> {
+    ) -> Result<RevertTrieDiff, MerkleRadixTrieError> {
         let missing_range = self.get_missing_range(txn);
         let mut result = BTreeMap::default();
         for (key, value) in diff.0 {
@@ -1207,12 +1306,47 @@ impl MerkleRadixTrie {
                 } else {
                     self.remove_raw(txn, &key, &missing_range);
                 };
-                assert!(result.insert(key, old_value).is_none());
+                assert!(result
+                    .insert(key, RevertDiffValue::known_value(old_value))
+                    .is_none());
             } else {
-                self.update_within_missing_part_raw(txn, &key, &missing_range)?;
+                let new_stump = self.update_within_missing_part_raw(txn, &key, &missing_range)?;
+                assert!(result
+                    .insert(key, RevertDiffValue::unknown_value(new_stump))
+                    .is_none());
             }
         }
-        Ok(TrieDiff(result))
+        Ok(RevertTrieDiff(result))
+    }
+
+    pub fn revert_diff(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        diff: RevertTrieDiff,
+    ) -> Result<(), MerkleRadixTrieError> {
+        let missing_range = self.get_missing_range(txn);
+        for (key, value) in diff.0.into_iter().rev() {
+            if self.is_within_complete_part(&key, &missing_range) {
+                match value {
+                    RevertDiffValue::Put(value) => self.put_raw(txn, &key, value, &missing_range),
+                    RevertDiffValue::Remove => self.remove_raw(txn, &key, &missing_range),
+                    RevertDiffValue::UpdateStump => {
+                        unreachable!("key should be in complete part")
+                    }
+                }
+            } else {
+                match value {
+                    RevertDiffValue::Put(_) => unreachable!("key should be in incomplete part"),
+                    RevertDiffValue::Remove => {
+                        self.remove_within_missing_part_raw(txn, &key, &missing_range)?
+                    }
+                    RevertDiffValue::UpdateStump => {
+                        self.update_within_missing_part_raw(txn, &key, &missing_range)?;
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     fn is_within_complete_part(
