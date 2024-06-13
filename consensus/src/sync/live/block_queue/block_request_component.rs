@@ -10,10 +10,11 @@ use nimiq_block::Block;
 use nimiq_blockchain_interface::Direction;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
-    network::{Network, NetworkEvent, SubscribeEvents},
+    network::{Network, NetworkEvent},
     request::RequestError,
 };
 use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
+use nimiq_utils::spawn::spawn;
 use parking_lot::RwLock;
 use thiserror::Error;
 
@@ -77,7 +78,6 @@ pub enum MissingBlockError {
 pub struct BlockRequestComponent<N: Network> {
     sync_queue: SyncQueue<N, MissingBlockRequest, MissingBlockResponse, MissingBlockError, ()>, // requesting missing blocks from peers
     peers: Arc<RwLock<PeerList<N>>>,
-    network_event_rx: SubscribeEvents<N::PeerId>,
     include_micro_bodies: bool,
     /// Pending requests.
     pending_requests: BTreeSet<Blake2bHash>,
@@ -88,7 +88,25 @@ impl<N: Network> BlockRequestComponent<N> {
 
     pub fn new(network: Arc<N>, include_micro_bodies: bool) -> Self {
         let peers = Arc::new(RwLock::new(PeerList::default()));
-        let network_event_rx = network.subscribe_events();
+        let mut network_event_rx = network.subscribe_events();
+
+        // Poll network events to remove peers.
+        let peers_weak = Arc::downgrade(&peers);
+        spawn(async move {
+            while let Some(result) = network_event_rx.next().await {
+                if let Ok(NetworkEvent::PeerLeft(peer_id)) = result {
+                    // Remove peers that left.
+                    let peers = match peers_weak.upgrade() {
+                        Some(peers) => peers,
+                        None => break,
+                    };
+
+                    debug!(%peer_id, "Removing peer from live sync");
+                    peers.write().remove_peer(&peer_id);
+                }
+            }
+        });
+
         Self {
             sync_queue: SyncQueue::with_verification(
                 network,
@@ -226,7 +244,6 @@ impl<N: Network> BlockRequestComponent<N> {
                 (),
             ),
             peers,
-            network_event_rx,
             include_micro_bodies,
             pending_requests: BTreeSet::new(),
         }
@@ -309,14 +326,6 @@ impl<N: Network> Stream for BlockRequestComponent<N> {
     type Item = BlockRequestComponentEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        // Poll network events to remove peers.
-        while let Poll::Ready(Some(result)) = self.network_event_rx.poll_next_unpin(cx) {
-            if let Ok(NetworkEvent::PeerLeft(peer_id)) = result {
-                // Remove peers that left.
-                self.peers.write().remove_peer(&peer_id);
-            }
-        }
-
         // Poll self.sync_queue, return results.
         while let Poll::Ready(Some(result)) = self.sync_queue.poll_next_unpin(cx) {
             match result {
