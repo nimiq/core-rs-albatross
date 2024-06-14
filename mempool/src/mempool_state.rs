@@ -74,15 +74,11 @@ impl MempoolState {
 
         if let Some(sender_state) = self.state_by_sender.get_mut(&tx.sender) {
             let reserved_balance = &mut sender_state.reserved_balance;
-            blockchain
-                .reserve_balance(&sender_account, tx, reserved_balance)
-                .map_err(|_| VerifyErr::InsufficientFunds)?;
+            blockchain.reserve_balance(&sender_account, tx, reserved_balance)?;
             sender_state.txns.insert(tx.hash());
         } else {
             let mut reserved_balance = ReservedBalance::new(tx.sender.clone());
-            blockchain
-                .reserve_balance(&sender_account, tx, &mut reserved_balance)
-                .map_err(|_| VerifyErr::InsufficientFunds)?;
+            blockchain.reserve_balance(&sender_account, tx, &mut reserved_balance)?;
 
             let sender_state = SenderPendingState {
                 reserved_balance,

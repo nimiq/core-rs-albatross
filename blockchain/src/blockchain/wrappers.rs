@@ -160,11 +160,11 @@ impl Blockchain {
         if let Ok(account) = self.state.accounts.get(address, None) {
             Some(account)
         } else {
-            warn!(%address, "Could not get account for address");
             None
         }
     }
 
+    /// The given account must correspond to the sender of the given transaction.
     pub fn reserve_balance(
         &self,
         account: &Account,
@@ -181,6 +181,7 @@ impl Blockchain {
         )
     }
 
+    /// The given account must correspond to the sender of the given transaction.
     pub fn release_balance(
         &self,
         account: &Account,

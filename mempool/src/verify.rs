@@ -3,7 +3,7 @@ use std::sync::Arc;
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_hash::Hash;
-use nimiq_primitives::{networks::NetworkId, transaction::TransactionError};
+use nimiq_primitives::{account::AccountError, networks::NetworkId, transaction::TransactionError};
 use nimiq_transaction::Transaction;
 use parking_lot::RwLock;
 use thiserror::Error;
@@ -20,8 +20,8 @@ pub enum VerifyErr {
     AlreadyIncluded,
     #[error("Transaction not valid at current block number")]
     InvalidBlockNumber,
-    #[error("Insufficient funds to execute transaction")]
-    InsufficientFunds,
+    #[error("Transaction cannot be applied to sender account: {0}")]
+    InvalidAccount(#[from] AccountError),
     #[error("Transaction already in mempool")]
     Known,
     #[error("Transaction is filtered")]

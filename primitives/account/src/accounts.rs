@@ -82,6 +82,7 @@ impl Accounts {
             .expect("Tree must be complete")
     }
 
+    /// The given account must correspond to the sender of the given transaction.
     pub fn reserve_balance(
         &self,
         account: &Account,
@@ -90,6 +91,14 @@ impl Accounts {
         block_state: &BlockState,
         txn_option: Option<&DBTransaction>,
     ) -> Result<(), AccountError> {
+        // Verify that the account type matches the one given in the transaction.
+        if account.account_type() != transaction.sender_type {
+            return Err(AccountError::TypeMismatch {
+                expected: transaction.sender_type,
+                got: account.account_type(),
+            });
+        }
+
         // This assumes that the given account corresponds to the sender of the given transaction.
         let store = DataStore::new(&self.tree, &transaction.sender);
 
@@ -106,6 +115,7 @@ impl Accounts {
         }
     }
 
+    /// The given account must correspond to the sender of the given transaction.
     pub fn release_balance(
         &self,
         account: &Account,
