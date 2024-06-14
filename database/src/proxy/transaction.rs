@@ -111,6 +111,17 @@ impl<'db> WriteTransaction<'db> for WriteTransactionProxy<'db> {
         }
     }
 
+    fn append<K, V>(&mut self, table: &Self::Table, key: &K, value: &V)
+    where
+        K: nimiq_database_value::AsDatabaseBytes + ?Sized,
+        V: nimiq_database_value::AsDatabaseBytes + ?Sized,
+    {
+        match self.txn {
+            TransactionProxy::ReadTransaction(_) => unreachable!(),
+            TransactionProxy::WriteTransaction(ref mut txn) => txn.append(table, key, value),
+        }
+    }
+
     fn remove<K>(&mut self, table: &Self::Table, key: &K)
     where
         K: nimiq_database_value::AsDatabaseBytes + ?Sized,
