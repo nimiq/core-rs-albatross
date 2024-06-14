@@ -20,7 +20,7 @@ pub fn compute_pbkdf2_sha512(
     derived_key_length: usize,
 ) -> Result<Vec<u8>, Pbkdf2Error> {
     // Following https://www.ietf.org/rfc/rfc2898.txt
-    if (derived_key_length as u64) > u64::from(u32::max_value()) * (Sha512Hash::len() as u64) {
+    if (derived_key_length as u64) > u64::from(u32::MAX) * (Sha512Hash::len() as u64) {
         return Err(Pbkdf2Error::KeyTooLong);
     }
 

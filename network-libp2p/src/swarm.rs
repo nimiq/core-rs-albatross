@@ -677,7 +677,7 @@ fn handle_event(
                 }
                 behaviour::BehaviourEvent::Pool(event) => {
                     match event {
-                        connection_pool::Event::PeerJoined { peer_id: _ } => {}
+                        connection_pool::Event::PeerJoined => {}
                     };
                 }
                 behaviour::BehaviourEvent::RequestResponse(event) => match event {

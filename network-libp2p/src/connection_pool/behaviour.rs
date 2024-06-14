@@ -278,7 +278,7 @@ impl<T> std::fmt::Display for ConnectionState<T> {
 #[derive(Debug)]
 pub enum Event {
     /// A peer has joined
-    PeerJoined { peer_id: PeerId },
+    PeerJoined,
 }
 
 type PoolToSwarm = ToSwarm<Event, Void>;
@@ -677,9 +677,7 @@ impl Behaviour {
             .mark_connected(address.clone(), peer_services);
 
         self.actions
-            .push_back(ToSwarm::GenerateEvent(Event::PeerJoined {
-                peer_id: *peer_id,
-            }));
+            .push_back(ToSwarm::GenerateEvent(Event::PeerJoined));
         self.wake();
 
         self.maintain_peers();
