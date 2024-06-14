@@ -94,6 +94,21 @@ impl<'db> WriteTransaction<'db> for MdbxWriteTransaction<'db> {
             .unwrap();
     }
 
+    fn append<K, V>(&mut self, table: &MdbxTable, key: &K, value: &V)
+    where
+        K: AsDatabaseBytes + ?Sized,
+        V: AsDatabaseBytes + ?Sized,
+    {
+        let table = self.open_table(table);
+
+        let key = AsDatabaseBytes::as_database_bytes(key);
+        let value = AsDatabaseBytes::as_database_bytes(value);
+
+        self.txn
+            .put(&table, key, value, WriteFlags::APPEND)
+            .unwrap();
+    }
+
     fn remove<K>(&mut self, table: &MdbxTable, key: &K)
     where
         K: AsDatabaseBytes + ?Sized,
