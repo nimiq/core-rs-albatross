@@ -145,7 +145,7 @@ impl<'a, 'env> Store<Blake2bHash> for MMRStore<'a, 'env> {
     fn push(&mut self, elem: Blake2bHash) {
         if let Tx::Write(ref mut tx) = self.tx {
             let key = index_to_key(self.epoch_number, self.size);
-            tx.put(self.hist_tree_table, &key, &elem);
+            tx.append(self.hist_tree_table, &key, &elem);
             self.size += 1;
         }
     }

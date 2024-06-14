@@ -42,6 +42,13 @@ pub trait WriteTransaction<'db>: ReadTransaction<'db> + Sized {
         K: AsDatabaseBytes + ?Sized,
         V: AsDatabaseBytes + ?Sized;
 
+    /// Appends a key/value pair to the end of the database.
+    /// This operation fails if the key is less than the last key.
+    fn append<K, V>(&mut self, table: &Self::Table, key: &K, value: &V)
+    where
+        K: AsDatabaseBytes + ?Sized,
+        V: AsDatabaseBytes + ?Sized;
+
     fn remove<K>(&mut self, table: &Self::Table, key: &K)
     where
         K: AsDatabaseBytes + ?Sized;
