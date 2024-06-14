@@ -142,7 +142,7 @@ pub fn next_micro_block(
     let history_root = config.history_root.clone().unwrap_or_else(|| {
         blockchain
             .history_store
-            .add_to_history(&mut txn, Policy::epoch_at(block_number), &hist_txs)
+            .add_to_history(&mut txn, block_number, &hist_txs)
             .expect("Failed to compute history root during block production.")
             .0
     });
@@ -241,7 +241,7 @@ pub fn next_skip_block(
     let history_root = config.history_root.clone().unwrap_or_else(|| {
         blockchain
             .history_store
-            .add_to_history(&mut txn, Policy::epoch_at(block_number), &hist_txs)
+            .add_to_history(&mut txn, block_number, &hist_txs)
             .expect("Failed to compute history root during block production.")
             .0
     });
@@ -388,7 +388,7 @@ pub fn next_macro_block_proposal(
 
     macro_block.header.history_root = blockchain
         .history_store
-        .add_to_history(&mut txn, Policy::epoch_at(block_number), &hist_txs)
+        .add_to_history(&mut txn, block_number, &hist_txs)
         .expect("Failed to compute history root during block production.")
         .0;
 
