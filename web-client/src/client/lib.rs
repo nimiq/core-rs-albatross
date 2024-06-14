@@ -701,11 +701,17 @@ impl Client {
     ///
     /// The obtained transactions are verified before being returned.
     ///
-    /// Up to a `limit` number of transactions are returned from newest to oldest.
-    /// If the network does not have at least `min_peers` to query, then an error is returned.
+    /// If you already have transactions belonging to this address, you can provide some of that
+    /// information to reduce the amount of network requests made:
+    /// - Provide the `since_block_height` parameter to exclude any history from before
+    ///   that block height. You should be completely certain about its state. This should not be
+    ///   the last known block height, but an earlier block height that could not have been forked
+    ///   from (e.g. the last known election or checkpoint block).
+    /// - Provide a list of `known_transaction_details` to have them verified and/or broadcasted
+    ///   again.
     ///
-    /// The `known_transaction_details` parameter is used as a filter to avoid fetching
-    /// transactions that are already known and confirmed.
+    /// Up to a `limit` number of transactions are returned from newest to oldest.
+    /// If the network does not have at least `min_peers` to query, an error is returned.
     #[wasm_bindgen(js_name = getTransactionsByAddress)]
     pub async fn get_transactions_by_address(
         &self,
@@ -729,6 +735,7 @@ impl Client {
         let address = Address::from_any(address)?.take_native();
         let mut known_txs = HashMap::new();
 
+        // Parse known transaction details from JS to Rust
         if let Some(array) = known_transaction_details {
             let known_transaction_details =
                 serde_wasm_bindgen::from_value::<Vec<PlainTransactionDetails>>(array.into())?;
@@ -739,10 +746,6 @@ impl Client {
                 );
             }
         }
-
-        // TODO: Get pending transactions?
-
-        let mut earliest_receipt_block_height: u32 = u32::MAX;
 
         // Fetch transaction receipts.
         let receipts: HashMap<_, _> = self
@@ -755,10 +758,6 @@ impl Client {
 
         let mut receipts_to_fetch = vec![];
         for (hash, block_number) in receipts.iter() {
-            if block_number < &earliest_receipt_block_height {
-                earliest_receipt_block_height = *block_number;
-            }
-
             // Skip known transactions that are already considered confirmed.
             if let Some(known_tx) = known_txs.get(hash) {
                 if matches!(known_tx.state, TransactionState::Confirmed)
@@ -777,13 +776,7 @@ impl Client {
             receipts_to_fetch.push((hash.clone(), Some(*block_number)));
         }
 
-        // If we receive the maximum receipts possible, set since_block_height to the earliest
-        // received block height to not re-request older known transactions.
-        if receipts.len() >= MAX_TRANSACTIONS_BY_ADDRESS.into() {
-            since_block_height = earliest_receipt_block_height + 1;
-        }
-
-        // Re-check known (included or confirmed) transactions that are not contained in the receipts.
+        // Re-check known included or confirmed transactions that are not contained in the receipts.
         for (hash, details) in &known_txs {
             if !matches!(
                 details.state,
@@ -791,13 +784,16 @@ impl Client {
             ) {
                 continue;
             }
+            if receipts.contains_key(hash) {
+                // Transaction is included in receipts, so not unknown.
+                continue;
+            }
+            // If the known transaction was earlier than the configured cutoff or the earliest
+            // retrievable receipt, do not try to verify it.
             if let Some(block_height) = details.block_height {
                 if block_height < since_block_height {
                     continue;
                 }
-            }
-            if receipts.contains_key(hash) {
-                continue;
             }
 
             receipts_to_fetch.push((hash.clone(), details.block_height));
@@ -812,16 +808,18 @@ impl Client {
 
         let current_height = self.get_head_height().await;
 
+        // Convert historic transactions into the plain transaction details result type.
         let mut txs: Vec<_> = ext_txs
             .into_iter()
             .map(|hist_tx| {
-                // TODO: Track unconfirmed transactions for confirmation by next macro block
+                // This method automatically marks the PlainTransactionDetails as status `Included`
+                // or `confirmed` from the `current_height`.
                 PlainTransactionDetails::try_from_historic_transaction(hist_tx, current_height)
                     .expect("no non-reward inherent")
             })
             .collect();
 
-        // Track known (new or pending) transactions
+        // Track known new or pending transactions.
         for details in known_txs.values() {
             if !matches!(
                 details.state,
@@ -833,16 +831,19 @@ impl Client {
                 .iter()
                 .any(|tx| tx.transaction.transaction_hash == details.transaction.transaction_hash)
             {
+                // We already fetched this transaction, meaning it got included and will be returned.
                 continue;
             }
 
             if details.transaction.validity_start_height
                 <= current_height - Policy::transaction_validity_window()
             {
+                // Transaction expired before getting included.
                 let mut expired_details = details.clone();
                 expired_details.state = TransactionState::Expired;
                 txs.push(expired_details);
             } else {
+                // Re-broadcast the transaction and return it with its new state.
                 txs.push(
                     self.send_web_transaction(Transaction::from_plain_transaction(
                         &details.transaction,
