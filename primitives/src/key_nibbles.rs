@@ -1,6 +1,6 @@
 use std::{
     cmp::{self, Ordering},
-    fmt, io, ops, str, usize,
+    fmt, io, ops, str,
 };
 
 use byteorder::WriteBytesExt;
