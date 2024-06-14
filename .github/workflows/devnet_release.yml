@@ -22,6 +22,7 @@ jobs:
         - FiveValidatorsWithSpammer
         - FiveValidatorsWithSpammerFullNodes
         - FiveValidatorsWithSpammerProfile
+        - ValidatorsStress
 
         include:
         - test: FourValidatorsReconnect
@@ -48,6 +49,8 @@ jobs:
           devnet_args: -t .github/devnet_topologies/five_validators_spammer_full_nodes.toml -R -k 0
         - test: FiveValidatorsWithSpammerProfile
           devnet_args: -t .github/devnet_topologies/five_validators_spammer.toml -R -k 0 -sp spammer/src/spammer_profile.toml
+        - test: ValidatorsStress
+          devnet_args: -t .github/devnet_topologies/validators_stress.toml -R -k 2 -as -dt 30
 
     runs-on: ubuntu-22.04
 
