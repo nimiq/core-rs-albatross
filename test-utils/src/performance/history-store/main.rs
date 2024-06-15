@@ -1,4 +1,4 @@
-use std::{process::exit, time::Instant};
+use std::{fs, path::PathBuf, process::exit, time::Instant};
 
 use clap::Parser;
 use nimiq_blockchain::{
@@ -70,6 +70,7 @@ fn history_store_performance(
     env: DatabaseProxy,
     tpb: u32,
     number_of_batches: u32,
+    db_file: PathBuf,
 ) {
     let num_txns = tpb;
 
@@ -98,12 +99,15 @@ fn history_store_performance(
 
     let duration = start.elapsed();
 
+    let db_file_size = fs::metadata(db_file.to_str().unwrap()).unwrap().len();
+
     println!(
-        "It took: {:.2}s, to add {} batches, {} tpb to the history store, total_txns {}",
+        "{:.2}s to add {} batches, {} tpb, DB size: {:.2}Mb, total_txns: {}",
         duration.as_millis() as f64 / 1000_f64,
         number_of_batches,
         num_txns,
-        num_txns * number_of_blocks,
+        db_file_size as f64 / 1000000_f64,
+        num_txns * number_of_blocks
     );
 
     let mut txn = env.write_transaction();
@@ -127,8 +131,9 @@ fn main() {
 
     let _ = Policy::get_or_init(policy_config);
 
-    let tmp_dir = tempdir().expect("Could not create temporal directory");
-    let tmp_dir = tmp_dir.path().to_str().unwrap();
+    let temp_dir = tempdir().expect("Could not create temporal directory");
+    let tmp_dir = temp_dir.path().to_str().unwrap();
+    let db_file = temp_dir.path().join("mdbx.dat");
     log::debug!("Creating a non volatile environment in {}", tmp_dir);
     let env = MdbxDatabase::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
 
@@ -144,7 +149,7 @@ fn main() {
             as Box<dyn HistoryInterface + Sync + Send>
     };
 
-    history_store_performance(history_store, env, args.tpb, args.batches);
+    history_store_performance(history_store, env, args.tpb, args.batches, db_file);
 
     exit(0);
 }
