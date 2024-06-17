@@ -298,9 +298,10 @@ impl MMRHash<Blake2bHash> for HistoricTransaction {
     /// to include it into the History Tree.
     /// This returns the executed transaction hash prefixed with 'prefix' number of leaves.
     fn hash(&self, prefix: u64) -> Blake2bHash {
-        let mut message = prefix.to_be_bytes().to_vec();
-        message.append(&mut self.serialize_to_vec());
-        message.hash()
+        let mut hasher = Blake2bHasher::new();
+        hasher.write_all(&prefix.to_be_bytes()).unwrap();
+        self.serialize_to_writer(&mut hasher).unwrap();
+        hasher.finish()
     }
 }
 
