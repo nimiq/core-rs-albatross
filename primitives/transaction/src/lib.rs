@@ -30,6 +30,7 @@ use crate::account::{
     AccountTransactionVerification,
 };
 
+mod control_transaction;
 mod equivocation_locator;
 
 pub mod account;
@@ -39,8 +40,11 @@ pub mod inherent;
 pub mod reward;
 pub mod signature_proof;
 
-pub use self::equivocation_locator::{
-    DoubleProposalLocator, DoubleVoteLocator, EquivocationLocator, ForkLocator,
+pub use self::{
+    control_transaction::ControlTransaction,
+    equivocation_locator::{
+        DoubleProposalLocator, DoubleVoteLocator, EquivocationLocator, ForkLocator,
+    },
 };
 
 /// Transaction topic for the Mempool to request transactions from the network
@@ -60,7 +64,7 @@ impl Topic for TransactionTopic {
 pub struct ControlTransactionTopic;
 
 impl Topic for ControlTransactionTopic {
-    type Item = Transaction;
+    type Item = ControlTransaction;
 
     const BUFFER_SIZE: usize = 1024;
     const NAME: &'static str = "control-transaction";

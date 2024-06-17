@@ -6,7 +6,7 @@ use std::{
 use futures::{
     future::{AbortHandle, Abortable},
     lock::{Mutex, MutexGuard},
-    stream::BoxStream,
+    stream::{BoxStream, StreamExt},
 };
 use nimiq_account::ReservedBalance;
 use nimiq_block::Block;
@@ -153,7 +153,9 @@ impl Mempool {
         let txn_stream = network
             .subscribe::<ControlTransactionTopic>()
             .await
-            .unwrap();
+            .unwrap()
+            .map(|(tx, pubsub_id)| (Transaction::from(tx), pubsub_id))
+            .boxed();
 
         self.start_executor::<N, ControlTransactionTopic>(
             network,
