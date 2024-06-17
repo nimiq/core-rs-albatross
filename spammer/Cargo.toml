@@ -42,5 +42,5 @@ nimiq-transaction-builder = { workspace = true }
 [dependencies.nimiq]
 package = "nimiq-lib"
 path = "../lib"
-version = "0.1"
+version = "0.22.1"
 features = [ "database-storage", "deadlock", "full-consensus", "logging", "metrics-server", "panic", "rpc-server", "signal-handling", "tokio-websocket", "validator", "wallet"]
