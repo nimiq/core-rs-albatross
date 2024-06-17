@@ -128,7 +128,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 chunk_index: chunk_index as u64,
             };
 
-            log::debug!(
+            log::info!(
                 target_macro = verifier_block_number,
                 chunk_index = chunk_index,
                 last_chunk_items = last_chunk_items,
@@ -328,7 +328,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                 peer_request.verifier_block_number = latest_macro_head_number;
                             } else {
                                 // We are done
-                                log::debug!(
+                                log::info!(
                                     synced_root = %expected_root,
                                     synced_macro_head = verifier_block_number,
                                     "Validity window syncing is complete"
