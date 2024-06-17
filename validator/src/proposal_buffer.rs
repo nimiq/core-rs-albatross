@@ -392,14 +392,13 @@ where
         if proposal.0.signer as usize > validators.num_validators() {
             // The proposal indicates a nonsensical proposer as the validator id is out of bounds.
             // The proposal is dropped and propagation is stopped.
+            log::debug!(proposal = ?proposal.0, "Proposal signer does not exist, IOOB");
             self.network
                 .validate_message::<ProposalTopic<TValidatorNetwork>>(
                     proposal.1,
                     MsgAcceptance::Reject,
                 );
             return;
-        } else {
-            log::debug!(proposal = ?proposal.0, "Proposal signer does not exist");
         }
 
         // Get the validator whose id was presented in the proposal message.
