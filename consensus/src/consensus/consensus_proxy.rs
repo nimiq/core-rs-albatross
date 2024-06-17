@@ -18,10 +18,10 @@ use nimiq_network_interface::{
     peer_info::Services,
     request::{OutboundRequestError, RequestError},
 };
-use nimiq_primitives::{account::AccountType, key_nibbles::KeyNibbles, policy::Policy};
+use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy};
 use nimiq_transaction::{
-    historic_transaction::HistoricTransaction, ControlTransactionTopic, Transaction,
-    TransactionTopic,
+    historic_transaction::HistoricTransaction, ControlTransaction, ControlTransactionTopic,
+    Transaction, TransactionTopic,
 };
 use tokio::sync::{
     broadcast::Sender as BroadcastSender, mpsc::Sender as MpscSender,
@@ -62,10 +62,14 @@ impl<N: Network> Clone for ConsensusProxy<N> {
 
 impl<N: Network> ConsensusProxy<N> {
     pub async fn send_transaction(&self, tx: Transaction) -> Result<(), N::Error> {
-        if tx.sender_type == AccountType::Staking || tx.recipient_type == AccountType::Staking {
-            return self.network.publish::<ControlTransactionTopic>(tx).await;
+        match ControlTransaction::try_from(tx) {
+            Ok(ctx) => self.network.publish::<ControlTransactionTopic>(ctx).await,
+            Err(err) => {
+                self.network
+                    .publish::<TransactionTopic>(err.into_inner())
+                    .await
+            }
         }
-        self.network.publish::<TransactionTopic>(tx).await
     }
 
     pub fn is_established(&self) -> bool {
