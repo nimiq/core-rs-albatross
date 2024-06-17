@@ -187,6 +187,12 @@ async fn main_inner() -> Result<(), Error> {
             .as_deref()
             .map(Deref::deref)
             .unwrap_or(DEV_KEY),
+        // For the testnet, panic if the fee key is not set
+        NetworkId::TestAlbatross => validator_settings
+            .fee_key
+            .as_deref()
+            .map(Deref::deref)
+            .unwrap(),
         _ => panic!("Unsupported network"),
     };
 
