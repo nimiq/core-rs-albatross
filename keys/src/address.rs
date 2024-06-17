@@ -227,7 +227,7 @@ impl FromDatabaseValue for Address {
 mod serde_derive {
     use std::borrow::Cow;
 
-    use nimiq_serde::SerializedSize;
+    use nimiq_serde::{FixedSizeByteArray, SerializedSize};
     use serde::{
         de::{Deserialize, Deserializer, Error},
         ser::{Serialize, Serializer},
@@ -247,7 +247,7 @@ mod serde_derive {
             if serializer.is_human_readable() {
                 serializer.serialize_str(&self.to_user_friendly_address())
             } else {
-                Serialize::serialize(&self.0, serializer)
+                FixedSizeByteArray::from(self.0).serialize(serializer)
             }
         }
     }
@@ -261,7 +261,8 @@ mod serde_derive {
                 let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
                 Address::from_any_str(&s).map_err(Error::custom)
             } else {
-                let data: [u8; Self::SIZE] = Deserialize::deserialize(deserializer)?;
+                let data: [u8; Self::SIZE] =
+                    FixedSizeByteArray::deserialize(deserializer)?.into_inner();
                 Ok(Address(data))
             }
         }
