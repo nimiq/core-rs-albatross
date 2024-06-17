@@ -11,10 +11,7 @@ use nimiq_database::{
 };
 use nimiq_genesis::NetworkId;
 use nimiq_keys::Address;
-use nimiq_primitives::{
-    coin::Coin,
-    policy::{Policy, TEST_POLICY},
-};
+use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_transaction::{
     historic_transaction::{HistoricTransaction, HistoricTransactionData},
     ExecutedTransaction, Transaction as BlockchainTransaction,
@@ -34,6 +31,9 @@ struct Args {
     /// Use the light history store
     #[arg(short, long, action = clap::ArgAction::Count)]
     light: u8,
+    /// Rounds (Batches operations)
+    #[arg(short, long)]
+    rounds: Option<u32>,
 }
 
 fn create_transaction(block: u32, value: u64) -> HistoricTransaction {
@@ -69,12 +69,13 @@ fn history_store_performance(
     history_store: Box<dyn HistoryInterface + Sync + Send>,
     env: DatabaseProxy,
     tpb: u32,
-    number_of_batches: u32,
+    batches: u32,
+    rounds: u32,
     db_file: PathBuf,
 ) {
     let num_txns = tpb;
 
-    let number_of_blocks = Policy::blocks_per_batch() * number_of_batches;
+    let number_of_blocks = Policy::blocks_per_batch() * batches;
     let mut txns_per_block = Vec::new();
 
     println!("Generating txns.. ");
@@ -83,30 +84,49 @@ fn history_store_performance(
     }
     println!("Done generating txns. ");
 
-    let mut txn = env.write_transaction();
-
     println!("Adding txns to history store");
     let start = Instant::now();
 
-    for block_number in 0..number_of_blocks {
-        history_store.add_to_history(
-            &mut txn,
-            1 + block_number,
-            &txns_per_block[block_number as usize],
+    let batches_per_round = batches / rounds;
+    let blocks_per_round = number_of_blocks / rounds;
+    println!(
+        "Number of rounds: {}, batches per round {} blocks per round {}",
+        rounds, batches_per_round, blocks_per_round
+    );
+
+    for round in 0..rounds {
+        let round_start = Instant::now();
+        let mut txn = env.write_transaction();
+
+        for block_number in 0..blocks_per_round {
+            history_store.add_to_history(
+                &mut txn,
+                (round * blocks_per_round) + (1 + block_number),
+                &txns_per_block[((round * blocks_per_round) + block_number) as usize],
+            );
+        }
+
+        let round_duration = round_start.elapsed();
+
+        println!(
+            "...{:.2}s to process round {}  ",
+            round_duration.as_millis() as f64 / 1000_f64,
+            1 + round
         );
+        txn.commit();
     }
-    txn.commit();
 
     let duration = start.elapsed();
 
     let db_file_size = fs::metadata(db_file.to_str().unwrap()).unwrap().len();
 
     println!(
-        "{:.2}s to add {} batches, {} tpb, DB size: {:.2}Mb, total_txns: {}",
+        "{:.2}s to add {} batches, {} tpb, DB size: {:.2}Mb, rounds: {}, total_txns: {}",
         duration.as_millis() as f64 / 1000_f64,
-        number_of_batches,
+        batches,
         num_txns,
         db_file_size as f64 / 1000000_f64,
+        rounds,
         num_txns * number_of_blocks
     );
 
@@ -127,7 +147,7 @@ fn history_store_performance(
 fn main() {
     let args = Args::parse();
 
-    let policy_config = TEST_POLICY;
+    let policy_config = Policy::default();
 
     let _ = Policy::get_or_init(policy_config);
 
@@ -149,7 +169,11 @@ fn main() {
             as Box<dyn HistoryInterface + Sync + Send>
     };
 
-    history_store_performance(history_store, env, args.tpb, args.batches, db_file);
+    let rounds = args.rounds.unwrap_or(1);
+
+    history_store_performance(history_store, env, args.tpb, args.batches, rounds, db_file);
+
+    let _ = fs::remove_dir_all(temp_dir);
 
     exit(0);
 }
