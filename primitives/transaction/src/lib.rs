@@ -343,25 +343,7 @@ impl Transaction {
             return Ok(());
         }
 
-        if self.recipient == Policy::STAKING_CONTRACT_ADDRESS
-            && self.recipient_type != AccountType::Staking
-        {
-            return Err(TransactionError::InvalidForRecipient);
-        }
-
-        // Should not be necessary as the sender would have to sign the transaction
-        // and the private key for the staking contract is unknown
-        if self.sender == Policy::STAKING_CONTRACT_ADDRESS
-            && self.sender_type != AccountType::Staking
-        {
-            return Err(TransactionError::InvalidForSender);
-        }
-
         if self.sender == self.recipient {
-            error!(
-                "The following transaction can't have the same sender and recipient:\n{:?}",
-                self
-            );
             return Err(TransactionError::SenderEqualsRecipient);
         }
 
