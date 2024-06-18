@@ -1,4 +1,4 @@
-use std::{cmp, convert::TryInto};
+use std::{cmp, convert::TryInto, fmt};
 
 use nimiq_database::{
     traits::{ReadCursor, ReadTransaction, WriteCursor, WriteTransaction},
@@ -7,6 +7,9 @@ use nimiq_database::{
 use nimiq_hash::Blake2bHash;
 use nimiq_mmr::store::{LightStore, Store};
 use nimiq_primitives::policy::Policy;
+
+type WriteCursorProxy<'env> =
+    <WriteTransactionProxy<'env> as WriteTransaction<'env>>::WriteCursor<'env>;
 
 #[derive(Debug)]
 enum Tx<'a, 'env> {
@@ -27,12 +30,23 @@ enum Tx<'a, 'env> {
 /// To this end, we place a database cursor at the beginning of the next epoch `key = epoch + 1 || 0`
 /// and move the cursor back by one entry (thus being the last node of the previous epoch, if the
 /// epoch has any nodes).
-#[derive(Debug)]
 pub struct MMRStore<'a, 'env> {
     hist_tree_table: &'a TableProxy,
-    tx: Tx<'a, 'env>,
+    tx: &'a TransactionProxy<'env>,
+    cursor: Option<WriteCursorProxy<'env>>,
     epoch_number: u32,
     size: usize,
+}
+
+impl fmt::Debug for MMRStore<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MMRStore")
+            .field("hist_tree_table", &self.hist_tree_table)
+            .field("tx", &self.tx)
+            .field("epoch_number", &self.epoch_number)
+            .field("size", &self.size)
+            .finish()
+    }
 }
 
 impl<'a, 'env> MMRStore<'a, 'env> {
@@ -45,9 +59,10 @@ impl<'a, 'env> MMRStore<'a, 'env> {
         let size = get_size(hist_tree_table, tx, epoch_number);
         MMRStore {
             hist_tree_table,
-            tx: Tx::Read(tx),
+            tx,
             epoch_number,
             size,
+            cursor: None,
         }
     }
 
@@ -60,9 +75,10 @@ impl<'a, 'env> MMRStore<'a, 'env> {
         let size = get_size(hist_tree_table, tx, epoch_number);
         MMRStore {
             hist_tree_table,
-            tx: Tx::Write(tx),
+            tx,
             epoch_number,
             size,
+            cursor: Some(WriteTransaction::cursor(tx, hist_tree_table)),
         }
     }
 }
@@ -143,18 +159,25 @@ fn key_to_index(key: Vec<u8>) -> Option<(u32, usize)> {
 
 impl<'a, 'env> Store<Blake2bHash> for MMRStore<'a, 'env> {
     fn push(&mut self, elem: Blake2bHash) {
-        if let Tx::Write(ref mut tx) = self.tx {
+        // This function assumes that there is no higher epoch.
+        // Otherwise the append method will fail.
+        if let Some(ref mut cursor) = self.cursor {
             let key = index_to_key(self.epoch_number, self.size);
-            tx.append(self.hist_tree_table, &key, &elem);
+            cursor.append(&key, &elem);
             self.size += 1;
         }
     }
 
     fn remove_back(&mut self, num_elems: usize) {
-        if let Tx::Write(ref mut tx) = self.tx {
+        if let Some(ref mut cursor) = self.cursor {
+            // Minimal seeking.
+            // We cannot just remove from the back of the database,
+            // because this might be in a previous epoch.
+            let key = index_to_key(self.epoch_number, self.size - 1);
+            cursor.seek_key::<Vec<u8>, Blake2bHash>(&key).unwrap();
             for _ in 0..cmp::min(num_elems, self.size) {
-                let key = index_to_key(self.epoch_number, self.size - 1);
-                tx.remove(self.hist_tree_table, &key);
+                cursor.remove();
+                cursor.prev::<Vec<u8>, Blake2bHash>();
                 self.size -= 1;
             }
         }
@@ -162,10 +185,7 @@ impl<'a, 'env> Store<Blake2bHash> for MMRStore<'a, 'env> {
 
     fn get(&self, pos: usize) -> Option<Blake2bHash> {
         let key = index_to_key(self.epoch_number, pos);
-        match self.tx {
-            Tx::Read(tx) => tx.get(self.hist_tree_table, &key),
-            Tx::Write(ref tx) => tx.get(self.hist_tree_table, &key),
-        }
+        self.tx.get(self.hist_tree_table, &key)
     }
 
     fn len(&self) -> usize {
