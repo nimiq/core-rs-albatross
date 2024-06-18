@@ -721,7 +721,7 @@ impl Client {
         limit: Option<u16>,
         min_peers: Option<usize>,
     ) -> Result<PlainTransactionDetailsArrayType, JsError> {
-        let mut since_block_height = since_block_height.unwrap_or(0);
+        let since_block_height = since_block_height.unwrap_or(0);
         let min_peers = min_peers.unwrap_or(1);
 
         if let Some(max) = limit {
