@@ -648,7 +648,7 @@ where
                             update_block_number = update.block_number,
                             "Discarding obsolete Tendermint state update"
                         );
-                        return;
+                        continue;
                     }
 
                     let mut write_transaction = self.env.write_transaction();
