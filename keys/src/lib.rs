@@ -1,3 +1,4 @@
+use nimiq_serde::SerializedMaxSize;
 #[cfg(feature = "serde-derive")]
 use nimiq_serde::{Deserialize, Serialize};
 pub use nimiq_utils::key_rng::{SecureGenerate, SecureRng};
@@ -8,14 +9,20 @@ pub use self::{
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde-derive", derive(Serialize, Deserialize))]
+#[cfg_attr(
+    feature = "serde-derive",
+    derive(Serialize, Deserialize, SerializedMaxSize)
+)]
 pub enum PublicKey {
     Ed25519(Ed25519PublicKey),
     ES256(ES256PublicKey),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde-derive", derive(Serialize, Deserialize))]
+#[cfg_attr(
+    feature = "serde-derive",
+    derive(Serialize, Deserialize, SerializedMaxSize)
+)]
 pub enum Signature {
     Ed25519(Ed25519Signature),
     ES256(ES256Signature),

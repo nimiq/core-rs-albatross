@@ -1,4 +1,3 @@
-use log::error;
 use nimiq_keys::Address;
 use nimiq_primitives::{account::AccountType, coin::Coin};
 use nimiq_serde::{Deserialize, Serialize, SerializedSize};
@@ -19,7 +18,7 @@ impl AccountTransactionVerification for VestingContractVerifier {
             .flags
             .contains(TransactionFlags::CONTRACT_CREATION)
         {
-            error!(
+            warn!(
                 "Only contract creation is allowed for this transaction:\n{:?}",
                 transaction
             );
@@ -27,7 +26,7 @@ impl AccountTransactionVerification for VestingContractVerifier {
         }
 
         if transaction.flags.contains(TransactionFlags::SIGNALING) {
-            error!(
+            warn!(
                 "Signaling not allowed for this transaction:\n{:?}",
                 transaction
             );
@@ -35,7 +34,7 @@ impl AccountTransactionVerification for VestingContractVerifier {
         }
 
         if transaction.recipient != transaction.contract_creation_address() {
-            error!("Recipient address must match contract creation address for this transaction:\n{:?}",
+            warn!("Recipient address must match contract creation address for this transaction:\n{:?}",
                 transaction);
             return Err(TransactionError::InvalidForRecipient);
         }
@@ -45,6 +44,14 @@ impl AccountTransactionVerification for VestingContractVerifier {
 
     fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
         assert_eq!(transaction.sender_type, AccountType::Vesting);
+
+        if !transaction.sender_data.is_empty() {
+            warn!(
+                "The following transaction can't have sender data:\n{:?}",
+                transaction
+            );
+            return Err(TransactionError::Overflow);
+        }
 
         // Verify signature.
         let signature_proof = SignatureProof::deserialize_all(&transaction.proof)?;

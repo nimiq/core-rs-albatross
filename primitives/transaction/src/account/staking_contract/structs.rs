@@ -2,7 +2,7 @@ use nimiq_bls::{CompressedPublicKey as BlsPublicKey, CompressedSignature as BlsS
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
 use nimiq_primitives::{coin::Coin, policy::Policy};
-use nimiq_serde::{Deserialize, DeserializeError, Serialize};
+use nimiq_serde::{Deserialize, DeserializeError, Serialize, SerializedMaxSize};
 
 use crate::{SignatureProof, Transaction, TransactionError};
 
@@ -29,7 +29,7 @@ use crate::{SignatureProof, Transaction, TransactionError};
 /// It is important to note that all `signature` fields contain the signature
 /// over the complete transaction with the `signature` field set to `Default::default()`.
 /// The field is populated only after computing the signature.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, SerializedMaxSize)]
 #[repr(u8)]
 pub enum IncomingStakingTransactionData {
     CreateValidator {
@@ -236,7 +236,7 @@ impl IncomingStakingTransactionData {
     }
 }
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, SerializedMaxSize)]
 #[repr(u8)]
 pub enum OutgoingStakingTransactionData {
     DeleteValidator,

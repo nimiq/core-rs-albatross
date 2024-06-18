@@ -9,7 +9,7 @@ use nimiq_primitives::{
     account::AccountType, coin::Coin, networks::NetworkId, policy::Policy,
     transaction::TransactionError,
 };
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng::test_rng;
 use nimiq_transaction::{
@@ -86,7 +86,7 @@ fn create_validator() {
                 .sign(&voting_key.serialize_to_vec())
                 .compress(),
             reward_address: Address::from([3u8; 20]),
-            signal_data: None,
+            signal_data: Some(Blake2bHash::default()),
             proof: SignatureProof::default(),
         },
         Policy::VALIDATOR_DEPOSIT,
@@ -94,8 +94,8 @@ fn create_validator() {
         None,
     );
 
-    let tx_hex = "018c551fabc6e6e00c609c3f0313257ad7e835643c0000000000000000000000000000000000000000000103940400b300481ddd7af6be3cf5c123b7af2c21f87f4ac808c8b0e622eb85826124a844713c60858b5c72adcf8b72b4dbea959d042769dcc93a0190e4b8aec92283548138833950aa214d920c17d3d19de27f6176d9fb21620edae76ad398670e17d5eba2f494b9b6901d457592ea68f9d35380c857ba44856ae037aff272ad6c1900442b426dde0bc53431e9ce5807f7ec4a05e71ce4a1e7e7b2511891521c4d3fd975764e3031ef646d48fa881ad88240813d40e533788f0dac2bc4d4c25db7b108c67dd28b7ec4c240cdc044badcaed7860a5d3da42ef860ed25a6db9c07be000a7f504f6d1b24ac81642206d5996b20749a156d7b39f851e60f228b19eef3fb3547469f03fc9764f5f68bc88e187ffee0f43f169acde847c78ea88029cdb19b91dd9562d60b607dd0347d67a0e33286c8908e4e9579a42685da95f06a9201030303030303030303030303030303030303030300b7561c15e53da2c482bfafddbf404f28b14ee2743e5cfe451c860da378b2ac23a651b574183d1287e2cea109943a34c44a7df9eb2fe5067c70f1c02bde900828c232a3d7736a278e0e8ac679bc2a1669f660c3810980526b7890f6e1708381007451b039e2f3fcafc3be7c6bd9e01fbc072c956a2b95a335cfb3cd3702335b5300fb66e591355ba338aa32cf9451580dc64bcb766e5216ae22e07abccd04abeb1ea4f051cf8a917be237791fa7be9e3fc91941d94d1fdb3f669f2fe95d5d5fb20c00000002540be40000000000000000640000000104006200b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500ec99b170aca53eb2b8552652d7d6b4bd931edfe90e3dcf8a0f9a88d1e5b8eb8e22c11747caca1206d309ba8e0fcdf0a4bc77170b456d7a8d73b0f96ed7c35308";
-    let tx_size = 699;
+    let tx_hex = "018c551fabc6e6e00c609c3f0313257ad7e835643c0000000000000000000000000000000000000000000103b40400b300481ddd7af6be3cf5c123b7af2c21f87f4ac808c8b0e622eb85826124a844713c60858b5c72adcf8b72b4dbea959d042769dcc93a0190e4b8aec92283548138833950aa214d920c17d3d19de27f6176d9fb21620edae76ad398670e17d5eba2f494b9b6901d457592ea68f9d35380c857ba44856ae037aff272ad6c1900442b426dde0bc53431e9ce5807f7ec4a05e71ce4a1e7e7b2511891521c4d3fd975764e3031ef646d48fa881ad88240813d40e533788f0dac2bc4d4c25db7b108c67dd28b7ec4c240cdc044badcaed7860a5d3da42ef860ed25a6db9c07be000a7f504f6d1b24ac81642206d5996b20749a156d7b39f851e60f228b19eef3fb3547469f03fc9764f5f68bc88e187ffee0f43f169acde847c78ea88029cdb19b91dd9562d60b607dd0347d67a0e33286c8908e4e9579a42685da95f06a92010303030303030303030303030303030303030303010000000000000000000000000000000000000000000000000000000000000000b7561c15e53da2c482bfafddbf404f28b14ee2743e5cfe451c860da378b2ac23a651b574183d1287e2cea109943a34c44a7df9eb2fe5067c70f1c02bde900828c232a3d7736a278e0e8ac679bc2a1669f660c3810980526b7890f6e1708381007451b039e2f3fcafc3be7c6bd9e01fbc072c956a2b95a335cfb3cd3702335b53007ab5fde15123c63c336126a015abd507e407fe589e5d6b706926ccae1b35981c1df0d68bb844552a9c35b736acab0da09e06fc409d5dbac9e5ab76018632290d00000002540be40000000000000000640000000104006200b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500e8addc6dbdf064ef3fb9b642f53c17e0662077b12b782d474acae27216316222a0bdb81fd52c1af4be0c22ce1efddd156ce88e8d927a3e1843b100fa922fd306";
+    let tx_size = 731;
 
     let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
     assert_eq!(tx_size, tx.serialized_size());
@@ -674,6 +674,16 @@ fn remove_stake() {
         AccountType::verify_outgoing_transaction(&tx),
         Err(TransactionError::InvalidProof)
     );
+}
+
+#[test]
+fn outgoing_transaction_data_is_below_max_transaction_sender() {
+    assert!(Policy::MAX_TX_SENDER_DATA_SIZE >= OutgoingStakingTransactionData::MAX_SIZE);
+}
+
+#[test]
+fn incoming_transaction_data_is_below_max_transaction_sender() {
+    assert!(Policy::MAX_TX_RECIPIENT_DATA_SIZE >= IncomingStakingTransactionData::MAX_SIZE);
 }
 
 fn make_incoming_tx(data: IncomingStakingTransactionData, value: u64) -> Transaction {

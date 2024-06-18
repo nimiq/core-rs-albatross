@@ -1,6 +1,5 @@
 use std::{borrow::Cow, str::FromStr};
 
-use log::error;
 use nimiq_hash::{
     sha512::{Sha512Hash, Sha512Hasher},
     Blake2bHash, Blake2bHasher, Hasher, Sha256Hash, Sha256Hasher,
@@ -26,7 +25,7 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
             .flags
             .contains(TransactionFlags::CONTRACT_CREATION)
         {
-            error!(
+            warn!(
                 "Only contract creation is allowed for the following transaction:\n{:?}",
                 transaction
             );
@@ -34,7 +33,7 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
         }
 
         if transaction.flags.contains(TransactionFlags::SIGNALING) {
-            error!(
+            warn!(
                 "Signaling not allowed for the following transaction:\n{:?}",
                 transaction
             );
@@ -63,6 +62,14 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
 
     fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
         assert_eq!(transaction.sender_type, AccountType::HTLC);
+
+        if !transaction.sender_data.is_empty() {
+            warn!(
+                "The following transaction can't have sender data:\n{:?}",
+                transaction
+            );
+            return Err(TransactionError::Overflow);
+        }
 
         let proof = OutgoingHTLCTransactionProof::parse(transaction)?;
         proof.verify(transaction)?;

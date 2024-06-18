@@ -48,6 +48,9 @@ impl AccountTransactionVerification for StakingContractVerifier {
     fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
         assert_eq!(transaction.sender_type, AccountType::Staking);
 
+        // Outgoing transactions require the data field to be set correctly.
+        _ = OutgoingStakingTransactionData::parse(transaction)?;
+
         // Verify signature.
         let proof = SignatureProof::deserialize_all(&transaction.proof)?;
         if !proof.verify(&transaction.serialize_content()) {

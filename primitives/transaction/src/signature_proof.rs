@@ -4,7 +4,8 @@ use base64::prelude::{Engine, BASE64_URL_SAFE_NO_PAD};
 use bitflags::bitflags;
 use nimiq_hash::{Blake2bHash, Hash, HashOutput, Sha256Hash};
 use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, PublicKey, Signature};
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_primitives::policy::Policy;
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 use nimiq_utils::merkle::Blake2bMerklePath;
 use url::Url;
 
@@ -14,6 +15,15 @@ pub struct SignatureProof {
     pub merkle_path: Blake2bMerklePath,
     pub signature: Signature,
     pub webauthn_fields: Option<WebauthnExtraFields>,
+}
+
+impl SerializedMaxSize for SignatureProof {
+    #[allow(clippy::identity_op)]
+    const MAX_SIZE: usize = 0
+        + PublicKey::MAX_SIZE
+        + Policy::MAX_MERKLE_PATH_SIZE
+        + Signature::MAX_SIZE
+        + nimiq_serde::option_max_size(WebauthnExtraFields::MAX_SIZE);
 }
 
 impl SignatureProof {
@@ -227,22 +237,26 @@ pub struct WebauthnExtraFields {
     ///
     /// Everything in the `origin` field in the `clientDataJSON`, exactly as it appears in the
     /// JSON, not undoing any JSON escaping etc.
-    origin_json_str: String,
+    pub origin_json_str: String,
     /// Does the `clientDataJSON` have a `"crossOrigin":false` field?
-    has_cross_origin_field: bool,
+    pub has_cross_origin_field: bool,
     /// Extra, unknown fields in the `clientDataJSON`.
     ///
     /// Exactly as it appears in the JSON, including the leading comma, excluding the final closing
     /// brace.
-    client_data_extra_json: String,
+    pub client_data_extra_json: String,
     /// Extra data included in the signed data.
     ///
     /// It's between the RP ID and the `clientDataHash`.
-    authenticator_data_suffix: Vec<u8>,
+    pub authenticator_data_suffix: Vec<u8>,
+}
+
+impl SerializedMaxSize for WebauthnExtraFields {
+    const MAX_SIZE: usize = Policy::MAX_SUPPORTED_WEB_AUTH_SIZE;
 }
 
 impl WebauthnExtraFields {
-    fn from_client_data_json(
+    pub fn from_client_data_json(
         client_data_json: &str,
         authenticator_data_suffix: Vec<u8>,
     ) -> Result<WebauthnExtraFields, SerializationError> {
@@ -451,6 +465,10 @@ mod serde_derive {
                 .next_element()?
                 .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
 
+            if merkle_path.serialized_size() > Policy::MAX_MERKLE_PATH_SIZE {
+                return Err(serde::de::Error::invalid_length(2, &self));
+            }
+
             let signature = match algorithm {
                 SignatureProofAlgorithm::Ed25519 => {
                     let signature: Ed25519Signature = seq
@@ -474,6 +492,10 @@ mod serde_derive {
             } else {
                 None
             };
+
+            if webauthn_fields.serialized_size() > WebauthnExtraFields::MAX_SIZE {
+                return Err(serde::de::Error::invalid_length(4, &self));
+            }
 
             Ok(SignatureProof {
                 public_key,

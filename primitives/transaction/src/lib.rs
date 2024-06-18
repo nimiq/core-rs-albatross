@@ -6,7 +6,6 @@ use std::{
     collections::BTreeSet,
     convert::TryFrom,
     io::{self, Write},
-    sync::Arc,
 };
 
 use bitflags::bitflags;
@@ -377,12 +376,6 @@ impl Transaction {
         AccountType::verify_incoming_transaction(self)?;
 
         Ok(())
-    }
-
-    pub fn check_set_valid(&mut self, tx: &Arc<Transaction>) {
-        if tx.valid && self.hash::<Blake2bHash>() == tx.hash() {
-            self.valid = true;
-        }
     }
 
     pub fn is_valid_at(&self, block_height: u32) -> bool {
@@ -905,18 +898,37 @@ mod serde_derive {
             let sender_type: AccountType = seq
                 .next_element()?
                 .ok_or_else(|| Error::invalid_length(1, &self))?;
+
+            // Enforce maximum sender data length.
             let sender_data: Vec<u8> = seq
                 .next_element()?
                 .ok_or_else(|| Error::invalid_length(2, &self))?;
+            let sender_data_len = sender_data.len();
+            if sender_data_len > Policy::MAX_TX_SENDER_DATA_SIZE {
+                return Err(Error::custom(format!(
+                    "sender data length exceeds the maximum allowed length of {}",
+                    Policy::MAX_TX_SENDER_DATA_SIZE
+                )));
+            }
+
             let recipient: Address = seq
                 .next_element()?
                 .ok_or_else(|| Error::invalid_length(3, &self))?;
             let recipient_type: AccountType = seq
                 .next_element()?
                 .ok_or_else(|| Error::invalid_length(4, &self))?;
+
+            // Enforce maximum recipient data length.
             let recipient_data: Vec<u8> = seq
                 .next_element()?
                 .ok_or_else(|| Error::invalid_length(5, &self))?;
+            if recipient_data.len() > Policy::MAX_TX_RECIPIENT_DATA_SIZE {
+                return Err(Error::custom(format!(
+                    "recipient data length exceeds the maximum allowed length of {}",
+                    Policy::MAX_TX_RECIPIENT_DATA_SIZE
+                )));
+            }
+
             let value: Coin = seq
                 .next_element()?
                 .ok_or_else(|| Error::invalid_length(6, &self))?;

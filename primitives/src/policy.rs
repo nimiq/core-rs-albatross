@@ -58,6 +58,22 @@ impl Policy {
     /// The maximum allowed size, in bytes, for a micro block body.
     pub const MAX_SIZE_MICRO_BODY: usize = 100_000;
 
+    // Maximum lengths for transaction sender_data and recipient_data fields used during deserialization.
+    /// Maximum size for the sender data field of the transactions.
+    /// The only transactions using this field are RemoveStake and Delete Validator.
+    pub const MAX_TX_SENDER_DATA_SIZE: usize = 1;
+    /// Maximum size for the recipient data field of the transactions.
+    /// This is used by the HTLC, Vesting and staking contract transactions. Basic transactions are allowed to use it as well.
+    /// The biggest transactions are the create validator and update validator with a web auth signature.
+    pub const MAX_TX_RECIPIENT_DATA_SIZE: usize = 2112;
+    /// Maximum length for basic transaction recipient_data used during intrinsic transaction verification.
+    pub const MAX_BASIC_TX_RECIPIENT_DATA_SIZE: usize = 64;
+    /// Maximum size for transaction's merkle path proofs.
+    /// 32 bytes for Merkle Path Node * 32 max length + 4 bytes to encode the bools for left/right + 1 byte for the serialize vec count.
+    pub const MAX_MERKLE_PATH_SIZE: usize = 1029;
+    /// Maximum size for the total web auth fields.
+    pub const MAX_SUPPORTED_WEB_AUTH_SIZE: usize = 512;
+
     /// The current version number of the protocol. Changing this always results in a hard fork.
     pub const VERSION: u16 = 1;
 
