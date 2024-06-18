@@ -34,6 +34,9 @@ struct Args {
     /// Rounds (Batches operations)
     #[arg(short, long)]
     rounds: Option<u32>,
+    /// Loops: repeat the whole operation multiple times.
+    #[arg(short, long)]
+    loops: Option<u32>,
 }
 
 fn create_transaction(block: u32, value: u64) -> HistoricTransaction {
@@ -65,32 +68,35 @@ fn gen_hist_txs_block(block_number: u32, num_txns: u32) -> Vec<HistoricTransacti
     txns
 }
 
-fn history_store_performance(
-    history_store: Box<dyn HistoryInterface + Sync + Send>,
-    env: DatabaseProxy,
+fn history_store_populate(
+    history_store: &Box<dyn HistoryInterface + Sync + Send>,
+    env: &DatabaseProxy,
     tpb: u32,
     batches: u32,
     rounds: u32,
+    loops: u32,
     db_file: PathBuf,
 ) {
     let num_txns = tpb;
+    let loops = loops - 1;
 
     let number_of_blocks = Policy::blocks_per_batch() * batches;
+    let loop_ofset = loops * number_of_blocks;
     let mut txns_per_block = Vec::new();
 
-    println!("Generating txns.. ");
+    println!(" Generating txns.. ");
     for block_number in 0..number_of_blocks {
-        txns_per_block.push(gen_hist_txs_block(1 + block_number, num_txns));
+        txns_per_block.push(gen_hist_txs_block(loop_ofset + 1 + block_number, num_txns));
     }
-    println!("Done generating txns. ");
+    println!(" Done generating txns. ");
 
-    println!("Adding txns to history store");
+    println!(" Adding txns to history store");
     let start = Instant::now();
 
     let batches_per_round = batches / rounds;
     let blocks_per_round = number_of_blocks / rounds;
     println!(
-        "Number of rounds: {}, batches per round {} blocks per round {}",
+        " Number of rounds: {}, batches per round {} blocks per round {}",
         rounds, batches_per_round, blocks_per_round
     );
 
@@ -101,11 +107,11 @@ fn history_store_performance(
         for block_number in 0..blocks_per_round {
             history_store.add_to_history(
                 &mut txn,
-                (round * blocks_per_round) + (1 + block_number),
+                (loop_ofset) + (round * blocks_per_round) + (1 + block_number),
                 &txns_per_block[((round * blocks_per_round) + block_number) as usize],
             );
         }
-
+        txn.commit();
         let round_duration = round_start.elapsed();
 
         println!(
@@ -113,7 +119,6 @@ fn history_store_performance(
             round_duration.as_millis() as f64 / 1000_f64,
             1 + round
         );
-        txn.commit();
     }
 
     let duration = start.elapsed();
@@ -121,7 +126,7 @@ fn history_store_performance(
     let db_file_size = fs::metadata(db_file.to_str().unwrap()).unwrap().len();
 
     println!(
-        "{:.2}s to add {} batches, {} tpb, DB size: {:.2}Mb, rounds: {}, total_txns: {}",
+        " {:.2}s to add {} batches, {} tpb, DB size: {:.2}Mb, rounds: {}, total_txns: {}",
         duration.as_millis() as f64 / 1000_f64,
         batches,
         num_txns,
@@ -129,7 +134,12 @@ fn history_store_performance(
         rounds,
         num_txns * number_of_blocks
     );
+}
 
+fn history_store_prune(
+    history_store: &Box<dyn HistoryInterface + Sync + Send>,
+    env: &DatabaseProxy,
+) {
     let mut txn = env.write_transaction();
     println!("Pruning the history store..");
     let start = Instant::now();
@@ -170,8 +180,23 @@ fn main() {
     };
 
     let rounds = args.rounds.unwrap_or(1);
+    let loops = args.loops.unwrap_or(1);
 
-    history_store_performance(history_store, env, args.tpb, args.batches, rounds, db_file);
+    for loop_number in 1..(1 + loops) {
+        println!("Current loop {}", loop_number);
+
+        history_store_populate(
+            &history_store,
+            &env,
+            args.tpb,
+            args.batches,
+            rounds,
+            loop_number,
+            db_file.clone(),
+        );
+    }
+
+    history_store_prune(&history_store, &env);
 
     let _ = fs::remove_dir_all(temp_dir);
 
