@@ -1,5 +1,3 @@
-#![recursion_limit = "256"]
-// unfortunately necessary for the rather big select! macro in aggregation.rs > Aggregation::next
 /// Handel implementation for Nimiq's Rust Albatross client.
 ///
 /// Handel[1] is byzantine fault-tolerant signature aggregation protocol. Albatross uses Handel to
