@@ -8,13 +8,24 @@ use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::{mdbx::MdbxReadTransaction as DBTransaction, traits::WriteTransaction};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::KeyPair as SchnorrKeyPair;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{account::AccountError, policy::Policy};
 use nimiq_transaction::{
     historic_transaction::HistoricTransaction, inherent::Inherent, Transaction,
 };
 use rand::{CryptoRng, Rng, RngCore};
+use thiserror::Error;
 
 use crate::{interface::HistoryInterface, Blockchain};
+
+#[derive(Debug, Error)]
+pub enum BlockProducerError {
+    #[error("Failed to commit accounts: {0}")]
+    AccountError(#[from] AccountError),
+    #[error("Failed to add to history")]
+    HistoryError,
+    #[error("Accounts are incomplete")]
+    AccountsIncomplete,
+}
 
 /// Struct that contains all necessary information to actually produce blocks.
 /// It has the validator keys for this validator.
@@ -50,7 +61,7 @@ impl BlockProducer {
         extra_data: Vec<u8>,
         // Skip block proof
         skip_block_proof: Option<SkipBlockProof>,
-    ) -> MicroBlock {
+    ) -> Result<MicroBlock, BlockProducerError> {
         self.next_micro_block_with_rng(
             blockchain,
             timestamp,
@@ -81,7 +92,7 @@ impl BlockProducer {
         skip_block_proof: Option<SkipBlockProof>,
         // The rng seed. We need this parameterized in order to have determinism when running unit tests.
         rng: &mut R,
-    ) -> MicroBlock {
+    ) -> Result<MicroBlock, BlockProducerError> {
         // The network ID stays unchanged for the whole blockchain.
         let network = blockchain.head().network();
 
@@ -129,8 +140,7 @@ impl BlockProducer {
         let (state_root, diff_root, executed_txns) = blockchain
             .state
             .accounts
-            .exercise_transactions(&transactions, &inherents, &block_state)
-            .expect("Failed to compute accounts hash during block production");
+            .exercise_transactions(&transactions, &inherents, &block_state)?;
 
         // Calculate the historic transactions from the transactions and the inherents.
         let hist_txs = HistoricTransaction::from(
@@ -151,7 +161,7 @@ impl BlockProducer {
         let (history_root, _) = blockchain
             .history_store
             .add_to_history(&mut txn, block_number, &hist_txs)
-            .expect("Failed to compute history root during block production.");
+            .ok_or(BlockProducerError::HistoryError)?;
 
         // Not strictly necessary to drop the lock here, but sign as well as compress might be somewhat expensive
         // and there is no need to hold the lock after this point.
@@ -189,11 +199,11 @@ impl BlockProducer {
         };
 
         // Returns the micro block.
-        MicroBlock {
+        Ok(MicroBlock {
             header,
             body: Some(body),
             justification: Some(justification),
-        }
+        })
     }
 
     /// Creates a proposal for the next macro block (checkpoint or election). It is just a proposal,
@@ -210,7 +220,7 @@ impl BlockProducer {
         round: u32,
         // Extra data for this block.
         extra_data: Vec<u8>,
-    ) -> MacroBlock {
+    ) -> Result<MacroBlock, BlockProducerError> {
         self.next_macro_block_proposal_with_rng(
             blockchain,
             timestamp,
@@ -236,7 +246,7 @@ impl BlockProducer {
         extra_data: Vec<u8>,
         // The rng seed. We need this parameterized in order to have determinism when running unit tests.
         rng: &mut R,
-    ) -> MacroBlock {
+    ) -> Result<MacroBlock, BlockProducerError> {
         // The network ID stays unchanged for the whole blockchain.
         let network = blockchain.head().network();
 
@@ -305,7 +315,7 @@ impl BlockProducer {
         };
 
         // Create the body for the macro block.
-        let body = Self::next_macro_body(blockchain, &header, None);
+        let body = Self::next_macro_body(blockchain, &header, None)?;
 
         // Add the root of the body to the header.
         header.body_root = body.hash();
@@ -321,11 +331,11 @@ impl BlockProducer {
 
         // Update the state and add the state root to the header.
         let block_state = BlockState::new(block_number, timestamp);
-        let (state_root, diff_root, _) = blockchain
-            .state
-            .accounts
-            .exercise_transactions(&[], &inherents, &block_state)
-            .expect("Failed to compute accounts hash during block production.");
+        let (state_root, diff_root, _) =
+            blockchain
+                .state
+                .accounts
+                .exercise_transactions(&[], &inherents, &block_state)?;
 
         macro_block.header.state_root = state_root;
         macro_block.header.diff_root = diff_root;
@@ -346,30 +356,31 @@ impl BlockProducer {
         macro_block.header.history_root = blockchain
             .history_store
             .add_to_history(&mut txn, block_number, &hist_txs)
-            .expect("Failed to compute history root during block production.")
+            .ok_or(BlockProducerError::HistoryError)?
             .0;
 
         txn.abort();
-        macro_block
+
+        Ok(macro_block)
     }
 
     pub fn next_macro_body(
         blockchain: &Blockchain,
         macro_header: &MacroHeader,
         txn_option: Option<&DBTransaction>,
-    ) -> MacroBody {
+    ) -> Result<MacroBody, BlockProducerError> {
         // Get the staking contract PRIOR to any state changes.
         let staking_contract = blockchain
             .get_staking_contract_if_complete(txn_option)
-            .expect("Staking Contract must be complete to create a macro body");
+            .ok_or(BlockProducerError::AccountsIncomplete)?;
 
         // Calculate the reward transactions.
         let reward_transactions =
             blockchain.create_reward_transactions(macro_header, &staking_contract);
 
         // Create the body for the macro block.
-        MacroBody {
+        Ok(MacroBody {
             transactions: reward_transactions,
-        }
+        })
     }
 }

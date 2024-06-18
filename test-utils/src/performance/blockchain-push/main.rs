@@ -83,12 +83,14 @@ fn main() {
 
         let blockchain = blockchain.upgradable_read();
 
-        let macro_block_proposal = producer.next_macro_block_proposal(
-            &blockchain,
-            blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-            0u32,
-            vec![],
-        );
+        let macro_block_proposal = producer
+            .next_macro_block_proposal(
+                &blockchain,
+                blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+                0u32,
+                vec![],
+            )
+            .unwrap();
 
         let block = sign_macro_block(
             &producer.voting_key,

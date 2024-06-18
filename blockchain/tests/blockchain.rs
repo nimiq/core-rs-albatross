@@ -24,36 +24,42 @@ fn prune_epoch_micro_blocks() {
     // We ensure more than one MicroBlock at same height exists.
     let micro_block1 = {
         let bc_read = blockchain.read();
-        producer.next_micro_block(
-            &bc_read,
-            &bc_read.time.now() + 1_u64 * 1000,
-            vec![],
-            vec![],
-            vec![0x42],
-            None,
-        )
+        producer
+            .next_micro_block(
+                &bc_read,
+                &bc_read.time.now() + 1_u64 * 1000,
+                vec![],
+                vec![],
+                vec![0x42],
+                None,
+            )
+            .unwrap()
     };
     let micro_block2 = {
         let bc_read = blockchain.read();
-        producer.next_micro_block(
-            &bc_read,
-            bc_read.time.now() + 1_u64 * 100,
-            vec![],
-            vec![],
-            vec![0x32],
-            None,
-        )
+        producer
+            .next_micro_block(
+                &bc_read,
+                bc_read.time.now() + 1_u64 * 100,
+                vec![],
+                vec![],
+                vec![0x32],
+                None,
+            )
+            .unwrap()
     };
     let micro_block3 = {
         let bc_read = blockchain.read();
-        producer.next_micro_block(
-            &bc_read,
-            bc_read.time.now() + 1_u64 * 10000,
-            vec![],
-            vec![],
-            vec![0x82],
-            None,
-        )
+        producer
+            .next_micro_block(
+                &bc_read,
+                bc_read.time.now() + 1_u64 * 10000,
+                vec![],
+                vec![],
+                vec![0x82],
+                None,
+            )
+            .unwrap()
     };
 
     assert_eq!(

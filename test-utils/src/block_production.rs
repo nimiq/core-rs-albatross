@@ -156,12 +156,15 @@ impl TemporaryBlockProducer {
         let height = blockchain.block_number() + 1;
 
         let block = if Policy::is_macro_block_at(height) {
-            let macro_block_proposal = self.producer.next_macro_block_proposal(
-                &blockchain,
-                blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-                0,
-                extra_data,
-            );
+            let macro_block_proposal = self
+                .producer
+                .next_macro_block_proposal(
+                    &blockchain,
+                    blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+                    0,
+                    extra_data,
+                )
+                .unwrap();
 
             // Calculate the block hash.
             let block_hash = macro_block_proposal.hash_blake2s();
@@ -187,23 +190,31 @@ impl TemporaryBlockProducer {
                 .0,
             )
         } else if skip_block {
-            Block::Micro(self.producer.next_micro_block(
-                &blockchain,
-                blockchain.timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT,
-                vec![],
-                vec![],
-                extra_data,
-                Some(self.create_skip_block_proof()),
-            ))
+            Block::Micro(
+                self.producer
+                    .next_micro_block(
+                        &blockchain,
+                        blockchain.timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT,
+                        vec![],
+                        vec![],
+                        extra_data,
+                        Some(self.create_skip_block_proof()),
+                    )
+                    .unwrap(),
+            )
         } else {
-            Block::Micro(self.producer.next_micro_block(
-                &blockchain,
-                blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-                vec![],
-                transactions,
-                extra_data,
-                None,
-            ))
+            Block::Micro(
+                self.producer
+                    .next_micro_block(
+                        &blockchain,
+                        blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+                        vec![],
+                        transactions,
+                        extra_data,
+                        None,
+                    )
+                    .unwrap(),
+            )
         };
 
         // drop the lock before pushing the block as that will acquire write eventually

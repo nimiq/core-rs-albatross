@@ -55,14 +55,16 @@ fn it_can_produce_micro_blocks() {
     let bc = blockchain.upgradable_read();
 
     // #1.0: Empty standard micro block
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![],
-        vec![0x41],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            vec![],
+            vec![0x41],
+            None,
+        )
+        .unwrap();
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block.clone())),
@@ -98,14 +100,17 @@ fn it_can_produce_micro_blocks() {
 
     let bc = blockchain.upgradable_read();
     // #2.0: Empty micro block with fork proof
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![fork_proof.into()],
-        vec![],
-        vec![0x41],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![fork_proof.into()],
+            vec![],
+            vec![0x41],
+            None,
+        )
+        .unwrap();
+
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
@@ -118,14 +123,16 @@ fn it_can_produce_micro_blocks() {
 
     // #2.1: Empty micro block (wrong prev_hash)
     let bc = blockchain.upgradable_read();
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![],
-        vec![0x41],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            vec![],
+            vec![0x41],
+            None,
+        )
+        .unwrap();
 
     // the block justification is ok.
     assert_eq!(
@@ -139,14 +146,17 @@ fn it_can_produce_micro_blocks() {
 
     // #2.2: Empty micro block
     let bc = blockchain.upgradable_read();
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![],
-        vec![0x41],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            vec![],
+            vec![0x41],
+            None,
+        )
+        .unwrap();
+
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
@@ -175,14 +185,14 @@ fn it_can_produce_macro_blocks() {
     fill_micro_blocks(&producer, &blockchain);
 
     let bc = blockchain.upgradable_read();
-    let macro_block = {
-        producer.next_macro_block_proposal(
+    let macro_block = producer
+        .next_macro_block_proposal(
             &bc,
             bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0u32,
             vec![],
         )
-    };
+        .unwrap();
 
     let block = sign_macro_block(&voting_key(), macro_block.header, macro_block.body);
     assert_eq!(
@@ -202,14 +212,15 @@ fn it_can_produce_macro_block_after_punishment() {
 
     // Create checkpoint block.
     let bc = producer.blockchain.upgradable_read();
-    let macro_block = {
-        producer.producer.next_macro_block_proposal(
+    let macro_block = producer
+        .producer
+        .next_macro_block_proposal(
             &bc,
             bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0u32,
             vec![],
         )
-    };
+        .unwrap();
 
     // Check sets are correctly produced.
     assert!(!bc
@@ -251,14 +262,15 @@ fn it_can_produce_macro_block_after_punishment() {
     fill_micro_blocks(&producer.producer, &producer.blockchain);
 
     let bc = producer.blockchain.upgradable_read();
-    let macro_block = {
-        producer.producer.next_macro_block_proposal(
+    let macro_block = producer
+        .producer
+        .next_macro_block_proposal(
             &bc,
             bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0u32,
             vec![],
         )
-    };
+        .unwrap();
 
     // Check sets are correctly produced.
     // The current punished slots still contain the slot.
@@ -305,14 +317,14 @@ fn it_can_produce_election_blocks() {
         fill_micro_blocks(&producer, &blockchain);
 
         let bc = blockchain.upgradable_read();
-        let macro_block = {
-            producer.next_macro_block_proposal(
+        let macro_block = producer
+            .next_macro_block_proposal(
                 &bc,
                 bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
                 0u32,
                 vec![0x42],
             )
-        };
+            .unwrap();
 
         let block = sign_macro_block(&voting_key(), macro_block.header, macro_block.body);
 
@@ -351,12 +363,14 @@ fn it_can_produce_a_chain_with_txns() {
 
         let blockchain = blockchain.upgradable_read();
 
-        let macro_block_proposal = producer.next_macro_block_proposal(
-            &blockchain,
-            blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-            0u32,
-            vec![],
-        );
+        let macro_block_proposal = producer
+            .next_macro_block_proposal(
+                &blockchain,
+                blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+                0u32,
+                vec![],
+            )
+            .unwrap();
 
         let block = sign_macro_block(
             &producer.voting_key,
@@ -369,112 +383,6 @@ fn it_can_produce_a_chain_with_txns() {
             Ok(PushResult::Extended)
         );
     }
-}
-
-#[test]
-fn it_can_revert_create_staker_transaction() {
-    let time = Arc::new(OffsetTime::new());
-    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-    let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(
-            env,
-            BlockchainConfig::default(),
-            NetworkId::UnitAlbatross,
-            time,
-        )
-        .unwrap(),
-    ));
-    let producer = BlockProducer::new(signing_key(), voting_key());
-
-    // #1.0: Empty micro block
-    let bc = blockchain.upgradable_read();
-
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![],
-        vec![0x41],
-        None,
-    );
-    assert_eq!(
-        Blockchain::push(bc, Block::Micro(block)),
-        Ok(PushResult::Extended)
-    );
-    assert_eq!(
-        blockchain.read().block_number(),
-        1 + blockchain.read().get_genesis_block_number()
-    );
-
-    let bc = blockchain.upgradable_read();
-
-    // One empty block
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![],
-        vec![0x41],
-        None,
-    );
-
-    assert_eq!(
-        Blockchain::push(bc, Block::Micro(block)),
-        Ok(PushResult::Extended)
-    );
-
-    assert_eq!(
-        blockchain.read().block_number(),
-        2 + blockchain.read().get_genesis_block_number()
-    );
-
-    // One block with staking transactions
-
-    let mut transactions = vec![];
-    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
-    let address = Address::from_any_str(STAKER_ADDRESS).unwrap();
-
-    let tx = TransactionBuilder::new_create_staker(
-        &key_pair,
-        &key_pair,
-        Some(address),
-        100_000_000.try_into().unwrap(),
-        100.try_into().unwrap(),
-        blockchain.read().block_number() + 1,
-        NetworkId::UnitAlbatross,
-    )
-    .unwrap();
-
-    transactions.push(tx);
-
-    let bc = blockchain.upgradable_read();
-
-    // Block with staking transactions
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        transactions,
-        vec![0x41],
-        None,
-    );
-
-    assert_eq!(
-        Blockchain::push(bc, Block::Micro(block)),
-        Ok(PushResult::Extended)
-    );
-
-    assert_eq!(
-        blockchain.read().block_number(),
-        3 + blockchain.read().get_genesis_block_number()
-    );
-
-    let bc = blockchain.upgradable_read();
-
-    let mut txn = bc.write_transaction();
-    let result = bc.revert_blocks(3, &mut txn);
-
-    assert_eq!(result, Ok(()));
 }
 
 #[test]
@@ -501,14 +409,17 @@ fn it_can_revert_failed_transactions() {
 
     let bc = blockchain.upgradable_read();
 
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![],
-        vec![0x41],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            vec![],
+            vec![0x41],
+            None,
+        )
+        .unwrap();
+
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
@@ -521,14 +432,16 @@ fn it_can_revert_failed_transactions() {
     let bc = blockchain.upgradable_read();
 
     // One empty block
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![],
-        vec![0x41],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            vec![],
+            vec![0x41],
+            None,
+        )
+        .unwrap();
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
@@ -576,14 +489,16 @@ fn it_can_revert_failed_transactions() {
     let bc = blockchain.upgradable_read();
 
     // Block with staking transactions
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        transactions,
-        vec![0x41],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            transactions,
+            vec![0x41],
+            None,
+        )
+        .unwrap();
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block.clone())),
@@ -628,6 +543,119 @@ fn it_can_revert_failed_transactions() {
 }
 
 #[test]
+fn it_can_revert_create_staker_transaction() {
+    let time = Arc::new(OffsetTime::new());
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+    let producer = BlockProducer::new(signing_key(), voting_key());
+
+    // #1.0: Empty micro block
+    let bc = blockchain.upgradable_read();
+
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            vec![],
+            vec![0x41],
+            None,
+        )
+        .unwrap();
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+    assert_eq!(
+        blockchain.read().block_number(),
+        1 + blockchain.read().get_genesis_block_number()
+    );
+
+    let bc = blockchain.upgradable_read();
+
+    // One empty block
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            vec![],
+            vec![0x41],
+            None,
+        )
+        .unwrap();
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(
+        blockchain.read().block_number(),
+        2 + blockchain.read().get_genesis_block_number()
+    );
+
+    // One block with staking transactions
+
+    let mut transactions = vec![];
+    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+    let address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let tx = TransactionBuilder::new_create_staker(
+        &key_pair,
+        &key_pair,
+        Some(address),
+        100_000_000.try_into().unwrap(),
+        100.try_into().unwrap(),
+        blockchain.read().block_number() + 1,
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    transactions.push(tx);
+
+    let bc = blockchain.upgradable_read();
+
+    // Block with staking transactions
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            transactions,
+            vec![0x41],
+            None,
+        )
+        .unwrap();
+
+    assert_eq!(
+        Blockchain::push(bc, Block::Micro(block)),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(
+        blockchain.read().block_number(),
+        3 + blockchain.read().get_genesis_block_number()
+    );
+
+    let bc = blockchain.upgradable_read();
+
+    let mut txn = bc.write_transaction();
+    let result = bc.revert_blocks(3, &mut txn);
+
+    assert_eq!(result, Ok(()));
+}
+
+#[test]
 fn it_can_revert_failed_vesting_contract_transaction() {
     let time = Arc::new(OffsetTime::new());
     let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
@@ -663,14 +691,17 @@ fn it_can_revert_failed_vesting_contract_transaction() {
 
     let transactions = vec![tx.clone()];
 
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        transactions,
-        vec![0x41],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            transactions,
+            vec![0x41],
+            None,
+        )
+        .unwrap();
+
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
@@ -725,14 +756,16 @@ fn it_can_revert_failed_vesting_contract_transaction() {
     let transactions = vec![redeem_tx.clone()];
 
     // Block with redeem funds transaction
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        transactions,
-        vec![0x41],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            transactions,
+            vec![0x41],
+            None,
+        )
+        .unwrap();
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block.clone())),
@@ -828,14 +861,16 @@ fn it_can_revert_reactivate_transaction() {
     let bc = blockchain.upgradable_read();
 
     // Block with staking transactions
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        transactions,
-        vec![0x41],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            transactions,
+            vec![0x41],
+            None,
+        )
+        .unwrap();
 
     let block_transactions = &block.body.as_ref().unwrap().transactions;
 
@@ -868,14 +903,16 @@ fn it_can_revert_reactivate_transaction() {
     let bc = blockchain.upgradable_read();
 
     // Block with staking transactions
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        transactions,
-        vec![0x41],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            transactions,
+            vec![0x41],
+            None,
+        )
+        .unwrap();
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
@@ -953,14 +990,17 @@ fn it_can_consume_all_validator_deposit() {
     .unwrap();
 
     let bc = blockchain.upgradable_read();
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![create_tx, retire_tx, vesting_tx.clone()],
-        vec![],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            vec![create_tx, retire_tx, vesting_tx.clone()],
+            vec![],
+            None,
+        )
+        .unwrap();
+
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
@@ -992,14 +1032,16 @@ fn it_can_consume_all_validator_deposit() {
 
     // Block with staking transactions
     let bc = blockchain.upgradable_read();
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![invalid_tx.clone()],
-        vec![],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            vec![invalid_tx.clone()],
+            vec![],
+            None,
+        )
+        .unwrap();
 
     let block_transactions = &block.body.as_ref().unwrap().transactions;
 
@@ -1049,14 +1091,16 @@ fn it_can_consume_all_validator_deposit() {
 
     // Block with staking transactions
     let bc = blockchain.upgradable_read();
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![invalid_tx.clone()],
-        vec![],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            vec![invalid_tx.clone()],
+            vec![],
+            None,
+        )
+        .unwrap();
 
     let block_transactions = &block.body.as_ref().unwrap().transactions;
 
@@ -1165,14 +1209,17 @@ fn it_can_revert_failed_delete_validator() {
     .unwrap();
 
     let bc = blockchain.upgradable_read();
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![create_tx, retire_tx, vesting_tx.clone()],
-        vec![],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            vec![create_tx, retire_tx, vesting_tx.clone()],
+            vec![],
+            None,
+        )
+        .unwrap();
+
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
@@ -1204,14 +1251,16 @@ fn it_can_revert_failed_delete_validator() {
 
     // Block with staking transactions
     let bc = blockchain.upgradable_read();
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![invalid_tx.clone()],
-        vec![],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            vec![invalid_tx.clone()],
+            vec![],
+            None,
+        )
+        .unwrap();
 
     let block_transactions = &block.body.as_ref().unwrap().transactions;
     assert_eq!(block_transactions[0], ExecutedTransaction::Err(invalid_tx));
@@ -1349,14 +1398,16 @@ fn it_can_revert_basic_and_create_contracts_txns() {
     let bc = blockchain.upgradable_read();
 
     // Block with txns
-    let block = producer.next_micro_block(
-        &bc,
-        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        transactions,
-        vec![0x41],
-        None,
-    );
+    let block = producer
+        .next_micro_block(
+            &bc,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            transactions,
+            vec![0x41],
+            None,
+        )
+        .unwrap();
 
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),

@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate log;
 
-pub use block_production::BlockProducer;
+pub use block_production::{BlockProducer, BlockProducerError};
 pub use blockchain::blockchain::{Blockchain, BlockchainConfig, TransactionVerificationCache};
 pub use history::*;
 

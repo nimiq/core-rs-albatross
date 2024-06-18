@@ -119,7 +119,7 @@ impl MacroBlock {
         // Verify the Tendermint proof.
         if !TendermintProof::verify(self, validators) {
             warn!(
-                %self,
+                block = %self,
                 reason = "Macro block with bad justification",
                 "Rejecting block"
             );

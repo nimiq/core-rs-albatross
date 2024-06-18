@@ -42,12 +42,10 @@ async fn it_verifies_inferior_chain_proposals() {
     // create a proposal for the macro block, but do not produce a block.
     let inf_proposal1 = {
         let b = blockchain1.read();
-        temp_producer1.producer.next_macro_block_proposal(
-            &b,
-            b.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-            0,
-            vec![],
-        )
+        temp_producer1
+            .producer
+            .next_macro_block_proposal(&b, b.timestamp() + Policy::BLOCK_SEPARATION_TIME, 0, vec![])
+            .unwrap()
     };
     // Use the skip block to rebranch the micro blocks away, effectively leaving the proposal on an inferior chain.
     // This chain has 2 blocks differ from the main chain preceding the macro block.
@@ -74,12 +72,10 @@ async fn it_verifies_inferior_chain_proposals() {
     // create a macro block proposal, but do not produce a block.
     let inf_proposal2 = {
         let b = blockchain1.read();
-        temp_producer1.producer.next_macro_block_proposal(
-            &b,
-            b.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-            0,
-            vec![],
-        )
+        temp_producer1
+            .producer
+            .next_macro_block_proposal(&b, b.timestamp() + Policy::BLOCK_SEPARATION_TIME, 0, vec![])
+            .unwrap()
     };
 
     // use the skip block to move the proposal to inferior chain.
@@ -102,12 +98,10 @@ async fn it_verifies_inferior_chain_proposals() {
     // Finally create a proposal on main chain
     let main_chain_proposal = {
         let b = blockchain1.read();
-        temp_producer1.producer.next_macro_block_proposal(
-            &b,
-            b.timestamp() + Policy::BLOCK_SEPARATION_TIME,
-            0,
-            vec![],
-        )
+        temp_producer1
+            .producer
+            .next_macro_block_proposal(&b, b.timestamp() + Policy::BLOCK_SEPARATION_TIME, 0, vec![])
+            .unwrap()
     };
 
     // blockchain2 here has not seen any of the inferior micro blocks nor any of the proposals.

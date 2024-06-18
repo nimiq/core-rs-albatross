@@ -51,14 +51,17 @@ async fn validator_update() {
         blockchain.read().block_number(),
         NetworkId::UnitAlbatross,
     );
-    let new_micro_block = producer1.next_micro_block(
-        &blockchain.read(),
-        blockchain.read().timestamp() + Policy::BLOCK_SEPARATION_TIME,
-        vec![],
-        vec![tx],
-        vec![0x42],
-        None,
-    );
+    let new_micro_block = producer1
+        .next_micro_block(
+            &blockchain.read(),
+            blockchain.read().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            vec![],
+            vec![tx],
+            vec![0x42],
+            None,
+        )
+        .unwrap();
+
     assert_eq!(
         Blockchain::push(blockchain.upgradable_read(), Block::Micro(new_micro_block)),
         Ok(PushResult::Extended)

@@ -1422,8 +1422,9 @@ async fn mempool_update_not_enough_balance() {
     {
         let bc = blockchain.upgradable_read();
 
-        let block =
-            producer.next_micro_block(&bc, bc.time.now(), vec![], adopted_txns, vec![0x41], None);
+        let block = producer
+            .next_micro_block(&bc, bc.time.now(), vec![], adopted_txns, vec![0x41], None)
+            .unwrap();
 
         assert_eq!(
             Blockchain::push(bc, Block::Micro(block)),
@@ -1448,8 +1449,9 @@ async fn mempool_update_not_enough_balance() {
     {
         let bc = blockchain.upgradable_read();
 
-        let block =
-            producer.next_micro_block(&bc, bc.time.now(), vec![], updated_txns, vec![0x41], None);
+        let block = producer
+            .next_micro_block(&bc, bc.time.now(), vec![], updated_txns, vec![0x41], None)
+            .unwrap();
 
         // We should succeed producing a block with the remaining mempool transactions
         assert_eq!(
@@ -1582,8 +1584,9 @@ async fn mempool_update_pruned_account() {
     {
         let bc = blockchain.upgradable_read();
 
-        let block =
-            producer.next_micro_block(&bc, bc.time.now(), vec![], adopted_txns, vec![0x41], None);
+        let block = producer
+            .next_micro_block(&bc, bc.time.now(), vec![], adopted_txns, vec![0x41], None)
+            .unwrap();
 
         assert_eq!(
             Blockchain::push(bc, Block::Micro(block)),
@@ -1606,8 +1609,9 @@ async fn mempool_update_pruned_account() {
     {
         let bc = blockchain.upgradable_read();
 
-        let block =
-            producer.next_micro_block(&bc, bc.time.now(), vec![], updated_txns, vec![0x41], None);
+        let block = producer
+            .next_micro_block(&bc, bc.time.now(), vec![], updated_txns, vec![0x41], None)
+            .unwrap();
 
         // We should succeed producing a block with the remaining mempool transactions
         assert_eq!(
@@ -1976,8 +1980,10 @@ async fn it_can_reject_invalid_vesting_contract_transaction() {
 
     let transactions = vec![tx.clone()];
 
-    let block =
-        producer.next_micro_block(&bc, bc.time.now(), vec![], transactions, vec![0x41], None);
+    let block = producer
+        .next_micro_block(&bc, bc.time.now(), vec![], transactions, vec![0x41], None)
+        .unwrap();
+
     assert_eq!(
         Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)

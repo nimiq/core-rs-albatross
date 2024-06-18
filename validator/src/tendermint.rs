@@ -221,7 +221,8 @@ where
         let time = blockchain.time.now();
         let block = self
             .block_producer
-            .next_macro_block_proposal(&blockchain, time, round, vec![]);
+            .next_macro_block_proposal(&blockchain, time, round, vec![])
+            .map_err(|_| ProtocolError::Abort)?;
 
         // Always `Some(…)` because the above function always sets it to `Some(…)`.
         let body = block.body.expect("produced blocks always have a body");

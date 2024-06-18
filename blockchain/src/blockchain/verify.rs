@@ -418,11 +418,10 @@ impl Blockchain {
 
             macro_block
                 .body
-                .get_or_insert(BlockProducer::next_macro_body(
-                    self,
-                    &macro_block.header,
-                    Some(txn),
-                ))
+                .get_or_insert_with(|| {
+                    BlockProducer::next_macro_body(self, &macro_block.header, Some(txn))
+                        .expect("Failed to construct macro body")
+                })
                 .clone()
         };
 
