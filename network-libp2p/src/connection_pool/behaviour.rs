@@ -274,14 +274,7 @@ impl<T> std::fmt::Display for ConnectionState<T> {
     }
 }
 
-/// Connection pool behaviour events
-#[derive(Debug)]
-pub enum Event {
-    /// A peer has joined
-    PeerJoined,
-}
-
-type PoolToSwarm = ToSwarm<Event, Void>;
+type PoolToSwarm = ToSwarm<Void, Void>;
 
 /// Connection pool behaviour
 ///
@@ -676,8 +669,6 @@ impl Behaviour {
         self.addresses
             .mark_connected(address.clone(), peer_services);
 
-        self.actions
-            .push_back(ToSwarm::GenerateEvent(Event::PeerJoined));
         self.wake();
 
         self.maintain_peers();
@@ -799,7 +790,7 @@ impl Behaviour {
 
 impl NetworkBehaviour for Behaviour {
     type ConnectionHandler = dummy::ConnectionHandler;
-    type ToSwarm = Event;
+    type ToSwarm = Void;
 
     fn on_swarm_event(&mut self, event: FromSwarm) {
         match event {

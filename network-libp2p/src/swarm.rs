@@ -42,7 +42,7 @@ use tokio::sync::{broadcast, mpsc};
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;
 use crate::{
-    behaviour, connection_pool,
+    behaviour,
     discovery::{behaviour::Event, peer_contacts::PeerContactBook},
     network_types::{
         DhtBootStrapState, DhtRecord, DhtResults, NetworkAction, TaskState, ValidateMessage,
@@ -674,11 +674,7 @@ fn handle_event(
                         }
                     };
                 }
-                behaviour::BehaviourEvent::Pool(event) => {
-                    match event {
-                        connection_pool::Event::PeerJoined => {}
-                    };
-                }
+                behaviour::BehaviourEvent::Pool(event) => match event {},
                 behaviour::BehaviourEvent::RequestResponse(event) => match event {
                     request_response::Event::Message {
                         peer: peer_id,

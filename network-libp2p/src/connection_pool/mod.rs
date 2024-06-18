@@ -1,5 +1,5 @@
 pub mod behaviour;
-pub use behaviour::{Behaviour, Event};
+pub use behaviour::Behaviour;
 use thiserror::Error;
 
 /// Connection Pool errors
