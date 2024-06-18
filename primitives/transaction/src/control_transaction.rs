@@ -63,3 +63,78 @@ impl<'de> Deserialize<'de> for ControlTransaction {
         ControlTransaction::try_from(tx).map_err(D::Error::custom)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use nimiq_keys::Address;
+    use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
+    use nimiq_serde::{Deserialize, Serialize};
+
+    use super::ControlTransaction;
+    use crate::{account::staking_contract::IncomingStakingTransactionData, Transaction};
+
+    fn normal_tx() -> Transaction {
+        Transaction::new_basic(
+            Address::default(),
+            Address::default(),
+            Coin::MAX_SAFE_VALUE.try_into().unwrap(),
+            Coin::ZERO,
+            0,
+            NetworkId::UnitAlbatross,
+        )
+    }
+
+    fn reactivate_tx() -> Transaction {
+        Transaction::new_signaling(
+            Address::default(),
+            AccountType::Basic,
+            Policy::STAKING_CONTRACT_ADDRESS,
+            AccountType::Staking,
+            Coin::ZERO,
+            IncomingStakingTransactionData::ReactivateValidator {
+                validator_address: Address::default(),
+                proof: Default::default(),
+            }
+            .serialize_to_vec(),
+            0,
+            NetworkId::UnitAlbatross,
+        )
+    }
+
+    #[test]
+    fn normal_tx_is_not_ctrl() {
+        let tx = normal_tx();
+        assert_eq!(
+            ControlTransaction::try_from(tx.clone())
+                .unwrap_err()
+                .into_inner(),
+            tx,
+        );
+    }
+
+    #[test]
+    fn reactivate_is_ctrl() {
+        let tx = reactivate_tx();
+        assert_eq!(
+            Transaction::from(ControlTransaction::try_from(tx.clone()).unwrap()),
+            tx,
+        );
+    }
+
+    #[test]
+    fn normal_tx_deserialize_error() {
+        let tx = normal_tx();
+        assert!(ControlTransaction::deserialize_from_vec(&tx.serialize_to_vec()).is_err());
+    }
+
+    #[test]
+    fn reactivate_serialize_roundtrip() {
+        let tx = reactivate_tx();
+        let ctx = ControlTransaction::try_from(tx.clone()).unwrap();
+        assert_eq!(tx.serialize_to_vec(), ctx.serialize_to_vec());
+        assert_eq!(
+            ControlTransaction::deserialize_from_vec(&tx.serialize_to_vec()).unwrap(),
+            ctx,
+        );
+    }
+}
