@@ -466,18 +466,32 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
 
             // Finally, if no future round aggregation verification is
             // currently running, start a new one.
-            if self.future_round_verification.is_none() && !self.future_round_messages.is_empty() {
+            while self.future_round_verification.is_none() && !self.future_round_messages.is_empty()
+            {
                 did_something = true;
+                // Choose a message at random
                 let index = thread_rng().gen_range(0..self.future_round_messages.len());
                 let validator_id = *self.future_round_messages.keys().nth(index).unwrap();
                 let message = self.future_round_messages.remove(&validator_id).unwrap();
+
+                // Make sure the message's contributors is not a subset of the already verified future contributors
                 let (round, step) = message.tag;
                 let contributors = message.aggregation.all_contributors();
+                if contributors.is_subset(
+                    self.future_contributions
+                        .get(&round)
+                        .unwrap_or(&BitSet::default()),
+                ) {
+                    continue;
+                }
+
+                // Create the future verifying the message signature.
                 let verification = self
                     .protocol
                     .verify_aggregation_message(round, step, message.aggregation)
                     .map(move |result| result.map(move |()| (round, contributors)));
                 self.future_round_verification = Some(Box::pin(verification));
+                break;
             }
         }
         None
