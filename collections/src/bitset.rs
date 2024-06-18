@@ -169,7 +169,7 @@ impl BitSet {
             .chain(repeat(false))
     }
 
-    /// Test if this is a superset of `other`
+    /// Test if this is a superset of or equal to `other`
     pub fn is_superset(&self, other: &Self) -> bool {
         let (mut left, mut right) = (self.store.iter(), other.store.iter());
         loop {
@@ -188,7 +188,7 @@ impl BitSet {
         }
     }
 
-    /// Test if this is a subset of `other`
+    /// Test if this is a subset of or equal to `other`
     pub fn is_subset(&self, other: &Self) -> bool {
         other.is_superset(self)
     }
