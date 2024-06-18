@@ -6,10 +6,11 @@ use std::{
 
 use futures::{
     future::{BoxFuture, Future, FutureExt},
-    ready, select,
+    ready,
     stream::{BoxStream, Stream, StreamExt},
 };
 use nimiq_time::{interval, Interval};
+use tokio::select;
 
 use crate::{
     config::Config,

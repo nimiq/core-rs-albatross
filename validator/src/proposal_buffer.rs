@@ -553,7 +553,7 @@ where
 mod test {
     use std::{sync::Arc, time::Duration};
 
-    use futures::{select, FutureExt, StreamExt};
+    use futures::{FutureExt, StreamExt};
     use nimiq_block::MacroHeader;
     use nimiq_blockchain::Blockchain;
     use nimiq_blockchain_proxy::BlockchainProxy;
@@ -577,6 +577,7 @@ mod test {
     use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
     use nimiq_zkp_component::ZKPComponent;
     use parking_lot::{Mutex, RwLock};
+    use tokio::select;
 
     use super::{ProposalAndPubsubId, ProposalBuffer};
     use crate::{
@@ -675,7 +676,7 @@ mod test {
                         _ => established.1 = false,
                     }
                 }
-                _elapsed = deadline => panic!("Failed to establish consensus!"),
+                _elapsed = &mut deadline => panic!("Failed to establish consensus!"),
             }
         }
 

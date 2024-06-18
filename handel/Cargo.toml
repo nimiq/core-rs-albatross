@@ -22,7 +22,7 @@ parking_lot = "0.12"
 rand = "0.8"
 serde = "1.0"
 thiserror = "1.0"
-tokio = { version = "1.38", features = ["rt", "time"] }
+tokio = { version = "1.38", features = ["macros", "rt", "time"] }
 tokio-stream = "0.1"
 
 nimiq-bls = { workspace = true }
