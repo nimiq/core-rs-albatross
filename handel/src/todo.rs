@@ -2,10 +2,9 @@ use core::{
     pin::Pin,
     task::{Context, Poll},
 };
-use std::{collections::HashSet, fmt, sync::Arc, task::Waker};
+use std::{collections::HashSet, fmt, sync::Arc};
 
 use futures::{stream::BoxStream, Stream, StreamExt};
-use nimiq_utils::WakerExt as _;
 
 use crate::{
     contribution::AggregatableContribution, evaluator::Evaluator, protocol::Protocol,
@@ -80,8 +79,6 @@ where
     evaluator: Arc<TProtocol::Evaluator>,
     /// The Stream where LevelUpdates can be polled from, which are subsequently converted into TodoItems
     input_stream: BoxStream<'static, LevelUpdate<TProtocol::Contribution>>,
-    /// Waker used for the poll next function
-    waker: Option<Waker>,
 }
 
 impl<TId, TProtocol> TodoList<TId, TProtocol>
@@ -102,16 +99,15 @@ where
             list: HashSet::new(),
             evaluator,
             input_stream,
-            waker: None,
         }
     }
 
+    /// Safe without a wake as it is only called in the constructor of Aggregation.
     pub fn add_contribution(&mut self, contribution: TProtocol::Contribution, level: usize) {
         self.list.insert(TodoItem {
             contribution,
             level,
         });
-        self.waker.wake();
     }
 
     pub fn into_stream(self) -> BoxStream<'static, LevelUpdate<TProtocol::Contribution>> {
@@ -205,13 +201,11 @@ where
                         best_score = score;
                         if let Some(best_todo) = best_todo {
                             self.list.insert(best_todo);
-                            self.waker.wake();
                         }
                         best_todo = Some(aggregate_todo);
                     } else {
                         // If the score is not a new best put the TodoItem in the list.
                         self.list.insert(aggregate_todo);
-                        self.waker.wake();
                     }
                 }
                 // Some of the LevelUpdates also contain an individual Signature in which case it is also converted into a TodoItem.
@@ -230,13 +224,11 @@ where
                             best_score = score;
                             if let Some(best_todo) = best_todo {
                                 self.list.insert(best_todo);
-                                self.waker.wake();
                             }
                             best_todo = Some(individual_todo);
                         } else {
                             // If the score is not a new best put the TodoItem in the list.
                             self.list.insert(individual_todo);
-                            self.waker.wake();
                         }
                     }
                 }
@@ -250,18 +242,14 @@ where
         }
 
         // If the best item has a score higher than 0 return it otherwise signal
-        // that no TodoItem is currently available.
-        // The function returns Poll<Option<TodoItem<C>>> but Ready(None) is never returned.
+        // that no new aggregate is currently available.
         if best_score > 0 {
-            // best_todo is now always Some(todo) never None
-            if let Some(todo) = best_todo {
-                Poll::Ready(Some(todo))
-            } else {
-                unreachable!(" Score was higher than 0 but there was no best TodoItem.");
-            }
-        } else {
-            self.waker.store_waker(cx);
-            Poll::Pending
+            // The function returns Poll<Option<TodoItem<C>>> but Ready(None) is never returned.
+            return Poll::Ready(Some(
+                best_todo.expect("Score was higher than 0 but there was no best TodoItem."),
+            ));
         }
+
+        Poll::Pending
     }
 }
