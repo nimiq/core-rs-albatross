@@ -44,6 +44,9 @@ pub trait HistoryInterface {
     /// Clears the history store.
     fn clear(&self, txn: &mut WriteTransactionProxy);
 
+    /// Returns true if the history store is the light version
+    fn is_light(&self) -> bool;
+
     /// Returns the length (i.e. the number of leaves) of the History Tree at a given block height.
     /// Note that this returns the number of leaves for only the epoch of the given block height,
     /// this is because we have separate History Trees for separate epochs.

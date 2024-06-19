@@ -123,13 +123,18 @@ impl<N: Network> ConsensusProxy<N> {
                 .await;
 
             match response {
-                Ok(response) => {
-                    log::debug!(
-                        "Obtained txn receipts response, length {} ",
-                        response.receipts.len()
-                    );
-                    obtained_receipts.extend(response.receipts);
-                }
+                Ok(response_result) => match response_result {
+                    Ok(response) => {
+                        log::debug!(
+                            "Obtained txn receipts response, length {} ",
+                            response.receipts.len()
+                        );
+                        obtained_receipts.extend(response.receipts);
+                    }
+                    Err(error) => {
+                        log::error!(peer=%peer_id, err=%error,"The peer does not support this request, even though it had the TRANSACTION_INDEX flag");
+                    }
+                },
                 Err(error) => {
                     // If there was a request error with this peer we log an error
                     log::error!(peer=%peer_id, err=%error,"There was an error requesting transaction receipts from peer");

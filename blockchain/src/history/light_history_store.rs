@@ -276,7 +276,7 @@ impl HistoryInterface for LightHistoryStore {
         _epoch_number: u32,
         _num_hist_txs: usize,
     ) -> Option<(Blake2bHash, u64)> {
-        None
+        unimplemented!()
     }
 
     fn tx_in_validity_window(
@@ -294,7 +294,7 @@ impl HistoryInterface for LightHistoryStore {
         _tx_hash: &Blake2bHash,
         _txn_option: Option<&TransactionProxy>,
     ) -> Vec<HistoricTransaction> {
-        todo!()
+        unimplemented!()
     }
 
     fn get_block_transactions(
@@ -302,7 +302,7 @@ impl HistoryInterface for LightHistoryStore {
         _block_number: u32,
         _txn_option: Option<&TransactionProxy>,
     ) -> Vec<HistoricTransaction> {
-        todo!()
+        unimplemented!()
     }
 
     fn get_epoch_transactions(
@@ -424,6 +424,10 @@ impl HistoryInterface for LightHistoryStore {
         nimiq_mmr::error::Error,
     > {
         unimplemented!()
+    }
+
+    fn is_light(&self) -> bool {
+        true
     }
 }
 

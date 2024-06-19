@@ -415,8 +415,18 @@ pub struct RequestTransactionReceiptsByAddress {
 impl RequestCommon for RequestTransactionReceiptsByAddress {
     type Kind = RequestMarker;
     const TYPE_ID: u16 = 214;
-    type Response = ResponseTransactionReceiptsByAddress;
+    type Response =
+        Result<ResponseTransactionReceiptsByAddress, ResponseTransactionReceiptsByAddressError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_TRANSACTIONS_BY_ADDRESS;
+}
+
+#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+pub enum ResponseTransactionReceiptsByAddressError {
+    #[error("not implemented")]
+    NotImplemented,
+    #[error("unknown error")]
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Serialize, Deserialize)]

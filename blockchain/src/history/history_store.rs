@@ -1277,6 +1277,10 @@ impl HistoryInterface for HistoryStore {
 
         (first, last)
     }
+
+    fn is_light(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]

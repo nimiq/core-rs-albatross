@@ -155,6 +155,11 @@ impl BlockchainInterface for BlockchainDispatcher {
         hash: Blake2bHash,
     ) -> RPCResult<ExecutedTransaction, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
+            if blockchain.history_store.is_light() {
+                log::warn!("Transaction by hash is not supported by the light history store");
+                return Err(Error::NotImplemented);
+            }
+
             // Get all the historic transactions that correspond to this hash.
             let mut hist_txs = blockchain.history_store.get_hist_tx_by_hash(&hash, None);
 
@@ -184,6 +189,13 @@ impl BlockchainInterface for BlockchainDispatcher {
         block_number: u32,
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
+            if blockchain.history_store.is_light() {
+                log::warn!(
+                    "Transaction hashes by address is not supported by the light history store"
+                );
+                return Err(Error::NotImplemented);
+            }
+
             // Get all the historic transactions that correspond to this block.
             let hist_txs = blockchain
                 .history_store
@@ -210,6 +222,13 @@ impl BlockchainInterface for BlockchainDispatcher {
         block_number: u32,
     ) -> RPCResult<Vec<Inherent>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
+            if blockchain.history_store.is_light() {
+                log::warn!(
+                    "Transaction hashes by address is not supported by the light history store"
+                );
+                return Err(Error::NotImplemented);
+            }
+
             // Get all the historic transactions that correspond to this block.
             let historic_tx_vec = blockchain
                 .history_store
@@ -235,6 +254,13 @@ impl BlockchainInterface for BlockchainDispatcher {
         batch_number: u32,
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
+            if blockchain.history_store.is_light() {
+                log::warn!(
+                    "Transaction hashes by address is not supported by the light history store"
+                );
+                return Err(Error::NotImplemented);
+            }
+
             // Calculate the numbers for the micro blocks in the batch.
             let first_block = Policy::first_block_of_batch(batch_number).ok_or(
                 Error::InvalidArgument("Batch number out of bounds".to_string()),
@@ -268,6 +294,13 @@ impl BlockchainInterface for BlockchainDispatcher {
         batch_number: u32,
     ) -> RPCResult<Vec<Inherent>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
+            if blockchain.history_store.is_light() {
+                log::warn!(
+                    "Transaction hashes by address is not supported by the light history store"
+                );
+                return Err(Error::NotImplemented);
+            }
+
             let macro_block_number = Policy::macro_block_of(batch_number).ok_or(
                 Error::InvalidArgument("Batch number out of bounds".to_string()),
             )?;
@@ -311,8 +344,16 @@ impl BlockchainInterface for BlockchainDispatcher {
         max: Option<u16>,
     ) -> RPCResult<Vec<Blake2bHash>, (), Self::Error> {
         if let BlockchainProxy::Full(blockchain) = &self.blockchain {
+            let blockchain = blockchain.read();
+
+            if blockchain.history_store.is_light() {
+                log::warn!(
+                    "Transaction hashes by address is not supported by the light history store"
+                );
+                return Err(Error::NotImplemented);
+            }
+
             Ok(blockchain
-                .read()
                 .history_store
                 .get_tx_hashes_by_address(&address, max.unwrap_or(500), None)
                 .into())
@@ -327,6 +368,11 @@ impl BlockchainInterface for BlockchainDispatcher {
         max: Option<u16>,
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
+            if blockchain.history_store.is_light() {
+                log::warn!("Transactions by address is not supported by the light history store");
+                return Err(Error::NotImplemented);
+            }
+
             // Get the transaction hashes for this address.
             let tx_hashes = blockchain.history_store.get_tx_hashes_by_address(
                 &address,

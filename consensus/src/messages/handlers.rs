@@ -90,10 +90,15 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMacroChain {
 impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
     fn handle(
         &self,
-        _peer_id: N::PeerId,
+        peer_id: N::PeerId,
         blockchain: &Arc<RwLock<Blockchain>>,
     ) -> Result<BatchSetInfo, BatchSetError> {
         let blockchain = blockchain.read();
+
+        if blockchain.history_store.is_light() {
+            log::warn!(peer=%peer_id,"Request batch set is not supported by the light history store");
+            return Err(BatchSetError::Other);
+        }
 
         let block = match blockchain.get_block(&self.hash, true, None) {
             Ok(Block::Macro(block)) => block,
@@ -154,10 +159,17 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
 impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
     fn handle(
         &self,
-        _peer_id: N::PeerId,
+        peer_id: N::PeerId,
         blockchain: &Arc<RwLock<Blockchain>>,
     ) -> Result<HistoryChunk, HistoryChunkError> {
-        if let Some(chunk) = blockchain.read().history_store.prove_chunk(
+        let blockchain = blockchain.read();
+
+        if blockchain.history_store.is_light() {
+            log::warn!(peer=%peer_id,"Request history chunk is not supported by the light history store");
+            return Err(HistoryChunkError::Other);
+        }
+
+        if let Some(chunk) = blockchain.history_store.prove_chunk(
             self.epoch_number,
             self.block_number,
             CHUNK_SIZE,
@@ -661,10 +673,16 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestTransactionsProof
 impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestTransactionReceiptsByAddress {
     fn handle(
         &self,
-        _peer_id: N::PeerId,
+        peer_id: N::PeerId,
         blockchain: &Arc<RwLock<Blockchain>>,
-    ) -> ResponseTransactionReceiptsByAddress {
+    ) -> Result<ResponseTransactionReceiptsByAddress, ResponseTransactionReceiptsByAddressError>
+    {
         let blockchain = blockchain.read();
+
+        if blockchain.history_store.is_light() {
+            log::warn!(peer=%peer_id,"Request Transaction Receipts by Address is not supported by the light history store");
+            return Err(ResponseTransactionReceiptsByAddressError::NotImplemented);
+        }
 
         // Get the transaction hashes for this address.
         let raw_tx_hashes = blockchain.history_store.get_tx_hashes_by_address(
@@ -686,7 +704,7 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestTransactionReceip
             );
         }
 
-        ResponseTransactionReceiptsByAddress { receipts }
+        Ok(ResponseTransactionReceiptsByAddress { receipts })
     }
 }
 
