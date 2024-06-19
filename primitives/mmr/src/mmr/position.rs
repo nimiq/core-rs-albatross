@@ -143,7 +143,15 @@ impl Ord for Position {
 /// Calculate whether a number only consists of 1-bits (except the leading zeros).
 /// That means 00000111 is considered all-ones but 00001110 is not.
 fn all_ones(num: usize) -> bool {
-    num != 0 && num.count_zeros() == num.leading_zeros()
+    if num == 0 {
+        return false;
+    }
+    // Find the highest set bit
+    let highest_set_bit = usize::BITS - num.leading_zeros();
+    // Create a mask with all 1s from the highest set bit to the least significant bit
+    let mask = (1 << highest_set_bit) - 1;
+    // Check if the number matches the mask
+    num == mask
 }
 
 /// In order to move left on the same level, we subtract the index by its most significant bit
