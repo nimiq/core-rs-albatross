@@ -265,4 +265,14 @@ impl<'txn> WriteCursor<'txn> for MdbxWriteCursor<'txn> {
         let value = AsDatabaseBytes::as_database_bytes(value);
         self.cursor.put(&key, &value, WriteFlags::APPEND).unwrap();
     }
+
+    fn put<K, V>(&mut self, key: &K, value: &V)
+    where
+        K: AsDatabaseBytes + ?Sized,
+        V: AsDatabaseBytes + ?Sized,
+    {
+        let key = AsDatabaseBytes::as_database_bytes(key);
+        let value = AsDatabaseBytes::as_database_bytes(value);
+        self.cursor.put(&key, &value, WriteFlags::empty()).unwrap();
+    }
 }
