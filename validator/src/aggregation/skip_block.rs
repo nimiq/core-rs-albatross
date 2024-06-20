@@ -68,15 +68,15 @@ impl Stream for InputStreamSwitch {
     type Item = LevelUpdate<SignedSkipBlockMessage>;
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         while let Some(message) = ready!(self.input.poll_next_unpin(cx)) {
-            if message.1.block_number != self.current_skip_block.block_number
-                || message.1.vrf_entropy != self.current_skip_block.vrf_entropy
+            if message.info.block_number != self.current_skip_block.block_number
+                || message.info.vrf_entropy != self.current_skip_block.vrf_entropy
             {
                 // The LevelUpdate is not for this skip block and thus irrelevant.
                 // TODO If it is for a future skip block we might want to shortcut a HeadRequest here.
                 continue;
             }
 
-            return Poll::Ready(Some(message.0));
+            return Poll::Ready(Some(message.level_update));
         }
 
         // We have exited the loop, so poll_next() must have returned Poll::Ready(None).
@@ -105,7 +105,10 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
         (msg, recipient): (LevelUpdate<Self::Contribution>, u16),
     ) -> futures::future::BoxFuture<'static, ()> {
         // Create the update.
-        let update_message = SkipBlockUpdate(msg, self.tag.clone());
+        let update_message = SkipBlockUpdate {
+            level_update: msg,
+            info: self.tag.clone(),
+        };
 
         // clone network so it can be moved into the future
         let nw = Arc::clone(&self.network);
@@ -139,7 +142,10 @@ impl AggregatableContribution for SignedSkipBlockMessage {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct SkipBlockUpdate(pub LevelUpdate<SignedSkipBlockMessage>, pub SkipBlockInfo);
+struct SkipBlockUpdate {
+    pub level_update: LevelUpdate<SignedSkipBlockMessage>,
+    pub info: SkipBlockInfo,
+}
 
 impl RequestCommon for SkipBlockUpdate {
     type Kind = MessageMarker;
