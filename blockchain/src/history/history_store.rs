@@ -257,14 +257,14 @@ impl HistoryStore {
         leaf_index: u32,
         hist_tx: &HistoricTransaction,
     ) -> usize {
-        txn.put_reserve(&self.hist_tx_table, leaf_hash, hist_tx);
+        //txn.put_reserve(&self.hist_tx_table, leaf_hash, hist_tx);
 
         // The raw tx hash corresponds to the hash without the execution result.
         // Thus for basic historic transactions we want discoverability for the raw transaction.
-        let raw_tx_hash = hist_tx.tx_hash();
+        //let raw_tx_hash = hist_tx.tx_hash();
 
         txn.put(&self.last_leaf_table, &hist_tx.block_number, &leaf_index);
-
+        /*
         match &hist_tx.data {
             HistoricTransactionData::Basic(tx) => {
                 let tx = tx.get_raw_transaction();
@@ -339,6 +339,7 @@ impl HistoryStore {
                 );
             }
         }
+        */
         hist_tx.serialized_size()
     }
 
