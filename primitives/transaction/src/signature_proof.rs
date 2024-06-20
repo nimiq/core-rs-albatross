@@ -4,7 +4,7 @@ use base64::prelude::{Engine, BASE64_URL_SAFE_NO_PAD};
 use bitflags::bitflags;
 use nimiq_hash::{Blake2bHash, Hash, HashOutput, Sha256Hash};
 use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, PublicKey, Signature};
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 use nimiq_utils::merkle::Blake2bMerklePath;
 use url::Url;
 
@@ -14,6 +14,10 @@ pub struct SignatureProof {
     pub merkle_path: Blake2bMerklePath,
     pub signature: Signature,
     pub webauthn_fields: Option<WebauthnExtraFields>,
+}
+
+impl SerializedMaxSize for SignatureProof {
+    const MAX_SIZE: usize = ;
 }
 
 impl SignatureProof {

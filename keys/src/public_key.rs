@@ -5,6 +5,7 @@ use std::{
 };
 
 use hex::FromHex;
+use nimiq_serde::SerializedMaxSize;
 
 use crate::{
     errors::{KeysError, ParseError},
@@ -14,6 +15,10 @@ use crate::{
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde-derive", derive(nimiq_hash_derive::SerializeContent))]
 pub struct Ed25519PublicKey(pub ed25519_zebra::VerificationKeyBytes);
+
+impl SerializedMaxSize for Ed25519PublicKey {
+    const MAX_SIZE: usize = Ed25519PublicKey::SIZE;
+}
 
 impl Ed25519PublicKey {
     pub const SIZE: usize = 32;

@@ -18,7 +18,7 @@ use nimiq_primitives::{
     account::AccountType, coin::Coin, networks::NetworkId, policy::Policy,
     transaction::TransactionError,
 };
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 use nimiq_utils::merkle::Blake2bMerkleProof;
 pub use signature_proof::*;
 use thiserror::Error;
@@ -103,6 +103,10 @@ bitflags! {
         const CONTRACT_CREATION = 0b1;
         const SIGNALING = 0b10;
     }
+}
+
+impl SerializedMaxSize for TransactionFlags {
+    const MAX_SIZE: usize = 1;
 }
 
 #[derive(Debug, Error)]
@@ -196,6 +200,22 @@ pub struct Transaction {
     pub flags: TransactionFlags,
     pub proof: Vec<u8>,
     valid: bool,
+}
+
+impl SerializedMaxSize for Transaction {
+    const MAX_SIZE: usize = 0 
+        + /*sender*/ Address::MAX_SIZE
+        + /*sender_type*/ AccountType::MAX_SIZE
+        + /*sender_data + recipient_data*/ Policy::MAX_TX_SENDER_RECIPIENT_DATA_SIZE
+        + /*recipient*/ Address::MAX_SIZE
+        + /*recipient_type*/ AccountType::MAX_SIZE
+        + /*value*/ Coin::MAX_SIZE
+        + /*fee*/ Coin::MAX_SIZE
+        + /*validity_start_height*/ u32::MAX_SIZE
+        + /*network_id*/ NetworkId::MAX_SIZE
+        + /*flags*/ TransactionFlags::MAX_SIZE
+        + /*proof*/ SignatureProof::MAX_SIZE
+        + /*valid*/ bool::MAX_SIZE;
 }
 
 impl Transaction {

@@ -1,6 +1,7 @@
 use std::{convert::TryFrom, fmt};
 
 use nimiq_keys::Address;
+use nimiq_serde::SerializedMaxSize;
 use thiserror::Error;
 
 use crate::{
@@ -9,7 +10,7 @@ use crate::{
     trie::error::MerkleRadixTrieError,
 };
 
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, SerializedMaxSize)]
 #[repr(u8)]
 #[cfg_attr(
     any(feature = "serde-derive", feature = "ts-types"),
