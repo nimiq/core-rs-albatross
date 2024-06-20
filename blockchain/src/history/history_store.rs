@@ -1,6 +1,7 @@
 use std::{
     cmp,
-    collections::{HashSet, VecDeque},
+    collections::{BTreeMap, HashSet, VecDeque},
+    time::Instant,
 };
 
 use nimiq_block::MicroBlock;
@@ -257,26 +258,26 @@ impl HistoryStore {
         leaf_index: u32,
         hist_tx: &HistoricTransaction,
     ) -> usize {
-        txn.put_reserve(&self.hist_tx_table, leaf_hash, hist_tx);
+        // txn.put_reserve(&self.hist_tx_table, leaf_hash, hist_tx);
 
         // The raw tx hash corresponds to the hash without the execution result.
         // Thus for basic historic transactions we want discoverability for the raw transaction.
         let raw_tx_hash = hist_tx.tx_hash();
 
-        txn.put(&self.last_leaf_table, &hist_tx.block_number, &leaf_index);
+        // txn.put(&self.last_leaf_table, &hist_tx.block_number, &leaf_index);
 
         match &hist_tx.data {
             HistoricTransactionData::Basic(tx) => {
                 let tx = tx.get_raw_transaction();
 
-                txn.put(
-                    &self.tx_hash_table,
-                    &raw_tx_hash,
-                    &OrderedHash {
-                        index: leaf_index,
-                        hash: leaf_hash.clone(),
-                    },
-                );
+                // txn.put(
+                //     &self.tx_hash_table,
+                //     &raw_tx_hash,
+                //     &OrderedHash {
+                //         index: leaf_index,
+                //         hash: leaf_hash.clone(),
+                //     },
+                // );
 
                 let index_tx_sender = self.get_last_tx_index_for_address(&tx.sender, Some(txn)) + 1;
 
@@ -306,14 +307,14 @@ impl HistoryStore {
                 let index_tx_recipient =
                     self.get_last_tx_index_for_address(&ev.reward_address, Some(txn)) + 1;
 
-                txn.put(
-                    &self.tx_hash_table,
-                    &raw_tx_hash,
-                    &OrderedHash {
-                        index: leaf_index,
-                        hash: leaf_hash.clone(),
-                    },
-                );
+                // txn.put(
+                //     &self.tx_hash_table,
+                //     &raw_tx_hash,
+                //     &OrderedHash {
+                //         index: leaf_index,
+                //         hash: leaf_hash.clone(),
+                //     },
+                // );
 
                 txn.put(
                     &self.address_table,
@@ -329,14 +330,14 @@ impl HistoryStore {
             HistoricTransactionData::Equivocation(_)
             | HistoricTransactionData::Penalize(_)
             | HistoricTransactionData::Jail(_) => {
-                txn.put(
-                    &self.tx_hash_table,
-                    &raw_tx_hash,
-                    &OrderedHash {
-                        index: leaf_index,
-                        hash: leaf_hash.clone(),
-                    },
-                );
+                // txn.put(
+                //     &self.tx_hash_table,
+                //     &raw_tx_hash,
+                //     &OrderedHash {
+                //         index: leaf_index,
+                //         hash: leaf_hash.clone(),
+                //     },
+                // );
             }
         }
         hist_tx.serialized_size()
@@ -566,10 +567,60 @@ impl HistoryInterface for HistoryStore {
 
         // Add the historic transactions into the respective database.
         // We need to do this separately due to the borrowing rules of Rust.
+        let mut rows: BTreeMap<Address, Vec<OrderedHash>> = BTreeMap::new();
         for (tx, i) in hist_txs.iter().zip(leaf_idx.iter()) {
             // The prefix is one because it is a leaf.
-            txns_size += self.put_historic_tx(txn, &tx.hash(1), *i, tx) as u64;
+            let raw_tx_hash = tx.tx_hash();
+            match &tx.data {
+                HistoricTransactionData::Basic(tx) => {
+                    let tx = tx.get_raw_transaction();
+
+                    let index_tx_sender =
+                        self.get_last_tx_index_for_address(&tx.sender, Some(txn)) + 1;
+
+                    rows.entry(tx.sender.clone())
+                        .or_default()
+                        .push(OrderedHash {
+                            index: index_tx_sender,
+                            hash: raw_tx_hash.clone().into(),
+                        });
+
+                    let index_tx_recipient =
+                        self.get_last_tx_index_for_address(&tx.recipient, Some(txn)) + 1;
+
+                    rows.entry(tx.recipient.clone())
+                        .or_default()
+                        .push(OrderedHash {
+                            index: index_tx_recipient,
+                            hash: raw_tx_hash.clone().into(),
+                        });
+                }
+                HistoricTransactionData::Reward(ev) => {
+                    // We only add reward inherents to the address database.
+                    let index_tx_recipient =
+                        self.get_last_tx_index_for_address(&ev.reward_address, Some(txn)) + 1;
+
+                    rows.entry(ev.reward_address.clone())
+                        .or_default()
+                        .push(OrderedHash {
+                            index: index_tx_recipient,
+                            hash: raw_tx_hash.clone().into(),
+                        });
+                }
+                _ => {}
+            }
+            // txns_size += self.put_historic_tx(txn, &tx.hash(1), *i, tx) as u64;
         }
+
+        let address_table_start = Instant::now();
+        let mut cursor = WriteTransaction::cursor(txn, &self.address_table);
+        for (address, entries) in rows.iter() {
+            for entry in entries.iter() {
+                cursor.put(address, entry);
+            }
+        }
+        let address_table_duration = address_table_start.elapsed();
+        // println!("Address table update took: {:?}", address_table_duration);
 
         // Return the history root.
         Some((root, txns_size))

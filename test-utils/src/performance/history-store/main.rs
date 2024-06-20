@@ -16,6 +16,7 @@ use nimiq_transaction::{
     historic_transaction::{HistoricTransaction, HistoricTransactionData},
     ExecutedTransaction, Transaction as BlockchainTransaction,
 };
+use rand::{thread_rng, Rng};
 use tempfile::tempdir;
 
 /// Command line arguments for the binary
@@ -40,15 +41,15 @@ struct Args {
 }
 
 fn create_transaction(block: u32, value: u64) -> HistoricTransaction {
+    let mut rng = thread_rng();
     HistoricTransaction {
         network_id: NetworkId::UnitAlbatross,
         block_number: block,
         block_time: 0,
         data: HistoricTransactionData::Basic(ExecutedTransaction::Ok(
             BlockchainTransaction::new_basic(
-                Address::from_user_friendly_address("NQ09 VF5Y 1PKV MRM4 5LE1 55KV P6R2 GXYJ XYQF")
-                    .unwrap(),
-                Address::burn_address(),
+                Address(rng.gen()),
+                Address(rng.gen()),
                 Coin::from_u64_unchecked(value),
                 Coin::from_u64_unchecked(0),
                 0,
@@ -111,13 +112,16 @@ fn history_store_populate(
                 &txns_per_block[((round * blocks_per_round) + block_number) as usize],
             );
         }
+        let commit_start = Instant::now();
         txn.commit();
         let round_duration = round_start.elapsed();
+        let commit_duration = commit_start.elapsed();
 
         println!(
-            "...{:.2}s to process round {}  ",
+            "...{:.2}s to process round {}, {:.2}s for commit",
             round_duration.as_millis() as f64 / 1000_f64,
-            1 + round
+            1 + round,
+            commit_duration.as_millis() as f64 / 1000_f64,
         );
     }
 
