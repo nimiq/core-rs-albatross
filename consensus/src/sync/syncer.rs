@@ -12,7 +12,7 @@ use nimiq_block::Block;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::network::{CloseReason, Network};
+use nimiq_network_interface::network::{CloseReason, Network, NetworkEvent, SubscribeEvents};
 use nimiq_time::{interval, Interval};
 
 use crate::{consensus::ResolveBlockRequest, messages::RequestHead};
@@ -128,6 +128,9 @@ pub struct Syncer<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> {
     /// A reference to the network
     network: Arc<N>,
 
+    /// A network event subscription
+    network_events: SubscribeEvents<N::PeerId>,
+
     /// The set of peers that macro sync deemed outdated
     outdated_peers: HashSet<N::PeerId>,
 
@@ -153,11 +156,13 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
         live_sync: L,
         macro_sync: M,
     ) -> Syncer<N, M, L> {
+        let network_events = network.subscribe_events();
         Syncer {
             live_sync,
             macro_sync,
             blockchain,
             network,
+            network_events,
             outdated_peers: Default::default(),
             incompatible_peers: Default::default(),
             check_interval: interval(Self::CHECK_INTERVAL),
@@ -292,12 +297,30 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
 
         true
     }
+
+    fn remove_peer(&mut self, peer_id: &N::PeerId) {
+        self.outdated_peers.remove(peer_id);
+        self.incompatible_peers.remove(peer_id);
+    }
 }
 
 impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M, L> {
     type Item = LiveSyncPushEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+        // Poll network events and remove disconnected peers.
+        while let Poll::Ready(event) = self.network_events.poll_next_unpin(cx) {
+            let event = match event {
+                Some(event) => event,
+                None => return Poll::Ready(None),
+            };
+            match event {
+                Ok(NetworkEvent::PeerLeft(peer_id)) => self.remove_peer(&peer_id),
+                Err(error) => error!(%error, "Syncer lagged receiving network events"),
+                _ => {}
+            };
+        }
+
         // Poll macro sync and track the peers that it emits.
         while let Poll::Ready(result) = self.macro_sync.poll_next_unpin(cx) {
             match result {
