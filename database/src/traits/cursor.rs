@@ -96,11 +96,17 @@ pub trait ReadCursor<'txn>: Clone {
 ///
 /// Closely follows `libmdbx`'s [cursor API](https://docs.rs/libmdbx/0.3.3/libmdbx/struct.Cursor.html).
 pub trait WriteCursor<'txn>: ReadCursor<'txn> {
+    fn put<K, V>(&mut self, key: &K, value: &V)
+    where
+        K: AsDatabaseBytes + ?Sized,
+        V: AsDatabaseBytes + ?Sized;
+
     /// Appends a key/value pair to the end of the database.
     /// This operation fails if the key is less than the last key.
     fn append<K, V>(&mut self, key: &K, value: &V)
     where
         K: AsDatabaseBytes + ?Sized,
         V: AsDatabaseBytes + ?Sized;
+
     fn remove(&mut self);
 }
