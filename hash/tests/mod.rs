@@ -92,6 +92,6 @@ fn it_can_compute_argon2_kdf() {
     );
     assert_eq!(
         res.unwrap(),
-        hex::decode("8c259fdcc2ad6799df728c11e895a3369e9dbae6a3166ebc3b353399fc565524").unwrap()
+        hex::decode("a4c0069f36c090e78efecd0fc86d3a7ae62bc169648f480bbf78e16f9f08d680").unwrap()
     )
 }

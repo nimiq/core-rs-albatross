@@ -337,10 +337,9 @@ pub enum OtpLock<T: Clear + Deserialize + Serialize> {
 }
 
 impl<T: Clear + Deserialize + Serialize> OtpLock<T> {
-    // Taken from Nimiq's JS implementation.
-    // TODO: Adjust.
-    pub const DEFAULT_ITERATIONS: u32 = 256;
     pub const DEFAULT_SALT_LENGTH: usize = 32;
+    // Taken from https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#argon2id, 2024-06-20.
+    pub const DEFAULT_ITERATIONS: u32 = 3;
 
     /// Calling code should make sure to clear the password from memory after use.
     pub fn new_unlocked(
