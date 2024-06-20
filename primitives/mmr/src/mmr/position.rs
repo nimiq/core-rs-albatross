@@ -146,12 +146,7 @@ fn all_ones(num: usize) -> bool {
     if num == 0 {
         return false;
     }
-    // Find the highest set bit
-    let highest_set_bit = usize::BITS - num.leading_zeros();
-    // Create a mask with all 1s from the highest set bit to the least significant bit
-    let mask = (1 << highest_set_bit) - 1;
-    // Check if the number matches the mask
-    num == mask
+    (num + 1).is_power_of_two()
 }
 
 /// In order to move left on the same level, we subtract the index by its most significant bit
