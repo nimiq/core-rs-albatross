@@ -1,7 +1,6 @@
-use std::convert::TryFrom;
+use std::{convert::TryFrom, fmt};
 
 use nimiq_keys::Address;
-use strum_macros::Display;
 use thiserror::Error;
 
 use crate::{
@@ -10,7 +9,7 @@ use crate::{
     trie::error::MerkleRadixTrieError,
 };
 
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Display)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug)]
 #[repr(u8)]
 #[cfg_attr(
     any(feature = "serde-derive", feature = "ts-types"),
@@ -29,6 +28,12 @@ pub enum AccountType {
     HTLC = 2,
     Staking = 3,
     // HistoricTransaction = 0xff,
+}
+
+impl fmt::Display for AccountType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
 }
 
 #[derive(Debug, Error)]

@@ -19,7 +19,6 @@ log = { workspace = true }
 parking_lot = "0.12"
 rand = "0.8"
 serde = "1.0"
-strum_macros = "0.26"
 thiserror = "1.0"
 
 nimiq-bls = { workspace = true }

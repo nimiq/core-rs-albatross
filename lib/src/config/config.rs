@@ -3,7 +3,7 @@ use std::net::IpAddr;
 #[cfg(feature = "metrics-server")]
 use std::net::SocketAddr;
 use std::{
-    fmt::Debug,
+    fmt,
     num::NonZeroU8,
     path::{Path, PathBuf},
     string::ToString,
@@ -27,7 +27,6 @@ use nimiq_serde::Deserialize;
 use nimiq_utils::key_rng::SecureGenerate;
 use nimiq_utils::{file_store::FileStore, Sensitive};
 use nimiq_zkp_circuits::DEFAULT_KEYS_PATH;
-use strum_macros::Display;
 use subtle::ConstantTimeEq;
 
 #[cfg(feature = "database-storage")]
@@ -52,7 +51,7 @@ use crate::{
 ///
 /// * We'll probably have this enum somewhere in the primitives. So this is a placeholder.
 ///
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Display)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum SyncMode {
     /// History nodes: They use HistoryMacroSync + BlockLiveSync
     History,
@@ -60,6 +59,12 @@ pub enum SyncMode {
     Full,
     /// Light nodes: They use LightMacroSync + BlockLiveSync
     Light,
+}
+
+impl fmt::Display for SyncMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
 }
 
 impl Default for SyncMode {

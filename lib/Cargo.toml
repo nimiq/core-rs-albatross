@@ -35,7 +35,6 @@ rustls-pemfile = "2.1"
 serde = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"], optional = true }
 signal-hook = { version = "0.3", optional = true }
-strum_macros = "0.26"
 subtle = "2.5"
 thiserror = "1.0"
 time = { version = "0.3", optional = true }
