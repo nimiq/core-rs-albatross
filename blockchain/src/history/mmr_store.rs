@@ -165,6 +165,8 @@ impl<'a, 'env> Store<Blake2bHash> for MMRStore<'a, 'env> {
             let key = index_to_key(self.epoch_number, self.size);
             cursor.append(&key, &elem);
             self.size += 1;
+        } else {
+            panic!("Cannot push to a read-only store");
         }
     }
 
@@ -180,6 +182,8 @@ impl<'a, 'env> Store<Blake2bHash> for MMRStore<'a, 'env> {
                 cursor.prev::<Vec<u8>, Blake2bHash>();
                 self.size -= 1;
             }
+        } else {
+            panic!("Cannot push to a read-only store");
         }
     }
 
@@ -360,6 +364,8 @@ impl<'a, 'env> LightStore<Blake2bHash> for LightMMRStore<'a, 'env> {
         if let Tx::Write(ref mut tx) = self.tx {
             let key = index_to_key(self.block_number, pos);
             tx.put(self.hist_tree_table, &key, &elem);
+        } else {
+            panic!("Cannot push to a read-only store");
         }
     }
 
@@ -367,6 +373,8 @@ impl<'a, 'env> LightStore<Blake2bHash> for LightMMRStore<'a, 'env> {
         if let Tx::Write(ref mut tx) = self.tx {
             let key = index_to_key(self.block_number, pos);
             tx.remove(self.hist_tree_table, &key);
+        } else {
+            panic!("Cannot push to a read-only store");
         }
     }
 
