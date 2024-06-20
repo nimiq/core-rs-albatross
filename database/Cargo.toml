@@ -1,7 +1,10 @@
 [package]
 name = "nimiq-database"
 version.workspace = true
-authors = ["Pascal B <git@paberr.net>", "The Nimiq Core Development Team <info@nimiq.com>"]
+authors = [
+    "Pascal B <git@paberr.net>",
+    "The Nimiq Core Development Team <info@nimiq.com>",
+]
 license.workspace = true
 edition.workspace = true
 description = "A LMDB database wrapper with support for volatile storage"
@@ -29,4 +32,16 @@ thiserror = "1.0"
 nimiq-database-value = { workspace = true }
 
 [dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+pprof = { version = "0.13", features = [
+    "flamegraph",
+    "frame-pointer",
+    "criterion",
+] }
+rand = "0.8"
+
 nimiq-test-log = { workspace = true }
+
+[[bench]]
+name = "hash_keys"
+harness = false
