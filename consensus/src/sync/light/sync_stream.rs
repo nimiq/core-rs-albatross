@@ -126,7 +126,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                 self.epoch_ids_stream.push(future);
                             }
                             Err(result) => {
-                                log::debug!(?result, "Failed applying ZKP proof to the blockchain",);
+                                log::warn!(?result, %peer_id, "Banning peer because failed applying ZKP proof to the blockchain",);
 
                                 // Since it failed applying the ZKP from this peer, we disconnect
                                 self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
@@ -280,8 +280,8 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                     if let Some(peer_requests) = self.peer_requests.get_mut(&peer_id) {
                         if !peer_requests.update_request(block) {
                             // We received a block we were not expecting from this peer
-                            log::trace!(%peer_id,
-                                "Disconnecting peer due to a non expected response",
+                            log::warn!(%peer_id,
+                                "Banning peer due to a non expected response",
                             );
                             self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
                             return Poll::Ready(None);
@@ -357,10 +357,11 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                         );
                                     }
                                     Err(error) => {
-                                        log::debug!(
+                                        log::warn!(
                                             block_number = block.block_number(),
                                             ?error,
-                                            "Failed to push macro block",
+                                            %peer_id,
+                                            "Banning peer because failed to push macro block",
                                         );
                                         // We failed applying a block from this peer, so we disconnect it
                                         self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);

@@ -73,7 +73,7 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
                     log::warn!(
                         num_epochs = macro_chain.epochs.len(),
                         %peer_id,
-                        "Request macro chain failed: too many epochs returned"
+                        "Banning peer because requesting macro chain failed: too many epochs returned"
                     );
                     network
                         .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
@@ -102,8 +102,8 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
                         log::warn!(
                             given_checkpoint_epoch,
                             expected_checkpoint_epoch,
-                            peer = %peer_id,
-                            "Request macro chain failed: invalid checkpoint",
+                            %peer_id,
+                            "Banning peer because requesting macro chain failed: invalid checkpoint",
                         );
                         network
                             .disconnect_peer(peer_id, CloseReason::MaliciousPeer)

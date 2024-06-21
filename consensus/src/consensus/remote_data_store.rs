@@ -103,7 +103,7 @@ impl<N: Network> RemoteDataStore<N> {
                                 .collect());
                         } else {
                             // If the proof does not verify, we disconnect from the peer
-                            log::debug!(peer = %peer_id, "Disconnecting from peer because the accounts proof didn't verify");
+                            log::warn!(%peer_id, "Banning peer because the accounts proof didn't verify");
                             network
                                 .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
                                 .await;

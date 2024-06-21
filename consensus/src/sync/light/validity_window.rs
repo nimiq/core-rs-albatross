@@ -370,11 +370,11 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         self.validity_queue.add_ids(vec![(request, None)]);
                     } else {
                         // If the chunk doesn't verify we disconnect from the peer
-                        log::error!(peer=?peer_id,
+                        log::warn!(%peer_id,
                                     chunk=request.chunk_index,
                                     verifier_block=request.block_number,
                                     epoch=request.epoch_number,
-                                    "The validity history chunk didn't verify, disconnecting from peer");
+                                    "Banning peer because the validity history chunk didn't verify");
 
                         // Remove the peer from the syncing process
                         self.validity_queue.remove_peer(&peer_id);

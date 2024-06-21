@@ -159,8 +159,14 @@ where
             .validate_message::<ProposalTopic<TValidatorNetwork>>(pubsub_id, MsgAcceptance::Reject);
 
         let network = Arc::clone(&self.network);
+
         // disconnect the peer
         let future = async move {
+            log::warn!(
+                peer_id = %source,
+                "Banning peer because an invalid proposal was received"
+            );
+
             network
                 .disconnect_peer(source, CloseReason::MaliciousPeer)
                 .await;
@@ -239,10 +245,17 @@ where
             // Try and retrieve the predecessor of the proposal.
             match blockchain.get_block(&signed_proposal.proposal.parent_hash, false, None) {
                 // Macro block predecessors do not make any sense in the presence of micro blocks.
-                Ok(Block::Macro(_block)) => self.disconnect_and_reject(pubsub_id),
+                Ok(Block::Macro(_block)) => {
+                    log::debug!(?pubsub_id, "The predecessing block of a macro block cannot be a macro block. Disconnecting the peer.");
+                    self.disconnect_and_reject(pubsub_id)
+                }
                 // Micro block predecessors can be used to verify the signer. If the block itself is good will be checked later.
                 Ok(Block::Micro(block)) => {
                     if !signed_proposal.verify_signer_matches_producer(block, &blockchain) {
+                        log::debug!(
+                            ?pubsub_id,
+                            "Verification of signed proposal failed. Disconnecting the peer."
+                        );
                         self.disconnect_and_reject(pubsub_id);
                     } else {
                         // No validate message call here, as later in the process more proposal verification happens.
@@ -455,6 +468,12 @@ where
 
             // Punish the propagation source of the proposal for propagating invalid proposal messages, i.e ban the peer.
             let nw = Arc::clone(&self.network);
+
+            log::warn!(
+                peer_id = %source,
+                "Disconnecting peer because proposal signature verification failed"
+            );
+
             let future = async move {
                 nw.disconnect_peer(source, CloseReason::MaliciousPeer).await;
             }
