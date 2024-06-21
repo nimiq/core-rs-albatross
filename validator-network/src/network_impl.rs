@@ -128,11 +128,11 @@ where
                 Ok(peer_id)
             }
             Ok(None) => {
-                log::trace!(validator_id, %public_key, "Unable to resolve validator peer ID: Entry not found in DHT");
+                log::debug!(validator_id, %public_key, "Unable to resolve validator peer ID: Entry not found in DHT");
                 Err(())
             }
             Err(error) => {
-                log::trace!(
+                log::debug!(
                     validator_id,
                     ?error,
                     %public_key,
@@ -177,7 +177,7 @@ where
                 CacheState::Resolved(..) => return *cache_state,
                 CacheState::Error(..) => {}
                 CacheState::InProgress(..) => {
-                    log::debug!(validator_id, "Record resolution is in progress");
+                    log::trace!(validator_id, "Record resolution is in progress");
                     return *cache_state;
                 }
                 CacheState::Empty(..) => {}
@@ -192,12 +192,18 @@ where
             if let Some(cache_state) = validator_peer_id_cache.get_mut(public_key.compressed()) {
                 new_cache_state = match *cache_state {
                     CacheState::Resolved(..) => return *cache_state,
-                    CacheState::Error(prev_peer_id) => CacheState::InProgress(prev_peer_id),
+                    CacheState::Error(prev_peer_id) => {
+                        log::debug!(validator_id, "Record resolution failed. Retrying...");
+                        CacheState::InProgress(prev_peer_id)
+                    }
                     CacheState::InProgress(..) => {
-                        log::debug!(validator_id, "Record resolution is in progress");
+                        log::trace!(validator_id, "Record resolution is in progress");
                         return *cache_state;
                     }
-                    CacheState::Empty(prev_peer_id) => CacheState::InProgress(Some(prev_peer_id)),
+                    CacheState::Empty(prev_peer_id) => {
+                        log::debug!(validator_id, "Cache entry was emptied, re-querying DHT...");
+                        CacheState::InProgress(Some(prev_peer_id))
+                    }
                 };
                 *cache_state = new_cache_state;
             } else {
@@ -207,7 +213,7 @@ where
                 log::debug!(
                     ?public_key,
                     validator_id,
-                    "Could not find peer ID for validator in DHT. Performing a DHT query",
+                    "No cache entry found, querying DHT",
                 );
             }
         }
@@ -337,10 +343,7 @@ where
         let peer_id = self
             .get_validator_cache(validator_id)
             .current_peer_id()
-            .ok_or_else(|| {
-                log::error!(validator_id, "Error getting validator peer ID");
-                NetworkError::UnknownValidator(validator_id)
-            })?;
+            .ok_or_else(|| NetworkError::UnknownValidator(validator_id))?;
 
         self.network
             .message(msg, peer_id)
