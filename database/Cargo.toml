@@ -26,9 +26,13 @@ workspace = true
 bitflags = "2.5"
 libmdbx = "0.5.0"
 log = { workspace = true }
+rusqlite = { version = "0.31.0", features = ["bundled"] }
 tempfile = "3"
 thiserror = "1.0"
 
+nimiq-primitives = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-transaction = { workspace = true }
 nimiq-database-value = { workspace = true }
 
 [dev-dependencies]

@@ -1,14 +1,10 @@
 use std::{fs, path::PathBuf, process::exit, time::Instant};
 
 use clap::Parser;
-use nimiq_blockchain::{
-    interface::HistoryInterface, light_history_store::LightHistoryStore, HistoryStore,
-};
-use nimiq_database::{
-    mdbx::MdbxDatabase,
-    traits::{Database, WriteTransaction},
-    DatabaseProxy,
-};
+// use nimiq_blockchain::{
+//     interface::HistoryInterface, light_history_store::LightHistoryStore, HistoryStore,
+// };
+use nimiq_database::sqlite::{SqliteDatabase, SqliteTable};
 use nimiq_genesis::NetworkId;
 use nimiq_keys::Address;
 use nimiq_primitives::{coin::Coin, policy::Policy};
@@ -70,8 +66,7 @@ fn gen_hist_txs_block(block_number: u32, num_txns: u32) -> Vec<HistoricTransacti
 }
 
 fn history_store_populate(
-    history_store: &Box<dyn HistoryInterface + Sync + Send>,
-    env: &DatabaseProxy,
+    db: &mut SqliteTable,
     tpb: u32,
     batches: u32,
     rounds: u32,
@@ -103,17 +98,14 @@ fn history_store_populate(
 
     for round in 0..rounds {
         let round_start = Instant::now();
-        let mut txn = env.write_transaction();
+        db.begin_transaction().unwrap(); // TODO: Handle error
 
         for block_number in 0..blocks_per_round {
-            history_store.add_to_history(
-                &mut txn,
-                (loop_ofset) + (round * blocks_per_round) + (1 + block_number),
-                &txns_per_block[((round * blocks_per_round) + block_number) as usize],
-            );
+            db.insert(&txns_per_block[((round * blocks_per_round) + block_number) as usize])
+                .unwrap(); // TODO: Handle error
         }
         let commit_start = Instant::now();
-        txn.commit();
+        db.commit().unwrap(); // TODO: Handle error
         let round_duration = round_start.elapsed();
         let commit_duration = commit_start.elapsed();
 
@@ -127,12 +119,20 @@ fn history_store_populate(
 
     let duration = start.elapsed();
 
+    println!("Creating indices..");
+    let indices_start = Instant::now();
+    db.create_indexes().unwrap(); // TODO: Handle error
+    let indices_duration = indices_start.elapsed();
+
     let db_file_size = fs::metadata(db_file.to_str().unwrap()).unwrap().len();
 
+    println!("Done adding {} txns to history store.", db.count().unwrap()); // TODO: Handle error
+
     println!(
-        " {:.2}s to add {} batches, {} tpb, DB size: {:.2}Mb, rounds: {}, total_txns: {}",
+        " {:.2}s to add {} batches, {:.2}s to create indices, {} tpb, DB size: {:.2}Mb, rounds: {}, total_txns: {}",
         duration.as_millis() as f64 / 1000_f64,
         batches,
+        indices_duration.as_millis() as f64 / 1000_f64,
         num_txns,
         db_file_size as f64 / 1000000_f64,
         rounds,
@@ -140,21 +140,20 @@ fn history_store_populate(
     );
 }
 
-fn history_store_prune(
-    history_store: &Box<dyn HistoryInterface + Sync + Send>,
-    env: &DatabaseProxy,
-) {
-    let mut txn = env.write_transaction();
+fn history_store_prune(db: &mut SqliteTable) {
+    db.begin_transaction().unwrap(); // TODO: Handle error
     println!("Pruning the history store..");
     let start = Instant::now();
 
-    history_store.remove_history(&mut txn, Policy::epoch_at(1));
+    let removed_rows = db.prune(Policy::epoch_at(1)).unwrap(); // TODO: Handle error
+    db.commit().unwrap(); // TODO: Handle error
 
     let duration = start.elapsed();
 
     println!(
-        "It took: {:.2}s, to prune the history store",
+        "It took: {:.2}s, to prune the history store, removing {} rows.",
         duration.as_millis() as f64 / 1000_f64,
+        removed_rows,
     );
 }
 
@@ -166,22 +165,10 @@ fn main() {
     let _ = Policy::get_or_init(policy_config);
 
     let temp_dir = tempdir().expect("Could not create temporal directory");
-    let tmp_dir = temp_dir.path().to_str().unwrap();
-    let db_file = temp_dir.path().join("mdbx.dat");
-    log::debug!("Creating a non volatile environment in {}", tmp_dir);
-    let env = MdbxDatabase::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
-
-    let history_store = if args.light > 0 {
-        println!("Exercising the light history store");
-        Box::new(LightHistoryStore::new(
-            env.clone(),
-            NetworkId::UnitAlbatross,
-        )) as Box<dyn HistoryInterface + Sync + Send>
-    } else {
-        println!("Exercising the history store");
-        Box::new(HistoryStore::new(env.clone(), NetworkId::UnitAlbatross))
-            as Box<dyn HistoryInterface + Sync + Send>
-    };
+    let db_file = temp_dir.path().join("sqlite.db");
+    log::debug!("Creating a non volatile database at {:?}", db_file);
+    let database = SqliteDatabase::open(db_file.clone()).unwrap();
+    let mut table = database.hist_txs_table().unwrap();
 
     let rounds = args.rounds.unwrap_or(1);
     let loops = args.loops.unwrap_or(1);
@@ -190,8 +177,7 @@ fn main() {
         println!("Current loop {}", loop_number);
 
         history_store_populate(
-            &history_store,
-            &env,
+            &mut table,
             args.tpb,
             args.batches,
             rounds,
@@ -200,7 +186,7 @@ fn main() {
         );
     }
 
-    history_store_prune(&history_store, &env);
+    history_store_prune(&mut table);
 
     let _ = fs::remove_dir_all(temp_dir);
 
