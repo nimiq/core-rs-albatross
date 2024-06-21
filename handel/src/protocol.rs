@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 use parking_lot::RwLock;
@@ -9,11 +9,15 @@ use crate::{
     identity::{IdentityRegistry, WeightRegistry},
     partitioner::Partitioner,
     store::ContributionStore,
-    verifier::{VerificationResult, Verifier},
+    verifier::Verifier,
 };
 
 #[async_trait]
-pub trait Protocol<TId: Clone + std::fmt::Debug + 'static>: Send + Sync + Sized + 'static {
+pub trait Protocol<TId>
+where
+    TId: Clone + Debug + 'static,
+    Self: Send + Sync + Sized + Unpin + 'static,
+{
     /// The type for individual as well as aggregated contributions.
     type Contribution: AggregatableContribution;
     // TODO: Some of those traits can be directly move into `Protocol`. Others should not be part of
@@ -32,9 +36,4 @@ pub trait Protocol<TId: Clone + std::fmt::Debug + 'static>: Send + Sync + Sized 
 
     fn identify(&self) -> TId;
     fn node_id(&self) -> usize;
-
-    // TODO: not strictly necessary as it does the same as protocol.verifier().verify(contribution).
-    async fn verify(&self, contribution: &Self::Contribution) -> VerificationResult {
-        self.verifier().verify(contribution).await
-    }
 }

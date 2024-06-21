@@ -176,10 +176,7 @@ where
             // TODO more robust handling of this case, as the aggregation might not be able to finish here (depending on what todos are left).
 
             // A new LevelUpdate is available when the msg is Some:
-            if self
-                .evaluator
-                .level_contains_id(msg.level as usize, msg.origin as usize)
-            {
+            if self.evaluator.level_contains_origin(&msg) {
                 // Every LevelUpdate contains an aggregate which can be turned into a TodoItem
                 let aggregate_todo = TodoItem {
                     contribution: msg.aggregate,
