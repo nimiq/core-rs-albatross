@@ -16,7 +16,7 @@ workspace = true
 [dependencies]
 hex = "0.4"
 serde = "1.0"
-subtle = "2.5"
+subtle = "2.6"
 
 nimiq-serde = { workspace = true }
 
