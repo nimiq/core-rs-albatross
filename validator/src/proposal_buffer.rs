@@ -239,10 +239,14 @@ where
             // Try and retrieve the predecessor of the proposal.
             match blockchain.get_block(&signed_proposal.proposal.parent_hash, false, None) {
                 // Macro block predecessors do not make any sense in the presence of micro blocks.
-                Ok(Block::Macro(_block)) => self.disconnect_and_reject(pubsub_id),
+                Ok(Block::Macro(_block)) => {
+                    log::debug!(?pubsub_id, "Proposal have a macro block as predecessor. Disconnecting the relaying peer and rejecting the proposal.");
+                    self.disconnect_and_reject(pubsub_id)
+                }
                 // Micro block predecessors can be used to verify the signer. If the block itself is good will be checked later.
                 Ok(Block::Micro(block)) => {
                     if !signed_proposal.verify_signer_matches_producer(block, &blockchain) {
+                        log::debug!(?pubsub_id, "Proposal signer does not match producer. Disconnecting the relaying peer and rejecting the proposal.");
                         self.disconnect_and_reject(pubsub_id);
                     } else {
                         // No validate message call here, as later in the process more proposal verification happens.
@@ -456,6 +460,7 @@ where
             // Punish the propagation source of the proposal for propagating invalid proposal messages, i.e ban the peer.
             let nw = Arc::clone(&self.network);
             let future = async move {
+                log::debug!(%source, "Invalid validator message signature. Disconnecting the sender.");
                 nw.disconnect_peer(source, CloseReason::MaliciousPeer).await;
             }
             .boxed();
