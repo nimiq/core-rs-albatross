@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, process::exit, time::Instant};
+use std::{fs::{self, create_dir}, path::{Path, PathBuf}, process::exit, time::Instant};
 
 use clap::Parser;
 // use nimiq_blockchain::{
@@ -119,7 +119,7 @@ fn history_store_populate(
 
     let duration = start.elapsed();
 
-    println!("Creating indices..");
+    println!(" Creating indices..");
     let indices_start = Instant::now();
     db.create_indexes().unwrap(); // TODO: Handle error
     let indices_duration = indices_start.elapsed();
@@ -140,22 +140,22 @@ fn history_store_populate(
     );
 }
 
-fn history_store_prune(db: &mut SqliteTable) {
-    db.begin_transaction().unwrap(); // TODO: Handle error
-    println!("Pruning the history store..");
-    let start = Instant::now();
+// fn history_store_prune(db: &mut SqliteTable) {
+//     db.begin_transaction().unwrap(); // TODO: Handle error
+//     println!("Pruning the history store..");
+//     let start = Instant::now();
 
-    let removed_rows = db.prune(Policy::epoch_at(1)).unwrap(); // TODO: Handle error
-    db.commit().unwrap(); // TODO: Handle error
+//     let removed_rows = db.prune(Policy::epoch_at(1)).unwrap(); // TODO: Handle error
+//     db.commit().unwrap(); // TODO: Handle error
 
-    let duration = start.elapsed();
+//     let duration = start.elapsed();
 
-    println!(
-        "It took: {:.2}s, to prune the history store, removing {} rows.",
-        duration.as_millis() as f64 / 1000_f64,
-        removed_rows,
-    );
-}
+//     println!(
+//         "It took: {:.2}s, to prune the history store, removing {} rows.",
+//         duration.as_millis() as f64 / 1000_f64,
+//         removed_rows,
+//     );
+// }
 
 fn main() {
     let args = Args::parse();
@@ -164,9 +164,10 @@ fn main() {
 
     let _ = Policy::get_or_init(policy_config);
 
-    let temp_dir = tempdir().expect("Could not create temporal directory");
-    let db_file = temp_dir.path().join("sqlite.db");
-    log::debug!("Creating a non volatile database at {:?}", db_file);
+    let temp_dir = Path::new("./data");
+    create_dir(temp_dir).expect("Could not create ./data directory");
+    let db_file = temp_dir.join("sqlite.db");
+    println!("Creating a non volatile database at {:?}", db_file);
     let database = SqliteDatabase::open(db_file.clone()).unwrap();
     let mut table = database.hist_txs_table().unwrap();
 
@@ -186,9 +187,9 @@ fn main() {
         );
     }
 
-    history_store_prune(&mut table);
+    // history_store_prune(&mut table);
 
-    let _ = fs::remove_dir_all(temp_dir);
+    // let _ = fs::remove_dir_all(temp_dir);
 
     exit(0);
 }

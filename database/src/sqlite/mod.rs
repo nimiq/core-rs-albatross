@@ -3,7 +3,6 @@ use std::path::Path;
 
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::HashOutput;
-use nimiq_primitives::policy::Policy;
 use nimiq_transaction::historic_transaction::{
     HistoricTransaction, HistoricTransactionData, RawTransactionHash,
 };
@@ -50,12 +49,16 @@ impl SqliteDatabase {
         );
         self.conn.execute(&create_sql, [])?;
 
-        // TODO: Investigate PRAGMA settings: https://avi.im/blag/2021/fast-sqlite-inserts/#sqlite-optimisations
-        // self.conn.pragma_update(None, "journal_mode", "OFF")?;
-        // self.conn.pragma_update(None, "synchronous", 0)?;
-        // self.conn.pragma_update(None, "cache_size", 1000000)?;
+        // TODO: Investigate PRAGMA settings:
+        // https://cj.rs/blog/sqlite-pragma-cheatsheet-for-performance-and-consistency/
+        // https://www.powersync.com/blog/sqlite-optimizations-for-ultra-high-performance
+        // https://avi.im/blag/2021/fast-sqlite-inserts/#sqlite-optimisations
+        self.conn.pragma_update(None, "journal_mode", "WAL")?;
+        self.conn.pragma_update(None, "wal_autocheckpoint", 1_000_000)?; // Reduce this after sync is complete, otherwise read performance will be terrible
+        self.conn.pragma_update(None, "synchronous", "NORMAL")?;
+        // self.conn.pragma_update(None, "page_size", 1024 * 2 * 2 * 2)?; // 65536 is the maximum allowed
+        self.conn.pragma_update(None, "cache_size", 1_000)?;
         self.conn.pragma_update(None, "locking_mode", "EXCLUSIVE")?;
-        // self.conn.pragma_update(None, "temp_store", "MEMORY")?;
 
         let get_by_hash_sql = format!(
             r#"
@@ -76,27 +79,6 @@ impl SqliteDatabase {
             name
         );
         let insert_one_stmt = self.conn.prepare(&insert_one_sql)?;
-
-        let del_by_hash_sql = format!(
-            r#"
-            DELETE FROM "{}"
-            WHERE "hash" = :hash
-            "#,
-            name
-        );
-        let del_by_hash_stmt = self.conn.prepare(&del_by_hash_sql)?;
-
-        let prune_sql = format!(
-            r#"
-            DELETE FROM "{}"
-            WHERE
-                "blocknumber" >= :first_block
-              AND
-                "blocknumber" <= :last_block
-            "#,
-            name
-        );
-        let prune_stmt = self.conn.prepare(&prune_sql)?;
 
         let begin_transaction_stmt = self.conn.prepare("BEGIN EXCLUSIVE TRANSACTION")?;
         let commit_transaction_stmt = self.conn.prepare("COMMIT TRANSACTION")?;
@@ -141,8 +123,6 @@ impl SqliteDatabase {
         Ok(SqliteTable {
             get_by_hash_stmt,
             insert_one_stmt,
-            del_by_hash_stmt,
-            prune_stmt,
             begin_transaction_stmt,
             commit_transaction_stmt,
             index_stmts,
@@ -156,8 +136,6 @@ impl SqliteDatabase {
 pub struct SqliteTable<'store> {
     get_by_hash_stmt: Statement<'store>,
     insert_one_stmt: Statement<'store>,
-    del_by_hash_stmt: Statement<'store>,
-    prune_stmt: Statement<'store>,
     begin_transaction_stmt: Statement<'store>,
     commit_transaction_stmt: Statement<'store>,
     index_stmts: Vec<Statement<'store>>,
@@ -233,23 +211,6 @@ impl<'store> SqliteTable<'store> {
             self.insert_one(hist_tx)?;
         }
         Ok(())
-    }
-
-    pub fn remove(&mut self, hash: &RawTransactionHash) -> Result<bool> {
-        let num_rows = self
-            .del_by_hash_stmt
-            .execute(named_params! {":hash": hash.as_bytes()})?;
-        Ok(num_rows > 0)
-    }
-
-    pub fn prune(&mut self, epoch_number: u32) -> Result<usize> {
-        let first_block = Policy::first_block_of(epoch_number).unwrap(); // TODO: Handle None
-        let last_block = Policy::election_block_of(epoch_number).unwrap(); // TODO: Handle None
-
-        Ok(self.prune_stmt.execute(named_params! {
-            ":first_block": first_block,
-            ":last_block": last_block,
-        })?)
     }
 
     pub fn begin_transaction(&mut self) -> Result<()> {
