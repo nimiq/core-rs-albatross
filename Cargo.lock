@@ -3876,7 +3876,6 @@ dependencies = [
  "serde",
  "thiserror",
  "tokio",
- "tokio-stream",
  "tracing",
 ]
 
