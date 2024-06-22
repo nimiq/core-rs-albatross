@@ -25,10 +25,10 @@ use crate::{proof_gen_utils::*, types::*};
 ///
 /// - The network
 /// - The current zkp state
-/// - The channel to kill the current process generating the proof
 /// - The election blocks stream
 /// - The genesis state
 /// - The current proof generation future if a proof is being generated
+/// - The channel to kill the current process generating the proof
 /// - The path of the proving keys directory
 /// - The path of the prover binary
 ///
@@ -36,12 +36,12 @@ use crate::{proof_gen_utils::*, types::*};
 pub struct ZKProver<N: Network> {
     network: Arc<N>,
     zkp_state: Arc<RwLock<ZKPState>>,
-    sender: Option<Sender<()>>,
     pending_election_blocks: VecDeque<MacroBlock>,
     election_stream: BoxStream<'static, MacroBlock>,
     genesis_header_hash: [u8; 32],
     proof_future:
         Option<BoxFuture<'static, Result<(ZKPState, MacroBlock), ZKProofGenerationError>>>,
+    proof_future_abort: Option<Sender<()>>,
     prover_keys_path: PathBuf,
     prover_path: Option<PathBuf>,
 }
@@ -107,11 +107,11 @@ impl<N: Network> ZKProver<N> {
         Self {
             network,
             zkp_state,
-            sender: None,
             genesis_header_hash: genesis_block.hash_blake2s().0,
             pending_election_blocks,
             election_stream: Box::pin(blockchain_election_rx),
             proof_future: None,
+            proof_future_abort: None,
             prover_keys_path,
             prover_path,
         }
@@ -119,8 +119,8 @@ impl<N: Network> ZKProver<N> {
 
     /// This sends the kill signal to the proof generation process.
     pub(crate) fn cancel_current_proof_production(&mut self) {
-        if let Some(sender) = self.sender.take() {
-            sender.send(()).unwrap();
+        if let Some(abort) = self.proof_future_abort.take() {
+            abort.send(()).unwrap();
         }
     }
 
@@ -152,10 +152,10 @@ impl<N: Network> ZKProver<N> {
         if zkp_state.latest_block.block_number()
             == block.block_number() - Policy::blocks_per_epoch()
         {
-            let (sender, recv) = channel();
+            let (abort_sender, abort_receiver) = channel();
             self.proof_future = Some(
                 launch_generate_new_proof(
-                    recv,
+                    abort_receiver,
                     ProofInput {
                         previous_block: zkp_state.latest_block.clone(),
                         previous_proof: zkp_state.latest_proof.clone(),
@@ -168,7 +168,7 @@ impl<N: Network> ZKProver<N> {
                 .map(|res| res.map(|state| (state, block)))
                 .boxed(),
             );
-            self.sender = Some(sender);
+            self.proof_future_abort = Some(abort_sender);
         } else {
             log::debug!(
                 block_height = zkp_state.latest_block.block_number(),
@@ -199,10 +199,10 @@ impl<N: Network> Stream for ZKProver<N> {
         }
 
         // If a new proof was generated it sets the state and broadcasts the new proof.
-        if let Some(ref mut proof_future) = self.proof_future {
+        if let Some(proof_future) = &mut self.proof_future {
             if let Poll::Ready(proof) = proof_future.poll_unpin(cx) {
                 self.proof_future = None;
-                self.sender = None;
+                self.proof_future_abort = None;
                 match proof {
                     Ok((new_zkp_state, block)) => {
                         assert!(

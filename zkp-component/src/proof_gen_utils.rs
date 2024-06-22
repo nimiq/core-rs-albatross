@@ -80,7 +80,7 @@ pub async fn launch_generate_new_proof(
     tokio::select! {
         _ = output.read_to_end(&mut buffer) => {
             let _ = child.wait().await;
-            parse_proof_generation_output(buffer).await
+            parse_proof_generation_output(buffer)
         }
         _ = recv => {
             child.kill().await?;
@@ -89,9 +89,7 @@ pub async fn launch_generate_new_proof(
     }
 }
 
-async fn parse_proof_generation_output(
-    output: Vec<u8>,
-) -> Result<ZKPState, ZKProofGenerationError> {
+fn parse_proof_generation_output(output: Vec<u8>) -> Result<ZKPState, ZKProofGenerationError> {
     // We need at least two bytes to proceed.
     if output.len() < 2 {
         return Err(ZKProofGenerationError::ProcessError(

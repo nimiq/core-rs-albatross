@@ -320,9 +320,7 @@ impl<N: Network> Future for ZKPComponent<N> {
                         }));
                     }
                 }
-                _ => {
-                    break;
-                }
+                Poll::Ready(None) | Poll::Pending => break,
             }
         }
 
@@ -355,8 +353,8 @@ impl<N: Network> Future for ZKPComponent<N> {
                     log::error!("ZK gossip stream aborted.");
                     return Poll::Ready(());
                 }
-                _ => {
-                    // If the zkp_stream is exhausted, we stop polling.
+                Poll::Pending => {
+                    // If the zkp_stream doesn't have any more data for now, we stop polling.
                     break;
                 }
             }
