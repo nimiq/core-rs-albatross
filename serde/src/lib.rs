@@ -8,38 +8,69 @@ use serde::{
 };
 pub use serde_derive::{Deserialize, Serialize};
 
-/// Deserialization Error. This error is a wrapper over `postcard::Error`.
+/// Deserialization error.
+///
+/// This error is mostly a wrapper over `postcard::Error` but adds more
+/// variants.
 #[derive(Eq, PartialEq)]
-pub struct DeserializeError(postcard::Error);
+pub struct DeserializeError(DeserializeErrorInner);
+
+#[derive(Eq, PartialEq)]
+enum DeserializeErrorInner {
+    Postcard(postcard::Error),
+    ExtraData,
+}
 
 impl DeserializeError {
+    fn from(error: postcard::Error) -> DeserializeError {
+        DeserializeError(DeserializeErrorInner::Postcard(error))
+    }
+
     /// Returns a 'Bad enumeration' error
     pub fn bad_enum() -> DeserializeError {
-        DeserializeError(postcard::Error::DeserializeBadEnum)
+        DeserializeError(DeserializeErrorInner::Postcard(
+            postcard::Error::DeserializeBadEnum,
+        ))
     }
     /// Returns an 'Unexpected end' error.
     pub fn unexpected_end() -> DeserializeError {
-        DeserializeError(postcard::Error::DeserializeUnexpectedEnd)
+        DeserializeError(DeserializeErrorInner::Postcard(
+            postcard::Error::DeserializeUnexpectedEnd,
+        ))
     }
     /// Returns a 'Bad encoding' error.
     pub fn bad_encoding() -> DeserializeError {
-        DeserializeError(postcard::Error::DeserializeBadEncoding)
+        DeserializeError(DeserializeErrorInner::Postcard(
+            postcard::Error::DeserializeBadEncoding,
+        ))
     }
     /// Returns a 'Serde custom' error.
     pub fn serde_custom() -> DeserializeError {
-        DeserializeError(postcard::Error::SerdeDeCustom)
+        DeserializeError(DeserializeErrorInner::Postcard(
+            postcard::Error::SerdeDeCustom,
+        ))
+    }
+    /// Returns a 'Extra data at the end' error.
+    pub fn extra_data() -> DeserializeError {
+        DeserializeError(DeserializeErrorInner::ExtraData)
     }
 }
 
 impl fmt::Debug for DeserializeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.0.fmt(f)
+        match &self.0 {
+            DeserializeErrorInner::Postcard(inner) => inner.fmt(f),
+            DeserializeErrorInner::ExtraData => f.debug_tuple("ExtraData").finish(),
+        }
     }
 }
 
 impl fmt::Display for DeserializeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.0.fmt(f)
+        match &self.0 {
+            DeserializeErrorInner::Postcard(inner) => inner.fmt(f),
+            DeserializeErrorInner::ExtraData => "extra data at the end".fmt(f),
+        }
     }
 }
 
@@ -241,14 +272,40 @@ pub trait Serialize: serde::Serialize {
 }
 
 pub trait Deserialize: serde::de::DeserializeOwned {
+    /// Deserialize from bytes. Extra data may remain at the end.
     fn deserialize_from_vec(bytes: &[u8]) -> Result<Self, DeserializeError> {
-        postcard::from_bytes(bytes).map_err(DeserializeError)
+        postcard::from_bytes(bytes).map_err(DeserializeError::from)
     }
+    /// Deserialize from bytes. Extra data is returned.
     fn deserialize_take(bytes: &[u8]) -> Result<(Self, &[u8]), DeserializeError> {
-        postcard::take_from_bytes(bytes).map_err(DeserializeError)
+        postcard::take_from_bytes(bytes).map_err(DeserializeError::from)
+    }
+    /// Deserialize from bytes. Extra data is an error.
+    fn deserialize_all(bytes: &[u8]) -> Result<Self, DeserializeError> {
+        let (result, rest) = Self::deserialize_take(bytes)?;
+        if !rest.is_empty() {
+            return Err(DeserializeError::extra_data());
+        }
+        Ok(result)
     }
 }
 
 impl<T: serde::Serialize> Serialize for T {}
 
 impl<T: serde::de::DeserializeOwned> Deserialize for T {}
+
+#[cfg(test)]
+mod test {
+    use super::{Deserialize, DeserializeError};
+
+    #[test]
+    fn deserialize_all() {
+        let bytes = b"\x12\x34";
+        assert_eq!(u8::deserialize_from_vec(bytes), Ok(0x12));
+        assert_eq!(u8::deserialize_take(bytes), Ok((0x12, &b"\x34"[..])));
+        assert_eq!(
+            u8::deserialize_all(bytes),
+            Err(DeserializeError::extra_data()),
+        );
+    }
+}
