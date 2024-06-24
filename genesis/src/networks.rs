@@ -41,7 +41,7 @@ impl NetworkInfo {
 
     #[inline]
     pub fn genesis_block(&self) -> Block {
-        Deserialize::deserialize_from_vec(self.genesis.block)
+        Block::deserialize_from_vec(self.genesis.block)
             .expect("Failed to deserialize genesis block.")
     }
 

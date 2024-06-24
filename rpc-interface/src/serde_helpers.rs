@@ -17,7 +17,6 @@ pub mod hex {
     where
         D: Deserializer<'de>,
     {
-        let s: String = Deserialize::deserialize(deserializer)?;
-        hex::decode(s).map_err(Error::custom)
+        hex::decode(String::deserialize(deserializer)?).map_err(Error::custom)
     }
 }

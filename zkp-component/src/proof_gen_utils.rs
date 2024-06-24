@@ -106,5 +106,5 @@ fn parse_proof_generation_output(output: Vec<u8>) -> Result<ZKPState, ZKProofGen
         }
     }
 
-    Deserialize::deserialize_from_vec(&output[mid..])?
+    <Result<ZKPState, ZKProofGenerationError>>::deserialize_from_vec(&output[mid..])?
 }

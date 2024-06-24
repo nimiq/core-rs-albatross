@@ -109,8 +109,7 @@ fn serialize_deserialize() {
 fn uncompress_compress() {
     let hex_public_key = "ae4cc2e31e04add9a6d379b4379b02f302971503cbac8d02fdc5d2dc8204d24ec8d095627d037de747f1a8ea7bf3c1693262d947f78e0cc73c18ecc2f2ec5b2249d551e1680fe0c973a7951bd78d4fbe0326be71286ed34004d2443eb3b00167a02edffcfd2b8539448fa116c5454da2d181dc03ea8cfe3fedb58b9b945d5e506c794deb3ba73983005b3ff799212bf59030a8dd17ff48fd5d015695195a022fed8ba4fab28a4c3e2d6f41be0e6315e41824df161219c02be5a281c215011c13131184187e9100d2d6a5321fd9b154806ecc78e93b91331a5334b8876fd1b8ea62b17ce6045fc9e1af60b7705b0cf86dba79f5bcb8320c99a45f3b7c7178f8f87ba953de2755c61af882059c1de1d7a35357f06cd4a7d954e4bb211900";
     let raw_public_key: Vec<u8> = hex::decode(hex_public_key).unwrap();
-    let compressed_public_key: CompressedPublicKey =
-        Deserialize::deserialize_from_vec(&raw_public_key).unwrap();
+    let compressed_public_key = CompressedPublicKey::deserialize_from_vec(&raw_public_key).unwrap();
 
     println!(
         "{:?}",

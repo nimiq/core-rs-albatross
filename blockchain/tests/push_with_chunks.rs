@@ -35,12 +35,10 @@ macro_rules! check_invalid_chunk {
 }
 
 fn key_pair_with_funds() -> KeyPair {
-    let priv_key: PrivateKey =
-        Deserialize::deserialize_from_vec(
-            &hex::decode("6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587")
-                .unwrap()[..],
-        )
-        .unwrap();
+    let priv_key = PrivateKey::deserialize_from_vec(
+        &hex::decode("6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587").unwrap(),
+    )
+    .unwrap();
     priv_key.into()
 }
 

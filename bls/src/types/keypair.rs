@@ -88,8 +88,7 @@ mod serde_derive {
         where
             D: Deserializer<'de>,
         {
-            let secret_key: SecretKey = Deserialize::deserialize(deserializer)?;
-            Ok(KeyPair::from(secret_key))
+            Ok(KeyPair::from(SecretKey::deserialize(deserializer)?))
         }
     }
 }

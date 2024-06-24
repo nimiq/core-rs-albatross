@@ -20,7 +20,7 @@ impl FileStore {
 
     pub fn load<T: Deserialize>(&self) -> Result<T, Error> {
         log::debug!(path = ?self.path.display(), "Reading from file");
-        Ok(Deserialize::deserialize_from_vec(&fs::read(&self.path)?)?)
+        Ok(T::deserialize_from_vec(&fs::read(&self.path)?)?)
     }
 
     /// Loads from the file, storing and returning a default value if the file does not exist.

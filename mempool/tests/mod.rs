@@ -46,9 +46,9 @@ fn tps_setting(default: usize) -> usize {
 }
 
 fn ed25519_key_pair(secret_key: &str) -> SchnorrKeyPair {
-    let priv_key: SchnorrPrivateKey =
-        Deserialize::deserialize_from_vec(&hex::decode(secret_key).unwrap()[..]).unwrap();
-    priv_key.into()
+    SchnorrPrivateKey::deserialize_from_vec(&hex::decode(secret_key).unwrap())
+        .unwrap()
+        .into()
 }
 
 async fn send_get_mempool_txns(

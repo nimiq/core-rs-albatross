@@ -35,7 +35,7 @@ fn test_non_failing() {
     for test_case in NON_FAILING_TESTS.iter() {
         let expected: Coin = test_case.value.try_into().unwrap();
         let vec = hex::decode(test_case.data).unwrap();
-        let coin: Coin = Deserialize::deserialize_from_vec(&vec[..]).unwrap();
+        let coin = Coin::deserialize_from_vec(&vec).unwrap();
         assert_eq!(expected, coin);
     }
 }
@@ -45,9 +45,7 @@ fn test_non_failing() {
 fn test_deserialize_out_of_bounds() {
     use nimiq_serde::DeserializeError;
 
-    let vec = hex::decode("0020000000000000").unwrap();
-    let res: Result<Coin, DeserializeError> = Deserialize::deserialize_from_vec(&vec[..]);
-    match res {
+    match Coin::deserialize_from_vec(&hex::decode("0020000000000000").unwrap()) {
         Ok(coin) => panic!("Instead of failing, got {}", coin),
         Err(err) => assert_eq!(err, DeserializeError::serde_custom()),
     }

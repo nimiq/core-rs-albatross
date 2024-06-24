@@ -33,11 +33,11 @@ fn prepare_outgoing_transaction() -> (
     SignatureProof,
     SignatureProof,
 ) {
-    let sender_priv_key: PrivateKey = Deserialize::deserialize_from_vec(
+    let sender_priv_key = PrivateKey::deserialize_from_vec(
         &hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap(),
     )
     .unwrap();
-    let recipient_priv_key: PrivateKey = Deserialize::deserialize_from_vec(
+    let recipient_priv_key = PrivateKey::deserialize_from_vec(
         &hex::decode("bd1cfcd49a81048c8c8d22a25766bd01bfa0f6b2eb0030f65241189393af96a2").unwrap(),
     )
     .unwrap();
@@ -77,8 +77,8 @@ fn prepare_outgoing_transaction() -> (
         NetworkId::UnitAlbatross,
     );
 
-    let sender_signature = sender_key_pair.sign(&tx.serialize_content()[..]);
-    let recipient_signature = recipient_key_pair.sign(&tx.serialize_content()[..]);
+    let sender_signature = sender_key_pair.sign(&tx.serialize_content());
+    let recipient_signature = recipient_key_pair.sign(&tx.serialize_content());
     let sender_signature_proof =
         SignatureProof::from_ed25519(sender_key_pair.public, sender_signature);
     let recipient_signature_proof =
@@ -143,8 +143,7 @@ fn create_serialized_contract() {
 
 #[test]
 fn it_can_deserialize_a_htlc() {
-    let bytes: Vec<u8> = hex::decode(HTLC).unwrap();
-    let htlc: HashedTimeLockedContract = Deserialize::deserialize_from_vec(&bytes[..]).unwrap();
+    let htlc = HashedTimeLockedContract::deserialize_from_vec(&hex::decode(HTLC).unwrap()).unwrap();
     assert_eq!(htlc.balance, Coin::ZERO);
     assert_eq!(htlc.hash_count, 1);
     assert_eq!(
@@ -167,8 +166,7 @@ fn it_can_deserialize_a_htlc() {
 
 #[test]
 fn it_can_serialize_a_htlc() {
-    let bytes: Vec<u8> = hex::decode(HTLC).unwrap();
-    let htlc: HashedTimeLockedContract = Deserialize::deserialize_from_vec(&bytes[..]).unwrap();
+    let htlc = HashedTimeLockedContract::deserialize_from_vec(&hex::decode(HTLC).unwrap()).unwrap();
     let mut bytes2: Vec<u8> = Vec::with_capacity(htlc.serialized_size());
     let size = htlc.serialize_to_writer(&mut bytes2).unwrap();
     assert_eq!(size, htlc.serialized_size());

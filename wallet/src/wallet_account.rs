@@ -100,8 +100,7 @@ impl<'de> serde::Deserialize<'de> for WalletAccount {
     where
         D: serde::Deserializer<'de>,
     {
-        let key_pair: KeyPair = serde::Deserialize::deserialize(deserializer)?;
-        Ok(WalletAccount::from(key_pair))
+        Ok(WalletAccount::from(KeyPair::deserialize(deserializer)?))
     }
 }
 
@@ -127,7 +126,6 @@ impl FromDatabaseValue for WalletAccount {
     where
         Self: Sized,
     {
-        Deserialize::deserialize_from_vec(bytes)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+        Self::deserialize_from_vec(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }

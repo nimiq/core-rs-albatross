@@ -1,6 +1,6 @@
 use std::convert::TryInto;
 
-use nimiq_bls::KeyPair as BlsKeyPair;
+use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
@@ -348,12 +348,11 @@ fn make_delete_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
 
 fn bls_key_pair() -> BlsKeyPair {
     BlsKeyPair::from_secret(
-        &Deserialize::deserialize_from_vec(&hex::decode(BLS_PRIVKEY).unwrap()[..]).unwrap(),
+        &BlsSecretKey::deserialize_from_vec(&hex::decode(BLS_PRIVKEY).unwrap()).unwrap(),
     )
 }
 
 fn ed25519_key_pair() -> KeyPair {
-    let priv_key: PrivateKey =
-        Deserialize::deserialize_from_vec(&hex::decode(PRIVATE_KEY).unwrap()[..]).unwrap();
+    let priv_key = PrivateKey::deserialize_from_vec(&hex::decode(PRIVATE_KEY).unwrap()).unwrap();
     priv_key.into()
 }

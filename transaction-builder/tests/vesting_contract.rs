@@ -108,7 +108,7 @@ fn it_can_create_creation_transaction() {
 
 #[test]
 fn it_can_create_outgoing_transactions() {
-    let sender_priv_key: PrivateKey = Deserialize::deserialize_from_vec(
+    let sender_priv_key = PrivateKey::deserialize_from_vec(
         &hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap(),
     )
     .unwrap();

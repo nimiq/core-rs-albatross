@@ -102,7 +102,7 @@ fn create_validator() {
     assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize_from_vec(&hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx = Transaction::deserialize_from_vec(&hex::decode(tx_hex).unwrap()).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.
@@ -212,7 +212,7 @@ fn update_validator() {
     assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize_from_vec(&hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx = Transaction::deserialize_from_vec(&hex::decode(tx_hex).unwrap()).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.
@@ -320,7 +320,7 @@ fn deactivate_validator() {
     assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize_from_vec(&hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx = Transaction::deserialize_from_vec(&hex::decode(tx_hex).unwrap()).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.
@@ -377,7 +377,7 @@ fn reactivate_validator() {
     assert_eq!(tx_size, tx.serialize(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize_from_vec(&hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx = Transaction::deserialize_from_vec(&hex::decode(tx_hex).unwrap()).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.
@@ -433,7 +433,7 @@ fn retire_validator() {
     assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize_from_vec(&hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx = Transaction::deserialize_from_vec(&hex::decode(tx_hex).unwrap()).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.
@@ -489,7 +489,7 @@ fn create_staker() {
     assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize_from_vec(&hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx = Transaction::deserialize_from_vec(&hex::decode(tx_hex).unwrap()).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.
@@ -544,7 +544,7 @@ fn stake() {
     assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize_from_vec(&hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx = Transaction::deserialize_from_vec(&hex::decode(tx_hex).unwrap()).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.
@@ -576,7 +576,7 @@ fn update_staker() {
     assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize_from_vec(&hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx = Transaction::deserialize_from_vec(&hex::decode(tx_hex).unwrap()).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.
@@ -623,7 +623,7 @@ fn delete_validator() {
     assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize_from_vec(&hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx = Transaction::deserialize_from_vec(&hex::decode(tx_hex).unwrap()).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case (This assumes the delete_validator_tx function creates a tx with 100 fee)
@@ -661,7 +661,7 @@ fn remove_stake() {
     assert_eq!(tx_size, tx.serialize_to_writer(&mut ser_tx).unwrap());
     assert_eq!(tx_hex, hex::encode(ser_tx));
 
-    let deser_tx = Deserialize::deserialize_from_vec(&hex::decode(tx_hex).unwrap()[..]).unwrap();
+    let deser_tx = Transaction::deserialize_from_vec(&hex::decode(tx_hex).unwrap()).unwrap();
     assert_eq!(tx, deser_tx);
 
     // Works in the valid case.

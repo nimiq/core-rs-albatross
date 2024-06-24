@@ -162,8 +162,9 @@ mod serde_derive {
         where
             D: Deserializer<'de>,
         {
-            let compressed: CompressedSignature = Deserialize::deserialize(deserializer)?;
-            compressed.uncompress().map_err(Error::custom)
+            CompressedSignature::deserialize(deserializer)?
+                .uncompress()
+                .map_err(Error::custom)
         }
     }
 }

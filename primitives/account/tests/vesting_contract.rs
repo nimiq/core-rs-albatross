@@ -59,7 +59,7 @@ fn make_signed_transaction(key_1: KeyPair, key_2: KeyPair, value: u64) -> Transa
         NetworkId::UnitAlbatross,
     );
     tx.sender_type = AccountType::Vesting;
-    let signature = key_1.sign(&tx.serialize_content()[..]);
+    let signature = key_1.sign(&tx.serialize_content());
     let signature_proof = SignatureProof::from_ed25519(key_1.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
@@ -84,8 +84,7 @@ fn create_serialized_contract() {
 
 #[test]
 fn it_can_deserialize_a_vesting_contract() {
-    let bytes: Vec<u8> = hex::decode(CONTRACT).unwrap();
-    let contract: VestingContract = Deserialize::deserialize_from_vec(&bytes[..]).unwrap();
+    let contract = VestingContract::deserialize_from_vec(&hex::decode(CONTRACT).unwrap()).unwrap();
     assert_eq!(contract.balance, 52500000000000.try_into().unwrap());
     assert_eq!(
         contract.owner,
@@ -99,8 +98,7 @@ fn it_can_deserialize_a_vesting_contract() {
 
 #[test]
 fn it_can_serialize_a_vesting_contract() {
-    let bytes: Vec<u8> = hex::decode(CONTRACT).unwrap();
-    let contract: VestingContract = Deserialize::deserialize_from_vec(&bytes[..]).unwrap();
+    let contract = VestingContract::deserialize_from_vec(&hex::decode(CONTRACT).unwrap()).unwrap();
     let mut bytes2: Vec<u8> = Vec::with_capacity(contract.serialized_size());
     let size = contract.serialize_to_writer(&mut bytes2).unwrap();
     assert_eq!(size, contract.serialized_size());
@@ -304,7 +302,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     );
     tx.sender_type = AccountType::Vesting;
 
-    let signature = key_1.sign(&tx.serialize_content()[..]);
+    let signature = key_1.sign(&tx.serialize_content());
     let signature_proof = SignatureProof::from_ed25519(key_1.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
@@ -367,7 +365,7 @@ fn it_refuses_invalid_transactions() {
     tx.sender_type = AccountType::Vesting;
 
     // Invalid signature
-    let signature = key_1_alt.sign(&tx.serialize_content()[..]);
+    let signature = key_1_alt.sign(&tx.serialize_content());
     let signature_proof = SignatureProof::from_ed25519(key_1_alt.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
@@ -386,7 +384,7 @@ fn it_refuses_invalid_transactions() {
     assert_eq!(tx_logger.logs.len(), 0);
 
     // Funds still vested
-    let signature = key_1.sign(&tx.serialize_content()[..]);
+    let signature = key_1.sign(&tx.serialize_content());
     let signature_proof = SignatureProof::from_ed25519(key_1.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 

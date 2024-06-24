@@ -217,7 +217,7 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
             return Err(self);
         };
 
-        let result = Deserialize::deserialize_from_vec(&key).ok();
+        let result = T::deserialize_from_vec(&key).ok();
 
         // Always overwrite unencrypted vector.
         for byte in key.iter_mut() {
@@ -325,8 +325,7 @@ impl<T: Default + Deserialize + Serialize> FromDatabaseValue for Locked<T> {
     where
         Self: Sized,
     {
-        Deserialize::deserialize_from_vec(bytes)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+        Self::deserialize_from_vec(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }
 

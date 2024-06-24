@@ -206,9 +206,7 @@ pub struct CreationTransactionData {
 
 impl CreationTransactionData {
     pub fn parse(transaction: &Transaction) -> Result<Self, TransactionError> {
-        Ok(Deserialize::deserialize_all(
-            &transaction.recipient_data[..],
-        )?)
+        Ok(Self::deserialize_all(&transaction.recipient_data)?)
     }
 
     pub fn verify(&self) -> Result<(), TransactionError> {

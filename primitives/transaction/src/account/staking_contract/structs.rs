@@ -230,7 +230,7 @@ impl IncomingStakingTransactionData {
         data: &[u8],
         signature_proof: SignatureProof,
     ) -> Result<Vec<u8>, DeserializeError> {
-        let mut data: IncomingStakingTransactionData = Deserialize::deserialize_from_vec(data)?;
+        let mut data = IncomingStakingTransactionData::deserialize_from_vec(data)?;
         data.set_signature(signature_proof);
         Ok(data.serialize_to_vec())
     }

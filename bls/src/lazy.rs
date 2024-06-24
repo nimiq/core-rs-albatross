@@ -164,7 +164,7 @@ mod serialization {
         where
             D: serde::Deserializer<'de>,
         {
-            let compressed: CompressedPublicKey = Deserialize::deserialize(deserializer)?;
+            let compressed = CompressedPublicKey::deserialize(deserializer)?;
             Ok(LazyPublicKey::from_compressed(&compressed))
         }
     }

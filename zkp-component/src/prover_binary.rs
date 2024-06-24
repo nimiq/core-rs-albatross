@@ -14,7 +14,7 @@ pub async fn prover_main() -> Result<(), Error> {
     let mut stdin = BufReader::new(io::stdin());
     stdin.read_to_end(&mut stdin_buf)?;
 
-    let proof_input: Result<ProofInput, _> = Deserialize::deserialize_from_vec(&stdin_buf);
+    let proof_input = ProofInput::deserialize_from_vec(&stdin_buf);
 
     log::info!(
         "Starting proof generation for block {:?}",

@@ -769,7 +769,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
 
 #[test]
 fn it_commits_valid_and_failing_txns() {
-    let priv_key: PrivateKey = Deserialize::deserialize_from_vec(
+    let priv_key = PrivateKey::deserialize_from_vec(
         &hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap(),
     )
     .unwrap();

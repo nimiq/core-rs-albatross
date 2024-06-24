@@ -31,8 +31,9 @@ impl StakingDataBuilder {
     /// using a key pair.
     pub fn sign_with_key_pair(&mut self, key_pair: &KeyPair) -> &mut Self {
         // Deserialize the data.
-        let mut data: IncomingStakingTransactionData =
-            Deserialize::deserialize_from_vec(&self.transaction.recipient_data[..]).unwrap();
+        let mut data =
+            IncomingStakingTransactionData::deserialize_from_vec(&self.transaction.recipient_data)
+                .unwrap();
 
         // If this is a stake transaction, we don't need to sign it.
         match data {

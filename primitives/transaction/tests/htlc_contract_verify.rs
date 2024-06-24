@@ -14,11 +14,11 @@ use nimiq_transaction::{
 };
 
 fn prepare_outgoing_transaction() -> (Transaction, AnyHash, SignatureProof, SignatureProof) {
-    let sender_priv_key: PrivateKey = Deserialize::deserialize_from_vec(
+    let sender_priv_key = PrivateKey::deserialize_from_vec(
         &hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap(),
     )
     .unwrap();
-    let recipient_priv_key: PrivateKey = Deserialize::deserialize_from_vec(
+    let recipient_priv_key = PrivateKey::deserialize_from_vec(
         &hex::decode("bd1cfcd49a81048c8c8d22a25766bd01bfa0f6b2eb0030f65241189393af96a2").unwrap(),
     )
     .unwrap();

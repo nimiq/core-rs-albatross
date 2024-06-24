@@ -13,7 +13,7 @@ use nimiq_wallet::WalletAccount;
 fn wallet() -> WalletAccount {
     let raw_private_key =
         hex::decode("b410a7a583cbc13ef4f1cbddace30928bcb4f9c13722414bc4a2faaba3f4e187").unwrap();
-    let private_key: PrivateKey = Deserialize::deserialize_from_vec(&raw_private_key).unwrap();
+    let private_key = PrivateKey::deserialize_from_vec(&raw_private_key).unwrap();
     WalletAccount::from(KeyPair::from(private_key))
 }
 

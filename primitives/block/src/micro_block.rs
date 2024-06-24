@@ -135,8 +135,7 @@ impl FromDatabaseValue for MicroBlock {
     where
         Self: Sized,
     {
-        Deserialize::deserialize_from_vec(bytes)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+        Self::deserialize_from_vec(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }
 

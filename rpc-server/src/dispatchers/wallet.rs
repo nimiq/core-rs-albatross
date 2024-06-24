@@ -48,7 +48,7 @@ impl WalletInterface for WalletDispatcher {
     ) -> RPCResult<Address, (), Self::Error> {
         let passphrase = passphrase.unwrap_or_default();
 
-        let private_key: PrivateKey = Deserialize::deserialize_from_vec(&hex::decode(key_data)?)?;
+        let private_key = PrivateKey::deserialize_from_vec(&hex::decode(key_data)?)?;
 
         let wallet_account = WalletAccount::from(KeyPair::from(private_key));
 

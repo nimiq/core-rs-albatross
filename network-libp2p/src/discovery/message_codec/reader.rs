@@ -165,7 +165,7 @@ where
 
                 // Decode the header: 16 bit length big-endian
                 // This will also advance the read position after the header.
-                let header = match Deserialize::deserialize_from_vec(self_projected.buffer) {
+                let header = match Header::deserialize_from_vec(self_projected.buffer) {
                     Ok(header) => header,
                     Err(e) => return Poll::Ready(Some(Err(e))),
                 };
@@ -199,7 +199,7 @@ where
                 }
 
                 // Decode the message, the read position of the buffer is already at the start of the message.
-                let message: M = match Deserialize::deserialize_from_vec(self_projected.buffer) {
+                let message = match M::deserialize_from_vec(self_projected.buffer) {
                     Ok(message) => message,
                     Err(e) => return Poll::Ready(Some(Err(e))),
                 };

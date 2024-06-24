@@ -108,8 +108,7 @@ impl FromDatabaseValue for TrieDiff {
     where
         Self: Sized,
     {
-        Deserialize::deserialize_from_vec(bytes)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+        Self::deserialize_from_vec(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }
 
@@ -162,7 +161,6 @@ impl FromDatabaseValue for RevertTrieDiff {
     where
         Self: Sized,
     {
-        Deserialize::deserialize_from_vec(bytes)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+        Self::deserialize_from_vec(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }

@@ -14,7 +14,7 @@ fn it_serializes_and_deserializes_zk_proof() {
         proof: None,
     };
     let serialized = Serialize::serialize_to_vec(&b);
-    let deserialized: ZKProof = Deserialize::deserialize_from_vec(&serialized).unwrap();
+    let deserialized = ZKProof::deserialize_from_vec(&serialized).unwrap();
     assert_eq!(deserialized, b);
 
     let proof = ZKProof {
@@ -22,7 +22,7 @@ fn it_serializes_and_deserializes_zk_proof() {
         proof: Some(Proof::default()),
     };
     let serialized = Serialize::serialize_to_vec(&proof);
-    let deserialized: ZKProof = Deserialize::deserialize_from_vec(&serialized).unwrap();
+    let deserialized = ZKProof::deserialize_from_vec(&serialized).unwrap();
     assert_eq!(deserialized, proof);
 }
 
@@ -52,7 +52,7 @@ fn it_serializes_and_deserializes_zkp_state() {
         latest_proof: Some(Proof::default()),
     };
     let serialized = Serialize::serialize_to_vec(&state);
-    let deserialized: ZKPState = Deserialize::deserialize_from_vec(&serialized).unwrap();
+    let deserialized = ZKPState::deserialize_from_vec(&serialized).unwrap();
     assert_eq!(deserialized, state);
 
     let state = ZKPState {
@@ -60,7 +60,7 @@ fn it_serializes_and_deserializes_zkp_state() {
         latest_proof: None,
     };
     let serialized = Serialize::serialize_to_vec(&state);
-    let deserialized: ZKPState = Deserialize::deserialize_from_vec(&serialized).unwrap();
+    let deserialized = ZKPState::deserialize_from_vec(&serialized).unwrap();
     assert_eq!(deserialized, state);
 }
 
@@ -74,7 +74,7 @@ fn it_serializes_and_deserializes_proof_input() {
         prover_keys_path: PathBuf::from(ZKP_TEST_KEYS_PATH),
     };
     let serialized = Serialize::serialize_to_vec(&proof_input);
-    let deserialized: ProofInput = Deserialize::deserialize_from_vec(&serialized).unwrap();
+    let deserialized = ProofInput::deserialize_from_vec(&serialized).unwrap();
     assert_eq!(deserialized, proof_input);
 
     let proof_input = ProofInput {
@@ -85,6 +85,6 @@ fn it_serializes_and_deserializes_proof_input() {
         prover_keys_path: PathBuf::from(ZKP_TEST_KEYS_PATH),
     };
     let serialized = Serialize::serialize_to_vec(&proof_input);
-    let deserialized: ProofInput = Deserialize::deserialize_from_vec(&serialized).unwrap();
+    let deserialized = ProofInput::deserialize_from_vec(&serialized).unwrap();
     assert_eq!(deserialized, proof_input);
 }

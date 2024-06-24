@@ -12,8 +12,7 @@ const INVALID_EXTENDED_TRANSACTION: &str = "014a88aaad038f9b8248865c4b9249efc554
 
 #[test]
 fn it_can_deserialize_historic_transaction() {
-    let v: Vec<u8> = hex::decode(EXTENDED_TRANSACTION).unwrap();
-    let t: Transaction = Deserialize::deserialize_from_vec(&v[..]).unwrap();
+    let t = Transaction::deserialize_from_vec(&hex::decode(EXTENDED_TRANSACTION).unwrap()).unwrap();
     assert_eq!(t.recipient_data, Vec::<u8>::new());
     assert_eq!(
         t.sender,
@@ -35,15 +34,13 @@ fn it_can_deserialize_historic_transaction() {
 
 #[test]
 fn deserialize_fails_on_invalid_transaction_flags() {
-    let v: Vec<u8> = hex::decode(INVALID_EXTENDED_TRANSACTION).unwrap();
-    let t: Result<Transaction, DeserializeError> = Deserialize::deserialize_from_vec(&v[..]);
+    let t = Transaction::deserialize_from_vec(&hex::decode(INVALID_EXTENDED_TRANSACTION).unwrap());
     assert_eq!(t, Err(DeserializeError::serde_custom()));
 }
 
 #[test]
 fn it_can_serialize_historic_transaction() {
-    let v: Vec<u8> = hex::decode(EXTENDED_TRANSACTION).unwrap();
-    let t: Transaction = Deserialize::deserialize_from_vec(&v[..]).unwrap();
+    let t = Transaction::deserialize_from_vec(&hex::decode(EXTENDED_TRANSACTION).unwrap()).unwrap();
     let mut v2: Vec<u8> = Vec::with_capacity(t.serialized_size());
     let size = t.serialize_to_writer(&mut v2).unwrap();
     assert_eq!(size, t.serialized_size());
@@ -52,8 +49,7 @@ fn it_can_serialize_historic_transaction() {
 
 #[test]
 fn it_can_deserialize_basic_transaction() {
-    let v: Vec<u8> = hex::decode(BASIC_TRANSACTION).unwrap();
-    let t: Transaction = Deserialize::deserialize_from_vec(&v[..]).unwrap();
+    let t = Transaction::deserialize_from_vec(&hex::decode(BASIC_TRANSACTION).unwrap()).unwrap();
     assert_eq!(t.recipient_data, Vec::<u8>::new());
     assert_eq!(
         t.sender,
@@ -75,8 +71,7 @@ fn it_can_deserialize_basic_transaction() {
 
 #[test]
 fn it_can_serialize_basic_transaction() {
-    let v: Vec<u8> = hex::decode(BASIC_TRANSACTION).unwrap();
-    let t: Transaction = Deserialize::deserialize_from_vec(&v[..]).unwrap();
+    let t = Transaction::deserialize_from_vec(&hex::decode(BASIC_TRANSACTION).unwrap()).unwrap();
     let mut v2: Vec<u8> = Vec::with_capacity(t.serialized_size());
     let size = t.serialize_to_writer(&mut v2).unwrap();
     assert_eq!(size, t.serialized_size());
@@ -101,9 +96,9 @@ fn it_can_serialize_and_deserialize_signature_proofs() {
         r#"{"type":"webauthn.get","challenge":"4rk3LpNhR-jlyPRHP-xgniidFviD-pbL1hSyh5Nole8","origin":"http://localhost:3000","crossOrigin":false}"#,
     ).unwrap();
 
-    let serialized = Serialize::serialize_to_vec(&proof.clone());
+    let serialized = proof.serialize_to_vec();
 
-    let deserialized: SignatureProof = Deserialize::deserialize_from_vec(&serialized[..]).unwrap();
+    let deserialized = SignatureProof::deserialize_from_vec(&serialized).unwrap();
 
     assert_eq!(deserialized.public_key, proof.public_key);
     assert_eq!(deserialized.merkle_path, proof.merkle_path);

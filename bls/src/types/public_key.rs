@@ -162,8 +162,9 @@ mod serde_derive {
         where
             D: Deserializer<'de>,
         {
-            let compressed: CompressedPublicKey = Deserialize::deserialize(deserializer)?;
-            compressed.uncompress().map_err(Error::custom)
+            CompressedPublicKey::deserialize(deserializer)?
+                .uncompress()
+                .map_err(Error::custom)
         }
     }
 }

@@ -81,7 +81,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         raw_tx: String,
     ) -> RPCResult<RPCTransaction, (), Self::Error> {
-        let transaction: Transaction = Deserialize::deserialize_from_vec(&hex::decode(raw_tx)?)?;
+        let transaction = Transaction::deserialize_from_vec(&hex::decode(raw_tx)?)?;
         Ok(RPCTransaction::from_transaction(transaction).into())
     }
 
@@ -89,7 +89,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         raw_tx: String,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
-        let tx: Transaction = Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
+        let tx = Transaction::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
         let txid = tx.hash::<Blake2bHash>();
 
         match self.consensus.send_transaction(tx).await {

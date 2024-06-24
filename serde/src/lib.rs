@@ -205,10 +205,10 @@ impl<'de, const N: usize> HexArray<'de> for [u8; N] {
     where
         D: Deserializer<'de>,
     {
+        use serde::Deserialize as _;
         if deserializer.is_human_readable() {
-            let s: String = serde::Deserialize::deserialize(deserializer)?;
             let mut out = [0u8; N];
-            hex::decode_to_slice(s, &mut out)
+            hex::decode_to_slice(String::deserialize(deserializer)?, &mut out)
                 .map_err(|_| D::Error::custom("Couldn't decode hex string"))?;
             Ok(out)
         } else {

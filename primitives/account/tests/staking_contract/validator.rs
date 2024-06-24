@@ -117,8 +117,8 @@ fn generate_contract_2() {
 #[test]
 fn it_can_de_serialize_a_staking_contract() {
     let contract_1 = StakingContract::default();
-    let contract_1a: StakingContract =
-        Deserialize::deserialize_from_vec(&contract_1.serialize_to_vec()).unwrap();
+    let contract_1a =
+        StakingContract::deserialize_from_vec(&contract_1.serialize_to_vec()).unwrap();
 
     assert_eq!(contract_1, contract_1a);
 
@@ -147,8 +147,8 @@ fn it_can_de_serialize_a_staking_contract() {
         active_validators,
         punished_slots,
     };
-    let contract_2a: StakingContract =
-        Deserialize::deserialize_from_vec(&contract_2.serialize_to_vec()).unwrap();
+    let contract_2a =
+        StakingContract::deserialize_from_vec(&contract_2.serialize_to_vec()).unwrap();
 
     assert_eq!(contract_2, contract_2a);
 }
