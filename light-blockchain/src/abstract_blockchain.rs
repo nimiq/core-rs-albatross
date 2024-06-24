@@ -32,6 +32,10 @@ impl AbstractBlockchain for LightBlockchain {
         self.election_head.clone()
     }
 
+    fn can_enforce_validity_window(&self) -> bool {
+        true
+    }
+
     fn accounts_complete(&self) -> bool {
         false
     }

@@ -234,22 +234,6 @@ impl Blockchain {
         self.state.accounts.tree.get_missing_range(txn)
     }
 
-    /// Check if we have enough state to check for duplicate transactions during the validity window
-    pub fn can_enforce_validity_window(&self) -> bool {
-        // If we are at the genesis block, we can enforce the validity window
-        if self.block_number() == Policy::genesis_block_number() {
-            true
-        } else {
-            // We can enforce the validity window when our history store root equals our head one.
-
-            *self.head().history_root()
-                == self
-                    .history_store
-                    .get_history_tree_root(self.block_number(), None)
-                    .unwrap()
-        }
-    }
-
     /// Removes the history of a given epoch
     pub fn remove_epoch_history(&mut self, epoch_number: u32) {
         let mut txn = self.write_transaction();

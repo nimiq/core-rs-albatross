@@ -115,6 +115,10 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         gen_blockchain_match!(self, BlockchainReadProxy, election_head)
     }
 
+    fn can_enforce_validity_window(&self) -> bool {
+        gen_blockchain_match!(self, BlockchainReadProxy, can_enforce_validity_window)
+    }
+
     fn accounts_complete(&self) -> bool {
         gen_blockchain_match!(self, BlockchainReadProxy, accounts_complete)
     }

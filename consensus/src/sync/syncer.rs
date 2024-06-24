@@ -277,11 +277,11 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
         }
 
         // Fetch the reported checkpoint block from our chain.
-        // If we don't know the block, the peer is either ahead of us or on a different chain.
-        // Since we are in the same epoch, we speculatively assume that the peer is ahead.
+        // If we don't know the block, the peer is either ahead of us or on a different chain,
+        // We consider the peer as not in sync until we catch up and is sufficiently close (see below).
         let checkpoint = match blockchain.get_block(&head.r#macro, false) {
             Ok(block) => block,
-            Err(_) => return true,
+            Err(_) => return false,
         };
 
         // We consider the peer synced if it's at most one batch behind us.
@@ -369,8 +369,13 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
         // Handle pending incompatible peer checks.
         while let Poll::Ready(Some((peer_id, synced))) = self.pending_checks.poll_next_unpin(cx) {
             if synced {
-                debug!(%peer_id, "Incompatible peer is in sync");
-                self.move_peer_into_live_sync(peer_id);
+                if self.blockchain.read().can_enforce_validity_window() {
+                    debug!(%peer_id, "Incompatible peer is in sync, moving it to live sync");
+                    self.move_peer_into_live_sync(peer_id);
+                } else {
+                    debug!(%peer_id, "Incompatible peer is in sync, waiting for the validity sync to complete");
+                    self.incompatible_peers.insert(peer_id);
+                }
             } else {
                 self.incompatible_peers.insert(peer_id);
             }

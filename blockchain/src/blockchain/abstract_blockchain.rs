@@ -5,7 +5,10 @@ use nimiq_blockchain_interface::{
 };
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::slots_allocation::{Slot, Validators};
+use nimiq_primitives::{
+    policy::Policy,
+    slots_allocation::{Slot, Validators},
+};
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::Blockchain;
@@ -41,6 +44,20 @@ impl AbstractBlockchain for Blockchain {
 
     fn epoch_number(&self) -> u32 {
         self.state.main_chain.head.epoch_number()
+    }
+
+    fn can_enforce_validity_window(&self) -> bool {
+        // If we are at the genesis block, we can enforce the validity window
+        if self.block_number() == Policy::genesis_block_number() {
+            true
+        } else {
+            // We can enforce the history root when our history store root equals our head one.
+            *self.head().history_root()
+                == self
+                    .history_store
+                    .get_history_tree_root(self.block_number(), None)
+                    .unwrap()
+        }
     }
 
     fn accounts_complete(&self) -> bool {

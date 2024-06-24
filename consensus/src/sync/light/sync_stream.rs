@@ -211,22 +211,12 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                     peer_id = ?epoch_ids.sender,
                     "Finished macro syncing with peer");
 
-                match self.blockchain {
+                if self.blockchain.read().can_enforce_validity_window() {
+                    // We can enforce the validity window, so we are done.
+                    return Poll::Ready(Some(MacroSyncReturn::Good(epoch_ids.sender)));
+                } else {
                     #[cfg(feature = "full")]
-                    BlockchainProxy::Full(ref blockchain) => {
-                        // If we are a full node we need to sync the validity window if we can not enforce it.
-
-                        if blockchain.read().can_enforce_validity_window() {
-                            // We can enforce the validity window, so we are done.
-                            return Poll::Ready(Some(MacroSyncReturn::Good(epoch_ids.sender)));
-                        } else {
-                            self.start_validity_synchronization(epoch_ids.sender);
-                        }
-                    }
-                    BlockchainProxy::Light(_) => {
-                        // If we are a light node, we are done and we emit this peer.
-                        return Poll::Ready(Some(MacroSyncReturn::Good(epoch_ids.sender)));
-                    }
+                    self.start_validity_synchronization(epoch_ids.sender);
                 }
             } else {
                 #[cfg(feature = "full")]

@@ -69,6 +69,9 @@ pub trait AbstractBlockchain {
     /// Returns a flag indicating if the accounts tree is complete.
     fn accounts_complete(&self) -> bool;
 
+    /// Returns true if we have enough state to enforce the validity window and verify the state root.
+    fn can_enforce_validity_window(&self) -> bool;
+
     /// Returns the current set of validators.
     fn current_validators(&self) -> Option<Validators>;
 
