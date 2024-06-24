@@ -99,9 +99,6 @@ pub(crate) enum NetworkAction {
         peer_id: PeerId,
         reason: CloseReason,
     },
-    UnbanPeer {
-        peer_id: PeerId,
-    },
 }
 
 pub(crate) struct ValidateMessage<P: Clone> {

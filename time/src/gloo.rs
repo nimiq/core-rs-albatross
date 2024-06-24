@@ -2,6 +2,7 @@ use std::{convert::TryInto, future::Future, pin::pin, time::Duration};
 
 use futures::future::{select, Either};
 use gloo_timers::future::{IntervalStream, TimeoutFuture};
+use instant::Instant;
 use send_wrapper::SendWrapper;
 
 pub type Interval = SendWrapper<IntervalStream>;
@@ -40,4 +41,8 @@ pub fn sleep(duration: Duration) -> impl Future<Output = ()> {
         .try_into()
         .expect("Duration as millis must fit in u32");
     SendWrapper::new(TimeoutFuture::new(millis))
+}
+
+pub fn sleep_until(deadline: Instant) -> impl Future<Output = ()> {
+    sleep(deadline.saturating_duration_since(Instant::now()))
 }

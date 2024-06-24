@@ -1196,9 +1196,6 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
         NetworkAction::DisconnectPeer { peer_id, reason } => {
             swarm.behaviour_mut().pool.close_connection(peer_id, reason)
         }
-        NetworkAction::UnbanPeer { peer_id } => {
-            swarm.behaviour_mut().pool.unban_connection(peer_id)
-        }
     }
 }
 

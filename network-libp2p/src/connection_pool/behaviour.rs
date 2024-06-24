@@ -1,12 +1,13 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     net::IpAddr,
+    pin::Pin,
     sync::Arc,
     task::{Context, Poll, Waker},
     time::Duration,
 };
 
-use futures::StreamExt;
+use futures::{future::BoxFuture, Future, FutureExt, StreamExt};
 use instant::Instant;
 use ip_network::IpNetwork;
 use libp2p::{
@@ -20,7 +21,7 @@ use libp2p::{
     Multiaddr, PeerId, TransportError,
 };
 use nimiq_network_interface::{network::CloseReason, peer_info::Services};
-use nimiq_time::{interval, Interval};
+use nimiq_time::{interval, sleep_until, Interval};
 use nimiq_utils::WakerExt as _;
 use parking_lot::RwLock;
 use rand::{seq::IteratorRandom, thread_rng};
@@ -98,6 +99,12 @@ struct ConnectionState<T> {
     connected: BTreeMap<T, Option<Services>>,
     /// Set of connection IDs marked as banned.
     banned: BTreeSet<T>,
+    /// List of subsequent banned peers with their unban deadlines in ascending order.
+    unban_deadlines: VecDeque<(T, Instant)>,
+    /// Deadline for first peer that can be unbanned.
+    unban_timeout: Option<(T, BoxFuture<'static, ()>)>,
+    /// The time that needs to pass to unban a banned peer.
+    ban_time: Duration,
     /// Set of connection IDs mark as failed.
     failed: BTreeMap<T, usize>,
     /// Set of connection IDs mark as down.
@@ -113,25 +120,65 @@ struct ConnectionState<T> {
     desired_connections: usize,
     /// The set of services that this peer requires.
     required_services: Services,
+    /// Waker used for the next poll
+    waker: Option<Waker>,
 }
 
-impl<T: Ord> ConnectionState<T> {
+impl<T: Clone + Ord + Unpin> Future for ConnectionState<T> {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        while let Some((id, sleep)) = self.unban_timeout.as_mut() {
+            if sleep.poll_unpin(cx).is_ready() {
+                let id = id.clone();
+                self.banned.remove(&id);
+                self.unban_timeout = None;
+
+                // While we are unbanning, try to unban more peers if their deadline also have been reached.
+                // Otherwise schedule a sleep until for the first peer that can be unbanned.
+                while let Some((next_id, deadline)) = self.unban_deadlines.pop_front() {
+                    if Instant::now() >= deadline {
+                        self.banned.remove(&next_id);
+                    } else {
+                        self.unban_timeout = Some((next_id, Box::pin(sleep_until(deadline))));
+                        break;
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        if self.unban_timeout.is_none() {
+            self.waker.store_waker(cx);
+        }
+
+        Poll::Pending
+    }
+}
+
+impl<T: Clone + Ord> ConnectionState<T> {
     fn new(
         max_failures: usize,
         retry_down_after: Duration,
         desired_connections: usize,
         required_services: Services,
+        ban_time: Duration,
     ) -> Self {
         Self {
             dialing: BTreeSet::new(),
             connected: BTreeMap::new(),
             banned: BTreeSet::new(),
+            ban_time,
+            unban_deadlines: VecDeque::new(),
+            unban_timeout: None,
             failed: BTreeMap::new(),
             down: BTreeMap::new(),
             max_failures,
             retry_down_after,
             desired_connections,
             required_services,
+            waker: None,
         }
     }
 
@@ -161,12 +208,17 @@ impl<T: Ord> ConnectionState<T> {
     fn mark_banned(&mut self, id: T) {
         self.failed.remove(&id);
         self.down.remove(&id);
-        self.banned.insert(id);
-    }
+        self.banned.insert(id.clone());
 
-    /// Removes a connection ID from the banned set
-    fn unmark_banned(&mut self, id: T) {
-        self.banned.remove(&id);
+        let unban_deadline = Instant::now() + self.ban_time;
+        // If no peer is scheduled to be unbanned, put is as the first-to-be unbanned peer.
+        // Otherwise queue the peer such that it will be scheduled later when the peer is the first in line.
+        if self.unban_timeout.is_none() {
+            self.unban_timeout = Some((id, Box::pin(sleep_until(unban_deadline))));
+            self.waker.wake();
+        } else {
+            self.unban_deadlines.push_back((id.clone(), unban_deadline));
+        }
     }
 
     /// Returns whether a connection ID is banned
@@ -352,12 +404,14 @@ impl Behaviour {
                 config.retry_down_after,
                 desired_peer_count,
                 required_services,
+                Duration::from_secs(60 * 10), // 10 minutes
             ),
             addresses: ConnectionState::new(
                 4,
                 config.retry_down_after,
                 desired_peer_count,
                 required_services,
+                Duration::from_secs(60 * 10), // 10 minutes
             ),
             actions: VecDeque::new(),
             active: false,
@@ -458,7 +512,7 @@ impl Behaviour {
     /// Closes a peer connection with a reason
     ///
     /// This will take actions depending on the close reason. For instance:
-    /// - The close reason `MaliciousPeer` will cause the peer to be banned.
+    /// - The close reason `MaliciousPeer` will cause the peer to be banned for a fixed amount of time.
     /// - Going offline will signal the network to stop connecting to peers.
     pub fn close_connection(&mut self, peer_id: PeerId, reason: CloseReason) {
         self.actions.push_back(ToSwarm::CloseConnection {
@@ -577,22 +631,6 @@ impl Behaviour {
             for address in addresses {
                 self.addresses.mark_banned(address.clone());
                 debug!(%address, "Banned address");
-            }
-        }
-    }
-
-    /// Un-bans a peer connection and its IP if we have the address for such peer ID
-    pub fn unban_connection(&mut self, peer_id: PeerId) {
-        // Unmark the peer ID as banned
-        self.peer_ids.unmark_banned(peer_id);
-        debug!(%peer_id, "Un-banned peer");
-
-        // Mark its addresses as unbanned if we have them
-        if let Some(contact) = self.contacts.read().get(&peer_id) {
-            let addresses = contact.addresses();
-            for address in addresses {
-                self.addresses.unmark_banned(address.clone());
-                debug!(%address, "Un-banned address");
             }
         }
     }
@@ -940,6 +978,9 @@ impl NetworkBehaviour for Behaviour {
             return Poll::Ready(action);
         }
 
+        let _ = self.peer_ids.poll_unpin(cx);
+        let _ = self.addresses.poll_unpin(cx);
+
         // Perform housekeeping at regular intervals.
         if self.housekeeping_timer.poll_next_unpin(cx).is_ready() {
             self.housekeeping();
@@ -948,5 +989,62 @@ impl NetworkBehaviour for Behaviour {
         self.waker.store_waker(cx);
 
         Poll::Pending
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::task::Context;
+
+    use futures::{task::noop_waker, FutureExt};
+    use instant::Duration;
+    use libp2p::PeerId;
+    use nimiq_network_interface::peer_info::Services;
+    use nimiq_test_log::test;
+    use nimiq_time::sleep;
+
+    use crate::connection_pool::behaviour::ConnectionState;
+
+    #[test(tokio::test)]
+    async fn unban_peers_after_timeout() {
+        let mut cs = ConnectionState::new(
+            30,
+            Duration::from_secs(30),
+            1,
+            Services::empty(),
+            Duration::from_secs(2), // Ban time: 2 seconds
+        );
+
+        let waker = noop_waker();
+        let cx = &mut Context::from_waker(&waker);
+
+        let p1 = PeerId::random();
+        let p2 = PeerId::random();
+        let p3 = PeerId::random();
+
+        cs.mark_banned(p1);
+
+        sleep(Duration::from_secs(1)).await;
+
+        cs.mark_banned(p2);
+        cs.mark_banned(p3);
+
+        sleep(Duration::from_secs(1)).await;
+
+        // Mimic a wake
+        let _ = cs.poll_unpin(cx);
+
+        // p1 should be unbanned
+        assert!(!cs.banned.contains(&p1));
+        // Other banned peers should still be banned
+        assert_eq!(cs.banned.len(), 2);
+
+        sleep(Duration::from_secs(1)).await;
+
+        // Mimic a wake
+        let _ = cs.poll_unpin(cx);
+
+        // p2 and p3 should both be unbanned
+        assert!(cs.banned.is_empty());
     }
 }

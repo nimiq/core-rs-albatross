@@ -191,18 +191,6 @@ impl Network {
         }
     }
 
-    /// Tells the network to un-ban a peer ID
-    pub async fn unban_peer(&self, peer_id: PeerId) {
-        if let Err(error) = self
-            .action_tx
-            .clone()
-            .send(NetworkAction::UnbanPeer { peer_id })
-            .await
-        {
-            error!(%error, "Failed to send NetworkAction::UnbanPeer");
-        }
-    }
-
     async fn request_impl<Req: RequestCommon>(
         &self,
         request: Req,

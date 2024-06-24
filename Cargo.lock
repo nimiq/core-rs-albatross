@@ -4616,6 +4616,7 @@ version = "0.23.0"
 dependencies = [
  "futures",
  "gloo-timers 0.3.0",
+ "instant",
  "send_wrapper 0.6.0",
  "tokio",
  "tokio-stream",
