@@ -46,7 +46,10 @@ use nimiq_transaction::ExecutedTransaction;
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::time::OffsetTime;
 use parking_lot::{Mutex, RwLock};
-use tokio::sync::mpsc::{self, Sender};
+use tokio::{
+    sync::mpsc::{self, Sender},
+    task::yield_now,
+};
 use tokio_stream::wrappers::ReceiverStream;
 
 fn blockchain(complete: bool) -> Blockchain {
@@ -328,6 +331,8 @@ async fn can_sync_state() {
         ),
         "Should immediately receive block"
     );
+    yield_now().await;
+
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
     assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
@@ -347,6 +352,8 @@ async fn can_sync_state() {
             ),
             "Should receive and accept chunks"
         );
+        yield_now().await;
+
         assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
         assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
@@ -383,8 +390,10 @@ async fn can_sync_state() {
         ),
         "Should receive missing blocks"
     );
+    yield_now().await;
+
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 1);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
     // Will apply the buffered block.
     assert!(
@@ -396,6 +405,8 @@ async fn can_sync_state() {
         ),
         "Should apply buffered block"
     );
+    yield_now().await;
+
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
     assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
@@ -412,6 +423,8 @@ async fn can_sync_state() {
         ),
         "Should apply announced block"
     );
+    yield_now().await;
+
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
     assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
@@ -537,7 +550,7 @@ async fn revert_chunks_for_state_live_sync() {
         "Should immediately receive block"
     );
     assert_eq!(live_sync.queue().num_buffered_chunks(), 1);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 1);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
     info!("Applying chunk #{}", 2);
     assert!(
@@ -775,8 +788,8 @@ async fn can_remove_chunks_related_to_invalid_blocks() {
             *blockchain_wg = new_blockchain;
         }
 
-        assert_eq!(mock_node.next().await, Some(RequestTrieDiff::TYPE_ID));
         assert_eq!(mock_node.next().await, Some(RequestChunk::TYPE_ID));
+        assert_eq!(mock_node.next().await, Some(RequestTrieDiff::TYPE_ID));
         assert_eq!(mock_node.next().await, Some(RequestChunk::TYPE_ID));
         (res1, res2)
     };
@@ -849,6 +862,7 @@ async fn clears_buffer_after_macro_block() {
         ),
         "Should accept first block"
     );
+    yield_now().await;
 
     // Upon first chunk request, return a chunk for a non-existent block.
     mock_node
@@ -884,6 +898,7 @@ async fn clears_buffer_after_macro_block() {
         ),
         "Should receive and accept chunks after reset"
     );
+    yield_now().await;
 
     // Check buffer.
     assert_eq!(live_sync.queue().num_buffered_chunks(), 1);
@@ -907,10 +922,11 @@ async fn clears_buffer_after_macro_block() {
         ),
         "Should accept missing blocks"
     );
+    yield_now().await;
 
     // Check buffer.
     assert_eq!(live_sync.queue().num_buffered_chunks(), 1);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 1);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
 
     assert!(
         matches!(
@@ -924,6 +940,7 @@ async fn clears_buffer_after_macro_block() {
         ),
         "Should accept missing blocks"
     );
+    yield_now().await;
 
     mock_node.request_chunk_handler.unpause();
 
@@ -939,6 +956,7 @@ async fn clears_buffer_after_macro_block() {
         ),
         "Should accept chunks"
     );
+    yield_now().await;
 
     // Check buffer.
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);

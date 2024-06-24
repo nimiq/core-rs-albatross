@@ -17,9 +17,12 @@ use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::Network;
 use parking_lot::Mutex;
 
-use super::{BlockQueue, QueuedBlock};
+use super::QueuedBlock;
 use crate::sync::{
-    live::queue::{self, LiveSyncQueue},
+    live::{
+        block_queue::queue::BlockQueue,
+        queue::{self, LiveSyncQueue},
+    },
     syncer::{LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
 };
 
@@ -179,6 +182,6 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
     }
 
     fn resolve_block(&mut self, request: crate::consensus::ResolveBlockRequest<N>) {
-        self.resolve_block(request)
+        BlockQueue::resolve_block(self, request)
     }
 }

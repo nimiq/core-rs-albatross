@@ -33,7 +33,7 @@ use nimiq_test_utils::{
 use nimiq_utils::time::OffsetTime;
 use parking_lot::{Mutex, RwLock};
 use rand::Rng;
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, task::yield_now};
 use tokio_stream::wrappers::ReceiverStream;
 
 #[derive(Default)]
@@ -140,7 +140,7 @@ async fn send_single_micro_block_to_block_queue() {
         blockchain2.read().block_number(),
         1 + Policy::genesis_block_number()
     );
-    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
+    assert_eq!(syncer.live_sync.queue().num_buffered_blocks(), 0);
 }
 
 #[test(tokio::test)]
@@ -201,21 +201,19 @@ async fn send_two_micro_blocks_out_of_order() {
 
     // Run the block_queue one iteration, i.e. until it processed one block
     let _ = poll!(syncer.next());
+    // Yield to allow the internal BlockQueue task to proceed.
+    yield_now().await;
 
     // This block should be buffered now
     assert_eq!(
         blockchain1.read().block_number(),
         Policy::genesis_block_number()
     );
-    let blocks = syncer
-        .live_sync
-        .queue()
-        .buffered_blocks()
-        .collect::<Vec<_>>();
+    let blocks = syncer.live_sync.queue().buffered_blocks();
     assert_eq!(blocks.len(), 1);
     let (block_number, blocks) = blocks.first().unwrap();
     assert_eq!(*block_number, 2 + Policy::genesis_block_number());
-    assert_eq!(blocks[0], &block2);
+    assert_eq!(blocks[0], block2);
 
     // Also we should've received a request to fill this gap
     let req = mock_node.next().await.unwrap();
@@ -233,7 +231,7 @@ async fn send_two_micro_blocks_out_of_order() {
         blockchain1.read().block_number(),
         2 + Policy::genesis_block_number()
     );
-    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
+    assert_eq!(syncer.live_sync.queue().num_buffered_blocks(), 0);
     assert_eq!(
         blockchain1
             .read()
@@ -312,6 +310,8 @@ async fn send_micro_blocks_out_of_order() {
 
         // Run the block_queue one iteration, i.e. until it processed one block
         let _ = poll!(syncer.next());
+        // Yield to allow the internal BlockQueue task to proceed.
+        yield_now().await;
     }
 
     // All blocks should be buffered
@@ -322,7 +322,7 @@ async fn send_micro_blocks_out_of_order() {
 
     // Obtain the buffered blocks
     assert_eq!(
-        syncer.live_sync.queue().buffered_blocks().count() as u64,
+        syncer.live_sync.queue().num_buffered_blocks() as u64,
         n_blocks - 1
     );
 
@@ -345,7 +345,7 @@ async fn send_micro_blocks_out_of_order() {
     }
 
     // No blocks buffered
-    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
+    assert_eq!(syncer.live_sync.queue().num_buffered_blocks(), 0);
 }
 
 #[test(tokio::test)]
@@ -411,21 +411,19 @@ async fn send_invalid_block() {
 
     // Run the block_queue one iteration, i.e. until it processed one block
     let _ = poll!(syncer.next());
+    // Yield to allow the internal BlockQueue task to proceed.
+    yield_now().await;
 
     // This block should be buffered now
     assert_eq!(
         blockchain1.read().block_number(),
         Policy::genesis_block_number()
     );
-    let blocks = syncer
-        .live_sync
-        .queue()
-        .buffered_blocks()
-        .collect::<Vec<_>>();
+    let blocks = syncer.live_sync.queue().buffered_blocks();
     assert_eq!(blocks.len(), 1);
     let (block_number, blocks) = blocks.first().unwrap();
     assert_eq!(*block_number, 2 + Policy::genesis_block_number());
-    assert_eq!(blocks[0], &block2);
+    assert_eq!(blocks[0], block2);
 
     let req = mock_node.next().await.unwrap();
     assert_eq!(req, RequestMissingBlocks::TYPE_ID);
@@ -443,7 +441,7 @@ async fn send_invalid_block() {
         blockchain1.read().block_number(),
         1 + Policy::genesis_block_number()
     );
-    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
+    assert_eq!(syncer.live_sync.queue().num_buffered_blocks(), 0);
     assert_eq!(
         blockchain1
             .read()
@@ -511,18 +509,16 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
 
     // Run the block_queue one iteration, i.e. until it processed one block
     let _ = poll!(syncer.next());
+    // Yield to allow the internal BlockQueue task to proceed.
+    yield_now().await;
 
     // This block should be buffered now
     assert_eq!(blockchain1.read().block_number(), genesis_block_number);
-    let blocks = syncer
-        .live_sync
-        .queue()
-        .buffered_blocks()
-        .collect::<Vec<_>>();
+    let blocks = syncer.live_sync.queue().buffered_blocks();
     assert_eq!(blocks.len(), 1);
     let (block_number, blocks) = blocks.first().unwrap();
     assert_eq!(*block_number, 2 + genesis_block_number);
-    assert_eq!(blocks[0], &block2);
+    assert_eq!(blocks[0], block2);
 
     // Also we should've received a request to fill this gap
     // Instead of gossiping the block, we'll answer the missing blocks request
@@ -535,7 +531,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
 
     // Now both blocks should've been pushed to the blockchain
     assert_eq!(blockchain1.read().block_number(), 2 + genesis_block_number);
-    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
+    assert_eq!(syncer.live_sync.queue().num_buffered_blocks(), 0);
     assert_eq!(
         blockchain1
             .read()
@@ -604,18 +600,16 @@ async fn request_missing_blocks_across_macro_block() {
 
     // Run the block_queue one iteration, i.e. until it processed one block
     let _ = poll!(syncer.next());
+    // Yield to allow the internal BlockQueue task to proceed.
+    yield_now().await;
 
     // This block should be buffered now
     assert_eq!(blockchain1.read().block_number(), genesis_block_number);
-    let blocks = syncer
-        .live_sync
-        .queue()
-        .buffered_blocks()
-        .collect::<Vec<_>>();
+    let blocks = syncer.live_sync.queue().buffered_blocks();
     assert_eq!(blocks.len(), 1);
     let (block_number, blocks) = blocks.first().unwrap();
     assert_eq!(*block_number, block2.block_number());
-    assert_eq!(blocks[0], &block2);
+    assert_eq!(blocks[0], block2);
 
     // Also we should've received a request to fill the first gap.
     // Instead of gossiping the block, we'll answer the missing blocks request
@@ -645,6 +639,8 @@ async fn request_missing_blocks_across_macro_block() {
     syncer.next().await;
     // syncer.next().await;
     let _ = poll!(syncer.next());
+    // Yield to allow the internal BlockQueue task to proceed.
+    yield_now().await;
     let _ = poll!(syncer.next());
 
     // The blocks from the first missing blocks request should be applied now
@@ -652,16 +648,12 @@ async fn request_missing_blocks_across_macro_block() {
         blockchain1.read().block_number(),
         Policy::blocks_per_batch() + genesis_block_number
     );
-    let blocks = syncer
-        .live_sync
-        .queue()
-        .buffered_blocks()
-        .collect::<Vec<_>>();
+    let blocks = syncer.live_sync.queue().buffered_blocks();
     // We have the last block buffered.
     assert_eq!(blocks.len(), 1);
     let (block_number, blocks) = blocks.first().unwrap();
     assert_eq!(*block_number, block2.block_number());
-    assert_eq!(blocks[0], &block2);
+    assert_eq!(blocks[0], block2);
 
     // Also we should've received a request to fill the second gap.
     let req = mock_node.next().await.unwrap();
@@ -676,7 +668,7 @@ async fn request_missing_blocks_across_macro_block() {
 
     // Now all blocks should've been pushed to the blockchain.
     assert_eq!(blockchain1.read().block_number(), block2.block_number());
-    assert!(syncer.live_sync.queue().buffered_blocks().next().is_none());
+    assert_eq!(syncer.live_sync.queue().num_buffered_blocks(), 0);
     assert_eq!(
         blockchain1
             .read()
@@ -748,6 +740,12 @@ async fn put_peer_back_into_sync_mode() {
     block_tx.send((block, mock_id)).await.unwrap();
 
     // Run the block_queue one iteration, i.e. until it processed one block
+    let _ = poll!(syncer.next());
+
+    // Yield execution to allow the internal BlockQueue task to proceed.
+    yield_now().await;
+
+    // Run the block queue another iteration.
     let _ = poll!(syncer.next());
 
     assert_eq!(history_sync_peers.read().len(), 1);

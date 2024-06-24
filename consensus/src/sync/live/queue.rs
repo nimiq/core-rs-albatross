@@ -77,7 +77,7 @@ impl<N: Network> ChunkAndId<N> {
 }
 
 pub trait LiveSyncQueue<N: Network>: Stream<Item = Self::QueueResult> + Send + Unpin {
-    type QueueResult;
+    type QueueResult: Send;
     type PushResult;
 
     fn push_queue_result(

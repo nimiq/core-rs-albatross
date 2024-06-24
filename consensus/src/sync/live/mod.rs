@@ -1,10 +1,3 @@
-pub mod block_queue;
-#[cfg(feature = "full")]
-pub mod diff_queue;
-pub mod queue;
-#[cfg(feature = "full")]
-pub mod state_queue;
-
 use std::{
     collections::VecDeque,
     pin::Pin,
@@ -26,6 +19,13 @@ use self::state_queue::StateQueue;
 use self::{block_queue::BlockQueue, queue::LiveSyncQueue};
 use super::syncer::{LiveSync, LiveSyncEvent};
 use crate::consensus::ResolveBlockRequest;
+
+pub mod block_queue;
+#[cfg(feature = "full")]
+pub mod diff_queue;
+pub mod queue;
+#[cfg(feature = "full")]
+pub mod state_queue;
 
 pub type BlockLiveSync<N> = LiveSyncer<N, BlockQueue<N>>;
 #[cfg(feature = "full")]
