@@ -339,7 +339,7 @@ impl AccountTransactionInteraction for StakingContract {
 
         // Parse transaction proof.
         let data = OutgoingStakingTransactionData::parse(transaction)?;
-        let proof: SignatureProof = Deserialize::deserialize_from_vec(&transaction.proof[..])?;
+        let proof = SignatureProof::deserialize_all(&transaction.proof)?;
 
         tx_logger.push_log(Log::pay_fee_log(transaction));
         tx_logger.push_log(Log::transfer_log(transaction));
@@ -388,7 +388,7 @@ impl AccountTransactionInteraction for StakingContract {
 
         // Parse transaction data.
         let data = OutgoingStakingTransactionData::parse(transaction)?;
-        let proof: SignatureProof = Deserialize::deserialize_from_vec(&transaction.proof[..])?;
+        let proof = SignatureProof::deserialize_all(&transaction.proof)?;
 
         let result = match data {
             OutgoingStakingTransactionData::DeleteValidator => {
@@ -441,7 +441,7 @@ impl AccountTransactionInteraction for StakingContract {
 
         // Parse transaction proof.
         let data = OutgoingStakingTransactionData::parse(transaction)?;
-        let proof: SignatureProof = Deserialize::deserialize_from_vec(&transaction.proof[..])?;
+        let proof = SignatureProof::deserialize_all(&transaction.proof)?;
 
         tx_logger.push_log(Log::pay_fee_log(transaction));
 
@@ -538,7 +538,7 @@ impl AccountTransactionInteraction for StakingContract {
 
         // Parse transaction data.
         let data = OutgoingStakingTransactionData::parse(transaction)?;
-        let proof: SignatureProof = Deserialize::deserialize_from_vec(&transaction.proof[..])?;
+        let proof = SignatureProof::deserialize_all(&transaction.proof)?;
 
         match data {
             OutgoingStakingTransactionData::DeleteValidator => {
@@ -628,7 +628,7 @@ impl AccountTransactionInteraction for StakingContract {
 
         // Parse transaction proof.
         let data = OutgoingStakingTransactionData::parse(transaction)?;
-        let proof: SignatureProof = Deserialize::deserialize_from_vec(&transaction.proof[..])?;
+        let proof = SignatureProof::deserialize_all(&transaction.proof)?;
 
         match data {
             OutgoingStakingTransactionData::DeleteValidator => {
@@ -680,7 +680,7 @@ impl AccountTransactionInteraction for StakingContract {
     ) -> Result<(), AccountError> {
         // Parse transaction proof.
         let data = OutgoingStakingTransactionData::parse(transaction)?;
-        let proof: SignatureProof = Deserialize::deserialize_from_vec(&transaction.proof[..])?;
+        let proof = SignatureProof::deserialize_all(&transaction.proof)?;
 
         match data {
             OutgoingStakingTransactionData::DeleteValidator => {

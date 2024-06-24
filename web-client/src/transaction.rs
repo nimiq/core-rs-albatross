@@ -693,7 +693,7 @@ impl Transaction {
                         }),
                     }
                 } else {
-                    let proof = SignatureProof::deserialize_from_vec(&self.inner.proof).unwrap();
+                    let proof = SignatureProof::deserialize_all(&self.inner.proof).unwrap();
                     PlainTransactionProof::Standard(PlainStandardProof {
                         raw: hex::encode(self.proof()),
                         signature: match proof.signature {

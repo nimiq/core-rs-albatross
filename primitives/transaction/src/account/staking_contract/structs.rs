@@ -101,7 +101,7 @@ impl IncomingStakingTransactionData {
     }
 
     pub fn parse(transaction: &Transaction) -> Result<Self, TransactionError> {
-        full_parse(&transaction.recipient_data[..])
+        Ok(Self::deserialize_all(&transaction.recipient_data)?)
     }
 
     pub fn verify(&self, transaction: &Transaction) -> Result<(), TransactionError> {
@@ -245,19 +245,8 @@ pub enum OutgoingStakingTransactionData {
 
 impl OutgoingStakingTransactionData {
     pub fn parse(transaction: &Transaction) -> Result<Self, TransactionError> {
-        full_parse(&transaction.sender_data[..])
+        Ok(Self::deserialize_all(&transaction.sender_data)?)
     }
-}
-
-pub fn full_parse<T: Deserialize>(data: &[u8]) -> Result<T, TransactionError> {
-    let (data, left_over) = T::deserialize_take(data)?;
-
-    // Ensure that transaction data has been fully read.
-    if !left_over.is_empty() {
-        return Err(TransactionError::InvalidData);
-    }
-
-    Ok(data)
 }
 
 pub fn verify_transaction_signature(

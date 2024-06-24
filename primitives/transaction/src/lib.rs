@@ -319,7 +319,7 @@ impl Transaction {
             && self.recipient_data.is_empty()
             && self.flags.is_empty()
         {
-            if let Ok(signature_proof) = SignatureProof::deserialize_from_vec(&self.proof) {
+            if let Ok(signature_proof) = SignatureProof::deserialize_all(&self.proof) {
                 if self.sender == Address::from(&signature_proof.public_key)
                     && signature_proof.merkle_path.is_empty()
                 {
@@ -432,14 +432,14 @@ impl Transaction {
         addresses.insert(self.recipient.clone());
 
         // If proof is a regular signature proof, add signer of the proof
-        if let Ok(proof) = SignatureProof::deserialize_from_vec(&self.proof) {
+        if let Ok(proof) = SignatureProof::deserialize_all(&self.proof) {
             addresses.insert(proof.compute_signer());
         }
 
         match self.sender_type {
             AccountType::Basic | AccountType::Vesting => {}
             AccountType::HTLC => {
-                if let Ok(proof) = OutgoingHTLCTransactionProof::deserialize_from_vec(&self.proof) {
+                if let Ok(proof) = OutgoingHTLCTransactionProof::deserialize_all(&self.proof) {
                     match proof {
                         OutgoingHTLCTransactionProof::RegularTransfer {
                             signature_proof, ..
@@ -713,9 +713,8 @@ mod serde_derive {
                         VARIANTS[0],
                         BASIC_FIELDS.len(),
                     )?;
-                    let signature_proof: SignatureProof =
-                        Deserialize::deserialize_from_vec(&self.proof)
-                            .map_err(|_| S::Error::custom("Could not serialize signature proof"))?;
+                    let signature_proof = SignatureProof::deserialize_all(&self.proof)
+                        .map_err(|_| S::Error::custom("Could not serialize signature proof"))?;
                     // Serialize public_key and signature algorithm and if webauthn_fields exist in one u8
                     sv.serialize_field(
                         BASIC_FIELDS[0],

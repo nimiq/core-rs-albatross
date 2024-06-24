@@ -41,8 +41,7 @@ impl AccountTransactionVerification for BasicAccountVerifier {
         assert_eq!(transaction.sender_type, AccountType::Basic);
 
         // Verify signer & signature.
-        let signature_proof: SignatureProof =
-            Deserialize::deserialize_from_vec(&transaction.proof[..])?;
+        let signature_proof = SignatureProof::deserialize_all(&transaction.proof)?;
 
         if !signature_proof.is_signed_by(&transaction.sender)
             || !signature_proof.verify(transaction.serialize_content().as_slice())

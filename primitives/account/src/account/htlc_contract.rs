@@ -44,10 +44,7 @@ impl HashedTimeLockedContract {
         block_state: &BlockState,
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
-        let proof_buf = &mut &transaction.proof[..];
-        let proof: OutgoingHTLCTransactionProof = Deserialize::deserialize_from_vec(proof_buf)?;
-
-        match proof {
+        match OutgoingHTLCTransactionProof::deserialize_all(&transaction.proof)? {
             OutgoingHTLCTransactionProof::RegularTransfer {
                 hash_depth,
                 hash_root,
@@ -129,7 +126,7 @@ impl HashedTimeLockedContract {
                     contract_address: transaction.sender.clone(),
                 });
             }
-        };
+        }
 
         Ok(())
     }
@@ -237,10 +234,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     ) -> Result<(), AccountError> {
         self.balance += transaction.total_value();
 
-        let proof_buf = &mut &transaction.proof[..];
-        let proof: OutgoingHTLCTransactionProof = Deserialize::deserialize_from_vec(proof_buf)?;
-
-        match proof {
+        match OutgoingHTLCTransactionProof::deserialize_all(&transaction.proof)? {
             OutgoingHTLCTransactionProof::RegularTransfer {
                 hash_depth,
                 pre_image,
@@ -262,7 +256,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                     contract_address: transaction.sender.clone(),
                 });
             }
-        };
+        }
 
         tx_logger.push_log(Log::transfer_log(transaction));
         tx_logger.push_log(Log::pay_fee_log(transaction));

@@ -205,7 +205,9 @@ fn it_can_verify_regular_transfer() {
 
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
+        Err(TransactionError::InvalidSerialization(
+            DeserializeError::extra_data()
+        )),
     );
 }
 
@@ -251,7 +253,9 @@ fn it_can_verify_early_resolve() {
 
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
+        Err(TransactionError::InvalidSerialization(
+            DeserializeError::extra_data()
+        )),
     );
 }
 
@@ -283,6 +287,8 @@ fn it_can_verify_timeout_resolve() {
 
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
+        Err(TransactionError::InvalidSerialization(
+            DeserializeError::extra_data()
+        )),
     );
 }

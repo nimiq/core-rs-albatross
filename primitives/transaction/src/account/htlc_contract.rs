@@ -206,7 +206,7 @@ pub struct CreationTransactionData {
 
 impl CreationTransactionData {
     pub fn parse(transaction: &Transaction) -> Result<Self, TransactionError> {
-        Ok(Deserialize::deserialize_from_vec(
+        Ok(Deserialize::deserialize_all(
             &transaction.recipient_data[..],
         )?)
     }
@@ -254,16 +254,7 @@ pub enum OutgoingHTLCTransactionProof {
 
 impl OutgoingHTLCTransactionProof {
     pub fn parse(transaction: &Transaction) -> Result<Self, TransactionError> {
-        let reader = &mut &transaction.proof[..];
-        let (data, left_over) = Self::deserialize_take(reader)?;
-
-        // Ensure that transaction data has been fully read.
-        if !left_over.is_empty() {
-            warn!("Over-long proof for the transaction");
-            return Err(TransactionError::InvalidProof);
-        }
-
-        Ok(data)
+        Ok(Self::deserialize_all(&transaction.proof)?)
     }
 
     pub fn verify(&self, transaction: &Transaction) -> Result<(), TransactionError> {
