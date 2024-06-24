@@ -102,14 +102,20 @@ pub enum QueuedStateChunks<N: Network> {
 }
 
 /// This represents the behavior for the next chunk request. When the accounts trie is:
-/// Complete: there are no further requests to make. (Can only set after a macro block).
-/// Reset: the next request should start based on the blockchain accounts trie state.
-/// Continue: the next request should start on the specified key, which is the end of the previous request.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ChunkRequestState {
+    /// The accounts trie is complete and all chunks were applied.
+    /// There are no further requests to make. (Can only set after a macro block).
     Complete,
-    Paused,
+    /// We successfully requested all chunks but they are not applied yet.
+    /// Also records the block number for which we received the last chunk.
+    /// If we pass this block and are not complete, we reset.
+    Paused(u32),
+    /// Restart the state sync.
+    /// The next request should start based on the blockchain accounts trie state.
     Reset,
+    /// Continue the state sync from the given key.
+    /// The next request should start on the specified key, which is the end of the previous request.
     Continue(KeyNibbles),
 }
 
@@ -118,11 +124,11 @@ impl ChunkRequestState {
         matches!(self, ChunkRequestState::Complete)
     }
 
-    fn with_key_start(start_key: &Option<KeyNibbles>) -> Self {
+    fn with_key_start(start_key: &Option<KeyNibbles>, block_number: u32) -> Self {
         if let Some(key) = start_key {
             Self::Continue(key.clone())
         } else {
-            Self::Paused
+            Self::Paused(block_number)
         }
     }
 
@@ -241,7 +247,7 @@ impl<N: Network> StateQueue<N> {
     /// If no starting key is supplied and the trie is already complete no request is being made.
     fn request_chunk(&mut self) -> bool {
         let start_key = match self.start_key {
-            ChunkRequestState::Complete | ChunkRequestState::Paused => None,
+            ChunkRequestState::Complete | ChunkRequestState::Paused(_) => None,
             ChunkRequestState::Reset => self
                 .blockchain
                 .read()
@@ -275,20 +281,23 @@ impl<N: Network> StateQueue<N> {
             .entry(response.block_hash.clone())
             .or_default();
 
-        // We try to avoid duplicate chunks by checking start and end key
-        // as well as items length for efficiency reasons.
-        if chunks.iter().any(|chunk| {
-            chunk.start_key == start_key
-                && chunk.chunk.items.len() == response.chunk.items.len()
-                && chunk.chunk.end_key == response.chunk.end_key
-        }) {
-            log::debug!(
-                "Discarding duplicate chunk {} for block (#{}, hash {})",
-                response.chunk,
-                response.block_number,
-                response.block_hash
-            );
-            return;
+        // We enforce the invariant that chunks are ordered here.
+        // If the new chunk is for an earlier key, we clear the vector
+        // and discard old chunks.
+        if let Some(chunk) = chunks.last() {
+            // TODO: Potentially we can enforce that only one chain of chunks exists by also
+            // checking that the previous end key matches the new start key.
+            // But that's only an optimization.
+            if chunk.start_key >= start_key {
+                log::debug!(
+                    "Discarding {} old chunks for block (#{}, hash {})",
+                    chunks.len(),
+                    response.block_number,
+                    response.block_hash
+                );
+                self.buffer_size -= chunks.len();
+                chunks.clear();
+            }
         }
 
         chunks.push(ChunkAndId::new(response.chunk, start_key, peer_id));
@@ -361,7 +370,7 @@ impl<N: Network> StateQueue<N> {
             );
         } else if chunk.block_hash == current_block_hash {
             // Immediately return chunks for the current head blockchain.
-            self.set_start_key(&chunk.chunk.end_key);
+            self.set_start_key(&chunk.chunk.end_key, chunk.block_number);
             return Some(QueuedStateChunks::HeadStateChunk(vec![ChunkAndId::new(
                 chunk.chunk,
                 start_key,
@@ -379,7 +388,7 @@ impl<N: Network> StateQueue<N> {
             log::debug!("Discarding chunk {}, block already applied", chunk);
         } else {
             // Chunk is inside the buffer window, put it in the buffer.
-            self.set_start_key(&chunk.chunk.end_key);
+            self.set_start_key(&chunk.chunk.end_key, chunk.block_number);
             self.insert_chunk_into_buffer(chunk, start_key, peer_id);
         }
         None
@@ -457,9 +466,9 @@ impl<N: Network> StateQueue<N> {
     }
 
     /// Sets the start key except if the chain of chunks has been invalidated.
-    fn set_start_key(&mut self, start_key: &Option<KeyNibbles>) {
+    fn set_start_key(&mut self, start_key: &Option<KeyNibbles>, block_number: u32) {
         if self.start_key.should_continue() {
-            self.start_key = ChunkRequestState::with_key_start(start_key);
+            self.start_key = ChunkRequestState::with_key_start(start_key, block_number);
         }
     }
 
@@ -488,7 +497,20 @@ impl<N: Network> Stream for StateQueue<N> {
                 BlockchainEvent::Finalized(_)
                 | BlockchainEvent::EpochFinalized(_)
                 | BlockchainEvent::Extended(_) => {
-                    let blockchain_state_complete = self.blockchain.read().accounts_complete();
+                    let (blockchain_state_complete, current_block_number) = {
+                        let blockchain_rg = self.blockchain.read();
+                        (
+                            blockchain_rg.accounts_complete(),
+                            blockchain_rg.block_number(),
+                        )
+                    };
+                    // Check if we passed the last chunk.
+                    let past_last_chunk =
+                        if let ChunkRequestState::Paused(last_chunk_block) = self.start_key {
+                            current_block_number > last_chunk_block
+                        } else {
+                            false
+                        };
                     if !self.start_key.is_complete() && blockchain_state_complete {
                         // Mark state sync as complete after passing a macro block.
                         info!("Finished state sync, trie complete.");
@@ -496,8 +518,11 @@ impl<N: Network> Stream for StateQueue<N> {
                         self.buffer.clear();
                         self.buffer_size = 0;
                         self.diff_queue.set_diff_needed(false);
-                    } else if self.start_key.is_complete() && !blockchain_state_complete {
+                    } else if (self.start_key.is_complete() || past_last_chunk)
+                        && !blockchain_state_complete
+                    {
                         // Start state sync if the blockchain state was reinitialized after pushing a macro block.
+                        // Also restart state sync if we were paused and passed the block number that contained the end key.
                         info!("Trie incomplete, starting state sync.");
                         self.start_key = ChunkRequestState::Reset;
                         self.diff_queue.set_diff_needed(true);
