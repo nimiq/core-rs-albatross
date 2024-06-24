@@ -38,7 +38,7 @@ impl StakingDataBuilder {
         match data {
             IncomingStakingTransactionData::AddStake { .. } => {}
             _ => {
-                let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
+                let signature = key_pair.sign(&self.transaction.serialize_content());
                 let proof = SignatureProof::from_ed25519(key_pair.public, signature);
                 data.set_signature(proof);
             }

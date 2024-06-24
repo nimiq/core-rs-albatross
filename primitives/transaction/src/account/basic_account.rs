@@ -44,7 +44,7 @@ impl AccountTransactionVerification for BasicAccountVerifier {
         let signature_proof = SignatureProof::deserialize_all(&transaction.proof)?;
 
         if !signature_proof.is_signed_by(&transaction.sender)
-            || !signature_proof.verify(transaction.serialize_content().as_slice())
+            || !signature_proof.verify(&transaction.serialize_content())
         {
             error!(
                 "The following transaction has an invalid proof:\n{:?}",

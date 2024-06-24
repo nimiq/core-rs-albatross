@@ -120,7 +120,7 @@ impl MultiSigAccount {
         commitments_data: &CommitmentsData,
     ) -> Result<PartialSignature, PartialSignatureError> {
         self.key_pair
-            .partial_sign(commitments_data, transaction.serialize_content().as_slice())
+            .partial_sign(commitments_data, &transaction.serialize_content())
     }
 
     /// Creates a signature proof.

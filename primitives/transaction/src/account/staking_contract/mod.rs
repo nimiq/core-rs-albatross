@@ -50,7 +50,7 @@ impl AccountTransactionVerification for StakingContractVerifier {
 
         // Verify signature.
         let proof = SignatureProof::deserialize_all(&transaction.proof)?;
-        if !proof.verify(transaction.serialize_content().as_slice()) {
+        if !proof.verify(&transaction.serialize_content()) {
             warn!("Invalid signature for this transaction:\n{:?}", transaction);
             return Err(TransactionError::InvalidProof);
         }

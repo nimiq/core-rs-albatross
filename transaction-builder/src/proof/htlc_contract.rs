@@ -65,7 +65,7 @@ impl HtlcProofBuilder {
     /// assert!(final_transaction.unwrap().verify(NetworkId::Main).is_ok());
     /// ```
     pub fn signature_with_key_pair(&self, key_pair: &KeyPair) -> SignatureProof {
-        let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
+        let signature = key_pair.sign(&self.transaction.serialize_content());
         SignatureProof::from_ed25519(key_pair.public, signature)
     }
 

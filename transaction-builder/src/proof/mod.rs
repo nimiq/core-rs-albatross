@@ -353,7 +353,7 @@ impl BasicProofBuilder {
     /// This method sets the required `signature` proof by signing the transaction
     /// using a key pair `key_pair`.
     pub fn sign_with_key_pair(&mut self, key_pair: &KeyPair) -> &mut Self {
-        let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
+        let signature = key_pair.sign(&self.transaction.serialize_content());
         self.signature = Some(SignatureProof::from_ed25519(key_pair.public, signature));
         self
     }

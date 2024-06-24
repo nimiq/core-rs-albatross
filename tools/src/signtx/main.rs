@@ -112,7 +112,7 @@ fn run_app() -> Result<(), Error> {
     if let Some(hex_secret_key) = matches.get_one::<String>("secret_key") {
         let raw_secret_key = hex::decode(hex_secret_key)?;
         let key_pair: KeyPair = PrivateKey::deserialize_from_vec(&raw_secret_key)?.into();
-        let signature = key_pair.sign(tx.serialize_content().as_slice());
+        let signature = key_pair.sign(&tx.serialize_content());
         let raw_signature = signature.serialize_to_vec();
         println!("{}", hex::encode(raw_signature));
         Ok(())

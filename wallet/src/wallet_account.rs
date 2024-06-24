@@ -55,9 +55,7 @@ impl WalletAccount {
     }
 
     pub fn create_signature_proof(&self, transaction: &Transaction) -> SignatureProof {
-        let signature = self
-            .key_pair
-            .sign(transaction.serialize_content().as_slice());
+        let signature = self.key_pair.sign(&transaction.serialize_content());
         SignatureProof::from_ed25519(self.key_pair.public, signature)
     }
 
