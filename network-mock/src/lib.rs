@@ -31,7 +31,7 @@ pub struct MockAddress(u64);
     From,
     Into,
 )]
-pub struct MockPeerId(u64);
+pub struct MockPeerId(pub u64);
 
 impl From<MockAddress> for MockPeerId {
     fn from(address: MockAddress) -> Self {

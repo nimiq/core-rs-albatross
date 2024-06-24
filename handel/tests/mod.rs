@@ -25,7 +25,7 @@ use nimiq_network_interface::{
     network::Network as NetworkInterface,
     request::{MessageMarker, RequestCommon},
 };
-use nimiq_network_mock::{MockHub, MockNetwork};
+use nimiq_network_mock::{MockHub, MockNetwork, MockPeerId};
 use nimiq_test_log::test;
 use nimiq_utils::spawn::spawn;
 use parking_lot::RwLock;
@@ -176,9 +176,9 @@ impl protocol::Protocol<usize> for Protocol {
     }
 }
 
-struct NetworkWrapper<N: NetworkInterface>(Arc<N>);
+struct NetworkWrapper<N: NetworkInterface<PeerId = MockPeerId>>(Arc<N>);
 
-impl<N: NetworkInterface> Network for NetworkWrapper<N> {
+impl<N: NetworkInterface<PeerId = MockPeerId>> Network for NetworkWrapper<N> {
     type Contribution = Contribution;
 
     fn send_to(
@@ -188,10 +188,15 @@ impl<N: NetworkInterface> Network for NetworkWrapper<N> {
         let update = Update(msg);
         let nw = Arc::clone(&self.0);
         async move {
-            for peer_id in nw.get_peers() {
-                if let Err(err) = nw.message(update.clone(), peer_id).await {
+            let peer_id = MockPeerId(recipient as u64);
+
+            if nw.has_peer(peer_id) {
+                if let Err(err) = nw.message(update, peer_id).await {
                     log::error!("Error sending request to {}: {:?}", recipient, err);
                 }
+            } else {
+                let this_id = nw.get_local_peer_id();
+                log::error!(?this_id, ?recipient, ?update, "Peer does not exist",);
             }
         }
         .boxed()
@@ -201,7 +206,7 @@ impl<N: NetworkInterface> Network for NetworkWrapper<N> {
 #[test(tokio::test)]
 async fn it_can_aggregate() {
     let config = Config {
-        update_count: 4,
+        update_count: 1,
         update_interval: Duration::from_millis(500),
         timeout: Duration::from_millis(500),
         peer_count: 1,
