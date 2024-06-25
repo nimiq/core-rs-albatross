@@ -196,7 +196,7 @@ pub async fn migrate_history(
             let mut txn = env.write_transaction();
             history_store.add_to_history(
                 &mut txn,
-                0,
+                block_height,
                 &HistoricTransaction::from(
                     network_id,
                     block_height,

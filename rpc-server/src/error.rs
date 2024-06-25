@@ -36,6 +36,9 @@ pub enum Error {
     #[error("Method not supported for a light blockchain")]
     NotSupportedForLightBlockchain,
 
+    #[error("Method requires a history index")]
+    RequiresHistoryIndex,
+
     #[error("Invalid combination of transaction parameters")]
     InvalidTransactionParameters,
 

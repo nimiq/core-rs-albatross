@@ -548,7 +548,7 @@ fn prove_txns_with_block_number(
         return Err(ResponseTransactionProofError::BlockNotFound);
     };
 
-    let proof = match blockchain.history_store.prove(
+    let proof = match blockchain.history_store.history_index().unwrap().prove(
         Policy::epoch_at(proving_block_number),
         hashes,
         verifier_state,
@@ -578,6 +578,8 @@ fn prove_transaction(
     // Get the historic transaction from the history store
     let historic_transaction = blockchain
         .history_store
+        .history_index()
+        .unwrap()
         .get_hist_tx_by_hash(transaction, None);
 
     if let Some(hist_txn) = historic_transaction {
@@ -614,7 +616,7 @@ fn prove_transaction(
         }
 
         // Prove the transaction
-        let proof = match blockchain.history_store.prove(
+        let proof = match blockchain.history_store.history_index().unwrap().prove(
             Policy::epoch_at(proving_block_number),
             vec![transaction],
             verifier_state,
@@ -665,11 +667,11 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestTransactionReceip
         let blockchain = blockchain.read();
 
         // Get the transaction hashes for this address.
-        let raw_tx_hashes = blockchain.history_store.get_tx_hashes_by_address(
-            &self.address,
-            self.max.unwrap_or(500).min(500),
-            None,
-        );
+        let raw_tx_hashes = blockchain
+            .history_store
+            .history_index()
+            .unwrap()
+            .get_tx_hashes_by_address(&self.address, self.max.unwrap_or(500).min(500), None);
 
         let mut receipts = vec![];
 
@@ -678,6 +680,8 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestTransactionReceip
             receipts.extend(
                 blockchain
                     .history_store
+                    .history_index()
+                    .unwrap()
                     .get_hist_tx_by_hash(&hash, None)
                     .iter()
                     .map(|hist_tx| (hist_tx.tx_hash().into(), hist_tx.block_number)),

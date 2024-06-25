@@ -232,6 +232,31 @@ where
         self.init_block_producer(head_hash);
     }
 
+    fn check_reactivate(&mut self, block_number: u32) {
+        // Check if the reactivate/activate transaction was sent
+        if let Some(validator_state) = &self.validator_state {
+            // We check this in the last possible block of the validity window
+            let tx_validity_window_start = validator_state.inactive_tx_validity_window_start;
+            if block_number
+                == tx_validity_window_start + Policy::transaction_validity_window_blocks() - 1
+            {
+                let blockchain = self.blockchain.read();
+                let staking_state = self.get_staking_state(&blockchain);
+                // Check that the transaction was sent in the validity window
+                if (matches!(staking_state, ValidatorStakingState::Inactive(..)))
+                    && !blockchain
+                        .history_store
+                        .tx_in_validity_window(&validator_state.inactive_tx_hash, None)
+                {
+                    // If we are inactive and no transaction has been seen in the expected validity window
+                    // after an epoch, reset our inactive state
+                    log::debug!("Resetting state to re-send reactivate transactions since we are inactive and validity window doesn't contain the transaction sent");
+                    self.validator_state = None;
+                }
+            }
+        }
+    }
+
     fn init_epoch(&mut self) {
         *self.slot_band.write() = None;
 
@@ -240,28 +265,6 @@ where
         }
 
         let blockchain = self.blockchain.read();
-
-        // Check if the unpark/activate transaction was sent
-        if let Some(validator_state) = &self.validator_state {
-            let tx_validity_window_start = validator_state.inactive_tx_validity_window_start;
-            // Check that the transaction was sent in the validity window
-            let staking_state = self.get_staking_state(&blockchain);
-            if (matches!(staking_state, ValidatorStakingState::Inactive(..)))
-                && blockchain.block_number()
-                    >= tx_validity_window_start + Policy::blocks_per_epoch()
-                && !blockchain.history_store.tx_in_validity_window(
-                    &validator_state.inactive_tx_hash,
-                    tx_validity_window_start,
-                    None,
-                )
-            {
-                // If we are inactive and no transaction has been seen in the expected validity window
-                // after an epoch, reset our inactive state
-                log::debug!("Resetting state to re-send reactivate transactions since we are inactive and validity window doesn't contain the transaction sent");
-                self.validator_state = None;
-            }
-        }
-
         let validators = blockchain.current_validators().unwrap();
 
         *self.slot_band.write() = validators.get_slot_band_by_address(&self.validator_address());
@@ -410,6 +413,7 @@ where
             .equivocation_proofs
             .apply_block(&block);
 
+        self.check_reactivate(block.block_number());
         self.init_block_producer(Some(hash));
     }
 

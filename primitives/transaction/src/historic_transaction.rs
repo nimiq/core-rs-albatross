@@ -305,6 +305,12 @@ impl MMRHash<Blake2bHash> for HistoricTransaction {
     }
 }
 
+impl AsDatabaseBytes for HistoricTransaction {
+    fn as_database_bytes(&self) -> Cow<[u8]> {
+        Cow::Owned(Serialize::serialize_to_vec(&self))
+    }
+}
+
 impl IntoDatabaseValue for HistoricTransaction {
     fn database_byte_size(&self) -> usize {
         self.serialized_size()
