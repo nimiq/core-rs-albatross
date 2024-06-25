@@ -21,7 +21,9 @@ use nimiq_mmr::{
 use nimiq_primitives::policy::Policy;
 use nimiq_serde::Serialize;
 use nimiq_transaction::{
-    historic_transaction::{EquivocationEvent, HistoricTransaction, HistoricTransactionData},
+    historic_transaction::{
+        EquivocationEvent, HistoricTransaction, HistoricTransactionData, RawTransactionHash,
+    },
     history_proof::HistoryTreeProof,
     inherent::Inherent,
     EquivocationLocator,
@@ -64,7 +66,7 @@ impl HistoryStore {
     const HIST_TREE_DB_NAME: &'static str = "HistoryTrees";
     /// `EpochBasedIndex` (`epoch number || leaf_index`) -> `HistoricTransaction`
     const HIST_TX_DB_NAME: &'static str = "HistoricTransactions";
-    /// `Blake2bHash` -> `EpochBasedIndex` (`epoch number || leaf_index`)
+    /// `RawTransactonHash` -> `EpochBasedIndex` (`epoch number || leaf_index`)
     const TX_HASH_DB_NAME: &'static str = "LeafIndicesByTxHash";
     /// `u32` -> `u32`
     const LAST_LEAF_DB_NAME: &'static str = "LastLeafIndexesByBlock";
@@ -75,10 +77,7 @@ impl HistoryStore {
     pub fn new(db: DatabaseProxy, network_id: NetworkId) -> Self {
         let hist_tree_table = db.open_table(Self::HIST_TREE_DB_NAME.to_string());
         let hist_tx_table = db.open_table(Self::HIST_TX_DB_NAME.to_string());
-        let tx_hash_table = db.open_table_with_flags(
-            Self::TX_HASH_DB_NAME.to_string(),
-            TableFlags::DUPLICATE_KEYS | TableFlags::DUP_FIXED_SIZE_VALUES,
-        );
+        let tx_hash_table = db.open_table(Self::TX_HASH_DB_NAME.to_string());
         let last_leaf_table =
             db.open_table_with_flags(Self::LAST_LEAF_DB_NAME.to_string(), TableFlags::UINT_KEYS);
         let address_table = db.open_table_with_flags(
@@ -272,14 +271,14 @@ impl HistoryStore {
         hist_tx.serialized_size()
     }
 
-    /// Returns a vector containing all leaf hashes and indexes corresponding to the given
+    /// Returns a the epoch index and leaf index corresponding to the given
     /// transaction hash.
-    /// Due to the missing execution result, there can be more than one occurence.
+    /// The validity window ensures that there is only ever one transaction.
     fn get_leaf_indices_by_tx_hash(
         &self,
         raw_tx_hash: &Blake2bHash,
         txn_option: Option<&TransactionProxy>,
-    ) -> Vec<EpochBasedIndex> {
+    ) -> Option<EpochBasedIndex> {
         let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -290,12 +289,10 @@ impl HistoryStore {
         };
 
         // Iterate leaf hashes at the given transaction hash.
-        let cursor = txn.cursor(&self.tx_hash_table);
-
-        cursor
-            .into_iter_dup_of::<Blake2bHash, EpochBasedIndex>(raw_tx_hash)
-            .map(|(_, leaf_hash)| leaf_hash)
-            .collect()
+        txn.get(
+            &self.tx_hash_table,
+            &RawTransactionHash::from(raw_tx_hash.clone()),
+        )
     }
     /// Returns the range of leaf indexes corresponding to the given block number.
     fn get_indexes_for_block(
@@ -569,14 +566,10 @@ impl HistoryInterface for HistoryStore {
         txn_opt: Option<&TransactionProxy>,
     ) -> bool {
         // Get a vector with all transactions corresponding to the given hash.
-        let ext_hash_vec = self.get_hist_tx_by_hash(tx_hash, txn_opt);
+        let hist_tx = self.get_hist_tx_by_hash(tx_hash, txn_opt);
 
         // If the vector is empty then we have never seen a transaction with this hash.
-        if ext_hash_vec.is_empty() {
-            return false;
-        }
-
-        for hist_tx in ext_hash_vec {
+        if let Some(hist_tx) = hist_tx {
             // If the transaction is inside the validity window, return true.
             if hist_tx.block_number >= validity_window_start
                 && hist_tx.block_number
@@ -593,9 +586,9 @@ impl HistoryInterface for HistoryStore {
     /// Gets an historic transaction given its transaction hash.
     fn get_hist_tx_by_hash(
         &self,
-        tx_hash: &Blake2bHash,
+        raw_tx_hash: &Blake2bHash,
         txn_option: Option<&TransactionProxy>,
-    ) -> Vec<HistoricTransaction> {
+    ) -> Option<HistoricTransaction> {
         let read_txn: TransactionProxy;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -606,19 +599,9 @@ impl HistoryInterface for HistoryStore {
         };
 
         // Get leaf hash(es).
-        let leaves = self.get_leaf_indices_by_tx_hash(tx_hash, Some(txn));
+        let leaf = self.get_leaf_indices_by_tx_hash(raw_tx_hash, Some(txn))?;
 
-        // Get historic transactions.
-        let mut hist_txs = vec![];
-
-        for leaf in leaves {
-            hist_txs.push(
-                self.get_historic_tx(leaf.epoch_number, leaf.index, Some(txn))
-                    .unwrap(),
-            );
-        }
-
-        hist_txs
+        self.get_historic_tx(leaf.epoch_number, leaf.index, Some(txn))
     }
 
     /// Gets all historic transactions for a given block number.
@@ -1063,7 +1046,7 @@ impl HistoryInterface for HistoryStore {
         txn_option: Option<&TransactionProxy>,
     ) -> bool {
         let hash = HistoricTransactionData::Equivocation(EquivocationEvent { locator }).hash();
-        !self.get_hist_tx_by_hash(&hash, txn_option).is_empty()
+        self.get_hist_tx_by_hash(&hash, txn_option).is_some()
     }
 
     fn prove_num_leaves(
@@ -1358,7 +1341,9 @@ mod tests {
 
         // Verify method works.
         assert_eq!(
-            history_store.get_hist_tx_by_hash(&hashes[0], Some(&txn))[0]
+            history_store
+                .get_hist_tx_by_hash(&hashes[0], Some(&txn))
+                .unwrap()
                 .unwrap_basic()
                 .get_raw_transaction()
                 .value,
@@ -1366,14 +1351,18 @@ mod tests {
         );
 
         assert_eq!(
-            history_store.get_hist_tx_by_hash(&hashes[2], Some(&txn))[0]
+            history_store
+                .get_hist_tx_by_hash(&hashes[2], Some(&txn))
+                .unwrap()
                 .unwrap_reward()
                 .value,
             Coin::from_u64_unchecked(2),
         );
 
         assert_eq!(
-            history_store.get_hist_tx_by_hash(&hashes[3], Some(&txn))[0]
+            history_store
+                .get_hist_tx_by_hash(&hashes[3], Some(&txn))
+                .unwrap()
                 .unwrap_basic()
                 .get_raw_transaction()
                 .value,

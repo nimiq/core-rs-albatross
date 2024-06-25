@@ -447,7 +447,6 @@ fn it_can_find_txns() {
             blockchain
                 .history_store
                 .get_hist_tx_by_hash(&txn.hash(), None)
-                .pop()
                 .unwrap(),
             HistoricTransaction {
                 network_id: NetworkId::UnitAlbatross,
@@ -468,8 +467,7 @@ fn it_can_find_txns() {
         assert_eq!(
             blockchain
                 .history_store
-                .get_hist_tx_by_hash(&txn.hash(), None)
-                .pop(),
+                .get_hist_tx_by_hash(&txn.hash(), None),
             None
         );
     }
