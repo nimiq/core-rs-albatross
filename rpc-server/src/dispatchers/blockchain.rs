@@ -156,14 +156,9 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<ExecutedTransaction, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
             // Get all the historic transactions that correspond to this hash.
-            let mut hist_txs = blockchain.history_store.get_hist_tx_by_hash(&hash, None);
-
-            // Unpack the transaction or raise an error.
-            if hist_txs.len() > 1 {
-                return Err(Error::MultipleTransactionsFound(hash));
-            }
-            let hist_tx = hist_txs
-                .pop()
+            let hist_tx = blockchain
+                .history_store
+                .get_hist_tx_by_hash(&hash, None)
                 .ok_or_else(|| Error::TransactionNotFound(hash.clone()))?;
 
             // Convert the historic transaction into a regular transaction. This will also convert
@@ -338,14 +333,9 @@ impl BlockchainInterface for BlockchainDispatcher {
 
             for hash in tx_hashes {
                 // Get all the historic transactions that correspond to this hash.
-                let mut hist_txs = blockchain.history_store.get_hist_tx_by_hash(&hash, None);
-
-                // Unpack the transaction or raise an error.
-                if hist_txs.len() > 1 {
-                    return Err(Error::MultipleTransactionsFound(hash));
-                }
-                let hist_tx = hist_txs
-                    .pop()
+                let hist_tx = blockchain
+                    .history_store
+                    .get_hist_tx_by_hash(&hash, None)
                     .ok_or_else(|| Error::TransactionNotFound(hash.clone()))?;
 
                 // Convert the historic transaction into a regular transaction. This will also convert

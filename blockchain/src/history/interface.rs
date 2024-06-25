@@ -82,7 +82,7 @@ pub trait HistoryInterface {
 
     fn tx_in_validity_window(
         &self,
-        tx_hash: &Blake2bHash,
+        raw_tx_hash: &Blake2bHash,
         validity_window_start: u32,
         txn_opt: Option<&TransactionProxy>,
     ) -> bool;
@@ -90,9 +90,9 @@ pub trait HistoryInterface {
     /// Gets an historic transaction given its transaction hash.
     fn get_hist_tx_by_hash(
         &self,
-        tx_hash: &Blake2bHash,
+        raw_tx_hash: &Blake2bHash,
         txn_option: Option<&TransactionProxy>,
-    ) -> Vec<HistoricTransaction>;
+    ) -> Option<HistoricTransaction>;
 
     /// Gets all historic transactions for a given block number.
     /// This method returns the transactions in the same order that they appear in the block.

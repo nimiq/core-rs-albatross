@@ -293,7 +293,7 @@ impl HistoryInterface for LightHistoryStore {
         &self,
         _tx_hash: &Blake2bHash,
         _txn_option: Option<&TransactionProxy>,
-    ) -> Vec<HistoricTransaction> {
+    ) -> Option<HistoricTransaction> {
         todo!()
     }
 
