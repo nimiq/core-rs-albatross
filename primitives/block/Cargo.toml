@@ -19,7 +19,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 ark-ec = "0.4"
-bitflags = { version = "2.5", features = ["serde"] }
+bitflags = { version = "2.6", features = ["serde"] }
 byteorder = "1.5"
 hex = "0.4"
 log = { workspace = true }

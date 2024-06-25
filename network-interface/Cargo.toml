@@ -21,7 +21,7 @@ workspace = true
 
 [dependencies]
 async-trait = "0.1"
-bitflags = { version = "2.5", features = ["serde"] }
+bitflags = { version = "2.6", features = ["serde"] }
 futures = { workspace = true }
 log = { workspace = true }
 multiaddr = "0.18"
