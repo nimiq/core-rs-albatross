@@ -1,7 +1,7 @@
 use std::cmp;
 
 use nimiq_keys::Address;
-use nimiq_utils::math::exp;
+use nimiq_utils::math::{exp, pow};
 use once_cell::sync::OnceCell;
 #[cfg(feature = "ts-types")]
 use wasm_bindgen::prelude::*;
@@ -499,8 +499,8 @@ impl Policy {
         let exponent = -Policy::SUPPLY_DECAY * t;
 
         let supply = genesis_supply
-            + (Self::INITIAL_SUPPLY_VELOCITY / Self::SUPPLY_DECAY
-                * (1.0 - f64::powf(2.0, exponent))) as u64;
+            + (Self::INITIAL_SUPPLY_VELOCITY / Self::SUPPLY_DECAY * (1.0 - pow(2.0, exponent)))
+                as u64;
 
         cmp::min(supply, Policy::TOTAL_SUPPLY)
     }
