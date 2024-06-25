@@ -31,6 +31,7 @@ use nimiq_utils::spawn::spawn;
 use parking_lot::RwLock;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
 
 /// Dump Aggregate adding numbers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -220,6 +221,8 @@ async fn it_can_aggregate() {
     let contributor_num: usize = rng.gen_range(7..15);
     log::info!(contributor_num, "Running with");
 
+    let (sender, mut receiver) = mpsc::channel(contributor_num);
+
     let mut networks: Vec<Arc<MockNetwork>> = vec![];
     // Initialize `contributor_num` networks and Handel Aggregations. Connect all the networks with each other.
     for id in 0..contributor_num {
@@ -257,9 +260,14 @@ async fn it_can_aggregate() {
         );
 
         let r = stopped.clone();
+        let s = sender.clone();
         spawn(async move {
             // have them just run until the aggregation is finished
-            while let Some(_contribution) = aggregation.next().await {
+            while let Some(contribution) = aggregation.next().await {
+                if contribution.num_contributors() == contributor_num + 1 {
+                    s.send(()).await.expect("Send should never fail");
+                }
+
                 if *r.read() {
                     return;
                 }
@@ -330,7 +338,14 @@ async fn it_can_aggregate() {
     net.disconnect();
 
     // give the other aggregations time to complete themselves
-    nimiq_time::sleep(Duration::from_millis(100)).await;
+    let mut finished_count = 0usize;
+    loop {
+        let _ = receiver.recv().await;
+        finished_count += 1;
+        if finished_count == contributor_num {
+            break;
+        }
+    }
 
     // after we have the final aggregate create a new instance and have it (without any other instances)
     // return a fully aggregated contribution and terminate.
@@ -374,7 +389,8 @@ async fn it_can_aggregate() {
     assert_eq!(
         last_aggregate.num_contributors(),
         contributor_num + 1,
-        "Not all contributions are present",
+        "Not all contributions are present: {:?}",
+        last_aggregate,
     );
 
     // the final value needs to be the sum of all contributions: `exp_agg_value`
