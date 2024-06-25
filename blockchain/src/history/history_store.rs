@@ -573,7 +573,7 @@ impl HistoryInterface for HistoryStore {
             // If the transaction is inside the validity window, return true.
             if hist_tx.block_number >= validity_window_start
                 && hist_tx.block_number
-                    <= validity_window_start + Policy::transaction_validity_window_blocks()
+                    < validity_window_start + Policy::transaction_validity_window_blocks()
             {
                 return true;
             }
