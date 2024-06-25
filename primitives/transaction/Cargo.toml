@@ -18,7 +18,7 @@ workspace = true
 
 [dependencies]
 base64 = "0.22"
-bitflags = { version = "2.5", features = ["serde"] }
+bitflags = { version = "2.6", features = ["serde"] }
 hex = "0.4"
 log = { workspace = true }
 serde = "1.0"
