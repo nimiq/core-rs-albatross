@@ -4,6 +4,8 @@ use std::{
     ops::RangeBounds,
 };
 
+use utils::BaggingInfo;
+
 use self::{proof::SizeProof, utils::prove_num_leaves};
 use crate::{
     error::Error,
@@ -153,7 +155,7 @@ impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
     /// If the verifier has a MMR that is a subtree of the prover's MMR (meaning that the prover's
     /// MMR is simply the verifier's MMR with more leaves added), you can set `verifier_state` to
     /// the length of the verifier's MMR. This will construct a proof that is valid to the verifier.
-    pub fn prove_num_leaves<T: Hash<H>, F: Fn(H) -> Option<T>>(
+    pub fn prove_num_leaves<T: Hash<H>, F: Fn(usize) -> Option<T>>(
         &self,
         f: F,
         verifier_state: Option<usize>,
@@ -176,18 +178,19 @@ impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
         };
 
         let it = RevPeakIterator::new(length).map(|peak_pos| {
-            Ok((
-                self.store
+            Ok(BaggingInfo {
+                hash: self
+                    .store
                     .get(peak_pos.index)
                     .ok_or(Error::InconsistentStore)?,
-                peak_pos.num_leaves(),
-                peak_pos
+                num_leaves: peak_pos.num_leaves(),
+                left_child_hash: peak_pos
                     .left_child()
                     .and_then(|pos| self.store.get(pos.index)),
-                peak_pos
+                right_child_hash: peak_pos
                     .right_child()
                     .and_then(|pos| self.store.get(pos.index)),
-            ))
+            })
         });
 
         prove_num_leaves(it, f)
@@ -681,10 +684,7 @@ mod tests {
 
         // Check empty size proof.
         let size_proof = mmr
-            .prove_num_leaves(
-                |hash| hashes.iter().position(|h| h == &hash).map(|pos| nodes[pos]),
-                None,
-            )
+            .prove_num_leaves(|index| Some(nodes[index]), None)
             .unwrap();
 
         assert!(size_proof.verify(&mmr.get_root().unwrap()));
@@ -699,10 +699,7 @@ mod tests {
             hashes.push(hash);
 
             let size_proof = mmr
-                .prove_num_leaves(
-                    |hash| hashes.iter().position(|h| h == &hash).map(|pos| nodes[pos]),
-                    None,
-                )
+                .prove_num_leaves(|index| Some(nodes[index]), None)
                 .unwrap();
 
             let root_hash = mmr.get_root().unwrap();
@@ -716,7 +713,7 @@ mod tests {
         for i in 0..mmr.num_leaves {
             let size_proof = mmr
                 .prove_num_leaves(
-                    |hash| hashes.iter().position(|h| h == &hash).map(|pos| nodes[pos]),
+                    |index| Some(nodes[index]),
                     Some(leaf_number_to_index(i + 1)),
                 )
                 .unwrap();
