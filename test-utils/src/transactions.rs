@@ -285,7 +285,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 sender.into(),
                 sender_data,
                 recipient.into(),
-                parameters.serialize_to_vec(),
+                parameters.to_tx_data(),
                 value,
                 fee,
                 block_state.number,

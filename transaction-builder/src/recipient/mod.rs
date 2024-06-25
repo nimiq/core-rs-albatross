@@ -32,7 +32,6 @@ pub mod vesting_contract;
 /// [`new_vesting_builder`]: enum.Recipient.html#method.new_vesting_builder
 /// [`new_staking_builder`]: enum.Recipient.html#method.new_staking_builder
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub enum Recipient {
     Basic {
         address: Address,

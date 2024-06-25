@@ -90,7 +90,6 @@ pub enum TransactionBuilderError {
 /// [`generate`]: struct.TransactionBuilder.html#method.generate
 /// [`TransactionProofBuilder`]: proof/enum.TransactionProofBuilder.html
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct TransactionBuilder {
     sender: Option<Sender>,
     value: Option<Coin>,

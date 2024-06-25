@@ -474,26 +474,20 @@ impl Transaction {
         match self.recipient_type {
             AccountType::Basic => {}
             AccountType::Vesting => {
-                if let Ok(contract_data) =
-                    VestingCreationData::deserialize_from_vec(&self.recipient_data)
-                {
+                if let Ok(contract_data) = VestingCreationData::parse(self) {
                     // Add the owner of the new vesting contract
                     addresses.insert(contract_data.owner);
                 }
             }
             AccountType::HTLC => {
-                if let Ok(contract_data) =
-                    HtlcCreationData::deserialize_from_vec(&self.recipient_data)
-                {
+                if let Ok(contract_data) = HtlcCreationData::parse(self) {
                     // Add both the "sender" and "recipient" of the new HTLC
                     addresses.insert(contract_data.sender);
                     addresses.insert(contract_data.recipient);
                 }
             }
             AccountType::Staking => {
-                if let Ok(contract_data) =
-                    IncomingStakingTransactionData::deserialize_from_vec(&self.recipient_data)
-                {
+                if let Ok(contract_data) = IncomingStakingTransactionData::parse(self) {
                     match contract_data {
                         IncomingStakingTransactionData::CreateValidator {
                             signing_key,

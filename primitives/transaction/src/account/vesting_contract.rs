@@ -58,7 +58,7 @@ impl AccountTransactionVerification for VestingContractVerifier {
     }
 }
 
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default)]
 pub struct CreationTransactionData {
     pub owner: Address,
     pub start_time: u64,

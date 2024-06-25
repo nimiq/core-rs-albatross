@@ -100,7 +100,7 @@ fn it_can_verify_creation_transaction() {
         step_amount: Coin::try_from(1000).unwrap(),
         total_amount: Coin::try_from(100).unwrap(),
     };
-    transaction.recipient_data = data.serialize_to_vec();
+    transaction.recipient_data = data.to_tx_data();
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
         AccountType::verify_incoming_transaction(&transaction),
