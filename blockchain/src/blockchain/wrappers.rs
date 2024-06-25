@@ -200,11 +200,7 @@ impl Blockchain {
         tx_hash: &Blake2bHash,
         txn_opt: Option<&DBTransaction>,
     ) -> bool {
-        let max_block_number = self
-            .block_number()
-            .saturating_sub(Policy::transaction_validity_window_blocks());
-        self.history_store
-            .tx_in_validity_window(tx_hash, max_block_number, txn_opt)
+        self.history_store.tx_in_validity_window(tx_hash, txn_opt)
     }
 
     pub fn staking_contract_address(&self) -> Address {

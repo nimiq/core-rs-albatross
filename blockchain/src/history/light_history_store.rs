@@ -9,6 +9,8 @@ use nimiq_mmr::mmr::PeaksMerkleMountainRange;
 use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{historic_transaction::HistoricTransaction, inherent::Inherent};
 
+use crate::interface::HistoryIndexInterface;
+
 use super::{
     interface::HistoryInterface,
     mmr_store::{get_range, remove_block_from_store, LightMMRStore},
@@ -260,8 +262,15 @@ impl HistoryInterface for LightHistoryStore {
         let root = tree.get_root().ok()?;
 
         for tx in hist_txs {
+            assert!(
+                tx.block_number <= block_number
+                    && Policy::epoch_at(tx.block_number) == Policy::epoch_at(block_number),
+                "Inconsistent transactions when adding to history store (block #{}, tx block #{}).",
+                block_number,
+                tx.block_number
+            );
             self.validity_store
-                .add_transaction(txn, block_number, tx.tx_hash().into())
+                .add_transaction(txn, tx.block_number, tx.tx_hash().into())
         }
 
         self.validity_store.update_validity_store(txn, block_number);
@@ -282,19 +291,9 @@ impl HistoryInterface for LightHistoryStore {
     fn tx_in_validity_window(
         &self,
         tx_hash: &Blake2bHash,
-        validity_window_start: u32,
         txn_opt: Option<&TransactionProxy>,
     ) -> bool {
-        self.validity_store
-            .has_transaction(txn_opt, validity_window_start, tx_hash.clone())
-    }
-
-    fn get_hist_tx_by_hash(
-        &self,
-        _tx_hash: &Blake2bHash,
-        _txn_option: Option<&TransactionProxy>,
-    ) -> Option<HistoricTransaction> {
-        todo!()
+        self.validity_store.has_transaction(txn_opt, tx_hash)
     }
 
     fn get_block_transactions(
@@ -361,25 +360,6 @@ impl HistoryInterface for LightHistoryStore {
         unimplemented!()
     }
 
-    fn get_tx_hashes_by_address(
-        &self,
-        _address: &nimiq_keys::Address,
-        _max: u16,
-        _txn_option: Option<&TransactionProxy>,
-    ) -> Vec<Blake2bHash> {
-        unimplemented!()
-    }
-
-    fn prove(
-        &self,
-        _epoch_number: u32,
-        _hashes: Vec<&Blake2bHash>,
-        _verifier_state: Option<usize>,
-        _txn_option: Option<&TransactionProxy>,
-    ) -> Option<nimiq_transaction::history_proof::HistoryTreeProof> {
-        unimplemented!()
-    }
-
     fn prove_chunk(
         &self,
         _epoch_number: u32,
@@ -424,6 +404,10 @@ impl HistoryInterface for LightHistoryStore {
         nimiq_mmr::error::Error,
     > {
         unimplemented!()
+    }
+
+    fn history_index(&self) -> Option<&Box<dyn HistoryIndexInterface + Send + Sync>> {
+        None
     }
 }
 
@@ -495,8 +479,6 @@ mod tests {
         // Add historic transactions to History Store.
         let mut current_block_number = Policy::genesis_block_number() + 1;
         let validity_window_blocks = Policy::transaction_validity_window_blocks();
-        let validity_window_start =
-            |current_block_number: u32| current_block_number.saturating_sub(validity_window_blocks);
 
         let mut txn = env.write_transaction();
         history_store.add_to_history(&mut txn, current_block_number, &hist_txs);
@@ -505,20 +487,12 @@ mod tests {
         // Now keep pushing transactions to the history store until we are past the transaction validity window
         for bn in 2..validity_window_blocks + 2 {
             assert_eq!(
-                history_store.tx_in_validity_window(
-                    &ext_0.tx_hash(),
-                    validity_window_start(current_block_number + 1),
-                    Some(&txn)
-                ),
+                history_store.tx_in_validity_window(&ext_0.tx_hash(), Some(&txn)),
                 true
             );
 
             assert_eq!(
-                history_store.tx_in_validity_window(
-                    &ext_1.tx_hash(),
-                    validity_window_start(current_block_number + 1),
-                    Some(&txn)
-                ),
+                history_store.tx_in_validity_window(&ext_1.tx_hash(), Some(&txn)),
                 true
             );
 
@@ -529,41 +503,24 @@ mod tests {
 
         // Since we are past the txn in validity window, the first two transaction should no longer be in it
         assert_eq!(
-            history_store.tx_in_validity_window(
-                &ext_0.tx_hash(),
-                validity_window_start(current_block_number + 1),
-                Some(&txn)
-            ),
+            history_store.tx_in_validity_window(&ext_0.tx_hash(), Some(&txn)),
             false
         );
 
         assert_eq!(
-            history_store.tx_in_validity_window(
-                &ext_1.tx_hash(),
-                validity_window_start(current_block_number + 1),
-                Some(&txn)
-            ),
+            history_store.tx_in_validity_window(&ext_1.tx_hash(), Some(&txn)),
             false
         );
 
         // Remove the last block and make sure the transactions are in the validity window again
         history_store.remove_block_light_history_store(&mut txn, current_block_number);
-        current_block_number -= 1;
         assert_eq!(
-            history_store.tx_in_validity_window(
-                &ext_0.tx_hash(),
-                validity_window_start(current_block_number + 1),
-                Some(&txn)
-            ),
+            history_store.tx_in_validity_window(&ext_0.tx_hash(), Some(&txn)),
             true
         );
 
         assert_eq!(
-            history_store.tx_in_validity_window(
-                &ext_1.tx_hash(),
-                validity_window_start(current_block_number + 1),
-                Some(&txn)
-            ),
+            history_store.tx_in_validity_window(&ext_1.tx_hash(), Some(&txn)),
             true
         );
     }

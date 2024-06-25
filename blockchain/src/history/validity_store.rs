@@ -8,6 +8,7 @@ use nimiq_primitives::policy::Policy;
 /// The validity store is used by full nodes to keep track of which
 /// transactions have occurred within the validity window without
 /// having to store the full transactions
+#[derive(Debug)]
 pub struct ValidityStore {
     // Database handle.
     db: DatabaseProxy,
@@ -43,8 +44,7 @@ impl ValidityStore {
     pub(crate) fn has_transaction(
         &self,
         txn_option: Option<&TransactionProxy>,
-        validity_window_start: u32,
-        raw_tx_hash: Blake2bHash,
+        raw_tx_hash: &Blake2bHash,
     ) -> bool {
         let read_txn: TransactionProxy;
         let txn = match txn_option {
@@ -55,14 +55,16 @@ impl ValidityStore {
             }
         };
 
+        // Calculate first block in window.
+        let validity_window_start = self
+            .last_bn(txn)
+            .saturating_sub(Policy::transaction_validity_window_blocks());
+
         // If the vector is empty then we have never seen a transaction with this hash.
-        let block_number = txn.get::<Blake2bHash, u32>(&self.txn_hashes, &raw_tx_hash);
+        let block_number = txn.get::<Blake2bHash, u32>(&self.txn_hashes, raw_tx_hash);
         if let Some(block_number) = block_number {
             // If the transaction is inside the validity window, return true.
-            if block_number >= validity_window_start
-                && block_number
-                    < validity_window_start + Policy::transaction_validity_window_blocks()
-            {
+            if block_number > validity_window_start {
                 return true;
             }
         }

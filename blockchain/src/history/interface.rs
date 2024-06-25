@@ -15,6 +15,14 @@ use crate::HistoryTreeChunk;
 
 /// Defines several methods to interact with a history store.
 pub trait HistoryInterface {
+    /// Returns a `HistoryIndexInterface` if supported.
+    fn history_index(&self) -> Option<&Box<dyn HistoryIndexInterface + Send + Sync>>;
+
+    /// Returns `true` if it supports a history index.
+    fn has_history_index(&self) -> bool {
+        self.history_index().is_some()
+    }
+
     /// Adds all the transactions included in a given block into the history store.
     fn add_block(
         &self,
@@ -83,16 +91,8 @@ pub trait HistoryInterface {
     fn tx_in_validity_window(
         &self,
         raw_tx_hash: &Blake2bHash,
-        validity_window_start: u32,
         txn_opt: Option<&TransactionProxy>,
     ) -> bool;
-
-    /// Gets an historic transaction given its transaction hash.
-    fn get_hist_tx_by_hash(
-        &self,
-        raw_tx_hash: &Blake2bHash,
-        txn_option: Option<&TransactionProxy>,
-    ) -> Option<HistoricTransaction>;
 
     /// Gets all historic transactions for a given block number.
     /// This method returns the transactions in the same order that they appear in the block.
@@ -139,28 +139,6 @@ pub trait HistoryInterface {
         txn_option: Option<&TransactionProxy>,
     ) -> Vec<HistoricTransaction>;
 
-    /// Returns a vector containing all transaction (and reward inherents) hashes corresponding to the given
-    /// address. It fetches the transactions from most recent to least recent up to the maximum
-    /// number given.
-    fn get_tx_hashes_by_address(
-        &self,
-        address: &Address,
-        max: u16,
-        txn_option: Option<&TransactionProxy>,
-    ) -> Vec<Blake2bHash>;
-
-    /// Returns a proof for transactions with the given hashes. The proof also includes the extended
-    /// transactions.
-    /// The verifier state is used for those cases where the verifier might have an incomplete MMR,
-    /// for instance this could occur where we want to create transaction inclusion proofs of incomplete epochs.
-    fn prove(
-        &self,
-        epoch_number: u32,
-        hashes: Vec<&Blake2bHash>,
-        verifier_state: Option<usize>,
-        txn_option: Option<&TransactionProxy>,
-    ) -> Option<HistoryTreeProof>;
-
     /// Returns the `chunk_index`th chunk of size `chunk_size` for a given epoch.
     /// The return value consists of a vector of all the historic transactions in that chunk
     /// and a proof for these in the MMR.
@@ -201,4 +179,36 @@ pub trait HistoryInterface {
         block_number: u32,
         txn_option: Option<&TransactionProxy>,
     ) -> Result<SizeProof<Blake2bHash, HistoricTransaction>, MMRError>;
+}
+
+/// Defines several methods to interact with a history store.
+pub trait HistoryIndexInterface {
+    /// Gets an historic transaction given its transaction hash.
+    fn get_hist_tx_by_hash(
+        &self,
+        raw_tx_hash: &Blake2bHash,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Option<HistoricTransaction>;
+
+    /// Returns a vector containing all transaction (and reward inherents) hashes corresponding to the given
+    /// address. It fetches the transactions from most recent to least recent up to the maximum
+    /// number given.
+    fn get_tx_hashes_by_address(
+        &self,
+        address: &Address,
+        max: u16,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Vec<Blake2bHash>;
+
+    /// Returns a proof for transactions with the given hashes. The proof also includes the extended
+    /// transactions.
+    /// The verifier state is used for those cases where the verifier might have an incomplete MMR,
+    /// for instance this could occur where we want to create transaction inclusion proofs of incomplete epochs.
+    fn prove(
+        &self,
+        epoch_number: u32,
+        hashes: Vec<&Blake2bHash>,
+        verifier_state: Option<usize>,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Option<HistoryTreeProof>;
 }

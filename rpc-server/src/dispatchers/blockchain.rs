@@ -158,6 +158,8 @@ impl BlockchainInterface for BlockchainDispatcher {
             // Get all the historic transactions that correspond to this hash.
             let hist_tx = blockchain
                 .history_store
+                .history_index()
+                .ok_or(Error::RequiresHistoryIndex)?
                 .get_hist_tx_by_hash(&hash, None)
                 .ok_or_else(|| Error::TransactionNotFound(hash.clone()))?;
 
@@ -309,6 +311,8 @@ impl BlockchainInterface for BlockchainDispatcher {
             Ok(blockchain
                 .read()
                 .history_store
+                .history_index()
+                .ok_or(Error::RequiresHistoryIndex)?
                 .get_tx_hashes_by_address(&address, max.unwrap_or(500), None)
                 .into())
         } else {
@@ -323,11 +327,11 @@ impl BlockchainInterface for BlockchainDispatcher {
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
             // Get the transaction hashes for this address.
-            let tx_hashes = blockchain.history_store.get_tx_hashes_by_address(
-                &address,
-                max.unwrap_or(500),
-                None,
-            );
+            let tx_hashes = blockchain
+                .history_store
+                .history_index()
+                .ok_or(Error::RequiresHistoryIndex)?
+                .get_tx_hashes_by_address(&address, max.unwrap_or(500), None);
 
             let mut txs = vec![];
 
@@ -335,6 +339,8 @@ impl BlockchainInterface for BlockchainDispatcher {
                 // Get all the historic transactions that correspond to this hash.
                 let hist_tx = blockchain
                     .history_store
+                    .history_index()
+                    .ok_or(Error::RequiresHistoryIndex)?
                     .get_hist_tx_by_hash(&hash, None)
                     .ok_or_else(|| Error::TransactionNotFound(hash.clone()))?;
 
