@@ -576,13 +576,11 @@ fn prove_transaction(
     let macro_head = blockchain.macro_head().block_number();
 
     // Get the historic transaction from the history store
-    let mut historic_transactions = blockchain
+    let historic_transaction = blockchain
         .history_store
         .get_hist_tx_by_hash(transaction, None);
 
-    // Due to the history store implementation, potentially, we could have multiple historic transactions at this hash
-    // So we just pick any transaction
-    if let Some(hist_txn) = historic_transactions.pop() {
+    if let Some(hist_txn) = historic_transaction {
         let block_number = hist_txn.block_number;
 
         let proving_block_number = if block_number <= election_head {
