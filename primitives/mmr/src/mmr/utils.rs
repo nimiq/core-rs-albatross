@@ -34,12 +34,19 @@ pub(crate) fn bagging<H: Merge, I: Iterator<Item = Result<(H, usize), Error>>>(
     Ok(root)
 }
 
+pub(crate) struct BaggingInfo<H: Merge + Clone> {
+    pub(crate) hash: H,
+    pub(crate) num_leaves: usize,
+    pub(crate) left_child_hash: Option<H>,
+    pub(crate) right_child_hash: Option<H>,
+}
+
 /// Computes a size proof for an iterator over peak positions.
-pub fn prove_num_leaves<
+pub(crate) fn prove_num_leaves<
     H: Merge + Clone,
     T: Hash<H>,
-    I: Iterator<Item = Result<(H, usize, Option<H>, Option<H>), Error>>,
-    F: Fn(H) -> Option<T>,
+    I: Iterator<Item = Result<BaggingInfo<H>, Error>>,
+    F: Fn(usize) -> Option<T>,
 >(
     peaks_rev: I,
     f: F,
@@ -47,31 +54,45 @@ pub fn prove_num_leaves<
     // Bagging
     let mut bagging_info = None;
     for item in peaks_rev {
-        let (peak_hash, peak_leaves, left_child_hash, right_child_hash) = item?;
+        let item = item?;
 
         bagging_info = match bagging_info {
-            None => Some((peak_leaves, left_child_hash, right_child_hash, peak_hash)),
-            Some((root_leaves, _, _, root_hash)) => {
-                let sum_leaves: usize = root_leaves + peak_leaves;
+            None => Some(item),
+            Some(BaggingInfo {
+                num_leaves: root_leaves,
+                hash: root_hash,
+                ..
+            }) => {
+                let sum_leaves: usize = root_leaves + item.num_leaves;
 
-                Some((
-                    sum_leaves,
-                    Some(peak_hash.clone()),
-                    Some(root_hash.clone()),
-                    peak_hash.merge(&root_hash, sum_leaves as u64),
-                ))
+                Some(BaggingInfo {
+                    num_leaves: sum_leaves,
+                    left_child_hash: Some(item.hash.clone()),
+                    right_child_hash: Some(root_hash.clone()),
+                    hash: item.hash.merge(&root_hash, sum_leaves as u64),
+                })
             }
         };
     }
     match bagging_info {
-        Some((size, Some(left_hash), Some(right_hash), _)) => Ok(SizeProof::MultipleElements(
+        Some(BaggingInfo {
+            num_leaves: size,
+            left_child_hash: Some(left_hash),
+            right_child_hash: Some(right_hash),
+            ..
+        }) => Ok(SizeProof::MultipleElements(
             size as u64,
             left_hash,
             right_hash,
         )),
-        Some((size, None, None, hash)) if size == 1 => Ok(SizeProof::SingleElement(
+        Some(BaggingInfo {
+            num_leaves: size,
+            left_child_hash: None,
+            right_child_hash: None,
+            ..
+        }) if size == 1 => Ok(SizeProof::SingleElement(
             size as u64,
-            f(hash).ok_or(Error::InconsistentStore)?,
+            f(0).ok_or(Error::InconsistentStore)?,
         )),
         None => Ok(SizeProof::EmptyTree),
         _ => Err(Error::ProveInvalidLeaves),
