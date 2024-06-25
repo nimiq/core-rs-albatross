@@ -19,7 +19,9 @@ pub struct ValidityStore {
 }
 
 impl ValidityStore {
+    /// `RawTransactionHash` -> `u32` (block number)
     const TXN_HASHES_DB_NAME: &'static str = "ValidityTxnHashes";
+    /// `u32` (block number) -> `RawTransactionHash`
     const BLOCK_TXNS_DB_NAME: &'static str = "ValidityBlockTxnHashes";
 
     /// Creates a new validity store initializing database tables
@@ -41,6 +43,7 @@ impl ValidityStore {
     pub(crate) fn has_transaction(
         &self,
         txn_option: Option<&TransactionProxy>,
+        validity_window_start: u32,
         raw_tx_hash: Blake2bHash,
     ) -> bool {
         let read_txn: TransactionProxy;
@@ -52,8 +55,20 @@ impl ValidityStore {
             }
         };
 
-        txn.get::<Blake2bHash, Blake2bHash>(&self.txn_hashes, &raw_tx_hash)
-            .is_some()
+        // If the vector is empty then we have never seen a transaction with this hash.
+        let block_number = txn.get::<Blake2bHash, u32>(&self.txn_hashes, &raw_tx_hash);
+        if let Some(block_number) = block_number {
+            // If the transaction is inside the validity window, return true.
+            if block_number >= validity_window_start
+                && block_number
+                    < validity_window_start + Policy::transaction_validity_window_blocks()
+            {
+                return true;
+            }
+        }
+
+        // If we didn't see any transaction inside the validity window then we can return false.
+        false
     }
 
     /// Returns the first block number stored in the validity store
@@ -79,7 +94,7 @@ impl ValidityStore {
         block_number: u32,
         transaction: Blake2bHash,
     ) {
-        db_txn.put(&self.txn_hashes, &transaction, &transaction);
+        db_txn.put(&self.txn_hashes, &transaction, &block_number);
         db_txn.put(&self.block_txns, &block_number, &transaction);
     }
 
@@ -114,7 +129,7 @@ impl ValidityStore {
         // Compute the number of blocks we currently have in the store
         let first_bn = self.first_bn(db_txn);
         let last_bn = self.last_bn(db_txn);
-        let num_blocks = last_bn - first_bn;
+        let num_blocks = last_bn - first_bn + 1;
 
         log::trace!(
             first = first_bn,
@@ -123,9 +138,14 @@ impl ValidityStore {
             "Pruning the validity store"
         );
 
-        if num_blocks > Policy::transaction_validity_window_blocks() {
+        // We need to keep at least 'validity_window_blocks' + 'blocks_per_batch' blocks
+        // to account for potential rebranches (when the window moves backwards).
+        let num_blocks_to_keep =
+            Policy::transaction_validity_window_blocks() + Policy::blocks_per_batch();
+
+        if num_blocks > num_blocks_to_keep {
             // We need to prune the validity store
-            let count = num_blocks - Policy::transaction_validity_window_blocks();
+            let count = num_blocks - num_blocks_to_keep;
 
             for bn in first_bn..first_bn + count {
                 self.delete_block_transactions(db_txn, bn);

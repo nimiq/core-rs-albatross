@@ -282,11 +282,11 @@ impl HistoryInterface for LightHistoryStore {
     fn tx_in_validity_window(
         &self,
         tx_hash: &Blake2bHash,
-        _validity_window_start: u32,
+        validity_window_start: u32,
         txn_opt: Option<&TransactionProxy>,
     ) -> bool {
         self.validity_store
-            .has_transaction(txn_opt, tx_hash.clone())
+            .has_transaction(txn_opt, validity_window_start, tx_hash.clone())
     }
 
     fn get_hist_tx_by_hash(
@@ -493,41 +493,78 @@ mod tests {
         let hist_txs = vec![ext_0.clone(), ext_1.clone()];
 
         // Add historic transactions to History Store.
+        let mut current_block_number = Policy::genesis_block_number() + 1;
+        let validity_window_blocks = Policy::transaction_validity_window_blocks();
+        let validity_window_start =
+            |current_block_number: u32| current_block_number.saturating_sub(validity_window_blocks);
+
         let mut txn = env.write_transaction();
-        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 1, &hist_txs);
+        history_store.add_to_history(&mut txn, current_block_number, &hist_txs);
 
         // Those transactions should be part of the valitidy window
-        assert_eq!(
-            history_store.tx_in_validity_window(&ext_0.tx_hash(), 0, Some(&txn)),
-            true
-        );
-
-        assert_eq!(
-            history_store.tx_in_validity_window(&ext_1.tx_hash(), 0, Some(&txn)),
-            true
-        );
-
         // Now keep pushing transactions to the history store until we are past the transaction validity window
-        let validity_window_blocks = Policy::transaction_validity_window_blocks();
-
-        for bn in 2..validity_window_blocks + 10 {
-            let historic_txn = create_transaction(Policy::genesis_block_number() + bn, bn as u64);
-            history_store.add_to_history(
-                &mut txn,
-                Policy::genesis_block_number() + bn,
-                &vec![historic_txn],
+        for bn in 2..validity_window_blocks + 2 {
+            assert_eq!(
+                history_store.tx_in_validity_window(
+                    &ext_0.tx_hash(),
+                    validity_window_start(current_block_number + 1),
+                    Some(&txn)
+                ),
+                true
             );
+
+            assert_eq!(
+                history_store.tx_in_validity_window(
+                    &ext_1.tx_hash(),
+                    validity_window_start(current_block_number + 1),
+                    Some(&txn)
+                ),
+                true
+            );
+
+            current_block_number += 1;
+            let historic_txn = create_transaction(Policy::genesis_block_number() + bn, bn as u64);
+            history_store.add_to_history(&mut txn, current_block_number, &vec![historic_txn]);
         }
 
         // Since we are past the txn in validity window, the first two transaction should no longer be in it
         assert_eq!(
-            history_store.tx_in_validity_window(&ext_0.tx_hash(), 0, Some(&txn)),
+            history_store.tx_in_validity_window(
+                &ext_0.tx_hash(),
+                validity_window_start(current_block_number + 1),
+                Some(&txn)
+            ),
             false
         );
 
         assert_eq!(
-            history_store.tx_in_validity_window(&ext_1.tx_hash(), 0, Some(&txn)),
+            history_store.tx_in_validity_window(
+                &ext_1.tx_hash(),
+                validity_window_start(current_block_number + 1),
+                Some(&txn)
+            ),
             false
+        );
+
+        // Remove the last block and make sure the transactions are in the validity window again
+        history_store.remove_block_light_history_store(&mut txn, current_block_number);
+        current_block_number -= 1;
+        assert_eq!(
+            history_store.tx_in_validity_window(
+                &ext_0.tx_hash(),
+                validity_window_start(current_block_number + 1),
+                Some(&txn)
+            ),
+            true
+        );
+
+        assert_eq!(
+            history_store.tx_in_validity_window(
+                &ext_1.tx_hash(),
+                validity_window_start(current_block_number + 1),
+                Some(&txn)
+            ),
+            true
         );
     }
 
