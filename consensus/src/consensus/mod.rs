@@ -267,11 +267,16 @@ impl<N: Network> Consensus<N> {
                 let stream = network.receive_requests::<RequestChunk>();
                 spawn(Box::pin(request_handler(network, stream, blockchain)));
 
-                let stream = network.receive_requests::<RequestTransactionsProof>();
-                spawn(Box::pin(request_handler(network, stream, blockchain)));
+                let supports_history_index = blockchain.read().history_store.has_history_index();
 
-                let stream = network.receive_requests::<RequestTransactionReceiptsByAddress>();
-                spawn(Box::pin(request_handler(network, stream, blockchain)));
+                // Only spawn these handlers if the history index is enabled.
+                if supports_history_index {
+                    let stream = network.receive_requests::<RequestTransactionsProof>();
+                    spawn(Box::pin(request_handler(network, stream, blockchain)));
+
+                    let stream = network.receive_requests::<RequestTransactionReceiptsByAddress>();
+                    spawn(Box::pin(request_handler(network, stream, blockchain)));
+                }
 
                 let stream = network.receive_requests::<RequestTrieProof>();
                 spawn(Box::pin(request_handler(network, stream, blockchain)));
