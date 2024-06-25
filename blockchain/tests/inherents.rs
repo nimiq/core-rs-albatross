@@ -204,14 +204,9 @@ fn it_can_penalize_delayed_batch() {
     let (genesis_supply, genesis_timestamp) = blockchain.get_genesis_parameters();
 
     // Total reward for the previous batch
-    let prev_supply = Policy::supply_at(
-        u64::from(genesis_supply),
-        genesis_timestamp,
-        genesis_timestamp,
-    );
+    let prev_supply = Policy::supply_at(u64::from(genesis_supply), genesis_timestamp);
 
-    let current_supply =
-        Policy::supply_at(u64::from(genesis_supply), genesis_timestamp, next_timestamp);
+    let current_supply = Policy::supply_at(u64::from(genesis_supply), next_timestamp);
 
     let max_reward = current_supply - prev_supply;
 

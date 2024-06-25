@@ -130,14 +130,11 @@ pub enum PolicyCommand {
     /// Returns the supply at a given time (as Unix time) in Lunas (1 NIM = 100,000 Lunas). It is
     /// calculated using the following formula:
     /// Supply (t) = Genesis_supply + Initial_supply_velocity / Supply_decay * (1 - 2^(- Supply_decay * t))
-    /// Where t is the time in milliseconds since the genesis block and `genesis_supply` is the supply at
+    /// Where t is the time in milliseconds since the PoW genesis block and `genesis_supply` is the supply at
     /// the genesis of the Nimiq 2.0 chain.
     SupplyAt {
         /// The supply at genesis.
         genesis_supply: u64,
-
-        /// The time of genesis.
-        genesis_time: u64,
 
         /// The current time.
         current_time: u64,
@@ -249,14 +246,13 @@ impl HandleSubcommand for PolicyCommand {
             }
             PolicyCommand::SupplyAt {
                 genesis_supply,
-                genesis_time,
                 current_time,
             } => {
                 println!(
                     "{:#?}",
                     client
                         .policy
-                        .get_supply_at(genesis_supply, genesis_time, current_time)
+                        .get_supply_at(genesis_supply, current_time)
                         .await?
                 );
             }

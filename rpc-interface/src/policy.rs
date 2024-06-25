@@ -101,12 +101,11 @@ pub trait PolicyInterface {
     /// Returns the supply at a given time (as Unix time) in Lunas (1 NIM = 100,000 Lunas). It is
     /// calculated using the following formula:
     /// Supply (t) = Genesis_supply + Initial_supply_velocity / Supply_decay * (1 - e^(- Supply_decay * t))
-    /// Where t is the time in milliseconds since the genesis block and `genesis_supply` is the supply at
+    /// Where t is the time in milliseconds since the PoW genesis block and `genesis_supply` is the supply at
     /// the genesis of the Nimiq 2.0 chain.
     async fn get_supply_at(
         &mut self,
         genesis_supply: u64,
-        genesis_time: u64,
         current_time: u64,
     ) -> RPCResult<u64, (), Self::Error>;
 }

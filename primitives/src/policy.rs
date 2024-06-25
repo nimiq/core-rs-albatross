@@ -138,7 +138,7 @@ impl Policy {
     /// This is the number of Lunas (1 NIM = 100,000 Lunas) created by millisecond at the genesis of the
     /// Nimiq 2.0 chain. The velocity then decreases following the formula:
     /// Supply_velocity (t) = Initial_supply_velocity * 2^(- Supply_decay * t)
-    /// Where t is the time in milliseconds since the genesis block.
+    /// Where t is the time in milliseconds since the PoW genesis block.
     pub const INITIAL_SUPPLY_VELOCITY: f64 = 0.10594132556065439;
 
     /// The supply decay is a constant that is calculated so that the supply velocity decreases at a
@@ -151,6 +151,9 @@ impl Policy {
     /// Maximum size of history chunks.
     /// 25 MB.
     pub const HISTORY_CHUNKS_MAX_SIZE: u64 = 25 * 1024 * 1024;
+
+    /// The PoW genesis timestamp.
+    pub const POW_GENESIS_TIMESTAMP: u64 = 1523727000000;
 
     #[inline]
     fn get_blocks_per_epoch(&self) -> u32 {
@@ -485,13 +488,13 @@ impl Policy {
     /// Returns the supply at a given time (as Unix time) in Lunas (1 NIM = 100,000 Lunas). It is
     /// calculated using the following formula:
     /// Supply (t) = Genesis_supply + Initial_supply_velocity / Supply_decay * (1 - 2^(- Supply_decay * t))
-    /// Where t is the time in milliseconds since the genesis block and `genesis_supply` is the supply at
+    /// Where t is the time in milliseconds since the PoW genesis block and `genesis_supply` is the supply at
     /// the genesis of the Nimiq 2.0 chain.
     #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = supplyAt))]
-    pub fn supply_at(genesis_supply: u64, genesis_time: u64, current_time: u64) -> u64 {
-        assert!(current_time >= genesis_time);
+    pub fn supply_at(genesis_supply: u64, current_time: u64) -> u64 {
+        assert!(current_time >= Self::POW_GENESIS_TIMESTAMP);
 
-        let t = (current_time - genesis_time) as f64;
+        let t = (current_time - Self::POW_GENESIS_TIMESTAMP) as f64;
 
         let exponent = -Policy::SUPPLY_DECAY * t;
 
@@ -635,7 +638,7 @@ impl Policy {
     /// This is the number of Lunas (1 NIM = 100,000 Lunas) created by millisecond at the genesis of the
     /// Nimiq 2.0 chain. The velocity then decreases following the formula:
     /// Supply_velocity (t) = Initial_supply_velocity * 2^(- Supply_decay * t)
-    /// Where t is the time in milliseconds since the genesis block.
+    /// Where t is the time in milliseconds since the PoW genesis block.
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = INITIAL_SUPPLY_VELOCITY))]
     pub fn wasm_initial_supply_velocity() -> f64 {
         Self::INITIAL_SUPPLY_VELOCITY
