@@ -259,37 +259,34 @@ impl Blockchain {
                 .checked_mul(num_penalized_slots)
                 .expect("Overflow in reward");
 
-            // Do not create reward transactions for zero rewards
-            if !reward.is_zero() {
-                // Create inherent for the reward.
-                let staking_contract = self.get_staking_contract();
-                let data_store = self.get_staking_contract_store();
-                let txn = self.read_transaction();
-                let validator = staking_contract
-                    .get_validator(&data_store.read(&txn), &validator_slot.address)
-                    .expect("Couldn't find validator in the accounts trie when paying rewards!");
+            // Create inherent for the reward.
+            let staking_contract = self.get_staking_contract();
+            let data_store = self.get_staking_contract_store();
+            let txn = self.read_transaction();
+            let validator = staking_contract
+                .get_validator(&data_store.read(&txn), &validator_slot.address)
+                .expect("Couldn't find validator in the accounts trie when paying rewards!");
 
-                let tx = RewardTransaction {
-                    validator_address: validator.address.clone(),
-                    recipient: validator.reward_address.clone(),
-                    value: reward,
-                };
+            let tx = RewardTransaction {
+                validator_address: validator.address.clone(),
+                recipient: validator.reward_address.clone(),
+                value: reward,
+            };
 
-                // Test whether account will accept inherent. If it can't then the reward will be
-                // burned.
-                // TODO Improve this check: it assumes that only BasicAccounts can receive transactions.
-                let account = self.state.accounts.get_complete(&tx.recipient, Some(&txn));
-                if account.account_type() == AccountType::Basic {
-                    num_eligible_slots_for_accepted_tx.push(num_eligible_slots);
-                    transactions.push(tx);
-                } else {
-                    debug!(
-                        target_address = %tx.recipient,
-                        reward = %tx.value,
-                        "Can't accept batch reward"
-                    );
-                    burned_reward += reward;
-                }
+            // Test whether account will accept inherent. If it can't then the reward will be
+            // burned.
+            // TODO Improve this check: it assumes that only BasicAccounts can receive transactions.
+            let account = self.state.accounts.get_complete(&tx.recipient, Some(&txn));
+            if account.account_type() == AccountType::Basic {
+                num_eligible_slots_for_accepted_tx.push(num_eligible_slots);
+                transactions.push(tx);
+            } else {
+                debug!(
+                    target_address = %tx.recipient,
+                    reward = %tx.value,
+                    "Can't accept batch reward"
+                );
+                burned_reward += reward;
             }
 
             // Update first_slot_number for next iteration
@@ -309,6 +306,9 @@ impl Blockchain {
         // accepting slots because the remainder is always at most SLOTS - 1 Lunas.
         let index = lookup.sample(&mut rng);
         transactions[index].value += remainder;
+
+        // Do not create reward transactions for zero rewards
+        transactions.retain(|transaction| !transaction.value.is_zero());
 
         // Create the inherent for the burned reward.
         if burned_reward > Coin::ZERO {
