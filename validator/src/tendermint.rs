@@ -9,8 +9,10 @@ use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_collections::BitSet;
 use nimiq_handel::{
-    aggregation::Aggregation, identity::IdentityRegistry, protocol::Protocol as _,
-    verifier::VerificationResult,
+    aggregation::Aggregation,
+    identity::IdentityRegistry,
+    protocol::Protocol as _,
+    verifier::{VerificationResult, Verifier},
 };
 use nimiq_hash::{Blake2sHash, Hash};
 use nimiq_keys::Ed25519Signature as SchnorrSignature;
@@ -442,7 +444,7 @@ where
 
         async move {
             if matches!(
-                protocol.verify(&message.0.aggregate).await,
+                protocol.verifier().verify(&message.0.aggregate).await,
                 VerificationResult::Ok
             ) {
                 Ok(())
