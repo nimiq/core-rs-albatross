@@ -172,7 +172,7 @@ pub struct TlsSettings {
     pub certificates: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 /// Different knobs used to tweak the consensus mechanism and settings
 pub struct ConsensusSettings {
@@ -188,6 +188,22 @@ pub struct ConsensusSettings {
     pub min_peers: Option<usize>,
     /// Minimum distance away, in number of blocks, from the head to switch from state sync to live sync
     pub full_sync_threshold: Option<u32>,
+    /// History indices enabled. Only effective for history nodes (default: `true`)
+    #[serde(default = "default_true")]
+    pub index_history: bool,
+}
+
+impl Default for ConsensusSettings {
+    fn default() -> Self {
+        Self {
+            sync_mode: SyncMode::default(),
+            max_epochs_stored: 1,
+            network: None,
+            min_peers: None,
+            full_sync_threshold: None,
+            index_history: true,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Deserialize, Debug, Default, Eq, PartialEq)]
