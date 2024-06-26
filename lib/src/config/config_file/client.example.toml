@@ -90,6 +90,11 @@ sync_mode = "full"
 # Default: 10800
 # full_sync_threshold = 1000
 
+# Enable or disable transaction indexing for history nodes.
+# This property only has an effect when the sync_mode has the value "history"
+# Default: true
+# index_history = true
+
 ##############################################################################
 #
 # Database specific configuration

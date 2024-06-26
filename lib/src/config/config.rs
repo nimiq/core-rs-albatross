@@ -89,6 +89,9 @@ pub struct ConsensusConfig {
     #[builder(default = "10800")]
     /// Minimum distance away, in number of blocks, from the head to switch from state sync to live sync
     pub full_sync_threshold: u32,
+    #[builder(default = "true")]
+    /// History indices enabled. Only effective for history nodes (default: `true`)
+    pub index_history: bool,
 }
 
 impl Default for ConsensusConfig {
@@ -98,6 +101,7 @@ impl Default for ConsensusConfig {
             min_peers: 3,
             max_epochs_stored: Policy::MIN_EPOCHS_STORED,
             full_sync_threshold: 10800,
+            index_history: true,
         }
     }
 }
