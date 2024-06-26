@@ -5,6 +5,7 @@ use std::{cmp, collections::HashSet};
 use nimiq_block::Block;
 #[cfg(feature = "full")]
 use nimiq_block::BlockInclusionProof;
+#[cfg(feature = "full")]
 use nimiq_blockchain::interface::{HistoryIndexInterface, HistoryInterface};
 #[cfg(feature = "full")]
 use nimiq_blockchain::{Blockchain, CHUNK_SIZE};
