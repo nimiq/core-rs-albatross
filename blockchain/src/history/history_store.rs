@@ -40,7 +40,7 @@ pub struct HistoryStore {
     /// A database of all history trees indexed by their epoch number.
     hist_tree_table: TableProxy,
     /// A database of all historic transactions indexed by their epoch number and leaf index.
-    hist_tx_table: TableProxy,
+    pub(super) hist_tx_table: TableProxy,
     /// A database of the last leaf index for each block number.
     last_leaf_table: TableProxy,
 
