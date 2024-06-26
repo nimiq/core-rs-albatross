@@ -9,8 +9,6 @@ use nimiq_mmr::mmr::PeaksMerkleMountainRange;
 use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{historic_transaction::HistoricTransaction, inherent::Inherent};
 
-use crate::interface::HistoryIndexInterface;
-
 use super::{
     interface::HistoryInterface,
     mmr_store::{get_range, remove_block_from_store, LightMMRStore},
@@ -404,10 +402,6 @@ impl HistoryInterface for LightHistoryStore {
         nimiq_mmr::error::Error,
     > {
         unimplemented!()
-    }
-
-    fn history_index(&self) -> Option<&Box<dyn HistoryIndexInterface + Send + Sync>> {
-        None
     }
 }
 

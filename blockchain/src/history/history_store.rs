@@ -27,10 +27,7 @@ use nimiq_transaction::{
 };
 
 use super::{interface::HistoryInterface, utils::EpochBasedIndex, validity_store::ValidityStore};
-use crate::{
-    history::{mmr_store::MMRStore, HistoryTreeChunk},
-    interface::HistoryIndexInterface,
-};
+use crate::history::{mmr_store::MMRStore, HistoryTreeChunk};
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
 /// constructed from the list of historic transactions in an epoch) and historic transactions (which
@@ -51,10 +48,8 @@ pub struct HistoryStore {
     /// transactions have occurred within the validity window.
     validity_store: ValidityStore,
 
-    history_index: Option<Box<dyn HistoryIndexInterface + Sync + Send>>,
-
     /// The network ID. It determines if this is the mainnet or one of the testnets.
-    network_id: NetworkId,
+    pub(crate) network_id: NetworkId,
 }
 
 impl HistoryStore {
@@ -79,13 +74,12 @@ impl HistoryStore {
             hist_tx_table,
             last_leaf_table,
             network_id,
-            history_index: None,
         }
     }
 
     /// Gets an historic transaction by its hash. Note that this hash is the leaf hash (see MMRHash)
     /// of the transaction, not a simple Blake2b hash of the transaction.
-    fn get_historic_tx(
+    pub(crate) fn get_historic_tx(
         &self,
         epoch_number: u32,
         leaf_index: u32,
@@ -104,7 +98,37 @@ impl HistoryStore {
         txn.get(&self.hist_tx_table, &key)
     }
 
-    fn remove_txns_from_history(
+    /// Internal method to remove leaves from the history tree.
+    /// Returns the root and leaf indices.
+    pub(crate) fn remove_leaves_from_history(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        epoch_number: u32,
+        limit: Option<usize>,
+    ) -> Option<(Blake2bHash, Vec<u32>)> {
+        // Get the history tree.
+        let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
+            &self.hist_tree_table,
+            txn,
+            epoch_number,
+        ));
+
+        // Get the history root. We need to get it here because of Rust's borrowing rules.
+        let root = tree.get_root().ok()?;
+
+        // Remove all leaves from the history tree and remember the respective hashes and indexes.
+        let num_leaves = tree.num_leaves();
+        let num_hist_txs = limit.map(|l| cmp::min(l, num_leaves)).unwrap_or(num_leaves);
+        let mut leaf_indices = Vec::with_capacity(num_hist_txs);
+
+        for i in 0..num_hist_txs {
+            tree.remove_back().ok()?;
+            leaf_indices.push((num_leaves - i - 1) as u32);
+        }
+        Some((root, leaf_indices))
+    }
+
+    pub(crate) fn remove_txns_from_history(
         &self,
         txn: &mut WriteTransactionProxy,
         epoch_number: u32,
@@ -137,11 +161,7 @@ impl HistoryStore {
             if end - start == 1 {
                 txn.remove(&self.last_leaf_table, &block_number);
             } else {
-                txn.put(
-                    &self.last_leaf_table,
-                    &block_number,
-                    &(leaf_index as u32 - 1),
-                );
+                txn.put(&self.last_leaf_table, &block_number, &(leaf_index - 1));
             }
         }
 
@@ -150,7 +170,7 @@ impl HistoryStore {
 
     /// Returns a proof for all the historic transactions at the given positions (leaf indexes). The
     /// proof also includes the historic transactions.
-    fn prove_with_position(
+    pub(crate) fn prove_with_position(
         &self,
         epoch_number: u32,
         leaf_indices: Vec<usize>,
@@ -194,7 +214,7 @@ impl HistoryStore {
     }
 
     /// Returns the range of leaf indexes corresponding to the given block number.
-    fn get_indexes_for_block(
+    pub(crate) fn get_indexes_for_block(
         &self,
         block_number: u32,
         txn_option: Option<&TransactionProxy>,
@@ -244,7 +264,7 @@ impl HistoryStore {
 
     /// Calculates the history tree root from a vector of historic transactions. It doesn't use the
     /// database, it is just used to check the correctness of the history root when syncing.
-    fn _root_from_hist_txs(hist_txs: &[HistoricTransaction]) -> Option<Blake2bHash> {
+    pub(crate) fn _root_from_hist_txs(hist_txs: &[HistoricTransaction]) -> Option<Blake2bHash> {
         // Create a new history tree.
         let mut tree = MerkleMountainRange::new(MemoryStore::new());
 
@@ -255,6 +275,65 @@ impl HistoryStore {
 
         // Return the history root.
         tree.get_root().ok()
+    }
+
+    /// Internal function for `add_to_history`, which also returns leaf indices.
+    pub(crate) fn put_historic_txns(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        block_number: u32,
+        hist_txs: &[HistoricTransaction],
+    ) -> Option<(Blake2bHash, u64, Vec<u32>)> {
+        let epoch_number = Policy::epoch_at(block_number);
+
+        // Get the history tree.
+        let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
+            &self.hist_tree_table,
+            txn,
+            epoch_number,
+        ));
+
+        // Append the historic transactions to the history tree and keep the respective leaf indexes.
+        let mut leaf_idx = vec![];
+
+        for tx in hist_txs {
+            let i = tree.push(tx).ok()?;
+            leaf_idx.push(i as u32);
+        }
+
+        let root = tree.get_root().ok()?;
+        let mut txns_size = 0u64;
+
+        // Add the historic transactions into the respective database.
+        // We need to do this separately due to the borrowing rules of Rust.
+        let mut cursor = WriteTransaction::cursor(txn, &self.hist_tx_table);
+        for (hist_tx, &leaf_index) in hist_txs.iter().zip(leaf_idx.iter()) {
+            assert!(
+                hist_tx.block_number <= block_number
+                    && Policy::epoch_at(hist_tx.block_number) == Policy::epoch_at(block_number),
+                "Inconsistent transactions when adding to history store (block #{}, tx block #{}).",
+                block_number,
+                hist_tx.block_number
+            );
+
+            let key = EpochBasedIndex::new(epoch_number, leaf_index);
+            cursor.append(&key, hist_tx);
+
+            self.validity_store.add_transaction(
+                txn,
+                hist_tx.block_number,
+                hist_tx.tx_hash().into(),
+            );
+
+            txn.put(&self.last_leaf_table, &hist_tx.block_number, &leaf_index);
+
+            txns_size += hist_tx.serialized_size() as u64;
+        }
+
+        self.validity_store.update_validity_store(txn, block_number);
+
+        // Return the history root.
+        Some((root, txns_size, leaf_idx))
     }
 }
 
@@ -341,56 +420,8 @@ impl HistoryInterface for HistoryStore {
         block_number: u32,
         hist_txs: &[HistoricTransaction],
     ) -> Option<(Blake2bHash, u64)> {
-        let epoch_number = Policy::epoch_at(block_number);
-
-        // Get the history tree.
-        let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
-            &self.hist_tree_table,
-            txn,
-            epoch_number,
-        ));
-
-        // Append the historic transactions to the history tree and keep the respective leaf indexes.
-        let mut leaf_idx = vec![];
-
-        for tx in hist_txs {
-            let i = tree.push(tx).ok()?;
-            leaf_idx.push(i as u32);
-        }
-
-        let root = tree.get_root().ok()?;
-        let mut txns_size = 0u64;
-
-        // Add the historic transactions into the respective database.
-        // We need to do this separately due to the borrowing rules of Rust.
-        let mut cursor = WriteTransaction::cursor(txn, &self.hist_tx_table);
-        for (hist_tx, &leaf_index) in hist_txs.iter().zip(leaf_idx.iter()) {
-            assert!(
-                tx.block_number <= block_number
-                    && Policy::epoch_at(tx.block_number) == Policy::epoch_at(block_number),
-                "Inconsistent transactions when adding to history store (block #{}, tx block #{}).",
-                block_number,
-                tx.block_number
-            );
-
-            let key = EpochBasedIndex::new(epoch_number, leaf_index);
-            cursor.append(&key, hist_tx);
-
-            self.validity_store.add_transaction(
-                txn,
-                hist_tx.block_number,
-                hist_tx.tx_hash().into(),
-            );
-
-            txn.put(&self.last_leaf_table, &hist_tx.block_number, &leaf_index);
-
-            txns_size += hist_tx.serialized_size() as u64;
-        }
-
-        self.validity_store.update_validity_store(txn, block_number);
-
-        // Return the history root.
-        Some((root, txns_size))
+        self.put_historic_txns(txn, block_number, hist_txs)
+            .map(|(root, size, _)| (root, size))
     }
 
     /// Removes a number of historic transactions from an existing history tree. It returns the root
@@ -401,25 +432,8 @@ impl HistoryInterface for HistoryStore {
         epoch_number: u32,
         num_hist_txs: usize,
     ) -> Option<(Blake2bHash, u64)> {
-        // Get the history tree.
-        let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
-            &self.hist_tree_table,
-            txn,
-            epoch_number,
-        ));
-
-        // Get the history root. We need to get it here because of Rust's borrowing rules.
-        let root = tree.get_root().ok()?;
-
-        // Remove all leaves from the history tree and remember the respective hashes and indexes.
-        let mut leaf_indices = Vec::with_capacity(num_hist_txs);
-
-        let num_leaves = tree.num_leaves();
-
-        for i in 0..cmp::min(num_hist_txs, num_leaves) {
-            tree.remove_back().ok()?;
-            leaf_indices.push((num_leaves - i - 1) as u32);
-        }
+        let (root, leaf_indices) =
+            self.remove_leaves_from_history(txn, epoch_number, Some(num_hist_txs))?;
 
         // Remove each of the historic transactions in the history tree from the extended
         // transaction database.
@@ -432,21 +446,7 @@ impl HistoryInterface for HistoryStore {
     /// Removes an existing history tree and all the historic transactions that were part of it.
     /// Returns None if there's no history tree corresponding to the given epoch number.
     fn remove_history(&self, txn: &mut WriteTransactionProxy, epoch_number: u32) -> Option<()> {
-        // Get the history tree.
-        let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
-            &self.hist_tree_table,
-            txn,
-            epoch_number,
-        ));
-
-        // Remove all leaves from the history tree and remember the respective hashes.
-        let mut leaf_indices = Vec::with_capacity(tree.num_leaves());
-
-        for i in (0..tree.num_leaves()).rev() {
-            tree.remove_back().ok()?;
-            leaf_indices.push(i as u32);
-        }
-
+        let (_, leaf_indices) = self.remove_leaves_from_history(txn, epoch_number, None)?;
         self.remove_txns_from_history(txn, epoch_number, leaf_indices);
 
         Some(())
@@ -992,10 +992,6 @@ impl HistoryInterface for HistoryStore {
         let last = cursor.last::<u32, u32>().unwrap_or_default().0;
 
         (first, last)
-    }
-
-    fn history_index(&self) -> Option<&Box<dyn HistoryIndexInterface + Send + Sync>> {
-        self.history_index.as_ref()
     }
 }
 

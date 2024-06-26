@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use futures::{future, stream::BoxStream, StreamExt};
 use nimiq_account::{BlockLog as BBlockLog, TransactionLog};
+use nimiq_blockchain::interface::{HistoryIndexInterface, HistoryInterface};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_blockchain_proxy::{BlockchainProxy, BlockchainReadProxy};
 use nimiq_hash::Blake2bHash;
