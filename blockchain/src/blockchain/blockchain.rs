@@ -70,8 +70,8 @@ pub struct BlockchainConfig {
     /// Maximum number of epochs (other than the current one) that the ChainStore will store fully.
     /// Epochs older than this number will be pruned.
     pub max_epochs_stored: u32,
-    /// Disables indices in the history store.
-    pub disable_history_index: bool,
+    /// Enables/Disables indices in the history store.
+    pub index_history: bool,
     /// The history store that is used by the full blockchain.
     /// If this is set to true, the light history store is used.
     pub light_history_store: bool,
@@ -83,7 +83,7 @@ impl Default for BlockchainConfig {
             keep_history: true,
             max_epochs_stored: Policy::MIN_EPOCHS_STORED,
             light_history_store: false,
-            disable_history_index: false,
+            index_history: true,
         }
     }
 }
@@ -276,11 +276,11 @@ impl Blockchain {
                 network_id,
             ))
                 as Box<dyn HistoryInterface + Sync + Send>)
-        } else if config.disable_history_index {
+        } else if config.index_history {
+            HistoryStoreProxy::WithIndex(HistoryStoreIndex::new(env.clone(), network_id))
+        } else {
             HistoryStoreProxy::WithoutIndex(Box::new(HistoryStore::new(env.clone(), network_id))
                 as Box<dyn HistoryInterface + Sync + Send>)
-        } else {
-            HistoryStoreProxy::WithIndex(HistoryStoreIndex::new(env.clone(), network_id))
         };
 
         Ok(Blockchain {
@@ -356,11 +356,11 @@ impl Blockchain {
                 network_id,
             ))
                 as Box<dyn HistoryInterface + Sync + Send>)
-        } else if config.disable_history_index {
+        } else if config.index_history {
+            HistoryStoreProxy::WithIndex(HistoryStoreIndex::new(env.clone(), network_id))
+        } else {
             HistoryStoreProxy::WithoutIndex(Box::new(HistoryStore::new(env.clone(), network_id))
                 as Box<dyn HistoryInterface + Sync + Send>)
-        } else {
-            HistoryStoreProxy::WithIndex(HistoryStoreIndex::new(env.clone(), network_id))
         };
 
         Ok(Blockchain {
