@@ -674,7 +674,7 @@ impl Default for Policy {
             batches_per_epoch: 720,
             tendermint_timeout_init: 1000,
             tendermint_timeout_delta: 1000,
-            state_chunks_max_size: 200, // #Nodes/accounts 200, TODO: Simulate with different sizes
+            state_chunks_max_size: 1000,
             transaction_validity_window: 120,
             genesis_block_number: 0,
         }
