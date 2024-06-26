@@ -33,7 +33,7 @@ impl FromDatabaseValue for OrderedHash {
 
 /// A wrapper for an u32 and a u32.
 /// We use it to store the epoch number and the (leaf) index of a transaction in the epoch.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EpochBasedIndex {
     pub epoch_number: u32,
     pub index: u32,
