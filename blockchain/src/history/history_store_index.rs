@@ -1,6 +1,8 @@
+use std::collections::BTreeMap;
+
 use nimiq_block::MicroBlock;
 use nimiq_database::{
-    traits::{Database, ReadCursor, ReadTransaction, WriteTransaction},
+    traits::{Database, ReadCursor, ReadTransaction, WriteCursor, WriteTransaction},
     DatabaseProxy, TableFlags, TableProxy, TransactionProxy, WriteTransactionProxy,
 };
 use nimiq_genesis::NetworkId;
@@ -113,7 +115,8 @@ impl HistoryStoreIndex {
     /// Returns the size of the serialized transaction
     fn put_historic_tx(
         &self,
-        txn: &mut WriteTransactionProxy,
+        hashes: &mut BTreeMap<RawTransactionHash, EpochBasedIndex>,
+        addresses: &mut BTreeMap<Address, Vec<OrderedHash>>,
         epoch_number: u32,
         leaf_index: u32,
         hist_tx: &HistoricTransaction,
@@ -123,7 +126,7 @@ impl HistoryStoreIndex {
         // The raw tx hash corresponds to the hash without the execution result.
         // Thus for basic historic transactions we want discoverability for the raw transaction.
         let raw_tx_hash = hist_tx.tx_hash();
-        txn.put(&self.tx_hash_table, &raw_tx_hash, &key);
+        hashes.insert(raw_tx_hash.clone(), key);
 
         let ordered_hash = OrderedHash {
             index: key,
@@ -132,12 +135,21 @@ impl HistoryStoreIndex {
         match &hist_tx.data {
             HistoricTransactionData::Basic(tx) => {
                 let tx = tx.get_raw_transaction();
-                txn.put(&self.address_table, &tx.sender, &ordered_hash);
-                txn.put(&self.address_table, &tx.recipient, &ordered_hash);
+                addresses
+                    .entry(tx.sender.clone())
+                    .or_insert_with(Vec::new)
+                    .push(ordered_hash.clone());
+                addresses
+                    .entry(tx.recipient.clone())
+                    .or_insert_with(Vec::new)
+                    .push(ordered_hash);
             }
             HistoricTransactionData::Reward(ev) => {
                 // We only add reward inherents to the address database.
-                txn.put(&self.address_table, &ev.reward_address, &ordered_hash);
+                addresses
+                    .entry(ev.reward_address.clone())
+                    .or_insert_with(Vec::new)
+                    .push(ordered_hash);
             }
             // Do not index equivocation or punishments events, since I do not see a use case
             // for this at the time.
@@ -406,10 +418,23 @@ impl HistoryInterface for HistoryStoreIndex {
         {
             let epoch_number = Policy::epoch_at(block_number);
             // Add the historic transactions into the respective database.
-            // We need to do this separately due to the borrowing rules of Rust.
+            // Sort everything first and then put with a cursor for improved database performance.
+            let mut hashes = BTreeMap::new();
+            let mut addresses = BTreeMap::new();
             for (tx, i) in hist_txs.iter().zip(leaf_idx.iter()) {
-                // The prefix is one because it is a leaf.
-                self.put_historic_tx(txn, epoch_number, *i, tx);
+                self.put_historic_tx(&mut hashes, &mut addresses, epoch_number, *i, tx);
+            }
+
+            // Put the hashes and addresses into the respective databases.
+            let mut hashes_cursor = WriteTransaction::cursor(txn, &self.tx_hash_table);
+            for (hash, key) in hashes.iter() {
+                hashes_cursor.put(hash, key);
+            }
+            let mut address_cursor = WriteTransaction::cursor(txn, &self.address_table);
+            for (address, keys) in addresses.iter() {
+                for ordered_hash in keys.iter() {
+                    address_cursor.put(address, ordered_hash);
+                }
             }
             return Some((root, size));
         }

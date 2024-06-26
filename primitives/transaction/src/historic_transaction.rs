@@ -18,7 +18,7 @@ use crate::{inherent::Inherent, EquivocationLocator, ExecutedTransaction};
 /// The raw transaction hash is a type wrapper.
 /// This corresponds to the hash of the transaction without the execution result.
 /// This hash is the external facing hash.
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct RawTransactionHash(Blake2bHash);
 
 impl From<Blake2bHash> for RawTransactionHash {
