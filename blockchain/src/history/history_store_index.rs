@@ -182,6 +182,41 @@ impl HistoryStoreIndex {
             &RawTransactionHash::from(raw_tx_hash.clone()),
         )
     }
+
+    /// Rebuilds the index from scratch.
+    /// This is a very expensive operation, which currently is only available in an external binary.
+    pub fn rebuild_index(&self, txn: &mut WriteTransactionProxy) {
+        // Clear the tables.
+        txn.clear_database(&self.tx_hash_table);
+        txn.clear_database(&self.address_table);
+
+        // Iterate over all epochs and leafs.
+        let mut hashes = BTreeMap::new();
+        let mut addresses = BTreeMap::new();
+        let cursor = WriteTransaction::cursor(txn, &self.history_store.hist_tx_table);
+        for (key, hist_tx) in cursor.into_iter_start::<EpochBasedIndex, HistoricTransaction>() {
+            self.put_historic_tx(
+                &mut hashes,
+                &mut addresses,
+                key.epoch_number,
+                key.index,
+                &hist_tx,
+            );
+        }
+
+        // We insert indices by append, which gives us much better performance.
+        let mut hashes_cursor = WriteTransaction::cursor(txn, &self.tx_hash_table);
+        for (hash, index) in hashes.iter() {
+            hashes_cursor.append(hash, index);
+        }
+
+        let mut addresses_cursor = WriteTransaction::cursor(txn, &self.address_table);
+        for (address, ordered_hashes) in addresses.iter() {
+            for ordered_hash in ordered_hashes.iter() {
+                addresses_cursor.append(address, ordered_hash);
+            }
+        }
+    }
 }
 
 impl HistoryInterface for HistoryStoreIndex {
