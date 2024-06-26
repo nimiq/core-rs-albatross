@@ -137,7 +137,9 @@ impl AggregatableContribution for SignedSkipBlockMessage {
     }
 
     fn combine(&mut self, other_contribution: &Self) -> Result<(), ContributionError> {
-        self.proof.combine(&other_contribution.proof)
+        self.proof
+            .combine(&other_contribution.proof)
+            .map_err(ContributionError::Overlapping)
     }
 }
 
@@ -321,12 +323,12 @@ impl SkipBlockAggregation {
             while let Some(msg) = stream.next().await {
                 match msg {
                     SkipBlockResult::SkipBlock(sb_msg) => {
-                        if let Some(aggregate_weight) = weights.signature_weight(&sb_msg.proof) {
+                        if let Some(aggregate_weight) = weights.signature_weight(&sb_msg) {
                             trace!(
                                 "New Skip Block Aggregate weight: {} / {} Signers: {:?}",
                                 aggregate_weight,
                                 policy::Policy::TWO_F_PLUS_ONE,
-                                &sb_msg.proof.contributors(),
+                                &sb_msg.contributors(),
                             );
 
                             // Check if the combined weight of the aggregation is at least 2f+1.
