@@ -15,14 +15,6 @@ use crate::HistoryTreeChunk;
 
 /// Defines several methods to interact with a history store.
 pub trait HistoryInterface {
-    /// Returns a `HistoryIndexInterface` if supported.
-    fn history_index(&self) -> Option<&Box<dyn HistoryIndexInterface + Send + Sync>>;
-
-    /// Returns `true` if it supports a history index.
-    fn has_history_index(&self) -> bool {
-        self.history_index().is_some()
-    }
-
     /// Adds all the transactions included in a given block into the history store.
     fn add_block(
         &self,

@@ -19,8 +19,8 @@ use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 use crate::chain_metrics::BlockchainMetrics;
 use crate::{
     blockchain_state::BlockchainState, chain_store::ChainStore, history::HistoryStore,
-    interface::HistoryInterface, light_history_store::LightHistoryStore,
-    reward::genesis_parameters,
+    history_store_proxy::HistoryStoreProxy, interface::HistoryInterface,
+    light_history_store::LightHistoryStore, reward::genesis_parameters, HistoryStoreIndex,
 };
 
 const BROADCAST_MAX_CAPACITY: usize = 256;
@@ -45,7 +45,7 @@ pub struct Blockchain {
     /// The chain store is a database containing all of the chain infos, blocks and receipts.
     pub chain_store: ChainStore,
     /// The history store is a database containing all of the history trees and transactions.
-    pub history_store: Box<dyn HistoryInterface + Sync + Send>,
+    pub history_store: HistoryStoreProxy,
     /// The current state of the blockchain.
     pub state: BlockchainState,
     /// A reference to a "function" to test whether a given transaction is known and valid.
@@ -70,6 +70,8 @@ pub struct BlockchainConfig {
     /// Maximum number of epochs (other than the current one) that the ChainStore will store fully.
     /// Epochs older than this number will be pruned.
     pub max_epochs_stored: u32,
+    /// Disables indices in the history store.
+    pub disable_history_index: bool,
     /// The history store that is used by the full blockchain.
     /// If this is set to true, the light history store is used.
     pub light_history_store: bool,
@@ -81,6 +83,7 @@ impl Default for BlockchainConfig {
             keep_history: true,
             max_epochs_stored: Policy::MIN_EPOCHS_STORED,
             light_history_store: false,
+            disable_history_index: false,
         }
     }
 }
@@ -268,11 +271,16 @@ impl Blockchain {
         let (tx_log, _rx_log) = broadcast(BROADCAST_MAX_CAPACITY);
 
         let history_store = if config.light_history_store {
-            Box::new(LightHistoryStore::new(env.clone(), network_id))
-                as Box<dyn HistoryInterface + Sync + Send>
+            HistoryStoreProxy::WithoutIndex(Box::new(LightHistoryStore::new(
+                env.clone(),
+                network_id,
+            ))
+                as Box<dyn HistoryInterface + Sync + Send>)
+        } else if config.disable_history_index {
+            HistoryStoreProxy::WithoutIndex(Box::new(HistoryStore::new(env.clone(), network_id))
+                as Box<dyn HistoryInterface + Sync + Send>)
         } else {
-            Box::new(HistoryStore::new(env.clone(), network_id))
-                as Box<dyn HistoryInterface + Sync + Send>
+            HistoryStoreProxy::WithIndex(HistoryStoreIndex::new(env.clone(), network_id))
         };
 
         Ok(Blockchain {
@@ -343,11 +351,16 @@ impl Blockchain {
         let (tx_log, _rx_log) = broadcast(BROADCAST_MAX_CAPACITY);
 
         let history_store = if config.light_history_store {
-            Box::new(LightHistoryStore::new(env.clone(), network_id))
-                as Box<dyn HistoryInterface + Sync + Send>
+            HistoryStoreProxy::WithoutIndex(Box::new(LightHistoryStore::new(
+                env.clone(),
+                network_id,
+            ))
+                as Box<dyn HistoryInterface + Sync + Send>)
+        } else if config.disable_history_index {
+            HistoryStoreProxy::WithoutIndex(Box::new(HistoryStore::new(env.clone(), network_id))
+                as Box<dyn HistoryInterface + Sync + Send>)
         } else {
-            Box::new(HistoryStore::new(env.clone(), network_id))
-                as Box<dyn HistoryInterface + Sync + Send>
+            HistoryStoreProxy::WithIndex(HistoryStoreIndex::new(env.clone(), network_id))
         };
 
         Ok(Blockchain {
