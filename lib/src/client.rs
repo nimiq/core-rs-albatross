@@ -96,12 +96,16 @@ pub(crate) struct ClientInner {
 }
 
 /// This function is used to generate the services flags (provided, needed) based upon the configured sync mode
-pub fn generate_service_flags(sync_mode: SyncMode) -> (Services, Services) {
+pub fn generate_service_flags(sync_mode: SyncMode, index_history: bool) -> (Services, Services) {
     let provided_services = match sync_mode {
         // Services provided by history nodes
         SyncMode::History => {
             log::info!("Client configured as a history node");
-            Services::provided(NodeType::History)
+            let mut services = Services::provided(NodeType::History);
+            if index_history {
+                services |= Services::TRANSACTION_INDEX;
+            }
+            services
         }
         // Services provided by full nodes
         SyncMode::Full => {
@@ -207,7 +211,7 @@ impl ClientInner {
         );
 
         let (mut provided_services, required_services) =
-            generate_service_flags(config.consensus.sync_mode);
+            generate_service_flags(config.consensus.sync_mode, config.consensus.index_history);
 
         // We update the services flags depending on our validator configuration
         #[cfg(feature = "validator")]
@@ -353,6 +357,7 @@ impl ClientInner {
             #[cfg(feature = "full-consensus")]
             SyncMode::History => {
                 blockchain_config.keep_history = true;
+                blockchain_config.disable_history_index = !config.consensus.index_history;
                 let blockchain = match Blockchain::new(
                     environment.clone(),
                     blockchain_config,
