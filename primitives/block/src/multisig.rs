@@ -1,6 +1,5 @@
 use nimiq_bls::AggregateSignature;
 use nimiq_collections::bitset::BitSet;
-use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
 use nimiq_primitives::policy::Policy;
 use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 
@@ -20,14 +19,12 @@ impl MultiSignature {
     pub fn new(signature: AggregateSignature, signers: BitSet) -> Self {
         Self { signature, signers }
     }
-}
 
-impl AggregatableContribution for MultiSignature {
-    fn contributors(&self) -> BitSet {
+    pub fn contributors(&self) -> BitSet {
         self.signers.clone()
     }
 
-    fn combine(&mut self, other: &MultiSignature) -> Result<(), ContributionError> {
+    pub fn combine(&mut self, other: &MultiSignature) -> Result<(), BitSet> {
         // TODO: If we don't need the overlapping IDs for the error, we can use `intersection_size`
         let overlap = &self.signers & &other.signers;
 
@@ -36,7 +33,7 @@ impl AggregatableContribution for MultiSignature {
             self.signers = &self.signers | &other.signers;
             Ok(())
         } else {
-            Err(ContributionError::Overlapping(overlap))
+            Err(overlap)
         }
     }
 }
