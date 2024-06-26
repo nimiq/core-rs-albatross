@@ -1,9 +1,8 @@
 use std::{error::Error, fmt, ops};
 
-use nimiq_primitives::account::AccountType;
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::Transaction;
+use crate::{Transaction, TransactionFlags};
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct ControlTransaction(Transaction);
@@ -29,7 +28,7 @@ impl TryFrom<Transaction> for ControlTransaction {
     type Error = ControlTransactionError;
 
     fn try_from(tx: Transaction) -> Result<ControlTransaction, ControlTransactionError> {
-        if tx.sender_type == AccountType::Staking || tx.recipient_type == AccountType::Staking {
+        if tx.flags.contains(TransactionFlags::SIGNALING) {
             Ok(ControlTransaction(tx))
         } else {
             Err(ControlTransactionError(tx))
