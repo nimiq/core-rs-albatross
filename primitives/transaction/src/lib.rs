@@ -714,7 +714,7 @@ mod serde_derive {
                         BASIC_FIELDS.len(),
                     )?;
                     let signature_proof = SignatureProof::deserialize_all(&self.proof)
-                        .map_err(|_| S::Error::custom("Could not serialize signature proof"))?;
+                        .map_err(|_| S::Error::custom("Could not deserialize signature proof"))?;
                     // Serialize public_key and signature algorithm and if webauthn_fields exist in one u8
                     sv.serialize_field(
                         BASIC_FIELDS[0],
