@@ -11,7 +11,7 @@ use nimiq_primitives::{
 };
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::Blockchain;
+use crate::{interface::HistoryInterface, Blockchain};
 
 impl AbstractBlockchain for Blockchain {
     fn network_id(&self) -> NetworkId {

@@ -253,7 +253,7 @@ impl<N: Network> Consensus<N> {
                 let stream = network.receive_requests::<RequestChunk>();
                 spawn(Box::pin(request_handler(network, stream, blockchain)));
 
-                let supports_history_index = blockchain.read().history_store.has_history_index();
+                let supports_history_index = blockchain.read().history_store.supports_index();
 
                 // Only spawn these handlers if the history index is enabled.
                 if supports_history_index {
