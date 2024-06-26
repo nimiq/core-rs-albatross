@@ -1,6 +1,7 @@
 pub mod bls_key_pair;
 pub mod bls_public_key;
 pub mod bls_secret_key;
+pub mod crypto_utils;
 pub mod es256_public_key;
 pub mod es256_signature;
 pub mod hash;

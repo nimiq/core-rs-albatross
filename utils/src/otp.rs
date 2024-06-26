@@ -10,6 +10,23 @@ use nimiq_hash::argon2kdf::{compute_argon2_kdf, Argon2Error, Argon2Variant};
 use nimiq_serde::{Deserialize, Serialize};
 use rand::{rngs::OsRng, RngCore};
 
+pub fn otp(
+    secret: &[u8],
+    password: &[u8],
+    iterations: u32,
+    salt: &[u8],
+    algorithm: Algorithm,
+) -> Result<Vec<u8>, Argon2Error> {
+    let mut key = compute_argon2_kdf(password, salt, iterations, secret.len(), algorithm.into())?;
+    assert_eq!(key.len(), secret.len());
+
+    for (key_byte, secret_byte) in key.iter_mut().zip(secret.iter()) {
+        *key_byte ^= secret_byte;
+    }
+
+    Ok(key)
+}
+
 pub trait Verify {
     fn verify(&self) -> bool;
 }
@@ -203,7 +220,7 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
     /// Calling code should make sure to clear the password from memory after use.
     /// The integrity of the output value is not checked.
     pub fn unlock_unchecked(self, password: &[u8]) -> Result<Unlocked<T>, Locked<T>> {
-        let key_opt = Self::otp(
+        let key_opt = otp(
             &self.lock,
             password,
             self.iterations,
@@ -234,24 +251,6 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
         }
     }
 
-    fn otp(
-        secret: &[u8],
-        password: &[u8],
-        iterations: u32,
-        salt: &[u8],
-        algorithm: Algorithm,
-    ) -> Result<Vec<u8>, Argon2Error> {
-        let mut key =
-            compute_argon2_kdf(password, salt, iterations, secret.len(), algorithm.into())?;
-        assert_eq!(key.len(), secret.len());
-
-        for (key_byte, secret_byte) in key.iter_mut().zip(secret.iter()) {
-            *key_byte ^= secret_byte;
-        }
-
-        Ok(key)
-    }
-
     fn lock(
         secret: &T,
         password: &[u8],
@@ -260,7 +259,7 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
         algorithm: Algorithm,
     ) -> Result<Self, Argon2Error> {
         let mut data = secret.serialize_to_vec();
-        let lock = Self::otp(&data, password, iterations, &salt, algorithm)?;
+        let lock = otp(&data, password, iterations, &salt, algorithm)?;
 
         // Always overwrite unencrypted vector.
         for byte in data.iter_mut() {
