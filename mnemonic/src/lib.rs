@@ -6,7 +6,8 @@ use nimiq_hash::{
     HashOutput, Hasher, Sha256Hasher,
 };
 use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
-use nimiq_utils::crc::Crc8Computer;
+use nimiq_utils::{crc::Crc8Computer, key_rng::SecureGenerate};
+use rand_core::{CryptoRng, RngCore};
 use unicode_normalization::UnicodeNormalization;
 
 #[cfg(feature = "key-derivation")]
@@ -55,6 +56,14 @@ impl Entropy {
         bits.extend_from_bitslice(self.as_bytes().view_bits::<Msb0>());
         bits.extend_from_bitslice(self.crc8_checksum().view_bits::<Msb0>());
         Mnemonic::from_bits(&bits, wordlist)
+    }
+}
+
+impl SecureGenerate for Entropy {
+    fn generate<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
+        let mut bytes = [0u8; Entropy::SIZE];
+        rng.fill_bytes(&mut bytes[..]);
+        bytes.into()
     }
 }
 
@@ -415,6 +424,14 @@ impl Mnemonic {
 
         compute_pbkdf2_sha512(mnemonic.as_bytes(), salt.as_bytes(), 2048, 64)
     }
+
+    pub fn from_words_unchecked(words: Vec<String>) -> Self {
+        Mnemonic { mnemonic: words }
+    }
+
+    pub fn as_words(&self) -> Vec<String> {
+        self.mnemonic.clone()
+    }
 }
 
 impl fmt::Display for Mnemonic {
@@ -441,8 +458,8 @@ impl From<&'static str> for Mnemonic {
 
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub enum MnemonicType {
-    LEGACY,
-    BIP39,
-    UNKNOWN,
-    INVALID,
+    INVALID = -2,
+    UNKNOWN = -1,
+    LEGACY = 0,
+    BIP39 = 1,
 }
