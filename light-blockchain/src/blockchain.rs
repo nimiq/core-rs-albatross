@@ -112,8 +112,7 @@ impl LightBlockchain {
         let macro_block = self.get_block_at(Policy::macro_block_before(block_number), true)?;
         let disabled_slots = macro_block
             .unwrap_macro()
-            .body
-            .unwrap()
+            .header
             .next_batch_initial_punished_set;
 
         // Compute the slot number of the next proposer.

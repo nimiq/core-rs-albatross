@@ -143,19 +143,14 @@ impl Blockchain {
         if let Block::Macro(macro_block) = block {
             // If we don't have the staking contract, there is nothing we can check.
             if let Some(staking_contract) = self.get_staking_contract_if_complete(Some(txn)) {
-                let body = macro_block
-                    .body
-                    .as_ref()
-                    .expect("Block body must be present");
-
-                if body.next_batch_initial_punished_set
+                if macro_block.header.next_batch_initial_punished_set
                     != staking_contract
                         .punished_slots
                         .current_batch_punished_slots()
                 {
                     warn!(
                         %macro_block,
-                        given_punished_set = ?body.next_batch_initial_punished_set,
+                        given_punished_set = ?macro_block.header.next_batch_initial_punished_set,
                         expected_punished_set = ?staking_contract.punished_slots
                         .current_batch_punished_slots(),
                         reason = "Invalid next batch punished set",
@@ -252,20 +247,15 @@ impl Blockchain {
             None => return Ok(()),
         };
 
-        let body = macro_block
-            .body
-            .as_ref()
-            .expect("Block body must be present");
-
         // Verify validators.
         let validators = match macro_block.is_election() {
             true => Some(self.next_validators(&macro_block.header.seed)),
             false => None,
         };
-        if body.validators != validators {
+        if macro_block.header.validators != validators {
             warn!(
                 %macro_block,
-                given_validators = ?body.validators,
+                given_validators = ?macro_block.header.validators,
                 expected_validators = ?validators,
                 reason = "Invalid validators",
                 "Rejecting block"
@@ -281,6 +271,11 @@ impl Blockchain {
 
         let reward_transactions =
             self.create_reward_transactions(&macro_block.header, &staking_contract);
+
+        let body = macro_block
+            .body
+            .as_ref()
+            .expect("Block body must be present");
 
         if body.transactions != reward_transactions {
             warn!(

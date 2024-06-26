@@ -732,6 +732,8 @@ mod test {
             body_root: Blake2sHash::default(),
             diff_root: Blake2bHash::default(),
             history_root: Blake2bHash::default(),
+            validators: None,
+            next_batch_initial_punished_set: BitSet::default(),
         };
         let header2 = MacroHeader {
             network: NetworkId::UnitAlbatross,
@@ -748,6 +750,8 @@ mod test {
             body_root: "".hash(),
             diff_root: "".hash(),
             history_root: "".hash(),
+            validators: None,
+            next_batch_initial_punished_set: BitSet::default(),
         };
         let header3 = MacroHeader {
             network: NetworkId::UnitAlbatross,
@@ -764,6 +768,8 @@ mod test {
             body_root: "1".hash(),
             diff_root: "1".hash(),
             history_root: "1".hash(),
+            validators: None,
+            next_batch_initial_punished_set: BitSet::default(),
         };
 
         // Headers from a different block height.

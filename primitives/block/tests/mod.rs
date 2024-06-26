@@ -120,12 +120,11 @@ fn it_can_convert_macro_block_into_slots() {
             body_root: Blake2sHash::default(),
             diff_root: Blake2bHash::default(),
             history_root: Blake2bHash::default(),
+            validators: Some(validator_slots.clone()),
+            next_batch_initial_punished_set: BitSet::new(),
         },
         justification: None,
         body: Some(MacroBody {
-            validators: Some(validator_slots.clone()),
-
-            next_batch_initial_punished_set: BitSet::new(),
             transactions: vec![],
         }),
     };

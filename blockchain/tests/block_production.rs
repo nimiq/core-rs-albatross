@@ -218,9 +218,7 @@ fn it_can_produce_macro_block_after_punishment() {
         .current_batch_punished_slots()
         .is_empty());
     assert!(!macro_block
-        .body
-        .as_ref()
-        .unwrap()
+        .header
         .next_batch_initial_punished_set
         .is_empty());
 
@@ -272,9 +270,7 @@ fn it_can_produce_macro_block_after_punishment() {
         .current_batch_punished_slots()
         .is_empty());
     assert!(macro_block
-        .body
-        .as_ref()
-        .unwrap()
+        .header
         .next_batch_initial_punished_set
         .is_empty());
 

@@ -266,6 +266,22 @@ impl BlockProducer {
             .seed()
             .sign_next_with_rng(&self.signing_key, rng);
 
+        // If this is an election block, calculate the validator set for the next epoch.
+        let validators = match Policy::is_election_block_at(block_number) {
+            true => Some(blockchain.next_validators(&seed)),
+            false => None,
+        };
+
+        // Get the staking contract PRIOR to any state changes.
+        let staking_contract = blockchain
+            .get_staking_contract_if_complete(None)
+            .expect("Staking Contract must be complete to create a macro body");
+
+        // Calculate the punished set for the next batch.
+        let next_batch_initial_punished_set = staking_contract
+            .punished_slots
+            .next_batch_initial_punished_set(block_number, &staking_contract.active_validators);
+
         // Create the header for the macro block without the state root and the transactions root.
         // We need several fields of this header in order to calculate the transactions and the
         // state.
@@ -284,6 +300,8 @@ impl BlockProducer {
             body_root: Blake2sHash::default(),
             diff_root: Blake2bHash::default(),
             history_root: Blake2bHash::default(),
+            validators,
+            next_batch_initial_punished_set,
         };
 
         // Create the body for the macro block.
@@ -345,28 +363,12 @@ impl BlockProducer {
             .get_staking_contract_if_complete(txn_option)
             .expect("Staking Contract must be complete to create a macro body");
 
-        // Calculate the punished set for the next batch.
-        let next_batch_initial_punished_set = staking_contract
-            .punished_slots
-            .next_batch_initial_punished_set(
-                macro_header.block_number,
-                &staking_contract.active_validators,
-            );
-
         // Calculate the reward transactions.
         let reward_transactions =
             blockchain.create_reward_transactions(macro_header, &staking_contract);
 
-        // If this is an election block, calculate the validator set for the next epoch.
-        let validators = match Policy::is_election_block_at(macro_header.block_number) {
-            true => Some(blockchain.next_validators(&macro_header.seed)),
-            false => None,
-        };
-
         // Create the body for the macro block.
         MacroBody {
-            validators,
-            next_batch_initial_punished_set,
             transactions: reward_transactions,
         }
     }

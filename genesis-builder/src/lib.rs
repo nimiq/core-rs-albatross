@@ -370,7 +370,6 @@ impl GenesisBuilder {
 
         // Body
         let body = MacroBody {
-            validators: Some(slots),
             ..Default::default()
         };
 
@@ -409,6 +408,8 @@ impl GenesisBuilder {
             body_root,
             diff_root: TreeProof::empty().root_hash(),
             history_root,
+            validators: Some(slots),
+            ..Default::default()
         };
 
         // Genesis hash

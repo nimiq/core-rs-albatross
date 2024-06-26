@@ -42,10 +42,18 @@ fn it_can_create_batch_finalization_inherents() {
         .unwrap(),
     );
 
-    let macro_header = MacroHeader {
+    let block_number = Policy::macro_block_of(2).unwrap();
+
+    let staking_contract = blockchain.get_staking_contract();
+    let active_validators = staking_contract.active_validators.clone();
+    let next_batch_initial_punished_set = staking_contract
+        .punished_slots
+        .next_batch_initial_punished_set(block_number, &active_validators);
+
+    let mut macro_header = MacroHeader {
         network: NetworkId::UnitAlbatross,
         version: 1,
-        block_number: Policy::macro_block_of(2).unwrap(),
+        block_number,
         round: 0,
         timestamp: blockchain.state.election_head.header.timestamp + 20000,
         parent_hash: Blake2bHash::default(),
@@ -57,18 +65,14 @@ fn it_can_create_batch_finalization_inherents() {
         body_root: Blake2sHash::default(),
         diff_root: Blake2bHash::default(),
         history_root: Blake2bHash::default(),
+        validators: None,
+        next_batch_initial_punished_set,
     };
 
-    let staking_contract = blockchain.get_staking_contract();
-    let active_validators = staking_contract.active_validators.clone();
     let reward_transactions =
         blockchain.create_reward_transactions(&macro_header, &staking_contract);
 
     let body = MacroBody {
-        validators: None,
-        next_batch_initial_punished_set: staking_contract
-            .punished_slots
-            .next_batch_initial_punished_set(macro_header.block_number, &active_validators),
         transactions: reward_transactions,
     };
 
@@ -132,13 +136,14 @@ fn it_can_create_batch_finalization_inherents() {
     let staking_contract = blockchain.get_staking_contract();
     let reward_transactions =
         blockchain.create_reward_transactions(&macro_header, &staking_contract);
+    macro_header.next_batch_initial_punished_set = staking_contract
+        .punished_slots
+        .next_batch_initial_punished_set(macro_header.block_number, &active_validators);
+
     let body = MacroBody {
-        validators: None,
-        next_batch_initial_punished_set: staking_contract
-            .punished_slots
-            .next_batch_initial_punished_set(macro_header.block_number, &active_validators),
         transactions: reward_transactions,
     };
+
     let macro_block = MacroBlock {
         header: macro_header,
         body: Some(body),
@@ -229,6 +234,11 @@ fn it_can_penalize_delayed_batch() {
         penalty
     );
 
+    let staking_contract = blockchain.get_staking_contract();
+    let next_batch_initial_punished_set = staking_contract
+        .punished_slots
+        .current_batch_punished_slots();
+
     let macro_header = MacroHeader {
         network: NetworkId::UnitAlbatross,
         version: 1,
@@ -244,6 +254,8 @@ fn it_can_penalize_delayed_batch() {
         body_root: Blake2sHash::default(),
         diff_root: Blake2bHash::default(),
         history_root: Blake2bHash::default(),
+        validators: None,
+        next_batch_initial_punished_set,
     };
 
     let staking_contract = blockchain.get_staking_contract();
@@ -251,10 +263,6 @@ fn it_can_penalize_delayed_batch() {
         blockchain.create_reward_transactions(&macro_header, &staking_contract);
 
     let body = MacroBody {
-        validators: None,
-        next_batch_initial_punished_set: staking_contract
-            .punished_slots
-            .current_batch_punished_slots(),
         transactions: reward_transactions,
     };
 

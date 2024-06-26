@@ -4,28 +4,29 @@ use std::{
         hash_map::{Entry as HashMapEntry, HashMap},
         BTreeSet, HashSet,
     },
-    error::Error,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll, Waker},
 };
 
 use futures::{stream::BoxStream, Stream, StreamExt};
-use nimiq_block::{Block, BlockHeaderTopic, BlockTopic};
+use nimiq_block::Block;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction, ForkEvent};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId};
 use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
-use nimiq_utils::{spawn, WakerExt};
+use nimiq_utils::WakerExt;
 use parking_lot::RwLock;
 use tokio::sync::oneshot::Sender as OneshotSender;
 
 use crate::{
     consensus::{ResolveBlockError, ResolveBlockRequest},
+    messages::{BlockBodyTopic, BlockHeaderTopic},
     sync::{
         live::{
             block_queue::{
+                assembler::BlockAssembler,
                 block_request_component::{BlockRequestComponent, BlockRequestComponentEvent},
                 BlockAndId, BlockStream, GossipSubBlockStream, QueuedBlock,
             },
@@ -88,13 +89,14 @@ impl<N: Network> BlockQueue<N> {
     const MAX_BUFFERED_PER_PEER_PER_HEIGHT: usize = 5;
 
     pub async fn new(network: Arc<N>, blockchain: BlockchainProxy, config: QueueConfig) -> Self {
+        let header_stream = network.subscribe::<BlockHeaderTopic>().await.unwrap();
+
         let block_stream = if config.include_micro_bodies {
-            network.subscribe::<BlockTopic>().await.unwrap().boxed()
+            let body_stream = network.subscribe::<BlockBodyTopic>().await.unwrap().boxed();
+            BlockAssembler::<N>::new(header_stream, body_stream).boxed()
         } else {
-            network
-                .subscribe::<BlockHeaderTopic>()
-                .await
-                .unwrap()
+            header_stream
+                .map(|(header, pubsub_id)| (header.into(), pubsub_id))
                 .boxed()
         };
 
@@ -512,38 +514,6 @@ impl<N: Network> BlockQueue<N> {
         Some(QueuedBlock::Missing(blocks))
     }
 
-    /// Publishes a given Block on the BlockHeaderTopic. It will strip the micro bodies from the blocks if they are present.
-    ///
-    /// ## Panic
-    /// For macro blocks the body must be present and if it is not this function will panic!
-    fn publish_block_header(&self, mut block: Block) {
-        let network = Arc::clone(&self.network);
-
-        spawn(async move {
-            let block_id = format!("{}", block);
-            log::debug!(block = block_id, "Broadcasting on BlockHeaderTopic",);
-
-            match block {
-                // Remove the body from micro blocks before publishing to the block header topic.
-                Block::Micro(ref mut micro_block) => micro_block.body = None,
-                // Macro blocks must be always sent with body.
-                Block::Macro(ref macro_block) => {
-                    if macro_block.body.is_none() {
-                        panic!("Macro block bodies must exists in order to publish on BlockHeaderTopic")
-                    }
-                }
-            }
-
-            if let Err(e) = network.publish::<BlockHeaderTopic>(block).await {
-                debug!(
-                    block = block_id,
-                    error = &e as &dyn Error,
-                    "Failed to publish block header"
-                );
-            }
-        });
-    }
-
     /// Fetches the relevant blocks for any given `BlockchainEvent`
     fn get_new_blocks_from_blockchain_event(&self, event: BlockchainEvent) -> Vec<Block> {
         // Collect block numbers and hashes of newly added blocks first.
@@ -551,14 +521,11 @@ impl<N: Network> BlockQueue<N> {
 
         match event {
             BlockchainEvent::Extended(block_hash) => {
-                // A bit hacky: include_micro_bodies is used here to determine whether or not this node is a light node.
-                // Non light clients should republish all blocks to the BlockHeaderTopic.
-                if self.config.include_micro_bodies {
-                    if let Ok(block) = self.blockchain.read().get_block(&block_hash, true) {
-                        self.publish_block_header(block.clone());
-                        block_infos.push(block);
-                    }
-                } else if let Ok(block) = self.blockchain.read().get_block(&block_hash, false) {
+                if let Ok(block) = self
+                    .blockchain
+                    .read()
+                    .get_block(&block_hash, self.config.include_micro_bodies)
+                {
                     block_infos.push(block);
                 }
             }
@@ -570,33 +537,11 @@ impl<N: Network> BlockQueue<N> {
                 }
             }
             BlockchainEvent::Rebranched(_, new_blocks) => {
-                // A bit hacky: include_micro_bodies is used here to determine whether or not this node is a light node.
-                // Non light clients should republish all blocks to the BlockHeaderTopic.
-                if self.config.include_micro_bodies {
-                    // `new_blocks` does not include the bodies. The last block adopted (the new one) needs to be fetched
-                    // with its body included.
-                    let (block_hash, _block) =
-                        new_blocks.last().expect("Rebranched with no new blocks");
-                    if let Ok(block) = self.blockchain.read().get_block(block_hash, true) {
-                        self.publish_block_header(block);
-                    }
-                }
-
                 for (_block_hash, block) in new_blocks {
                     block_infos.push(block);
                 }
             }
             BlockchainEvent::Stored(block) => {
-                // A bit hacky: include_micro_bodies is used here to determine whether or not this node is a light node.
-                // Non light clients should republish all blocks to the BlockHeaderTopic.
-                if self.config.include_micro_bodies {
-                    // `block` does not include the body. It needs to be fetched with its body included.
-                    if let Ok(block_with_body) =
-                        self.blockchain.read().get_block(&block.hash(), true)
-                    {
-                        self.publish_block_header(block_with_body);
-                    }
-                }
                 block_infos.push(block);
             }
         }
@@ -667,15 +612,10 @@ impl<N: Network> BlockQueue<N> {
                     invalid_blocks.insert(hash.clone());
 
                     if let Some(id) = pubsub_id {
-                        if self.config.include_micro_bodies {
-                            self.network
-                                .validate_message::<BlockTopic>(id.clone(), MsgAcceptance::Reject);
-                        } else {
-                            self.network.validate_message::<BlockHeaderTopic>(
-                                id.clone(),
-                                MsgAcceptance::Reject,
-                            );
-                        }
+                        self.network.validate_message::<BlockHeaderTopic>(
+                            id.clone(),
+                            MsgAcceptance::Reject,
+                        );
                     }
 
                     false
@@ -698,15 +638,8 @@ impl<N: Network> BlockQueue<N> {
             for (_, pubsub_id) in blocks.values() {
                 // Inline `report_validation_result` here, because it solves the borrow issue:
                 if let Some(id) = pubsub_id {
-                    if self.config.include_micro_bodies {
-                        self.network
-                            .validate_message::<BlockTopic>(id.clone(), MsgAcceptance::Ignore);
-                    } else {
-                        self.network.validate_message::<BlockHeaderTopic>(
-                            id.clone(),
-                            MsgAcceptance::Ignore,
-                        );
-                    }
+                    self.network
+                        .validate_message::<BlockHeaderTopic>(id.clone(), MsgAcceptance::Ignore);
                 }
             }
             false
@@ -766,12 +699,8 @@ impl<N: Network> BlockQueue<N> {
         acceptance: MsgAcceptance,
     ) {
         if let Some(id) = pubsub_id {
-            if self.config.include_micro_bodies {
-                self.network.validate_message::<BlockTopic>(id, acceptance);
-            } else {
-                self.network
-                    .validate_message::<BlockHeaderTopic>(id, acceptance);
-            }
+            self.network
+                .validate_message::<BlockHeaderTopic>(id, acceptance);
         }
     }
 

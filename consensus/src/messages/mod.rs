@@ -1,10 +1,16 @@
-use std::fmt::{Debug, Formatter};
+use std::{
+    fmt::{Debug, Display, Formatter},
+    io::Write,
+};
 
-use nimiq_block::{Block, BlockInclusionProof, MacroBlock};
+use nimiq_block::{
+    Block, BlockBody, BlockInclusionProof, BlockType, MacroBlock, MacroHeader, MicroBlock,
+    MicroHeader, MicroJustification, TendermintProof,
+};
 #[cfg(feature = "full")]
 use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_blockchain_interface::Direction;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput, SerializeContent};
 use nimiq_keys::Address;
 use nimiq_macros::test_max_req_size;
 use nimiq_mmr::mmr::proof::SizeProof;
@@ -22,6 +28,128 @@ use thiserror::Error;
 use crate::error::SubscribeToAddressesError;
 
 mod handlers;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum BlockHeaderMessage {
+    Macro {
+        header: MacroHeader,
+        justification: TendermintProof,
+    },
+    Micro {
+        header: MicroHeader,
+        justification: MicroJustification,
+    },
+}
+
+impl BlockHeaderMessage {
+    pub fn ty(&self) -> BlockType {
+        match self {
+            BlockHeaderMessage::Macro { .. } => BlockType::Macro,
+            BlockHeaderMessage::Micro { .. } => BlockType::Micro,
+        }
+    }
+
+    pub fn body_root(&self) -> &Blake2sHash {
+        match self {
+            BlockHeaderMessage::Macro { header, .. } => &header.body_root,
+            BlockHeaderMessage::Micro { header, .. } => &header.body_root,
+        }
+    }
+
+    pub fn split_block(block: Block) -> (BlockHeaderMessage, BlockBodyMessage) {
+        match block {
+            Block::Macro(block) => {
+                let header = BlockHeaderMessage::Macro {
+                    header: block.header,
+                    justification: block.justification.unwrap(),
+                };
+                let body = BlockBodyMessage {
+                    header_hash: header.hash(),
+                    body: BlockBody::Macro(block.body.unwrap()),
+                };
+                (header, body)
+            }
+            Block::Micro(block) => {
+                let header = BlockHeaderMessage::Micro {
+                    header: block.header,
+                    justification: block.justification.unwrap(),
+                };
+                let body = BlockBodyMessage {
+                    header_hash: header.hash(),
+                    body: BlockBody::Micro(block.body.unwrap()),
+                };
+                (header, body)
+            }
+        }
+    }
+}
+
+impl Display for BlockHeaderMessage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BlockHeaderMessage::Macro { header, .. } => Display::fmt(header, f),
+            BlockHeaderMessage::Micro { header, .. } => Display::fmt(header, f),
+        }
+    }
+}
+
+impl SerializeContent for BlockHeaderMessage {
+    fn serialize_content<W: Write, H: HashOutput>(&self, writer: &mut W) -> std::io::Result<()> {
+        self.serialize(writer).map(|_| ())
+    }
+}
+
+impl From<BlockHeaderMessage> for Block {
+    fn from(value: BlockHeaderMessage) -> Block {
+        match value {
+            BlockHeaderMessage::Macro {
+                header,
+                justification,
+            } => Block::Macro(MacroBlock {
+                header,
+                body: None,
+                justification: Some(justification),
+            }),
+            BlockHeaderMessage::Micro {
+                header,
+                justification,
+            } => Block::Micro(MicroBlock {
+                header,
+                body: None,
+                justification: Some(justification),
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BlockBodyMessage {
+    pub header_hash: Blake2bHash,
+    pub body: BlockBody,
+}
+
+/// GossipSub topics to publish block headers and block bodies.
+#[derive(Clone, Debug, Default)]
+pub struct BlockHeaderTopic;
+
+impl Topic for BlockHeaderTopic {
+    type Item = BlockHeaderMessage;
+
+    const BUFFER_SIZE: usize = 16;
+    const NAME: &'static str = "block-header";
+    const VALIDATE: bool = true;
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct BlockBodyTopic;
+
+impl Topic for BlockBodyTopic {
+    type Item = BlockBodyMessage;
+
+    const BUFFER_SIZE: usize = 16;
+    const NAME: &'static str = "block-body";
+    const VALIDATE: bool = false;
+}
 
 /*
 The consensus module uses the following messages:

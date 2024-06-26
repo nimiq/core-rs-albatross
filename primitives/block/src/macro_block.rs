@@ -79,14 +79,14 @@ impl MacroBlock {
         Ok(interlink)
     }
 
-    /// Returns whether or not this macro block is an election block.
+    /// Returns whether this macro block is an election block.
     pub fn is_election(&self) -> bool {
-        Policy::is_election_block_at(self.header.block_number)
+        self.header.is_election()
     }
 
     /// Returns a copy of the validator slots. Only returns Some if it is an election block.
     pub fn get_validators(&self) -> Option<Validators> {
-        self.body.as_ref()?.validators.clone()
+        self.header.validators.clone()
     }
 
     /// Returns the block number of this macro block.
@@ -142,13 +142,13 @@ impl MacroBlock {
 
         let validators = Some(validators.build());
         let body = MacroBody {
-            validators,
             ..Default::default()
         };
         let body_root = body.hash();
         MacroBlock {
             header: MacroHeader {
                 body_root,
+                validators,
                 ..Default::default()
             },
             body: Some(body),
@@ -197,12 +197,61 @@ pub struct MacroHeader {
     /// The root of the Merkle tree of the blockchain state. It just acts as a commitment to the
     /// state.
     pub state_root: Blake2bHash,
-    /// The root of the Merkle tree of the body. It just acts as a commitment to the body.
+    /// The hash of the body. It just acts as a commitment to the body.
     pub body_root: Blake2sHash,
     /// The root of the trie diff tree proof.
     pub diff_root: Blake2bHash,
     /// A merkle root over all of the transactions that happened in the current epoch.
     pub history_root: Blake2bHash,
+    /// Contains all the information regarding the next validator set, i.e. their validator
+    /// public key, their reward address and their assigned validator slots.
+    /// Is only Some when the macro block is an election block.
+    pub validators: Option<Validators>,
+    /// A bitset representing which validator slots will be prohibited from producing micro blocks or
+    /// proposing macro blocks in the batch following this macro block.
+    /// This set is needed for nodes that do not have the state as it is normally computed
+    /// inside the staking contract.
+    pub next_batch_initial_punished_set: BitSet,
+}
+
+impl MacroHeader {
+    /// Returns whether this macro block is an election block.
+    pub fn is_election(&self) -> bool {
+        Policy::is_election_block_at(self.block_number)
+    }
+
+    pub(crate) fn verify(&self) -> Result<(), BlockError> {
+        // Check that validators are only set on election blocks.
+        if self.is_election() != self.validators.is_some() {
+            return Err(BlockError::InvalidValidators);
+        }
+        Ok(())
+    }
+
+    fn legacy_body_root(&self) -> Blake2sHash {
+        let mut h = <Blake2sHash as HashOutput>::Builder::default();
+        self.legacy_body_serialize_content(&mut h).unwrap();
+        h.finish()
+    }
+
+    pub fn legacy_body_serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
+        if let Some(ref validators) = self.validators {
+            let pk_tree_root = validators.hash::<Blake2sHash>();
+            pk_tree_root.serialize_to_writer(writer)?;
+        } else {
+            0u8.serialize_to_writer(writer)?;
+        }
+
+        let punished_set_hash = self
+            .next_batch_initial_punished_set
+            .serialize_to_vec()
+            .hash::<Blake2sHash>();
+        punished_set_hash.serialize_to_writer(writer)?;
+
+        self.body_root.serialize_to_writer(writer)?;
+
+        Ok(())
+    }
 }
 
 impl SerializedMaxSize for MacroHeader {
@@ -221,7 +270,9 @@ impl SerializedMaxSize for MacroHeader {
         + /*state_root*/ Blake2bHash::SIZE
         + /*body_root*/ Blake2sHash::SIZE
         + /*diff_root*/ Blake2bHash::SIZE
-        + /*history_root*/ Blake2bHash::SIZE;
+        + /*history_root*/ Blake2bHash::SIZE
+        + /*validators*/ nimiq_serde::option_max_size(Validators::MAX_SIZE)
+        + /*next_batch_punished_set*/ BitSet::max_size(Policy::SLOTS as usize);
 }
 
 impl Message for MacroHeader {
@@ -266,7 +317,8 @@ impl SerializeContent for MacroHeader {
         extra_data_hash.serialize_to_writer(writer)?;
 
         self.state_root.serialize_to_writer(writer)?;
-        self.body_root.serialize_to_writer(writer)?;
+        // This includes validators and next_batch_punished_set.
+        self.legacy_body_root().serialize_to_writer(writer)?;
         self.history_root.serialize_to_writer(writer)?;
 
         Ok(())
@@ -276,50 +328,15 @@ impl SerializeContent for MacroHeader {
 /// The struct representing the body of a Macro block (can be either checkpoint or election).
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
 pub struct MacroBody {
-    /// Contains all the information regarding the next validator set, i.e. their validator
-    /// public key, their reward address and their assigned validator slots.
-    /// Is only Some when the macro block is an election block.
-    pub validators: Option<Validators>,
-    /// A bitset representing which validator slots will be prohibited from producing micro blocks or
-    /// proposing macro blocks in the batch following this macro block.
-    /// This set is needed for nodes that do not have the state as it is normally computed
-    /// inside the staking contract.
-    #[serialize_size(bitset_max_elem = Policy::SLOTS as usize)]
-    pub next_batch_initial_punished_set: BitSet,
     /// The reward related transactions of this block.
     #[serialize_size(seq_max_elems = Policy::SLOTS as usize)]
     pub transactions: Vec<RewardTransaction>,
 }
 
-impl MacroBody {
-    pub(crate) fn verify(&self, is_election: bool) -> Result<(), BlockError> {
-        if is_election != self.validators.is_some() {
-            return Err(BlockError::InvalidValidators);
-        }
-
-        Ok(())
-    }
-}
-
 impl SerializeContent for MacroBody {
     fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
-        // PITODO: do we need to hash something if None?
-        if let Some(ref validators) = self.validators {
-            let pk_tree_root = validators.hash::<H>();
-            pk_tree_root.serialize_to_writer(writer)?;
-        } else {
-            0u8.serialize_to_writer(writer)?;
-        }
-
-        let punished_set_hash = self
-            .next_batch_initial_punished_set
-            .serialize_to_vec()
-            .hash::<H>();
-        punished_set_hash.serialize_to_writer(writer)?;
-
         let transactions_hash = self.transactions.serialize_to_vec().hash::<H>();
         transactions_hash.serialize_to_writer(writer)?;
-
         Ok(())
     }
 }

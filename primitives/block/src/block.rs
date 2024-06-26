@@ -4,7 +4,6 @@ use nimiq_bls::cache::PublicKeyCache;
 use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::Ed25519PublicKey;
-use nimiq_network_interface::network::Topic;
 use nimiq_primitives::{
     coin::Coin, networks::NetworkId, policy::Policy, slots_allocation::Validators,
 };
@@ -13,32 +12,9 @@ use nimiq_transaction::ExecutedTransaction;
 use nimiq_vrf::VrfSeed;
 
 use crate::{
-    macro_block::MacroBlock, micro_block::MicroBlock, BlockError, MacroBody, MicroBody,
-    MicroJustification, TendermintProof,
+    macro_block::MacroBlock, micro_block::MicroBlock, BlockError, MacroBody, MacroHeader,
+    MicroBody, MicroJustification, TendermintProof,
 };
-
-/// These network topics are used to subscribe and request Blocks and Block Headers respectively
-#[derive(Clone, Debug, Default)]
-pub struct BlockTopic;
-
-impl Topic for BlockTopic {
-    type Item = Block;
-
-    const BUFFER_SIZE: usize = 16;
-    const NAME: &'static str = "block";
-    const VALIDATE: bool = true;
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct BlockHeaderTopic;
-
-impl Topic for BlockHeaderTopic {
-    type Item = Block;
-
-    const BUFFER_SIZE: usize = 16;
-    const NAME: &'static str = "block-header";
-    const VALIDATE: bool = true;
-}
 
 /// Defines the type of the block, either Micro or Macro (which includes both checkpoint and
 /// election blocks).
@@ -363,14 +339,15 @@ impl Block {
     }
 
     /// Updates validator keys from a public key cache.
+    // TODO remove this function
     pub fn update_validator_keys(&self, cache: &mut PublicKeyCache) {
         // Prepare validator keys from BLS cache.
         if let Block::Macro(MacroBlock {
-            body:
-                Some(MacroBody {
+            header:
+                MacroHeader {
                     validators: Some(validators),
                     ..
-                }),
+                },
             ..
         }) = self
         {
@@ -410,7 +387,7 @@ impl Block {
             // Perform block type specific body verification.
             match body {
                 BlockBody::Micro(body) => body.verify(self.is_skip(), self.block_number())?,
-                BlockBody::Macro(body) => body.verify(self.is_election())?,
+                BlockBody::Macro(_) => {}
             };
         }
 
@@ -458,6 +435,12 @@ impl Block {
                 "Invalid block"
             );
             return Err(BlockError::ExtraDataTooLarge);
+        }
+
+        // Perform block type specific header verification.
+        match self {
+            Block::Macro(block) => block.header.verify()?,
+            Block::Micro(_) => {}
         }
 
         Ok(())

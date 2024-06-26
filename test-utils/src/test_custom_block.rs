@@ -316,6 +316,19 @@ pub fn next_macro_block_proposal(
         .clone()
         .unwrap_or_else(|| blockchain.head().seed().sign_next(signing_key));
 
+    let validators = if Policy::is_election_block_at(blockchain.block_number() + 1) {
+        Some(blockchain.next_validators(&seed))
+    } else {
+        None
+    };
+
+    // Get the staking contract PRIOR to any state changes.
+    let staking_contract = blockchain.get_staking_contract();
+
+    let next_batch_initial_punished_set = staking_contract
+        .punished_slots
+        .next_batch_initial_punished_set(block_number, &staking_contract.active_validators);
+
     let mut header = MacroHeader {
         network,
         version: config.version.unwrap_or(Policy::VERSION),
@@ -331,26 +344,13 @@ pub fn next_macro_block_proposal(
         body_root: Blake2sHash::default(),
         diff_root: Blake2bHash::default(),
         history_root: Blake2bHash::default(),
+        validators,
+        next_batch_initial_punished_set,
     };
-
-    // Get the staking contract PRIOR to any state changes.
-    let staking_contract = blockchain.get_staking_contract();
-
-    let next_batch_initial_punished_set = staking_contract
-        .punished_slots
-        .next_batch_initial_punished_set(header.block_number, &staking_contract.active_validators);
 
     let reward_transactions = blockchain.create_reward_transactions(&header, &staking_contract);
 
-    let validators = if Policy::is_election_block_at(blockchain.block_number() + 1) {
-        Some(blockchain.next_validators(&header.seed))
-    } else {
-        None
-    };
-
     let body = MacroBody {
-        validators,
-        next_batch_initial_punished_set,
         transactions: reward_transactions,
     };
 

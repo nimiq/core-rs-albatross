@@ -1,16 +1,16 @@
 use futures::stream::BoxStream;
 use nimiq_block::Block;
 use nimiq_network_interface::network::Network;
+pub use proxy::BlockQueueProxy as BlockQueue;
 use tokio::sync::oneshot::Sender as OneshotSender;
 
 use crate::consensus::ResolveBlockError;
 
+mod assembler;
 pub mod block_request_component;
 pub mod live_sync;
 mod proxy;
 mod queue;
-
-pub use proxy::BlockQueueProxy as BlockQueue;
 
 pub type BlockStream<N> = BoxStream<
     'static,

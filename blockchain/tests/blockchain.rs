@@ -134,9 +134,7 @@ fn can_detect_invalid_punished_set() {
             next_macro_block_proposal(&temp_producer.producer.signing_key, &blockchain, &config);
         // Put a wrong value into the set.
         macro_block_proposal
-            .body
-            .as_mut()
-            .unwrap()
+            .header
             .next_batch_initial_punished_set
             .insert(2);
         macro_block_proposal.header.body_root = macro_block_proposal.body.as_ref().unwrap().hash();

@@ -5,7 +5,7 @@ use std::{
 };
 
 use futures::{future::BoxFuture, FutureExt, Stream};
-use nimiq_block::{Block, BlockHeaderTopic, BlockTopic};
+use nimiq_block::Block;
 #[cfg(feature = "full")]
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{
@@ -26,7 +26,9 @@ use nimiq_primitives::{
 };
 use parking_lot::Mutex;
 
-use crate::{consensus::ResolveBlockRequest, sync::syncer::LiveSyncEvent};
+use crate::{
+    consensus::ResolveBlockRequest, messages::BlockHeaderTopic, sync::syncer::LiveSyncEvent,
+};
 
 async fn spawn_blocking<R: Send + 'static, F: FnOnce() -> R + Send + 'static>(f: F) -> R {
     #[cfg(not(target_family = "wasm"))]
@@ -472,7 +474,8 @@ fn validate_message<N: Network>(
     network: Arc<N>,
     pubsub_id: Option<N::PubsubId>,
     block_push_result: &Option<Result<PushResult, PushError>>,
-    include_body: bool,
+    // TODO Remove this
+    _include_body: bool,
 ) {
     if let Some(id) = pubsub_id {
         if let Some(ref push_result) = block_push_result {
@@ -489,11 +492,7 @@ fn validate_message<N: Network>(
                     MsgAcceptance::Reject
                 }
             };
-            if include_body {
-                network.validate_message::<BlockTopic>(id, acceptance);
-            } else {
-                network.validate_message::<BlockHeaderTopic>(id, acceptance);
-            }
+            network.validate_message::<BlockHeaderTopic>(id, acceptance);
         }
     }
 }

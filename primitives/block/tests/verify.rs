@@ -498,11 +498,11 @@ fn test_verify_election_macro_body() {
         body_root: Blake2sHash::default(),
         diff_root: Blake2bHash::default(),
         history_root: Blake2bHash::default(),
-    };
-
-    let mut macro_body = MacroBody {
         validators: None,
         next_batch_initial_punished_set: BitSet::default(),
+    };
+
+    let macro_body = MacroBody {
         transactions: vec![],
     };
     macro_header.body_root = macro_body.hash();
@@ -529,7 +529,7 @@ fn test_verify_election_macro_body() {
             SchnorrPublicKey::default(),
         );
     }
-    macro_body.validators = Some(validators.build());
+    macro_header.validators = Some(validators.build());
 
     macro_header.body_root = macro_body.hash();
     let block = Block::Macro(MacroBlock {

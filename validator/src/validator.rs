@@ -11,11 +11,14 @@ use std::{
 };
 
 use futures::stream::StreamExt;
-use nimiq_block::{Block, BlockHeaderTopic, BlockTopic, BlockType, EquivocationProof};
+use nimiq_block::{Block, BlockType, EquivocationProof};
 use nimiq_blockchain::{interface::HistoryInterface, BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, ForkEvent, PushResult};
 use nimiq_bls::{lazy::LazyPublicKey, KeyPair as BlsKeyPair};
-use nimiq_consensus::{Consensus, ConsensusEvent, ConsensusProxy};
+use nimiq_consensus::{
+    messages::{BlockBodyTopic, BlockHeaderMessage, BlockHeaderTopic},
+    Consensus, ConsensusEvent, ConsensusProxy,
+};
 use nimiq_database::{
     declare_table,
     mdbx::MdbxDatabase,
@@ -587,33 +590,28 @@ where
     }
 
     /// Publish a block via gossipsub.
-    fn publish_block(&self, mut block: Block) {
+    fn publish_block(&self, block: Block) {
         trace!(%block, "Publishing block");
 
         let network = Arc::clone(&self.network);
         spawn(async move {
             let block_id = format!("{}", block);
 
-            if let Err(e) = network.publish::<BlockTopic>(block.clone()).await {
-                debug!(
-                    block = block_id,
-                    error = &e as &dyn Error,
-                    "Failed to publish block"
-                );
-            }
+            let (header, body) = BlockHeaderMessage::split_block(block);
 
-            // Remove body from micro blocks before publishing to the block header topic.
-            // Macro blocks must be always sent with body.
-            match block {
-                Block::Micro(ref mut micro_block) => micro_block.body = None,
-                Block::Macro(_) => {}
-            }
-
-            if let Err(e) = network.publish::<BlockHeaderTopic>(block).await {
-                debug!(
+            if let Err(e) = network.publish::<BlockHeaderTopic>(header).await {
+                trace!(
                     block = block_id,
                     error = &e as &dyn Error,
                     "Failed to publish block header"
+                );
+            }
+
+            if let Err(e) = network.publish::<BlockBodyTopic>(body).await {
+                trace!(
+                    block = block_id,
+                    error = &e as &dyn Error,
+                    "Failed to publish block body"
                 );
             }
         });

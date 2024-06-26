@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use futures::{future, StreamExt};
-use nimiq_block::{BlockHeaderTopic, BlockTopic};
 use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::{
     consensus::Consensus,
+    messages::{BlockBodyTopic, BlockHeaderMessage, BlockHeaderTopic},
     sync::{syncer::MacroSyncReturn, syncer_proxy::SyncerProxy},
 };
 use nimiq_database::mdbx::MdbxDatabase;
@@ -27,6 +27,7 @@ use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
 
 #[allow(dead_code)]
+#[derive(PartialEq)]
 pub enum SyncMode {
     History,
     Full,
@@ -227,14 +228,11 @@ pub async fn sync_two_peers(
             .unwrap();
 
         for block in blocks {
-            match sync_mode {
-                SyncMode::Light => {
-                    _ = net1.publish::<BlockHeaderTopic>(block).await;
-                }
-                SyncMode::History | SyncMode::Full => {
-                    _ = net1.publish::<BlockTopic>(block.clone()).await;
-                }
-            };
+            let (header, body) = BlockHeaderMessage::split_block(block);
+            _ = net1.publish::<BlockHeaderTopic>(header).await;
+            if sync_mode == SyncMode::History || sync_mode == SyncMode::Full {
+                _ = net1.publish::<BlockBodyTopic>(body).await;
+            }
         }
         let sync_result = events.next().await;
         assert!(sync_result.is_some());

@@ -243,17 +243,16 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
             UInt8::<MNT6Fq>::new_input_vec(cs.clone(), value.header.history_root.as_bytes())?;
 
         // Body
-        let body = value
-            .body
-            .as_ref()
-            .ok_or(SynthesisError::AssignmentMissing)?;
-        let validators = body
+        let validators = value
+            .header
             .validators
             .as_ref()
             .ok_or(SynthesisError::AssignmentMissing)?;
 
         let mut body_bytes = Vec::new();
-        body.serialize_content::<_, Blake2sHash>(&mut body_bytes)
+        value
+            .header
+            .legacy_body_serialize_content(&mut body_bytes)
             .map_err(|_| SynthesisError::AssignmentMissing)?;
 
         let pk_tree_root =
@@ -332,17 +331,16 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
             UInt8::<MNT6Fq>::new_witness_vec(cs.clone(), value.header.history_root.as_bytes())?;
 
         // Body
-        let body = value
-            .body
-            .as_ref()
-            .ok_or(SynthesisError::AssignmentMissing)?;
-        let validators = body
+        let validators = value
+            .header
             .validators
             .as_ref()
             .ok_or(SynthesisError::AssignmentMissing)?;
 
         let mut body_bytes = Vec::new();
-        body.serialize_content::<_, Blake2sHash>(&mut body_bytes)
+        value
+            .header
+            .legacy_body_serialize_content(&mut body_bytes)
             .map_err(|_| SynthesisError::AssignmentMissing)?;
 
         let pk_tree_root =
@@ -425,11 +423,7 @@ mod tests {
             value: Coin::from_u64_unchecked(12),
         }];
 
-        let body = MacroBody {
-            validators,
-            next_batch_initial_punished_set: Default::default(),
-            transactions,
-        };
+        let body = MacroBody { transactions };
 
         // Initialize the header.
         let body_root = body.hash();
@@ -448,6 +442,8 @@ mod tests {
             body_root,
             diff_root: Blake2bHash(rng.gen()),
             history_root: Blake2bHash(rng.gen()),
+            validators,
+            next_batch_initial_punished_set: Default::default(),
         };
 
         MacroBlock {
