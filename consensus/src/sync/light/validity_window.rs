@@ -4,6 +4,7 @@ use std::{
 };
 
 use futures::StreamExt;
+#[cfg(feature = "full")]
 use nimiq_blockchain::interface::HistoryInterface;
 #[cfg(feature = "full")]
 use nimiq_blockchain::{Blockchain, CHUNK_SIZE};

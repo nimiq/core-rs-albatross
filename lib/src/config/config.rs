@@ -765,6 +765,7 @@ impl ClientConfigBuilder {
         // Configure consensus
         let mut consensus = ConsensusConfigBuilder::default()
             .sync_mode(config_file.consensus.sync_mode)
+            .index_history(config_file.consensus.index_history)
             .build()
             .unwrap();
         if let Some(min_peers) = config_file.consensus.min_peers {

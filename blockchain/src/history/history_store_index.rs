@@ -59,11 +59,36 @@ impl HistoryStoreIndex {
             TableFlags::DUPLICATE_KEYS | TableFlags::DUP_FIXED_SIZE_VALUES,
         );
 
-        HistoryStoreIndex {
+        let index = HistoryStoreIndex {
             history_store: HistoryStore::new(db.clone(), network_id),
             db,
             tx_hash_table,
             address_table,
+        };
+
+        index.rebuild_index_if_necessary();
+        index
+    }
+
+    /// Rebuild index if necessary.
+    fn rebuild_index_if_necessary(&self) {
+        let mut txn = self.db.write_transaction();
+        let mut hist_tx_cursor = WriteTransaction::cursor(&txn, &self.history_store.hist_tx_table);
+
+        trace!("Check if history index needs to be rebuilt.");
+        // Check if last transaction is part of index.
+        if let Some((_, hist_tx)) = hist_tx_cursor.last::<EpochBasedIndex, HistoricTransaction>() {
+            let raw_tx_hash = hist_tx.tx_hash();
+            if txn
+                .get::<RawTransactionHash, EpochBasedIndex>(&self.tx_hash_table, &raw_tx_hash)
+                .is_none()
+            {
+                info!("History index out-of-date. Starting to rebuild index (this can take a long time).");
+                self.rebuild_index(&mut txn);
+                debug!("Commiting rebuilt index.");
+                txn.commit();
+                info!("Finished rebuilding history index.")
+            }
         }
     }
 
@@ -194,6 +219,7 @@ impl HistoryStoreIndex {
         let mut hashes = BTreeMap::new();
         let mut addresses = BTreeMap::new();
         let cursor = WriteTransaction::cursor(txn, &self.history_store.hist_tx_table);
+        debug!("Reading historic transactions.");
         for (key, hist_tx) in cursor.into_iter_start::<EpochBasedIndex, HistoricTransaction>() {
             self.put_historic_tx(
                 &mut hashes,
@@ -205,11 +231,13 @@ impl HistoryStoreIndex {
         }
 
         // We insert indices by append, which gives us much better performance.
+        debug!("Writing transaction hash index");
         let mut hashes_cursor = WriteTransaction::cursor(txn, &self.tx_hash_table);
         for (hash, index) in hashes.iter() {
             hashes_cursor.append(hash, index);
         }
 
+        debug!("Writing address index");
         let mut addresses_cursor = WriteTransaction::cursor(txn, &self.address_table);
         for (address, ordered_hashes) in addresses.iter() {
             for ordered_hash in ordered_hashes.iter() {

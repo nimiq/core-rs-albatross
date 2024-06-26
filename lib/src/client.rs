@@ -357,7 +357,7 @@ impl ClientInner {
             #[cfg(feature = "full-consensus")]
             SyncMode::History => {
                 blockchain_config.keep_history = true;
-                blockchain_config.disable_history_index = !config.consensus.index_history;
+                blockchain_config.index_history = config.consensus.index_history;
                 let blockchain = match Blockchain::new(
                     environment.clone(),
                     blockchain_config,
