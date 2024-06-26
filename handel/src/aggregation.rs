@@ -117,7 +117,7 @@ where
     }
 
     /// Starts level `level`
-    fn start_level(&mut self, level: usize) {
+    fn start_level(&mut self, level: usize, store: &<P as Protocol<TId>>::Store) {
         let level = self
             .levels
             .get(level)
@@ -135,11 +135,7 @@ where
             // Don't do anything for level 0 as it only contains this node
             if level.id > 0 {
                 // Get the current best for the level. Freeing the lock as soon as possible to continue working on todos
-                let best = {
-                    let store = self.protocol.store();
-                    let store = store.read();
-                    store.combined(level.id - 1)
-                };
+                let best = store.combined(level.id - 1);
 
                 if let Some(best) = best {
                     self.send_update(
@@ -165,7 +161,7 @@ where
     }
 
     /// Check if a level was completed
-    fn check_completed_level(&mut self, level_id: usize) {
+    fn check_completed_level(&mut self, level_id: usize, store: &<P as Protocol<TId>>::Store) {
         let num_peers = {
             let level = self
                 .levels
@@ -188,14 +184,10 @@ where
 
         // first get the current contributor count for this level. Release the lock as soon as possible
         // to continue working on todos.
-        let num_contributors = {
-            let store = self.protocol.store();
-            let store = store.read();
-            let best = store
-                .best(level_id)
-                .unwrap_or_else(|| panic!("Expected a best signature for level {}", level_id));
-            self.num_contributors(best)
-        };
+        let best = store
+            .best(level_id)
+            .unwrap_or_else(|| panic!("Expected a best signature for level {}", level_id));
+        let num_contributors = self.num_contributors(best);
 
         // If the number of contributors on this level is equal to the number of peers on this level it is completed.
         if num_contributors == num_peers {
@@ -216,19 +208,14 @@ where
             // if there is a level with a higher id than the completed one it needs to be activated.
             if level_id + 1 < self.levels.len() {
                 // activate next level
-                self.start_level(level_id + 1);
+                self.start_level(level_id + 1, store);
             }
         }
 
         // In order to send updated messages iterate all levels higher than the given level.
         let level_count = self.levels.len();
         for i in level_id + 1..level_count {
-            let combined = {
-                // Acquire read lock to retrieve the current combined contribution for the next lower level
-                let store = self.protocol.store();
-                let store = store.read();
-                store.combined(i - 1)
-            };
+            let combined = store.combined(i - 1);
 
             // if there is an aggregate contribution for given level i send it out to the peers of that level.
             if let Some(multisig) = combined {
@@ -327,8 +314,11 @@ where
             // next time the timeout triggers the next level needs activating
             self.next_level_timeout += 1;
 
+            let store_rw = self.protocol.store();
+            let store = store_rw.read();
+
             // finally start the level.
-            self.start_level(level);
+            self.start_level(level, &*store);
         }
     }
 
@@ -346,30 +336,26 @@ where
             return todo.contribution;
         }
 
+        let store_rw = self.protocol.store();
+        let mut store = store_rw.write();
+
         // if the contribution is valid push it to the store, creating a new aggregate
-        {
-            let store = self.protocol.store();
-            let mut store = store.write();
-            store.put(
-                todo.contribution.clone(),
-                todo.level,
-                self.protocol.registry(),
-                self.protocol.identify(),
-            );
-        }
+        store.put(
+            todo.contribution.clone(),
+            todo.level,
+            self.protocol.registry(),
+            self.protocol.identify(),
+        );
 
         // in case the level of this todo has not started, start it now as we have already contributions on it.
-        self.start_level(todo.level);
+        self.start_level(todo.level, &*store);
         // check if a level was completed by the addition of the contribution
-        self.check_completed_level(todo.level);
+        self.check_completed_level(todo.level, &*store);
 
         // get the best aggregate
         let last_level = self.levels.last().expect("No levels");
-        let best = {
-            let store = self.protocol.store();
-            let store = store.read();
-            store.combined(last_level.id)
-        };
+
+        let best = store.combined(last_level.id);
 
         best.expect("A best signature must exist after applying a contribution.")
     }
