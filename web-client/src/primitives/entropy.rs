@@ -41,6 +41,9 @@ impl Entropy {
         Ok(Entropy::from(entropy))
     }
 
+    /// Decrypts an Entropy object from an encrypted byte array and its password.
+    ///
+    /// Only supports version 3 encrypted entropies, not older versions nor private keys.
     #[wasm_bindgen(js_name = fromEncrypted)]
     pub fn from_encrypted(buf: &[u8], key: &[u8]) -> Result<Entropy, JsError> {
         let entropy =
@@ -70,6 +73,7 @@ impl Entropy {
         hex::encode(self.serialize())
     }
 
+    /// Derives an ExtendedPrivateKey from the Entropy.
     #[wasm_bindgen(js_name = toExtendedPrivateKey)]
     pub fn to_extended_private_key(
         &self,
@@ -82,6 +86,7 @@ impl Entropy {
         Ok(ExtendedPrivateKey::from(ext_priv_key))
     }
 
+    /// Converts the Entropy to a mnemonic.
     #[wasm_bindgen(js_name = toMnemonic)]
     pub fn to_mnemonic(&self) -> Vec<String> {
         self.inner
@@ -89,6 +94,7 @@ impl Entropy {
             .as_words()
     }
 
+    /// Encrypts the Entropy with a password.
     #[wasm_bindgen(js_name = exportEncrypted)]
     pub fn export_encrypted(&self, key: &[u8]) -> Result<Vec<u8>, JsError> {
         self.inner

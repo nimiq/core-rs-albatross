@@ -119,7 +119,7 @@ impl Entropy {
         let version = buf[0];
         let rounds_log = buf[1];
         if rounds_log > 32 {
-            return Err("Rounds out-of-bounds".to_string());
+            return Err(format!("Rounds out-of-bounds: 2^{}", rounds_log));
         }
         let rounds = 2u32.pow(rounds_log as u32);
 
@@ -155,7 +155,7 @@ impl Entropy {
 
         let purpose_id = u32::from_be_bytes(payload[..4].try_into().unwrap());
         if purpose_id != Entropy::PURPOSE_ID {
-            return Err(format!("Invalid purpose ID {}", purpose_id));
+            return Err(format!("Invalid secret type (Purpose ID) {}", purpose_id));
         }
 
         let secret = &payload[4..];

@@ -20,6 +20,7 @@ impl ExtendedPrivateKey {
         ))
     }
 
+    /// Generates the master extended private key from a seed.
     #[wasm_bindgen(js_name = generateMasterKey)]
     pub fn generate_master_key(seed: &[u8]) -> ExtendedPrivateKey {
         ExtendedPrivateKey::from(nimiq_key_derivation::ExtendedPrivateKey::from_seed(
@@ -27,11 +28,13 @@ impl ExtendedPrivateKey {
         ))
     }
 
+    /// Tests if a HD derivation path is valid.
     #[wasm_bindgen(js_name = isValidPath)]
     pub fn is_valid_path(path: String) -> bool {
         nimiq_key_derivation::ExtendedPrivateKey::is_valid_path(&path)
     }
 
+    /// Derives an extended private key from a seed and a derivation path.
     #[wasm_bindgen(js_name = derivePathFromSeed)]
     pub fn derive_path_from_seed(path: String, seed: &[u8]) -> Result<ExtendedPrivateKey, JsError> {
         let key = nimiq_key_derivation::ExtendedPrivateKey::from_seed(seed.to_vec());
@@ -40,7 +43,7 @@ impl ExtendedPrivateKey {
         ))
     }
 
-    /// Creates a new extended private key from a private key and chain code.
+    /// Creates an extended private key from a private key and chain code.
     ///
     /// Throws when the chain code is not exactly 32 bytes long.
     #[wasm_bindgen(constructor)]
@@ -58,6 +61,7 @@ impl ExtendedPrivateKey {
         ))
     }
 
+    /// Derives a child extended private key from the current key at the provided index.
     pub fn derive(&self, index: u32) -> Result<ExtendedPrivateKey, JsError> {
         Ok(ExtendedPrivateKey::from(
             self.inner
@@ -66,6 +70,7 @@ impl ExtendedPrivateKey {
         ))
     }
 
+    /// Derives a child extended private key from the current key at the provided path.
     #[wasm_bindgen(js_name = derivePath)]
     pub fn derive_path(&self, path: String) -> Result<ExtendedPrivateKey, JsError> {
         Ok(ExtendedPrivateKey::from(
@@ -94,11 +99,13 @@ impl ExtendedPrivateKey {
         hex::encode(self.serialize())
     }
 
+    /// Returns the private key of the extended private key.
     #[wasm_bindgen(getter, js_name = privateKey)]
     pub fn private_key(&self) -> PrivateKey {
         PrivateKey::from(self.inner.to_private_key())
     }
 
+    /// Returns the address related to this extended private key.
     #[wasm_bindgen(js_name = toAddress)]
     pub fn to_address(&self) -> Address {
         Address::from(self.inner.to_address())

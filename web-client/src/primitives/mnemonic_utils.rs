@@ -8,11 +8,13 @@ pub struct MnemonicUtils;
 
 #[wasm_bindgen]
 impl MnemonicUtils {
+    /// Converts an Entropy to a mnemonic.
     #[wasm_bindgen(js_name = entropyToMnemonic)]
     pub fn entropy_to_mnemonic(entropy: Entropy) -> Vec<String> {
         entropy.to_mnemonic()
     }
 
+    /// Converts a mnemonic to an Entropy.
     #[wasm_bindgen(js_name = mnemonicToEntropy)]
     pub fn mnemonic_to_entropy(mnemonic: Vec<String>) -> Result<Entropy, JsError> {
         let mnemonic = nimiq_mnemonic::Mnemonic::from_words_unchecked(mnemonic);
@@ -23,6 +25,9 @@ impl MnemonicUtils {
         }
     }
 
+    /// Converts a mnemonic to a seed.
+    ///
+    /// Optionally takes a password to use for the seed derivation.
     #[wasm_bindgen(js_name = mnemonicToSeed)]
     pub fn mnemonic_to_seed(
         mnemonic: Vec<String>,
@@ -34,6 +39,9 @@ impl MnemonicUtils {
             .map_err(|_| JsError::new("Invalid mnemonic"))
     }
 
+    /// Converts a mnemonic to an extended private key.
+    ///
+    /// Optionally takes a password to use for the seed derivation.
     #[wasm_bindgen(js_name = mnemonicToExtendedPrivateKey)]
     pub fn mnemonic_to_extended_private_key(
         mnemonic: Vec<String>,
@@ -46,11 +54,19 @@ impl MnemonicUtils {
         Ok(ExtendedPrivateKey::from(ext_priv_key))
     }
 
+    /// Tests if a mnemonic can be both for a legacy Nimiq wallet and a BIP39 wallet.
     #[wasm_bindgen(js_name = isCollidingChecksum)]
     pub fn is_colliding_checksum(entropy: Entropy) -> bool {
         entropy.native_ref().is_colliding_checksum()
     }
 
+    /// Gets the type of a mnemonic.
+    ///
+    /// Return values:
+    /// - `MnemonicType.LEGACY` => the mnemonic is for a legacy Nimiq wallet.
+    /// - `MnemonicType.BIP39` => the mnemonic is for a BIP39 wallet.
+    /// - `MnemonicType.UNKNOWN` => the mnemonic can be for both.
+    /// - `MnemonicType.INVALID` => the mnemonic is invalid.
     #[wasm_bindgen(js_name = getMnemonicType)]
     pub fn get_mnemonic_type(mnemonic: Vec<String>) -> MnemonicType {
         let mnemonic = nimiq_mnemonic::Mnemonic::from_words_unchecked(mnemonic);
