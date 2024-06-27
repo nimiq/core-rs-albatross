@@ -28,9 +28,6 @@ where
     /// Return the number of the current best level.
     fn best_level(&self) -> usize;
 
-    /// Check whether we have an individual signature from a certain `peer_id`.
-    fn individual_received(&self, peer_id: &Identity) -> bool;
-
     /// Return a `BitSet` of the verified individual signatures we have for a given `level`.
     ///
     /// Panics if `level` is invalid.
@@ -67,9 +64,6 @@ where
     /// The currently best level
     best_level: usize,
 
-    /// BitSet that contains the IDs of all individual contributions we already received
-    individual_received: Identity,
-
     /// BitSets for all the individual contributions that we already verified
     /// level -> peer_id -> bool
     individual_verified: Vec<Identity>,
@@ -99,7 +93,6 @@ where
         Self {
             partitioner,
             best_level: 0,
-            individual_received: Identity::default(),
             individual_verified,
             individual_contributions: individual_signatures,
             best_contribution: BTreeMap::new(),
@@ -267,10 +260,6 @@ where
 
     fn best_level(&self) -> usize {
         self.best_level
-    }
-
-    fn individual_received(&self, identity: &Identity) -> bool {
-        self.individual_received.is_superset_of(identity)
     }
 
     fn individual_verified(&self, level: usize) -> &Identity {
