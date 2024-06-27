@@ -91,14 +91,22 @@ pub trait SerializedMaxSize {
     const MAX_SIZE: usize;
 }
 
+/// Types implementing this trait have an alternative fixed-size serialization length.
+pub trait SerializedFixedSize {
+    /// Size in bytes of the alternate, fixed-size serialization.
+    const FIXED_SIZE: usize;
+}
+
 impl<T: SerializedSize> SerializedMaxSize for T {
     const MAX_SIZE: usize = T::SIZE;
 }
 
 #[rustfmt::skip]
 mod integer_impls {
-    use super::SerializedSize;
+    use super::SerializedFixedSize;
     use super::SerializedMaxSize;
+    use super::SerializedSize;
+    use std::mem;
 
     impl SerializedSize for bool { const SIZE: usize = 1; }
 
@@ -111,6 +119,13 @@ mod integer_impls {
     impl SerializedMaxSize for u32 { const MAX_SIZE: usize = (32 + 6) / 7; }
     impl SerializedMaxSize for i64 { const MAX_SIZE: usize = (64 + 6) / 7; }
     impl SerializedMaxSize for u64 { const MAX_SIZE: usize = (64 + 6) / 7; }
+
+    impl SerializedFixedSize for i16 { const FIXED_SIZE: usize = mem::size_of::<Self>(); }
+    impl SerializedFixedSize for u16 { const FIXED_SIZE: usize = mem::size_of::<Self>(); }
+    impl SerializedFixedSize for i32 { const FIXED_SIZE: usize = mem::size_of::<Self>(); }
+    impl SerializedFixedSize for u32 { const FIXED_SIZE: usize = mem::size_of::<Self>(); }
+    impl SerializedFixedSize for i64 { const FIXED_SIZE: usize = mem::size_of::<Self>(); }
+    impl SerializedFixedSize for u64 { const FIXED_SIZE: usize = mem::size_of::<Self>(); }
 }
 
 impl<T: SerializedMaxSize> SerializedMaxSize for Option<T> {

@@ -20,6 +20,7 @@ struct Field {
     ty: Type,
     seq_max_elems: Option<Expr>,
     bitset_max_elem: Option<Expr>,
+    fixed_size: Option<()>,
 }
 
 #[derive(FromVariant)]
@@ -46,23 +47,27 @@ fn size_fields(fields: &[Field], max: bool) -> TokenStream {
         ty,
         seq_max_elems,
         bitset_max_elem,
+        fixed_size,
     } in fields
     {
-        let size = match (seq_max_elems, bitset_max_elem) {
-            (None, None) => {
+        let size = match (seq_max_elems, bitset_max_elem, fixed_size) {
+            (None, None, None) => {
                 if max {
                     max_size(ty)
                 } else {
                     size(ty)
                 }
             }
+            (None, None, Some(())) => quote! {
+                <#ty as ::nimiq_serde::SerializedFixedSize>::FIXED_SIZE
+            },
             _ if !max => panic!(
                 "`#[serialize_size]` attributes not supported while deriving `SerializedSize`"
             ),
-            (Some(seq_max_elems), None) => quote! {
+            (Some(seq_max_elems), None, None) => quote! {
                 ::nimiq_serde::seq_max_size(<#ty as ::nimiq_serde::SerializeSeqMaxSize>::Element::MAX_SIZE, #seq_max_elems)
             },
-            (None, Some(bitset_max_elem)) => quote! {
+            (None, Some(bitset_max_elem), None) => quote! {
                 ::nimiq_collections::BitSet::max_size(#bitset_max_elem)
             },
             _ => panic!("`more than one #[serialize_size]` attribute specified"),
