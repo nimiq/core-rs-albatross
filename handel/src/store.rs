@@ -5,14 +5,16 @@ use crate::{
     identity::{Identity, IdentityRegistry},
     partitioner::Partitioner,
     protocol::Protocol,
+    Identifier,
 };
 
 /// Trait that needs to be implemented to support the storage of contributions
 /// and the selection of the best contributions seen.
-pub trait ContributionStore<TId, TProtocol>: Send + Sync
+pub trait ContributionStore<TId, TProtocol>
 where
-    TId: std::fmt::Debug + Clone + 'static,
+    TId: Identifier,
     TProtocol: Protocol<TId>,
+    Self: Send + Sync,
 {
     /// Put `signature` into the store for level `level`.
     fn put(
@@ -48,13 +50,17 @@ where
     /// Panics if `level` is invalid.
     fn best(&self, level: usize) -> Option<&TProtocol::Contribution>;
 
-    /// Returns the best combined multi-signature for all levels upto `level`.
+    /// Returns the best combined multi-signature for all levels up to `level`.
     fn combined(&self, level: usize) -> Option<TProtocol::Contribution>;
 }
 
 #[derive(Clone, Debug)]
 /// An implementation of the `ContributionStore` trait
-pub struct ReplaceStore<TId: Clone + std::fmt::Debug + 'static, TProtocol: Protocol<TId>> {
+pub struct ReplaceStore<TId, TProtocol>
+where
+    TId: Identifier,
+    TProtocol: Protocol<TId>,
+{
     /// The Partitioner used to create the Aggregation Tree.
     partitioner: Arc<TProtocol::Partitioner>,
 
@@ -76,8 +82,10 @@ pub struct ReplaceStore<TId: Clone + std::fmt::Debug + 'static, TProtocol: Proto
     best_contribution: BTreeMap<usize, (TProtocol::Contribution, Identity)>,
 }
 
-impl<TId: Clone + std::fmt::Debug + 'static, TProtocol: Protocol<TId>>
-    ReplaceStore<TId, TProtocol>
+impl<TId, TProtocol> ReplaceStore<TId, TProtocol>
+where
+    TId: Identifier,
+    TProtocol: Protocol<TId>,
 {
     /// Create a new Replace Store using the Partitioner `partitioner`.
     pub fn new(partitioner: Arc<TProtocol::Partitioner>) -> Self {
@@ -208,7 +216,7 @@ impl<TId: Clone + std::fmt::Debug + 'static, TProtocol: Protocol<TId>>
 
 impl<TId, TProtocol> ContributionStore<TId, TProtocol> for ReplaceStore<TId, TProtocol>
 where
-    TId: Clone + std::fmt::Debug + 'static,
+    TId: Identifier,
     TProtocol: Protocol<TId>,
 {
     fn put(

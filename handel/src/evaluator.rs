@@ -9,13 +9,15 @@ use crate::{
     protocol::Protocol,
     store::ContributionStore,
     update::LevelUpdate,
+    Identifier,
 };
 
 /// Trait for scoring or evaluating a contribution or signature.
-pub trait Evaluator<TId, TProtocol>: Send + Sync
+pub trait Evaluator<TId, TProtocol>
 where
-    TId: Clone + std::fmt::Debug + 'static,
+    TId: Identifier,
     TProtocol: Protocol<TId>,
+    Self: Send + Sync,
 {
     /// Takes an unverified contribution and scores it in terms of usefulness with
     ///
@@ -34,7 +36,7 @@ where
 #[derive(Debug)]
 pub struct WeightedVote<TId, TProtocol>
 where
-    TId: Clone + std::fmt::Debug + 'static,
+    TId: Identifier,
     TProtocol: Protocol<TId>,
 {
     /// The contribution store.
@@ -52,7 +54,7 @@ where
 
 impl<TId, TProtocol> WeightedVote<TId, TProtocol>
 where
-    TId: Clone + std::fmt::Debug + 'static,
+    TId: Identifier,
     TProtocol: Protocol<TId>,
 {
     /// If a todo completes a level this is the base score
@@ -89,7 +91,7 @@ where
 
 impl<TId, TProtocol> Evaluator<TId, TProtocol> for WeightedVote<TId, TProtocol>
 where
-    TId: Clone + std::fmt::Debug + 'static,
+    TId: Identifier,
     TProtocol: Protocol<TId>,
 {
     /// Takes an unverified contribution and scores it in terms of usefulness with
