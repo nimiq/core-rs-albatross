@@ -81,8 +81,8 @@ impl Policy {
     /// ceiling division.
     pub const F_PLUS_ONE: u16 = (Self::SLOTS + 3 - 1) / 3;
 
-    /// The timeout in milliseconds for a validator to produce a block (2s)
-    pub const BLOCK_PRODUCER_TIMEOUT: u64 = 2 * 1000;
+    /// The timeout in milliseconds for a validator to produce a block (4s)
+    pub const BLOCK_PRODUCER_TIMEOUT: u64 = 4 * 1000;
 
     /// The optimal time in milliseconds between blocks (1s)
     pub const BLOCK_SEPARATION_TIME: u64 = 1000;
