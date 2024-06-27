@@ -288,8 +288,6 @@ where
     }
 
     fn combined(&self, level: usize) -> Option<TProtocol::Contribution> {
-        // TODO: Cache this?
-
         let mut signatures = Vec::new();
         for (_, (signature, _)) in self.best_contribution.range(0..=level) {
             signatures.push(signature)
