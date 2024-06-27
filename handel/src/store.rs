@@ -17,6 +17,7 @@ where
     Self: Send + Sync,
 {
     /// Put `signature` into the store for level `level`.
+    /// In the case of individual signatures they must not already exist.
     fn put(
         &mut self,
         contribution: TProtocol::Contribution,
@@ -99,16 +100,24 @@ where
         }
     }
 
+    /// Attempts to merge the given contribution with the best contribution on the given level.
+    ///
+    /// If the signatures cannot be merged all available individual signatures will be merged into the given
+    /// signature if that would produce a stronger signature than the current best for the given level.
+    ///
+    /// ## Returns
+    /// * The combined contribution produced as well as the identity present in the contribution if there was an improvement.
+    /// * None otherwise.
     fn check_merge(
         &self,
-        contribution: &TProtocol::Contribution,
+        mut contribution: TProtocol::Contribution,
         registry: Arc<TProtocol::Registry>,
         level: usize,
         identifier: TId,
-    ) -> Option<TProtocol::Contribution> {
+    ) -> Option<(TProtocol::Contribution, Identity)> {
         let best_contribution = self.best_contribution.get(&level);
 
-        if best_contribution.is_none() {
+        let Some((best_contribution, best_contributors)) = best_contribution else {
             // This is normal whenever the first signature for a level is processed.
             trace!(
                 id = ?identifier,
@@ -116,10 +125,9 @@ where
                 contributors = ?contribution.contributors(),
                 "Level was empty",
             );
-            return Some(contribution.clone());
-        }
-
-        let (best_contribution, best_contributors) = best_contribution.unwrap();
+            let contributors = registry.signers_identity(&contribution.contributors());
+            return Some((contribution, contributors));
+        };
 
         trace!(
             id = ?identifier,
@@ -130,13 +138,11 @@ where
         );
 
         // Try to combine
-        let mut contribution = contribution.clone();
-
         // If combining fails, it is due to the contributions having an overlap.
         // One may be the superset of the other which makes it the strictly better set.
         // If that is the case the better can be immediately returned.
         // Otherwise individual signatures must still be checked.
-        let contributors = if let Err(e) = contribution.combine(best_contribution) {
+        let mut contributors = if let Err(e) = contribution.combine(best_contribution) {
             // The contributors of contribution represented as an Identity.
             let contributors = registry.signers_identity(&contribution.contributors());
 
@@ -148,7 +154,7 @@ where
                     ?best_contribution,
                     "New signature is superset of current best. Replacing",
                 );
-                return Some(contribution);
+                return Some((contribution, contributors));
             } else {
                 trace!(
                     id = ?identifier,
@@ -160,7 +166,10 @@ where
                 contributors
             }
         } else {
-            registry.signers_identity(&contribution.contributors())
+            // Combining worked meaning the contributions did not overlap. Since individuals should already
+            // have been present in the previous best this is the best signature available.
+            let contributors = registry.signers_identity(&contribution.contributors());
+            return Some((contribution, contributors));
         };
 
         // Individual signatures of identities which this node has that are already verified.
@@ -185,25 +194,16 @@ where
         // Put in the individual signatures
         for id in complements.iter() {
             // Get individual signature
-            let individual = self
-                .individual_contributions
-                .get(level)
-                .unwrap_or_else(|| panic!("Individual contribution missing for level {}", level))
-                .get(&id)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Individual contribution {:?} missing for level {}",
-                        id, level
-                    )
-                });
+            let individual = &self.individual_contributions[level][&id];
 
             // Merge individual signature into multisig
             contribution
                 .combine(individual)
                 .unwrap_or_else(|e| panic!("Individual contribution from id={:?} can't be added to aggregate contributions: {:?}", id, e));
+            contributors.combine(&id, false);
         }
 
-        Some(contribution)
+        Some((contribution, contributors))
     }
 }
 
@@ -224,27 +224,22 @@ where
             return;
         }
 
+        // In case of individual contributions additional tracking is required.
         if identity.len() == 1 {
-            // Intersection is not allowed here, as it is assumed that the individual contribution
-            // does not exist prior to this call. If it does the evaluator has a bug.
-            self.individual_verified
-                .get_mut(level)
-                .unwrap_or_else(|| panic!("Missing Level {level}"))
-                .combine(&identity, false);
-
-            self.individual_contributions
-                .get_mut(level)
-                .unwrap_or_else(|| panic!("Missing Level {level}"))
-                .insert(identity, contribution.clone());
+            // These will panic if the level does not exist or if the individual signature already exists.
+            // If it does the evaluator has a bug, as existing signatures should be scored 0.
+            self.individual_verified[level].combine(&identity, false);
+            assert!(self.individual_contributions[level]
+                .insert(identity, contribution.clone())
+                .is_none());
         }
 
-        if let Some(best_contribution) = self.check_merge(
-            &contribution,
+        if let Some((best_contribution, best_identity)) = self.check_merge(
+            contribution,
             Arc::clone(&registry),
             level,
             identifier.clone(),
         ) {
-            let best_identity = registry.signers_identity(&best_contribution.contributors());
             self.best_contribution
                 .insert(level, (best_contribution, best_identity));
             if level > self.best_level {
