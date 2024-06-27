@@ -119,6 +119,8 @@ where
                         // If there is also no more peers left to request from, this request has now failed as a whole.
                         if self.remaining_peers.is_empty() {
                             return Poll::Ready(None);
+                        } else {
+                            break;
                         }
                     }
                 }
