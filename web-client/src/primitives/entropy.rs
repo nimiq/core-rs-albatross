@@ -40,6 +40,13 @@ impl Entropy {
         Ok(Entropy::from(entropy))
     }
 
+    #[wasm_bindgen(js_name = fromEncrypted)]
+    pub fn from_encrypted(buf: &[u8], key: &[u8]) -> Result<Entropy, JsError> {
+        let entropy =
+            nimiq_mnemonic::Entropy::from_encrypted(buf, key).map_err(|str| JsError::new(&str))?;
+        Ok(Entropy::from(entropy))
+    }
+
     /// Creates a new Entropy from a byte array.
     ///
     /// Throws when the byte array is not exactly 32 bytes long.
