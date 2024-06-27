@@ -80,6 +80,13 @@ impl Entropy {
             .to_mnemonic(nimiq_mnemonic::WORDLIST_EN)
             .as_words()
     }
+
+    #[wasm_bindgen(js_name = exportEncrypted)]
+    pub fn export_encrypted(&self, key: &[u8]) -> Result<Vec<u8>, JsError> {
+        self.inner
+            .export_encrypted(key)
+            .map_err(|str| JsError::new(&str))
+    }
 }
 
 impl From<nimiq_mnemonic::Entropy> for Entropy {
