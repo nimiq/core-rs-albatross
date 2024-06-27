@@ -83,7 +83,7 @@ fn it_can_compute_argon2_kdf() {
     let password = "test";
     let salt = "nimiqrocks!";
 
-    let res = argon2kdf::compute_argon2_kdf(
+    let res2d = argon2kdf::compute_argon2_kdf(
         password.as_bytes(),
         salt.as_bytes(),
         1,
@@ -91,7 +91,19 @@ fn it_can_compute_argon2_kdf() {
         argon2::Variant::Argon2d,
     );
     assert_eq!(
-        res.unwrap(),
-        hex::decode("a4c0069f36c090e78efecd0fc86d3a7ae62bc169648f480bbf78e16f9f08d680").unwrap()
-    )
+        res2d.unwrap(),
+        hex::decode("8c259fdcc2ad6799df728c11e895a3369e9dbae6a3166ebc3b353399fc565524").unwrap()
+    );
+
+    let res2id = argon2kdf::compute_argon2_kdf(
+        password.as_bytes(),
+        salt.as_bytes(),
+        1,
+        32,
+        argon2::Variant::Argon2id,
+    );
+    assert_eq!(
+        res2id.unwrap(),
+        hex::decode("8d8a0ac8da6f305cfc505411db3d3d17cda3aa1773e4c63b85aade07fdfa637e").unwrap()
+    );
 }
