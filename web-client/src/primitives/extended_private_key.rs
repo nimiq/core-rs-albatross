@@ -118,3 +118,28 @@ impl ExtendedPrivateKey {
         &self.inner
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use wasm_bindgen::JsValue;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    use crate::primitives::entropy::Entropy;
+
+    const ENTROPY: &str = "fc0a0c62a4cc79211e58c1cd788d123d7af859668281ec2ec8861bd9a966d6bf";
+
+    #[wasm_bindgen_test]
+    pub fn it_can_derive_hd_wallets() {
+        let entropy = Entropy::from_hex(ENTROPY).map_err(JsValue::from).unwrap();
+        let ext_priv_key = entropy
+            .to_extended_private_key(None)
+            .map_err(JsValue::from)
+            .unwrap();
+        let derived_key = ext_priv_key
+            .derive_path("m/44'/242'/0'/0'".to_string())
+            .map_err(JsValue::from)
+            .unwrap();
+        let address = derived_key.to_address().to_user_friendly_address();
+        assert_eq!(address, "NQ54 7EA0 SGCF 28VB L9H6 9KYG PG2U ATS3 CSN5")
+    }
+}

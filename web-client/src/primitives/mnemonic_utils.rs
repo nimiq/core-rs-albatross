@@ -71,3 +71,32 @@ const TS_MNEMONIC_ENUM: &'static str = r#"export enum MnemonicType {
     LEGACY = 0,
     BIP39 = 1,
 }"#;
+
+#[cfg(test)]
+mod tests {
+    use wasm_bindgen::JsValue;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    use super::MnemonicUtils;
+    use crate::primitives::entropy::Entropy;
+
+    const ENTROPY: &str = "fc0a0c62a4cc79211e58c1cd788d123d7af859668281ec2ec8861bd9a966d6bf";
+
+    #[wasm_bindgen_test]
+    pub fn it_can_convert_between_entropy_and_mnemonic() {
+        let entropy = Entropy::from_hex(ENTROPY).map_err(JsValue::from).unwrap();
+        let mnemonic = MnemonicUtils::entropy_to_mnemonic(entropy);
+        assert_eq!(
+            mnemonic,
+            vec![
+                "winter", "expire", "board", "end", "shy", "mountain", "just", "blouse", "sniff",
+                "settle", "duty", "kit", "question", "coach", "old", "expand", "umbrella", "iron",
+                "canoe", "dash", "once", "recall", "foot", "width"
+            ]
+        );
+        let entropy = MnemonicUtils::mnemonic_to_entropy(mnemonic)
+            .map_err(JsValue::from)
+            .unwrap();
+        assert_eq!(entropy.to_hex(), ENTROPY);
+    }
+}
