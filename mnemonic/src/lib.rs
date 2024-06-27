@@ -114,6 +114,53 @@ impl Entropy {
 
         Ok(buf)
     }
+
+    pub fn from_encrypted(buf: &[u8], key: &[u8]) -> Result<Entropy, String> {
+        let version = buf[0];
+        let rounds_log = buf[1];
+        if rounds_log > 32 {
+            return Err("Rounds out-of-bounds".to_string());
+        }
+        let rounds = 2u32.pow(rounds_log as u32);
+
+        match version {
+            1 => unimplemented!(),
+            2 => unimplemented!(),
+            3 => Entropy::decrypt_v3(&buf[2..], key, rounds),
+            _ => Err(format!("Unknown version: {}", version)),
+        }
+    }
+
+    fn decrypt_v3(buf: &[u8], key: &[u8], rounds: u32) -> Result<Entropy, String> {
+        if buf.len() < Entropy::ENCRYPTION_SALT_SIZE {
+            return Err("Buffer too short".to_string());
+        }
+        let salt = &buf[..Entropy::ENCRYPTION_SALT_SIZE];
+        let ciphertext = &buf[Entropy::ENCRYPTION_SALT_SIZE
+            ..Entropy::ENCRYPTION_SALT_SIZE + Entropy::ENCRYPTION_CHECKSUM_SIZE_V3 + /*purposeId*/ 4 + Entropy::SIZE];
+
+        let plaintext = otp(ciphertext, key, rounds, salt, Algorithm::Argon2d)
+            .map_err(|err| format!("{:?}", err))?;
+
+        let check = &plaintext[..Entropy::ENCRYPTION_CHECKSUM_SIZE_V3];
+        let payload = &plaintext[Entropy::ENCRYPTION_CHECKSUM_SIZE_V3..];
+        let checksum: [u8; Entropy::ENCRYPTION_CHECKSUM_SIZE_V3] = Blake2bHasher::default()
+            .digest(payload)
+            .as_bytes()[..Entropy::ENCRYPTION_CHECKSUM_SIZE_V3]
+            .try_into()
+            .unwrap();
+        if checksum != check {
+            return Err("Invalid key".to_string());
+        }
+
+        let purpose_id = u32::from_be_bytes(payload[..4].try_into().unwrap());
+        if purpose_id != Entropy::PURPOSE_ID {
+            return Err(format!("Invalid purpose ID {}", purpose_id));
+        }
+
+        let secret = &payload[4..];
+        Ok(Entropy::from(secret))
+    }
 }
 
 const WORDLIST_SIZE: usize = 2048;
