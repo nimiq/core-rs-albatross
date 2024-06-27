@@ -73,6 +73,14 @@ pub trait ReadCursor<'txn>: Clone {
         K: AsDatabaseBytes + FromDatabaseValue,
         V: FromDatabaseValue;
 
+    /// Seeks to the first entry with a key greater than or equal to the given key.
+    /// For DUP tables, it also takes into account the data.
+    /// The bool in the return value is set to `true` if it is an exact match.
+    fn seek_range_subkey<K, V>(&mut self, key: &K, data: &V) -> Option<(bool, K, V)>
+    where
+        K: AsDatabaseBytes + FromDatabaseValue,
+        V: AsDatabaseBytes + FromDatabaseValue;
+
     fn count_duplicates(&mut self) -> usize;
 
     fn into_iter_start<K, V>(self) -> Self::IntoIter<K, V>
@@ -104,6 +112,13 @@ pub trait WriteCursor<'txn>: ReadCursor<'txn> {
     /// Appends a key/value pair to the end of the database.
     /// This operation fails if the key is less than the last key.
     fn append<K, V>(&mut self, key: &K, value: &V)
+    where
+        K: AsDatabaseBytes + ?Sized,
+        V: AsDatabaseBytes + ?Sized;
+
+    /// Appends a key/value pair to the end of the database with duplicate keys.
+    /// This operation fails if the key is less than the last key.
+    fn append_dup<K, V>(&mut self, key: &K, value: &V)
     where
         K: AsDatabaseBytes + ?Sized,
         V: AsDatabaseBytes + ?Sized;
