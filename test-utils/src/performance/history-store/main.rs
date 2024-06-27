@@ -3,6 +3,7 @@ use std::{fs, path::PathBuf, process::exit, time::Instant};
 use clap::Parser;
 use nimiq_blockchain::{
     interface::HistoryInterface, light_history_store::LightHistoryStore, HistoryStore,
+    HistoryStoreIndex,
 };
 use nimiq_database::{
     mdbx::MdbxDatabase,
@@ -31,6 +32,9 @@ struct Args {
     /// Use the light history store
     #[arg(short, long, action = clap::ArgAction::Count)]
     light: u8,
+    /// Use indexing
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    indexing: u8,
     /// Rounds (Batches operations)
     #[arg(short, long)]
     rounds: Option<u32>,
@@ -170,6 +174,12 @@ fn main() {
     let history_store = if args.light > 0 {
         println!("Exercising the light history store");
         Box::new(LightHistoryStore::new(
+            env.clone(),
+            NetworkId::UnitAlbatross,
+        )) as Box<dyn HistoryInterface + Sync + Send>
+    } else if args.indexing > 0 {
+        println!("Exercising the history store index");
+        Box::new(HistoryStoreIndex::new(
             env.clone(),
             NetworkId::UnitAlbatross,
         )) as Box<dyn HistoryInterface + Sync + Send>
