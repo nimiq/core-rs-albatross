@@ -153,7 +153,7 @@ ark-r1cs-std = { git = "https://github.com/paberr/r1cs-std", branch = "pb/fix-pe
 libp2p-websocket = { git = "https://github.com/Eligioo/rust-libp2p", branch = "stefan/quicksink-no-panic" }
 
 [workspace.package]
-version = "0.22.1"
+version = "0.22.3"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2021"
 homepage = "https://nimiq.com"
