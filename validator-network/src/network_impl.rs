@@ -340,9 +340,14 @@ where
             validator_id: self.local_validator_id()?,
             inner: msg,
         };
+        // Use the last known peer ID, knowing that it might be already outdated.
+        // The network doesn't have a way to know if a record is outdated but we mark
+        // them as potentially outdated when a request/response error happens.
+        // If the cache has a potentially outdated value, it will be updated soon
+        // and then available to use by future calls to this function.
         let peer_id = self
             .get_validator_cache(validator_id)
-            .current_peer_id()
+            .potentially_outdated_peer_id()
             .ok_or_else(|| NetworkError::UnknownValidator(validator_id))?;
 
         self.network
