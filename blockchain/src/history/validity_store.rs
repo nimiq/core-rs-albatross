@@ -5,9 +5,9 @@ use nimiq_database::{
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy::Policy;
 
-/// The validity store is used by full nodes to keep track of which
-/// transactions have occurred within the validity window without
-/// having to store the full transactions
+/// The validity store is used by full/history nodes to keep track of which
+/// transactions have occurred within the validity window.
+/// The validity store keeps at least `validity_window_blocks + blocks_per_batch` blocks
 #[derive(Debug)]
 pub struct ValidityStore {
     // Database handle.

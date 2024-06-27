@@ -26,17 +26,13 @@ use super::{
 };
 use crate::{history::HistoryTreeChunk, interface::HistoryIndexInterface, HistoryStore};
 
-/// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
-/// constructed from the list of historic transactions in an epoch) and historic transactions (which
-/// are representations of transactions).
-/// The history trees allow a node in possession of a transaction to prove to another node (that
-/// only has macro block headers) that that given transaction happened.
+/// A struct that contains databases to store history indices.
 pub struct HistoryStoreIndex {
     /// Database handle.
     db: DatabaseProxy,
     /// A database of all epoch numbers and leaf indices indexed by the hash of the (raw) transaction. This way we
     /// can start with a raw transaction hash and find it in the MMR.
-    /// Mapping of raw tx to epoch number and leaf index.
+    /// Mapping of raw tx hash to epoch number and leaf index.
     tx_hash_table: TableProxy,
     /// A database of all raw transaction (and reward inherent) hashes indexed by their sender and
     /// recipient addresses.
@@ -97,16 +93,13 @@ impl HistoryStoreIndex {
         txn: &mut WriteTransactionProxy,
         epoch_number: u32,
         leaf_indices: Range<u32>,
-    ) -> u64 {
+    ) {
         for leaf_index in leaf_indices.clone() {
             let tx_opt = self
                 .history_store
                 .get_historic_tx(epoch_number, leaf_index, Some(txn));
 
-            let hist_tx = match tx_opt {
-                Some(v) => v,
-                None => continue,
-            };
+            let Some(hist_tx) = tx_opt else { continue };
 
             // Remove it from the transaction hash database.
             let tx_hash = hist_tx.tx_hash();
@@ -115,7 +108,7 @@ impl HistoryStoreIndex {
 
             let ordered_hash = OrderedHash {
                 index: key,
-                hash: tx_hash.into(),
+                value: tx_hash.into(),
             };
             match &hist_tx.data {
                 HistoricTransactionData::Basic(tx) => {
@@ -131,9 +124,6 @@ impl HistoryStoreIndex {
                 | HistoricTransactionData::Jail(_) => {}
             }
         }
-
-        self.history_store
-            .remove_txns_from_history(txn, epoch_number, leaf_indices)
     }
 
     /// Inserts a historic transaction into the History Store's transaction databases.
@@ -155,25 +145,25 @@ impl HistoryStoreIndex {
 
         let ordered_hash = OrderedHash {
             index: key,
-            hash: raw_tx_hash.into(),
+            value: raw_tx_hash.into(),
         };
         match &hist_tx.data {
             HistoricTransactionData::Basic(tx) => {
                 let tx = tx.get_raw_transaction();
                 addresses
                     .entry(tx.sender.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(ordered_hash.clone());
                 addresses
                     .entry(tx.recipient.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(ordered_hash);
             }
             HistoricTransactionData::Reward(ev) => {
                 // We only add reward inherents to the address database.
                 addresses
                     .entry(ev.reward_address.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(ordered_hash);
             }
             // Do not index equivocation or punishments events, since I do not see a use case
@@ -184,7 +174,7 @@ impl HistoryStoreIndex {
         }
     }
 
-    /// Returns a the epoch index and leaf index corresponding to the given
+    /// Returns the epoch index and leaf index corresponding to the given
     /// transaction hash.
     /// The validity window ensures that there is only ever one transaction.
     fn get_leaf_indices_by_tx_hash(
@@ -518,7 +508,10 @@ impl HistoryInterface for HistoryStoreIndex {
 
         // Remove each of the historic transactions in the history tree from the extended
         // transaction database.
-        let txns_size = self.remove_txns_from_history(txn, epoch_number, leaf_indices);
+        self.remove_txns_from_history(txn, epoch_number, leaf_indices.clone());
+        let txns_size =
+            self.history_store
+                .remove_txns_from_history(txn, epoch_number, leaf_indices);
 
         // Return the history root.
         Some((root, txns_size))
@@ -531,6 +524,8 @@ impl HistoryInterface for HistoryStoreIndex {
             self.history_store
                 .remove_leaves_from_history(txn, epoch_number, None)?;
         self.remove_txns_from_history(txn, epoch_number, leaf_indices);
+        self.history_store
+            .remove_epoch_from_history(txn, epoch_number);
 
         Some(())
     }
@@ -592,12 +587,12 @@ impl HistoryIndexInterface for HistoryStoreIndex {
 
         // Then go to the last transaction hash at the given address and add it to the transaction
         // hashes list.
-        tx_hashes.push(cursor.last_duplicate::<OrderedHash>().expect("This shouldn't panic since we already verified before that there is at least one transactions at this address!").hash);
+        tx_hashes.push(cursor.last_duplicate::<OrderedHash>().expect("This shouldn't panic since we already verified before that there is at least one transactions at this address!").value);
 
         while tx_hashes.len() < max as usize {
             // Get previous transaction hash.
             match cursor.prev_duplicate::<Address, OrderedHash>() {
-                Some((_, v)) => tx_hashes.push(v.hash),
+                Some((_, v)) => tx_hashes.push(v.value),
                 None => break,
             };
         }

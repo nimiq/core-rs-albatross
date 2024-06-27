@@ -20,7 +20,7 @@ use crate::chain_metrics::BlockchainMetrics;
 use crate::{
     blockchain_state::BlockchainState, chain_store::ChainStore, history::HistoryStore,
     history_store_proxy::HistoryStoreProxy, interface::HistoryInterface,
-    light_history_store::LightHistoryStore, reward::genesis_parameters, HistoryStoreIndex,
+    reward::genesis_parameters, HistoryStoreIndex,
 };
 
 const BROADCAST_MAX_CAPACITY: usize = 256;
@@ -72,9 +72,6 @@ pub struct BlockchainConfig {
     pub max_epochs_stored: u32,
     /// Enables/Disables indices in the history store.
     pub index_history: bool,
-    /// The history store that is used by the full blockchain.
-    /// If this is set to true, the light history store is used.
-    pub light_history_store: bool,
 }
 
 impl Default for BlockchainConfig {
@@ -82,7 +79,6 @@ impl Default for BlockchainConfig {
         Self {
             keep_history: true,
             max_epochs_stored: Policy::MIN_EPOCHS_STORED,
-            light_history_store: false,
             index_history: true,
         }
     }
@@ -270,13 +266,7 @@ impl Blockchain {
         let (tx_fork, _rx_fork) = broadcast(BROADCAST_MAX_CAPACITY);
         let (tx_log, _rx_log) = broadcast(BROADCAST_MAX_CAPACITY);
 
-        let history_store = if config.light_history_store {
-            HistoryStoreProxy::WithoutIndex(Box::new(LightHistoryStore::new(
-                env.clone(),
-                network_id,
-            ))
-                as Box<dyn HistoryInterface + Sync + Send>)
-        } else if config.index_history {
+        let history_store = if config.index_history {
             HistoryStoreProxy::WithIndex(HistoryStoreIndex::new(env.clone(), network_id))
         } else {
             HistoryStoreProxy::WithoutIndex(Box::new(HistoryStore::new(env.clone(), network_id))
@@ -350,13 +340,7 @@ impl Blockchain {
         let (tx_fork, _rx_fork) = broadcast(BROADCAST_MAX_CAPACITY);
         let (tx_log, _rx_log) = broadcast(BROADCAST_MAX_CAPACITY);
 
-        let history_store = if config.light_history_store {
-            HistoryStoreProxy::WithoutIndex(Box::new(LightHistoryStore::new(
-                env.clone(),
-                network_id,
-            ))
-                as Box<dyn HistoryInterface + Sync + Send>)
-        } else if config.index_history {
+        let history_store = if config.index_history {
             HistoryStoreProxy::WithIndex(HistoryStoreIndex::new(env.clone(), network_id))
         } else {
             HistoryStoreProxy::WithoutIndex(Box::new(HistoryStore::new(env.clone(), network_id))
