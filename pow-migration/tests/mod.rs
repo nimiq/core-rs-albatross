@@ -23,12 +23,21 @@ mod pow_migration_test {
         block_windows: &BlockWindows,
         validator_address: &str,
         network_id: NetworkId,
-    ) -> Result<GenesisConfig, Error> {
+        candidate_block: u32,
+    ) -> Result<Option<GenesisConfig>, Error> {
         let env = VolatileDatabase::new(20).unwrap();
         let client = setup_pow_client();
         let address = Address::from_user_friendly_address(&validator_address)
             .expect("Could not parse provided validator address");
-        migrate(&client, block_windows, env, &address, network_id).await
+        migrate(
+            &client,
+            block_windows,
+            candidate_block,
+            env,
+            &Some(address),
+            network_id,
+        )
+        .await
     }
 
     #[test(tokio::test)]
@@ -44,9 +53,16 @@ mod pow_migration_test {
             readiness_window: 10,
         };
         let network_id = NetworkId::TestAlbatross;
-        let genesis = test_pow_migration(&block_windows, &validator_address, network_id)
-            .await
-            .unwrap();
+        let candidate_block = 2664100;
+        let genesis = test_pow_migration(
+            &block_windows,
+            &validator_address,
+            network_id,
+            candidate_block,
+        )
+        .await
+        .unwrap()
+        .unwrap();
         assert_eq!(genesis.validators.len(), 2);
         assert_eq!(genesis.stakers.len(), 2);
         assert!(
