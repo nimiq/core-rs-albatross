@@ -9,7 +9,7 @@ use crate::{
 };
 
 /// The verifier trait for a basic account. This only uses data available in the transaction.
-pub struct VestingContractVerifier {}
+pub struct VestingContractVerifier;
 
 impl AccountTransactionVerification for VestingContractVerifier {
     fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
@@ -58,12 +58,20 @@ impl AccountTransactionVerification for VestingContractVerifier {
     }
 }
 
+/// Data used to create vesting contracts.
+///
+/// Used in [`Transaction::recipient_data`].
 #[derive(Clone, Debug, Default)]
 pub struct CreationTransactionData {
+    /// The owner of the contract, the only address that can interact with it.
     pub owner: Address,
+    /// The block height at which the release schedule starts.
     pub start_time: u64,
+    /// The frequency at which funds are released.
     pub time_step: u64,
+    /// The amount released at each [`time_step`](Self::time_step).
     pub step_amount: Coin,
+    /// Initially locked balance.
     pub total_amount: Coin,
 }
 

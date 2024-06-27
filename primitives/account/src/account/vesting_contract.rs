@@ -32,7 +32,7 @@ pub struct VestingContract {
     /// The frequency at which funds are released.
     #[serde(with = "nimiq_serde::fixint::be")]
     pub time_step: u64,
-    /// The amount released at each time_step.
+    /// The amount released at each [`time_step`](Self::time_step).
     pub step_amount: Coin,
     /// Initially locked balance.
     pub total_amount: Coin,
