@@ -3,10 +3,14 @@ use std::{fmt, str, str::FromStr};
 use bitvec::{field::BitField, order::Msb0, slice::BitSlice, vec::BitVec, view::BitView};
 use nimiq_hash::{
     pbkdf2::{compute_pbkdf2_sha512, Pbkdf2Error},
-    HashOutput, Hasher, Sha256Hasher,
+    Blake2bHasher, HashOutput, Hasher, Sha256Hasher,
 };
 use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
-use nimiq_utils::{crc::Crc8Computer, key_rng::SecureGenerate};
+use nimiq_utils::{
+    crc::Crc8Computer,
+    key_rng::SecureGenerate,
+    otp::{otp, Algorithm},
+};
 use rand_core::{CryptoRng, RngCore};
 use unicode_normalization::UnicodeNormalization;
 
@@ -64,6 +68,51 @@ impl SecureGenerate for Entropy {
         let mut bytes = [0u8; Entropy::SIZE];
         rng.fill_bytes(&mut bytes[..]);
         bytes.into()
+    }
+}
+
+impl Entropy {
+    const PURPOSE_ID: u32 = 0x42000002;
+    const ENCRYPTION_SALT_SIZE: usize = 16;
+    const ENCRYPTION_KDF_ROUNDS: u32 = 256;
+    const ENCRYPTION_CHECKSUM_SIZE_V3: usize = 2;
+
+    pub fn export_encrypted(&self, key: &[u8]) -> Result<Vec<u8>, String> {
+        let mut salt = [0u8; Entropy::ENCRYPTION_SALT_SIZE];
+        rand_core::OsRng.fill_bytes(&mut salt);
+
+        let mut data = Vec::with_capacity(/*purposeId*/ 4 + Entropy::SIZE);
+        data.extend_from_slice(&Entropy::PURPOSE_ID.to_be_bytes());
+        data.extend_from_slice(self.as_bytes());
+
+        let checksum: [u8; Entropy::ENCRYPTION_CHECKSUM_SIZE_V3] = Blake2bHasher::default()
+            .digest(&data)
+            .as_bytes()[0..Entropy::ENCRYPTION_CHECKSUM_SIZE_V3]
+            .try_into()
+            .unwrap();
+        let mut plaintext = Vec::with_capacity(checksum.len() + data.len());
+        plaintext.extend_from_slice(&checksum);
+        plaintext.extend_from_slice(&data);
+        let ciphertext = otp(
+            &plaintext,
+            key,
+            Entropy::ENCRYPTION_KDF_ROUNDS,
+            &salt,
+            Algorithm::Argon2d,
+        )
+        .map_err(|err| format!("{:?}", err))?;
+
+        let mut buf = Vec::with_capacity(
+            /*version*/ 1 + /*kdf rounds*/ 1 + salt.len() + ciphertext.len(),
+        );
+        buf.extend_from_slice(&3u8.to_be_bytes()); // version
+        buf.extend_from_slice(
+            &((Entropy::ENCRYPTION_KDF_ROUNDS as f32).log2() as u8).to_be_bytes(),
+        );
+        buf.extend_from_slice(&salt);
+        buf.extend_from_slice(&ciphertext);
+
+        Ok(buf)
     }
 }
 
