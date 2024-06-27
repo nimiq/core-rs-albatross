@@ -21,6 +21,15 @@ jobs:
         components: rustfmt
     - run: cargo fmt --all -- --check
 
+  check:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
+    - run: cargo check --all-features --tests --benches
+
   test:
     runs-on: ubuntu-22.04
 
