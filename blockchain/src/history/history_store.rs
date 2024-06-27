@@ -1,4 +1,4 @@
-use std::{cmp, collections::VecDeque};
+use std::{cmp, collections::VecDeque, ops::Range};
 
 use nimiq_block::MicroBlock;
 use nimiq_database::{
@@ -105,7 +105,7 @@ impl HistoryStore {
         txn: &mut WriteTransactionProxy,
         epoch_number: u32,
         limit: Option<usize>,
-    ) -> Option<(Blake2bHash, Vec<u32>)> {
+    ) -> Option<(Blake2bHash, Range<u32>)> {
         // Get the history tree.
         let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
             &self.hist_tree_table,
@@ -119,28 +119,36 @@ impl HistoryStore {
         // Remove all leaves from the history tree and remember the respective hashes and indexes.
         let num_leaves = tree.num_leaves();
         let num_hist_txs = limit.map(|l| cmp::min(l, num_leaves)).unwrap_or(num_leaves);
-        let mut leaf_indices = Vec::with_capacity(num_hist_txs);
+        let lower_limit = (num_leaves - num_hist_txs) as u32;
 
-        for i in 0..num_hist_txs {
+        for _ in 0..num_hist_txs {
             tree.remove_back().ok()?;
-            leaf_indices.push((num_leaves - i - 1) as u32);
         }
-        Some((root, leaf_indices))
+        Some((root, lower_limit..num_leaves as u32))
     }
 
     pub(crate) fn remove_txns_from_history(
         &self,
         txn: &mut WriteTransactionProxy,
         epoch_number: u32,
-        leaf_indices: Vec<u32>,
+        leaf_indices: Range<u32>,
     ) -> u64 {
         let mut txns_size = 0u64;
 
         let mut cursor = WriteTransaction::cursor(txn, &self.hist_tx_table);
 
-        for leaf_index in leaf_indices {
+        for (i, leaf_index) in leaf_indices.rev().enumerate() {
             let key = EpochBasedIndex::new(epoch_number, leaf_index);
-            let tx_opt: Option<HistoricTransaction> = cursor.seek_key(&key);
+            let tx_opt: Option<HistoricTransaction> = if i == 0 {
+                cursor.seek_key(&key)
+            } else {
+                // The entries should be consecutive in the database,
+                // so we can just call next() without seeking.
+                cursor.prev().map(|(k, v)| {
+                    assert_eq!(key, k, "Invalid order of leaf indices");
+                    v
+                })
+            };
 
             let hist_tx = match tx_opt {
                 Some(v) => v,
