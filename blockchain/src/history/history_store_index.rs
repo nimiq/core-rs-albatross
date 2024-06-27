@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Range};
 
 use nimiq_block::MicroBlock;
 use nimiq_database::{
@@ -96,9 +96,9 @@ impl HistoryStoreIndex {
         &self,
         txn: &mut WriteTransactionProxy,
         epoch_number: u32,
-        leaf_indices: Vec<u32>,
+        leaf_indices: Range<u32>,
     ) -> u64 {
-        for &leaf_index in leaf_indices.iter() {
+        for leaf_index in leaf_indices.clone() {
             let tx_opt = self
                 .history_store
                 .get_historic_tx(epoch_number, leaf_index, Some(txn));
