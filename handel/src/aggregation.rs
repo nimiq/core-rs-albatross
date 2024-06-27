@@ -1,5 +1,4 @@
 use std::{
-    fmt::Debug,
     mem,
     pin::Pin,
     task::{Context, Poll},
@@ -23,6 +22,7 @@ use crate::{
     todo::{TodoItem, TodoList},
     update::LevelUpdate,
     verifier::{VerificationResult, Verifier},
+    Identifier,
 };
 
 // TODOS:
@@ -35,7 +35,7 @@ type LevelUpdateStream<P, T> = BoxStream<'static, LevelUpdate<<P as Protocol<T>>
 /// Future implementation for the next aggregation event
 pub struct OngoingAggregation<TId, P, N>
 where
-    TId: Debug + Clone + Unpin + Send + 'static,
+    TId: Identifier,
     P: Protocol<TId>,
     N: Network<Contribution = P::Contribution>,
 {
@@ -73,7 +73,7 @@ where
 
 impl<TId, P, N> OngoingAggregation<TId, P, N>
 where
-    TId: Debug + Clone + Unpin + Send + 'static,
+    TId: Identifier,
     P: Protocol<TId>,
     N: Network<Contribution = P::Contribution>,
 {
@@ -394,7 +394,7 @@ where
 
 impl<TId, P, N> Stream for OngoingAggregation<TId, P, N>
 where
-    TId: Debug + Clone + Unpin + Send + 'static,
+    TId: Identifier,
     P: Protocol<TId>,
     N: Network<Contribution = P::Contribution>,
 {
@@ -477,7 +477,7 @@ where
 
 pub struct FinishedAggregation<TId, P, N>
 where
-    TId: Debug + Clone + Unpin + Send + 'static,
+    TId: Identifier,
     P: Protocol<TId>,
     N: Network<Contribution = P::Contribution>,
 {
@@ -488,7 +488,7 @@ where
 
 impl<TId, P, N> FinishedAggregation<TId, P, N>
 where
-    TId: Debug + Clone + Unpin + Send + 'static,
+    TId: Identifier,
     P: Protocol<TId>,
     N: Network<Contribution = P::Contribution>,
 {
@@ -514,7 +514,7 @@ where
 
 impl<TId, P, N> Future for FinishedAggregation<TId, P, N>
 where
-    TId: Debug + Clone + Unpin + Send + 'static,
+    TId: Identifier,
     P: Protocol<TId>,
     N: Network<Contribution = P::Contribution>,
 {
@@ -550,7 +550,7 @@ where
 /// There is an additional variant used to transition from ongoing to finished.
 pub enum Aggregation<TId, P, N>
 where
-    TId: Debug + Clone + Unpin + Send + 'static,
+    TId: Identifier,
     P: Protocol<TId>,
     N: Network<Contribution = P::Contribution>,
 {
@@ -566,7 +566,7 @@ where
 
 impl<TId, P, N> Aggregation<TId, P, N>
 where
-    TId: Debug + Clone + Unpin + Send + 'static,
+    TId: Identifier,
     P: Protocol<TId>,
     N: Network<Contribution = P::Contribution>,
 {
@@ -593,7 +593,7 @@ where
 
 impl<TId, P, N> Stream for Aggregation<TId, P, N>
 where
-    TId: Debug + Clone + Unpin + Send + 'static,
+    TId: Identifier,
     P: Protocol<TId>,
     N: Network<Contribution = P::Contribution>,
 {

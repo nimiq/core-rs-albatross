@@ -1,4 +1,7 @@
+use std::fmt::Debug;
+
 use nimiq_collections::bitset::BitSet;
+use nimiq_serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
@@ -8,7 +11,7 @@ pub enum ContributionError {
 }
 
 pub trait AggregatableContribution:
-    Clone + std::fmt::Debug + Send + Sync + nimiq_serde::Serialize + nimiq_serde::Deserialize + Unpin
+    Clone + Debug + Send + Sync + Serialize + Deserialize + Unpin
 {
     /// A BitSet signaling which contributors have contributed in this Contribution
     fn contributors(&self) -> BitSet;
@@ -33,6 +36,6 @@ pub trait AggregatableContribution:
 
     /// Combines this contribution with `other_contribution` to create the aggregate of the two.
     ///
-    /// The combining contributions must be disjoint.
+    /// The combining contributions must be disjoint. The orginal must be retained in case of an error
     fn combine(&mut self, other_contribution: &Self) -> Result<(), ContributionError>;
 }

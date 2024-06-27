@@ -20,3 +20,8 @@ pub mod store;
 pub(crate) mod todo;
 pub mod update;
 pub mod verifier;
+
+use std::fmt::Debug;
+
+pub trait Identifier: Debug + Clone + Send + Unpin + 'static {}
+impl<T: Debug + Clone + Send + Unpin + 'static> Identifier for T {}

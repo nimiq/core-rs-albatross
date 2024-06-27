@@ -1,4 +1,4 @@
-use std::{fmt::Debug, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use parking_lot::RwLock;
@@ -10,12 +10,13 @@ use crate::{
     partitioner::Partitioner,
     store::ContributionStore,
     verifier::Verifier,
+    Identifier,
 };
 
 #[async_trait]
 pub trait Protocol<TId>
 where
-    TId: Clone + Debug + 'static,
+    TId: Identifier,
     Self: Send + Sync + Sized + Unpin + 'static,
 {
     /// The type for individual as well as aggregated contributions.
