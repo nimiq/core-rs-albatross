@@ -1,4 +1,4 @@
-use std::{cmp, collections::VecDeque, ops::Range};
+use std::{cmp, ops::Range};
 
 use nimiq_block::MicroBlock;
 use nimiq_database::{
@@ -26,7 +26,9 @@ use nimiq_transaction::{
     EquivocationLocator,
 };
 
-use super::{interface::HistoryInterface, utils::EpochBasedIndex, validity_store::ValidityStore};
+use super::{
+    interface::HistoryInterface, utils::IndexedTransaction, validity_store::ValidityStore,
+};
 use crate::history::{mmr_store::MMRStore, HistoryTreeChunk};
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
@@ -53,17 +55,23 @@ pub struct HistoryStore {
 }
 
 impl HistoryStore {
-    /// `Vec<u8>` (`epoch number || node_index`) -> `Blake2bHash`
+    /// `u32` (epoch number) -> `IndexedHash` (`node_index || Blake2bHash`)
     const HIST_TREE_DB_NAME: &'static str = "HistoryTrees";
-    /// `EpochBasedIndex` (`epoch number || leaf_index`) -> `HistoricTransaction`
+    /// `u32` (epoch number) -> `IndexedTransaction` (`leaf_index || HistoricTransaction`)
     const HIST_TX_DB_NAME: &'static str = "HistoricTransactions";
     /// `u32` -> `u32`
     const LAST_LEAF_DB_NAME: &'static str = "LastLeafIndexesByBlock";
 
     /// Creates a new HistoryStore.
     pub fn new(db: DatabaseProxy, network_id: NetworkId) -> Self {
-        let hist_tree_table = db.open_table(Self::HIST_TREE_DB_NAME.to_string());
-        let hist_tx_table = db.open_table(Self::HIST_TX_DB_NAME.to_string());
+        let hist_tree_table = db.open_table_with_flags(
+            Self::HIST_TREE_DB_NAME.to_string(),
+            TableFlags::UINT_KEYS | TableFlags::DUPLICATE_KEYS | TableFlags::DUP_FIXED_SIZE_VALUES,
+        );
+        let hist_tx_table = db.open_table_with_flags(
+            Self::HIST_TX_DB_NAME.to_string(),
+            TableFlags::UINT_KEYS | TableFlags::DUPLICATE_KEYS,
+        );
         let last_leaf_table =
             db.open_table_with_flags(Self::LAST_LEAF_DB_NAME.to_string(), TableFlags::UINT_KEYS);
 
@@ -94,8 +102,61 @@ impl HistoryStore {
             }
         };
 
-        let key = EpochBasedIndex::new(epoch_number, leaf_index);
-        txn.get(&self.hist_tx_table, &key)
+        let mut cursor = txn.cursor(&self.hist_tx_table);
+        let key = IndexedTransaction::empty(leaf_index);
+        let (_, epoch, value) = cursor.seek_range_subkey(&epoch_number, &key)?;
+        if epoch != epoch_number || value.index != leaf_index {
+            return None;
+        }
+        Some(value.value.value())
+    }
+
+    fn get_historic_txns(
+        &self,
+        epoch_number: u32,
+        leaf_indices: Range<u32>,
+        txn_option: Option<&TransactionProxy>,
+    ) -> Vec<HistoricTransaction> {
+        let mut hist_txs = Vec::with_capacity((leaf_indices.end - leaf_indices.start) as usize);
+        let read_txn: TransactionProxy;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = self.db.read_transaction();
+                &read_txn
+            }
+        };
+
+        // Get consecutive transactions with fast cursor.
+        let mut cursor = txn.cursor(&self.hist_tx_table);
+
+        for (i, leaf_index) in (leaf_indices.start..leaf_indices.end).enumerate() {
+            let (epoch, hist_tx) = if i == 0 {
+                let key = IndexedTransaction::empty(leaf_indices.start);
+                cursor
+                    .seek_range_subkey(&epoch_number, &key)
+                    .map(|(_, k, v)| {
+                        (
+                            k,
+                            IndexedTransaction {
+                                index: v.index,
+                                value: v.value.value(),
+                            },
+                        )
+                    })
+                    .expect("Transaction not found")
+            } else {
+                cursor
+                    .next_duplicate::<u32, IndexedTransaction>()
+                    .expect("Transaction not found")
+            };
+
+            assert_eq!(epoch, epoch_number, "Epoch number mismatch");
+            assert_eq!(hist_tx.index, leaf_index, "Index mismatch");
+            hist_txs.push(hist_tx.value);
+        }
+
+        hist_txs
     }
 
     /// Internal method to remove leaves from the history tree.
@@ -118,6 +179,13 @@ impl HistoryStore {
 
         // Remove all leaves from the history tree and remember the respective hashes and indexes.
         let num_leaves = tree.num_leaves();
+
+        // Optimisation if we remove all leaves.
+        if limit.is_none() || limit == Some(num_leaves) {
+            txn.remove(&self.hist_tree_table, &epoch_number);
+            return Some((root, 0..num_leaves as u32));
+        }
+
         let num_hist_txs = limit.map(|l| cmp::min(l, num_leaves)).unwrap_or(num_leaves);
         let lower_limit = (num_leaves - num_hist_txs) as u32;
 
@@ -138,22 +206,29 @@ impl HistoryStore {
         let mut cursor = WriteTransaction::cursor(txn, &self.hist_tx_table);
 
         for (i, leaf_index) in leaf_indices.rev().enumerate() {
-            let key = EpochBasedIndex::new(epoch_number, leaf_index);
-            let tx_opt: Option<HistoricTransaction> = if i == 0 {
-                cursor.seek_key(&key)
+            let tx_opt: Option<IndexedTransaction> = if i == 0 {
+                let key = IndexedTransaction::empty(leaf_index);
+                cursor
+                    .seek_range_subkey(&epoch_number, &key)
+                    .map(|(_, k, v)| {
+                        assert_eq!(k, epoch_number, "Invalid epoch number");
+                        IndexedTransaction {
+                            index: v.index,
+                            value: v.value.value(),
+                        }
+                    })
             } else {
                 // The entries should be consecutive in the database,
                 // so we can just call next() without seeking.
-                cursor.prev().map(|(k, v)| {
-                    assert_eq!(key, k, "Invalid order of leaf indices");
+                cursor.prev_duplicate::<u32, _>().map(|(k, v)| {
+                    assert_eq!(epoch_number, k, "Invalid order of leaf indices");
                     v
                 })
             };
 
-            let hist_tx = match tx_opt {
-                Some(v) => v,
-                None => continue,
-            };
+            let Some(hist_tx) = tx_opt else { continue };
+            assert_eq!(hist_tx.index, leaf_index, "Invalid leaf index");
+            let hist_tx = hist_tx.value;
 
             // Remove it from the historic transaction database.
             cursor.remove();
@@ -174,6 +249,30 @@ impl HistoryStore {
         }
 
         txns_size
+    }
+
+    pub(crate) fn remove_epoch_from_history(
+        &self,
+        txn: &mut WriteTransactionProxy,
+        epoch_number: u32,
+    ) {
+        // Fast removal of all transactions.
+        txn.remove(&self.hist_tx_table, &epoch_number);
+
+        let mut cursor = WriteTransaction::cursor(txn, &self.last_leaf_table);
+        let Some((mut block_number, _value)) =
+            cursor.seek_range_key::<u32, u32>(&Policy::first_block_of(epoch_number).unwrap())
+        else {
+            return;
+        };
+
+        while Policy::epoch_at(block_number) == epoch_number {
+            cursor.remove();
+            let Some((block, _value)) = cursor.next::<u32, u32>() else {
+                return;
+            };
+            block_number = block;
+        }
     }
 
     /// Returns a proof for all the historic transactions at the given positions (leaf indexes). The
@@ -324,8 +423,11 @@ impl HistoryStore {
                 hist_tx.block_number
             );
 
-            let key = EpochBasedIndex::new(epoch_number, leaf_index);
-            cursor.append(&key, hist_tx);
+            let value = IndexedTransaction {
+                index: leaf_index,
+                value: hist_tx.clone(),
+            };
+            cursor.append_dup(&epoch_number, &value);
 
             self.validity_store.add_transaction(
                 txn,
@@ -454,8 +556,8 @@ impl HistoryInterface for HistoryStore {
     /// Removes an existing history tree and all the historic transactions that were part of it.
     /// Returns None if there's no history tree corresponding to the given epoch number.
     fn remove_history(&self, txn: &mut WriteTransactionProxy, epoch_number: u32) -> Option<()> {
-        let (_, leaf_indices) = self.remove_leaves_from_history(txn, epoch_number, None)?;
-        self.remove_txns_from_history(txn, epoch_number, leaf_indices);
+        self.remove_leaves_from_history(txn, epoch_number, None)?;
+        self.remove_epoch_from_history(txn, epoch_number);
 
         Some(())
     }
@@ -516,15 +618,7 @@ impl HistoryInterface for HistoryStore {
         // Get the range of leaf indexes at this height.
         let (start, end) = self.get_indexes_for_block(block_number, Some(txn));
 
-        // Get each historic transaction.
-        let mut hist_txs = vec![];
-
-        for i in start..end {
-            let hist_tx = self.get_historic_tx(epoch_number, i, Some(txn)).unwrap();
-            hist_txs.push(hist_tx);
-        }
-
-        hist_txs
+        self.get_historic_txns(epoch_number, start..end, Some(txn))
     }
 
     /// Gets all historic transactions for a given epoch.
@@ -549,17 +643,7 @@ impl HistoryInterface for HistoryStore {
             epoch_number,
         ));
 
-        // Get each historic transaction from the tree.
-        let mut hist_txs = vec![];
-
-        for i in 0..tree.num_leaves() {
-            hist_txs.push(
-                self.get_historic_tx(epoch_number, i as u32, Some(txn))
-                    .unwrap(),
-            );
-        }
-
-        hist_txs
+        self.get_historic_txns(epoch_number, 0..tree.num_leaves() as u32, Some(txn))
     }
 
     /// Returns the number of historic transactions for a given epoch.
@@ -621,20 +705,31 @@ impl HistoryInterface for HistoryStore {
             .unwrap();
         let last_macro_block = Policy::last_macro_block(last_tx.block_number);
 
-        // Count the historic transactions up to the last macro block.
-        let mut hist_txs = Vec::new();
-
-        for i in 0..tree.num_leaves() {
-            let hist_tx = self
-                .get_historic_tx(epoch_number, i as u32, Some(txn))
-                .unwrap();
-            if hist_tx.block_number > last_macro_block {
-                break;
+        let end = if Policy::epoch_at(last_macro_block) != epoch_number {
+            0
+        } else {
+            // Otherwise, find the last block that had transactions.
+            // Usually that is the macro block itself.
+            // Only in the first batch, we actually need the loop.
+            let mut block_number = last_macro_block;
+            let mut end = 0;
+            loop {
+                let (block_start, block_end) = self.get_indexes_for_block(block_number, Some(txn));
+                // If start != end, this is the last block that contained finalized transactions.
+                if block_start != block_end {
+                    end = block_end;
+                    break;
+                }
+                // If we switched epochs, start at 0.
+                if Policy::epoch_at(block_number) != epoch_number {
+                    break;
+                }
+                block_number -= 1;
             }
-            hist_txs.push(hist_tx);
-        }
+            end
+        };
 
-        hist_txs
+        self.get_historic_txns(epoch_number, 0..end, Some(txn))
     }
 
     /// Gets the number of all finalized historic transactions for a given epoch.
@@ -673,20 +768,31 @@ impl HistoryInterface for HistoryStore {
             .unwrap();
         let last_macro_block = Policy::last_macro_block(last_tx.block_number);
 
-        // Iterate backwards and check when we find a transaction of a block that is before the last macro block
-        let mut count = tree.num_leaves();
-        for i in (0..tree.num_leaves()).rev() {
-            let hist_tx = self
-                .get_historic_tx(epoch_number, i as u32, Some(txn))
-                .unwrap();
-            if hist_tx.block_number > last_macro_block {
-                count -= 1;
-            } else {
-                break;
+        let end = if Policy::epoch_at(last_macro_block) != epoch_number {
+            0
+        } else {
+            // Otherwise, find the last block that had transactions.
+            // Usually that is the macro block itself.
+            // Only in the first batch, we actually need the loop.
+            let mut block_number = last_macro_block;
+            let mut end = 0;
+            loop {
+                let (block_start, block_end) = self.get_indexes_for_block(block_number, Some(txn));
+                // If start != end, this is the last block that contained finalized transactions.
+                if block_start != block_end {
+                    end = block_end;
+                    break;
+                }
+                // If we switched epochs, start at 0.
+                if Policy::epoch_at(block_number) != epoch_number {
+                    break;
+                }
+                block_number -= 1;
             }
-        }
+            end
+        };
 
-        count
+        end as usize
     }
 
     /// Gets all non-finalized historic transactions for a given epoch.
@@ -723,20 +829,32 @@ impl HistoryInterface for HistoryStore {
             .unwrap();
         let last_macro_block = Policy::last_macro_block(last_tx.block_number);
 
-        // Get each historic transaction after the last macro block from the tree.
-        let mut hist_txs = VecDeque::new();
-
-        for i in (num_leaves - 1)..0 {
-            let hist_tx = self
-                .get_historic_tx(epoch_number, i as u32, Some(txn))
-                .unwrap();
-            if hist_tx.block_number <= last_macro_block {
-                break;
+        // If the last macro block is in a different epoch, start at 0.
+        let nonfinal_start = if Policy::epoch_at(last_macro_block) != epoch_number {
+            0
+        } else {
+            // Otherwise, find the last block that had transactions.
+            // Usually that is the macro block itself.
+            // Only in the first batch, we actually need the loop.
+            let mut block_number = last_macro_block;
+            let mut nonfinal_start = 0;
+            loop {
+                let (start, end) = self.get_indexes_for_block(block_number, Some(txn));
+                // If start != end, this is the last block that contained finalized transactions.
+                if start != end {
+                    nonfinal_start = end;
+                    break;
+                }
+                // If we switched epochs, start at 0.
+                if Policy::epoch_at(block_number) != epoch_number {
+                    break;
+                }
+                block_number -= 1;
             }
-            hist_txs.push_front(hist_tx);
-        }
+            cmp::min(nonfinal_start + 1, num_leaves as u32)
+        };
 
-        hist_txs.into()
+        self.get_historic_txns(epoch_number, nonfinal_start..num_leaves as u32, Some(txn))
     }
 
     /// Returns the `chunk_index`th chunk of size `chunk_size` for a given epoch.
@@ -785,14 +903,7 @@ impl HistoryInterface for HistoryStore {
             .ok()?;
 
         // Get each historic transaction from the tree.
-        let mut hist_txs = vec![];
-
-        for i in start..end {
-            hist_txs.push(
-                self.get_historic_tx(epoch_number, i as u32, Some(txn))
-                    .unwrap(),
-            );
-        }
+        let hist_txs = self.get_historic_txns(epoch_number, start as u32..end as u32, Some(txn));
 
         Some(HistoryTreeChunk {
             proof,
@@ -833,8 +944,11 @@ impl HistoryInterface for HistoryStore {
         let mut cursor = WriteTransaction::cursor(txn, &self.hist_tx_table);
         // Then add all transactions to the database as the tree is finished.
         for (leaf_index, hist_tx) in all_leaves.iter().enumerate() {
-            let key = EpochBasedIndex::new(epoch_number, leaf_index as u32);
-            cursor.append(&key, hist_tx);
+            let value = IndexedTransaction {
+                index: leaf_index as u32,
+                value: hist_tx.clone(),
+            };
+            cursor.append(&epoch_number, &value);
 
             self.validity_store.add_transaction(
                 txn,

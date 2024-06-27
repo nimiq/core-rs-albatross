@@ -160,6 +160,17 @@ impl<'txn> ReadCursor<'txn> for CursorProxy<'txn> {
         }
     }
 
+    fn seek_range_subkey<K, V>(&mut self, key: &K, data: &V) -> Option<(bool, K, V)>
+    where
+        K: AsDatabaseBytes + FromDatabaseValue,
+        V: AsDatabaseBytes + FromDatabaseValue,
+    {
+        match self {
+            CursorProxy::ReadCursor(cursor) => cursor.seek_range_subkey(key, data),
+            CursorProxy::WriteCursor(cursor) => cursor.seek_range_subkey(key, data),
+        }
+    }
+
     fn count_duplicates(&mut self) -> usize {
         match self {
             CursorProxy::ReadCursor(cursor) => cursor.count_duplicates(),

@@ -191,6 +191,25 @@ where
         ))
     }
 
+    fn seek_range_subkey<K, V>(&mut self, key: &K, data: &V) -> Option<(bool, K, V)>
+    where
+        K: AsDatabaseBytes + FromDatabaseValue,
+        V: AsDatabaseBytes + FromDatabaseValue,
+    {
+        let key = AsDatabaseBytes::as_database_bytes(key);
+        let data = AsDatabaseBytes::as_database_bytes(data);
+        let result: Option<(bool, Cow<[u8]>, Cow<[u8]>)> = self
+            .cursor
+            .set_lowerbound(key.as_ref(), Some(data.as_ref()))
+            .unwrap();
+        let (exact_match, key, value) = result?;
+        Some((
+            exact_match,
+            FromDatabaseValue::copy_from_database(&key).unwrap(),
+            FromDatabaseValue::copy_from_database(&value).unwrap(),
+        ))
+    }
+
     fn count_duplicates(&mut self) -> usize {
         let result: Option<DbKvPair> = self.cursor.get_current().unwrap();
 
@@ -264,6 +283,18 @@ impl<'txn> WriteCursor<'txn> for MdbxWriteCursor<'txn> {
         let key = AsDatabaseBytes::as_database_bytes(key);
         let value = AsDatabaseBytes::as_database_bytes(value);
         self.cursor.put(&key, &value, WriteFlags::APPEND).unwrap();
+    }
+
+    fn append_dup<K, V>(&mut self, key: &K, value: &V)
+    where
+        K: AsDatabaseBytes + ?Sized,
+        V: AsDatabaseBytes + ?Sized,
+    {
+        let key = AsDatabaseBytes::as_database_bytes(key);
+        let value = AsDatabaseBytes::as_database_bytes(value);
+        self.cursor
+            .put(&key, &value, WriteFlags::APPEND_DUP)
+            .unwrap();
     }
 
     fn put<K, V>(&mut self, key: &K, value: &V)
