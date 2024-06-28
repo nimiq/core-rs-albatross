@@ -72,6 +72,15 @@ impl MnemonicUtils {
         let mnemonic = nimiq_mnemonic::Mnemonic::from_words_unchecked(mnemonic);
         JsValue::from(mnemonic.get_type(nimiq_mnemonic::WORDLIST_EN) as i8).unchecked_into()
     }
+
+    /// Gets the default English wordlist.
+    #[wasm_bindgen(getter, js_name = DEFAULT_WORDLIST)]
+    pub fn default_wordlist() -> Vec<String> {
+        nimiq_mnemonic::WORDLIST_EN
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
+    }
 }
 
 #[wasm_bindgen]
