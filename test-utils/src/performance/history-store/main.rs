@@ -1,10 +1,7 @@
 use std::{fs, path::PathBuf, process::exit, time::Instant};
 
 use clap::Parser;
-use nimiq_blockchain::{
-    interface::HistoryInterface, light_history_store::LightHistoryStore, HistoryStore,
-    HistoryStoreIndex,
-};
+use nimiq_blockchain::{interface::HistoryInterface, HistoryStore, HistoryStoreIndex};
 use nimiq_database::{
     mdbx::MdbxDatabase,
     traits::{Database, WriteTransaction},
@@ -171,13 +168,7 @@ fn main() {
     log::debug!("Creating a non volatile environment in {}", tmp_dir);
     let env = MdbxDatabase::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
 
-    let history_store = if args.light > 0 {
-        println!("Exercising the light history store");
-        Box::new(LightHistoryStore::new(
-            env.clone(),
-            NetworkId::UnitAlbatross,
-        )) as Box<dyn HistoryInterface + Sync + Send>
-    } else if args.indexing > 0 {
+    let history_store = if args.indexing > 0 {
         println!("Exercising the history store index");
         Box::new(HistoryStoreIndex::new(
             env.clone(),
