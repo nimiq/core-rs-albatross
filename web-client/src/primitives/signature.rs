@@ -3,6 +3,8 @@ use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_derive::TryFromJsValue;
 
+use crate::primitives::{private_key::PrivateKey, public_key::PublicKey};
+
 /// An Ed25519 Signature represents a cryptographic proof that a private key signed some data.
 /// It can be verified with the private key's public key.
 #[derive(TryFromJsValue)]
@@ -29,6 +31,16 @@ impl Signature {
     #[wasm_bindgen(js_name = toBytes)]
     pub fn serialize(&self) -> Vec<u8> {
         self.inner.to_bytes().to_vec()
+    }
+
+    /// Create a signature from a private key and its public key over byte data.
+    pub fn create(private_key: &PrivateKey, public_key: &PublicKey, data: &[u8]) -> Signature {
+        let key_pair = nimiq_keys::KeyPair {
+            public: *public_key.native_ref(),
+            private: private_key.native_ref().clone(),
+        };
+        let signature = key_pair.sign(data);
+        Signature::from(signature)
     }
 
     /// Parses an Ed25519 signature from its ASN.1 representation.
