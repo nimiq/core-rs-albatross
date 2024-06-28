@@ -418,19 +418,16 @@ pub fn launch_pos_client(
     config_file: &str,
     genesis_env_var_name: &str,
 ) -> Result<ExitStatus, Error> {
-    // Start the nimiq PoS client with the generated genesis file
     log::info!(
         filename = ?genesis_file,
         "Launching PoS client with generated genesis"
     );
 
-    // Set the genesis file environment variable
-    std::env::set_var(genesis_env_var_name, genesis_file);
-
     // Launch the PoS client
     let mut child = match Command::new(pos_client_path)
         .arg("-c")
         .arg(config_file)
+        .env(genesis_env_var_name, genesis_file)
         .spawn()
     {
         Ok(child) => child,
