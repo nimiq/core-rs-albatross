@@ -13,7 +13,7 @@ use futures::{FutureExt, StreamExt};
 use instant::Instant;
 use nimiq_block::Block;
 use nimiq_blockchain_interface::AbstractBlockchain;
-use nimiq_blockchain_proxy::BlockchainProxy;
+use nimiq_blockchain_proxy::{BlockchainProxy, BlockchainReadProxy};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::request_handler};
 use nimiq_utils::spawn::spawn;
@@ -55,7 +55,9 @@ mod remote_event_dispatcher;
 #[derive(Clone)]
 pub enum ConsensusEvent {
     /// Consensus is established
-    Established,
+    /// Also includes a flag that indicates if we are ready for transaction verification.
+    /// The established event can be triggered multiple times with different values for the flag.
+    Established { synced_validity_window: bool },
     /// Consensus was lost
     Lost,
 }
@@ -128,6 +130,8 @@ pub struct Consensus<N: Network> {
 
     events: BroadcastSender<ConsensusEvent>,
     established_flag: Arc<AtomicBool>,
+    last_batch_number: u32,
+    synced_validity_window_flag: Arc<AtomicBool>,
     head_requests: Option<HeadRequests<N>>,
     head_requests_time: Option<Instant>,
 
@@ -192,6 +196,14 @@ impl<N: Network> Consensus<N> {
         Self::init_remote_event_dispatcher(&network, &blockchain);
 
         let established_flag = Arc::new(AtomicBool::new(false));
+        let mut synced_validity_window_flag = true;
+        #[cfg(feature = "full")]
+        {
+            if let BlockchainReadProxy::Full(blockchain) = blockchain.read() {
+                synced_validity_window_flag = blockchain.can_enforce_validity_window();
+            }
+        }
+        let synced_validity_window_flag = Arc::new(AtomicBool::new(synced_validity_window_flag));
 
         Consensus {
             blockchain,
@@ -199,6 +211,8 @@ impl<N: Network> Consensus<N> {
             sync: syncer,
             events: tx,
             established_flag,
+            last_batch_number: 0,
+            synced_validity_window_flag,
             head_requests: None,
             head_requests_time: None,
             min_peers,
@@ -286,6 +300,7 @@ impl<N: Network> Consensus<N> {
             blockchain: self.blockchain.clone(),
             network: Arc::clone(&self.network),
             established_flag: Arc::clone(&self.established_flag),
+            synced_validity_window_flag: Arc::clone(&self.synced_validity_window_flag),
             events: self.events.clone(),
             request: self.requests.0.clone(),
         }
@@ -301,7 +316,48 @@ impl<N: Network> Consensus<N> {
         self.head_requests_time = None;
 
         // We don't care if anyone is listening.
-        self.events.send(ConsensusEvent::Established).ok();
+        let (synced_validity_window, _) = self.check_validity_window();
+        self.events
+            .send(ConsensusEvent::Established {
+                synced_validity_window,
+            })
+            .ok();
+    }
+
+    /// Checks if the validity window is available.
+    /// This function contains optimizations to only run the check when necessary.
+    /// It returns a boolean indicating if the validity window is available
+    /// and an consensus event if the value changed in this call.
+    fn check_validity_window(&mut self) -> (bool, Option<ConsensusEvent>) {
+        // We only check for the validity window if consensus is established
+        // and we are in a new batch.
+        // The `can_enforce_validity_window` flag can only change on macro blocks:
+        // It can change to false during macro sync when pushing macro blocks.
+        // It can change to true when we reach an offset of the transaction validity window
+        // into a new epoch we have the history for. The validity window is a multiple
+        // of the batch size – thus it is again a macro block.
+        // We do not subscribe to blockchain events since the consensus polls all relevant channels
+        // that add new blocks to the blockchain.
+        #[cfg(feature = "full")]
+        if let BlockchainReadProxy::Full(ref full_blockchain) = self.blockchain.read() {
+            let current_batch_number = full_blockchain.batch_number();
+            if current_batch_number > self.last_batch_number {
+                self.last_batch_number = current_batch_number;
+                let can_enforce_validity_window = full_blockchain.can_enforce_validity_window();
+                let old_value = self
+                    .synced_validity_window_flag
+                    .swap(can_enforce_validity_window, Ordering::Release);
+                // If the value changed, send an Established event.
+                let mut event = None;
+                if old_value != can_enforce_validity_window {
+                    event = Some(ConsensusEvent::Established {
+                        synced_validity_window: can_enforce_validity_window,
+                    });
+                }
+                return (can_enforce_validity_window, event);
+            }
+        }
+        (true, None)
     }
 
     /// Calculates and sets established state, returns a ConsensusEvent if the state changed.
@@ -327,6 +383,10 @@ impl<N: Network> Consensus<N> {
                 self.established_flag.swap(false, Ordering::Release);
                 return Some(ConsensusEvent::Lost);
             }
+            // Check if validity window availability changed.
+            if let (_, Some(event)) = self.check_validity_window() {
+                return Some(event);
+            }
         } else {
             // We have three conditions on whether we move to the established state.
             // First, we always need a minimum number of peers connected.
@@ -344,7 +404,10 @@ impl<N: Network> Consensus<N> {
                     self.head_requests_time = None;
                     self.zkp_proxy
                         .request_zkp_from_peers(self.sync.peers(), false);
-                    return Some(ConsensusEvent::Established);
+                    let (synced_validity_window, _) = self.check_validity_window();
+                    return Some(ConsensusEvent::Established {
+                        synced_validity_window,
+                    });
                 } else {
                     // The head state check is carried out immediately after we reach the minimum
                     // number of peers and then after certain time intervals until consensus is reached.
@@ -357,7 +420,10 @@ impl<N: Network> Consensus<N> {
                             self.established_flag.swap(true, Ordering::Release);
                             self.zkp_proxy
                                 .request_zkp_from_peers(self.sync.peers(), false);
-                            return Some(ConsensusEvent::Established);
+                            let (synced_validity_window, _) = self.check_validity_window();
+                            return Some(ConsensusEvent::Established {
+                                synced_validity_window,
+                            });
                         }
                     }
                     // If there's no ongoing head request, check whether we should start a new one.

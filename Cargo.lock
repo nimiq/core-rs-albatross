@@ -4040,6 +4040,7 @@ dependencies = [
  "nimiq-light-blockchain",
  "nimiq-log",
  "nimiq-mempool",
+ "nimiq-mempool-task",
  "nimiq-metrics-server",
  "nimiq-network-interface",
  "nimiq-network-libp2p",
@@ -4155,6 +4156,23 @@ dependencies = [
  "serde",
  "thiserror",
  "tokio",
+ "tokio-metrics",
+ "tokio-stream",
+ "tracing",
+]
+
+[[package]]
+name = "nimiq-mempool-task"
+version = "0.22.3"
+dependencies = [
+ "futures-util",
+ "nimiq-blockchain",
+ "nimiq-blockchain-interface",
+ "nimiq-consensus",
+ "nimiq-mempool",
+ "nimiq-network-interface",
+ "nimiq-utils",
+ "parking_lot",
  "tokio-metrics",
  "tokio-stream",
  "tracing",
@@ -4771,6 +4789,7 @@ dependencies = [
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-mempool",
+ "nimiq-mempool-task",
  "nimiq-network-interface",
  "nimiq-network-libp2p",
  "nimiq-network-mock",

@@ -53,7 +53,10 @@ pub fn initialize_rpc_server(
     }
     dispatcher.add(PolicyDispatcher {});
     if let Some(validator_proxy) = client.validator_proxy() {
-        dispatcher.add(ValidatorDispatcher::new(validator_proxy));
+        dispatcher.add(ValidatorDispatcher::new(
+            validator_proxy,
+            client.consensus_proxy(),
+        ));
     }
     dispatcher.add(wallet_dispatcher);
 

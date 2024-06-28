@@ -16,6 +16,8 @@ use nimiq_genesis::NetworkInfo;
 use nimiq_light_blockchain::LightBlockchain;
 #[cfg(feature = "validator")]
 use nimiq_mempool::mempool::Mempool;
+#[cfg(feature = "validator")]
+use nimiq_mempool_task::MempoolTask as AbstractMempoolTask;
 use nimiq_network_interface::{
     network::Network as NetworkInterface,
     peer_info::{NodeType, Services},
@@ -67,6 +69,15 @@ pub type ValidatorProxy = AbstractValidatorProxy;
 
 pub type ZKPComponent = AbstractZKPComponent<Network>;
 pub type ZKPComponentProxy = AbstractZKPComponentProxy<Network>;
+
+#[cfg(feature = "validator")]
+pub type MempoolTask = AbstractMempoolTask<Network>;
+
+#[cfg(feature = "validator")]
+pub enum ValidatorOrMempool {
+    Validator(Validator),
+    Mempool(MempoolTask),
+}
 
 /// Holds references to the relevant structs. This is then Arc'd in `Client` and a nice API is
 /// exposed.
@@ -475,7 +486,10 @@ impl ClientInner {
         );
 
         #[cfg(feature = "validator")]
-        let (validator, validator_proxy) = match config.validator {
+        let mut validator_or_mempool = None;
+
+        #[cfg(feature = "validator")]
+        let validator_proxy = match config.validator {
             Some(validator_config) => {
                 if let BlockchainProxy::Full(ref blockchain) = blockchain_proxy {
                     // Load validator address
@@ -506,21 +520,39 @@ impl ClientInner {
                         signing_key,
                         voting_key,
                         fee_key,
-                        config.mempool,
+                        config.mempool.clone(),
                     );
 
                     // Use the validator's mempool as TransactionVerificationCache in the blockchain.
                     blockchain.write().tx_verification_cache =
-                        Arc::<Mempool>::clone(&validator.mempool);
+                        Arc::<Mempool>::clone(&validator.mempool_task.mempool);
 
                     let validator_proxy = validator.proxy();
-                    (Some(validator), Some(validator_proxy))
+                    validator_or_mempool = Some(ValidatorOrMempool::Validator(validator));
+                    Some(validator_proxy)
                 } else {
-                    (None, None)
+                    None
                 }
             }
-            None => (None, None),
+            None => None,
         };
+
+        // If this is a full/history node without validator,
+        // still initialize a mempool.
+        #[cfg(feature = "validator")]
+        if matches!(
+            config.consensus.sync_mode,
+            SyncMode::Full | SyncMode::History
+        ) && validator_or_mempool.is_none()
+        {
+            if let BlockchainProxy::Full(ref blockchain) = blockchain_proxy {
+                validator_or_mempool = Some(ValidatorOrMempool::Mempool(MempoolTask::new(
+                    &consensus,
+                    Arc::clone(blockchain),
+                    config.mempool,
+                )));
+            }
+        }
 
         // Start network.
         network.listen_on(config.network.listen_addresses).await;
@@ -539,7 +571,7 @@ impl ClientInner {
             }),
             consensus: Some(consensus),
             #[cfg(feature = "validator")]
-            validator,
+            validator_or_mempool,
             zkp_component: Some(zkp_component),
         })
     }
@@ -567,7 +599,7 @@ pub struct Client {
     inner: Arc<ClientInner>,
     consensus: Option<Consensus>,
     #[cfg(feature = "validator")]
-    validator: Option<Validator>,
+    validator_or_mempool: Option<ValidatorOrMempool>,
     zkp_component: Option<ZKPComponent>,
 }
 
@@ -605,10 +637,45 @@ impl Client {
         Arc::clone(&self.inner.wallet_store)
     }
 
-    /// Returns a reference to the *Validator* or `None`.
+    /// Returns the *Validator* or `None`.
     #[cfg(feature = "validator")]
     pub fn take_validator(&mut self) -> Option<Validator> {
-        self.validator.take()
+        if self
+            .validator_or_mempool
+            .as_ref()
+            .map(|v| matches!(v, ValidatorOrMempool::Validator(_)))?
+        {
+            match self.validator_or_mempool.take()? {
+                ValidatorOrMempool::Validator(validator) => Some(validator),
+                _ => unreachable!(),
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Returns the *MempoolTask* or `None`.
+    /// This is only available if the client is not a validator.
+    #[cfg(feature = "validator")]
+    pub fn take_mempool(&mut self) -> Option<MempoolTask> {
+        if self
+            .validator_or_mempool
+            .as_ref()
+            .map(|v| matches!(v, ValidatorOrMempool::Mempool(_)))?
+        {
+            match self.validator_or_mempool.take()? {
+                ValidatorOrMempool::Mempool(mempool) => Some(mempool),
+                _ => unreachable!(),
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Returns the *ValidatorOrMempool* or `None`.
+    #[cfg(feature = "validator")]
+    pub fn take_validator_or_mempool(&mut self) -> Option<ValidatorOrMempool> {
+        self.validator_or_mempool.take()
     }
 
     #[cfg(feature = "validator")]
@@ -619,9 +686,13 @@ impl Client {
 
     #[cfg(feature = "validator")]
     pub fn mempool(&self) -> Option<Arc<Mempool>> {
-        self.validator
-            .as_ref()
-            .map(|validator| Arc::clone(&validator.mempool))
+        match self.validator_or_mempool {
+            Some(ValidatorOrMempool::Mempool(ref mempool)) => Some(Arc::clone(&mempool.mempool)),
+            Some(ValidatorOrMempool::Validator(ref validator)) => {
+                Some(Arc::clone(&validator.mempool_task.mempool))
+            }
+            None => None,
+        }
     }
 
     /// Returns a reference to the *ZKP Component* or none.

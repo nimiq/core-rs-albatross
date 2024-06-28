@@ -21,7 +21,9 @@ workspace = true
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
-console-subscriber = { version = "0.3", features = ["parking_lot"], optional = true }
+console-subscriber = { version = "0.3", features = [
+    "parking_lot",
+], optional = true }
 derive_builder = "0.20"
 directories = "5.0"
 hex = "0.4"
@@ -41,8 +43,11 @@ time = { version = "0.3", optional = true }
 tokio = { version = "1.38", features = ["rt"], optional = true }
 toml = "0.8"
 tracing-loki = { version = "0.2.5", optional = true }
-tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "std"] }
-tracing-web = { version = "0.1", optional = true}
+tracing-subscriber = { version = "0.3", optional = true, features = [
+    "env-filter",
+    "std",
+] }
+tracing-web = { version = "0.1", optional = true }
 url = { version = "2.5", features = ["serde"] }
 
 nimiq-block = { workspace = true }
@@ -60,6 +65,7 @@ nimiq-keys = { workspace = true }
 nimiq-light-blockchain = { workspace = true }
 nimiq-log = { workspace = true, optional = true }
 nimiq-mempool = { workspace = true, optional = true }
+nimiq-mempool-task = { workspace = true, optional = true }
 nimiq-metrics-server = { workspace = true, optional = true }
 nimiq-network-libp2p = { workspace = true }
 nimiq-network-interface = { workspace = true }
@@ -67,7 +73,9 @@ nimiq-primitives = { workspace = true, features = ["networks"] }
 nimiq-rpc-server = { workspace = true, optional = true }
 nimiq-serde = { workspace = true }
 nimiq-utils = { workspace = true, features = ["time", "key-store"] }
-nimiq-validator = { workspace = true, optional = true, features = ["trusted_push"] }
+nimiq-validator = { workspace = true, optional = true, features = [
+    "trusted_push",
+] }
 nimiq-validator-network = { workspace = true, optional = true }
 nimiq-wallet = { workspace = true, optional = true, features = ["store"] }
 nimiq-zkp = { workspace = true }
@@ -82,18 +90,54 @@ nimiq-test-log = { workspace = true }
 database-storage = ["nimiq-database", "nimiq-zkp-component/database-storage"]
 deadlock = ["parking_lot/deadlock_detection"]
 default = ["full-consensus"]
-full-consensus = ["database-storage", "nimiq-blockchain", "nimiq-consensus/full"]
+full-consensus = [
+    "database-storage",
+    "nimiq-blockchain",
+    "nimiq-consensus/full",
+]
 launcher = []
 logging = ["nimiq-log", "serde_json", "tokio", "tracing-subscriber"]
 loki = ["logging", "tracing-loki"]
-metrics-server = ["nimiq-metrics-server", "nimiq-network-libp2p/metrics", "nimiq-validator/metrics"]
+metrics-server = [
+    "nimiq-metrics-server",
+    "nimiq-network-libp2p/metrics",
+    "nimiq-validator/metrics",
+]
 panic = ["log-panics"]
-parallel = ["nimiq-zkp/parallel", "nimiq-zkp-circuits/parallel", "nimiq-zkp-component/parallel", "nimiq-zkp-primitives/parallel"]
-rpc-server = ["nimiq-jsonrpc-core", "nimiq-jsonrpc-server", "nimiq-rpc-server", "nimiq-wallet", "validator"]
+parallel = [
+    "nimiq-zkp/parallel",
+    "nimiq-zkp-circuits/parallel",
+    "nimiq-zkp-component/parallel",
+    "nimiq-zkp-primitives/parallel",
+]
+rpc-server = [
+    "nimiq-jsonrpc-core",
+    "nimiq-jsonrpc-server",
+    "nimiq-rpc-server",
+    "nimiq-wallet",
+    "validator",
+]
 signal-handling = ["signal-hook", "tokio"]
 tokio-console = ["console-subscriber", "logging", "tokio/tracing"]
 tokio-websocket = ["nimiq-network-libp2p/tokio-websocket"]
-validator = ["database-storage", "nimiq-mempool", "nimiq-validator", "nimiq-validator-network", "nimiq-rpc-server"]
+validator = [
+    "database-storage",
+    "nimiq-mempool",
+    "nimiq-mempool-task",
+    "nimiq-validator",
+    "nimiq-validator-network",
+    "nimiq-rpc-server",
+]
 wallet = ["database-storage", "nimiq-wallet"]
-web-logging = ["nimiq-log", "time/wasm-bindgen", "tracing-subscriber", "tracing-web"]
-zkp-prover = ["nimiq-zkp/zkp-prover", "nimiq-zkp-circuits/zkp-prover", "nimiq-zkp-component/zkp-prover", "nimiq-zkp-primitives/zkp-prover"]
+web-logging = [
+    "nimiq-log",
+    "time/wasm-bindgen",
+    "tracing-subscriber",
+    "tracing-web",
+]
+zkp-prover = [
+    "nimiq-zkp/zkp-prover",
+    "nimiq-zkp-circuits/zkp-prover",
+    "nimiq-zkp-component/zkp-prover",
+    "nimiq-zkp-primitives/zkp-prover",
+]

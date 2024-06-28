@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 
-use futures::stream::{BoxStream, StreamExt};
+use futures::stream::StreamExt;
 use nimiq_block::{Block, BlockHeaderTopic, BlockTopic, BlockType, EquivocationProof};
 use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, ForkEvent, PushResult};
@@ -22,7 +22,8 @@ use nimiq_database::{
 };
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair};
-use nimiq_mempool::{config::MempoolConfig, mempool::Mempool};
+use nimiq_mempool::config::MempoolConfig;
+use nimiq_mempool_task::MempoolTask;
 use nimiq_network_interface::{
     network::{MsgAcceptance, Network, NetworkEvent, SubscribeEvents},
     request::request_handler,
@@ -54,8 +55,6 @@ enum ValidatorStakingState {
 
 pub struct ConsensusState {
     equivocation_proofs: EquivocationProofPool,
-    pub consensus_established: bool,
-    pub validity_window_synced: bool,
 }
 
 /// Validator inactivity
@@ -107,7 +106,6 @@ where
     proposal_receiver: ProposalReceiver<TValidatorNetwork>,
 
     consensus_event_rx: BroadcastStream<ConsensusEvent>,
-    blockchain_event_rx: BoxStream<'static, BlockchainEvent>,
     network_event_rx: SubscribeEvents<<TValidatorNetwork::NetworkType as Network>::PeerId>,
     fork_event_rx: BroadcastStream<ForkEvent>,
 
@@ -121,12 +119,7 @@ where
 
     micro_producer: Option<ProduceMicroBlock<TValidatorNetwork>>,
 
-    pub mempool: Arc<Mempool>,
-    mempool_active: bool,
-    #[cfg(feature = "metrics")]
-    mempool_monitor: TaskMonitor,
-    #[cfg(feature = "metrics")]
-    control_mempool_monitor: TaskMonitor,
+    pub mempool_task: MempoolTask<TValidatorNetwork::NetworkType>,
 }
 
 impl<TValidatorNetwork: ValidatorNetwork> Validator<TValidatorNetwork>
@@ -154,7 +147,6 @@ where
         let consensus_event_rx = consensus.subscribe_events();
 
         let blockchain_rg = blockchain.read();
-        let blockchain_event_rx = blockchain_rg.notifier_as_stream();
         let fork_event_rx = BroadcastStream::new(blockchain_rg.fork_notifier.subscribe());
         drop(blockchain_rg);
 
@@ -162,8 +154,6 @@ where
 
         let blockchain_state = ConsensusState {
             equivocation_proofs: EquivocationProofPool::new(),
-            consensus_established: false,
-            validity_window_synced: false,
         };
 
         let database = env.open_table(Self::MACRO_STATE_DB_NAME.to_string());
@@ -180,8 +170,7 @@ where
             consensus.proxy(),
         );
 
-        let mempool = Arc::new(Mempool::new(Arc::clone(&blockchain), mempool_config));
-        let mempool_active = false;
+        let mempool = MempoolTask::new(consensus, Arc::clone(&blockchain), mempool_config);
 
         let automatic_reactivate = Arc::new(AtomicBool::new(automatic_reactivate));
 
@@ -213,7 +202,6 @@ where
             proposal_receiver,
 
             consensus_event_rx,
-            blockchain_event_rx,
             network_event_rx,
             fork_event_rx,
 
@@ -227,12 +215,7 @@ where
 
             micro_producer: None,
 
-            mempool: Arc::clone(&mempool),
-            mempool_active,
-            #[cfg(feature = "metrics")]
-            mempool_monitor: TaskMonitor::new(),
-            #[cfg(feature = "metrics")]
-            control_mempool_monitor: TaskMonitor::new(),
+            mempool_task: mempool,
         }
     }
 
@@ -246,7 +229,6 @@ where
 
     fn init(&mut self, head_hash: Option<&Blake2bHash>) {
         self.init_epoch();
-        self.init_mempool();
         self.init_block_producer(head_hash);
     }
 
@@ -372,7 +354,7 @@ where
 
                 self.micro_producer = Some(ProduceMicroBlock::new(
                     Arc::clone(&self.blockchain),
-                    Arc::clone(&self.mempool),
+                    Arc::clone(&self.mempool_task.mempool),
                     Arc::clone(&self.network),
                     block_producer,
                     self.validator_slot_band(),
@@ -386,112 +368,31 @@ where
         }
     }
 
-    fn init_mempool(&mut self) {
-        if self.mempool_active || !self.is_synced() {
-            return;
-        }
-
-        let mempool = Arc::clone(&self.mempool);
-        let network = Arc::clone(&self.consensus.network);
-        #[cfg(not(feature = "metrics"))]
-        spawn({
-            async move {
-                // The mempool is not updated while consensus is lost.
-                // Thus, we need to check all transactions if they are still valid.
-                mempool.cleanup();
-                mempool.start_executors(network, None, None).await;
-            }
-        });
-        #[cfg(feature = "metrics")]
-        spawn({
-            let mempool_monitor = self.mempool_monitor.clone();
-            let ctrl_mempool_monitor = self.control_mempool_monitor.clone();
-            async move {
-                // The mempool is not updated while consensus is lost.
-                // Thus, we need to check all transactions if they are still valid.
-                mempool.cleanup();
-
-                mempool
-                    .start_executors(network, Some(mempool_monitor), Some(ctrl_mempool_monitor))
-                    .await;
-            }
-        });
-
-        self.mempool_active = true;
-    }
-
     fn pause(&mut self) {
         *self.slot_band.write() = None;
         self.macro_producer = None;
         self.micro_producer = None;
-
-        if !self.mempool_active {
-            return;
-        }
-
-        let mempool = Arc::clone(&self.mempool);
-        let network = Arc::clone(&self.consensus.network);
-        spawn(async move {
-            mempool.stop_executors(network).await;
-        });
-
-        self.mempool_active = false;
-    }
-
-    /// Check and update if consensus has been established and we can enforce the tx validity window.
-    /// This is important if we use the state sync and do not have the relevant parts of the history yet.
-    fn update_consensus_state(&mut self, head_hash: Option<&Blake2bHash>) {
-        // The `can_enforce_validity_window` flag can only change on macro blocks:
-        // It can change to false during macro sync when pushing macro blocks.
-        // It can change to true when we reach an offset of the transaction validity window
-        // into a new epoch we have the history for. The validity window is a multiple
-        // of the batch size – thus it is again a macro block.
-
-        let was_synced = self.is_synced();
-        let mut consensus_state = self.consensus_state.write();
-        consensus_state.consensus_established = self.consensus.is_established();
-        consensus_state.validity_window_synced =
-            self.blockchain.read().can_enforce_validity_window();
-        drop(consensus_state);
-        let is_synced = self.is_synced();
-
-        if !was_synced && is_synced {
-            self.init(head_hash);
-        } else if was_synced && !is_synced {
-            self.pause();
-        }
     }
 
     fn on_blockchain_event(&mut self, event: BlockchainEvent) {
         match event {
             BlockchainEvent::Extended(ref hash) => self.on_blockchain_extended(hash),
-            BlockchainEvent::HistoryAdopted(ref hash) => self.on_blockchain_history_adopted(hash),
             BlockchainEvent::Finalized(ref hash) => {
                 // The on_blockchain_extended is necessary for the order of events to not matter.
                 self.on_blockchain_extended(hash);
-                self.update_consensus_state(Some(hash));
             }
             BlockchainEvent::EpochFinalized(ref hash) => {
                 self.init_epoch();
                 // The on_blockchain_extended is necessary for the order of events to not matter.
                 self.on_blockchain_extended(hash);
-                self.update_consensus_state(Some(hash));
             }
             BlockchainEvent::Rebranched(ref old_chain, ref new_chain) => {
                 self.on_blockchain_rebranched(old_chain, new_chain)
             }
-            BlockchainEvent::Stored(ref _block) => {
+            BlockchainEvent::HistoryAdopted(_) | BlockchainEvent::Stored(_) => {
                 // Nothing to do here for now. Forks are already reported on `fork_event_rx`
                 // and inferior chain blocks are irrelevant here.
             }
-        }
-    }
-
-    fn on_blockchain_history_adopted(&mut self, _: &Blake2bHash) {
-        // Mempool updates are only done once we are synced.
-        if self.is_synced() {
-            self.mempool.cleanup();
-            debug!("Performed a mempool clean up because new history was adopted");
         }
     }
 
@@ -508,12 +409,6 @@ where
             .write()
             .equivocation_proofs
             .apply_block(&block);
-
-        // Mempool updates are only done once we are synced.
-        if self.is_synced() {
-            self.mempool
-                .update(&vec![(hash.clone(), block)], [].as_ref());
-        }
 
         self.init_block_producer(Some(hash));
     }
@@ -532,11 +427,6 @@ where
             consensus_state.equivocation_proofs.apply_block(block);
         }
         drop(consensus_state);
-
-        // Mempool updates are only done once we are synced.
-        if self.is_synced() {
-            self.mempool.update(new_chain, old_chain);
-        }
 
         let head_hash = &new_chain.last().expect("new_chain must not be empty").0;
         self.init_block_producer(Some(head_hash));
@@ -735,8 +625,7 @@ where
     /// Checks whether the validator fulfills the conditions for producing valid blocks.
     /// This includes having consensus, being able to extend the history tree and to enforce transaction validity.
     fn is_synced(&self) -> bool {
-        let consensus_state = self.consensus_state.read();
-        consensus_state.consensus_established && consensus_state.validity_window_synced
+        self.consensus.is_ready_for_validation()
     }
 
     fn get_staking_state(&self, blockchain: &Blockchain) -> ValidatorStakingState {
@@ -825,12 +714,12 @@ where
 
     #[cfg(feature = "metrics")]
     pub fn get_mempool_monitor(&self) -> TaskMonitor {
-        self.mempool_monitor.clone()
+        self.mempool_task.get_mempool_monitor()
     }
 
     #[cfg(feature = "metrics")]
     pub fn get_control_mempool_monitor(&self) -> TaskMonitor {
-        self.control_mempool_monitor.clone()
+        self.mempool_task.get_control_mempool_monitor()
     }
 }
 
@@ -844,15 +733,25 @@ where
         // Process consensus updates.
         while let Poll::Ready(Some(event)) = self.consensus_event_rx.poll_next_unpin(cx) {
             match event {
-                Ok(_) => self.update_consensus_state(None),
+                Ok(ConsensusEvent::Established {
+                    synced_validity_window: true,
+                }) => self.init(None),
+                Ok(ConsensusEvent::Lost)
+                | Ok(ConsensusEvent::Established {
+                    synced_validity_window: false,
+                }) => self.pause(),
                 Err(_) => return Poll::Ready(()),
             }
         }
 
         // Process blockchain updates.
-        while let Poll::Ready(Some(event)) = self.blockchain_event_rx.poll_next_unpin(cx) {
-            trace!(?event, is_synced = self.is_synced(), "blockchain event");
-            self.on_blockchain_event(event);
+        while let Poll::Ready(Some(event)) = self.mempool_task.poll_next_unpin(cx) {
+            trace!(
+                ?event,
+                is_synced = self.is_synced(),
+                "mempool/blockchain event"
+            );
+            self.on_blockchain_event(event.into());
         }
 
         // Process fork events.

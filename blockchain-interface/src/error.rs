@@ -11,6 +11,8 @@ pub enum ForkEvent {
     Detected(ForkProof),
 }
 
+/// Events from the blockchain.
+/// Note that `Finalized` and `EpochFinalized` will be sent **in addition** to `Extended` events.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BlockchainEvent {
     Extended(Blake2bHash),

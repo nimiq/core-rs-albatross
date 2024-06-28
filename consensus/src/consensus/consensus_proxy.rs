@@ -44,6 +44,7 @@ pub struct ConsensusProxy<N: Network> {
     pub blockchain: BlockchainProxy,
     pub network: Arc<N>,
     pub(crate) established_flag: Arc<AtomicBool>,
+    pub(crate) synced_validity_window_flag: Arc<AtomicBool>,
     pub(crate) events: BroadcastSender<ConsensusEvent>,
     pub(crate) request: MpscSender<ConsensusRequest<N>>,
 }
@@ -54,6 +55,7 @@ impl<N: Network> Clone for ConsensusProxy<N> {
             blockchain: self.blockchain.clone(),
             network: Arc::clone(&self.network),
             established_flag: Arc::clone(&self.established_flag),
+            synced_validity_window_flag: Arc::clone(&self.synced_validity_window_flag),
             events: self.events.clone(),
             request: self.request.clone(),
         }
@@ -74,6 +76,12 @@ impl<N: Network> ConsensusProxy<N> {
 
     pub fn is_established(&self) -> bool {
         self.established_flag.load(Ordering::Acquire)
+    }
+
+    /// Returns true if the node is ready to start the validator/mempool.
+    pub fn is_ready_for_validation(&self) -> bool {
+        self.established_flag.load(Ordering::Acquire)
+            && self.synced_validity_window_flag.load(Ordering::Acquire)
     }
 
     pub fn subscribe_events(&self) -> BroadcastStream<ConsensusEvent> {

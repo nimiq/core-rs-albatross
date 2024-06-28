@@ -675,7 +675,7 @@ mod test {
                 // Any event which is None or Some(Err(_)) must be considered failures.
                 event = consensus_events1.next() => {
                     match event {
-                        Some(Ok(ConsensusEvent::Established)) => {
+                        Some(Ok(ConsensusEvent::Established {..})) => {
                             if established.1 {
                                 break
                             }
@@ -686,7 +686,7 @@ mod test {
                 }
                 event = consensus_events2.next() => {
                     match event {
-                        Some(Ok(ConsensusEvent::Established)) => {
+                        Some(Ok(ConsensusEvent::Established {..})) => {
                             if established.0 {
                                 break;
                             }

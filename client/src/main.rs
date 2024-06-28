@@ -117,6 +117,24 @@ async fn main_inner() -> Result<(), Error> {
         } else {
             tokio::spawn(validator);
         }
+    } else if let Some(mempool_task) = client.take_mempool() {
+        info!("Initializing mempool");
+
+        if metrics_enabled {
+            let mp_metrics_monitor = mempool_task.get_mempool_monitor();
+            let inst_mempool = val_metric_monitor.instrument(mempool_task);
+            tokio::spawn(inst_mempool);
+            nimiq_task_metric.push(NimiqTaskMonitor {
+                name: "mempool".to_string(),
+                monitor: mp_metrics_monitor,
+            });
+            nimiq_task_metric.push(NimiqTaskMonitor {
+                name: "mempool-task".to_string(),
+                monitor: val_metric_monitor,
+            });
+        } else {
+            tokio::spawn(mempool_task);
+        }
     }
 
     // Start metrics server

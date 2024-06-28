@@ -24,6 +24,7 @@ members = [
   "log",
   "macros",
   "mempool",
+  "mempool/mempool-task",
   "metrics-server",
   "mnemonic",
   "network-interface",
@@ -200,6 +201,7 @@ nimiq-light-blockchain = { path = "light-blockchain", default-features = false }
 nimiq-log = { path = "log", default-features = false }
 nimiq-macros = { path = "macros", default-features = false }
 nimiq-mempool = { path = "mempool", default-features = false }
+nimiq-mempool-task = { path = "mempool/mempool-task", default-features = false }
 nimiq-metrics-server = { path = "metrics-server", default-features = false }
 nimiq-mmr = { path = "primitives/mmr", default-features = false }
 nimiq-mnemonic = { path = "mnemonic", default-features = false }

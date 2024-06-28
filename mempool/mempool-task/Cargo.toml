@@ -1,0 +1,37 @@
+[package]
+name = "nimiq-mempool-task"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "Mempool task implementation for Nimiq"
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+keywords.workspace = true
+
+[badges]
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
+maintenance = { status = "experimental" }
+
+[lints]
+workspace = true
+
+[dependencies]
+futures = { workspace = true }
+log = { workspace = true }
+parking_lot = "0.12"
+tokio-metrics = { version = "0.3", optional = true }
+tokio-stream = { version = "0.1", features = ["sync"] }
+
+nimiq-blockchain = { workspace = true }
+nimiq-blockchain-interface = { workspace = true }
+nimiq-consensus = { workspace = true }
+nimiq-mempool = { workspace = true }
+nimiq-network-interface = { workspace = true }
+nimiq-utils = { workspace = true, features = ["time"] }
+
+[features]
+metrics = ["nimiq-mempool/metrics", "tokio-metrics"]

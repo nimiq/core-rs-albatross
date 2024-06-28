@@ -356,7 +356,7 @@ impl Client {
             .subscribe_events()
             .any(|event| async move {
                 if let Ok(state) = event {
-                    matches!(state, ConsensusEvent::Established)
+                    matches!(state, ConsensusEvent::Established { .. })
                 } else {
                     self.is_consensus_established().await
                 }
@@ -911,7 +911,9 @@ impl Client {
         spawn_local(async move {
             loop {
                 let state = match consensus_events.next().await {
-                    Some(Ok(ConsensusEvent::Established)) => Some(ConsensusState::Established),
+                    Some(Ok(ConsensusEvent::Established { .. })) => {
+                        Some(ConsensusState::Established)
+                    }
                     Some(Ok(ConsensusEvent::Lost)) => {
                         if network.peer_count() >= 1 {
                             Some(ConsensusState::Syncing)

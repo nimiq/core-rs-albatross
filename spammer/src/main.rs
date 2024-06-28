@@ -243,7 +243,7 @@ async fn main_inner() -> Result<(), Error> {
     // Start Spammer
     let mempool = if let Some(validator) = client.take_validator() {
         log::info!("Spawning spammer");
-        let mempool = Arc::clone(&validator.mempool);
+        let mempool = Arc::clone(&validator.mempool_task.mempool);
         tokio::spawn(validator);
         mempool
     } else {

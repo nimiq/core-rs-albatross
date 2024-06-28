@@ -1,7 +1,9 @@
 use std::sync::atomic::Ordering;
 
 use async_trait::async_trait;
+use nimiq_consensus::ConsensusProxy;
 use nimiq_keys::Address;
+use nimiq_network_libp2p::Network;
 use nimiq_rpc_interface::{types::RPCResult, validator::ValidatorInterface};
 use nimiq_serde::Serialize;
 use nimiq_validator::validator::ValidatorProxy;
@@ -10,11 +12,15 @@ use crate::error::Error;
 
 pub struct ValidatorDispatcher {
     validator: ValidatorProxy,
+    consensus: ConsensusProxy<Network>,
 }
 
 impl ValidatorDispatcher {
-    pub fn new(validator: ValidatorProxy) -> Self {
-        ValidatorDispatcher { validator }
+    pub fn new(validator: ValidatorProxy, consensus: ConsensusProxy<Network>) -> Self {
+        ValidatorDispatcher {
+            validator,
+            consensus,
+        }
     }
 }
 
@@ -60,8 +66,7 @@ impl ValidatorInterface for ValidatorDispatcher {
     }
 
     async fn is_validator_synced(&mut self) -> RPCResult<bool, (), Self::Error> {
-        let state = self.validator.consensus_state.read();
-        let is_synced = state.consensus_established && state.validity_window_synced;
+        let is_synced = self.consensus.is_ready_for_validation();
         Ok(is_synced.into())
     }
 }
