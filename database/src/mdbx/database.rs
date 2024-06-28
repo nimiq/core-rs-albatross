@@ -1,171 +1,155 @@
-use std::{borrow::Cow, fs, path::Path, sync::Arc};
+use std::{any::TypeId, fs, ops::Range, path::Path, sync::Arc};
 
 use libmdbx::NoWriteMap;
-use log::info;
+use log::{debug, info};
+use tempfile::TempDir;
 
 use super::{MdbxReadTransaction, MdbxWriteTransaction};
-use crate::{traits::Database, DatabaseProxy, Error, TableFlags};
+use crate::{
+    traits::{AsDatabaseBytes, Database, DupTable, RegularTable, Table},
+    Error,
+};
 
-pub(super) type DbKvPair<'a> = (Cow<'a, [u8]>, Cow<'a, [u8]>);
+const GIGABYTE: usize = 1024 * 1024 * 1024;
+const TERABYTE: usize = GIGABYTE * 1024;
+
+/// Database config options.
+pub struct DatabaseConfig {
+    /// The maximum number of tables that can be opened.
+    pub max_tables: Option<u64>,
+    /// The maximum number of reader slots.
+    pub max_readers: Option<u32>,
+    /// Whether to enable/disable readahead.
+    pub no_rdahead: bool,
+    /// The minimum/maximum file size of the database. Default max size is 2TB.
+    pub size: Option<Range<isize>>,
+    /// Aims to coalesce a Garbage Collection items.
+    pub coalesce: bool,
+    /// The growth step by which the database file will be increased when lacking space.
+    pub growth_step: Option<isize>,
+    /// The threshold of unused space, after which the database file will be shrunk.
+    pub shrink_threshold: Option<isize>,
+}
+
+impl Default for DatabaseConfig {
+    fn default() -> Self {
+        DatabaseConfig {
+            max_tables: Some(20),
+            max_readers: None,
+            no_rdahead: true,
+            // Default max database size: 2TB
+            size: Some(0..(2 * TERABYTE as isize)),
+            coalesce: false,
+            // Default growth step: 4GB
+            growth_step: Some(4 * GIGABYTE as isize),
+            shrink_threshold: None,
+        }
+    }
+}
+
+impl From<DatabaseConfig> for libmdbx::DatabaseOptions {
+    fn from(value: DatabaseConfig) -> Self {
+        libmdbx::DatabaseOptions {
+            max_tables: value.max_tables,
+            max_readers: value.max_readers,
+            no_rdahead: value.no_rdahead,
+            mode: libmdbx::Mode::ReadWrite(libmdbx::ReadWriteOptions {
+                sync_mode: libmdbx::SyncMode::Durable,
+                min_size: value.size.as_ref().map(|r| r.start),
+                max_size: value.size.map(|r| r.end),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+}
 
 /// Wrapper around the mdbx database handle.
 /// A database can hold multiple tables.
 #[derive(Clone, Debug)]
 pub struct MdbxDatabase {
-    pub(super) db: Arc<libmdbx::Database<NoWriteMap>>,
-}
-
-impl Database for MdbxDatabase {
-    type Table = MdbxTable;
-    type ReadTransaction<'db> = MdbxReadTransaction<'db>
-    where
-        Self: 'db;
-    type WriteTransaction<'db> = MdbxWriteTransaction<'db>
-    where
-        Self: 'db;
-
-    fn open_table(&self, name: String) -> Self::Table {
-        self.open_table_with_flags(name, TableFlags::empty())
-    }
-
-    fn open_table_with_flags(&self, name: String, flags: TableFlags) -> Self::Table {
-        // This is an implicit transaction, so take the lock first.
-        let mut table_flags = libmdbx::TableFlags::CREATE;
-
-        // Translate flags.
-        if flags.contains(TableFlags::DUPLICATE_KEYS) {
-            table_flags.insert(libmdbx::TableFlags::DUP_SORT);
-
-            if flags.contains(TableFlags::DUP_FIXED_SIZE_VALUES) {
-                table_flags.insert(libmdbx::TableFlags::DUP_FIXED);
-            }
-        }
-        if flags.contains(TableFlags::UINT_KEYS) {
-            table_flags.insert(libmdbx::TableFlags::INTEGER_KEY);
-        }
-
-        // Create the database
-        let txn = self.db.begin_rw_txn().unwrap();
-        txn.create_table(Some(&name), table_flags).unwrap();
-        txn.commit().unwrap();
-
-        MdbxTable { name }
-    }
-
-    fn read_transaction(&self) -> Self::ReadTransaction<'_> {
-        MdbxReadTransaction::new(self.db.begin_ro_txn().unwrap())
-    }
-
-    fn write_transaction(&self) -> Self::WriteTransaction<'_> {
-        MdbxWriteTransaction::new(self.db.begin_rw_txn().unwrap())
-    }
+    /// The database handle.
+    db: Arc<libmdbx::Database<NoWriteMap>>,
+    /// For volatile databases, this is the temporary directory handle,
+    /// which will clean up on `Drop`.
+    temp_dir: Option<Arc<TempDir>>,
 }
 
 impl MdbxDatabase {
-    #[allow(clippy::new_ret_no_self)]
-    pub fn new<P: AsRef<Path>>(
-        path: P,
-        size: usize,
-        max_tables: u32,
-    ) -> Result<DatabaseProxy, Error> {
-        Ok(DatabaseProxy::Persistent(MdbxDatabase::new_mdbx_database(
-            path.as_ref(),
-            size,
-            max_tables,
-            None,
-        )?))
+    /// Create a table with additional flags.
+    fn create_table<T: Table>(&self, _table: &T, mut flags: libmdbx::TableFlags) {
+        // Ensure `CREATE` flag is set.
+        flags.insert(libmdbx::TableFlags::CREATE);
+
+        // Automatically set the integer key flag.
+        let key_type = TypeId::of::<T::Key>();
+        if key_type == TypeId::of::<u32>() || key_type == TypeId::of::<u64>() {
+            flags.insert(libmdbx::TableFlags::INTEGER_KEY);
+        }
+
+        // Create the table with an implicit transaction.
+        let txn = self.db.begin_rw_txn().unwrap();
+        debug!("Creating table: {}, flags: {:?}", T::NAME, flags);
+        txn.create_table(Some(T::NAME), flags).unwrap();
+        txn.commit().unwrap();
     }
 
-    #[allow(clippy::new_ret_no_self)]
-    pub fn new_with_max_readers<P: AsRef<Path>>(
-        path: P,
-        size: usize,
-        max_tables: u32,
-        max_readers: u32,
-    ) -> Result<DatabaseProxy, Error> {
-        Ok(DatabaseProxy::Persistent(MdbxDatabase::new_mdbx_database(
-            path.as_ref(),
-            size,
-            max_tables,
-            Some(max_readers),
-        )?))
-    }
+    /// Creates a new database at the given path.
+    pub fn new<P: AsRef<Path>>(path: P, config: DatabaseConfig) -> Result<Self, Error> {
+        fs::create_dir_all(path.as_ref()).map_err(Error::CreateDirectory)?;
 
-    pub(crate) fn new_mdbx_database(
-        path: &Path,
-        size: usize,
-        max_tables: u32,
-        max_readers: Option<u32>,
-    ) -> Result<Self, Error> {
-        fs::create_dir_all(path).map_err(Error::CreateDirectory)?;
-
-        let db = libmdbx::Database::open_with_options(
-            path,
-            libmdbx::DatabaseOptions {
-                max_tables: Some(max_tables.into()),
-                max_readers,
-                no_rdahead: true,
-                mode: libmdbx::Mode::ReadWrite(libmdbx::ReadWriteOptions {
-                    sync_mode: libmdbx::SyncMode::Durable, // default anyway
-                    min_size: Some(0),
-                    max_size: Some(size.try_into().unwrap()),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-        )?;
+        let db =
+            libmdbx::Database::open_with_options(path, libmdbx::DatabaseOptions::from(config))?;
 
         let info = db.info()?;
         let cur_mapsize = info.map_size();
         info!(cur_mapsize, "MDBX memory map size");
 
-        let mdbx = MdbxDatabase { db: Arc::new(db) };
-        if mdbx.need_resize(0) {
-            info!("MDBX memory needs to be resized.");
-        }
+        let mdbx = MdbxDatabase {
+            db: Arc::new(db),
+            temp_dir: None,
+        };
 
         Ok(mdbx)
     }
 
-    pub fn need_resize(&self, threshold_size: usize) -> bool {
-        let info = self.db.info().unwrap();
-        let stat = self.db.stat().unwrap();
+    /// Creates a volatile database (in a temporary directory, which cleans itself after use).
+    pub fn new_volatile(config: DatabaseConfig) -> Result<Self, Error> {
+        let temp_dir = Arc::new(TempDir::new()?);
+        let mut mdbx = MdbxDatabase::new(temp_dir.path(), config)?;
+        mdbx.temp_dir = Some(temp_dir);
 
-        let size_used = (stat.page_size() as usize) * (info.last_pgno() + 1);
-
-        if threshold_size > 0 && info.map_size() - size_used < threshold_size {
-            info!(
-                size_used,
-                threshold_size,
-                map_size = info.map_size(),
-                space_remaining = info.map_size() - size_used,
-                "DB settings (threshold-based)"
-            );
-            return true;
-        }
-
-        // Resize is currently not supported. So don't let the resize happen
-        // if a specific percentage is reached.
-        let resize_percent: f64 = 1_f64;
-
-        if (size_used as f64) / (info.map_size() as f64) > resize_percent {
-            info!(
-                map_size = info.map_size(),
-                size_used,
-                space_remaining = info.map_size() - size_used,
-                percent_used = (size_used as f64) / (info.map_size() as f64),
-                "DB resize (percent-based)"
-            );
-            return true;
-        }
-
-        false
+        Ok(mdbx)
     }
 }
 
-/// A table handle for the mdbx database.
-/// It is used to reference tables during transactions.
-#[derive(Debug)]
-pub struct MdbxTable {
-    pub(super) name: String,
+impl Database for MdbxDatabase {
+    type ReadTransaction<'db> = MdbxReadTransaction<'db>;
+
+    type WriteTransaction<'db> = MdbxWriteTransaction<'db>;
+
+    /// Creates a regular table (no-duplicates).
+    fn create_regular_table<T: RegularTable>(&self, table: &T) {
+        self.create_table(table, libmdbx::TableFlags::empty())
+    }
+
+    /// Creates a regular table (no-duplicates).
+    fn create_dup_table<T: DupTable>(&self, table: &T) {
+        let mut dup_flags = libmdbx::TableFlags::DUP_SORT;
+
+        // Set the fixed size flag if given.
+        if T::Value::FIXED_SIZE.is_some() {
+            dup_flags.insert(libmdbx::TableFlags::DUP_FIXED);
+        }
+
+        self.create_table(table, dup_flags)
+    }
+
+    fn read_transaction(&self) -> Self::ReadTransaction<'_> {
+        MdbxReadTransaction::new_read(self.db.begin_ro_txn().unwrap())
+    }
+
+    fn write_transaction(&self) -> Self::WriteTransaction<'_> {
+        MdbxWriteTransaction::new(self.db.begin_rw_txn().unwrap())
+    }
 }

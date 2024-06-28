@@ -1,12 +1,14 @@
 use nimiq_block::{Block, MicroBlock};
-use nimiq_database::{TransactionProxy, WriteTransactionProxy};
+use nimiq_database::mdbx::{MdbxReadTransaction, MdbxWriteTransaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_mmr::{
     error::Error as MMRError,
     mmr::proof::{RangeProof, SizeProof},
 };
 use nimiq_transaction::{
-    historic_transaction::HistoricTransaction, inherent::Inherent, EquivocationLocator,
+    historic_transaction::{HistoricTransaction, RawTransactionHash},
+    inherent::Inherent,
+    EquivocationLocator,
 };
 
 use super::history_store_index::HistoryStoreIndex;
@@ -37,7 +39,7 @@ impl HistoryInterface for HistoryStoreProxy {
     // Adds all the transactions included in a given block into the history store.
     fn add_block(
         &self,
-        txn: &mut WriteTransactionProxy,
+        txn: &mut MdbxWriteTransaction,
         block: &Block,
         inherents: Vec<Inherent>,
     ) -> Option<(Blake2bHash, u64)> {
@@ -50,7 +52,7 @@ impl HistoryInterface for HistoryStoreProxy {
     /// Removes all transactions, from a given block number, from the history store.
     fn remove_block(
         &self,
-        txn: &mut WriteTransactionProxy,
+        txn: &mut MdbxWriteTransaction,
         block: &MicroBlock,
         inherents: Vec<Inherent>,
     ) -> Option<u64> {
@@ -61,7 +63,7 @@ impl HistoryInterface for HistoryStoreProxy {
     }
 
     /// Removes the full history associated with a given epoch.
-    fn remove_history(&self, txn: &mut WriteTransactionProxy, epoch_number: u32) -> Option<()> {
+    fn remove_history(&self, txn: &mut MdbxWriteTransaction, epoch_number: u32) -> Option<()> {
         match self {
             HistoryStoreProxy::WithIndex(index) => index.remove_history(txn, epoch_number),
             HistoryStoreProxy::WithoutIndex(store) => store.remove_history(txn, epoch_number),
@@ -72,7 +74,7 @@ impl HistoryInterface for HistoryStoreProxy {
     fn get_history_tree_root(
         &self,
         block_number: u32,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Option<Blake2bHash> {
         match self {
             HistoryStoreProxy::WithIndex(index) => {
@@ -85,7 +87,7 @@ impl HistoryInterface for HistoryStoreProxy {
     }
 
     /// Clears the history store.
-    fn clear(&self, txn: &mut WriteTransactionProxy) {
+    fn clear(&self, txn: &mut MdbxWriteTransaction) {
         match self {
             HistoryStoreProxy::WithIndex(index) => index.clear(txn),
             HistoryStoreProxy::WithoutIndex(store) => store.clear(txn),
@@ -95,7 +97,7 @@ impl HistoryInterface for HistoryStoreProxy {
     /// Returns the length (i.e. the number of leaves) of the History Tree at a given block height.
     /// Note that this returns the number of leaves for only the epoch of the given block height,
     /// this is because we have separate History Trees for separate epochs.
-    fn length_at(&self, block_number: u32, txn_option: Option<&TransactionProxy>) -> u32 {
+    fn length_at(&self, block_number: u32, txn_option: Option<&MdbxReadTransaction>) -> u32 {
         match self {
             HistoryStoreProxy::WithIndex(index) => index.length_at(block_number, txn_option),
             HistoryStoreProxy::WithoutIndex(store) => store.length_at(block_number, txn_option),
@@ -108,7 +110,7 @@ impl HistoryInterface for HistoryStoreProxy {
     fn total_len_at_epoch(
         &self,
         epoch_number: u32,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> usize {
         match self {
             HistoryStoreProxy::WithIndex(index) => {
@@ -121,7 +123,7 @@ impl HistoryInterface for HistoryStoreProxy {
     }
 
     /// Returns the first and last block number stored in the history store
-    fn history_store_range(&self, txn_option: Option<&TransactionProxy>) -> (u32, u32) {
+    fn history_store_range(&self, txn_option: Option<&MdbxReadTransaction>) -> (u32, u32) {
         match self {
             HistoryStoreProxy::WithIndex(index) => index.history_store_range(txn_option),
             HistoryStoreProxy::WithoutIndex(store) => store.history_store_range(txn_option),
@@ -136,7 +138,7 @@ impl HistoryInterface for HistoryStoreProxy {
     ///     3. We only push transactions for one epoch at a time.
     fn add_to_history(
         &self,
-        txn: &mut WriteTransactionProxy,
+        txn: &mut MdbxWriteTransaction,
         block_number: u32,
         hist_txs: &[HistoricTransaction],
     ) -> Option<(Blake2bHash, u64)> {
@@ -154,7 +156,7 @@ impl HistoryInterface for HistoryStoreProxy {
     /// of the resulting tree and the total size of of the transactions removed.
     fn remove_partial_history(
         &self,
-        txn: &mut WriteTransactionProxy,
+        txn: &mut MdbxWriteTransaction,
         epoch_number: u32,
         num_hist_txs: usize,
     ) -> Option<(Blake2bHash, u64)> {
@@ -170,8 +172,8 @@ impl HistoryInterface for HistoryStoreProxy {
 
     fn tx_in_validity_window(
         &self,
-        raw_tx_hash: &Blake2bHash,
-        txn_opt: Option<&TransactionProxy>,
+        raw_tx_hash: &RawTransactionHash,
+        txn_opt: Option<&MdbxReadTransaction>,
     ) -> bool {
         match self {
             HistoryStoreProxy::WithIndex(index) => {
@@ -188,7 +190,7 @@ impl HistoryInterface for HistoryStoreProxy {
     fn get_block_transactions(
         &self,
         block_number: u32,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Vec<HistoricTransaction> {
         match self {
             HistoryStoreProxy::WithIndex(index) => {
@@ -204,7 +206,7 @@ impl HistoryInterface for HistoryStoreProxy {
     fn get_epoch_transactions(
         &self,
         epoch_number: u32,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Vec<HistoricTransaction> {
         match self {
             HistoryStoreProxy::WithIndex(index) => {
@@ -220,7 +222,7 @@ impl HistoryInterface for HistoryStoreProxy {
     fn num_epoch_transactions(
         &self,
         epoch_number: u32,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> usize {
         match self {
             HistoryStoreProxy::WithIndex(index) => {
@@ -237,7 +239,7 @@ impl HistoryInterface for HistoryStoreProxy {
     fn num_epoch_transactions_before(
         &self,
         block_number: u32,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> usize {
         match self {
             HistoryStoreProxy::WithIndex(index) => {
@@ -254,7 +256,7 @@ impl HistoryInterface for HistoryStoreProxy {
     fn get_epoch_transactions_after(
         &self,
         block_number: u32,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Vec<HistoricTransaction> {
         match self {
             HistoryStoreProxy::WithIndex(index) => {
@@ -278,7 +280,7 @@ impl HistoryInterface for HistoryStoreProxy {
         verifier_block_number: u32,
         chunk_size: usize,
         chunk_index: usize,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Option<HistoryTreeChunk> {
         match self {
             HistoryStoreProxy::WithIndex(index) => index.prove_chunk(
@@ -303,7 +305,7 @@ impl HistoryInterface for HistoryStoreProxy {
         &self,
         epoch_number: u32,
         chunks: Vec<(Vec<HistoricTransaction>, RangeProof<Blake2bHash>)>,
-        txn: &mut WriteTransactionProxy,
+        txn: &mut MdbxWriteTransaction,
     ) -> Result<Blake2bHash, MMRError> {
         match self {
             HistoryStoreProxy::WithIndex(index) => {
@@ -316,7 +318,7 @@ impl HistoryInterface for HistoryStoreProxy {
     }
 
     /// Returns the block number of the last leaf in the history store
-    fn get_last_leaf_block_number(&self, txn_option: Option<&TransactionProxy>) -> Option<u32> {
+    fn get_last_leaf_block_number(&self, txn_option: Option<&MdbxReadTransaction>) -> Option<u32> {
         match self {
             HistoryStoreProxy::WithIndex(index) => index.get_last_leaf_block_number(txn_option),
             HistoryStoreProxy::WithoutIndex(store) => store.get_last_leaf_block_number(txn_option),
@@ -328,7 +330,7 @@ impl HistoryInterface for HistoryStoreProxy {
     fn has_equivocation_proof(
         &self,
         locator: EquivocationLocator,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> bool {
         match self {
             HistoryStoreProxy::WithIndex(index) => {
@@ -344,7 +346,7 @@ impl HistoryInterface for HistoryStoreProxy {
     fn prove_num_leaves(
         &self,
         block_number: u32,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Result<SizeProof<Blake2bHash, HistoricTransaction>, MMRError> {
         match self {
             HistoryStoreProxy::WithIndex(index) => index.prove_num_leaves(block_number, txn_option),

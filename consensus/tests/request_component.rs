@@ -4,7 +4,7 @@ use futures::StreamExt;
 use nimiq_blockchain::BlockProducer;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::KeyPair as BLSKeyPair;
-use nimiq_database::volatile::VolatileDatabase;
+use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_network_mock::{MockHub, MockNetwork};
@@ -22,7 +22,8 @@ use nimiq_utils::spawn::spawn;
 #[ignore]
 async fn test_request_component() {
     let mut hub = Some(MockHub::default());
-    let env = VolatileDatabase::new(20).expect("Could not open a volatile database");
+    let env =
+        MdbxDatabase::new_volatile(Default::default()).expect("Could not open a volatile database");
 
     // Generate genesis block.
     let key = KeyPair::generate(&mut seeded_rng(0));

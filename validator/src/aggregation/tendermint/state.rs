@@ -1,7 +1,7 @@
-use std::{collections::BTreeMap, fmt::Debug, io};
+use std::{collections::BTreeMap, fmt::Debug};
 
 use nimiq_block::{MacroBody, MacroHeader};
-use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::Blake2sHash;
 use nimiq_keys::Ed25519Signature as SchnorrSignature;
 use nimiq_serde::{Deserialize, Serialize};
@@ -14,7 +14,7 @@ use super::{
 };
 use crate::tendermint::TendermintProtocol;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, DbSerializable)]
 pub struct MacroState {
     pub(crate) block_number: u32,
     round_number: u32,
@@ -139,24 +139,5 @@ impl MacroState {
             signature: signature.0,
             signer: signature.1,
         })
-    }
-}
-
-impl IntoDatabaseValue for MacroState {
-    fn database_byte_size(&self) -> usize {
-        self.serialized_size()
-    }
-
-    fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize_to_writer(&self, &mut bytes).unwrap();
-    }
-}
-
-impl FromDatabaseValue for MacroState {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized,
-    {
-        Self::deserialize_from_vec(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }

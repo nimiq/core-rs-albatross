@@ -16,7 +16,10 @@ use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_network_interface::network::{Network, Topic};
 use nimiq_serde::Serialize;
-use nimiq_transaction::{ControlTransactionTopic, Transaction, TransactionTopic};
+use nimiq_transaction::{
+    historic_transaction::RawTransactionHash, ControlTransactionTopic, Transaction,
+    TransactionTopic,
+};
 use nimiq_utils::spawn::spawn;
 use parking_lot::RwLock;
 use tokio_metrics::TaskMonitor;
@@ -359,7 +362,7 @@ impl Mempool {
                     }
 
                     // Check that the transaction has not already been included.
-                    if blockchain.contains_tx_in_validity_window(&tx_hash, None) {
+                    if blockchain.contains_tx_in_validity_window(&tx_hash.into(), None) {
                         continue;
                     }
 
@@ -386,7 +389,12 @@ impl Mempool {
         let included_txs = regular_iter
             .chain(control_iter)
             .map(|tx| tx.0)
-            .filter(|tx_hash| blockchain.contains_tx_in_validity_window(tx_hash, None))
+            .filter(|tx_hash| {
+                blockchain.contains_tx_in_validity_window(
+                    &RawTransactionHash::from((*tx_hash).clone()),
+                    None,
+                )
+            })
             .cloned()
             .collect::<Vec<Blake2bHash>>();
 

@@ -1,5 +1,5 @@
 use nimiq_block::{Block, MicroBlock};
-use nimiq_database::{TransactionProxy, WriteTransactionProxy};
+use nimiq_database::mdbx::{MdbxReadTransaction, MdbxWriteTransaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_mmr::{
@@ -7,7 +7,9 @@ use nimiq_mmr::{
     mmr::proof::{RangeProof, SizeProof},
 };
 use nimiq_transaction::{
-    historic_transaction::HistoricTransaction, history_proof::HistoryTreeProof, inherent::Inherent,
+    historic_transaction::{HistoricTransaction, RawTransactionHash},
+    history_proof::HistoryTreeProof,
+    inherent::Inherent,
     EquivocationLocator,
 };
 
@@ -18,7 +20,7 @@ pub trait HistoryInterface {
     /// Adds all the transactions included in a given block into the history store.
     fn add_block(
         &self,
-        txn: &mut WriteTransactionProxy,
+        txn: &mut MdbxWriteTransaction,
         block: &Block,
         inherents: Vec<Inherent>,
     ) -> Option<(Blake2bHash, u64)>;
@@ -26,37 +28,40 @@ pub trait HistoryInterface {
     /// Removes all transactions, from a given block number, from the history store.
     fn remove_block(
         &self,
-        txn: &mut WriteTransactionProxy,
+        txn: &mut MdbxWriteTransaction,
         block: &MicroBlock,
         inherents: Vec<Inherent>,
     ) -> Option<u64>;
 
     /// Removes the full history associated with a given epoch.
-    fn remove_history(&self, txn: &mut WriteTransactionProxy, epoch_number: u32) -> Option<()>;
+    fn remove_history(&self, txn: &mut MdbxWriteTransaction, epoch_number: u32) -> Option<()>;
 
     /// Obtains the current history root at the given block.
     fn get_history_tree_root(
         &self,
         block_number: u32,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Option<Blake2bHash>;
 
     /// Clears the history store.
-    fn clear(&self, txn: &mut WriteTransactionProxy);
+    fn clear(&self, txn: &mut MdbxWriteTransaction);
 
     /// Returns the length (i.e. the number of leaves) of the History Tree at a given block height.
     /// Note that this returns the number of leaves for only the epoch of the given block height,
     /// this is because we have separate History Trees for separate epochs.
-    fn length_at(&self, block_number: u32, txn_option: Option<&TransactionProxy>) -> u32;
+    fn length_at(&self, block_number: u32, txn_option: Option<&MdbxReadTransaction>) -> u32;
 
     /// Returns the total length of the History Tree at a given epoch number.
     /// The size of the history length is useful for getting a proof for a previous state
     /// of the history tree.
-    fn total_len_at_epoch(&self, epoch_number: u32, txn_option: Option<&TransactionProxy>)
-        -> usize;
+    fn total_len_at_epoch(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> usize;
 
     /// Returns the first and last block number stored in the history store
-    fn history_store_range(&self, txn_option: Option<&TransactionProxy>) -> (u32, u32);
+    fn history_store_range(&self, txn_option: Option<&MdbxReadTransaction>) -> (u32, u32);
 
     /// Add a list of historic transactions to an existing history tree. It returns the root of the
     /// resulting tree and the total size of the transactions added.
@@ -66,7 +71,7 @@ pub trait HistoryInterface {
     ///     3. We only push transactions for one epoch at a time.
     fn add_to_history(
         &self,
-        txn: &mut WriteTransactionProxy,
+        txn: &mut MdbxWriteTransaction,
         block_number: u32,
         hist_txs: &[HistoricTransaction],
     ) -> Option<(Blake2bHash, u64)>;
@@ -75,15 +80,15 @@ pub trait HistoryInterface {
     /// of the resulting tree and the total size of of the transactions removed.
     fn remove_partial_history(
         &self,
-        txn: &mut WriteTransactionProxy,
+        txn: &mut MdbxWriteTransaction,
         epoch_number: u32,
         num_hist_txs: usize,
     ) -> Option<(Blake2bHash, u64)>;
 
     fn tx_in_validity_window(
         &self,
-        raw_tx_hash: &Blake2bHash,
-        txn_opt: Option<&TransactionProxy>,
+        raw_tx_hash: &RawTransactionHash,
+        txn_opt: Option<&MdbxReadTransaction>,
     ) -> bool;
 
     /// Gets all historic transactions for a given block number.
@@ -91,21 +96,21 @@ pub trait HistoryInterface {
     fn get_block_transactions(
         &self,
         block_number: u32,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Vec<HistoricTransaction>;
 
     /// Gets all historic transactions for a given epoch.
     fn get_epoch_transactions(
         &self,
         epoch_number: u32,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Vec<HistoricTransaction>;
 
     /// Returns the number of historic transactions for a given epoch.
     fn num_epoch_transactions(
         &self,
         epoch_number: u32,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> usize;
 
     /// Returns the number of historic transactions within the given block's epoch that occurred
@@ -113,7 +118,7 @@ pub trait HistoryInterface {
     fn num_epoch_transactions_before(
         &self,
         block_number: u32,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> usize;
 
     /// Returns all historic transactions within the given block's epoch that occurred after the
@@ -121,7 +126,7 @@ pub trait HistoryInterface {
     fn get_epoch_transactions_after(
         &self,
         block_number: u32,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Vec<HistoricTransaction>;
 
     /// Returns the `chunk_index`th chunk of size `chunk_size` for a given epoch.
@@ -136,7 +141,7 @@ pub trait HistoryInterface {
         verifier_block_number: u32,
         chunk_size: usize,
         chunk_index: usize,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Option<HistoryTreeChunk>;
 
     /// Creates a new history tree from chunks and returns the root hash.
@@ -144,25 +149,25 @@ pub trait HistoryInterface {
         &self,
         epoch_number: u32,
         chunks: Vec<(Vec<HistoricTransaction>, RangeProof<Blake2bHash>)>,
-        txn: &mut WriteTransactionProxy,
+        txn: &mut MdbxWriteTransaction,
     ) -> Result<Blake2bHash, MMRError>;
 
     /// Returns the block number of the last leaf in the history store
-    fn get_last_leaf_block_number(&self, txn_option: Option<&TransactionProxy>) -> Option<u32>;
+    fn get_last_leaf_block_number(&self, txn_option: Option<&MdbxReadTransaction>) -> Option<u32>;
 
     /// Check whether an equivocation proof at a given equivocation locator has
     /// already been included.
     fn has_equivocation_proof(
         &self,
         locator: EquivocationLocator,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> bool;
 
     /// Proves the number of leaves in the history store for the given block.
     fn prove_num_leaves(
         &self,
         block_number: u32,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Result<SizeProof<Blake2bHash, HistoricTransaction>, MMRError>;
 }
 
@@ -172,7 +177,7 @@ pub trait HistoryIndexInterface {
     fn get_hist_tx_by_hash(
         &self,
         raw_tx_hash: &Blake2bHash,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Option<HistoricTransaction>;
 
     /// Returns a vector containing all transaction (and reward inherents) hashes corresponding to the given
@@ -182,7 +187,7 @@ pub trait HistoryIndexInterface {
         &self,
         address: &Address,
         max: u16,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Vec<Blake2bHash>;
 
     /// Returns a proof for transactions with the given hashes. The proof also includes the extended
@@ -194,6 +199,6 @@ pub trait HistoryIndexInterface {
         epoch_number: u32,
         hashes: Vec<&Blake2bHash>,
         verifier_state: Option<usize>,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Option<HistoryTreeProof>;
 }

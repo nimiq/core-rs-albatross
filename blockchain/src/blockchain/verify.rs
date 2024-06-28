@@ -2,8 +2,8 @@ use nimiq_account::BlockLogger;
 use nimiq_block::{Block, BlockError, MacroBlock, MacroBody};
 use nimiq_blockchain_interface::{AbstractBlockchain, ChainInfo, PushError};
 use nimiq_database::{
+    mdbx::{MdbxReadTransaction as DBTransaction, MdbxWriteTransaction},
     traits::{ReadTransaction, WriteTransaction},
-    TransactionProxy as DBTransaction, WriteTransactionProxy,
 };
 use nimiq_hash::Hash;
 use nimiq_primitives::policy::Policy;
@@ -415,7 +415,7 @@ impl Blockchain {
     fn verify_proposal_state(
         &self,
         block: &mut Block,
-        txn: &mut WriteTransactionProxy,
+        txn: &mut MdbxWriteTransaction,
     ) -> Result<MacroBody, PushError> {
         // First compute the macro body if it was not given as part of the proposed block.
         let body = {

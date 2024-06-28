@@ -5,13 +5,13 @@ use std::sync::Arc;
 use nimiq_account::{Account, BlockState, DataStore, ReservedBalance, StakingContract};
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError, ChainInfo, Direction};
-use nimiq_database::{traits::WriteTransaction, TransactionProxy as DBTransaction};
+use nimiq_database::{mdbx::MdbxReadTransaction as DBTransaction, traits::WriteTransaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::{
     account::AccountError, key_nibbles::KeyNibbles, policy::Policy, slots_allocation::Slot,
 };
-use nimiq_transaction::Transaction;
+use nimiq_transaction::{historic_transaction::RawTransactionHash, Transaction};
 
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
@@ -197,7 +197,7 @@ impl Blockchain {
     /// used to prevent replay attacks.
     pub fn contains_tx_in_validity_window(
         &self,
-        tx_hash: &Blake2bHash,
+        tx_hash: &RawTransactionHash,
         txn_opt: Option<&DBTransaction>,
     ) -> bool {
         self.history_store.tx_in_validity_window(tx_hash, txn_opt)

@@ -263,7 +263,7 @@ mod tests {
     use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
     use nimiq_blockchain_interface::AbstractBlockchain;
     use nimiq_blockchain_proxy::BlockchainProxy;
-    use nimiq_database::volatile::VolatileDatabase;
+    use nimiq_database::mdbx::MdbxDatabase;
     use nimiq_network_interface::{network::Network, request::request_handler};
     use nimiq_network_mock::{MockHub, MockNetwork};
     use nimiq_primitives::{networks::NetworkId, policy::Policy};
@@ -279,7 +279,7 @@ mod tests {
 
     fn blockchain() -> Arc<RwLock<Blockchain>> {
         let time = Arc::new(OffsetTime::new());
-        let env = VolatileDatabase::new(20).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         Arc::new(RwLock::new(
             Blockchain::new(
                 env,

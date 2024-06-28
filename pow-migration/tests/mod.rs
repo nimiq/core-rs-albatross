@@ -4,7 +4,7 @@
 //! setup code.
 #[cfg(feature = "pow-migration-tests")]
 mod pow_migration_test {
-    use nimiq_database::volatile::VolatileDatabase;
+    use nimiq_database::mdbx::{DatabaseConfig, MdbxDatabase};
     use nimiq_genesis_builder::config::GenesisConfig;
     use nimiq_keys::Address;
     use nimiq_pow_migration::{migrate, BlockWindows, Error};
@@ -25,7 +25,7 @@ mod pow_migration_test {
         network_id: NetworkId,
         candidate_block: u32,
     ) -> Result<Option<GenesisConfig>, Error> {
-        let env = VolatileDatabase::new(20).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let client = setup_pow_client();
         let address = Address::from_user_friendly_address(&validator_address)
             .expect("Could not parse provided validator address");

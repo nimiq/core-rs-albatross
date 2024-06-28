@@ -4,7 +4,7 @@ use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::{sync::syncer_proxy::SyncerProxy, Consensus};
-use nimiq_database::volatile::VolatileDatabase;
+use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::MockHub;
@@ -30,7 +30,7 @@ async fn test_request_transactions_by_address() {
     // Create one node with a full epoch. The first batch will have one tx per block.
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(
-            VolatileDatabase::new(20).unwrap(),
+            MdbxDatabase::new_volatile(Default::default()).unwrap(),
             BlockchainConfig::default(),
             NetworkId::UnitAlbatross,
             Arc::new(OffsetTime::new()),

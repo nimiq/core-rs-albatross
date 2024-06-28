@@ -39,6 +39,7 @@ wasm-bindgen = { version = "0.2", optional = true }
 
 nimiq-bls = { workspace = true, features = ["lazy", "serde-derive"], optional = true }
 nimiq-database-value = { workspace = true, optional = true }
+nimiq-database-value-derive = { workspace = true, optional = true }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true, optional = true, features = ["serde-derive"] }
 nimiq-serde = { workspace = true, optional = true }
@@ -51,7 +52,7 @@ nimiq-test-log = { workspace = true }
 account = ["coin", "hex", "serde-derive", "thiserror", "transaction", "trie"]
 all = ["account", "coin", "networks", "policy", "slots", "key-nibbles"]
 coin = ["hex", "nimiq-serde", "regex", "thiserror"]
-key-nibbles = ["hex", "nimiq-keys", "nimiq-database-value", "nimiq-serde"]
+key-nibbles = ["hex", "nimiq-keys", "nimiq-database-value", "nimiq-database-value-derive", "nimiq-serde"]
 networks = ["thiserror"]
 policy = ["nimiq-keys", "nimiq-utils", "parking_lot"]
 serde-derive = ["nimiq-serde", "serde", "serde_bytes", "serde_repr"]
@@ -59,7 +60,7 @@ slots = ["nimiq-bls", "nimiq-keys", "nimiq-serde", "nimiq-utils", "policy"]
 tendermint = ["networks", "nimiq-bls", "serde-derive"]
 transaction = ["nimiq-serde", "thiserror"]
 tree-proof = []
-trie = ["key-nibbles", "serde-derive", "thiserror"]
+trie = ["key-nibbles", "serde-derive", "thiserror", "nimiq-database-value-derive", "nimiq-database-value"]
 ts-types = ["serde", "tsify", "wasm-bindgen"]
 # parallel = ["rayon", "ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "ark-groth16/parallel"]
 # zkp-prover = ["ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]

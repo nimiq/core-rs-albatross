@@ -46,6 +46,7 @@ nimiq-blockchain-interface = { workspace = true }
 nimiq-blockchain-proxy = { workspace = true, default-features = false }
 nimiq-database = { workspace = true, optional = true }
 nimiq-database-value = { workspace = true }
+nimiq-database-value-derive = { workspace = true }
 nimiq-genesis = { workspace = true, default-features = false }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true }

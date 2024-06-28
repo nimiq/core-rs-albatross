@@ -1,4 +1,4 @@
-use std::{borrow::Cow, io, path::PathBuf, sync::Arc};
+use std::{io, path::PathBuf, sync::Arc};
 
 use ark_groth16::Proof;
 use ark_mnt6_753::MNT6_753;
@@ -6,7 +6,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use nimiq_block::MacroBlock;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
+use nimiq_database_value_derive::DbSerializable;
 use nimiq_network_interface::{
     network::{Network, Topic},
     request::{Handle, RequestCommon, RequestError, RequestMarker},
@@ -100,7 +100,7 @@ impl<N: Network> ProofSource<N> {
 }
 
 /// The ZK Proof and the respective block identifier. This object is sent though the network and stored in the zkp db.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, DbSerializable)]
 pub struct ZKProof {
     pub block_number: u32,
     pub proof: Option<Proof<MNT6_753>>,
@@ -121,22 +121,6 @@ impl From<ZKPState> for ZKProof {
             block_number: zkp_component_state.latest_block.block_number(),
             proof: zkp_component_state.latest_proof,
         }
-    }
-}
-
-impl AsDatabaseBytes for ZKProof {
-    fn as_database_bytes(&self) -> Cow<[u8]> {
-        let v = Serialize::serialize_to_vec(&self);
-        Cow::Owned(v)
-    }
-}
-
-impl FromDatabaseValue for ZKProof {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized,
-    {
-        Self::deserialize_from_vec(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }
 

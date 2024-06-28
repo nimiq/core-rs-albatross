@@ -2,7 +2,7 @@ use std::error::Error;
 
 use nimiq_account::{BlockLog, BlockLogger};
 use nimiq_blockchain_interface::{ChainInfo, PushError};
-use nimiq_database::{TransactionProxy, WriteTransactionProxy};
+use nimiq_database::mdbx::{MdbxReadTransaction, MdbxWriteTransaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::trie::trie_diff::TrieDiff;
 
@@ -19,7 +19,7 @@ impl Blockchain {
         block_hash: Blake2bHash,
         chain_info: ChainInfo,
         diff: Option<TrieDiff>,
-        txn: &TransactionProxy,
+        txn: &MdbxReadTransaction,
     ) -> Result<
         (
             (Blake2bHash, ChainInfo, Option<TrieDiff>),
@@ -87,7 +87,7 @@ impl Blockchain {
         &self,
         target_chain: &mut [(Blake2bHash, ChainInfo, Option<TrieDiff>)],
         ancestor: &mut (Blake2bHash, ChainInfo, Option<TrieDiff>),
-        write_txn: &mut WriteTransactionProxy,
+        write_txn: &mut MdbxWriteTransaction,
     ) -> Result<
         (Vec<(Blake2bHash, ChainInfo)>, Vec<BlockLog>),
         Vec<(Blake2bHash, ChainInfo, Option<TrieDiff>)>,

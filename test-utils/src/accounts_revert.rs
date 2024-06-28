@@ -5,9 +5,8 @@ use nimiq_account::{
     BlockLog, BlockLogger, BlockState, DataStore, InherentLogger, Receipts, TransactionLog,
 };
 use nimiq_database::{
+    mdbx::MdbxDatabase,
     traits::{Database, WriteTransaction},
-    volatile::VolatileDatabase,
-    DatabaseProxy,
 };
 use nimiq_keys::Address;
 use nimiq_primitives::{account::AccountError, coin::Coin, key_nibbles::KeyNibbles};
@@ -99,12 +98,12 @@ impl TestCommitRevert {
     impl_accounts_trait!(inherent, target, Inherent, InherentLogger);
 
     pub fn new() -> Self {
-        let env = VolatileDatabase::new(20).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let accounts = Accounts::new(env);
         TestCommitRevert { accounts }
     }
 
-    pub fn env(&self) -> &DatabaseProxy {
+    pub fn env(&self) -> &MdbxDatabase {
         &self.accounts.env
     }
 

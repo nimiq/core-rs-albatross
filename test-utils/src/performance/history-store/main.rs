@@ -5,7 +5,6 @@ use nimiq_blockchain::{interface::HistoryInterface, HistoryStore, HistoryStoreIn
 use nimiq_database::{
     mdbx::MdbxDatabase,
     traits::{Database, WriteTransaction},
-    DatabaseProxy,
 };
 use nimiq_genesis::NetworkId;
 use nimiq_keys::Address;
@@ -71,7 +70,7 @@ fn gen_hist_txs_block(block_number: u32, num_txns: u32) -> Vec<HistoricTransacti
 
 fn history_store_populate(
     history_store: &(dyn HistoryInterface + Sync + Send),
-    env: &DatabaseProxy,
+    env: &MdbxDatabase,
     tpb: u32,
     batches: u32,
     rounds: u32,
@@ -137,7 +136,7 @@ fn history_store_populate(
     );
 }
 
-fn history_store_prune(history_store: &(dyn HistoryInterface + Sync + Send), env: &DatabaseProxy) {
+fn history_store_prune(history_store: &(dyn HistoryInterface + Sync + Send), env: &MdbxDatabase) {
     let mut txn = env.write_transaction();
     println!("Pruning the history store..");
     let start = Instant::now();
@@ -163,7 +162,7 @@ fn main() {
     let tmp_dir = temp_dir.path().to_str().unwrap();
     let db_file = temp_dir.path().join("mdbx.dat");
     log::debug!("Creating a non volatile environment in {}", tmp_dir);
-    let env = MdbxDatabase::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
+    let env = MdbxDatabase::new(tmp_dir, Default::default()).unwrap();
 
     let history_store = if args.indexing > 0 {
         println!("Exercising the history store index");

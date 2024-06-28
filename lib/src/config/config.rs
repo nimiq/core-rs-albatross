@@ -13,7 +13,7 @@ use derive_builder::Builder;
 #[cfg(feature = "validator")]
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 #[cfg(feature = "database-storage")]
-use nimiq_database::{mdbx::MdbxDatabase, volatile::VolatileDatabase, DatabaseProxy};
+use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_hash::{Blake2bHash, Hash};
 #[cfg(feature = "validator")]
 use nimiq_keys::{Address, KeyPair, PrivateKey};
@@ -343,14 +343,21 @@ impl StorageConfig {
         network_id: NetworkId,
         sync_mode: SyncMode,
         db_config: DatabaseConfig,
-    ) -> Result<DatabaseProxy, Error> {
+    ) -> Result<MdbxDatabase, Error> {
+        use nimiq_database::mdbx;
+
         let db_name = format!("{network_id}-{sync_mode}-consensus").to_lowercase();
         log::info!("Opening database: {}", db_name);
 
+        let config = mdbx::DatabaseConfig {
+            max_tables: Some(db_config.max_dbs as u64),
+            size: Some(-1..db_config.size as isize),
+            max_readers: Some(db_config.max_readers),
+            ..Default::default()
+        };
+
         Ok(match self {
-            StorageConfig::Volatile => {
-                VolatileDatabase::with_max_readers(db_config.max_dbs, db_config.max_readers)?
-            }
+            StorageConfig::Volatile => MdbxDatabase::new_volatile(config)?,
             StorageConfig::Filesystem(file_storage) => {
                 let db_path = file_storage.database_parent.join(db_name);
                 let db_path = db_path
@@ -362,12 +369,7 @@ impl StorageConfig {
                         ))
                     })?
                     .to_string();
-                MdbxDatabase::new_with_max_readers(
-                    db_path,
-                    db_config.size,
-                    db_config.max_dbs,
-                    db_config.max_readers,
-                )?
+                MdbxDatabase::new(db_path, config)?
             }
         })
     }

@@ -1,7 +1,7 @@
-use std::{fmt, io};
+use std::fmt;
 
 use nimiq_bls::cache::PublicKeyCache;
-use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::Ed25519PublicKey;
 use nimiq_network_interface::network::Topic;
@@ -61,7 +61,9 @@ impl BlockType {
 
 /// The enum representing a block. Blocks can either be Micro blocks or Macro blocks (which includes
 /// both checkpoint and election blocks).
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
+#[derive(
+    Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize, DbSerializable,
+)]
 pub enum Block {
     Macro(MacroBlock),
     Micro(MicroBlock),
@@ -626,25 +628,6 @@ impl fmt::Display for Block {
             Block::Macro(block) => fmt::Display::fmt(block, f),
             Block::Micro(block) => fmt::Display::fmt(block, f),
         }
-    }
-}
-
-impl IntoDatabaseValue for Block {
-    fn database_byte_size(&self) -> usize {
-        self.serialized_size()
-    }
-
-    fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize_to_writer(&self, &mut bytes).unwrap();
-    }
-}
-
-impl FromDatabaseValue for Block {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized,
-    {
-        Self::deserialize_from_vec(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }
 

@@ -1,5 +1,5 @@
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError};
-use nimiq_database::TransactionProxy;
+use nimiq_database::mdbx::MdbxReadTransaction;
 use nimiq_primitives::{
     policy::Policy,
     slots_allocation::{Slot, Validators},
@@ -14,7 +14,7 @@ impl Blockchain {
     pub fn get_validators_for_epoch(
         &self,
         epoch: u32,
-        txn: Option<&TransactionProxy>,
+        txn: Option<&MdbxReadTransaction>,
     ) -> Result<Validators, BlockchainError> {
         let current_epoch = Policy::epoch_at(self.state.main_chain.head.block_number());
 
@@ -56,7 +56,7 @@ impl Blockchain {
         block_number: u32,
         offset: u32,
         vrf_entropy: VrfEntropy,
-        txn: Option<&TransactionProxy>,
+        txn: Option<&MdbxReadTransaction>,
     ) -> Result<Slot, BlockchainError> {
         // Fetch the latest macro block that precedes the block at the given block_number.
         // We use the disabled_slots set from that macro block for the slot selection.

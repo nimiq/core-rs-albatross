@@ -3,7 +3,7 @@ use nimiq_account::{
 };
 use nimiq_block::{Block, BlockError, SkipBlockInfo};
 use nimiq_blockchain_interface::PushError;
-use nimiq_database::{traits::Database, TransactionProxy};
+use nimiq_database::{mdbx::MdbxReadTransaction, traits::Database};
 use nimiq_keys::Address;
 use nimiq_primitives::{
     key_nibbles::KeyNibbles,
@@ -210,7 +210,7 @@ impl Blockchain {
     /// Produces a Merkle proof of the inclusion of the given keys in the
     /// Merkle Radix Trie.
     pub fn get_accounts_proof(&self, keys: Vec<&KeyNibbles>) -> Result<TrieProof, IncompleteTrie> {
-        let txn = self.env.read_transaction();
+        let txn = self.db.read_transaction();
 
         self.state.accounts.get_proof(Some(&txn), keys)
     }
@@ -218,7 +218,7 @@ impl Blockchain {
     /// Gets an accounts chunk given a start key and a limit
     pub fn get_accounts_chunk(
         &self,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
         start: KeyNibbles,
         limit: usize,
     ) -> AccountsChunk {

@@ -5,7 +5,7 @@ use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::{sync::syncer_proxy::SyncerProxy, Consensus};
-use nimiq_database::{volatile::VolatileDatabase, DatabaseProxy};
+use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis_builder::GenesisInfo;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
@@ -28,7 +28,7 @@ pub struct Node<N: NetworkInterface + TestNetwork> {
     pub network: Arc<N>,
     pub blockchain: Arc<RwLock<Blockchain>>,
     pub consensus: Option<Consensus<N>>,
-    pub environment: DatabaseProxy,
+    pub environment: MdbxDatabase,
 }
 
 impl<N: NetworkInterface + TestNetwork> Node<N> {
@@ -56,7 +56,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
         is_prover_active: bool,
     ) -> Self {
         let block_hash = block.hash();
-        let env = VolatileDatabase::new(20).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let clock = Arc::new(OffsetTime::new());
         let blockchain = Arc::new(RwLock::new(
             Blockchain::with_genesis(

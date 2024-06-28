@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use ark_groth16::Proof;
 use nimiq_block::MacroBlock;
-use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseBytes};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_utils::zkp_test_data::ZKP_TEST_KEYS_PATH;
 use nimiq_zkp_component::types::{ProofInput, ZKPState, ZKProof};
@@ -32,16 +32,16 @@ fn it_serializes_and_deserializes_to_bytes_zk_proof() {
         block_number: 0,
         proof: None,
     };
-    let serialized = proof.as_database_bytes();
-    let deserialized: ZKProof = FromDatabaseValue::copy_from_database(&serialized).unwrap();
+    let serialized = proof.as_value_bytes();
+    let deserialized: ZKProof = FromDatabaseBytes::from_value_bytes(&serialized);
     assert_eq!(deserialized, proof);
 
     let proof = ZKProof {
         block_number: 0,
         proof: Some(Proof::default()),
     };
-    let serialized = proof.as_database_bytes();
-    let deserialized: ZKProof = FromDatabaseValue::copy_from_database(&serialized).unwrap();
+    let serialized = proof.as_value_bytes();
+    let deserialized: ZKProof = FromDatabaseBytes::from_value_bytes(&serialized);
     assert_eq!(deserialized, proof);
 }
 

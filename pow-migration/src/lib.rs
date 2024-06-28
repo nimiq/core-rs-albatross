@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 
-use nimiq_database::DatabaseProxy;
+use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis_builder::config::GenesisConfig;
 use nimiq_hash::{Blake2bHasher, Hasher};
 use nimiq_keys::Address;
@@ -153,7 +153,7 @@ pub async fn migrate(
     pow_client: &Client,
     block_windows: &BlockWindows,
     candidate_block: u32,
-    env: DatabaseProxy,
+    env: MdbxDatabase,
     validator_address: &Option<Address>,
     network_id: NetworkId,
 ) -> Result<Option<GenesisConfig>, Error> {

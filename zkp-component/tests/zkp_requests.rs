@@ -3,7 +3,7 @@ use std::{path::Path, sync::Arc};
 use futures::StreamExt;
 use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_database::volatile::VolatileDatabase;
+use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
@@ -25,7 +25,7 @@ use parking_lot::RwLock;
 
 fn blockchain() -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     Arc::new(RwLock::new(
         Blockchain::new(
             env,
@@ -85,8 +85,8 @@ async fn peers_reply_with_valid_proof() {
     network.dial_address(network3.address()).await.unwrap();
     network.dial_address(network2.address()).await.unwrap();
 
-    let env2 = VolatileDatabase::new(20).unwrap();
-    let env3 = VolatileDatabase::new(20).unwrap();
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let env3 = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let store2 = DBProofStore::new(env2.clone());
     let store3 = DBProofStore::new(env3.clone());
     let producer = BlockProducer::new(signing_key(), voting_key());
@@ -163,8 +163,8 @@ async fn peers_reply_with_valid_proof_and_election_block() {
     network.dial_address(network3.address()).await.unwrap();
     network.dial_address(network2.address()).await.unwrap();
 
-    let env2 = VolatileDatabase::new(20).unwrap();
-    let env3 = VolatileDatabase::new(20).unwrap();
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let env3 = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let store2 = DBProofStore::new(env2.clone());
     let store3 = DBProofStore::new(env3.clone());
     let producer = BlockProducer::new(signing_key(), voting_key());

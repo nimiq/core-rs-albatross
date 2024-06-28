@@ -2,7 +2,7 @@ use std::{path::Path, sync::Arc};
 
 use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_database::volatile::VolatileDatabase;
+use nimiq_database::mdbx::{DatabaseConfig, MdbxDatabase};
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
@@ -23,7 +23,7 @@ use parking_lot::RwLock;
 
 fn blockchain() -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     Arc::new(RwLock::new(
         Blockchain::new(
             env,
@@ -65,7 +65,13 @@ async fn loads_valid_zkp_state_from_db() {
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
 
-    let proof_store = DBProofStore::new(VolatileDatabase::new(1).unwrap());
+    let proof_store = DBProofStore::new(
+        MdbxDatabase::new_volatile(DatabaseConfig {
+            max_tables: Some(2),
+            ..Default::default()
+        })
+        .unwrap(),
+    );
     let producer = BlockProducer::new(signing_key(), voting_key());
     produce_macro_blocks_with_rng(
         &producer,
@@ -105,7 +111,11 @@ async fn does_not_load_invalid_zkp_state_from_db() {
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
 
-    let env = VolatileDatabase::new(1).unwrap();
+    let env = MdbxDatabase::new_volatile(DatabaseConfig {
+        max_tables: Some(2),
+        ..Default::default()
+    })
+    .unwrap();
 
     let proof_store = DBProofStore::new(env);
     let new_proof = ZKProof {

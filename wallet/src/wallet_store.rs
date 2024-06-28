@@ -1,47 +1,45 @@
 use nimiq_database::{
+    declare_table,
+    mdbx::{MdbxDatabase, MdbxReadTransaction, MdbxWriteTransaction, OptionalTransaction},
     traits::{Database, ReadCursor, ReadTransaction, WriteTransaction},
-    DatabaseProxy, TableProxy, TransactionProxy, WriteTransactionProxy,
 };
 use nimiq_keys::Address;
 use nimiq_utils::otp::Locked;
 
 use crate::wallet_account::WalletAccount;
 
+declare_table!(WalletTable, "Wallet", Address => Locked<WalletAccount>);
+
 #[derive(Debug)]
 pub struct WalletStore {
-    env: DatabaseProxy,
-    wallet_db: TableProxy,
+    env: MdbxDatabase,
+    table: WalletTable,
 }
 
 impl WalletStore {
-    const WALLET_DB_NAME: &'static str = "Wallet";
-
-    pub fn new(env: DatabaseProxy) -> Self {
-        let wallet_db = env.open_table(Self::WALLET_DB_NAME.to_string());
-        WalletStore { env, wallet_db }
+    pub fn new(env: MdbxDatabase) -> Self {
+        let wallet_table = WalletTable;
+        env.create_regular_table(&wallet_table);
+        WalletStore {
+            env,
+            table: wallet_table,
+        }
     }
 
-    pub fn create_read_transaction(&self) -> TransactionProxy {
+    pub fn create_read_transaction(&self) -> MdbxReadTransaction {
         self.env.read_transaction()
     }
 
-    pub fn create_write_transaction(&self) -> WriteTransactionProxy {
+    pub fn create_write_transaction(&self) -> MdbxWriteTransaction {
         self.env.write_transaction()
     }
 
-    pub fn list(&self, txn_option: Option<&TransactionProxy>) -> Vec<Address> {
-        let read_txn;
-        let txn = match txn_option {
-            Some(txn) => txn,
-            None => {
-                read_txn = self.env.read_transaction();
-                &read_txn
-            }
-        };
+    pub fn list(&self, txn_option: Option<&MdbxReadTransaction>) -> Vec<Address> {
+        let txn = txn_option.or_new(&self.env);
 
-        let cursor = txn.cursor(&self.wallet_db);
+        let cursor = txn.cursor(&self.table);
         cursor
-            .into_iter_start::<_, Locked<WalletAccount>>()
+            .into_iter_start()
             .map(|(address, _)| address)
             .collect()
     }
@@ -49,20 +47,18 @@ impl WalletStore {
     pub fn get(
         &self,
         address: &Address,
-        txn_option: Option<&TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Option<Locked<WalletAccount>> {
-        match txn_option {
-            Some(txn) => txn.get(&self.wallet_db, address),
-            None => self.env.read_transaction().get(&self.wallet_db, address),
-        }
+        let txn = txn_option.or_new(&self.env);
+        txn.get(&self.table, address)
     }
 
     pub fn put(
         &self,
         address: &Address,
         wallet: &Locked<WalletAccount>,
-        txn: &mut WriteTransactionProxy,
+        txn: &mut MdbxWriteTransaction,
     ) {
-        txn.put_reserve(&self.wallet_db, address, wallet);
+        txn.put_reserve(&self.table, address, wallet);
     }
 }

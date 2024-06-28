@@ -8,9 +8,8 @@ use nimiq_bls::{
     CompressedPublicKey as BlsPublicKey, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey,
 };
 use nimiq_database::{
+    mdbx::MdbxDatabase,
     traits::{Database, WriteTransaction},
-    volatile::VolatileDatabase,
-    DatabaseProxy,
 };
 use nimiq_keys::{Address, Ed25519PublicKey, KeyPair, PrivateKey};
 use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId, policy::Policy};
@@ -216,7 +215,7 @@ enum ValidatorState {
 }
 
 struct ValidatorSetup {
-    env: DatabaseProxy,
+    env: MdbxDatabase,
     accounts: Accounts,
     staking_contract: StakingContract,
     effective_state_block_state: BlockState,
@@ -233,7 +232,7 @@ impl ValidatorSetup {
         state_release_block_state: BlockState,
         staker_active_balance: Option<u64>,
     ) -> ValidatorSetup {
-        let env = VolatileDatabase::new(20).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let accounts = Accounts::new(env.clone());
         let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
         let mut db_txn_og = env.write_transaction();
@@ -391,7 +390,7 @@ impl ValidatorSetup {
 }
 
 struct StakerSetup {
-    env: DatabaseProxy,
+    env: MdbxDatabase,
     accounts: Accounts,
     staking_contract: StakingContract,
     effective_block_state: BlockState,

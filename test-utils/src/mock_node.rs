@@ -12,7 +12,7 @@ use nimiq_consensus::{
     messages::*,
     sync::live::{diff_queue::RequestTrieDiff, state_queue::RequestChunk},
 };
-use nimiq_database::volatile::VolatileDatabase;
+use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_network_interface::{network::Network as NetworkInterface, request::Handle};
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::{networks::NetworkId, trie::TrieItem};
@@ -139,7 +139,7 @@ impl<N: NetworkInterface + TestNetwork> MockNode<N> {
         hub: &mut Option<MockHub>,
     ) -> Self {
         let network = N::build_network(peer_id, block.hash(), hub).await;
-        let env = VolatileDatabase::new(20).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let clock = Arc::new(OffsetTime::new());
 
         let blockchain = Arc::new(RwLock::new(

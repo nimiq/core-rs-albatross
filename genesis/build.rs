@@ -1,6 +1,6 @@
 use std::{env, fmt::Write, fs, path::Path};
 
-use nimiq_database::volatile::VolatileDatabase;
+use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_hash::Blake2bHash;
 
@@ -34,9 +34,10 @@ fn generate_albatross(name: &str, out_dir: &Path, src_dir: &Path) {
     let genesis_config = src_dir.join(format!("{name}.toml"));
     log::info!("genesis source file: {}", genesis_config.display());
 
-    let env = VolatileDatabase::new(20).expect("Could not open a volatile database");
+    let db =
+        MdbxDatabase::new_volatile(Default::default()).expect("Could not open a volatile database");
     let builder = GenesisBuilder::from_config_file(genesis_config).unwrap();
-    let genesis_hash = builder.write_to_files(env, &directory).unwrap();
+    let genesis_hash = builder.write_to_files(db, &directory).unwrap();
     write_genesis_rs(&directory, name, &genesis_hash);
 }
 

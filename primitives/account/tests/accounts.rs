@@ -9,7 +9,6 @@ use nimiq_bls::KeyPair as BLSKeyPair;
 use nimiq_database::{
     mdbx::MdbxDatabase,
     traits::{Database, WriteTransaction},
-    volatile::VolatileDatabase,
 };
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, Ed25519PublicKey, KeyPair, PrivateKey, SecureGenerate};
@@ -400,7 +399,7 @@ fn it_checks_for_sufficient_funds() {
 fn accounts_performance() {
     let (env, num_txns) = if VOLATILE_ENV {
         let num_txns = 1_000;
-        let env = VolatileDatabase::new(20).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
         (env, num_txns)
     } else {
@@ -408,7 +407,7 @@ fn accounts_performance() {
         let tmp_dir = tempdir().expect("Could not create temporal directory");
         let tmp_dir = tmp_dir.path().to_str().unwrap();
         log::debug!("Creating a non volatile environment in {}", tmp_dir);
-        let env = MdbxDatabase::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
+        let env = MdbxDatabase::new(tmp_dir, Default::default()).unwrap();
         (env, num_txns)
     };
 
@@ -517,7 +516,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
 
     let (env, num_txns) = if VOLATILE_ENV {
         let num_txns = 25;
-        let env = VolatileDatabase::new(20).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
         (env, num_txns)
     } else {
@@ -525,7 +524,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
         let tmp_dir = tempdir().expect("Could not create temporal directory");
         let tmp_dir = tmp_dir.path().to_str().unwrap();
         log::debug!("Creating a non volatile environment in {}", tmp_dir);
-        let env = MdbxDatabase::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
+        let env = MdbxDatabase::new(tmp_dir, Default::default()).unwrap();
         (env, num_txns)
     };
 
@@ -646,7 +645,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
 
     let (env, num_txns) = if VOLATILE_ENV {
         let num_txns = 25;
-        let env = VolatileDatabase::new(20).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
         (env, num_txns)
     } else {
@@ -654,7 +653,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
         let tmp_dir = tempdir().expect("Could not create temporal directory");
         let tmp_dir = tmp_dir.path().to_str().unwrap();
         log::debug!("Creating a non volatile environment in {}", tmp_dir);
-        let env = MdbxDatabase::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
+        let env = MdbxDatabase::new(tmp_dir, Default::default()).unwrap();
         (env, num_txns)
     };
 

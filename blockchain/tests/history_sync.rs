@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use nimiq_blockchain::{interface::HistoryInterface, BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
-use nimiq_database::volatile::VolatileDatabase;
+use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::Policy;
 use nimiq_test_log::test;
@@ -26,7 +26,7 @@ fn history_sync_works() {
     let time = Arc::new(OffsetTime::new());
 
     // Create a blockchain to produce the macro blocks.
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(
@@ -122,7 +122,7 @@ fn history_sync_works() {
 
     let time = Arc::new(OffsetTime::new());
     // Create a second blockchain to push these blocks.
-    let env2 = VolatileDatabase::new(20).unwrap();
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
     let blockchain2 = Arc::new(RwLock::new(
         Blockchain::new(
@@ -193,7 +193,7 @@ fn history_sync_works_with_micro_blocks() {
     let time = Arc::new(OffsetTime::new());
 
     // Create a blockchain to produce the macro blocks.
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(
@@ -303,7 +303,7 @@ fn history_sync_works_with_micro_blocks() {
 
     let time = Arc::new(OffsetTime::new());
     // Create a second blockchain to push these blocks.
-    let env2 = VolatileDatabase::new(20).unwrap();
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
     let blockchain2 = Arc::new(RwLock::new(
         Blockchain::new(
@@ -377,7 +377,7 @@ fn history_sync_works_with_micro_blocks() {
 fn history_sync_works_with_diverging_history() {
     let genesis_block_number = Policy::genesis_block_number();
     // Produce macro blocks to complete one epoch in blockchain1.
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(
@@ -398,7 +398,7 @@ fn history_sync_works_with_diverging_history() {
     );
 
     // Produce some micro blocks (with a different history) in blockchain2.
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain2 = Arc::new(RwLock::new(
         Blockchain::new(

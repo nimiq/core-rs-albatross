@@ -33,6 +33,7 @@ thiserror = { version = "1.0", optional = true }
 
 nimiq-collections = { workspace = true, optional = true }
 nimiq-database-value = { workspace = true }
+nimiq-database-value-derive = { workspace = true }
 nimiq-hash = { workspace = true, optional = true }
 nimiq-serde = { workspace = true }
 

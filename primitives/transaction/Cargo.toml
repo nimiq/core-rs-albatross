@@ -30,6 +30,7 @@ wasm-bindgen = { version = "0.2", optional = true }
 
 nimiq-bls = { workspace = true, features = ["serde-derive"] }
 nimiq-database-value = { workspace = true }
+nimiq-database-value-derive = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-hash_derive = { workspace = true }
 nimiq-keys = { workspace = true, features = ["serde-derive"] }

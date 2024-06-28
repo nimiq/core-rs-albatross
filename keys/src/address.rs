@@ -1,14 +1,15 @@
 use std::{borrow::Cow, char, convert::From, fmt, io, iter::Iterator, str::FromStr};
 
 use hex::FromHex;
-use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseBytes};
 use nimiq_hash::{hash_typed_array, Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_macros::create_typed_array;
 use thiserror::Error;
 
 use crate::{key_pair::KeyPair, ES256PublicKey, Ed25519PublicKey, PublicKey};
 
-create_typed_array!(Address, u8, 20);
+const ADDRESS_LEN: usize = 20;
+create_typed_array!(Address, u8, ADDRESS_LEN);
 hash_typed_array!(Address);
 
 #[derive(Debug, Error, Eq, PartialEq)]
@@ -33,9 +34,9 @@ impl Address {
     const NIMIQ_ALPHABET: &'static str = "0123456789ABCDEFGHJKLMNPQRSTUVXY";
 
     /// The lexicographically first address.
-    pub const START_ADDRESS: Address = Address([0x00; 20]);
+    pub const START_ADDRESS: Address = Address([0x00; ADDRESS_LEN]);
     /// The lexicographically last address.
-    pub const END_ADDRESS: Address = Address([0xff; 20]);
+    pub const END_ADDRESS: Address = Address([0xff; ADDRESS_LEN]);
 
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
@@ -64,7 +65,7 @@ impl Address {
         let b_vec = encoding
             .decode(friendly_addr_wospace[4..].as_bytes())
             .map_err(|_| AddressParseError::UnknownFormat)?;
-        let mut b = [0; 20];
+        let mut b = [0; ADDRESS_LEN];
         b.copy_from_slice(&b_vec[..b_vec.len()]);
         Ok(Address(b))
     }
@@ -209,17 +210,19 @@ impl fmt::Debug for Address {
 }
 
 impl AsDatabaseBytes for Address {
-    fn as_database_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<[u8]> {
         Cow::Borrowed(self.as_bytes())
     }
+
+    const FIXED_SIZE: Option<usize> = Some(ADDRESS_LEN);
 }
 
-impl FromDatabaseValue for Address {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+impl FromDatabaseBytes for Address {
+    fn from_key_bytes(bytes: &[u8]) -> Self
     where
         Self: Sized,
     {
-        Ok(bytes.into())
+        bytes.into()
     }
 }
 

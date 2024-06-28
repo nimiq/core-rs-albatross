@@ -2,7 +2,7 @@ pub mod types;
 
 use std::{fs, path::PathBuf, str::FromStr, time::Instant};
 
-use nimiq_database::DatabaseProxy;
+use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis_builder::config::GenesisConfig;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{KeyPair, SecureGenerate};
@@ -24,7 +24,7 @@ pub async fn get_pos_genesis(
     client: &Client,
     pow_reg_window: &PoWRegistrationWindow,
     network_id: NetworkId,
-    env: DatabaseProxy,
+    env: MdbxDatabase,
     pos_registered_agents: Option<PoSRegisteredAgents>,
 ) -> Result<GenesisConfig, Error> {
     match network_id {

@@ -1,11 +1,12 @@
 use std::{
     borrow::Cow,
     error, fmt,
-    io::{self, Write},
+    io::Write,
     ops::{Deref, Range},
 };
 
-use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseBytes};
+use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Hash, Hasher};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::Address;
@@ -18,7 +19,7 @@ use crate::{inherent::Inherent, EquivocationLocator, ExecutedTransaction};
 /// The raw transaction hash is a type wrapper.
 /// This corresponds to the hash of the transaction without the execution result.
 /// This hash is the external facing hash.
-#[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Default, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct RawTransactionHash(Blake2bHash);
 
 impl From<Blake2bHash> for RawTransactionHash {
@@ -39,16 +40,18 @@ impl Deref for RawTransactionHash {
     }
 }
 impl AsDatabaseBytes for RawTransactionHash {
-    fn as_database_bytes(&self) -> Cow<[u8]> {
-        Cow::Owned(self.deref().0.to_vec())
+    fn as_key_bytes(&self) -> Cow<[u8]> {
+        self.0.as_key_bytes()
     }
+
+    const FIXED_SIZE: Option<usize> = Blake2bHash::FIXED_SIZE;
 }
-impl FromDatabaseValue for RawTransactionHash {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+impl FromDatabaseBytes for RawTransactionHash {
+    fn from_key_bytes(bytes: &[u8]) -> Self
     where
         Self: Sized,
     {
-        Ok(RawTransactionHash(bytes[4..].into()))
+        RawTransactionHash(FromDatabaseBytes::from_key_bytes(bytes))
     }
 }
 
@@ -72,22 +75,24 @@ impl Deref for ExecutedTransactionHash {
     }
 }
 impl AsDatabaseBytes for ExecutedTransactionHash {
-    fn as_database_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<[u8]> {
         Cow::Owned(self.deref().0.to_vec())
     }
+
+    const FIXED_SIZE: Option<usize> = Blake2bHash::FIXED_SIZE;
 }
-impl FromDatabaseValue for ExecutedTransactionHash {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+impl FromDatabaseBytes for ExecutedTransactionHash {
+    fn from_key_bytes(bytes: &[u8]) -> Self
     where
         Self: Sized,
     {
-        Ok(ExecutedTransactionHash(bytes[4..].into()))
+        ExecutedTransactionHash(bytes[4..].into())
     }
 }
 
 /// A single struct that stores information that represents any possible transaction (basic
 /// transaction or inherent) on the blockchain.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, DbSerializable)]
 pub struct HistoricTransaction {
     /// The ID of the network where the transaction happened.
     pub network_id: NetworkId,
@@ -302,31 +307,6 @@ impl MMRHash<Blake2bHash> for HistoricTransaction {
         hasher.write_all(&prefix.to_be_bytes()).unwrap();
         self.serialize_to_writer(&mut hasher).unwrap();
         hasher.finish()
-    }
-}
-
-impl AsDatabaseBytes for HistoricTransaction {
-    fn as_database_bytes(&self) -> Cow<[u8]> {
-        Cow::Owned(Serialize::serialize_to_vec(&self))
-    }
-}
-
-impl IntoDatabaseValue for HistoricTransaction {
-    fn database_byte_size(&self) -> usize {
-        self.serialized_size()
-    }
-
-    fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize_to_writer(&self, &mut bytes).unwrap();
-    }
-}
-
-impl FromDatabaseValue for HistoricTransaction {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized,
-    {
-        Self::deserialize_from_vec(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }
 

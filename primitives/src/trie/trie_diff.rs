@@ -1,6 +1,6 @@
-use std::{collections::BTreeMap, io};
+use std::collections::BTreeMap;
 
-use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value_derive::DbSerializable;
 use nimiq_serde::{Deserialize, Serialize};
 
 use crate::key_nibbles::KeyNibbles;
@@ -90,27 +90,8 @@ impl TrieDiffBuilder {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, DbSerializable)]
 pub struct TrieDiff(pub BTreeMap<KeyNibbles, Option<Vec<u8>>>);
-
-impl IntoDatabaseValue for TrieDiff {
-    fn database_byte_size(&self) -> usize {
-        self.serialized_size()
-    }
-
-    fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize(&self, &mut bytes).unwrap();
-    }
-}
-
-impl FromDatabaseValue for TrieDiff {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized,
-    {
-        Self::deserialize_from_vec(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
-    }
-}
 
 /// A diff on an incomplete trie.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -143,24 +124,5 @@ impl RevertDiffValue {
 }
 
 /// A diff on an incomplete trie.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, DbSerializable)]
 pub struct RevertTrieDiff(pub BTreeMap<KeyNibbles, RevertDiffValue>);
-
-impl IntoDatabaseValue for RevertTrieDiff {
-    fn database_byte_size(&self) -> usize {
-        self.serialized_size()
-    }
-
-    fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize(&self, &mut bytes).unwrap();
-    }
-}
-
-impl FromDatabaseValue for RevertTrieDiff {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized,
-    {
-        Self::deserialize_from_vec(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
-    }
-}

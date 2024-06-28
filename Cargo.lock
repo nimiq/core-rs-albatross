@@ -3534,6 +3534,7 @@ dependencies = [
  "nimiq-collections",
  "nimiq-database",
  "nimiq-database-value",
+ "nimiq-database-value-derive",
  "nimiq-genesis-builder",
  "nimiq-hash",
  "nimiq-keys",
@@ -3565,6 +3566,7 @@ dependencies = [
  "nimiq-bls",
  "nimiq-collections",
  "nimiq-database-value",
+ "nimiq-database-value-derive",
  "nimiq-handel",
  "nimiq-hash",
  "nimiq-hash_derive",
@@ -3633,6 +3635,7 @@ dependencies = [
  "nimiq-block",
  "nimiq-collections",
  "nimiq-database-value",
+ "nimiq-database-value-derive",
  "nimiq-hash",
  "nimiq-primitives",
  "nimiq-serde",
@@ -3760,11 +3763,9 @@ dependencies = [
 name = "nimiq-database"
 version = "0.23.0"
 dependencies = [
- "bitflags 2.6.0",
  "criterion",
  "libmdbx",
  "nimiq-database-value",
- "nimiq-test-log",
  "pprof",
  "rand",
  "tempfile",
@@ -3775,6 +3776,15 @@ dependencies = [
 [[package]]
 name = "nimiq-database-value"
 version = "0.23.0"
+
+[[package]]
+name = "nimiq-database-value-derive"
+version = "0.23.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.72",
+]
 
 [[package]]
 name = "nimiq-genesis"
@@ -4335,6 +4345,7 @@ dependencies = [
  "hex",
  "nimiq-bls",
  "nimiq-database-value",
+ "nimiq-database-value-derive",
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-serde",
@@ -4656,6 +4667,7 @@ dependencies = [
  "hex",
  "nimiq-bls",
  "nimiq-database-value",
+ "nimiq-database-value-derive",
  "nimiq-hash",
  "nimiq-hash_derive",
  "nimiq-keys",
@@ -4719,6 +4731,7 @@ dependencies = [
  "libp2p-identity",
  "nimiq-collections",
  "nimiq-database-value",
+ "nimiq-database-value-derive",
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-serde",
@@ -4754,6 +4767,7 @@ dependencies = [
  "nimiq-consensus",
  "nimiq-database",
  "nimiq-database-value",
+ "nimiq-database-value-derive",
  "nimiq-genesis",
  "nimiq-genesis-builder",
  "nimiq-handel",
@@ -4833,6 +4847,7 @@ dependencies = [
  "itertools 0.13.0",
  "nimiq-database",
  "nimiq-database-value",
+ "nimiq-database-value-derive",
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-primitives",
@@ -4978,6 +4993,7 @@ dependencies = [
  "nimiq-bls",
  "nimiq-database",
  "nimiq-database-value",
+ "nimiq-database-value-derive",
  "nimiq-genesis",
  "nimiq-genesis-builder",
  "nimiq-hash",

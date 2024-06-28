@@ -1,14 +1,13 @@
-use std::{borrow::Cow, collections::HashSet, hash::Hash};
+use std::{borrow::Cow, collections::HashSet, hash::Hash, marker::PhantomData};
 
 use criterion::{
     black_box, criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, Criterion,
 };
 use nimiq_database::{
-    traits::{Database, WriteCursor, WriteTransaction},
-    volatile::VolatileDatabase,
-    DatabaseProxy, TableFlags,
+    mdbx::{DatabaseConfig, MdbxDatabase},
+    traits::{Database, Key, RegularTable, Table, WriteCursor, WriteTransaction},
 };
-use nimiq_database_value::AsDatabaseBytes;
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseBytes};
 use pprof::criterion::{Output, PProfProfiler};
 use rand::{
     distributions::{Distribution, Standard},
@@ -23,6 +22,24 @@ criterion_group! {
     targets = hash_keys
 }
 criterion_main!(benches);
+
+struct DbTable<K: Key> {
+    _key: PhantomData<K>,
+}
+
+impl<K: Key> DbTable<K> {
+    fn new() -> Self {
+        Self { _key: PhantomData }
+    }
+}
+
+impl<K: Key> Table for DbTable<K> {
+    type Key = K;
+    type Value = Vec<u8>;
+
+    const NAME: &'static str = TABLE;
+}
+impl<K: Key> RegularTable for DbTable<K> {}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct Blake2bHash([u8; 32]);
@@ -42,14 +59,30 @@ impl Distribution<Address> for Standard {
 }
 
 impl AsDatabaseBytes for Blake2bHash {
-    fn as_database_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<[u8]> {
         Cow::Borrowed(&self.0)
     }
 }
 
 impl AsDatabaseBytes for Address {
-    fn as_database_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<[u8]> {
         Cow::Borrowed(&self.0)
+    }
+}
+
+impl FromDatabaseBytes for Blake2bHash {
+    fn from_key_bytes(bytes: &[u8]) -> Self {
+        let mut hash = [0u8; 32];
+        hash.copy_from_slice(bytes);
+        Blake2bHash(hash)
+    }
+}
+
+impl FromDatabaseBytes for Address {
+    fn from_key_bytes(bytes: &[u8]) -> Self {
+        let mut hash = [0u8; 20];
+        hash.copy_from_slice(bytes);
+        Address(hash)
     }
 }
 
@@ -68,26 +101,20 @@ pub fn hash_keys(c: &mut Criterion) {
     group.sample_size(10);
 
     for size in [10_000, 100_000, 1_000_000] {
-        measure_table_insertion::<u32>(&mut group, size, "u32", TableFlags::UINT_KEYS);
-        measure_table_insertion::<Address>(&mut group, size, "Address", TableFlags::empty());
-        measure_table_insertion::<Blake2bHash>(
-            &mut group,
-            size,
-            "Blake2bHash",
-            TableFlags::empty(),
-        );
+        measure_table_insertion::<u32>(&mut group, size, "u32");
+        measure_table_insertion::<Address>(&mut group, size, "Address");
+        measure_table_insertion::<Blake2bHash>(&mut group, size, "Blake2bHash");
     }
 }
 
-fn measure_table_insertion<K: Eq + PartialEq + PartialOrd + Ord + Hash + Clone + AsDatabaseBytes>(
+fn measure_table_insertion<K: Eq + PartialEq + PartialOrd + Ord + Hash + Clone + Key>(
     group: &mut BenchmarkGroup<'_, WallTime>,
     size: usize,
     ty: &'static str,
-    table_flags: TableFlags,
 ) where
     Standard: Distribution<K>,
 {
-    let scenarios: Vec<(fn(_, _, _) -> _, &str)> = vec![
+    let scenarios: Vec<(fn(_, _) -> _, &str)> = vec![
         (append, "append_all"),
         (append, "append_input"),
         (insert, "insert_unsorted"),
@@ -114,8 +141,13 @@ fn measure_table_insertion<K: Eq + PartialEq + PartialOrd + Ord + Hash + Clone +
         // Setup phase before each benchmark iteration
         let setup = || {
             // Reset DB
-            let db = VolatileDatabase::new(2).unwrap();
-            let table = db.open_table_with_flags(TABLE.to_string(), table_flags);
+            let db = MdbxDatabase::new_volatile(DatabaseConfig {
+                max_tables: Some(2),
+                ..Default::default()
+            })
+            .unwrap();
+            let table = DbTable::<K>::new();
+            db.create_regular_table(&table);
 
             let mut unsorted_input = unsorted_input.clone();
             if scenario_str == "append_all" {
@@ -139,9 +171,11 @@ fn measure_table_insertion<K: Eq + PartialEq + PartialOrd + Ord + Hash + Clone +
         let execution = |(input, db)| {
             let mut input: Vec<(K, Vec<u8>)> = input;
             if scenario_str.contains("_sorted") || scenario_str.contains("append") {
-                input.sort_by(|a, b| a.0.cmp(&b.0));
+                input.sort_by(|a, b| {
+                    AsDatabaseBytes::as_key_bytes(&a.0).cmp(&AsDatabaseBytes::as_key_bytes(&b.0))
+                });
             }
-            scenario(db, input, table_flags)
+            scenario(db, input)
         };
 
         group.bench_function(
@@ -183,13 +217,9 @@ where
     (preload, input)
 }
 
-fn append<K: AsDatabaseBytes>(
-    db: DatabaseProxy,
-    input: Vec<(K, Vec<u8>)>,
-    table_flags: TableFlags,
-) -> DatabaseProxy {
+fn append<K: Key>(db: MdbxDatabase, input: Vec<(K, Vec<u8>)>) -> MdbxDatabase {
     {
-        let table = db.open_table_with_flags(TABLE.to_string(), table_flags);
+        let table = DbTable::<K>::new();
         let txn = db.write_transaction();
         let mut cursor = txn.cursor(&table);
         black_box({
@@ -203,13 +233,9 @@ fn append<K: AsDatabaseBytes>(
     db
 }
 
-fn insert<K: AsDatabaseBytes>(
-    db: DatabaseProxy,
-    input: Vec<(K, Vec<u8>)>,
-    table_flags: TableFlags,
-) -> DatabaseProxy {
+fn insert<K: Key>(db: MdbxDatabase, input: Vec<(K, Vec<u8>)>) -> MdbxDatabase {
     {
-        let table = db.open_table_with_flags(TABLE.to_string(), table_flags);
+        let table = DbTable::<K>::new();
         let txn = db.write_transaction();
         let mut cursor = txn.cursor(&table);
         black_box({
@@ -223,13 +249,9 @@ fn insert<K: AsDatabaseBytes>(
     db
 }
 
-fn put<K: AsDatabaseBytes>(
-    db: DatabaseProxy,
-    input: Vec<(K, Vec<u8>)>,
-    table_flags: TableFlags,
-) -> DatabaseProxy {
+fn put<K: Key>(db: MdbxDatabase, input: Vec<(K, Vec<u8>)>) -> MdbxDatabase {
     {
-        let table = db.open_table_with_flags(TABLE.to_string(), table_flags);
+        let table = DbTable::<K>::new();
         let mut txn = db.write_transaction();
         black_box({
             for (k, v) in input {

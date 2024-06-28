@@ -1,4 +1,4 @@
 mod transaction;
 pub mod trie;
 
-pub use transaction::WriteTransactionProxy;
+pub use transaction::{TrieTable, WriteTransactionProxy};

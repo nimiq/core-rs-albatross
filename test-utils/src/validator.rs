@@ -4,7 +4,7 @@ use futures::{future, StreamExt};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_consensus::{Consensus, ConsensusEvent};
-use nimiq_database::DatabaseProxy;
+use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis_builder::{GenesisBuilder, GenesisInfo};
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, SecureGenerate};
 use nimiq_mempool::config::MempoolConfig;
@@ -62,7 +62,7 @@ where
 }
 
 pub async fn build_validators<N: TestNetwork + NetworkInterface>(
-    env: DatabaseProxy,
+    env: MdbxDatabase,
     peer_ids: &[u64],
     hub: &mut Option<MockHub>,
     is_prover_active: bool,

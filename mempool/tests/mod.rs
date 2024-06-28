@@ -4,7 +4,7 @@ use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
 use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
-use nimiq_database::volatile::VolatileDatabase;
+use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::{
@@ -311,7 +311,7 @@ async fn push_same_tx_twice() {
     log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
     // Add a validator
     genesis_builder.with_genesis_validator(
@@ -386,7 +386,7 @@ async fn valid_tx_not_in_blockchain() {
     log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
     // Create an empty blockchain
     let blockchain = Arc::new(RwLock::new(
@@ -434,7 +434,7 @@ async fn push_tx_with_wrong_signature() {
     txns[0].proof = hex::decode("0222666efadc937148a6d61589ce6d4aeecca97fda4c32348d294eab582f14a0003fecb82d3aef4be76853d5c5b263754b7d495d9838f6ae5df60cf3addd3512a82988db0056059c7a52ae15285983ef0db8229ae446c004559147686d28f0a30b").unwrap();
 
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
     // Add a validator
     genesis_builder.with_genesis_validator(
@@ -509,7 +509,7 @@ async fn mempool_get_txn_max_size() {
     log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
     // Add a validator to genesis
     genesis_builder.with_genesis_validator(
@@ -594,7 +594,7 @@ async fn mempool_get_txn_ordered() {
     log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
     // Add a validator to genesis
     genesis_builder.with_genesis_validator(
@@ -680,7 +680,7 @@ async fn push_tx_with_insufficient_balance() {
     log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
     // Add a validator to genesis
     genesis_builder.with_genesis_validator(
@@ -756,7 +756,7 @@ async fn multiple_transactions_multiple_senders() {
     log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
     // Add a validator to genesis
     genesis_builder.with_genesis_validator(
@@ -814,7 +814,7 @@ async fn mempool_tps() {
     let min_tps = tps_setting(100);
     let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
     genesis_builder.with_network(NetworkId::UnitAlbatross);
 
@@ -905,7 +905,7 @@ async fn mempool_tps() {
 async fn multiple_start_stop() {
     let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
     genesis_builder.with_network(NetworkId::UnitAlbatross);
 
@@ -980,7 +980,7 @@ async fn multiple_start_stop() {
 async fn mempool_update() {
     let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
     genesis_builder.with_network(NetworkId::UnitAlbatross);
 
@@ -1176,7 +1176,7 @@ async fn mempool_update() {
 async fn mempool_update_aged_transaction() {
     let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
     genesis_builder.with_network(NetworkId::UnitAlbatross);
 
@@ -1304,7 +1304,7 @@ async fn mempool_update_aged_transaction() {
 async fn mempool_update_not_enough_balance() {
     let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
     genesis_builder.with_network(NetworkId::UnitAlbatross);
 
@@ -1463,7 +1463,7 @@ async fn mempool_update_not_enough_balance() {
 async fn mempool_update_pruned_account() {
     let mut rng = test_rng(true);
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
     genesis_builder.with_network(NetworkId::UnitAlbatross);
 
@@ -1620,7 +1620,7 @@ async fn mempool_update_pruned_account() {
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 10))]
 async fn mempool_basic_prioritization_control_tx() {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
     let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
     let validator_signing_key = ed25519_key_pair(VALIDATOR_SECRET_KEY);
@@ -1733,7 +1733,7 @@ async fn mempool_regular_and_control_tx() {
     log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
     // Add a validator to genesis
     genesis_builder.with_genesis_validator(
@@ -1848,7 +1848,7 @@ async fn mempool_regular_and_control_tx() {
 
 #[test(tokio::test)]
 async fn applies_total_tx_size_limits() {
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
     genesis_builder.with_network(NetworkId::UnitAlbatross);
 
@@ -1937,7 +1937,7 @@ async fn applies_total_tx_size_limits() {
 #[test(tokio::test)]
 async fn it_can_reject_invalid_vesting_contract_transaction() {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(
             env,

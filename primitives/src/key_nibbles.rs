@@ -5,12 +5,15 @@ use std::{
 
 use byteorder::WriteBytesExt;
 use log::error;
+#[cfg(feature = "serde-derive")]
+use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::{HashOutput, SerializeContent};
 use nimiq_keys::Address;
 
 /// A compact representation of a node's key. It stores the key in big endian. Each byte
 /// stores up to 2 nibbles. Internally, we assume that a key is represented in hexadecimal form.
 #[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde-derive", derive(DbSerializable))]
 pub struct KeyNibbles {
     /// Invariant: Unused nibbles are always zeroed.
     bytes: [u8; KeyNibbles::MAX_BYTES],
@@ -355,10 +358,8 @@ impl ops::Add<&KeyNibbles> for &KeyNibbles {
 
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
-    use std::{borrow::Cow, fmt, io};
+    use std::fmt;
 
-    use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
-    use nimiq_serde::Deserialize as NimiqDeserialize;
     use serde::{
         de::{Deserialize, Deserializer, Error, SeqAccess, Unexpected, Visitor},
         ser::{Serialize, SerializeStruct, Serializer},
@@ -426,23 +427,6 @@ mod serde_derive {
             D: Deserializer<'de>,
         {
             deserializer.deserialize_struct("KeyNibbles", FIELDS, KeyNibblesVisitor)
-        }
-    }
-
-    impl AsDatabaseBytes for KeyNibbles {
-        fn as_database_bytes(&self) -> Cow<[u8]> {
-            // TODO: Improve KeyNibbles, so that no serialization is needed.
-            nimiq_serde::Serialize::serialize_to_vec(self).into()
-        }
-    }
-
-    impl FromDatabaseValue for KeyNibbles {
-        fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
-        where
-            Self: Sized,
-        {
-            KeyNibbles::deserialize_from_vec(bytes)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
         }
     }
 }

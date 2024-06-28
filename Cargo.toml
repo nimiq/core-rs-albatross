@@ -12,6 +12,7 @@ members = [
   "consensus",
   "database",
   "database/database-value",
+  "database/database-value-derive",
   "genesis",
   "genesis-builder",
   "handel",
@@ -186,6 +187,7 @@ nimiq-collections = { path = "collections", default-features = false }
 nimiq-consensus = { path = "consensus", default-features = false }
 nimiq-database = { path = "database", default-features = false }
 nimiq-database-value = { path = "database/database-value", default-features = false }
+nimiq-database-value-derive = { path = "database/database-value-derive", default-features = false }
 nimiq-genesis = { path = "genesis", default-features = false }
 nimiq-genesis-builder = { path = "genesis-builder", default-features = false }
 nimiq-handel = { path = "handel", default-features = false }

@@ -1,6 +1,6 @@
-use std::{cmp::Ordering, collections::HashSet, fmt, fmt::Debug, io};
+use std::{cmp::Ordering, collections::HashSet, fmt, fmt::Debug};
 
-use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::{Ed25519PublicKey, Ed25519Signature};
@@ -14,7 +14,9 @@ use crate::{
 };
 
 /// The struct representing a Micro block.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
+#[derive(
+    Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize, DbSerializable,
+)]
 pub struct MicroBlock {
     /// The header, contains some basic information and commitments to the body and the state.
     pub header: MicroHeader,
@@ -117,25 +119,6 @@ impl MicroBlock {
         }
 
         Ok(())
-    }
-}
-
-impl IntoDatabaseValue for MicroBlock {
-    fn database_byte_size(&self) -> usize {
-        self.serialized_size()
-    }
-
-    fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize_to_writer(&self, &mut bytes).unwrap();
-    }
-}
-
-impl FromDatabaseValue for MicroBlock {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized,
-    {
-        Self::deserialize_from_vec(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }
 

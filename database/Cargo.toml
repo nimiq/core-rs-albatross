@@ -23,7 +23,6 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-bitflags = "2.6"
 libmdbx = "0.5.0"
 log = { workspace = true }
 tempfile = "3"
@@ -39,8 +38,6 @@ pprof = { version = "0.13", features = [
     "criterion",
 ] }
 rand = "0.8"
-
-nimiq-test-log = { workspace = true }
 
 [[bench]]
 name = "hash_keys"

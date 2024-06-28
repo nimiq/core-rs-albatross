@@ -17,8 +17,9 @@ use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, ForkEvent,
 use nimiq_bls::{lazy::LazyPublicKey, KeyPair as BlsKeyPair};
 use nimiq_consensus::{Consensus, ConsensusEvent, ConsensusProxy};
 use nimiq_database::{
+    declare_table,
+    mdbx::MdbxDatabase,
     traits::{Database, ReadTransaction, WriteTransaction},
-    DatabaseProxy, TableProxy,
 };
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair};
@@ -87,6 +88,8 @@ impl Clone for ValidatorProxy {
     }
 }
 
+declare_table!(ValidatorTable, "ValidatorState", () => MacroState);
+
 pub struct Validator<TValidatorNetwork: ValidatorNetwork + 'static>
 where
     PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
@@ -95,8 +98,8 @@ where
     pub blockchain: Arc<RwLock<Blockchain>>,
     pub network: Arc<TValidatorNetwork>,
 
-    database: TableProxy,
-    env: DatabaseProxy,
+    table: ValidatorTable,
+    env: MdbxDatabase,
 
     validator_address: Arc<RwLock<Address>>,
     signing_key: Arc<RwLock<SchnorrKeyPair>>,
@@ -126,14 +129,12 @@ impl<TValidatorNetwork: ValidatorNetwork> Validator<TValidatorNetwork>
 where
     PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
-    const MACRO_STATE_DB_NAME: &'static str = "ValidatorState";
-    const MACRO_STATE_KEY: &'static str = "validatorState";
     const PRODUCER_TIMEOUT: Duration = Duration::from_millis(Policy::BLOCK_PRODUCER_TIMEOUT);
     const BLOCK_SEPARATION_TIME: Duration = Duration::from_millis(Policy::BLOCK_SEPARATION_TIME);
     const EQUIVOCATION_PROOFS_MAX_SIZE: usize = 1_000; // bytes
 
     pub fn new(
-        env: DatabaseProxy,
+        env: MdbxDatabase,
         consensus: &Consensus<TValidatorNetwork::NetworkType>,
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TValidatorNetwork>,
@@ -156,11 +157,11 @@ where
             equivocation_proofs: EquivocationProofPool::new(),
         };
 
-        let database = env.open_table(Self::MACRO_STATE_DB_NAME.to_string());
+        env.create_regular_table(&ValidatorTable);
 
         let macro_state: Option<MacroState> = {
             let read_transaction = env.read_transaction();
-            read_transaction.get(&database, Self::MACRO_STATE_KEY)
+            read_transaction.get(&ValidatorTable, &())
         };
         let macro_state = Arc::new(RwLock::new(macro_state));
 
@@ -191,7 +192,7 @@ where
             blockchain,
             network,
 
-            database,
+            table: ValidatorTable,
             env,
 
             validator_address: Arc::new(RwLock::new(validator_address)),
@@ -244,9 +245,10 @@ where
                 let staking_state = self.get_staking_state(&blockchain);
                 // Check that the transaction was sent in the validity window
                 if (matches!(staking_state, ValidatorStakingState::Inactive(..)))
-                    && !blockchain
-                        .history_store
-                        .tx_in_validity_window(&validator_state.inactive_tx_hash, None)
+                    && !blockchain.history_store.tx_in_validity_window(
+                        &validator_state.inactive_tx_hash.clone().into(),
+                        None,
+                    )
                 {
                     // If we are inactive and no transaction has been seen in the expected validity window
                     // after an epoch, reset our inactive state
@@ -546,11 +548,7 @@ where
                     }
 
                     let mut write_transaction = self.env.write_transaction();
-                    write_transaction.put::<str, Vec<u8>>(
-                        &self.database,
-                        Self::MACRO_STATE_KEY,
-                        &nimiq_serde::Serialize::serialize_to_vec(&update),
-                    );
+                    write_transaction.put(&self.table, &(), &update);
                     write_transaction.commit();
 
                     *self.macro_state.write() = Some(update);

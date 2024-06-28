@@ -17,7 +17,7 @@ use nimiq_consensus::{
         syncer::{LiveSync, MacroSync, MacroSyncReturn, Syncer},
     },
 };
-use nimiq_database::volatile::VolatileDatabase;
+use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_network_interface::{network::Network, request::RequestCommon};
 use nimiq_network_mock::{MockHub, MockId, MockPeerId};
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
@@ -65,7 +65,7 @@ impl MacroSync<MockPeerId> for MockHistorySyncStream {
 
 fn blockchain() -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     Arc::new(RwLock::new(
         Blockchain::new(
             env,

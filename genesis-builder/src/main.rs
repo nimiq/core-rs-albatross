@@ -1,6 +1,6 @@
 use std::{env, process::exit};
 
-use nimiq_database::volatile::VolatileDatabase;
+use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis_builder::{GenesisBuilder, GenesisInfo};
 
 fn usage(args: Vec<String>) -> ! {
@@ -16,7 +16,8 @@ fn main() {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let env = VolatileDatabase::new(20).expect("Could not open a volatile database");
+    let db =
+        MdbxDatabase::new_volatile(Default::default()).expect("Could not open a volatile database");
     let args = env::args().collect::<Vec<String>>();
 
     if let Some(file) = args.get(1) {
@@ -26,7 +27,7 @@ fn main() {
             accounts,
         } = GenesisBuilder::from_config_file(file)
             .unwrap()
-            .generate(env)
+            .generate(db)
             .unwrap();
 
         println!("Genesis Block: {hash}");

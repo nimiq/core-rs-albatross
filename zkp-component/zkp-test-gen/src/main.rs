@@ -4,7 +4,7 @@ use log::metadata::LevelFilter;
 use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_database::volatile::VolatileDatabase;
+use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis::NetworkInfo;
 use nimiq_log::TargetsExt;
 use nimiq_primitives::{
@@ -59,7 +59,7 @@ async fn main() -> Result<(), NanoZKPError> {
 
 fn blockchain() -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     Arc::new(RwLock::new(
         Blockchain::new(
             env,

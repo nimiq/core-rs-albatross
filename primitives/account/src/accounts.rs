@@ -1,6 +1,7 @@
 use nimiq_database::{
+    declare_table,
+    mdbx::{MdbxDatabase, MdbxReadTransaction as DBTransaction},
     traits::{Database, WriteTransaction},
-    DatabaseProxy, TransactionProxy as DBTransaction,
 };
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
@@ -11,6 +12,7 @@ use nimiq_primitives::{
         error::IncompleteTrie,
         trie_chunk::{TrieChunk, TrieChunkPushResult},
         trie_diff::{RevertTrieDiff, TrieDiff},
+        trie_node::TrieNode,
         trie_proof::TrieProof,
         TrieItem,
     },
@@ -26,8 +28,10 @@ use crate::{
     TransactionLog, TransactionOperationReceipt, TransactionReceipt,
 };
 
+declare_table!(AccountsTrieTable, "AccountsTrie", KeyNibbles => TrieNode);
+
 /// An alias for the accounts tree.
-pub type AccountsTrie = MerkleRadixTrie;
+pub type AccountsTrie = MerkleRadixTrie<AccountsTrieTable>;
 
 /// The Accounts struct is simply an wrapper containing a database environment and, more importantly,
 /// a MerkleRadixTrie with accounts as leaf values. This struct basically holds all the accounts in
@@ -35,14 +39,14 @@ pub type AccountsTrie = MerkleRadixTrie;
 /// directly update the accounts.
 #[derive(Debug)]
 pub struct Accounts {
-    pub env: DatabaseProxy,
+    pub env: MdbxDatabase,
     pub tree: AccountsTrie,
 }
 
 impl Accounts {
     /// Creates a new Accounts.
-    pub fn new(env: DatabaseProxy) -> Self {
-        let tree = AccountsTrie::new(env.clone(), "AccountsTrie");
+    pub fn new(env: MdbxDatabase) -> Self {
+        let tree = AccountsTrie::new(&env, AccountsTrieTable);
         Accounts { env, tree }
     }
 

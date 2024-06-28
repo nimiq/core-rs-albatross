@@ -1,7 +1,7 @@
 use nimiq_account::StakingContract;
 use nimiq_block::{EquivocationProof, MacroBlock, MacroHeader, SkipBlockInfo};
 use nimiq_blockchain_interface::AbstractBlockchain;
-use nimiq_database as db;
+use nimiq_database::mdbx::MdbxReadTransaction;
 use nimiq_keys::Address;
 use nimiq_primitives::{
     account::AccountType,
@@ -38,7 +38,7 @@ impl Blockchain {
         block_number: u32,
         equivocation_proofs: &[EquivocationProof],
         skip_block_info: Option<SkipBlockInfo>,
-        txn_option: Option<&db::TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Vec<Inherent> {
         let mut inherents = vec![];
 
@@ -67,7 +67,7 @@ impl Blockchain {
         &self,
         block_number: u32,
         equivocation_proof: &EquivocationProof,
-        txn_option: Option<&db::TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Inherent {
         // If the reporting block is in a new epoch, we check if the proposer is still a validator in this epoch
         // and retrieve its new slots.
@@ -110,7 +110,7 @@ impl Blockchain {
     pub fn inherent_from_skip_block_info(
         &self,
         skip_block_info: &SkipBlockInfo,
-        txn_option: Option<&db::TransactionProxy>,
+        txn_option: Option<&MdbxReadTransaction>,
     ) -> Inherent {
         // Get the slot owner and slot number for this block number.
         let proposer_slot = self

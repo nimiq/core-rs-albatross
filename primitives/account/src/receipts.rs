@@ -1,6 +1,6 @@
-use std::{fmt::Debug, io};
+use std::fmt::Debug;
 
-use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value_derive::DbSerializable;
 use nimiq_primitives::{account::FailReason, trie::trie_diff::RevertTrieDiff};
 use nimiq_serde::{Deserialize, Serialize};
 
@@ -67,7 +67,7 @@ pub struct Receipts {
     pub inherents: Vec<InherentOperationReceipt>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, DbSerializable)]
 #[repr(u8)]
 pub enum RevertInfo {
     Receipts(Receipts),
@@ -87,23 +87,3 @@ impl From<RevertTrieDiff> for RevertInfo {
 }
 
 // TODO Implement sparse serialization for Receipts
-
-impl IntoDatabaseValue for RevertInfo {
-    fn database_byte_size(&self) -> usize {
-        self.serialized_size()
-    }
-
-    fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        self.serialize_to_writer(&mut bytes).unwrap();
-    }
-}
-
-impl FromDatabaseValue for RevertInfo {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized,
-    {
-        Deserialize::deserialize_from_vec(bytes)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
-    }
-}

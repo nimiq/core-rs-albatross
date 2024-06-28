@@ -25,6 +25,7 @@ thiserror = "1.0"
 
 nimiq-database = { workspace = true, optional = true }
 nimiq-database-value = { workspace = true }
+nimiq-database-value-derive = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true }
 nimiq-primitives = { workspace = true }

@@ -14,8 +14,8 @@ use nimiq_account::{
 use nimiq_block::{Block, MacroBlock, MacroBody, MacroHeader};
 use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_database::{
+    mdbx::MdbxDatabase,
     traits::{Database, WriteTransaction},
-    DatabaseProxy,
 };
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
@@ -273,7 +273,7 @@ impl GenesisBuilder {
     }
 
     /// Add a basic account with a certain balance to the genesis block.
-    pub fn generate(&self, env: DatabaseProxy) -> Result<GenesisInfo, GenesisBuilderError> {
+    pub fn generate(&self, db: MdbxDatabase) -> Result<GenesisInfo, GenesisBuilderError> {
         // Initialize the environment.
         let timestamp = self.timestamp.unwrap_or_else(OffsetDateTime::now_utc);
         let parent_election_hash = self.parent_election_hash.clone().unwrap_or_default();
@@ -281,10 +281,10 @@ impl GenesisBuilder {
         let history_root = self.history_root.clone().unwrap_or_default();
 
         // Initialize the accounts.
-        let accounts = Accounts::new(env.clone());
+        let accounts = Accounts::new(db.clone());
 
         // Note: This line needs to be AFTER we call Accounts::new().
-        let mut raw_txn = env.write_transaction();
+        let mut raw_txn = db.write_transaction();
         let mut txn = (&mut raw_txn).into();
 
         debug!("Genesis accounts");
@@ -481,14 +481,14 @@ impl GenesisBuilder {
 
     pub fn write_to_files<P: AsRef<Path>>(
         &self,
-        env: DatabaseProxy,
+        db: MdbxDatabase,
         directory: P,
     ) -> Result<Blake2bHash, GenesisBuilderError> {
         let GenesisInfo {
             block,
             hash,
             accounts,
-        } = self.generate(env)?;
+        } = self.generate(db)?;
 
         debug!(%hash, "Genesis block");
         debug!(?block);

@@ -7,10 +7,10 @@ use nimiq_blockchain_interface::{
     ChunksPushResult, ForkEvent, PushError, PushResult,
 };
 use nimiq_database::{
+    mdbx::{MdbxReadTransaction, MdbxWriteTransaction},
     traits::{ReadTransaction, WriteTransaction},
-    TransactionProxy, WriteTransactionProxy,
 };
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::{
     policy::Policy,
@@ -19,7 +19,7 @@ use nimiq_primitives::{
         trie_diff::TrieDiff,
     },
 };
-use nimiq_trie::WriteTransactionProxy as TrieWriteTransactionProxy;
+use nimiq_trie::WriteTransactionProxy as TrieMdbxWriteTransaction;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 use tokio::sync::broadcast::Sender as BroadcastSender;
 
@@ -532,7 +532,7 @@ impl Blockchain {
         &self,
         block: &Block,
         diff: Option<TrieDiff>,
-        txn: &mut WriteTransactionProxy,
+        txn: &mut MdbxWriteTransaction,
         block_logger: &mut BlockLogger,
     ) -> Result<u64, PushError> {
         // Check transactions against replay attacks. This is only necessary for micro blocks.
@@ -541,12 +541,12 @@ impl Blockchain {
 
             if let Some(tx_vec) = transactions {
                 for transaction in tx_vec {
-                    let tx_hash = transaction.get_raw_transaction().hash();
+                    let tx_hash = transaction.raw_tx_hash();
                     if self.contains_tx_in_validity_window(&tx_hash, Some(txn)) {
                         warn!(
                             %block,
                             reason = "transaction already included",
-                            transaction_hash = %tx_hash,
+                            transaction_hash = %*tx_hash,
                             "Rejecting block",
                         );
                         return Err(PushError::DuplicateTransaction);
@@ -566,7 +566,7 @@ impl Blockchain {
         let total_tx_size;
         {
             let is_complete = self.state.accounts.is_complete(Some(txn));
-            let mut txn: TrieWriteTransactionProxy = txn.into();
+            let mut txn: TrieMdbxWriteTransaction = txn.into();
             if is_complete {
                 txn.start_recording();
             }
@@ -594,7 +594,7 @@ impl Blockchain {
 
     fn detect_forks(
         &self,
-        txn: &TransactionProxy,
+        txn: &MdbxReadTransaction,
         block: &MicroBlock,
         validator_address: &Address,
     ) {

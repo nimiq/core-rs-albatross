@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
-use nimiq_hash::Hash;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::{account::AccountError, networks::NetworkId, transaction::TransactionError};
 use nimiq_transaction::Transaction;
 use parking_lot::RwLock;
@@ -60,7 +60,7 @@ pub(crate) async fn verify_tx(
         return Err(VerifyErr::InvalidBlockNumber);
     }
 
-    if blockchain.contains_tx_in_validity_window(&transaction.hash(), None) {
+    if blockchain.contains_tx_in_validity_window(&transaction.hash::<Blake2bHash>().into(), None) {
         log::trace!("Transaction has already been included");
         return Err(VerifyErr::AlreadyIncluded);
     }

@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use nimiq_blockchain::{interface::HistoryInterface, HistoryStore};
 use nimiq_database::{
+    mdbx::MdbxDatabase,
     traits::{Database, WriteTransaction},
-    DatabaseProxy,
 };
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, AddressParseError};
@@ -109,7 +109,7 @@ fn from_pow_transaction(pow_transaction: &PoWTransaction) -> Result<Transaction,
 pub async fn migrate_history(
     mut rx_candidate_block: mpsc::Receiver<u32>,
     tx_migration_completed: watch::Sender<u32>,
-    env: DatabaseProxy,
+    env: MdbxDatabase,
     network_id: NetworkId,
     pow_client: Client,
     block_confirmations: u32,
@@ -220,7 +220,7 @@ pub async fn migrate_history(
 /// Get the PoS genesis history root by getting all of the transactions from the
 /// PoW chain and building a single history tree.
 pub async fn get_history_root(
-    env: DatabaseProxy,
+    env: MdbxDatabase,
     network_id: NetworkId,
 ) -> Result<Blake2bHash, Error> {
     HistoryStore::new(env.clone(), network_id)
@@ -229,7 +229,7 @@ pub async fn get_history_root(
 }
 
 /// Get the current block height of the PoS history store
-pub async fn get_history_store_height(env: DatabaseProxy, network_id: NetworkId) -> u32 {
+pub async fn get_history_store_height(env: MdbxDatabase, network_id: NetworkId) -> u32 {
     if let Some(block_height) =
         HistoryStore::new(env.clone(), network_id).get_last_leaf_block_number(None)
     {

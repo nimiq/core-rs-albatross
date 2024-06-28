@@ -4,8 +4,8 @@ use nimiq_account::{Accounts, BlockLog};
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{BlockchainError, BlockchainEvent, ChainInfo, ForkEvent};
 use nimiq_database::{
+    mdbx::{MdbxDatabase, MdbxReadTransaction, MdbxWriteTransaction},
     traits::{Database, WriteTransaction},
-    DatabaseProxy, TransactionProxy, WriteTransactionProxy,
 };
 use nimiq_genesis::NetworkInfo;
 use nimiq_hash::Blake2bHash;
@@ -29,7 +29,7 @@ const BROADCAST_MAX_CAPACITY: usize = 256;
 /// structure in this crate.
 pub struct Blockchain {
     /// The environment of the blockchain.
-    pub(crate) env: DatabaseProxy,
+    pub(crate) db: MdbxDatabase,
     /// Blockchain configuration options
     pub config: BlockchainConfig,
     /// The network ID. It determines if this is the mainnet or one of the testnets.
@@ -88,7 +88,7 @@ impl Default for BlockchainConfig {
 impl Blockchain {
     /// Creates a new blockchain from a given environment and network ID.
     pub fn new(
-        env: DatabaseProxy,
+        env: MdbxDatabase,
         config: BlockchainConfig,
         network_id: NetworkId,
         time: Arc<OffsetTime>,
@@ -109,7 +109,7 @@ impl Blockchain {
 
     /// Creates a new blockchain with the given genesis block.
     pub fn with_genesis(
-        env: DatabaseProxy,
+        env: MdbxDatabase,
         config: BlockchainConfig,
         time: Arc<OffsetTime>,
         network_id: NetworkId,
@@ -162,7 +162,7 @@ impl Blockchain {
 
     /// Loads a blockchain from given inputs.
     fn load(
-        env: DatabaseProxy,
+        env: MdbxDatabase,
         config: BlockchainConfig,
         chain_store: ChainStore,
 
@@ -274,7 +274,7 @@ impl Blockchain {
         };
 
         Ok(Blockchain {
-            env,
+            db: env,
             config,
             network_id,
             time,
@@ -306,7 +306,7 @@ impl Blockchain {
 
     /// Initializes a blockchain.
     fn init(
-        env: DatabaseProxy,
+        env: MdbxDatabase,
         config: BlockchainConfig,
         chain_store: ChainStore,
 
@@ -348,7 +348,7 @@ impl Blockchain {
         };
 
         Ok(Blockchain {
-            env,
+            db: env,
             config,
             network_id,
             time,
@@ -386,12 +386,12 @@ impl Blockchain {
         self.genesis_block_number
     }
 
-    pub fn read_transaction(&self) -> TransactionProxy {
-        self.env.read_transaction()
+    pub fn read_transaction(&self) -> MdbxReadTransaction {
+        self.db.read_transaction()
     }
 
-    pub fn write_transaction(&self) -> WriteTransactionProxy {
-        self.env.write_transaction()
+    pub fn write_transaction(&self) -> MdbxWriteTransaction {
+        self.db.write_transaction()
     }
 }
 

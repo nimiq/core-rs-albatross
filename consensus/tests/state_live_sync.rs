@@ -21,8 +21,8 @@ use nimiq_consensus::{
     },
 };
 use nimiq_database::{
+    mdbx::MdbxDatabase,
     traits::{Database, WriteTransaction},
-    volatile::VolatileDatabase,
 };
 use nimiq_genesis::{NetworkId, NetworkInfo};
 use nimiq_hash::{Blake2bHash, Blake2sHash};
@@ -54,7 +54,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 fn blockchain(complete: bool) -> Blockchain {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let blockchain = Blockchain::new(
         env.clone(),
         BlockchainConfig::default(),

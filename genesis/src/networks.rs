@@ -4,7 +4,7 @@ use std::path::Path;
 
 use nimiq_block::Block;
 #[cfg(feature = "genesis-override")]
-use nimiq_database::volatile::VolatileDatabase;
+use nimiq_database::mdbx::MdbxDatabase;
 #[cfg(feature = "genesis-override")]
 use nimiq_genesis_builder::{GenesisBuilder, GenesisBuilderError, GenesisInfo};
 use nimiq_hash::Blake2bHash;
@@ -63,7 +63,8 @@ impl NetworkInfo {
 
 #[cfg(feature = "genesis-override")]
 fn read_genesis_config(config: &Path) -> Result<GenesisData, GenesisBuilderError> {
-    let env = VolatileDatabase::new(20).expect("Could not open a volatile database");
+    let env =
+        MdbxDatabase::new_volatile(Default::default()).expect("Could not open a volatile database");
 
     let GenesisInfo {
         block,

@@ -10,7 +10,7 @@ use nimiq_consensus::{
     consensus::Consensus,
     sync::{syncer::MacroSyncReturn, syncer_proxy::SyncerProxy},
 };
-use nimiq_database::volatile::VolatileDatabase;
+use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis::NetworkId;
 use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::network::Network as NetworkInterface;
@@ -88,7 +88,7 @@ pub async fn sync_two_peers(
     let mut networks = vec![];
 
     // Setup first peer.
-    let env1 = VolatileDatabase::new(20).unwrap();
+    let env1 = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(
@@ -132,7 +132,7 @@ pub async fn sync_two_peers(
 
     // Setup second peer (not synced yet).
     let time = Arc::new(OffsetTime::new());
-    let env2 = VolatileDatabase::new(20).unwrap();
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
     let blockchain2_proxy = match sync_mode {
         SyncMode::History | SyncMode::Full => {

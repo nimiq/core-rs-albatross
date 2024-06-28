@@ -4,9 +4,8 @@ use criterion::{
     black_box, criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, Criterion,
 };
 use nimiq_database::{
-    traits::{Database, ReadCursor, WriteCursor, WriteTransaction},
-    volatile::VolatileDatabase,
-    DatabaseProxy, TableFlags,
+    mdbx::{DatabaseConfig, MdbxDatabase},
+    traits::{Database, DupTable, ReadCursor, RegularTable, Table, WriteCursor, WriteTransaction},
 };
 use pprof::criterion::{Output, PProfProfiler};
 
@@ -18,6 +17,16 @@ criterion_group! {
     targets = pruning
 }
 criterion_main!(pruning_benches);
+
+struct DbTable;
+impl Table for DbTable {
+    type Key = u32;
+    type Value = u32;
+
+    const NAME: &'static str = TABLE;
+}
+impl RegularTable for DbTable {}
+impl DupTable for DbTable {}
 
 /// Benchmarks pruning via delete, cursor and dup tables.
 pub fn pruning(c: &mut Criterion) {
@@ -31,25 +40,30 @@ pub fn pruning(c: &mut Criterion) {
 }
 
 fn measure_table_pruning(group: &mut BenchmarkGroup<'_, WallTime>, size: usize) {
-    let scenarios: Vec<(fn(_, _, _) -> _, &str, TableFlags)> = vec![
-        (delete, "delete", TableFlags::UINT_KEYS),
-        (cursor, "cursor", TableFlags::UINT_KEYS),
-        (
-            delete,
-            "delete_dup",
-            TableFlags::UINT_KEYS | TableFlags::DUPLICATE_KEYS | TableFlags::DUP_FIXED_SIZE_VALUES,
-        ),
+    let scenarios: Vec<(fn(_, _) -> _, &str)> = vec![
+        (delete, "delete"),
+        (cursor, "cursor"),
+        (delete, "delete_dup"),
     ];
 
     // `preload` is to be inserted into the database during the setup phase.
-    for (scenario, scenario_str, table_flags) in scenarios {
+    for (scenario, scenario_str) in scenarios {
         let (preload, delete_range) = generate_batches(size, scenario_str.contains("dup"));
 
         // Setup phase before each benchmark iteration
         let setup = || {
             // Reset DB
-            let db = VolatileDatabase::new(2).unwrap();
-            let table = db.open_table_with_flags(TABLE.to_string(), table_flags);
+            let db = MdbxDatabase::new_volatile(DatabaseConfig {
+                max_tables: Some(2),
+                ..Default::default()
+            })
+            .unwrap();
+            let table = DbTable;
+            if scenario_str.contains("dup") {
+                db.create_dup_table(&table);
+            } else {
+                db.create_regular_table(&table);
+            }
 
             let mut txn = db.write_transaction();
 
@@ -63,7 +77,7 @@ fn measure_table_pruning(group: &mut BenchmarkGroup<'_, WallTime>, size: usize) 
         };
 
         // Iteration to be benchmarked
-        let execution = |(db, delete_range)| scenario(db, delete_range, table_flags);
+        let execution = |(db, delete_range)| scenario(db, delete_range);
 
         group.bench_function(
             format!("{} | {scenario_str} | preload: {} ", TABLE, preload.len()),
@@ -100,9 +114,9 @@ fn generate_batches(size: usize, dup: bool) -> (Vec<(u32, u32)>, Range<u32>) {
     (input, range)
 }
 
-fn delete(db: DatabaseProxy, input: Range<u32>, table_flags: TableFlags) -> DatabaseProxy {
+fn delete(db: MdbxDatabase, input: Range<u32>) -> MdbxDatabase {
     {
-        let table = db.open_table_with_flags(TABLE.to_string(), table_flags);
+        let table = DbTable;
         let mut txn = db.write_transaction();
         black_box({
             for key in input {
@@ -115,17 +129,17 @@ fn delete(db: DatabaseProxy, input: Range<u32>, table_flags: TableFlags) -> Data
     db
 }
 
-fn cursor(db: DatabaseProxy, input: Range<u32>, table_flags: TableFlags) -> DatabaseProxy {
+fn cursor(db: MdbxDatabase, input: Range<u32>) -> MdbxDatabase {
     {
-        let table = db.open_table_with_flags(TABLE.to_string(), table_flags);
+        let table = DbTable;
         let txn = db.write_transaction();
         let mut cursor = txn.cursor(&table);
         black_box({
             let first_key = input.end - 1;
-            cursor.seek_key::<u32, u32>(&first_key).unwrap();
+            cursor.set_key(&first_key).unwrap();
             for _ in input {
                 cursor.remove();
-                cursor.prev::<u32, u32>();
+                cursor.prev();
             }
             txn.commit();
         });

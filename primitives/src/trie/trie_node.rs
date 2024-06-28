@@ -1,10 +1,10 @@
-use std::{io, mem, ops::RangeFrom, slice};
+use std::{mem, ops::RangeFrom, slice};
 
 use byteorder::WriteBytesExt;
 use log::error;
-use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::{Blake2bHash, Hash, HashOutput, Hasher};
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::Serialize;
 
 use crate::{key_nibbles::KeyNibbles, trie::error::MerkleRadixTrieError};
 
@@ -12,7 +12,7 @@ use crate::{key_nibbles::KeyNibbles, trie::error::MerkleRadixTrieError};
 /// only references to its children, a leaf node, which contains a value or a hybrid node, which has
 /// both children and a value. A branch/hybrid node can have up to 16 children, since we represent
 /// the keys in hexadecimal form, each child represents a different hexadecimal character.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, DbSerializable)]
 pub struct TrieNode {
     // This is not serialized.
     pub key: KeyNibbles,
@@ -281,25 +281,6 @@ impl TrieNode {
     pub fn hash_assert<H: HashOutput>(&self) -> H {
         self.hash()
             .expect("can only hash TrieNode with complete information about children")
-    }
-}
-
-impl IntoDatabaseValue for TrieNode {
-    fn database_byte_size(&self) -> usize {
-        self.serialized_size()
-    }
-
-    fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize(&self, &mut bytes).unwrap();
-    }
-}
-
-impl FromDatabaseValue for TrieNode {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized,
-    {
-        Self::deserialize_from_vec(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }
 

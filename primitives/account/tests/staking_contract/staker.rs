@@ -1,5 +1,5 @@
 use nimiq_account::*;
-use nimiq_database::{traits::Database, volatile::VolatileDatabase};
+use nimiq_database::{mdbx::MdbxDatabase, traits::Database};
 use nimiq_keys::Address;
 use nimiq_primitives::{account::AccountError, coin::Coin, policy::Policy};
 use nimiq_test_log::test;
@@ -136,7 +136,7 @@ fn prepare_second_validator_for_redelegation(
 
 #[test]
 fn can_get_staker() {
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = env.write_transaction();
@@ -154,7 +154,7 @@ fn can_get_staker() {
 
 #[test]
 fn can_iter_stakers() {
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let mut db_txn = env.write_transaction();
@@ -175,7 +175,7 @@ fn can_iter_stakers() {
 
 #[test]
 fn create_staker_works() {
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);
@@ -310,7 +310,7 @@ fn create_staker_works() {
 
 #[test]
 fn add_stake_works() {
-    let env = VolatileDatabase::new(20).unwrap();
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
     let accounts = Accounts::new(env.clone());
     let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
     let block_state = BlockState::new(2, 2);

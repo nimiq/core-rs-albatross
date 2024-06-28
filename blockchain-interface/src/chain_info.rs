@@ -1,13 +1,13 @@
-use std::{io, ops::RangeFrom};
+use std::ops::RangeFrom;
 
 use nimiq_block::Block;
-use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{coin::Coin, key_nibbles::KeyNibbles, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
 
 /// Struct that, for each block, keeps information relative to the chain the block is on.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, DbSerializable)]
 pub struct ChainInfo {
     /// This is the block (excluding the body).
     #[serde(serialize_with = "ChainInfo::serialize_head")]
@@ -125,23 +125,3 @@ impl PartialEq for ChainInfo {
 }
 
 impl Eq for ChainInfo {}
-
-impl IntoDatabaseValue for ChainInfo {
-    fn database_byte_size(&self) -> usize {
-        self.serialized_size()
-    }
-
-    fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize_to_writer(self, &mut bytes).unwrap();
-    }
-}
-
-impl FromDatabaseValue for ChainInfo {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized,
-    {
-        Deserialize::deserialize_from_vec(bytes)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
-    }
-}

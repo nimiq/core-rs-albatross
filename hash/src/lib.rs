@@ -13,7 +13,7 @@ use std::{
 use blake2_rfc::{blake2b::Blake2b, blake2s::Blake2s};
 use byteorder::WriteBytesExt;
 use hex::FromHex;
-use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseBytes};
 use nimiq_macros::{
     add_constant_time_eq_typed_arr, add_hex_io_fns_typed_arr, add_serialization_fns_typed_arr,
     create_typed_array,
@@ -174,17 +174,19 @@ impl Hasher for Blake2bHasher {
 }
 
 impl AsDatabaseBytes for Blake2bHash {
-    fn as_database_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<[u8]> {
         Cow::Borrowed(self.as_bytes())
     }
+
+    const FIXED_SIZE: Option<usize> = Some(BLAKE2B_LENGTH);
 }
 
-impl FromDatabaseValue for Blake2bHash {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+impl FromDatabaseBytes for Blake2bHash {
+    fn from_key_bytes(bytes: &[u8]) -> Self
     where
         Self: Sized,
     {
-        Ok(bytes.into())
+        bytes.into()
     }
 }
 

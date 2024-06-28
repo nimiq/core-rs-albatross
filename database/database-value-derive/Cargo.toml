@@ -1,0 +1,26 @@
+[package]
+name = "nimiq-database-value-derive"
+version.workspace = true
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+license.workspace = true
+edition.workspace = true
+description = "Derive macros for nimiq database traits"
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+keywords.workspace = true
+
+[badges]
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+maintenance = { status = "experimental" }
+
+[lints]
+workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = "2.0"

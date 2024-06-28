@@ -30,6 +30,7 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 nimiq-block = { workspace = true }
 nimiq-collections = { workspace = true }
 nimiq-database-value = { workspace = true }
+nimiq-database-value-derive = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["coin", "key-nibbles", "policy"] }
 nimiq-serde = { workspace = true }

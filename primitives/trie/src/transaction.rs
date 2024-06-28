@@ -1,9 +1,8 @@
 use std::ops;
 
 use nimiq_database::{
-    traits::{ReadTransaction, WriteTransaction},
-    TableProxy, TransactionProxy as RawTransactionProxy,
-    WriteTransactionProxy as RawWriteTransactionProxy,
+    mdbx::{MdbxReadTransaction, MdbxWriteTransaction},
+    traits::{ReadTransaction, RegularTable, Table, WriteTransaction},
 };
 use nimiq_primitives::{
     key_nibbles::KeyNibbles,
@@ -13,12 +12,16 @@ use nimiq_primitives::{
     },
 };
 
+/// Any regular table that has `KeyNibbles` as key and `TrieNode` as values.
+pub trait TrieTable: Table<Key = KeyNibbles, Value = TrieNode> + RegularTable {}
+impl<T> TrieTable for T where T: Table<Key = KeyNibbles, Value = TrieNode> + RegularTable {}
+
 pub(crate) trait TransactionExt {
-    fn get_node(&self, db: &TableProxy, key: &KeyNibbles) -> Option<TrieNode>;
+    fn get_node<T: TrieTable>(&self, db: &T, key: &KeyNibbles) -> Option<TrieNode>;
 }
 
-impl<'env> TransactionExt for RawTransactionProxy<'env> {
-    fn get_node(&self, db: &TableProxy, key: &KeyNibbles) -> Option<TrieNode> {
+impl<'db> TransactionExt for MdbxReadTransaction<'db> {
+    fn get_node<T: TrieTable>(&self, db: &T, key: &KeyNibbles) -> Option<TrieNode> {
         let mut node: TrieNode = self.get(db, key)?;
         node.key = key.clone();
         Some(node)
@@ -26,8 +29,8 @@ impl<'env> TransactionExt for RawTransactionProxy<'env> {
 }
 
 impl<'txn, 'env> TransactionExt for WriteTransactionProxy<'txn, 'env> {
-    fn get_node(&self, db: &TableProxy, key: &KeyNibbles) -> Option<TrieNode> {
-        self.raw.get_node(db, key)
+    fn get_node<T: TrieTable>(&self, table: &T, key: &KeyNibbles) -> Option<TrieNode> {
+        self.raw.get_node(table, key)
     }
 }
 
@@ -47,14 +50,12 @@ impl From<Option<Vec<u8>>> for OldValue {
 }
 
 pub struct WriteTransactionProxy<'txn, 'env> {
-    raw: &'txn mut RawWriteTransactionProxy<'env>,
+    raw: &'txn mut MdbxWriteTransaction<'env>,
     diff: Option<TrieDiffBuilder>,
 }
 
-impl<'txn, 'env> From<&'txn mut RawWriteTransactionProxy<'env>>
-    for WriteTransactionProxy<'txn, 'env>
-{
-    fn from(raw: &'txn mut RawWriteTransactionProxy<'env>) -> WriteTransactionProxy<'txn, 'env> {
+impl<'txn, 'env> From<&'txn mut MdbxWriteTransaction<'env>> for WriteTransactionProxy<'txn, 'env> {
+    fn from(raw: &'txn mut MdbxWriteTransaction<'env>) -> WriteTransactionProxy<'txn, 'env> {
         WriteTransactionProxy { raw, diff: None }
     }
 }
@@ -91,25 +92,35 @@ impl<'txn, 'env> WriteTransactionProxy<'txn, 'env> {
             diff.add_change(key.clone(), value_change);
         }
     }
-    pub(crate) fn clear_database(&mut self, db: &TableProxy) {
-        self.raw.clear_database(db)
+    pub(crate) fn clear_table<T: TrieTable>(&mut self, table: &T) {
+        self.raw.clear_table(table)
     }
-    pub(crate) fn put_node(&mut self, db: &TableProxy, node: &TrieNode, old_value: OldValue) {
+    pub(crate) fn put_node<T: TrieTable>(
+        &mut self,
+        table: &T,
+        node: &TrieNode,
+        old_value: OldValue,
+    ) {
         self.record_value_change(&node.key, old_value, node.value.as_deref());
-        self.raw.put_reserve(db, &node.key, node);
+        self.raw.put_reserve(table, &node.key, node);
     }
-    pub(crate) fn remove_node(&mut self, db: &TableProxy, key: &KeyNibbles, old_value: OldValue) {
+    pub(crate) fn remove_node<T: TrieTable>(
+        &mut self,
+        table: &T,
+        key: &KeyNibbles,
+        old_value: OldValue,
+    ) {
         self.record_value_change(key, old_value, None);
-        self.raw.remove(db, key);
+        self.raw.remove(table, key);
     }
-    pub fn raw(&mut self) -> &mut RawWriteTransactionProxy<'env> {
+    pub fn raw(&mut self) -> &mut MdbxWriteTransaction<'env> {
         self.raw
     }
 }
 
 impl<'txn, 'env> ops::Deref for WriteTransactionProxy<'txn, 'env> {
-    type Target = RawTransactionProxy<'env>;
-    fn deref(&self) -> &RawTransactionProxy<'env> {
+    type Target = MdbxWriteTransaction<'env>;
+    fn deref(&self) -> &MdbxWriteTransaction<'env> {
         self.raw
     }
 }

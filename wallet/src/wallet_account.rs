@@ -1,16 +1,14 @@
-use std::io;
-
-use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::{Hash, HashOutput, Sha256Hash};
 use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature, KeyPair, SecureGenerate};
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::Serialize;
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_utils::otp::Verify;
 
 pub const NIMIQ_SIGN_MESSAGE_PREFIX: &[u8] = b"\x16Nimiq Signed Message:\n";
 
-#[derive(Default, Debug, Clone, Serialize, Eq, PartialEq)]
+#[derive(Default, Debug, Clone, Serialize, Eq, PartialEq, DbSerializable)]
 pub struct WalletAccount {
     pub key_pair: KeyPair,
     #[serde(skip)]
@@ -108,24 +106,5 @@ impl From<KeyPair> for WalletAccount {
     fn from(key_pair: KeyPair) -> Self {
         let address = Address::from(&key_pair);
         Self { key_pair, address }
-    }
-}
-
-impl IntoDatabaseValue for WalletAccount {
-    fn database_byte_size(&self) -> usize {
-        self.serialized_size()
-    }
-
-    fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize_to_writer(&self, &mut bytes).unwrap();
-    }
-}
-
-impl FromDatabaseValue for WalletAccount {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized,
-    {
-        Self::deserialize_from_vec(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }

@@ -1,127 +1,111 @@
-use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
+use super::{DupSubKey, DupTable, DupTableValue, Row, Table};
 
 /// A cursor is used for navigating the entries within a table.
 /// The read-only version cannot modify entries.
 ///
-/// Closely follows `libmdbx`'s [cursor API](https://docs.rs/libmdbx/0.3.3/libmdbx/struct.Cursor.html).
-pub trait ReadCursor<'txn>: Clone {
-    type IntoIter<K, V>: Iterator<Item = (K, V)>
-    where
-        K: FromDatabaseValue,
-        V: FromDatabaseValue;
+/// Closely follows `libmdbx`'s [cursor API](https://docs.rs/libmdbx/latest/libmdbx/struct.Cursor.html).
+pub trait ReadCursor<'txn, T: Table>: Clone {
+    type IntoIter: Iterator<Item = Row<T>>;
 
-    fn first<K, V>(&mut self) -> Option<(K, V)>
-    where
-        K: FromDatabaseValue,
-        V: FromDatabaseValue;
+    /// Positions the cursor at the first entry in the table.
+    fn first(&mut self) -> Option<Row<T>>;
 
-    fn first_duplicate<V>(&mut self) -> Option<V>
-    where
-        V: FromDatabaseValue;
+    /// Positions the cursor at the last entry in the table.
+    fn last(&mut self) -> Option<Row<T>>;
 
-    fn last<K, V>(&mut self) -> Option<(K, V)>
-    where
-        K: FromDatabaseValue,
-        V: FromDatabaseValue;
+    /// Positions the cursor at the next entry in the table.
+    /// For a `DupTable`, this can be either the next duplicate for the current key
+    /// or the first duplicate for the next key.
+    fn next(&mut self) -> Option<Row<T>>;
 
-    fn last_duplicate<V>(&mut self) -> Option<V>
-    where
-        V: FromDatabaseValue;
+    /// Positions the cursor at the previous entry in the table.
+    /// For a `DupTable`, this can be either the next duplicate for the current key
+    /// or the first duplicate for the next key.
+    fn prev(&mut self) -> Option<Row<T>>;
 
-    fn get_current<K, V>(&mut self) -> Option<(K, V)>
-    where
-        K: FromDatabaseValue,
-        V: FromDatabaseValue;
+    /// Returns the current entry at the cursor position.
+    fn get_current(&mut self) -> Option<Row<T>>;
 
-    fn next<K, V>(&mut self) -> Option<(K, V)>
-    where
-        K: FromDatabaseValue,
-        V: FromDatabaseValue;
+    /// Positions the cursor at the entry that has a key == `key`.
+    /// Previously `seek_key`.
+    fn set_key(&mut self, key: &T::Key) -> Option<T::Value>;
 
-    fn next_duplicate<K, V>(&mut self) -> Option<(K, V)>
-    where
-        K: FromDatabaseValue,
-        V: FromDatabaseValue;
+    /// Positions the cursor at the first entry that has a key >= `key`.
+    /// Previously `seek_range_key`.
+    fn set_lowerbound_key(&mut self, key: &T::Key) -> Option<Row<T>>;
 
-    fn next_no_duplicate<K, V>(&mut self) -> Option<(K, V)>
-    where
-        K: FromDatabaseValue,
-        V: FromDatabaseValue;
+    /// Iterates over all entries in the table.
+    fn into_iter_start(self) -> Self::IntoIter;
 
-    fn prev<K, V>(&mut self) -> Option<(K, V)>
-    where
-        K: FromDatabaseValue,
-        V: FromDatabaseValue;
+    /// Iterates over all entries in the table starting from a given key.
+    fn into_iter_from(self, key: &T::Key) -> Self::IntoIter;
+}
 
-    fn prev_duplicate<K, V>(&mut self) -> Option<(K, V)>
-    where
-        K: FromDatabaseValue,
-        V: FromDatabaseValue;
+pub trait DupReadCursor<'txn, T: DupTable>: ReadCursor<'txn, T> {
+    /// Positions the cursor at the first duplicate value for the current key.
+    fn first_duplicate(&mut self) -> Option<T::Value>;
 
-    fn prev_no_duplicate<K, V>(&mut self) -> Option<(K, V)>
-    where
-        K: FromDatabaseValue,
-        V: FromDatabaseValue;
+    /// Positions the cursor at the last duplicate value for the current key.
+    fn last_duplicate(&mut self) -> Option<T::Value>;
 
-    fn seek_key<K, V>(&mut self, key: &K) -> Option<V>
-    where
-        K: AsDatabaseBytes + ?Sized,
-        V: FromDatabaseValue;
+    /// Positions the cursor at the next duplicate value for the current key.
+    /// This does not jump keys.
+    fn next_duplicate(&mut self) -> Option<Row<T>>;
 
-    fn seek_range_key<K, V>(&mut self, key: &K) -> Option<(K, V)>
-    where
-        K: AsDatabaseBytes + FromDatabaseValue,
-        V: FromDatabaseValue;
+    /// Positions the cursor at the first duplicate of the next key.
+    fn next_no_duplicate(&mut self) -> Option<Row<T>>;
 
-    /// Seeks to the first entry with a key greater than or equal to the given key.
-    /// For DUP tables, it also takes into account the data.
-    /// The bool in the return value is set to `true` if it is an exact match.
-    fn seek_range_subkey<K, V>(&mut self, key: &K, data: &V) -> Option<(bool, K, V)>
-    where
-        K: AsDatabaseBytes + FromDatabaseValue,
-        V: AsDatabaseBytes + FromDatabaseValue;
+    /// Positions the cursor at the previous duplicate value for the current key.
+    fn prev_duplicate(&mut self) -> Option<Row<T>>;
 
+    /// Positions the cursor at the last duplicate of the previous key.
+    fn prev_no_duplicate(&mut self) -> Option<Row<T>>;
+
+    /// Positions the cursor at the entry with a given key and subkey.
+    fn set_subkey(&mut self, key: &T::Key, subkey: &DupSubKey<T>) -> Option<T::Value>
+    where
+        T::Value: DupTableValue;
+
+    /// Positions the cursor at the first duplicate entry that has a key >= `key` && subkey >= `subkey`.
+    fn set_lowerbound_both(&mut self, key: &T::Key, subkey: &DupSubKey<T>) -> Option<Row<T>>
+    where
+        T::Value: DupTableValue;
+
+    /// Positions the cursor at the first duplicate entry that has a key == `key` && subkey >= `subkey`.
+    fn set_lowerbound_subkey(&mut self, key: &T::Key, subkey: &DupSubKey<T>) -> Option<T::Value>
+    where
+        T::Value: DupTableValue;
+
+    /// Counts the number of duplicates (linear operation!).
     fn count_duplicates(&mut self) -> usize;
 
-    fn into_iter_start<K, V>(self) -> Self::IntoIter<K, V>
-    where
-        K: FromDatabaseValue,
-        V: FromDatabaseValue;
-
-    fn into_iter_dup_of<K, V>(self, key: &K) -> Self::IntoIter<K, V>
-    where
-        K: AsDatabaseBytes + FromDatabaseValue,
-        V: FromDatabaseValue;
-
-    fn into_iter_from<K, V>(self, key: &K) -> Self::IntoIter<K, V>
-    where
-        K: AsDatabaseBytes + FromDatabaseValue,
-        V: FromDatabaseValue;
+    /// Iterates over all duplicates of the given key.
+    fn into_iter_dup_of(self, key: &T::Key) -> Self::IntoIter;
 }
 
 /// A cursor is used for navigating the entries within a table.
 /// The read-write version can also delete entries.
 ///
 /// Closely follows `libmdbx`'s [cursor API](https://docs.rs/libmdbx/0.3.3/libmdbx/struct.Cursor.html).
-pub trait WriteCursor<'txn>: ReadCursor<'txn> {
-    fn put<K, V>(&mut self, key: &K, value: &V)
-    where
-        K: AsDatabaseBytes + ?Sized,
-        V: AsDatabaseBytes + ?Sized;
+pub trait WriteCursor<'txn, T: Table>: ReadCursor<'txn, T> {
+    /// Puts a new entry into the database.
+    /// The cursor will be positioned on the new entry.
+    fn put(&mut self, key: &T::Key, value: &T::Value);
 
     /// Appends a key/value pair to the end of the database.
     /// This operation fails if the key is less than the last key.
-    fn append<K, V>(&mut self, key: &K, value: &V)
-    where
-        K: AsDatabaseBytes + ?Sized,
-        V: AsDatabaseBytes + ?Sized;
+    fn append(&mut self, key: &T::Key, value: &T::Value);
 
-    /// Appends a key/value pair to the end of the database with duplicate keys.
-    /// This operation fails if the key is less than the last key.
-    fn append_dup<K, V>(&mut self, key: &K, value: &V)
-    where
-        K: AsDatabaseBytes + ?Sized,
-        V: AsDatabaseBytes + ?Sized;
-
+    /// Removes the current entry from the database.
+    /// For a `DupTable`, this removes the current duplicate value.
     fn remove(&mut self);
+}
+
+pub trait DupWriteCursor<'txn, T: DupTable>: WriteCursor<'txn, T> + DupReadCursor<'txn, T> {
+    /// Appends a key/value pair to the end of the database.
+    /// This operation fails if the key is less than the last key.
+    fn append_dup(&mut self, key: &T::Key, value: &T::Value);
+
+    /// Removes all duplicate values for the current key.
+    fn remove_all_dup(&mut self);
 }
