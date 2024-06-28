@@ -1,5 +1,7 @@
 use std::{fmt::Debug, net::SocketAddr, sync::Arc};
 
+use ::metrics::set_global_recorder;
+use database::DatabaseMetrics;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::ConsensusProxy;
 use nimiq_mempool::mempool::Mempool;
@@ -14,6 +16,7 @@ use prometheus_client::{
 use tokio_metrics::RuntimeMonitor;
 use tokio_metrics::TaskMonitor;
 
+pub use crate::metrics::MetricsCollector;
 #[cfg(tokio_unstable)]
 use crate::tokio_runtime::TokioRuntimeMetrics;
 use crate::{
@@ -23,7 +26,9 @@ use crate::{
 
 mod chain;
 mod consensus;
+mod database;
 mod mempool;
+mod metrics;
 mod network;
 mod server;
 #[cfg(tokio_unstable)]
@@ -78,6 +83,14 @@ impl<T: EncodeGaugeValue + Sized + Debug> Debug for NumericClosureMetric<T> {
     }
 }
 
+/// To be called at the beginning of the program to install the metrics collector.
+/// This is currently only used for database metrics.
+pub fn install_metrics() -> MetricsCollector {
+    let collector = MetricsCollector::default();
+    set_global_recorder(collector.clone()).unwrap();
+    collector
+}
+
 pub fn start_metrics_server<TNetwork: Network>(
     addr: SocketAddr,
     blockchain_proxy: BlockchainProxy,
@@ -85,6 +98,7 @@ pub fn start_metrics_server<TNetwork: Network>(
     consensus_proxy: ConsensusProxy<TNetwork>,
     network: Arc<nimiq_network_libp2p::Network>,
     task_monitors: &[NimiqTaskMonitor],
+    collector: MetricsCollector,
 ) {
     let mut registry = Registry::default();
     let nimiq_registry = registry.sub_registry_with_prefix("nimiq");
@@ -92,6 +106,7 @@ pub fn start_metrics_server<TNetwork: Network>(
     BlockMetrics::register(nimiq_registry, blockchain_proxy);
     ConsensusMetrics::register(nimiq_registry, consensus_proxy);
     NetworkMetrics::register(nimiq_registry, network);
+    DatabaseMetrics::register(nimiq_registry, collector);
 
     if let Some(mempool) = mempool {
         MempoolMetrics::register(nimiq_registry, mempool);

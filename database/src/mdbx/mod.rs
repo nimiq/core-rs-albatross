@@ -1,9 +1,10 @@
 mod cursor;
 mod database;
 mod iterators;
+mod metrics_handler;
 mod transaction;
 
-pub use self::{cursor::*, database::*, iterators::*, transaction::*};
+pub use self::{cursor::*, database::*, iterators::*, metrics_handler::*, transaction::*};
 
 #[cfg(test)]
 mod tests {

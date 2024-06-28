@@ -358,7 +358,7 @@ impl StorageConfig {
                         ))
                     })?
                     .to_string();
-                MdbxDatabase::new_with_max_readers(
+                MdbxDatabase::new_with_max_readers_and_metrics(
                     db_path,
                     db_config.size,
                     db_config.max_dbs,

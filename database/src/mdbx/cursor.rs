@@ -1,15 +1,20 @@
-use std::{borrow::Cow, marker::PhantomData};
+use std::{borrow::Cow, marker::PhantomData, sync::Arc};
 
 use libmdbx::{TransactionKind, WriteFlags, RO, RW};
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue};
 
 use super::{DbKvPair, IntoIter};
-use crate::traits::{ReadCursor, WriteCursor};
+use crate::{
+    metrics::{DatabaseEnvMetrics, Operation},
+    traits::{ReadCursor, WriteCursor},
+};
 
 /// A cursor for navigating the entries within a table.
 /// Wraps the libmdbx cursor so that we only expose our own methods.
 pub struct MdbxCursor<'txn, K: TransactionKind> {
     cursor: libmdbx::Cursor<'txn, K>,
+    metrics: Option<Arc<DatabaseEnvMetrics>>,
+    table_name: String,
 }
 /// Instantiation of the `MdbxCursor` for read transactions.
 pub type MdbxReadCursor<'txn> = MdbxCursor<'txn, RO>;
@@ -20,8 +25,33 @@ impl<'txn, Kind> MdbxCursor<'txn, Kind>
 where
     Kind: TransactionKind,
 {
-    pub(crate) fn new(cursor: libmdbx::Cursor<'txn, Kind>) -> Self {
-        MdbxCursor { cursor }
+    pub(crate) fn new(
+        table_name: &str,
+        cursor: libmdbx::Cursor<'txn, Kind>,
+        metrics: Option<Arc<DatabaseEnvMetrics>>,
+    ) -> Self {
+        MdbxCursor {
+            table_name: table_name.to_string(),
+            cursor,
+            metrics,
+        }
+    }
+
+    /// If `self.metrics` is `Some(...)`, record a metric with the provided operation and value
+    /// size.
+    ///
+    /// Otherwise, just execute the closure.
+    fn execute_with_operation_metric<R>(
+        &mut self,
+        operation: Operation,
+        value_size: Option<usize>,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        if let Some(metrics) = self.metrics.as_ref().cloned() {
+            metrics.record_operation(&self.table_name.clone(), operation, value_size, || f(self))
+        } else {
+            f(self)
+        }
     }
 }
 
@@ -246,14 +276,18 @@ where
 {
     fn clone(&self) -> Self {
         Self {
+            table_name: self.table_name.clone(),
             cursor: self.cursor.clone(),
+            metrics: self.metrics.as_ref().cloned(),
         }
     }
 }
 
 impl<'txn> WriteCursor<'txn> for MdbxWriteCursor<'txn> {
     fn remove(&mut self) {
-        self.cursor.del(WriteFlags::empty()).unwrap();
+        self.execute_with_operation_metric(Operation::CursorDeleteCurrent, None, |cursor| {
+            cursor.cursor.del(WriteFlags::empty()).unwrap();
+        });
     }
 
     fn append<K, V>(&mut self, key: &K, value: &V)

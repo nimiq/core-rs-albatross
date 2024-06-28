@@ -9,7 +9,7 @@ use std::{
 use clap::Parser;
 use futures::StreamExt;
 use log::info;
-use nimiq::client::ConsensusProxy;
+use nimiq::{client::ConsensusProxy, extras::metrics_server::install_metrics};
 pub use nimiq::{
     client::{Client, Consensus},
     config::{command_line::CommandLine, config::ClientConfig, config_file::ConfigFile},
@@ -171,6 +171,12 @@ async fn main_inner() -> Result<(), Error> {
     let config = builder.build()?;
     log::debug!("Final configuration: {:#?}", config);
 
+    // Initialize database logging.
+    let mut metrics_collector = None;
+    if config.metrics_server.is_some() {
+        metrics_collector = Some(install_metrics());
+    }
+
     // Clone config for RPC and metrics server
     let rpc_config = config.rpc_server.clone();
     let metrics_config = config.metrics_server.clone();
@@ -237,6 +243,7 @@ async fn main_inner() -> Result<(), Error> {
             client.consensus_proxy(),
             client.network(),
             &[],
+            metrics_collector.unwrap(),
         )
     }
 
