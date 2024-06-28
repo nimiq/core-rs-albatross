@@ -19,8 +19,7 @@ impl Signature {
     /// Deserializes an Ed25519 signature from a byte array.
     ///
     /// Throws when the byte array contains less than 64 bytes.
-    #[wasm_bindgen(js_name = fromBytes)]
-    pub fn deserialize(bytes: &[u8]) -> Result<Signature, JsError> {
+    pub fn unserialize(bytes: &[u8]) -> Result<Signature, JsError> {
         match nimiq_keys::Ed25519Signature::from_bytes(bytes) {
             Ok(sig) => Ok(Signature::from(sig)),
             Err(err) => Err(JsError::from(err)),
@@ -28,7 +27,6 @@ impl Signature {
     }
 
     /// Serializes the signature to a byte array.
-    #[wasm_bindgen(js_name = toBytes)]
     pub fn serialize(&self) -> Vec<u8> {
         self.inner.to_bytes().to_vec()
     }
@@ -46,7 +44,7 @@ impl Signature {
     /// Parses an Ed25519 signature from its ASN.1 representation.
     #[wasm_bindgen(js_name = fromAsn1)]
     pub fn from_asn1(bytes: &[u8]) -> Result<Signature, JsError> {
-        Signature::deserialize(Signature::asn1_to_raw(bytes)?.as_slice())
+        Signature::unserialize(Signature::asn1_to_raw(bytes)?.as_slice())
     }
 
     /// Parses an Ed25519 signature from its hex representation.
