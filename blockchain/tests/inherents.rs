@@ -89,7 +89,7 @@ fn it_can_create_batch_finalization_inherents() {
     for inherent in &inherents {
         match inherent {
             Inherent::Reward { value, .. } => {
-                assert_eq!(*value, Coin::from_u64_unchecked(942));
+                assert_eq!(*value, Coin::from_u64_unchecked(941));
                 got_reward = true;
             }
             Inherent::FinalizeBatch => {
@@ -145,7 +145,7 @@ fn it_can_create_batch_finalization_inherents() {
 
     let inherents = blockchain.finalize_previous_batch(&macro_block);
     assert_eq!(inherents.len(), 3);
-    let one_slot_reward = 942 / Policy::SLOTS as u64;
+    let one_slot_reward = 941 / Policy::SLOTS as u64;
     let mut got_reward = false;
     let mut got_penalize = false;
     let mut got_finalize_batch = false;
@@ -163,7 +163,7 @@ fn it_can_create_batch_finalization_inherents() {
                     got_penalize = true;
                 } else {
                     assert_eq!(*actual_validator_address, *validator_address);
-                    assert_eq!(*value, Coin::from_u64_unchecked(942 - one_slot_reward));
+                    assert_eq!(*value, Coin::from_u64_unchecked(941 - one_slot_reward));
                     got_reward = true;
                 }
             }

@@ -49,12 +49,7 @@ nimiq-primitives = { workspace = true, features = ["policy", "trie"] }
 nimiq-serde = { workspace = true }
 nimiq-time = { workspace = true }
 nimiq-transaction = { workspace = true }
-nimiq-utils = { workspace = true, features = [
-    "math",
-    "merkle",
-    "spawn",
-    "time",
-] }
+nimiq-utils = { workspace = true, features = ["merkle", "spawn", "time"] }
 nimiq-zkp-component = { workspace = true }
 
 [dev-dependencies]

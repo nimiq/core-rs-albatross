@@ -4,7 +4,6 @@ pub mod crc;
 pub mod file_store;
 #[cfg(feature = "key-rng")]
 pub mod key_rng;
-#[cfg(feature = "math")]
 pub mod math;
 #[cfg(feature = "merkle")]
 pub mod merkle;

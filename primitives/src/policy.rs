@@ -1,7 +1,7 @@
 use std::cmp;
 
 use nimiq_keys::Address;
-use nimiq_utils::math::{exp, pow};
+use nimiq_utils::math::powi;
 use once_cell::sync::OnceCell;
 #[cfg(feature = "ts-types")]
 use wasm_bindgen::prelude::*;
@@ -110,8 +110,7 @@ impl Policy {
     /// system time. We only care about drifting to the future.
     pub const TIMESTAMP_MAX_DRIFT: u64 = 600000;
 
-    /// The slope of the exponential decay used to punish validators for not producing block in time
-    pub const BLOCKS_DELAY_DECAY: f64 = 1.1e-9;
+    pub const BLOCKS_DELAY_DECAY_BASE: f64 = 0.9999999989;
 
     /// The minimum rewards percentage that we allow
     pub const MINIMUM_REWARDS_PERCENTAGE: f64 = 0.5;
@@ -144,6 +143,7 @@ impl Policy {
     /// The supply decay is a constant that is calculated so that the supply velocity decreases at a
     /// the velocity of the PoW chain supply curve.
     pub const SUPPLY_DECAY: f64 = 5.7327557121556496e-12;
+    pub const SUPPLY_DECAY_BASE: f64 = 0.9999999999960264;
 
     /// The maximum size of the BLS public key cache.
     pub const BLS_CACHE_MAX_CAPACITY: usize = 1000;
@@ -494,13 +494,11 @@ impl Policy {
     pub fn supply_at(genesis_supply: u64, current_time: u64) -> u64 {
         assert!(current_time >= Self::POW_GENESIS_TIMESTAMP);
 
-        let t = (current_time - Self::POW_GENESIS_TIMESTAMP) as f64;
-
-        let exponent = -Policy::SUPPLY_DECAY * t;
+        let t = current_time - Self::POW_GENESIS_TIMESTAMP;
 
         let supply = genesis_supply
-            + (Self::INITIAL_SUPPLY_VELOCITY / Self::SUPPLY_DECAY * (1.0 - pow(2.0, exponent)))
-                as u64;
+            + (Self::INITIAL_SUPPLY_VELOCITY / Self::SUPPLY_DECAY
+                * (1.0 - powi(Self::SUPPLY_DECAY_BASE, t))) as u64;
 
         cmp::min(supply, Policy::TOTAL_SUPPLY)
     }
@@ -512,10 +510,9 @@ impl Policy {
     /// The function is: [(1 - MINIMUM_REWARDS_PERCENTAGE) * e ^(-BLOCKS_DELAY_DECAY * t^2)] + MINIMUM_REWARDS_PERCENTAGE
     #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = batchDelayPenalty))]
     pub fn batch_delay_penalty(delay: u64) -> f64 {
-        let t = delay as f64;
-        let exponent = -Self::BLOCKS_DELAY_DECAY * t * t;
-
-        (1.0 - Self::MINIMUM_REWARDS_PERCENTAGE) * exp(exponent) + Self::MINIMUM_REWARDS_PERCENTAGE
+        (1.0 - Self::MINIMUM_REWARDS_PERCENTAGE)
+            * powi(powi(Self::BLOCKS_DELAY_DECAY_BASE, delay), delay)
+            + Self::MINIMUM_REWARDS_PERCENTAGE
     }
 }
 
@@ -603,12 +600,6 @@ impl Policy {
         Self::TIMESTAMP_MAX_DRIFT
     }
 
-    /// The slope of the exponential decay used to punish validators for not producing block in time
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = BLOCKS_DELAY_DECAY))]
-    pub fn wasm_blocks_delay_decay() -> f64 {
-        Self::BLOCKS_DELAY_DECAY
-    }
-
     /// The minimum rewards percentage that we allow
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = MINIMUM_REWARDS_PERCENTAGE))]
     pub fn wasm_minimum_rewards_percentage() -> f64 {
@@ -642,13 +633,6 @@ impl Policy {
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = INITIAL_SUPPLY_VELOCITY))]
     pub fn wasm_initial_supply_velocity() -> f64 {
         Self::INITIAL_SUPPLY_VELOCITY
-    }
-
-    /// The supply decay is a constant that is calculated so that the supply velocity decreases at a
-    /// steady 1.47% per year.
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = SUPPLY_DECAY))]
-    pub fn wasm_supply_decay() -> f64 {
-        Self::SUPPLY_DECAY
     }
 
     /// The maximum size of the BLS public key cache.

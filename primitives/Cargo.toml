@@ -42,7 +42,7 @@ nimiq-database-value = { workspace = true, optional = true }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true, optional = true, features = ["serde-derive"] }
 nimiq-serde = { workspace = true, optional = true }
-nimiq-utils = { workspace = true, features = ["math"], optional = true }
+nimiq-utils = { workspace = true, optional = true }
 
 [dev-dependencies]
 nimiq-test-log = { workspace = true }

@@ -30,7 +30,7 @@ nimiq-collections = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-serde = { workspace = true }
 nimiq-time = { workspace = true }
-nimiq-utils = { workspace = true, features = ["math"] }
+nimiq-utils = { workspace = true }
 
 [dev-dependencies]
 nimiq-network-interface = { workspace = true }
@@ -38,4 +38,4 @@ nimiq-network-mock = { workspace = true }
 nimiq-test-log = { workspace = true }
 
 tokio = { version = "1.38", features = ["rt", "time", "macros"] }
-nimiq-utils = { workspace = true, features = ["math"] }
+nimiq-utils = { workspace = true }

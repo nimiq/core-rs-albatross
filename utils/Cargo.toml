@@ -52,9 +52,7 @@ crc = []
 key-rng = ["rand", "rand_core"]
 key-store = ["log", "thiserror"]
 libp2p = ["libp2p-identity"]
-math = []
 merkle = [
-    "math",
     "nimiq-collections",
     "nimiq-hash",
 ]
@@ -66,7 +64,6 @@ time = []
 # Compiles this package with all features.
 all = [
     "key-store",
-    "math",
     "merkle",
     "otp",
     "time",
