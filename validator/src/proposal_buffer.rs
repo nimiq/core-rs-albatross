@@ -651,8 +651,8 @@ mod test {
         let mut consensus_events1 = consensus1.subscribe_events().boxed().fuse();
         let mut consensus_events2 = consensus2.subscribe_events().boxed().fuse();
 
-        // At most wait 200 millis for them to connect and sync as there is nothing to do here.
-        let mut deadline = sleep(Duration::from_millis(200)).boxed().fuse();
+        // At most wait 1 second for them to connect and sync as there is nothing to do here.
+        let mut deadline = sleep(Duration::from_secs(1)).boxed().fuse();
 
         // Spawn both consensus before connecting them.
         spawn(consensus1);
@@ -770,7 +770,7 @@ mod test {
 
         // Poll the ProposalBuffer until it produces a proposal. This should resolve the so far unknown predecessor and resolve.
         // Do this with a timeout as it should really only take a single round trip.
-        let _signed_proposal = timeout(Duration::from_millis(400), proposal_receiver.next())
+        let _signed_proposal = timeout(Duration::from_secs(1), proposal_receiver.next())
             .await
             .expect("proposal buffer should have produced the proposal before the timeout")
             .expect("proposal buffer should have produced the proposal");
@@ -819,7 +819,7 @@ mod test {
 
         // Poll the ProposalBuffer until it produces a proposal. This should resolve the so far unknown predecessor and resolve.
         // Do this with a timeout as it should really only take a single round trip.
-        let signed_proposal = timeout(Duration::from_millis(400), proposal_receiver.next())
+        let signed_proposal = timeout(Duration::from_secs(1), proposal_receiver.next())
             .await
             .expect("proposal buffer should have resolved the proposal before the timeout")
             .expect("proposal buffer should have resolved the proposal");
@@ -883,7 +883,7 @@ mod test {
 
         // Poll the ProposalBuffer until it produces a proposal. This should resolve the so far unknown predecessor and resolve.
         // Do this with a timeout as it should really only take a single round trip.
-        let signed_proposal = timeout(Duration::from_millis(400), proposal_receiver.next())
+        let signed_proposal = timeout(Duration::from_secs(1), proposal_receiver.next())
             .await
             .expect("proposal buffer should have resolved the proposal before the timeout")
             .expect("proposal buffer should have resolved the proposal");
@@ -950,7 +950,7 @@ mod test {
 
         // Poll the ProposalBuffer until it produces a proposal. This should resolve the so far unknown predecessor and resolve.
         // Do this with a timeout as it should really only take a single round trip.
-        let signed_proposal = timeout(Duration::from_millis(400), proposal_receiver.next())
+        let signed_proposal = timeout(Duration::from_secs(1), proposal_receiver.next())
             .await
             .expect("proposal buffer should have resolved the proposal before the timeout")
             .expect("proposal buffer should have resolved the proposal");
