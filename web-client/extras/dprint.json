@@ -1,0 +1,13 @@
+{
+  "typescript": {
+    "indentWidth": 4,
+    "quoteStyle": "alwaysSingle",
+    "typeLiteral.separatorKind": "comma"
+  },
+  "excludes": [
+    "yarn.lock"
+  ],
+  "plugins": [
+    "https://plugins.dprint.dev/typescript-0.91.1.wasm"
+  ]
+}

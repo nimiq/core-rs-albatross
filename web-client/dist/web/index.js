@@ -15,4 +15,5 @@ const Client = clientFactory(
 
 export * from './main-wasm/index.js';
 export { Client };
+export * from '../lib/browser/index.mjs';
 export default init;

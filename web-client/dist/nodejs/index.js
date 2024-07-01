@@ -16,8 +16,12 @@ const Client = clientFactory(
     worker => Comlink.wrap(nodeEndpoint(worker)),
 );
 
-const reexports = require('./main-wasm/index.js');
-Object.keys(reexports).forEach(key => {
-  exports[key] = reexports[key]
+const wasmexports = require('./main-wasm/index.js');
+Object.keys(wasmexports).forEach(key => {
+  exports[key] = wasmexports[key]
 });
 exports.Client = Client;
+const libexports = require('../lib/node/index.js');
+Object.keys(libexports).forEach(key => {
+  exports[key] = libexports[key]
+});

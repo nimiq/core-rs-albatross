@@ -1,8 +1,13 @@
 {
+  "scripts": {
+    "fmt": "dprint fmt"
+  },
   "dependencies": {
     "comlink": "^4.4.1"
   },
   "devDependencies": {
-    "tsup": "^7.2.0"
+    "dprint": "^0.47.0",
+    "tsup": "^8.1.0",
+    "typescript": "^5.5.2"
   }
 }

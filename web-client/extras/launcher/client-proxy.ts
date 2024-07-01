@@ -35,7 +35,7 @@ export function clientFactory(workerFactory: () => Worker, comlinkWrapper: (work
 
             if (typeof document !== 'undefined') {
                 document.addEventListener('visibilitychange', () => {
-                    if (document.visibilityState === "visible") {
+                    if (document.visibilityState === 'visible') {
                         worker.postMessage('visible');
                     }
                 });
@@ -68,7 +68,7 @@ export function clientFactory(workerFactory: () => Worker, comlinkWrapper: (work
             return client;
         },
     };
-};
+}
 
 function addEventListener(worker: Worker, type: string, listener: (event: MessageEvent | {}) => void): void {
     const method = 'addListener' in worker ? 'addListener' : 'addEventListener';

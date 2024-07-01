@@ -1,12 +1,15 @@
-import type { transferHandlers, TransferHandler } from 'comlink';
+import type { TransferHandler, transferHandlers } from 'comlink';
 
 interface Serializable {
-    serialize(): Uint8Array,
+    serialize(): Uint8Array;
 }
 
-export function setupMainThreadTransferHandlers(Comlink: { transferHandlers: typeof transferHandlers }, classes: { Address: any, Transaction: any }) {
+export function setupMainThreadTransferHandlers(
+    Comlink: { transferHandlers: typeof transferHandlers },
+    classes: { Address: any, Transaction: any },
+) {
     Comlink.transferHandlers.set('function', {
-        canHandle: (obj) => typeof obj === "function",
+        canHandle: (obj) => typeof obj === 'function',
         serialize(obj) {
             return Comlink.transferHandlers.get('proxy')!.serialize(obj);
         },
@@ -21,7 +24,8 @@ export function setupMainThreadTransferHandlers(Comlink: { transferHandlers: typ
 
     // @ts-expect-error Cannot force `canHandle` to be the correct type
     Comlink.transferHandlers.set('plain', {
-        canHandle: (obj) => canBeSerialized(obj)
+        canHandle: (obj) =>
+            canBeSerialized(obj)
             || (Array.isArray(obj) && obj.some(item => canBeSerialized(item))),
         serialize(obj) {
             if (Array.isArray(obj)) {

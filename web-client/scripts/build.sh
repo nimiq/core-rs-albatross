@@ -11,6 +11,7 @@ TARGETS="bundler,web,nodejs"
 RUN_WASM_OPT=true
 BUILD_TYPES=true
 BUILD_LAUNCHER=true
+BUILD_LIB=true
 
 # Parse command line arguments - all arguments are optional
 while [[ "$#" -gt 0 ]]; do
@@ -22,6 +23,7 @@ while [[ "$#" -gt 0 ]]; do
         --skip-wasm-opt) RUN_WASM_OPT=false ;;
         --skip-types) BUILD_TYPES=false ;;
         --skip-launcher) BUILD_LAUNCHER=false ;;
+        --skip-lib) BUILD_LIB=false ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
     esac
     shift
@@ -107,13 +109,19 @@ fi
 if [ "$BUILD_TYPES" = "true" ]; then
     echo "Building types..."
     compile "client,primitives"
-    wasm-bindgen --weak-refs --target web --out-name web --out-dir dist/types "$CARGO_OUTPUT"
-    wasm-bindgen --weak-refs --target bundler --out-name bundler --out-dir dist/types "$CARGO_OUTPUT"
-    find dist/types ! -name 'web.d.ts' ! -name 'bundler.d.ts' -type f -exec rm {} +
+    wasm-bindgen --weak-refs --target web --out-name web --out-dir dist/types/wasm "$CARGO_OUTPUT"
+    wasm-bindgen --weak-refs --target bundler --out-name bundler --out-dir dist/types/wasm "$CARGO_OUTPUT"
+    find dist/types/wasm ! -name 'web.d.ts' ! -name 'bundler.d.ts' -type f -exec rm {} +
 fi
 
 # Build launcher
 if [ "$BUILD_LAUNCHER" = "true" ]; then
     echo "Building launcher..."
     ./scripts/build-launcher.sh
+fi
+
+# Build launcher
+if [ "$BUILD_LIB" = "true" ]; then
+    echo "Building lib..."
+    ./scripts/build-lib.sh
 fi
