@@ -1,5 +1,5 @@
 import type { Remote } from 'comlink';
-import type { Client, PlainClientConfiguration } from '../dist/types/index';
+import type { Client, PlainClientConfiguration } from '../../dist/types/bundler';
 
 export function clientFactory(workerFactory: () => Worker, comlinkWrapper: (worker: Worker) => Remote<Client>): {
     create(config: PlainClientConfiguration): Promise<Client>,
@@ -11,7 +11,7 @@ export function clientFactory(workerFactory: () => Worker, comlinkWrapper: (work
 
             // Wait for worker script to load
             await new Promise<void>((resolve) => {
-                const readyListener = (event) => {
+                const readyListener = (event: {} | MessageEvent) => {
                     removeEventListener(worker, 'message', readyListener);
                     if (getEventData(event) === 'NIMIQ_ONLOAD') resolve();
                 };

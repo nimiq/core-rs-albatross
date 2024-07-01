@@ -1,10 +1,10 @@
 set -e
 
-cd launcher
+cd extras
 yarn install
 
 # Build for browsers (bundler, web)
-yarn tsup --format esm --platform browser --out-dir ../dist/lib/browser *.ts
+yarn tsup launcher --format esm --platform browser --out-dir ../dist/launcher/browser *.ts
 
 # Build for node
-yarn tsup --format esm,cjs --platform node --out-dir ../dist/lib/node *.ts
+yarn tsup launcher --format esm,cjs --platform node --out-dir ../dist/launcher/node *.ts

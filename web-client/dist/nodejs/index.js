@@ -3,8 +3,8 @@ const { Worker } = require('node:worker_threads');
 const Comlink = require('comlink');
 const nodeEndpoint = require('comlink/dist/umd/node-adapter.js');
 const { Address, Transaction } = require('./main-wasm/index.js');
-const { clientFactory } = require('../lib/node/client-proxy.js');
-const { setupMainThreadTransferHandlers } = require('../lib/node/transfer-handlers.js');
+const { clientFactory } = require('../launcher/node/client-proxy.js');
+const { setupMainThreadTransferHandlers } = require('../launcher/node/transfer-handlers.js');
 
 setupMainThreadTransferHandlers(Comlink, {
     Address,

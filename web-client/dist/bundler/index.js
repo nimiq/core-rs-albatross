@@ -1,7 +1,7 @@
 import * as Comlink from 'comlink';
 import { Address, Transaction } from './main-wasm/index.js';
-import { clientFactory } from '../lib/browser/client-proxy.mjs';
-import { setupMainThreadTransferHandlers } from '../lib/browser/transfer-handlers.mjs';
+import { clientFactory } from '../launcher/browser/client-proxy.mjs';
+import { setupMainThreadTransferHandlers } from '../launcher/browser/transfer-handlers.mjs';
 
 setupMainThreadTransferHandlers(Comlink, {
     Address,

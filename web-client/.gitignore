@@ -1,6 +1,7 @@
 dist/*/main-wasm
 dist/*/worker-wasm
 dist/types
+dist/launcher
 dist/lib
 
 node_modules
