@@ -124,6 +124,8 @@ enum SpamType {
 const UNIT_KEY: &str = "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
 const DEV_KEY: &str = "1ef7aad365c195462ed04c275d47189d5362bbfe36b5e93ce7ba2f3add5f439b";
 
+const MAX_SENDER_ACCOUNTS: usize = 10000;
+
 async fn main_inner() -> Result<(), Error> {
     // Keep for potential future reactivation
     // initialize_deadlock_detection();
@@ -426,6 +428,8 @@ async fn spam(
             }
         };
 
+        let txn_count = txs.len();
+
         for tx in txs {
             let consensus1 = consensus.clone();
             let mp = Arc::clone(&mempool);
@@ -438,7 +442,7 @@ async fn spam(
                 }
             });
         }
-        log::info!("\tSent {} transactions to the network.\n", new_count);
+        log::info!("\tSent {} transactions to the network.\n", txn_count);
     })
     .await
     .expect("spawn_blocking() panicked");
@@ -460,35 +464,41 @@ fn generate_basic_transactions(
         let current_block_number = state.read().unwrap().current_block_number;
         let mut state = state.write().unwrap();
 
-        if rng.gen_bool(config.many_to_many.into()) && !state.balances.is_empty() {
+        if rng.gen_bool(config.many_to_many.into()) && state.balances.len() > count {
             //This is the case where we send from an existing account
 
             // Obtain a random index
-            let index = rng.gen_range(0..state.balances.len());
+            let accounts_len = state.balances.len();
 
-            let account = &mut state.balances[index];
-
-            // If the sender already reached a balance of zero we need to remove it
-            if account.balance == Coin::ZERO {
-                state.balances.swap_remove(index);
-                continue;
+            let sender_index = rng.gen_range(0..accounts_len);
+            let mut recipient_index = rng.gen_range(0..accounts_len);
+            while sender_index == recipient_index {
+                recipient_index = rng.gen_range(0..accounts_len);
             }
+
+            let sender_account = &state.balances[sender_index];
+            let recipient_account = &state.balances[recipient_index];
 
             // We need to make sure the txns are included in the blockchain first.
-            if current_block_number - account.block_number < Policy::blocks_per_batch() {
+            if current_block_number - sender_account.block_number < Policy::blocks_per_batch() {
                 continue;
             }
 
-            // We generate a new recipient
-            let new_kp = KeyPair::generate(&mut rng);
-            let recipient = Address::from(&new_kp);
-            let amount = Coin::from_u64_unchecked(1);
+            // If the sender already reached a balance of zero we need to remove it
+            if sender_account.balance == Coin::ZERO {
+                state.balances.swap_remove(sender_index);
+                continue;
+            }
+
+            let recipient = Address::from(&recipient_account.key_pair);
+            let amount = Coin::from_u64_unchecked(rng.gen_range(1..10));
+            let fee = Coin::from_u64_unchecked(rng.gen_range(0..10));
 
             let tx = TransactionBuilder::new_basic(
-                &account.key_pair,
+                &sender_account.key_pair,
                 recipient,
                 amount,
-                Coin::ZERO,
+                fee,
                 start_height,
                 network_id,
             )
@@ -496,13 +506,8 @@ fn generate_basic_transactions(
             txs.push(tx);
 
             //Update the senders balance
-            account.balance -= amount;
-            //Create a new recipients account and add it to the vector
-            state.balances.push(SpammerAccounts {
-                key_pair: new_kp,
-                balance: amount,
-                block_number: current_block_number,
-            });
+            state.balances[sender_index].balance -= amount;
+            state.balances[recipient_index].balance += amount;
             continue;
         }
 
@@ -510,15 +515,20 @@ fn generate_basic_transactions(
         let new_kp = KeyPair::generate(&mut rng);
 
         let recipient = Address::from(&new_kp);
-        let amount = Coin::from_u64_unchecked(100);
+        let amount = Coin::from_u64_unchecked(10000);
 
-        //We only need to maintain state when we use many to many distributions
         if config.many_to_many > 0.0 {
-            state.balances.push(SpammerAccounts {
-                key_pair: new_kp,
-                balance: amount,
-                block_number: current_block_number,
-            });
+            // We can create a new sender account
+            if state.balances.len() < MAX_SENDER_ACCOUNTS {
+                state.balances.push(SpammerAccounts {
+                    key_pair: new_kp,
+                    balance: amount,
+                    block_number: current_block_number,
+                });
+            } else {
+                // We are already at the maximum of the sender accounts that we can mantain
+                continue;
+            }
         }
 
         let tx = TransactionBuilder::new_basic(
