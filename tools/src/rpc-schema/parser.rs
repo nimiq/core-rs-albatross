@@ -131,6 +131,7 @@ impl ParsedItemStruct {
             "bool" => Value::String("boolean".into()),
             "AccountAdditionalFields"
             | "BitSet"
+            | "BTreeSet"
             | "S"
             | "T"
             | "BlockAdditionalFields"
