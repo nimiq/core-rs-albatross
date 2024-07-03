@@ -52,7 +52,7 @@ pub fn block_reward_for_batch(
         Policy::supply_at(genesis_supply_u64, genesis_timestamp, current_timestamp);
 
     // This is the maximum rewards that we can pay for this batch
-    let max_rewards = current_supply - prev_supply;
+    let max_rewards = current_supply.saturating_sub(prev_supply);
 
     // However, there is a penalty if the batch was not produced in time...
     // First we calculate the delay producing the batch:
