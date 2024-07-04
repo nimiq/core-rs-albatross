@@ -1,5 +1,5 @@
 use std::{
-    collections::VecDeque,
+    collections::{HashSet, VecDeque},
     ops::Deref,
     path::PathBuf,
     str::FromStr,
@@ -459,6 +459,12 @@ fn generate_basic_transactions(
     let mut txs = Vec::new();
 
     let mut rng = thread_rng();
+    let mut accounts_idx: HashSet<usize> = HashSet::new();
+
+    log::debug!(
+        "Generating transactions, currently tracking {} accounts",
+        state.read().unwrap().balances.len()
+    );
 
     for _ in 0..count {
         let current_block_number = state.read().unwrap().current_block_number;
@@ -470,7 +476,15 @@ fn generate_basic_transactions(
             // Obtain a random index
             let accounts_len = state.balances.len();
 
-            let sender_index = rng.gen_range(0..accounts_len);
+            let mut sender_index = rng.gen_range(0..accounts_len);
+
+            // This is used to make sure we select different sender accounts for each set of txns.
+            while accounts_idx.contains(&sender_index) {
+                sender_index = rng.gen_range(0..accounts_len);
+            }
+
+            accounts_idx.insert(sender_index);
+
             let mut recipient_index = rng.gen_range(0..accounts_len);
             while sender_index == recipient_index {
                 recipient_index = rng.gen_range(0..accounts_len);
@@ -484,8 +498,8 @@ fn generate_basic_transactions(
                 continue;
             }
 
-            // If the sender already reached a balance of zero we need to remove it
-            if sender_account.balance == Coin::ZERO {
+            // We need to have at least sufficient funds to pay the txn + fees
+            if sender_account.balance <= Coin::from_u64_unchecked(20) {
                 state.balances.swap_remove(sender_index);
                 continue;
             }
