@@ -755,6 +755,74 @@ mod tests {
     }
 
     #[test]
+    fn transaction_in_validity_window_works() {
+        // Initialize History Store.
+        let env = VolatileDatabase::new(20).unwrap();
+        let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross);
+
+        // Create historic transactions.
+        let ext_0 = create_transaction(Policy::genesis_block_number() + 1, 0);
+        let ext_1 = create_transaction(Policy::genesis_block_number() + 1, 1);
+
+        let hist_txs = vec![ext_0.clone(), ext_1.clone()];
+
+        // Add historic transactions to History Store.
+        let mut txn = env.write_transaction();
+        history_store.add_to_history(&mut txn, Policy::genesis_block_number() + 1, &hist_txs);
+
+        // Those transactions should be part of the valitidy window
+        assert_eq!(
+            history_store.tx_in_validity_window(&ext_0.tx_hash(), Some(&txn)),
+            true
+        );
+
+        assert_eq!(
+            history_store.tx_in_validity_window(&ext_1.tx_hash(), Some(&txn)),
+            true
+        );
+
+        // Now keep pushing transactions to the history store until we are past the transaction validity window
+        let validity_window_blocks = Policy::transaction_validity_window_blocks();
+
+        let mut txn_hashes = vec![];
+
+        for bn in 2..validity_window_blocks + 10 {
+            let historic_txn = create_transaction(Policy::genesis_block_number() + bn, bn as u64);
+            txn_hashes.push(historic_txn.tx_hash());
+            history_store.add_to_history(
+                &mut txn,
+                Policy::genesis_block_number() + bn,
+                &vec![historic_txn],
+            );
+        }
+
+        // Since we are past the txn in validity window, the first two transaction should no longer be in it
+        assert_eq!(
+            history_store.tx_in_validity_window(&ext_0.tx_hash(), Some(&txn)),
+            false
+        );
+
+        assert_eq!(
+            history_store.tx_in_validity_window(&ext_1.tx_hash(), Some(&txn)),
+            false
+        );
+
+        for txn_hash in &txn_hashes[..8] {
+            assert_eq!(
+                history_store.tx_in_validity_window(txn_hash, Some(&txn)),
+                false
+            );
+        }
+
+        for txn_hash in &txn_hashes[8..] {
+            assert_eq!(
+                history_store.tx_in_validity_window(txn_hash, Some(&txn)),
+                true
+            );
+        }
+    }
+
+    #[test]
     fn get_root_from_hist_txs_works() {
         // Initialize History Store.
         let env = VolatileDatabase::new(20).unwrap();
