@@ -48,7 +48,7 @@ pub struct HistoryStore {
 
     /// The validity store is used by nodes to keep track of which
     /// transactions have occurred within the validity window.
-    validity_store: ValidityStore,
+    pub(crate) validity_store: ValidityStore,
 
     /// The network ID. It determines if this is the mainnet or one of the testnets.
     pub(crate) network_id: NetworkId,

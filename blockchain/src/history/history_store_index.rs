@@ -306,6 +306,11 @@ impl HistoryInterface for HistoryStoreIndex {
             .remove_partial_history(txn, block.epoch_number(), num_txs)
             .expect("Failed to remove partial history");
 
+        // Remove the block from the validity store (and its corresponding txn hashes)
+        self.history_store
+            .validity_store
+            .delete_block_transactions(txn, block.block_number());
+
         Some(total_size)
     }
 
