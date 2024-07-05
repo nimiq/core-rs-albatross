@@ -22,7 +22,7 @@ use nimiq_transaction::{
 
 use super::{
     interface::HistoryInterface,
-    utils::{EpochBasedIndex, OrderedHash},
+    utils::{EpochBasedIndex, IndexedTransaction, OrderedHash},
 };
 use crate::{history::HistoryTreeChunk, interface::HistoryIndexInterface, HistoryStore};
 
@@ -73,8 +73,8 @@ impl HistoryStoreIndex {
 
         trace!("Check if history index needs to be rebuilt.");
         // Check if last transaction is part of index.
-        if let Some((_, hist_tx)) = hist_tx_cursor.last::<EpochBasedIndex, HistoricTransaction>() {
-            let raw_tx_hash = hist_tx.tx_hash();
+        if let Some((_, hist_tx)) = hist_tx_cursor.last::<u32, IndexedTransaction>() {
+            let raw_tx_hash = hist_tx.value.tx_hash();
             if txn
                 .get::<RawTransactionHash, EpochBasedIndex>(&self.tx_hash_table, &raw_tx_hash)
                 .is_none()
