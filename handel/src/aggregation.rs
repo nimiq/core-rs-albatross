@@ -401,22 +401,10 @@ where
     type Item = P::Contribution;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // Check if the automatic update interval triggers, if so perform the update.
-        if let Poll::Ready(_instant) = self.periodic_update_interval.as_mut().poll_tick(cx) {
-            // This creates new messages in the sender.
-            self.automatic_update();
-        }
-
-        if let Poll::Ready(_instant) = self.start_level_interval.as_mut().poll_tick(cx) {
-            // Activates the next level if there is a next level.
-            // This potentially creates new messages in the sender.
-            self.activate_next_level();
-        }
-
         // Poll the verification future if there is one.
         let mut best_aggregate = if let Some(verification_future) = &mut self.current_verification {
             if let Poll::Ready((result, todo)) = verification_future.poll_unpin(cx) {
-                // If a result is produced, unset the future such a new one can take its place.
+                // If a result is produced, unset the future such that a new one can take its place.
                 self.current_verification = None;
                 if result.is_ok() {
                     // If the todo was successfully verified, apply it and return the new best aggregate
@@ -434,6 +422,18 @@ where
             // There is no future to poll and thus no new todo to process. There is no new best aggregate.
             None
         };
+
+        // Check if the automatic update interval triggers, if so perform the update.
+        if let Poll::Ready(_instant) = self.periodic_update_interval.as_mut().poll_tick(cx) {
+            // This creates new messages in the sender.
+            self.automatic_update();
+        }
+
+        if let Poll::Ready(_instant) = self.start_level_interval.as_mut().poll_tick(cx) {
+            // Activates the next level if there is a next level.
+            // This potentially creates new messages in the sender.
+            self.activate_next_level();
+        }
 
         // Check and see if a new todo should be verified.
         // Only start a new verification task if there is not already one and also only if the poll does not have produced a value yet.
