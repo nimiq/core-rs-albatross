@@ -71,9 +71,9 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                     if last_bn >= verifier_block_number {
                         epoch_number = Policy::epoch_at(last_bn);
 
-                        let current_length = blockchain_wr
-                            .history_store
-                            .total_len_at_epoch(epoch_number, None);
+                        // This length is based on number of leaves in the tree
+                        let current_length =
+                            blockchain_wr.history_store.length_at(last_bn, None) as usize;
 
                         log::debug!(
                             first_bn = first_bn,
@@ -92,9 +92,9 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         // We need to request the missing items
                         epoch_number = Policy::epoch_at(last_bn);
 
-                        let current_length = blockchain_wr
-                            .history_store
-                            .total_len_at_epoch(epoch_number, None);
+                        // This length is based on number of leaves in the tree
+                        let current_length =
+                            blockchain_wr.history_store.length_at(last_bn, None) as usize;
 
                         log::debug!(
                             first_bn = first_bn,
