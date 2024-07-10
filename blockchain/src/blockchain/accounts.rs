@@ -81,7 +81,7 @@ impl Blockchain {
                     skip_block_info,
                     Some(txn),
                 );
-
+                log::debug!("Committing to AT");
                 // Commit block to AccountsTree and create the receipts.
                 let revert_info: RevertInfo = if accounts.is_complete(Some(txn)) {
                     accounts
@@ -98,6 +98,7 @@ impl Blockchain {
                 } else {
                     return Err(PushError::MissingAccountsTrieDiff);
                 };
+                log::debug!("Committing to AT");
 
                 // Check that the transaction results match the ones in the block.
                 if let RevertInfo::Receipts(receipts) = &revert_info {
@@ -126,11 +127,13 @@ impl Blockchain {
                     &revert_info,
                 );
 
+                log::debug!("Committing to HS");
                 let total_tx_size = self
                     .history_store
                     .add_block(txn.raw(), block, inherents)
                     .expect("Failed to store history")
                     .1;
+                log::debug!("Done ommitting to HS");
 
                 Ok(total_tx_size)
             }

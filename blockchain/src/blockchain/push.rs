@@ -302,9 +302,13 @@ impl Blockchain {
             block_number,
             chain_info.head.timestamp(),
         );
+        log::debug!("Checking and committing");
         let total_tx_size =
             this.check_and_commit(&chain_info.head, diff, &mut txn, &mut block_logger)?;
+        txn.commit();
+        log::debug!("Done checking and committing");
 
+        let mut txn = this.write_transaction();
         chain_info.on_main_chain = true;
         chain_info.set_cumulative_hist_tx_size(&prev_info, total_tx_size);
         chain_info.history_tree_len =
@@ -335,7 +339,9 @@ impl Blockchain {
             }
         }
 
+        log::debug!("Committing txn");
         txn.commit();
+        log::debug!("Done committing txn");
 
         if let Block::Macro(ref macro_block) = chain_info.head {
             this.state.macro_info = chain_info.clone();
@@ -360,7 +366,10 @@ impl Blockchain {
         let this = RwLockWriteGuard::downgrade_to_upgradable(this);
 
         // Try to apply any chunks we received.
+
+        log::debug!("Committing chunks");
         let chunk_result = this.commit_chunks(chunks, &block_hash);
+        log::debug!("Done ommitting chunks");
 
         let num_transactions = this.state.main_chain.head.num_transactions();
         #[cfg(feature = "metrics")]
@@ -563,6 +572,7 @@ impl Blockchain {
         }
 
         // Commit block to AccountsTree.
+        log::debug!("Committing AT");
         let total_tx_size;
         {
             let is_complete = self.state.accounts.is_complete(Some(txn));
@@ -582,6 +592,7 @@ impl Blockchain {
                     .put_accounts_diff(txn.raw(), &block.hash(), &recorded_diff);
             }
         }
+        log::debug!("Done committing AT");
 
         // Verify the state against the block.
         if let Err(e) = self.verify_block_state_post_commit(block, txn) {
