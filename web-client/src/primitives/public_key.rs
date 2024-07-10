@@ -5,7 +5,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_derive::TryFromJsValue;
 
 use crate::{
-    address::Address,
+    common::address::Address,
     primitives::{private_key::PrivateKey, signature::Signature},
 };
 

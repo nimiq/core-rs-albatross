@@ -76,5 +76,6 @@ nimiq-zkp-component = { workspace = true, default-features = false }
 
 [features]
 client = []
-default = ["client", "primitives"]
+crypto = []
+default = ["client", "crypto", "primitives"]
 primitives = ["wasm-bindgen-derive"]

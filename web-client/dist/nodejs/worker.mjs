@@ -38,7 +38,7 @@ async function init(config) {
     if (initialized) throw new Error('Already initialized');
     initialized = true;
 
-    console.log('Initializing WASM worker');
+    console.log('Initializing client WASM worker');
 
     const client = await wasm.Client.create(config);
     Comlink.expose(client, nodeEndpoint(parentPort));
@@ -60,4 +60,4 @@ parentPort.addListener('message', async (event) => {
 });
 
 parentPort.postMessage('NIMIQ_ONLOAD');
-console.log('Launched WASM worker, ready for init');
+console.debug('Launched client WASM worker, ready for init');

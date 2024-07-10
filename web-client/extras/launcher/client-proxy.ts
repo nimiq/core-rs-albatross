@@ -17,7 +17,7 @@ export function clientFactory(workerFactory: () => Worker, comlinkWrapper: (work
                 };
                 addEventListener(worker, 'message', readyListener);
             });
-            console.debug('WASM worker loaded');
+            console.debug('Client WASM worker loaded');
 
             // Wrap the worker with Comlink, to transparently proxy any method calls on the client
             // instance to the worker.
@@ -42,7 +42,7 @@ export function clientFactory(workerFactory: () => Worker, comlinkWrapper: (work
             }
 
             // Create the client with the config in the worker
-            console.debug('Sending NIMIQ_INIT message to worker');
+            console.debug('Sending NIMIQ_INIT message to client worker');
             worker.postMessage({
                 type: 'NIMIQ_INIT',
                 config,
@@ -64,11 +64,13 @@ export function clientFactory(workerFactory: () => Worker, comlinkWrapper: (work
                 });
             });
 
-            console.debug('Have worker client');
+            console.debug('Have client worker remote');
             return client;
         },
     };
 }
+
+/** Abstractions over the differences between web workers and NodeJS worker_threads */
 
 function addEventListener(worker: Worker, type: string, listener: (event: MessageEvent | {}) => void): void {
     const method = 'addListener' in worker ? 'addListener' : 'addEventListener';

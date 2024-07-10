@@ -105,10 +105,22 @@ if contains "nodejs" "$TARGETS"; then
     generate "worker" "nodejs"
 fi
 
+# Crypto
+compile "crypto"
+if contains "bundler" "$TARGETS"; then
+    generate "crypto" "bundler"
+fi
+if contains "web" "$TARGETS"; then
+    generate "crypto" "no-modules" "./dist/web/crypto-wasm"
+fi
+if contains "nodejs" "$TARGETS"; then
+    generate "crypto" "nodejs"
+fi
+
 # Types
 if [ "$BUILD_TYPES" = "true" ]; then
     echo "Building types..."
-    compile "client,primitives"
+    compile "client,crypto,primitives"
     wasm-bindgen --weak-refs --target web --out-name web --out-dir dist/types/wasm "$CARGO_OUTPUT"
     wasm-bindgen --weak-refs --target bundler --out-name bundler --out-dir dist/types/wasm "$CARGO_OUTPUT"
     find dist/types/wasm ! -name 'web.d.ts' ! -name 'bundler.d.ts' -type f -exec rm {} +

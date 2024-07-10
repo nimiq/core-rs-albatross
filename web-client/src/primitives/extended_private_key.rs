@@ -1,7 +1,7 @@
 use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-use crate::{address::Address, primitives::private_key::PrivateKey};
+use crate::{common::address::Address, primitives::private_key::PrivateKey};
 
 /// The secret (private) part of an asymmetric key pair that is typically used to digitally sign or decrypt data.
 #[wasm_bindgen]

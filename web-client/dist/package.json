@@ -29,12 +29,16 @@
   },
   "homepage": "https://nimiq.com",
   "sideEffects": [
+    "./bundler/crypto-wasm/index.js",
     "./bundler/main-wasm/index.js",
     "./bundler/worker-wasm/index.js",
+    "./nodejs/crypto-wasm/index.js",
+    "./nodejs/crypto-wasm/index.mjs",
     "./nodejs/main-wasm/index.js",
     "./nodejs/main-wasm/index.mjs",
     "./nodejs/worker-wasm/index.js",
     "./nodejs/worker-wasm/index.mjs",
+    "./web/crypto-wasm/index.js",
     "./web/main-wasm/index.js",
     "./web/worker-wasm/index.js"
   ],
