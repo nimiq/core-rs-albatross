@@ -169,11 +169,11 @@ impl PolicyInterface for PolicyDispatcher {
         genesis_time: u64,
         current_time: u64,
     ) -> RPCResult<u64, (), Self::Error> {
-        if Policy::POW_GENESIS_TIMESTAMP > current_time {
+        if current_time < genesis_time {
             log::error!(
                 current_time,
-                pow_genesis_ts = Policy::POW_GENESIS_TIMESTAMP,
-                "The supplied time must be equal or greater than the PoW genesis timestamp"
+                genesis_time,
+                "The supplied time must be equal or greater than the genesis timestamp"
             );
             return Err(Error::InvalidArgument(current_time.to_string()));
         }

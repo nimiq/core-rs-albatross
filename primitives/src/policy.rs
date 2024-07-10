@@ -145,9 +145,6 @@ impl Policy {
     /// 25 MB.
     pub const HISTORY_CHUNKS_MAX_SIZE: u64 = 25 * 1024 * 1024;
 
-    /// The PoW genesis timestamp.
-    pub const POW_GENESIS_TIMESTAMP: u64 = 1523727000000;
-
     #[inline]
     fn get_blocks_per_epoch(&self) -> u32 {
         self.blocks_per_batch * self.batches_per_epoch as u32
