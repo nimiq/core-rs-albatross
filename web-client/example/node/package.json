@@ -5,8 +5,5 @@
   "module": "index.mjs",
   "dependencies": {
     "@nimiq/core": "../../dist"
-  },
-  "scripts": {
-    "preinstall": "cd ../.. && ./scripts/build-launcher.sh"
   }
 }
