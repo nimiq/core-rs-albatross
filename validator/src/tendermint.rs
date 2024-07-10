@@ -175,8 +175,8 @@ where
 
     const F_PLUS_ONE: usize = Policy::F_PLUS_ONE as usize;
     const TWO_F_PLUS_ONE: usize = Policy::TWO_F_PLUS_ONE as usize;
-    const TIMEOUT_DELTA: u64 = 1000;
-    const TIMEOUT_INIT: u64 = 1000;
+    const TIMEOUT_DELTA: u64 = Policy::TENDERMINT_TIMEOUT_DELTA;
+    const TIMEOUT_INIT: u64 = Policy::TENDERMINT_TIMEOUT_INIT;
 
     fn is_proposer(&self, round: u32) -> Result<bool, ProtocolError> {
         let blockchain = self.blockchain.read();

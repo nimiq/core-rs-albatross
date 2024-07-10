@@ -18,16 +18,6 @@ pub struct Policy {
     /// How many batches constitute an epoch
     #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
     pub batches_per_epoch: u16,
-    /// Tendermint's initial timeout, in milliseconds.
-    ///
-    /// See <https://arxiv.org/abs/1807.04938v3> for more information.
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
-    pub tendermint_timeout_init: u64,
-    /// Tendermint's timeout delta, in milliseconds.
-    ///
-    /// See <https://arxiv.org/abs/1807.04938v3> for more information.
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
-    pub tendermint_timeout_delta: u64,
     /// Maximum size of accounts trie chunks.
     #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
     pub state_chunks_max_size: u32,
@@ -102,6 +92,16 @@ impl Policy {
 
     /// The optimal time in milliseconds between blocks (1s)
     pub const BLOCK_SEPARATION_TIME: u64 = 1000;
+
+    /// Tendermint's initial timeout, in milliseconds.
+    ///
+    /// See <https://arxiv.org/abs/1807.04938v3> for more information.
+    pub const TENDERMINT_TIMEOUT_INIT: u64 = 1000;
+
+    /// Tendermint's timeout delta, in milliseconds.
+    ///
+    /// See <https://arxiv.org/abs/1807.04938v3> for more information.
+    pub const TENDERMINT_TIMEOUT_DELTA: u64 = 1000;
 
     /// Minimum number of epochs that the ChainStore will store fully
     pub const MIN_EPOCHS_STORED: u32 = 1;
@@ -214,28 +214,6 @@ impl Policy {
         GLOBAL_POLICY
             .get_or_init(Self::default)
             .genesis_block_number
-    }
-
-    /// Tendermint's initial timeout, in milliseconds.
-    ///
-    /// See <https://arxiv.org/abs/1807.04938v3> for more information.
-    #[inline]
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = TENDERMINT_TIMEOUT_INIT))]
-    pub fn tendermint_timeout_init() -> u64 {
-        GLOBAL_POLICY
-            .get_or_init(Self::default)
-            .tendermint_timeout_init
-    }
-
-    /// Tendermint's timeout delta, in milliseconds.
-    ///
-    /// See <https://arxiv.org/abs/1807.04938v3> for more information.
-    #[inline]
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = TENDERMINT_TIMEOUT_DELTA))]
-    pub fn tendermint_timeout_delta() -> u64 {
-        GLOBAL_POLICY
-            .get_or_init(Self::default)
-            .tendermint_timeout_delta
     }
 
     /// Maximum size of accounts trie chunks.
@@ -688,8 +666,6 @@ impl Default for Policy {
         Policy {
             blocks_per_batch: 60,
             batches_per_epoch: 720,
-            tendermint_timeout_init: 1000,
-            tendermint_timeout_delta: 1000,
             state_chunks_max_size: 1000,
             transaction_validity_window: 120,
             genesis_block_number: 0,
@@ -700,8 +676,6 @@ impl Default for Policy {
 pub const TEST_POLICY: Policy = Policy {
     blocks_per_batch: 32,
     batches_per_epoch: 4,
-    tendermint_timeout_init: 1000,
-    tendermint_timeout_delta: 1000,
     state_chunks_max_size: 2,
     transaction_validity_window: 2,
     genesis_block_number: 0,
