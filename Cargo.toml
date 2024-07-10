@@ -152,6 +152,7 @@ ark-ec = { git = "https://github.com/paberr/algebra", branch = "pb/0.4" }
 ark-ff = { git = "https://github.com/paberr/algebra", branch = "pb/0.4" }
 ark-r1cs-std = { git = "https://github.com/paberr/r1cs-std", branch = "pb/fix-pedersen" }
 libp2p-websocket = { git = "https://github.com/Eligioo/rust-libp2p", branch = "stefan/quicksink-no-panic" }
+libp2p-websocket-websys = { git = "https://github.com/sisou/rust-libp2p", branch = "sisou/websocket-websys-drop" }
 
 [workspace.package]
 version = "0.22.3"
