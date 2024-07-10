@@ -37,7 +37,6 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys::MessageEvent;
 
 use crate::{
-    address::{Address, AddressAnyArrayType, AddressAnyType},
     client::{
         account::{
             PlainAccount, PlainAccountArrayType, PlainAccountType, PlainStaker,
@@ -47,15 +46,18 @@ use crate::{
         block::{PlainBlock, PlainBlockType},
         peer_info::{PlainPeerInfo, PlainPeerInfoArrayType},
     },
-    client_configuration::{
-        ClientConfiguration, PlainClientConfiguration, PlainClientConfigurationType,
+    common::{
+        address::{Address, AddressAnyArrayType, AddressAnyType},
+        client_configuration::{
+            ClientConfiguration, PlainClientConfiguration, PlainClientConfigurationType,
+        },
+        transaction::{
+            PlainTransactionDetails, PlainTransactionDetailsArrayType, PlainTransactionDetailsType,
+            PlainTransactionReceipt, PlainTransactionReceiptArrayType,
+            PlainTransactionRecipientData, Transaction, TransactionAnyType, TransactionState,
+        },
+        utils::from_network_id,
     },
-    transaction::{
-        PlainTransactionDetails, PlainTransactionDetailsArrayType, PlainTransactionDetailsType,
-        PlainTransactionReceipt, PlainTransactionReceiptArrayType, PlainTransactionRecipientData,
-        Transaction, TransactionAnyType, TransactionState,
-    },
-    utils::from_network_id,
 };
 
 /// Maximum number of transactions that can be requested by address

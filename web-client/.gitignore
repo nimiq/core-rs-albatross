@@ -1,3 +1,4 @@
+dist/*/crypto-wasm
 dist/*/main-wasm
 dist/*/worker-wasm
 dist/types
