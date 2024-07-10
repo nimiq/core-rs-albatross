@@ -46,9 +46,10 @@ pub fn block_reward_for_batch(
 
     let genesis_supply_u64 = u64::from(genesis_supply);
 
-    let prev_supply = Policy::supply_at(genesis_supply_u64, previous_timestamp);
+    let prev_supply = Policy::supply_at(genesis_supply_u64, genesis_timestamp, previous_timestamp);
 
-    let current_supply = Policy::supply_at(genesis_supply_u64, current_timestamp);
+    let current_supply =
+        Policy::supply_at(genesis_supply_u64, genesis_timestamp, current_timestamp);
 
     // This is the maximum rewards that we can pay for this batch
     let max_rewards = current_supply.saturating_sub(prev_supply);

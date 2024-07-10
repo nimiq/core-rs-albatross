@@ -166,6 +166,7 @@ impl PolicyInterface for PolicyDispatcher {
     async fn get_supply_at(
         &mut self,
         genesis_supply: u64,
+        genesis_time: u64,
         current_time: u64,
     ) -> RPCResult<u64, (), Self::Error> {
         if Policy::POW_GENESIS_TIMESTAMP > current_time {
@@ -177,6 +178,6 @@ impl PolicyInterface for PolicyDispatcher {
             return Err(Error::InvalidArgument(current_time.to_string()));
         }
 
-        Ok(Policy::supply_at(genesis_supply, current_time).into())
+        Ok(Policy::supply_at(genesis_supply, genesis_time, current_time).into())
     }
 }

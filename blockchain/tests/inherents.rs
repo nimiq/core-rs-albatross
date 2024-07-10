@@ -84,12 +84,14 @@ fn it_can_create_batch_finalization_inherents() {
 
     let (validator_address, _) = active_validators.iter().next().unwrap();
 
+    const EXPECTED_REWARD: u64 = 166_810_895;
+
     let mut got_reward = false;
     let mut got_finalize_batch = false;
     for inherent in &inherents {
         match inherent {
             Inherent::Reward { value, .. } => {
-                assert_eq!(*value, Coin::from_u64_unchecked(941));
+                assert_eq!(*value, Coin::from_u64_unchecked(EXPECTED_REWARD));
                 got_reward = true;
             }
             Inherent::FinalizeBatch => {
@@ -145,7 +147,7 @@ fn it_can_create_batch_finalization_inherents() {
 
     let inherents = blockchain.finalize_previous_batch(&macro_block);
     assert_eq!(inherents.len(), 3);
-    let one_slot_reward = 941 / Policy::SLOTS as u64;
+    let one_slot_reward = EXPECTED_REWARD / Policy::SLOTS as u64;
     let mut got_reward = false;
     let mut got_penalize = false;
     let mut got_finalize_batch = false;
@@ -163,7 +165,10 @@ fn it_can_create_batch_finalization_inherents() {
                     got_penalize = true;
                 } else {
                     assert_eq!(*actual_validator_address, *validator_address);
-                    assert_eq!(*value, Coin::from_u64_unchecked(941 - one_slot_reward));
+                    assert_eq!(
+                        *value,
+                        Coin::from_u64_unchecked(EXPECTED_REWARD - one_slot_reward),
+                    );
                     got_reward = true;
                 }
             }
@@ -204,9 +209,14 @@ fn it_can_penalize_delayed_batch() {
     let (genesis_supply, genesis_timestamp) = blockchain.get_genesis_parameters();
 
     // Total reward for the previous batch
-    let prev_supply = Policy::supply_at(u64::from(genesis_supply), genesis_timestamp);
+    let prev_supply = Policy::supply_at(
+        u64::from(genesis_supply),
+        genesis_timestamp,
+        genesis_timestamp,
+    );
 
-    let current_supply = Policy::supply_at(u64::from(genesis_supply), next_timestamp);
+    let current_supply =
+        Policy::supply_at(u64::from(genesis_supply), genesis_timestamp, next_timestamp);
 
     let max_reward = current_supply - prev_supply;
 

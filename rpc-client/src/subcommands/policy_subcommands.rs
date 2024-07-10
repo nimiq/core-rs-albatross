@@ -136,6 +136,9 @@ pub enum PolicyCommand {
         /// The supply at genesis.
         genesis_supply: u64,
 
+        /// The time of genesis.
+        genesis_time: u64,
+
         /// The current time.
         current_time: u64,
     },
@@ -246,13 +249,14 @@ impl HandleSubcommand for PolicyCommand {
             }
             PolicyCommand::SupplyAt {
                 genesis_supply,
+                genesis_time,
                 current_time,
             } => {
                 println!(
                     "{:#?}",
                     client
                         .policy
-                        .get_supply_at(genesis_supply, current_time)
+                        .get_supply_at(genesis_supply, genesis_time, current_time)
                         .await?
                 );
             }

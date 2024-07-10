@@ -110,7 +110,7 @@ impl Policy {
     /// system time. We only care about drifting to the future.
     pub const TIMESTAMP_MAX_DRIFT: u64 = 600000;
 
-    pub const BLOCKS_DELAY_DECAY_BASE: f64 = 0.9999999989;
+    pub const BLOCKS_DELAY_DECAY: f64 = 0.9999999989;
 
     /// The minimum rewards percentage that we allow
     pub const MINIMUM_REWARDS_PERCENTAGE: f64 = 0.5;
@@ -134,16 +134,9 @@ impl Policy {
     /// Total supply in units.
     pub const TOTAL_SUPPLY: u64 = 2_100_000_000_000_000;
 
-    /// This is the number of Lunas (1 NIM = 100,000 Lunas) created by millisecond at the genesis of the
-    /// Nimiq 2.0 chain. The velocity then decreases following the formula:
-    /// Supply_velocity (t) = Initial_supply_velocity * 2^(- Supply_decay * t)
-    /// Where t is the time in milliseconds since the PoW genesis block.
-    pub const INITIAL_SUPPLY_VELOCITY: f64 = 0.10594132556065439;
-
     /// The supply decay is a constant that is calculated so that the supply velocity decreases at a
     /// the velocity of the PoW chain supply curve.
-    pub const SUPPLY_DECAY: f64 = 5.7327557121556496e-12;
-    pub const SUPPLY_DECAY_BASE: f64 = 0.9999999999960264;
+    pub const SUPPLY_DECAY: f64 = 0.9999999999960264;
 
     /// The maximum size of the BLS public key cache.
     pub const BLS_CACHE_MAX_CAPACITY: usize = 1000;
@@ -487,31 +480,31 @@ impl Policy {
 
     /// Returns the supply at a given time (as Unix time) in Lunas (1 NIM = 100,000 Lunas). It is
     /// calculated using the following formula:
-    /// Supply (t) = Genesis_supply + Initial_supply_velocity / Supply_decay * (1 - 2^(- Supply_decay * t))
-    /// Where t is the time in milliseconds since the PoW genesis block and `genesis_supply` is the supply at
+    /// ```text
+    /// supply(t) = total_supply - (total_supply - genesis_supply) * supply_decay^t
+    /// ```
+    /// Where t is the time in milliseconds since the PoS genesis block and `genesis_supply` is the supply at
     /// the genesis of the Nimiq 2.0 chain.
     #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = supplyAt))]
-    pub fn supply_at(genesis_supply: u64, current_time: u64) -> u64 {
-        assert!(current_time >= Self::POW_GENESIS_TIMESTAMP);
+    pub fn supply_at(genesis_supply: u64, genesis_time: u64, current_time: u64) -> u64 {
+        let t = current_time
+            .checked_sub(genesis_time)
+            .expect("current_time must be greater or equal to genesis_time");
 
-        let t = current_time - Self::POW_GENESIS_TIMESTAMP;
-
-        let supply = genesis_supply
-            + (Self::INITIAL_SUPPLY_VELOCITY / Self::SUPPLY_DECAY
-                * (1.0 - powi(Self::SUPPLY_DECAY_BASE, t))) as u64;
-
-        cmp::min(supply, Policy::TOTAL_SUPPLY)
+        Policy::TOTAL_SUPPLY
+            - ((Policy::TOTAL_SUPPLY - genesis_supply) as f64 * powi(Policy::SUPPLY_DECAY, t))
+                as u64
     }
 
     /// Returns the percentage reduction that should be applied to the rewards due to a delayed batch.
     /// This function returns a float in the range [0, 1]
     /// I.e 1 means that the full rewards should be given, whereas 0.5 means that half of the rewards should be given
     /// The input to this function is the batch delay, in milliseconds
-    /// The function is: [(1 - MINIMUM_REWARDS_PERCENTAGE) * e ^(-BLOCKS_DELAY_DECAY * t^2)] + MINIMUM_REWARDS_PERCENTAGE
+    /// The function is: [(1 - MINIMUM_REWARDS_PERCENTAGE) * BLOCKS_DELAY_DECAY ^ (t^2)] + MINIMUM_REWARDS_PERCENTAGE
     #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = batchDelayPenalty))]
     pub fn batch_delay_penalty(delay: u64) -> f64 {
         (1.0 - Self::MINIMUM_REWARDS_PERCENTAGE)
-            * powi(powi(Self::BLOCKS_DELAY_DECAY_BASE, delay), delay)
+            * powi(powi(Self::BLOCKS_DELAY_DECAY, delay), delay)
             + Self::MINIMUM_REWARDS_PERCENTAGE
     }
 }
@@ -624,15 +617,6 @@ impl Policy {
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = TOTAL_SUPPLY))]
     pub fn wasm_total_supply() -> u64 {
         Self::TOTAL_SUPPLY
-    }
-
-    /// This is the number of Lunas (1 NIM = 100,000 Lunas) created by millisecond at the genesis of the
-    /// Nimiq 2.0 chain. The velocity then decreases following the formula:
-    /// Supply_velocity (t) = Initial_supply_velocity * 2^(- Supply_decay * t)
-    /// Where t is the time in milliseconds since the PoW genesis block.
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = INITIAL_SUPPLY_VELOCITY))]
-    pub fn wasm_initial_supply_velocity() -> f64 {
-        Self::INITIAL_SUPPLY_VELOCITY
     }
 
     /// The maximum size of the BLS public key cache.
