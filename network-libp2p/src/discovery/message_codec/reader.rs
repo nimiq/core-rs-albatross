@@ -11,58 +11,51 @@ use pin_project::pin_project;
 
 use super::header::Header;
 
-/// Try to read, such that at most `n` bytes are in the buffer. This will return `Poll::Pending` until the buffer
-/// has `n` bytes in it. This returns `Poll::Ready(Ok(false))` in case of EOF.
+/// Try to read, such that at most `wanted_len` bytes are in the buffer.
+///
+/// This will return `Poll::Pending` until the buffer has `wanted_len` bytes in
+/// it. This returns `Poll::Ready(Ok(false))` in case of EOF.
 fn read_to_buf<R>(
-    reader: Pin<&mut R>,
+    mut reader: Pin<&mut R>,
     buffer: &mut BytesMut,
-    n: usize,
+    wanted_len: usize,
     cx: &mut Context<'_>,
 ) -> Poll<Result<bool, std::io::Error>>
 where
     R: AsyncRead,
 {
-    // Current length of buffer
-    let n0 = buffer.len();
-
-    if n > n0 {
-        buffer.resize(n, 0);
-
-        match AsyncRead::poll_read(reader, cx, &mut buffer[n0..n]) {
+    let mut len_buffer_read = buffer.len();
+    if buffer.len() < wanted_len {
+        buffer.resize(wanted_len, 0);
+    }
+    while len_buffer_read < wanted_len {
+        match AsyncRead::poll_read(
+            reader.as_mut(),
+            cx,
+            &mut buffer[len_buffer_read..wanted_len],
+        ) {
             // EOF
             Poll::Ready(Ok(0)) => {
-                buffer.resize(n0, 0);
-                Poll::Ready(Ok(false))
+                buffer.resize(len_buffer_read, 0);
+                return Poll::Ready(Ok(false));
             }
 
             // Data was read
-            Poll::Ready(Ok(n_read)) => {
-                // New length of buffer
-                let n_new = n0 + n_read;
-
-                if n_new < n {
-                    // We didn't read all the bytes, so let's resize the buffer accordingly
-                    buffer.resize(n_new, 0);
-
-                    cx.waker().wake_by_ref();
-                    Poll::Pending
-                } else {
-                    Poll::Ready(Ok(true))
-                }
+            Poll::Ready(Ok(read)) => {
+                len_buffer_read += read;
             }
 
             // An error occurred
-            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+            Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
 
             // Reader is not ready
             Poll::Pending => {
-                buffer.resize(n0, 0);
-                Poll::Pending
+                buffer.resize(len_buffer_read, 0);
+                return Poll::Pending;
             }
         }
-    } else {
-        Poll::Ready(Ok(true))
     }
+    Poll::Ready(Ok(true))
 }
 
 /// TODO: Generalize over a type `H: Header`, which is `Deserialize` and has a getter for the length of the message.
