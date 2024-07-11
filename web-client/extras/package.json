@@ -3,6 +3,7 @@
     "fmt": "dprint fmt"
   },
   "dependencies": {
+    "@nimiq/core": "link:../dist",
     "comlink": "^4.4.1"
   },
   "devDependencies": {

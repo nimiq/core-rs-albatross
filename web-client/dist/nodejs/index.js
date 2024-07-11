@@ -2,9 +2,9 @@ const { join } = require('node:path');
 const { Worker } = require('node:worker_threads');
 const Comlink = require('comlink');
 const nodeEndpoint = require('comlink/dist/umd/node-adapter.js');
-const { Address, Transaction } = require('./main-wasm/index.js');
+const { Address, CryptoUtils, Transaction } = require('./main-wasm/index.js');
 const { clientFactory } = require('../launcher/node/client-proxy.js');
-const { cryptoUtilsFactory } = require('../launcher/node/cryptoutils-proxy.js');
+const { cryptoUtilsWorkerFactory } = require('../launcher/node/cryptoutils-worker-proxy.js');
 const { setupMainThreadTransferHandlers } = require('../launcher/node/transfer-handlers.js');
 
 setupMainThreadTransferHandlers(Comlink, {
@@ -17,17 +17,22 @@ const Client = clientFactory(
     worker => Comlink.wrap(nodeEndpoint(worker)),
 );
 
-const CryptoUtils = cryptoUtilsFactory(
+const CryptoUtilsWorker = cryptoUtilsWorkerFactory(
     () => new Worker(join(__dirname, './crypto.js')),
     worker => Comlink.wrap(nodeEndpoint(worker)),
 );
+for (const propName in CryptoUtilsWorker) {
+  const prop = CryptoUtilsWorker[propName];
+  if (typeof prop === 'function') {
+      CryptoUtils[propName] = prop;
+  }
+}
 
 const wasmexports = require('./main-wasm/index.js');
 Object.keys(wasmexports).forEach(key => {
   exports[key] = wasmexports[key]
 });
 exports.Client = Client;
-exports.CryptoUtils = CryptoUtils;
 const libexports = require('../lib/node/index.js');
 Object.keys(libexports).forEach(key => {
   exports[key] = libexports[key]

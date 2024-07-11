@@ -1,14 +1,20 @@
 import type { Remote } from 'comlink';
-import type { CryptoUtils } from '../../dist/types/bundler';
 
-let remote: Remote<CryptoUtils> | undefined;
+interface CryptoUtilsWorker {
+    otpKdf(message: Uint8Array, key: Uint8Array, salt: Uint8Array, iterations: number): Promise<Uint8Array>;
+}
+
+let remote: Remote<CryptoUtilsWorker> | undefined;
 
 // class CryptoUtilsProxy {}
 
-export function cryptoUtilsFactory(workerFactory: () => Worker, comlinkWrapper: (worker: Worker) => Remote<CryptoUtils>) {
+export function cryptoUtilsWorkerFactory(
+    workerFactory: () => Worker,
+    comlinkWrapper: (worker: Worker) => Remote<CryptoUtilsWorker>,
+) {
     // Construct a proxy object that lazily initializes a crypto worker and forwards all known method calls to it.
-    const proxy = {};
-    ["computeHmacSha512", "computePBKDF2sha512", "otpKdf"].forEach((method) => {
+    const proxy: Record<string, Function> = {};
+    ['otpKdf'].forEach((method) => {
         proxy[method] = async function() {
             remote = remote || await startWorker(workerFactory, comlinkWrapper);
             return remote[method](...arguments);
@@ -17,7 +23,7 @@ export function cryptoUtilsFactory(workerFactory: () => Worker, comlinkWrapper: 
     return proxy;
 }
 
-async function startWorker(workerFactory: () => Worker, comlinkWrapper: (worker: Worker) => Remote<CryptoUtils>) {
+async function startWorker(workerFactory: () => Worker, comlinkWrapper: (worker: Worker) => Remote<CryptoUtilsWorker>) {
     const worker = workerFactory();
 
     // Wait for worker script to load

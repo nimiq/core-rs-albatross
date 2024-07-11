@@ -12,6 +12,21 @@ pub struct PrivateKey {
 
 #[wasm_bindgen]
 impl PrivateKey {
+    #[wasm_bindgen(getter = PURPOSE_ID)]
+    pub fn purpose_id() -> u32 {
+        0x42000001
+    }
+
+    #[wasm_bindgen(getter = SIZE)]
+    pub fn size() -> usize {
+        nimiq_keys::PrivateKey::SIZE
+    }
+
+    #[wasm_bindgen(getter = serializedSize)]
+    pub fn serialized_size(&self) -> usize {
+        PrivateKey::size()
+    }
+
     /// Generates a new private key from secure randomness.
     pub fn generate() -> PrivateKey {
         PrivateKey::from(nimiq_keys::PrivateKey::generate_default_csprng())
