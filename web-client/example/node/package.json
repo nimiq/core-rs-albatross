@@ -4,6 +4,6 @@
   "main": "index.js",
   "module": "index.mjs",
   "dependencies": {
-    "@nimiq/core": "../../dist"
+    "@nimiq/core": "link:../../dist"
   }
 }

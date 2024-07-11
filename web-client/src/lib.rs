@@ -4,7 +4,7 @@ extern crate alloc; // Required for wasm-bindgen-derive
 mod client;
 #[cfg(any(feature = "client", feature = "primitives"))]
 mod common;
-#[cfg(feature = "crypto")]
+#[cfg(any(feature = "crypto", feature = "primitives"))]
 mod crypto_utils;
 #[cfg(feature = "primitives")]
 mod primitives;

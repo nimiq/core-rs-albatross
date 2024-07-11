@@ -4,12 +4,12 @@
 import { parentPort } from 'node:worker_threads';
 import Comlink from 'comlink';
 import nodeEndpoint from 'comlink/dist/esm/node-adapter.mjs';
-import wasm from './crypto-wasm/index.js';
+import { CryptoUtils } from './crypto-wasm/index.js';
 
 (async function init() {
     console.log('Initializing crypto WASM worker');
 
-    Comlink.expose(wasm.CryptoUtils, nodeEndpoint(parentPort));
+    Comlink.expose(CryptoUtils, nodeEndpoint(parentPort));
 
     parentPort.postMessage('NIMIQ_ONLOAD');
 })();

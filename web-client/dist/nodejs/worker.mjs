@@ -5,7 +5,7 @@ import { parentPort } from 'node:worker_threads';
 import Comlink from 'comlink';
 import nodeEndpoint from 'comlink/dist/esm/node-adapter.mjs';
 import websocket from 'websocket';
-import wasm from './worker-wasm/index.js';
+import { Client } from './worker-wasm/index.js';
 
 // Provide a global WebSocket implementation, which is expected by the WASM code built for browsers.
 global.WebSocket = websocket.w3cwebsocket;
@@ -36,7 +36,7 @@ async function init(config) {
 
     console.log('Initializing client WASM worker');
 
-    const client = await wasm.Client.create(config);
+    const client = await Client.create(config);
     Comlink.expose(client, nodeEndpoint(parentPort));
 };
 

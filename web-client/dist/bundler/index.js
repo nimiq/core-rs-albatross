@@ -1,7 +1,7 @@
 import * as Comlink from 'comlink';
-import { Address, Transaction } from './main-wasm/index.js';
+import { Address, CryptoUtils, Transaction } from './main-wasm/index.js';
 import { clientFactory } from '../launcher/browser/client-proxy.mjs';
-import { cryptoUtilsFactory } from '../launcher/browser/cryptoutils-proxy.mjs';
+import { cryptoUtilsWorkerFactory } from '../launcher/browser/cryptoutils-worker-proxy.mjs';
 import { setupMainThreadTransferHandlers } from '../launcher/browser/transfer-handlers.mjs';
 
 setupMainThreadTransferHandlers(Comlink, {
@@ -14,11 +14,17 @@ const Client = clientFactory(
     worker => Comlink.wrap(worker),
 );
 
-const CryptoUtils = cryptoUtilsFactory(
+const CryptoUtilsWorker = cryptoUtilsWorkerFactory(
     () => new Worker(new URL('./crypto.js', import.meta.url), { type : 'module' }),
     worker => Comlink.wrap(worker),
 );
+for (const propName in CryptoUtilsWorker) {
+    const prop = CryptoUtilsWorker[propName];
+    if (typeof prop === 'function') {
+        CryptoUtils[propName] = prop;
+    }
+}
 
 export * from './main-wasm/index.js';
-export { Client, CryptoUtils };
-export * from '../lib/browser/index.mjs';
+export { Client };
+export * from '../lib/bundler/index.mjs';

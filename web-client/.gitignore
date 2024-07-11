@@ -1,7 +1,7 @@
 dist/*/crypto-wasm
 dist/*/main-wasm
 dist/*/worker-wasm
-dist/types
+dist/types/wasm
 dist/launcher
 dist/lib
 
