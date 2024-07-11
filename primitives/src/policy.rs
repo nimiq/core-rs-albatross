@@ -110,6 +110,9 @@ impl Policy {
     /// system time. We only care about drifting to the future.
     pub const TIMESTAMP_MAX_DRIFT: u64 = 600000;
 
+    /// Reward decay for epochs produced late.
+    ///
+    /// See [`Policy::blocks_delay_penalty`] for more details on the calculation.
     pub const BLOCKS_DELAY_DECAY: f64 = 0.9999999989;
 
     /// The minimum rewards percentage that we allow
@@ -134,8 +137,16 @@ impl Policy {
     /// Total supply in units.
     pub const TOTAL_SUPPLY: u64 = 2_100_000_000_000_000;
 
-    /// The supply decay is a constant that is calculated so that the supply velocity decreases at a
-    /// the velocity of the PoW chain supply curve.
+    /// The supply decay is the base with which the remainder of the supply
+    /// decreases. The available supply increases as a consequence.
+    ///
+    /// This constant describes the supply decay of one millisecond (timestamps
+    /// are measured in milliseconds in this codebase).
+    ///
+    /// It mirrors the supply curve that existed prior to the PoS upgrade. Back
+    /// then, the targeted block time was 60 s, and each block had a reward of
+    /// 1/(2**22) of the remaining supply. Thus, this constant is the 60000th
+    /// root of (1 - 1/(2**22)).
     pub const SUPPLY_DECAY: f64 = 0.9999999999960264;
 
     /// The maximum size of the BLS public key cache.
