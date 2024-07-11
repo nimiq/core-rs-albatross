@@ -70,7 +70,7 @@ fn gen_hist_txs_block(block_number: u32, num_txns: u32) -> Vec<HistoricTransacti
 }
 
 fn history_store_populate(
-    history_store: &Box<dyn HistoryInterface + Sync + Send>,
+    history_store: &(dyn HistoryInterface + Sync + Send),
     env: &DatabaseProxy,
     tpb: u32,
     batches: u32,
@@ -137,10 +137,7 @@ fn history_store_populate(
     );
 }
 
-fn history_store_prune(
-    history_store: &Box<dyn HistoryInterface + Sync + Send>,
-    env: &DatabaseProxy,
-) {
+fn history_store_prune(history_store: &(dyn HistoryInterface + Sync + Send), env: &DatabaseProxy) {
     let mut txn = env.write_transaction();
     println!("Pruning the history store..");
     let start = Instant::now();
@@ -187,7 +184,7 @@ fn main() {
         println!("Current loop {}", loop_number);
 
         history_store_populate(
-            &history_store,
+            &*history_store,
             &env,
             args.tpb,
             args.batches,
@@ -197,7 +194,7 @@ fn main() {
         );
     }
 
-    history_store_prune(&history_store, &env);
+    history_store_prune(&*history_store, &env);
 
     let _ = fs::remove_dir_all(temp_dir);
 
