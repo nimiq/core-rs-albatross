@@ -111,13 +111,7 @@ where
             contribution,
             level,
         });
-        self.wake();
-    }
-
-    fn wake(&mut self) {
-        if let Some(waker) = self.waker.take() {
-            waker.wake();
-        }
+        self.waker.wake();
     }
 
     pub fn into_stream(self) -> BoxStream<'static, LevelUpdate<TProtocol::Contribution>> {
@@ -211,13 +205,13 @@ where
                         best_score = score;
                         if let Some(best_todo) = best_todo {
                             self.list.insert(best_todo);
-                            self.wake();
+                            self.waker.wake();
                         }
                         best_todo = Some(aggregate_todo);
                     } else {
                         // If the score is not a new best put the TodoItem in the list.
                         self.list.insert(aggregate_todo);
-                        self.wake();
+                        self.waker.wake();
                     }
                 }
                 // Some of the LevelUpdates also contain an individual Signature in which case it is also converted into a TodoItem.
@@ -236,13 +230,13 @@ where
                             best_score = score;
                             if let Some(best_todo) = best_todo {
                                 self.list.insert(best_todo);
-                                self.wake();
+                                self.waker.wake();
                             }
                             best_todo = Some(individual_todo);
                         } else {
                             // If the score is not a new best put the TodoItem in the list.
                             self.list.insert(individual_todo);
-                            self.wake();
+                            self.waker.wake();
                         }
                     }
                 }

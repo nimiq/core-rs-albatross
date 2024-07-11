@@ -96,9 +96,7 @@ impl<TNetwork: Network> LevelUpdateSender<TNetwork> {
             }
         }
         // wake as a new message was added.
-        if let Some(waker) = &self.waker {
-            waker.wake_by_ref();
-        }
+        self.waker.wake();
     }
 }
 

@@ -626,9 +626,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
 
                         // Pushing the future to FuturesUnordered above does not wake the task that
                         // polls `requested_proposals`. Therefore, we need to wake the task manually.
-                        if let Some(waker) = &self.waker {
-                            waker.wake_by_ref();
-                        }
+                        self.waker.wake();
                     }
                 }
             }

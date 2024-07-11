@@ -368,12 +368,6 @@ impl Behaviour {
         }
     }
 
-    fn wake(&mut self) {
-        if let Some(waker) = self.waker.take() {
-            waker.wake();
-        }
-    }
-
     fn get_ip_info_from_multiaddr(&self, address: &Multiaddr) -> Option<IpInfo> {
         // Get IP from multiaddress if it exists.
         match address.iter().next() {
@@ -445,7 +439,7 @@ impl Behaviour {
             }
         }
 
-        self.wake();
+        self.waker.wake();
     }
 
     /// Tells the behaviour to start connecting to other peers.
@@ -471,7 +465,7 @@ impl Behaviour {
             peer_id,
             connection: CloseConnection::All,
         });
-        self.wake();
+        self.waker.wake();
 
         match reason {
             CloseReason::MaliciousPeer => self.ban_connection(peer_id),
@@ -639,7 +633,7 @@ impl Behaviour {
                     peer_id: *peer_id,
                     connection: CloseConnection::One(*connection_id),
                 });
-                self.wake();
+                self.waker.wake();
             }
             return;
         }
@@ -669,7 +663,7 @@ impl Behaviour {
         self.addresses
             .mark_connected(address.clone(), peer_services);
 
-        self.wake();
+        self.waker.wake();
 
         self.maintain_peers();
     }

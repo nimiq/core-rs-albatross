@@ -260,9 +260,7 @@ where
                 self.peers.read().len(),
             );
 
-            if let Some(waker) = self.waker.take() {
-                waker.wake();
-            }
+            self.waker.wake();
         }
     }
 
@@ -329,9 +327,7 @@ where
         }
 
         // Adding new ids needs to wake the task that is polling the SyncQueue.
-        if let Some(waker) = self.waker.take() {
-            waker.wake();
-        }
+        self.waker.wake();
     }
 
     /// Truncates the stored ids, retaining only the first `len` elements.

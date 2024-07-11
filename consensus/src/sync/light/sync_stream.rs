@@ -375,9 +375,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
                             // Pushing the future to FuturesUnordered above does not wake the task that
                             // polls `epoch_ids_stream`. Therefore, we need to wake the task manually.
-                            if let Some(waker) = &self.waker {
-                                waker.wake_by_ref();
-                            }
+                            self.waker.wake();
                         }
                     } else {
                         // If we don't have any pending requests from this peer, we proceed requesting epoch ids
@@ -391,9 +389,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
                         // Pushing the future to FuturesUnordered above does not wake the task that
                         // polls `epoch_ids_stream`. Therefore, we need to wake the task manually.
-                        if let Some(waker) = &self.waker {
-                            waker.wake_by_ref();
-                        }
+                        self.waker.wake();
                     }
                 }
                 (Ok(Err(error)), peer_id) => {

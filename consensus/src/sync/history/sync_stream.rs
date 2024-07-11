@@ -158,9 +158,7 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
                         self.job_queue
                             .push_back(Job::FinishCluster(cluster, result));
 
-                        if let Some(waker) = self.waker.take() {
-                            waker.wake();
-                        }
+                        self.waker.wake();
                         break;
                     }
                 }
@@ -213,9 +211,7 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
                 }
             }
 
-            if let Some(waker) = self.waker.take() {
-                waker.wake();
-            }
+            self.waker.wake();
         }
     }
 

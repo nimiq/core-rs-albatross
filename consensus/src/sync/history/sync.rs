@@ -8,6 +8,7 @@ use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt};
 use nimiq_blockchain::Blockchain;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{Network, SubscribeEvents};
+use nimiq_utils::WakerExt as _;
 use parking_lot::RwLock;
 
 use crate::{
@@ -119,8 +120,6 @@ impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for HistoryMacroSync<TNetwor
 
         // Pushing the future to FuturesUnordered above does not wake the task that
         // polls `epoch_ids_stream`. Therefore, we need to wake the task manually.
-        if let Some(waker) = &self.waker {
-            waker.wake_by_ref();
-        }
+        self.waker.wake();
     }
 }

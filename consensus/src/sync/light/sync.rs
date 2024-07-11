@@ -12,7 +12,7 @@ use nimiq_network_interface::{
     network::{CloseReason, Network, SubscribeEvents},
     request::RequestError,
 };
-use nimiq_utils::spawn::spawn;
+use nimiq_utils::{spawn::spawn, WakerExt as _};
 use nimiq_zkp_component::{
     types::{Error, ZKPRequestEvent},
     zkp_component::ZKPComponentProxy,
@@ -268,8 +268,6 @@ impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for LightMacroSync<TNetwork>
 
         // Pushing the future to FuturesUnordered above does not wake the task that
         // polls `epoch_ids_stream`. Therefore, we need to wake the task manually.
-        if let Some(waker) = &self.waker {
-            waker.wake_by_ref();
-        }
+        self.waker.wake();
     }
 }

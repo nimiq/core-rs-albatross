@@ -8,6 +8,7 @@ use nimiq_network_interface::{
     request::RequestError,
 };
 use nimiq_primitives::policy::Policy;
+use nimiq_utils::WakerExt as _;
 use parking_lot::RwLock;
 
 use crate::{
@@ -448,9 +449,7 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
 
         // If we made space in epoch_clusters, wake the task.
         if cluster.is_some() {
-            if let Some(waker) = self.waker.take() {
-                waker.wake();
-            }
+            self.waker.wake();
             return cluster;
         }
 

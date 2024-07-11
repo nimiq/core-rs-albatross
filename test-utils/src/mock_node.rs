@@ -16,7 +16,7 @@ use nimiq_database::volatile::VolatileDatabase;
 use nimiq_network_interface::{network::Network as NetworkInterface, request::Handle};
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::{networks::NetworkId, trie::TrieItem};
-use nimiq_utils::time::OffsetTime;
+use nimiq_utils::{time::OffsetTime, WakerExt as _};
 use parking_lot::RwLock;
 
 use crate::test_network::TestNetwork;
@@ -54,9 +54,7 @@ impl<N: NetworkInterface + TestNetwork, Req: Handle<N, T>, T: Send + Sync + Unpi
         self.paused = true;
     }
     pub fn unpause(&mut self) {
-        if let Some(waker) = self.pause_waker.take() {
-            waker.wake();
-        }
+        self.pause_waker.wake();
         self.paused = false;
     }
     pub fn set(&mut self, request_handler: fn(N::PeerId, &Req, &T) -> Req::Response) {

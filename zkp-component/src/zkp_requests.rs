@@ -112,9 +112,7 @@ impl<N: Network + 'static> ZKPRequests<N> {
         );
         // Pushing to the futures unordered above does not wake the task that polls zkp_requests_results
         // So we need to wake the task manually
-        if let Some(waker) = self.waker.take() {
-            waker.wake();
-        }
+        self.waker.wake();
     }
 }
 

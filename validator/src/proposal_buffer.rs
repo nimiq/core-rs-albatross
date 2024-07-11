@@ -452,9 +452,7 @@ where
             }
 
             // A new proposal was admitted into the buffer. Potential waiting tasks can be woken.
-            if let Some(waker) = shared.waker.take() {
-                waker.wake()
-            }
+            shared.waker.wake();
         } else {
             // The signature verification did not succeed.
 
@@ -486,9 +484,7 @@ where
 
             // Wake, as a new future was added and needs to be polled.
             // A new proposal was admitted into the buffer. Potential waiting tasks can be woken.
-            if let Some(waker) = shared.waker.take() {
-                waker.wake()
-            }
+            shared.waker.wake();
         }
     }
 }
