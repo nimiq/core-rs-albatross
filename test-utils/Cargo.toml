@@ -17,6 +17,10 @@ workspace = true
 name = "nimiq-performance-history-store"
 path = "src/performance/history-store/main.rs"
 
+[[bin]]
+name = "nimiq-performance-accounts-tree"
+path = "src/performance/accounts-tree/main.rs"
+
 [dependencies]
 ark-ff = "0.4"
 ark-groth16 = { version = "0.4", default-features = false }
