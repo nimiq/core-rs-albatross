@@ -155,7 +155,7 @@ libp2p-websocket = { git = "https://github.com/Eligioo/rust-libp2p", branch = "s
 libp2p-websocket-websys = { git = "https://github.com/sisou/rust-libp2p", branch = "sisou/websocket-websys-drop" }
 
 [workspace.package]
-version = "0.22.3"
+version = "0.23.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2021"
 homepage = "https://nimiq.com"
