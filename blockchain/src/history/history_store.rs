@@ -260,8 +260,12 @@ impl HistoryStore {
         txn.remove(&self.hist_tx_table, &epoch_number);
 
         let mut cursor = WriteTransaction::cursor(txn, &self.last_leaf_table);
-        let Some((mut block_number, _value)) =
-            cursor.seek_range_key::<u32, u32>(&Policy::first_block_of(epoch_number).unwrap())
+
+        let Some(first_block) = Policy::first_block_of(epoch_number) else {
+            return;
+        };
+
+        let Some((mut block_number, _value)) = cursor.seek_range_key::<u32, u32>(&first_block)
         else {
             return;
         };
