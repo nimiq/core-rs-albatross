@@ -556,6 +556,10 @@ impl HistoryInterface for HistoryStore {
     /// Removes an existing history tree and all the historic transactions that were part of it.
     /// Returns None if there's no history tree corresponding to the given epoch number.
     fn remove_history(&self, txn: &mut WriteTransactionProxy, epoch_number: u32) -> Option<()> {
+        // Nothing to be removed from epoch 0 (pre-genesis)
+        if epoch_number == 0 {
+            return Some(());
+        }
         self.remove_leaves_from_history(txn, epoch_number, None)?;
         self.remove_epoch_from_history(txn, epoch_number);
 
