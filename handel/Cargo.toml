@@ -38,4 +38,4 @@ nimiq-network-mock = { workspace = true }
 nimiq-test-log = { workspace = true }
 
 tokio = { version = "1.38", features = ["rt", "time", "macros"] }
-nimiq-utils = { workspace = true }
+nimiq-utils = { workspace = true, features = ["spawn"] }

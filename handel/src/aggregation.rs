@@ -1,16 +1,15 @@
 use std::{
     fmt::Debug,
+    mem,
     pin::Pin,
     task::{Context, Poll},
 };
 
 use futures::{
     future::{BoxFuture, Future, FutureExt},
-    ready,
     stream::{BoxStream, Stream, StreamExt},
 };
 use nimiq_time::{interval, Interval};
-use tokio::select;
 
 use crate::{
     config::Config,
@@ -21,8 +20,9 @@ use crate::{
     partitioner::Partitioner,
     protocol::Protocol,
     store::ContributionStore,
-    todo::TodoList,
+    todo::{TodoItem, TodoList},
     update::LevelUpdate,
+    verifier::{VerificationResult, Verifier},
 };
 
 // TODOS:
@@ -33,11 +33,12 @@ use crate::{
 type LevelUpdateStream<P, T> = BoxStream<'static, LevelUpdate<<P as Protocol<T>>::Contribution>>;
 
 /// Future implementation for the next aggregation event
-struct NextAggregation<
-    TId: Debug + Clone + Unpin + 'static,
+pub struct OngoingAggregation<TId, P, N>
+where
+    TId: Debug + Clone + Unpin + Send + 'static,
     P: Protocol<TId>,
     N: Network<Contribution = P::Contribution>,
-> {
+{
     /// Handel configuration
     config: Config,
 
@@ -64,13 +65,17 @@ struct NextAggregation<
 
     /// the level which needs activation next
     next_level_timeout: usize,
+
+    /// Future of the currently verified todo. There is only ever one todo being verified at a time.
+    current_verification:
+        Option<BoxFuture<'static, (VerificationResult, TodoItem<P::Contribution>)>>,
 }
 
-impl<
-        TId: Debug + Clone + Unpin + 'static,
-        P: Protocol<TId>,
-        N: Network<Contribution = P::Contribution>,
-    > NextAggregation<TId, P, N>
+impl<TId, P, N> OngoingAggregation<TId, P, N>
+where
+    TId: Debug + Clone + Unpin + Send + 'static,
+    P: Protocol<TId>,
+    N: Network<Contribution = P::Contribution>,
 {
     pub fn new(
         protocol: P,
@@ -107,6 +112,7 @@ impl<
             start_level_interval,
             periodic_update_interval,
             next_level_timeout: 0,
+            current_verification: None,
         }
     }
 
@@ -326,93 +332,182 @@ impl<
         }
     }
 
-    async fn next(mut self) -> (P::Contribution, Option<Self>) {
-        // As long as there is no new aggregate to return loop over the select of both intervals and the actual aggregation
-        loop {
-            // Note that this function only gets called once per new aggregation.
-            // That means levels can only be activated either by completing the previous one, or before starting a new todo, which is not ideal.
-            // Likewise the periodic update will only trigger between todos.
-            select! {
-                _ = self.periodic_update_interval.next().fuse() => self.automatic_update(),
-                _ = self.start_level_interval.next().fuse() => self.activate_next_level(),
-                _ = self.sender.next().fuse() => {},
-                item = self.todos.next().fuse() => {
-                    match item {
-                        Some(todo) => {
-                            // verify the contribution
-                            let result = self.protocol.verify(&todo.contribution).await;
-
-                            if result.is_ok() {
-                                // special case of full contributions
-                                if todo.level == self.protocol.partitioner().levels() {
-                                    return (todo.contribution, Some(self));
-                                }
-
-                                // if the contribution is valid push it to the store, creating a new aggregate
-                                {
-                                    let store = self.protocol.store();
-                                    let mut store = store.write();
-                                    store.put(
-                                        todo.contribution.clone(),
-                                        todo.level,
-                                        self.protocol.registry(),
-                                        self.protocol.identify(),
-                                    );
-                                }
-
-                                // in case the level of this todo has not started, start it now as we have already contributions on it.
-                                self.start_level(todo.level);
-                                // check if a level was completed by the addition of the contribution
-                                self.check_completed_level(todo.level);
-
-                                // get the best aggregate
-                                let last_level = self.levels.last().expect("No levels");
-                                let best = {
-                                    let store = self.protocol.store();
-                                    let store = store.read();
-                                    store.combined(last_level.id)
-                                };
-
-                                if let Some(best) = best {
-                                    return (best, Some(self));
-                                }
-                            } else {
-                                // Invalid contributions create a warning, but do not terminate. -> Continue with the next best todo item.
-                                warn!(
-                                    id = ?self.protocol.identify(),
-                                    ?result,
-                                    "Invalid signature",
-                                );
-                            }
-                        },
-                        None => {
-                            // This should really never happen as TodoList<Item> does not return None.
-                            panic!("Todo Stream returned None");
-                        }
-                    }
-                },
-            }
-        }
-    }
-
     fn into_inner(self) -> (LevelUpdateStream<P, TId>, LevelUpdateSender<N>) {
         (self.todos.into_stream(), self.sender)
     }
+
+    /// Applies the given todo. It will either be immediately emitted as the new best aggregate if it is completed
+    /// or it will be added to the store and the new best aggregate will be emitted.
+    fn apply_todo(&mut self, todo: TodoItem<P::Contribution>) -> P::Contribution {
+        // special case of full contributions
+        if todo.level == self.protocol.partitioner().levels()
+            && self.is_complete_aggregate(&todo.contribution)
+        {
+            return todo.contribution;
+        }
+
+        // if the contribution is valid push it to the store, creating a new aggregate
+        {
+            let store = self.protocol.store();
+            let mut store = store.write();
+            store.put(
+                todo.contribution.clone(),
+                todo.level,
+                self.protocol.registry(),
+                self.protocol.identify(),
+            );
+        }
+
+        // in case the level of this todo has not started, start it now as we have already contributions on it.
+        self.start_level(todo.level);
+        // check if a level was completed by the addition of the contribution
+        self.check_completed_level(todo.level);
+
+        // get the best aggregate
+        let last_level = self.levels.last().expect("No levels");
+        let best = {
+            let store = self.protocol.store();
+            let store = store.read();
+            store.combined(last_level.id)
+        };
+
+        best.expect("A best signature must exist after applying a contribution.")
+    }
+
+    /// Verifies a given signature.
+    ///
+    /// As signature verification can be costly it creates a future which will be polled directly after creation.
+    /// The created future may return immediately.
+    ///
+    /// This function will override `self.current_verification` if the created future does not immediately produce a value.
+    ///
+    /// ## Returns
+    /// Returns the verification result and the todo in question iff the verification resolves immediately.
+    /// None otherwise
+    fn start_todo_verification(
+        &mut self,
+        todo: TodoItem<P::Contribution>,
+        cx: &mut Context<'_>,
+    ) -> Option<(VerificationResult, TodoItem<P::Contribution>)> {
+        // Create a new verification future.
+        let verifier = self.protocol.verifier();
+        let mut fut = async move {
+            let result = verifier.verify(&todo.contribution).await;
+            (result, todo)
+        }
+        .boxed();
+
+        if let Poll::Ready(result) = fut.poll_unpin(cx) {
+            return Some(result);
+        }
+
+        self.current_verification = Some(fut);
+        None
+    }
 }
 
-struct FinishedAggregation<T: Debug + Clone + 'static, P: Protocol<T>, N: Network> {
+impl<TId, P, N> Stream for OngoingAggregation<TId, P, N>
+where
+    TId: Debug + Clone + Unpin + Send + 'static,
+    P: Protocol<TId>,
+    N: Network<Contribution = P::Contribution>,
+{
+    type Item = P::Contribution;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // Check if the automatic update interval triggers, if so perform the update.
+        if let Poll::Ready(_instant) = self.periodic_update_interval.as_mut().poll_tick(cx) {
+            // This creates new messages in the sender.
+            self.automatic_update();
+        }
+
+        if let Poll::Ready(_instant) = self.start_level_interval.as_mut().poll_tick(cx) {
+            // Activates the next level if there is a next level.
+            // This potentially creates new messages in the sender.
+            self.activate_next_level();
+        }
+
+        // Poll the verification future if there is one.
+        let mut best_aggregate = if let Some(verification_future) = &mut self.current_verification {
+            if let Poll::Ready((result, todo)) = verification_future.poll_unpin(cx) {
+                // If a result is produced, unset the future such a new one can take its place.
+                self.current_verification = None;
+                if result.is_ok() {
+                    // If the todo was successfully verified, apply it and return the new best aggregate
+                    Some(self.apply_todo(todo))
+                } else {
+                    // If the Todo failed to verify there is nothing to be done, and also no new best aggregate.
+                    log::debug!(?result, ?todo, "Verification of Todo Item failed.");
+                    None
+                }
+            } else {
+                // The future has not yet resolved. There is no new best aggregate.
+                None
+            }
+        } else {
+            // There is no future to poll and thus no new todo to process. There is no new best aggregate.
+            None
+        };
+
+        // Check and see if a new todo should be verified.
+        // Only start a new verification task if there is not already one and also only if the poll does not have produced a value yet.
+        // This is necessary as the verification future could resolve immediately producing a second item for the stream.
+        // As the new best aggregate will be returned this stream will be polled again creating the future in the next poll
+        if self.current_verification.is_none() && best_aggregate.is_none() {
+            // Get the next best todo.
+            while let Poll::Ready(Some(todo)) = self.todos.poll_next_unpin(cx) {
+                // Start the verification. This will also poll and thus may immediately return a result.
+                if let Some((result, todo)) = self.start_todo_verification(todo, cx) {
+                    // If the future returned immediately it needs to be handled.
+                    if result.is_ok() {
+                        // If the todo verified, apply it and return the new best aggregate
+                        let new_aggregate = self.apply_todo(todo);
+
+                        best_aggregate = Some(new_aggregate);
+                        break;
+                    } else {
+                        log::debug!(?result, ?todo, "Verification of Todo Item failed.");
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+
+        // Poll sender to until it is pending sending as many messages as possible.
+        while let Poll::Ready(t) = self.sender.poll_next_unpin(cx) {
+            t.expect("Sender should never return None");
+        }
+
+        // Return the aggregate if available.
+        if let Some(contribution) = best_aggregate {
+            return Poll::Ready(Some(contribution));
+        }
+
+        // Return Pending otherwise.
+        Poll::Pending
+    }
+}
+
+pub struct FinishedAggregation<TId, P, N>
+where
+    TId: Debug + Clone + Unpin + Send + 'static,
+    P: Protocol<TId>,
+    N: Network<Contribution = P::Contribution>,
+{
     level_update: LevelUpdate<P::Contribution>,
-    input_stream: LevelUpdateStream<P, T>,
+    input_stream: LevelUpdateStream<P, TId>,
     sender: LevelUpdateSender<N>,
 }
 
-impl<
-        TId: Debug + Clone + Unpin + Send + 'static,
-        P: Protocol<TId>,
-        N: Network<Contribution = P::Contribution>,
-    > FinishedAggregation<TId, P, N>
+impl<TId, P, N> FinishedAggregation<TId, P, N>
+where
+    TId: Debug + Clone + Unpin + Send + 'static,
+    P: Protocol<TId>,
+    N: Network<Contribution = P::Contribution>,
 {
-    fn from(aggregation: NextAggregation<TId, P, N>, aggregate: P::Contribution) -> Self {
+    fn from(aggregation: OngoingAggregation<TId, P, N>, aggregate: P::Contribution) -> Self {
+        // create a level update from the final aggregation
         let level_update = LevelUpdate::<P::Contribution>::new(
             aggregate,
             None,
@@ -420,6 +515,7 @@ impl<
             aggregation.protocol.node_id(),
         );
 
+        // Get rid of the aggregation retaining the input stream of level updates and the sender.
         let (input_stream, sender) = aggregation.into_inner();
 
         Self {
@@ -430,98 +526,132 @@ impl<
     }
 }
 
-impl<
-        TId: Debug + Clone + Unpin + Send + 'static,
-        P: Protocol<TId>,
-        N: Network<Contribution = P::Contribution>,
-    > Future for FinishedAggregation<TId, P, N>
-{
-    type Output = (P::Contribution, Option<NextAggregation<TId, P, N>>);
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        // always returns Poll::Pending.
-        let _ = self.sender.poll_next_unpin(cx);
-
-        while let Some(msg) = ready!(self.input_stream.poll_next_unpin(cx)) {
-            // Don't respond to final level updates.
-            if msg.level == self.level_update.level {
-                continue;
-            }
-
-            let response = (self.level_update.clone(), msg.origin());
-            self.sender.send(response);
-        }
-
-        Poll::Ready((self.level_update.aggregate.clone(), None))
-    }
-}
-/// Stream implementation for consecutive aggregation events
-pub struct Aggregation<
+impl<TId, P, N> Future for FinishedAggregation<TId, P, N>
+where
     TId: Debug + Clone + Unpin + Send + 'static,
     P: Protocol<TId>,
     N: Network<Contribution = P::Contribution>,
-> {
-    next_aggregation:
-        Option<BoxFuture<'static, (P::Contribution, Option<NextAggregation<TId, P, N>>)>>,
+{
+    /// The type could just be `()` as it will only ever return `Poll::Pending`, but for compatibility with the
+    /// `OngoingAggregation` it is kept. As it is a Future the Option is added.
+    type Output = Option<P::Contribution>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        while let Poll::Ready(msg) = self.input_stream.poll_next_unpin(cx) {
+            if let Some(msg) = msg {
+                // Don't respond to final level updates.
+                if msg.level == self.level_update.level {
+                    continue;
+                }
+
+                let response = (self.level_update.clone(), msg.origin());
+                self.sender.send(response);
+            } else {
+                log::error!("Failed to poll input stream; None returned")
+            }
+        }
+
+        // Send as many messages as possible.
+        let _ = self.sender.poll_next_unpin(cx);
+
+        // Do never produce an item as it has been produced earlier already.
+        // This future will never produce an item.
+        Poll::Pending
+    }
 }
 
-impl<
-        TId: Debug + Clone + Unpin + Send + 'static,
-        TProtocol: Protocol<TId>,
-        TNetwork: Network<Contribution = TProtocol::Contribution> + Send + 'static,
-    > Aggregation<TId, TProtocol, TNetwork>
+/// Abstraction for both kinds of aggregations.
+/// There is an additional variant used to transition from ongoing to finished.
+pub enum Aggregation<TId, P, N>
+where
+    TId: Debug + Clone + Unpin + Send + 'static,
+    P: Protocol<TId>,
+    N: Network<Contribution = P::Contribution>,
+{
+    /// The aggregation is currently ongoing and it is going to produce stream items as well as network traffic.
+    Ongoing(OngoingAggregation<TId, P, N>),
+    /// The aggregation is finished and it will no longer produce stream items and it will reduce network traffic
+    /// to answering messages with an unfinished aggregate within them
+    Finished(FinishedAggregation<TId, P, N>),
+    /// The aggregation has just finished and is transitioning from ongoing to finished.
+    /// Used to deconstruct the OngoingAggregation and should be `unreachable!()` everywhere but in that location.
+    Transitioning,
+}
+
+impl<TId, P, N> Aggregation<TId, P, N>
+where
+    TId: Debug + Clone + Unpin + Send + 'static,
+    P: Protocol<TId>,
+    N: Network<Contribution = P::Contribution>,
 {
     pub fn new(
-        protocol: TProtocol,
+        protocol: P,
         config: Config,
-        own_contribution: TProtocol::Contribution,
-        input_stream: LevelUpdateStream<TProtocol, TId>,
-        network: TNetwork,
+        own_contribution: P::Contribution,
+        input_stream: LevelUpdateStream<P, TId>,
+        network: N,
     ) -> Self {
         // Create the Sender, buffering a single message per recipient.
         let sender = LevelUpdateSender::new(protocol.partitioner().size(), network);
 
-        let next_aggregation =
-            NextAggregation::new(protocol, config, own_contribution, input_stream, sender)
-                .next()
-                .boxed();
-
-        Self {
-            next_aggregation: Some(next_aggregation),
-        }
+        // Aggregations start out as Ongoing
+        Self::Ongoing(OngoingAggregation::new(
+            protocol,
+            config,
+            own_contribution,
+            input_stream,
+            sender,
+        ))
     }
 }
 
-impl<
-        TId: Debug + Clone + Unpin + Send + 'static,
-        P: Protocol<TId> + Debug,
-        N: Network<Contribution = P::Contribution>,
-    > Stream for Aggregation<TId, P, N>
+impl<TId, P, N> Stream for Aggregation<TId, P, N>
+where
+    TId: Debug + Clone + Unpin + Send + 'static,
+    P: Protocol<TId>,
+    N: Network<Contribution = P::Contribution>,
 {
     type Item = P::Contribution;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // check if there is a next_aggregation
-        let next_aggregation = match self.next_aggregation.as_mut() {
-            // If there is Some(next_aggregation) proceed with it
-            Some(next_aggregation) => next_aggregation,
-            // If there is None that means all signatories have signed the payload so there is nothing more to aggregate after the last returned value.
-            // Thus return Poll::Ready(None) as the previous value can no longer be improved.
-            None => return Poll::Ready(None),
+        // Poll either the ongoing or the finished aggregation
+        let result = match &mut *self {
+            Self::Transitioning => {
+                unreachable!("Aggregation should never be transitioning when polled.")
+            }
+            Self::Finished(ref mut finished_aggregation) => {
+                // Finished aggregations are simply polled as the future will never produce a value.
+                return finished_aggregation.poll_unpin(cx);
+            }
+            Self::Ongoing(ref mut ongoing_aggregation) => {
+                let result = ongoing_aggregation.poll_next_unpin(cx);
+                // For produced stream items of the ongoing aggregations it needs to be checked if the transition into a
+                // finished aggregation is required.
+                if let Poll::Ready(Some(aggregate)) = &result {
+                    // Only completely full aggregates trigger the transition.
+                    if ongoing_aggregation.is_complete_aggregate(aggregate) {
+                        // Take the ongoing aggregation out of *self, replacing it with the Transitioning variant.
+                        let ongoing_aggregation = mem::replace(&mut *self, Self::Transitioning);
+                        let ongoing_aggregation = match ongoing_aggregation {
+                            Self::Ongoing(aggregation) => aggregation,
+                            _ => panic!("Was ongoing before, should still be ongoing."),
+                        };
+                        // Create the FinishedAggregation and replace the Transitioning variant with it again.
+                        *self = Self::Finished(FinishedAggregation::from(
+                            ongoing_aggregation,
+                            aggregate.clone(),
+                        ));
+                    }
+                }
+                result
+            }
         };
 
-        // Poll the next_aggregate future. If it is still Poll::Pending return Poll::Pending as well. (hidden within ready!)
-        let (aggregate, next_aggregation) = ready!(next_aggregation.poll_unpin(cx));
+        // In case there is now a FinishedAggregation where before there wasn't poll it, to register the waker.
+        if let Self::Finished(ref mut finished_aggregation) = &mut *self {
+            assert!(finished_aggregation.poll_unpin(cx).is_pending());
+        }
 
-        self.next_aggregation = next_aggregation.map(|next_aggregation| {
-            if next_aggregation.is_complete_aggregate(&aggregate) {
-                FinishedAggregation::from(next_aggregation, aggregate.clone()).boxed()
-            } else {
-                next_aggregation.next().boxed()
-            }
-        });
-
-        // At this point a new aggregate was returned so the Stream returns it as well.
-        Poll::Ready(Some(aggregate))
+        result
     }
 }

@@ -8,6 +8,7 @@ use crate::{
     partitioner::Partitioner,
     protocol::Protocol,
     store::ContributionStore,
+    update::LevelUpdate,
 };
 
 /// Trait for scoring or evaluating a contribution or signature.
@@ -26,7 +27,7 @@ where
     fn is_final(&self, signature: &TProtocol::Contribution) -> bool;
 
     /// Returns whether a level contains a specific peer ID.
-    fn level_contains_id(&self, level: usize, id: usize) -> bool;
+    fn level_contains_origin(&self, msg: &LevelUpdate<TProtocol::Contribution>) -> bool;
 }
 
 /// A signature counts as it was signed N times, where N is the signers weight
@@ -96,19 +97,9 @@ where
     /// `0` being not useful at all, can be discarded.
     /// `>0` being more useful the bigger the number.
     fn evaluate(&self, contribution: &TProtocol::Contribution, level: usize, id: TId) -> usize {
-        // Special case for final aggregations
+        // Special case for final aggregations, full contribution is already checked.
         if level == self.partitioner.levels() {
-            // Only available to full aggregations
-            if self
-                .weights
-                .signers_identity(&contribution.contributors())
-                .len()
-                == self.partitioner.size()
-            {
-                return usize::MAX;
-            } else {
-                return 0;
-            }
+            return usize::MAX;
         }
 
         let store = self.store.read();
@@ -256,13 +247,18 @@ where
         votes >= self.threshold
     }
 
-    fn level_contains_id(&self, level: usize, id: usize) -> bool {
-        if level == self.partitioner.levels() {
-            return true;
+    fn level_contains_origin(&self, msg: &LevelUpdate<TProtocol::Contribution>) -> bool {
+        if msg.level as usize == self.partitioner.levels() {
+            let weight = self
+                .weights
+                .signers_identity(&msg.aggregate.contributors())
+                .len();
+            // Only available to full aggregations
+            return weight == self.partitioner.size();
         }
-        let range = self.partitioner.range(level);
+        let range = self.partitioner.range(msg.level as usize);
         if let Ok(range) = range {
-            range.contains(&id)
+            range.contains(&(msg.origin as usize))
         } else {
             false
         }
