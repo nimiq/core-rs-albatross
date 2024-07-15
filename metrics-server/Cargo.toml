@@ -26,6 +26,7 @@ http-body-util = { version = "0.1" }
 hyper = { version = "1.4" }
 hyper-util = { version = "0.1", features = ["server-auto", "tokio"] }
 log = { workspace = true }
+metrics = "0.23"
 parking_lot = "0.12"
 prometheus-client = "0.22.2"
 tokio = { version = "1.38", features = [
@@ -36,6 +37,7 @@ tokio = { version = "1.38", features = [
 ] }
 tokio-metrics = "0.3"
 
+nimiq-database = { workspace = true }
 nimiq-blockchain = { workspace = true, features = ["metrics"] }
 nimiq-blockchain-interface = { workspace = true }
 nimiq-blockchain-proxy = { workspace = true, features = ["full"] }

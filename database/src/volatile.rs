@@ -78,6 +78,39 @@ impl VolatileDatabase {
             db,
         }))
     }
+
+    pub fn with_metrics(max_tables: u32) -> Result<DatabaseProxy, Error> {
+        let temp_dir = TempDir::new().map_err(Error::CreateDirectory)?;
+        let mut db = MdbxDatabase::new_mdbx_database(
+            temp_dir.path(),
+            1024 * 1024 * 1024 * 1024,
+            max_tables,
+            None,
+        )?;
+        db.with_metrics();
+        Ok(DatabaseProxy::Volatile(VolatileDatabase {
+            temp_dir: Arc::new(temp_dir),
+            db,
+        }))
+    }
+
+    pub fn with_max_readers_and_metrics(
+        max_tables: u32,
+        max_readers: u32,
+    ) -> Result<DatabaseProxy, Error> {
+        let temp_dir = TempDir::new().map_err(Error::CreateDirectory)?;
+        let mut db = MdbxDatabase::new_mdbx_database(
+            temp_dir.path(),
+            1024 * 1024 * 1024 * 1024,
+            max_tables,
+            Some(max_readers),
+        )?;
+        db.with_metrics();
+        Ok(DatabaseProxy::Volatile(VolatileDatabase {
+            temp_dir: Arc::new(temp_dir),
+            db,
+        }))
+    }
 }
 
 pub type VolatileTable = MdbxTable;
@@ -95,7 +128,7 @@ mod tests {
 
     #[test]
     fn it_can_save_basic_objects() {
-        let db = VolatileDatabase::new(1).unwrap();
+        let db = VolatileDatabase::with_metrics(1).unwrap();
         {
             let table = db.open_table("test".to_string());
 

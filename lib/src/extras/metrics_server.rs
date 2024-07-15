@@ -4,7 +4,7 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::ConsensusProxy;
 #[cfg(feature = "nimiq-mempool")]
 use nimiq_mempool::mempool::Mempool;
-pub use nimiq_metrics_server::NimiqTaskMonitor;
+pub use nimiq_metrics_server::{install_metrics, MetricsCollector, NimiqTaskMonitor};
 use nimiq_network_interface::network::Network;
 
 pub fn start_metrics_server<TNetwork: Network>(
@@ -14,6 +14,7 @@ pub fn start_metrics_server<TNetwork: Network>(
     consensus_proxy: ConsensusProxy<TNetwork>,
     network: Arc<nimiq_network_libp2p::Network>,
     task_monitors: &[NimiqTaskMonitor],
+    collector: MetricsCollector,
 ) {
     #[cfg(not(feature = "nimiq-mempool"))]
     let mempool = None;
@@ -24,5 +25,6 @@ pub fn start_metrics_server<TNetwork: Network>(
         consensus_proxy,
         network,
         task_monitors,
+        collector,
     );
 }

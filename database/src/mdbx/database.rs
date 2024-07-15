@@ -1,18 +1,27 @@
-use std::{borrow::Cow, fs, path::Path, sync::Arc};
+use std::{borrow::Cow, fmt, fs, path::Path, sync::Arc};
 
 use libmdbx::NoWriteMap;
 use log::info;
 
 use super::{MdbxReadTransaction, MdbxWriteTransaction};
-use crate::{traits::Database, DatabaseProxy, Error, TableFlags};
+use crate::{metrics::DatabaseEnvMetrics, traits::Database, DatabaseProxy, Error, TableFlags};
 
 pub(super) type DbKvPair<'a> = (Cow<'a, [u8]>, Cow<'a, [u8]>);
 
 /// Wrapper around the mdbx database handle.
 /// A database can hold multiple tables.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct MdbxDatabase {
     pub(super) db: Arc<libmdbx::Database<NoWriteMap>>,
+    pub(super) metrics: Option<Arc<DatabaseEnvMetrics>>,
+}
+
+impl fmt::Debug for MdbxDatabase {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MdbxDatabase")
+            .field("db", &self.db)
+            .finish()
+    }
 }
 
 impl Database for MdbxDatabase {
@@ -49,15 +58,22 @@ impl Database for MdbxDatabase {
         txn.create_table(Some(&name), table_flags).unwrap();
         txn.commit().unwrap();
 
+        if let Some(ref metrics) = self.metrics {
+            metrics.register_table(&name);
+        }
+
         MdbxTable { name }
     }
 
     fn read_transaction(&self) -> Self::ReadTransaction<'_> {
-        MdbxReadTransaction::new(self.db.begin_ro_txn().unwrap())
+        MdbxReadTransaction::new(self.db.begin_ro_txn().unwrap(), self.metrics.clone())
     }
 
     fn write_transaction(&self) -> Self::WriteTransaction<'_> {
-        MdbxWriteTransaction::new(self.db.begin_rw_txn().unwrap())
+        MdbxWriteTransaction::new(
+            self.db.begin_rw_txn().unwrap(),
+            self.metrics.as_ref().cloned(),
+        )
     }
 }
 
@@ -91,6 +107,30 @@ impl MdbxDatabase {
         )?))
     }
 
+    #[allow(clippy::new_ret_no_self)]
+    pub fn new_with_metrics<P: AsRef<Path>>(
+        path: P,
+        size: usize,
+        max_tables: u32,
+    ) -> Result<DatabaseProxy, Error> {
+        let mut db = MdbxDatabase::new_mdbx_database(path.as_ref(), size, max_tables, None)?;
+        db.with_metrics();
+        Ok(DatabaseProxy::Persistent(db))
+    }
+
+    #[allow(clippy::new_ret_no_self)]
+    pub fn new_with_max_readers_and_metrics<P: AsRef<Path>>(
+        path: P,
+        size: usize,
+        max_tables: u32,
+        max_readers: u32,
+    ) -> Result<DatabaseProxy, Error> {
+        let mut db =
+            MdbxDatabase::new_mdbx_database(path.as_ref(), size, max_tables, Some(max_readers))?;
+        db.with_metrics();
+        Ok(DatabaseProxy::Persistent(db))
+    }
+
     pub(crate) fn new_mdbx_database(
         path: &Path,
         size: usize,
@@ -119,47 +159,16 @@ impl MdbxDatabase {
         let cur_mapsize = info.map_size();
         info!(cur_mapsize, "MDBX memory map size");
 
-        let mdbx = MdbxDatabase { db: Arc::new(db) };
-        if mdbx.need_resize(0) {
-            info!("MDBX memory needs to be resized.");
-        }
+        let mdbx = MdbxDatabase {
+            db: Arc::new(db),
+            metrics: None,
+        };
 
         Ok(mdbx)
     }
 
-    pub fn need_resize(&self, threshold_size: usize) -> bool {
-        let info = self.db.info().unwrap();
-        let stat = self.db.stat().unwrap();
-
-        let size_used = (stat.page_size() as usize) * (info.last_pgno() + 1);
-
-        if threshold_size > 0 && info.map_size() - size_used < threshold_size {
-            info!(
-                size_used,
-                threshold_size,
-                map_size = info.map_size(),
-                space_remaining = info.map_size() - size_used,
-                "DB settings (threshold-based)"
-            );
-            return true;
-        }
-
-        // Resize is currently not supported. So don't let the resize happen
-        // if a specific percentage is reached.
-        let resize_percent: f64 = 1_f64;
-
-        if (size_used as f64) / (info.map_size() as f64) > resize_percent {
-            info!(
-                map_size = info.map_size(),
-                size_used,
-                space_remaining = info.map_size() - size_used,
-                percent_used = (size_used as f64) / (info.map_size() as f64),
-                "DB resize (percent-based)"
-            );
-            return true;
-        }
-
-        false
+    pub(crate) fn with_metrics(&mut self) {
+        self.metrics = Some(DatabaseEnvMetrics::new().into());
     }
 }
 

@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use log::info;
-use nimiq::prover::prover_main;
 pub use nimiq::{
     client::Client,
     config::{command_line::CommandLine, config::ClientConfig, config_file::ConfigFile},
@@ -13,6 +12,7 @@ pub use nimiq::{
         signal_handling::initialize_signal_handler,
     },
 };
+use nimiq::{extras::metrics_server::install_metrics, prover::prover_main};
 
 async fn main_inner() -> Result<(), Error> {
     // Keep for potential future reactivation
@@ -39,7 +39,7 @@ async fn main_inner() -> Result<(), Error> {
     // Initialize panic hook.
     initialize_panic_reporting();
 
-    // Initialize signal handler
+    // Initialize signal handler.
     initialize_signal_handler();
 
     // Early return in case of a proving process.
@@ -62,6 +62,12 @@ async fn main_inner() -> Result<(), Error> {
     let rpc_config = config.rpc_server.clone();
     let metrics_config = config.metrics_server.clone();
     let metrics_enabled = metrics_config.is_some();
+
+    // Initialize database logging.
+    let mut metrics_collector = None;
+    if metrics_enabled {
+        metrics_collector = Some(install_metrics());
+    }
 
     // Create client from config.
     let mut client: Client = Client::from_config(config).await?;
@@ -146,6 +152,7 @@ async fn main_inner() -> Result<(), Error> {
             client.consensus_proxy(),
             client.network(),
             &nimiq_task_metric,
+            metrics_collector.unwrap(),
         )
     }
 

@@ -24,10 +24,15 @@ workspace = true
 
 [dependencies]
 bitflags = "2.6"
-libmdbx = "0.5.0"
+libmdbx = { git = "https://github.com/paberr/libmdbx-rs" }
 log = { workspace = true }
 tempfile = "3"
 thiserror = "1.0"
+metrics = "0.23"
+parking_lot = "0.12"
+rustc-hash = "1.1"
+strum = "0.26"
+strum_macros = "0.26"
 
 nimiq-database-value = { workspace = true }
 

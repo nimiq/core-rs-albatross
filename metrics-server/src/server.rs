@@ -39,7 +39,7 @@ pub struct MetricService {
     reg: Arc<RwLock<Registry>>,
 }
 
-type SharedRegistry = Arc<RwLock<Registry>>;
+pub(crate) type SharedRegistry = Arc<RwLock<Registry>>;
 
 impl MetricService {
     pub fn new(registry: Registry) -> Self {
