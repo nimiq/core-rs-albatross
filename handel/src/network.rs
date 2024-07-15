@@ -6,7 +6,7 @@ use std::{
 use futures::{
     future::{BoxFuture, FutureExt},
     stream::{FuturesUnordered, StreamExt},
-    Stream,
+    Future,
 };
 use nimiq_utils::WakerExt as _;
 
@@ -100,10 +100,10 @@ impl<TNetwork: Network> LevelUpdateSender<TNetwork> {
     }
 }
 
-impl<TNetwork: Network + Unpin> Stream for LevelUpdateSender<TNetwork> {
-    type Item = ();
+impl<TNetwork: Network + Unpin> Future for LevelUpdateSender<TNetwork> {
+    type Output = ();
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // Loop here such that after polling pending futures there is an opportunity to create new ones
         // before returning.
         loop {
@@ -159,7 +159,7 @@ impl<TNetwork: Network + Unpin> Stream for LevelUpdateSender<TNetwork> {
 mod test {
     use std::{sync::Arc, task::Context, time::Duration};
 
-    use futures::{FutureExt, StreamExt};
+    use futures::FutureExt;
     use nimiq_collections::BitSet;
     use nimiq_test_log::test;
     use parking_lot::Mutex;
@@ -214,7 +214,7 @@ mod test {
         fn poll(sender: &mut LevelUpdateSender<Net>) {
             let waker = futures::task::noop_waker();
             let mut cx = Context::from_waker(&waker);
-            assert!(sender.poll_next_unpin(&mut cx).is_pending());
+            assert!(sender.poll_unpin(&mut cx).is_pending());
         }
 
         // Send single msg and see if it is sent

@@ -318,7 +318,7 @@ where
             let store = store_rw.read();
 
             // finally start the level.
-            self.start_level(level, &*store);
+            self.start_level(level, &store);
         }
     }
 
@@ -348,9 +348,9 @@ where
         );
 
         // in case the level of this todo has not started, start it now as we have already contributions on it.
-        self.start_level(todo.level, &*store);
+        self.start_level(todo.level, &store);
         // check if a level was completed by the addition of the contribution
-        self.check_completed_level(todo.level, &*store);
+        self.check_completed_level(todo.level, &store);
 
         // get the best aggregate
         let last_level = self.levels.last().expect("No levels");
@@ -424,12 +424,12 @@ where
         };
 
         // Check if the automatic update interval triggers, if so perform the update.
-        if let Poll::Ready(_instant) = self.periodic_update_interval.as_mut().poll_tick(cx) {
+        while let Poll::Ready(_instant) = self.periodic_update_interval.as_mut().poll_tick(cx) {
             // This creates new messages in the sender.
             self.automatic_update();
         }
 
-        if let Poll::Ready(_instant) = self.start_level_interval.as_mut().poll_tick(cx) {
+        while let Poll::Ready(_instant) = self.start_level_interval.as_mut().poll_tick(cx) {
             // Activates the next level if there is a next level.
             // This potentially creates new messages in the sender.
             self.activate_next_level();
@@ -460,10 +460,8 @@ where
             }
         }
 
-        // Poll sender to until it is pending sending as many messages as possible.
-        while let Poll::Ready(t) = self.sender.poll_next_unpin(cx) {
-            t.expect("Sender should never return None");
-        }
+        // Poll the sender, sending as many messages as possible.
+        assert!(self.sender.poll_unpin(cx).is_pending());
 
         // Return the aggregate if available.
         if let Some(contribution) = best_aggregate {
@@ -538,7 +536,7 @@ where
         }
 
         // Send as many messages as possible.
-        let _ = self.sender.poll_next_unpin(cx);
+        assert!(self.sender.poll_unpin(cx).is_pending());
 
         // Do never produce an item as it has been produced earlier already.
         // This future will never produce an item.
@@ -557,7 +555,7 @@ where
     /// The aggregation is currently ongoing and it is going to produce stream items as well as network traffic.
     Ongoing(OngoingAggregation<TId, P, N>),
     /// The aggregation is finished and it will no longer produce stream items and it will reduce network traffic
-    /// to answering messages with an unfinished aggregate within them
+    /// to answering messages with an unfinished aggregate within them.
     Finished(FinishedAggregation<TId, P, N>),
     /// The aggregation has just finished and is transitioning from ongoing to finished.
     /// Used to deconstruct the OngoingAggregation and should be `unreachable!()` everywhere but in that location.
@@ -605,11 +603,12 @@ where
             Self::Transitioning => {
                 unreachable!("Aggregation should never be transitioning when polled.")
             }
-            Self::Finished(ref mut finished_aggregation) => {
+            Self::Finished(finished_aggregation) => {
                 // Finished aggregations are simply polled as the future will never produce a value.
-                return finished_aggregation.poll_unpin(cx);
+                assert!(finished_aggregation.poll_unpin(cx).is_pending());
+                return Poll::Pending;
             }
-            Self::Ongoing(ref mut ongoing_aggregation) => {
+            Self::Ongoing(ongoing_aggregation) => {
                 let result = ongoing_aggregation.poll_next_unpin(cx);
                 // For produced stream items of the ongoing aggregations it needs to be checked if the transition into a
                 // finished aggregation is required.
@@ -634,7 +633,7 @@ where
         };
 
         // In case there is now a FinishedAggregation where before there wasn't poll it, to register the waker.
-        if let Self::Finished(ref mut finished_aggregation) = &mut *self {
+        if let Self::Finished(finished_aggregation) = &mut *self {
             assert!(finished_aggregation.poll_unpin(cx).is_pending());
         }
 

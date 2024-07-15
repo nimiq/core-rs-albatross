@@ -76,6 +76,10 @@ where
     evaluator: Arc<TProtocol::Evaluator>,
     /// The Stream where LevelUpdates can be polled from, which are subsequently converted into TodoItems
     input_stream: BoxStream<'static, LevelUpdate<TProtocol::Contribution>>,
+    /// Keeps track on whether or not the TodoList has been polled at least once.
+    /// Used to make sure that operations which need to happen before the first poll
+    /// are in fact executed before the first poll.
+    is_unpolled: bool,
 }
 
 impl<TId, TProtocol> TodoList<TId, TProtocol>
@@ -96,11 +100,15 @@ where
             list: HashSet::new(),
             evaluator,
             input_stream,
+            is_unpolled: true,
         }
     }
 
     /// Safe without a wake as it is only called in the constructor of Aggregation.
     pub fn add_contribution(&mut self, contribution: TProtocol::Contribution, level: usize) {
+        // As no waker is used, this must only ever happen before the first poll.
+        assert!(self.is_unpolled);
+        // Add the item to the list.
         self.list.insert(TodoItem {
             contribution,
             level,
@@ -120,6 +128,9 @@ where
     type Item = TodoItem<TProtocol::Contribution>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // Once poll is called this list is no longer unpolled.
+        self.is_unpolled = true;
+
         // current best score
         let mut best_score: usize = 0;
         // retained set of todos. Same as self.list, but did not retain 0 score todos and the best todo.

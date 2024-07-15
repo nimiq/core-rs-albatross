@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use parking_lot::RwLock;
 
 use crate::{
@@ -13,7 +12,6 @@ use crate::{
     Identifier,
 };
 
-#[async_trait]
 pub trait Protocol<TId>
 where
     TId: Identifier,
