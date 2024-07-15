@@ -28,7 +28,7 @@ futures = { workspace = true }
 hex = "0.4"
 parking_lot = "0.12"
 serde = "1.0"
-serde_with = "3.8"
+serde_with = "3.9"
 thiserror = "1.0"
 
 nimiq-account = { workspace = true }
