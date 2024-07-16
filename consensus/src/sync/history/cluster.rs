@@ -365,9 +365,10 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
 
         let current_epoch_number = blockchain.epoch_number();
         let num_known_txs = if epoch_number == current_epoch_number {
+            let last_macro_block = Policy::last_macro_block(current_block_number);
             blockchain
                 .history_store
-                .get_number_final_epoch_transactions(epoch_number, None) as u64
+                .num_epoch_transactions_before(last_macro_block, None) as u64
         } else {
             0
         };

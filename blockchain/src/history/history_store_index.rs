@@ -382,31 +382,22 @@ impl HistoryInterface for HistoryStoreIndex {
             .num_epoch_transactions(epoch_number, txn_option)
     }
 
-    fn get_final_epoch_transactions(
+    fn num_epoch_transactions_before(
         &self,
-        epoch_number: u32,
-        txn_option: Option<&TransactionProxy>,
-    ) -> Vec<HistoricTransaction> {
-        self.history_store
-            .get_final_epoch_transactions(epoch_number, txn_option)
-    }
-
-    fn get_number_final_epoch_transactions(
-        &self,
-        epoch_number: u32,
+        block_number: u32,
         txn_option: Option<&TransactionProxy>,
     ) -> usize {
         self.history_store
-            .get_number_final_epoch_transactions(epoch_number, txn_option)
+            .num_epoch_transactions_before(block_number, txn_option)
     }
 
-    fn get_nonfinal_epoch_transactions(
+    fn get_epoch_transactions_after(
         &self,
-        epoch_number: u32,
+        block_number: u32,
         txn_option: Option<&TransactionProxy>,
     ) -> Vec<HistoricTransaction> {
         self.history_store
-            .get_nonfinal_epoch_transactions(epoch_number, txn_option)
+            .get_epoch_transactions_after(block_number, txn_option)
     }
 
     fn prove_chunk(

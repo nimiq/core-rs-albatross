@@ -108,26 +108,19 @@ pub trait HistoryInterface {
         txn_option: Option<&TransactionProxy>,
     ) -> usize;
 
-    /// Gets all finalized historic transactions for a given epoch.
-    fn get_final_epoch_transactions(
+    /// Returns the number of historic transactions within the given block's epoch that occurred
+    /// before the given block (inclusive).
+    fn num_epoch_transactions_before(
         &self,
-        epoch_number: u32,
-        txn_option: Option<&TransactionProxy>,
-    ) -> Vec<HistoricTransaction>;
-
-    /// Gets the number of all finalized historic transactions for a given epoch.
-    /// This is basically an optimization of calling `get_final_epoch_transactions(..).len()`
-    /// since the latter is very expensive
-    fn get_number_final_epoch_transactions(
-        &self,
-        epoch_number: u32,
+        block_number: u32,
         txn_option: Option<&TransactionProxy>,
     ) -> usize;
 
-    /// Gets all non-finalized historic transactions for a given epoch.
-    fn get_nonfinal_epoch_transactions(
+    /// Returns all historic transactions within the given block's epoch that occurred after the
+    /// given block (exclusive).
+    fn get_epoch_transactions_after(
         &self,
-        epoch_number: u32,
+        block_number: u32,
         txn_option: Option<&TransactionProxy>,
     ) -> Vec<HistoricTransaction>;
 

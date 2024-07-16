@@ -187,7 +187,7 @@ impl Blockchain {
         // We might already know the given epoch partially.
         // Revert our chain to a common ancestor state in case we have adopted a different history.
         // Also skip over any transactions that we already know.
-        let first_new_hist_tx = this.revert_to_common_state(&block, history, &mut txn);
+        let first_new_hist_tx = this.revert_to_common_state(history, &mut txn);
 
         // Separate the historic transactions by block number and type.
         // We know it comes sorted because we already checked it against the history root and
@@ -468,7 +468,6 @@ impl Blockchain {
 
     fn revert_to_common_state(
         &self,
-        block: &Block,
         history: &[HistoricTransaction],
         txn: &mut WriteTransactionProxy,
     ) -> usize {
@@ -483,7 +482,7 @@ impl Blockchain {
         // Revert any blocks that don't match.
         let known_history = self
             .history_store
-            .get_nonfinal_epoch_transactions(block.epoch_number(), Some(txn));
+            .get_epoch_transactions_after(last_macro_block, Some(txn));
         if !known_history.is_empty() {
             // Iterate over the known history and the given history in parallel to find the block
             // where the histories diverge (if they do).

@@ -675,23 +675,11 @@ impl HistoryInterface for HistoryStore {
         tree.num_leaves()
     }
 
-    /// Gets all finalized historic transactions for a given epoch.
-    fn get_final_epoch_transactions(
+    /// Gets the number of historic transactions within an epoch that occurred before the given
+    /// block (inclusive).
+    fn num_epoch_transactions_before(
         &self,
-        epoch_number: u32,
-        txn_option: Option<&TransactionProxy>,
-    ) -> Vec<HistoricTransaction> {
-        let end = self.get_number_final_epoch_transactions(epoch_number, txn_option) as u32;
-
-        self.get_historic_txns(epoch_number, 0..end, txn_option)
-    }
-
-    /// Gets the number of all finalized historic transactions for a given epoch.
-    /// This is basically an optimization of calling `get_final_epoch_transactions(..).len()`
-    /// since the latter is very expensive
-    fn get_number_final_epoch_transactions(
-        &self,
-        epoch_number: u32,
+        mut block_number: u32,
         txn_option: Option<&TransactionProxy>,
     ) -> usize {
         let read_txn: TransactionProxy;
@@ -703,56 +691,30 @@ impl HistoryInterface for HistoryStore {
             }
         };
 
-        // Get history tree for given epoch.
-        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
-            &self.hist_tree_table,
-            txn,
-            epoch_number,
-        ));
-
-        // Return early if there are no leaves in the HistoryTree for the given epoch.
-        let num_leaves = tree.num_leaves();
-        if num_leaves == 0 {
-            return 0;
-        }
-
-        // Find the number of the last macro stored for the given epoch.
-        let last_tx = self
-            .get_historic_tx(epoch_number, (num_leaves - 1) as u32, Some(txn))
-            .unwrap();
-        let last_macro_block = Policy::last_macro_block(last_tx.block_number);
-
-        let end = if Policy::epoch_at(last_macro_block) != epoch_number {
-            0
-        } else {
-            // Otherwise, find the last block that had transactions.
-            // Usually that is the macro block itself.
-            // Only in the first batch, we actually need the loop.
-            let mut block_number = last_macro_block;
-            let mut end = 0;
-            loop {
-                let (block_start, block_end) = self.get_indexes_for_block(block_number, Some(txn));
-                // If start != end, this is the last block that contained finalized transactions.
-                if block_start != block_end {
-                    end = block_end;
-                    break;
-                }
-                // If we switched epochs, start at 0.
-                if Policy::epoch_at(block_number) != epoch_number {
-                    break;
-                }
-                block_number -= 1;
+        // Find the index of the last transaction that occurred before the given block.
+        let epoch_number = Policy::epoch_at(block_number);
+        loop {
+            // If we switched epochs, this epoch is empty.
+            if Policy::epoch_at(block_number) != epoch_number {
+                break 0;
             }
-            end
-        };
-
-        end as usize
+            // If start != end, this is the last block that contained transactions.
+            let (start, end) = self.get_indexes_for_block(block_number, Some(txn));
+            if start != end {
+                break end as usize;
+            }
+            // If we have reached the beginning of the chain, this epoch is empty.
+            if block_number == 0 {
+                break 0;
+            }
+            block_number -= 1;
+        }
     }
 
-    /// Gets all non-finalized historic transactions for a given epoch.
-    fn get_nonfinal_epoch_transactions(
+    /// Gets all historic transactions within an epoch that occurred after the given block.
+    fn get_epoch_transactions_after(
         &self,
-        epoch_number: u32,
+        block_number: u32,
         txn_option: Option<&TransactionProxy>,
     ) -> Vec<HistoricTransaction> {
         let read_txn: TransactionProxy;
@@ -765,6 +727,7 @@ impl HistoryInterface for HistoryStore {
         };
 
         // Get history tree for given epoch.
+        let epoch_number = Policy::epoch_at(block_number);
         let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
             &self.hist_tree_table,
             txn,
@@ -772,43 +735,14 @@ impl HistoryInterface for HistoryStore {
         ));
 
         // Return early if there are no leaves in the HistoryTree for the given epoch.
-        let num_leaves = tree.num_leaves();
+        let num_leaves = tree.num_leaves() as u32;
         if num_leaves == 0 {
             return vec![];
         }
 
-        // Find the block number of the last macro stored for the given epoch.
-        let last_tx = self
-            .get_historic_tx(epoch_number, (num_leaves - 1) as u32, Some(txn))
-            .unwrap();
-        let last_macro_block = Policy::last_macro_block(last_tx.block_number);
-
-        // If the last macro block is in a different epoch, start at 0.
-        let nonfinal_start = if Policy::epoch_at(last_macro_block) != epoch_number {
-            0
-        } else {
-            // Otherwise, find the last block that had transactions.
-            // Usually that is the macro block itself.
-            // Only in the first batch, we actually need the loop.
-            let mut block_number = last_macro_block;
-            let mut nonfinal_start = 0;
-            loop {
-                let (start, end) = self.get_indexes_for_block(block_number, Some(txn));
-                // If start != end, this is the last block that contained finalized transactions.
-                if start != end {
-                    nonfinal_start = end;
-                    break;
-                }
-                // If we switched epochs, start at 0.
-                if Policy::epoch_at(block_number) != epoch_number {
-                    break;
-                }
-                block_number -= 1;
-            }
-            cmp::min(nonfinal_start + 1, num_leaves as u32)
-        };
-
-        self.get_historic_txns(epoch_number, nonfinal_start..num_leaves as u32, Some(txn))
+        // Find the index of the first transaction to return.
+        let start_idx = self.num_epoch_transactions_before(block_number, Some(txn)) as u32;
+        self.get_historic_txns(epoch_number, start_idx..num_leaves, Some(txn))
     }
 
     /// Returns the `chunk_index`th chunk of size `chunk_size` for a given epoch.
