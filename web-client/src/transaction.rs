@@ -612,7 +612,7 @@ impl Transaction {
             },
             proof: {
                 if self.inner.proof.is_empty() {
-                    PlainTransactionProof::Empty(PlainEmptyProof {})
+                    PlainTransactionProof::Empty(PlainEmptyProof::default())
                 } else if self.inner.sender_type == AccountType::HTLC {
                     let proof = OutgoingHTLCTransactionProof::parse(&self.inner).unwrap();
                     match proof {
@@ -902,8 +902,10 @@ pub enum PlainTransactionProof {
 }
 
 /// Placeholder struct to serialize an empty proof of transactions
-#[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
-pub struct PlainEmptyProof {}
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize, Tsify)]
+pub struct PlainEmptyProof {
+    pub raw: String,
+}
 
 /// JSON-compatible and human-readable format of standard transaction proofs.
 #[derive(Clone, serde::Serialize, serde::Deserialize, Tsify)]
@@ -1050,7 +1052,7 @@ impl PlainTransaction {
             data: PlainTransactionRecipientData::Raw(PlainRawData {
                 raw: String::from(""),
             }),
-            proof: PlainTransactionProof::Empty(PlainEmptyProof {}),
+            proof: PlainTransactionProof::Empty(PlainEmptyProof::default()),
             size,
             valid: true,
         }
