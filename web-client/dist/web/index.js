@@ -1,5 +1,5 @@
 import * as Comlink from './comlink.min.mjs';
-import init, { Address, Transaction } from './main-wasm/index.js';
+import { Address, Transaction } from './main-wasm/index.js';
 import { clientFactory } from '../launcher/browser/client-proxy.mjs';
 import { setupMainThreadTransferHandlers } from '../launcher/browser/transfer-handlers.mjs';
 
@@ -13,7 +13,7 @@ const Client = clientFactory(
     worker => Comlink.wrap(worker),
 );
 
+export { default } from './main-wasm/index.js';
 export * from './main-wasm/index.js';
 export { Client };
 export * from '../lib/browser/index.mjs';
-export default init;
