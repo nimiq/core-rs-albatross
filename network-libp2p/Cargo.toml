@@ -32,7 +32,7 @@ log = { workspace = true }
 parking_lot = "0.12"
 pin-project = "1.1"
 pin-project-lite = "0.2.14"
-prometheus-client = { version = "0.22.2", optional = true }
+prometheus-client = { version = "0.22.3", optional = true }
 rand = "0.8"
 serde = "1.0"
 sha2 = "0.10"

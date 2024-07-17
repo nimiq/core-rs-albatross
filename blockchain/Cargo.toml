@@ -24,7 +24,7 @@ futures = { workspace = true }
 hex = "0.4"
 log = { workspace = true }
 parking_lot = "0.12"
-prometheus-client = { version = "0.22.2", optional = true }
+prometheus-client = { version = "0.22.3", optional = true }
 rand = "0.8"
 serde = "1.0"
 thiserror = "1.0"
