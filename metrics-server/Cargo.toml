@@ -27,7 +27,7 @@ hyper = { version = "1.4" }
 hyper-util = { version = "0.1", features = ["server-auto", "tokio"] }
 log = { workspace = true }
 parking_lot = "0.12"
-prometheus-client = "0.22.2"
+prometheus-client = "0.22.3"
 tokio = { version = "1.38", features = [
     "macros",
     "net",
