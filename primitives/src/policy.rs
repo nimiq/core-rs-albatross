@@ -87,8 +87,8 @@ impl Policy {
     /// ceiling division.
     pub const F_PLUS_ONE: u16 = (Self::SLOTS + 3 - 1) / 3;
 
-    /// The timeout in milliseconds for a validator to produce a block (4s)
-    pub const BLOCK_PRODUCER_TIMEOUT: u64 = 4 * 1000;
+    /// The minimum timeout in milliseconds for a validator to produce a block (4s)
+    pub const MINIMUM_PRODUCER_TIMEOUT: u64 = 4 * 1000;
 
     /// The optimal time in milliseconds between blocks (1s)
     pub const BLOCK_SEPARATION_TIME: u64 = 1000;
@@ -576,10 +576,10 @@ impl Policy {
         Self::F_PLUS_ONE
     }
 
-    /// The timeout in milliseconds for a validator to produce a block (2s)
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = BLOCK_PRODUCER_TIMEOUT))]
-    pub fn wasm_block_producer_timeout() -> u64 {
-        Self::BLOCK_PRODUCER_TIMEOUT
+    /// The minimum timeout in milliseconds for a validator to produce a block (4s)
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = MINIMUM_PRODUCER_TIMEOUT))]
+    pub fn wasm_minimum_block_producer_timeout() -> u64 {
+        Self::MINIMUM_PRODUCER_TIMEOUT
     }
 
     /// The optimal time in milliseconds between blocks (1s)

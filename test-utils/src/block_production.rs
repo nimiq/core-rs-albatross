@@ -194,7 +194,7 @@ impl TemporaryBlockProducer {
                 self.producer
                     .next_micro_block(
                         &blockchain,
-                        blockchain.timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT,
+                        blockchain.timestamp() + Policy::MINIMUM_PRODUCER_TIMEOUT,
                         vec![],
                         vec![],
                         extra_data,

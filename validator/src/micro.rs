@@ -11,6 +11,7 @@ use nimiq_block::{Block, EquivocationProof, MicroBlock, SkipBlockInfo};
 use nimiq_blockchain::{BlockProducer, BlockProducerError, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_mempool::mempool::Mempool;
+use nimiq_primitives::policy::Policy;
 use nimiq_time::sleep;
 use nimiq_utils::time::systemtime_to_timestamp;
 use nimiq_validator_network::ValidatorNetwork;
@@ -201,12 +202,18 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         let now = systemtime_to_timestamp(SystemTime::now());
         let wait_until_min = now + self.producer_timeout.as_millis() as u64;
         let wait_until_expected = expected_next_ts
-            + (self.producer_timeout - self.block_separation_time).as_millis() as u64;
+            + (self
+                .producer_timeout
+                .saturating_sub(self.block_separation_time))
+            .as_millis() as u64;
+
         let next_block_timeout = cmp::max(wait_until_min, wait_until_expected) - now;
-        sleep(Duration::from_millis(next_block_timeout)).await;
+        let timeout = Duration::from_millis(next_block_timeout);
+        sleep(timeout).await;
 
         info!(
             block_number = self.block_number,
+            ?timeout,
             "No micro block received within timeout, producing skip block"
         );
 
@@ -246,7 +253,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             if !in_current_state(head) {
                 None
             } else {
-                let timestamp = head.timestamp() + self.producer_timeout.as_millis() as u64;
+                let timestamp = head.timestamp() + Policy::MINIMUM_PRODUCER_TIMEOUT;
 
                 let skip_block = self.block_producer.next_micro_block(
                     &blockchain,

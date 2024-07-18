@@ -36,7 +36,7 @@ jobs:
         - test: Validators90sDownFullNodes
           devnet_args: -t .github/devnet_topologies/four_validators_spammer_3.toml -dt 90 -R
         - test: LowBlockProducerTimeout
-          pre: "sed -i 's/BLOCK_PRODUCER_TIMEOUT: u64 = 4 * 1000;/BLOCK_PRODUCER_TIMEOUT: u64 = 2 * 1000;/g' primitives/src/policy.rs"
+          pre: "sed -i 's/MINIMUM_PRODUCER_TIMEOUT: u64 = 4 * 1000;/MINIMUM_PRODUCER_TIMEOUT: u64 = 2 * 1000;/g' primitives/src/policy.rs"
           devnet_args: -t .github/devnet_topologies/four_validators_spammer_2.toml -k 0 -R
         - test: FiveValidatorsWithSpammer
           devnet_args: -t .github/devnet_topologies/five_validators_multi_spammer.toml -R -k 0

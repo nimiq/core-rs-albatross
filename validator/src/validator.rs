@@ -132,7 +132,10 @@ impl<TValidatorNetwork: ValidatorNetwork> Validator<TValidatorNetwork>
 where
     PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
-    const PRODUCER_TIMEOUT: Duration = Duration::from_millis(Policy::BLOCK_PRODUCER_TIMEOUT);
+    const MAXIMUM_PRODUCER_TIMEOUT: Duration = Duration::from_millis(16_000); // 16 seconds
+    const MINIMUM_PRODUCER_TIMEOUT: Duration =
+        Duration::from_millis(Policy::MINIMUM_PRODUCER_TIMEOUT); // 4 seconds
+    const NUM_BLOCKS_FOR_TIMEOUT_CALCULATION: u32 = 60;
     const BLOCK_SEPARATION_TIME: Duration = Duration::from_millis(Policy::BLOCK_SEPARATION_TIME);
     const EQUIVOCATION_PROOFS_MAX_SIZE: usize = 1_000; // bytes
 
@@ -234,6 +237,58 @@ where
     fn init(&mut self, head_hash: Option<&Blake2bHash>) {
         self.init_epoch();
         self.init_block_producer(head_hash);
+    }
+
+    /// Computes the micro block producer timeout based on historical block data.
+    ///
+    /// This method calculates the timeout duration for a micro block producer by computing the average block
+    /// time over a defined number of previous blocks (`Self::NUM_BLOCKS_FOR_TIMEOUT_CALCULATION`).
+    /// If sufficient block history is not available, it uses the genesis block as a fallback for the calculation.
+    ///
+    /// If the block window is equal or smaller than 1, `Self::MINIMUM_PRODUCER_TIMEOUT` is returned.
+    ///
+    /// The timeout is determined by multiplying the average block time by four. For example
+    /// an average block time of 2 seconds results in a 8 second timeout.
+    ///
+    /// Lastly, the timeout is clamped between `Self::MINIMUM_PRODUCER_TIMEOUT` and `Self::MAXIMUM_PRODUCER_TIMEOUT`.
+    fn compute_micro_block_producer_timeout(
+        head_block: &Block,
+        blockchain: &Blockchain,
+    ) -> Duration {
+        let lower_timestamp;
+        let lower_block_number;
+
+        if let Ok(window_block) = blockchain.get_block_at(
+            head_block
+                .block_number()
+                .saturating_sub(Self::NUM_BLOCKS_FOR_TIMEOUT_CALCULATION),
+            false,
+            None,
+        ) {
+            lower_timestamp = window_block.timestamp();
+            lower_block_number = window_block.block_number();
+        } else {
+            let genesis_block = blockchain
+                .get_block_at(Policy::genesis_block_number(), false, None)
+                .expect("genesis block must be present in the ChainStore");
+
+            lower_timestamp = genesis_block.timestamp();
+            lower_block_number = genesis_block.block_number();
+        }
+
+        let block_window = head_block.block_number().saturating_sub(lower_block_number) as u64;
+        if block_window <= 1 {
+            return Self::MINIMUM_PRODUCER_TIMEOUT;
+        }
+
+        let avg_block_time =
+            (head_block.timestamp().saturating_sub(lower_timestamp)) / (block_window - 1);
+        let timeout = Duration::from_millis(avg_block_time * 4);
+
+        timeout.clamp(
+            Self::MINIMUM_PRODUCER_TIMEOUT,
+            Self::MAXIMUM_PRODUCER_TIMEOUT,
+        )
     }
 
     /// Resets the reactivation state if we sent a reactivate transaction that expired.
@@ -374,8 +429,6 @@ where
                     .get_equivocation_proofs_for_block(Self::EQUIVOCATION_PROOFS_MAX_SIZE);
                 let prev_seed = head.seed().clone();
 
-                drop(blockchain);
-
                 self.micro_producer = Some(ProduceMicroBlock::new(
                     Arc::clone(&self.blockchain),
                     Arc::clone(&self.mempool_task.mempool),
@@ -385,7 +438,7 @@ where
                     equivocation_proofs,
                     prev_seed,
                     next_block_number,
-                    Self::PRODUCER_TIMEOUT,
+                    Self::compute_micro_block_producer_timeout(head, &blockchain),
                     Self::BLOCK_SEPARATION_TIME,
                 ));
             }
