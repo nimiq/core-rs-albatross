@@ -1,6 +1,5 @@
-use nimiq_serde::SerializedMaxSize;
 #[cfg(feature = "serde-derive")]
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 pub use nimiq_utils::key_rng::{SecureGenerate, SecureRng};
 
 pub use self::{
