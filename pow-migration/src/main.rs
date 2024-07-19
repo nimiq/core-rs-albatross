@@ -3,8 +3,8 @@ use std::{fs, process::exit, time::Duration};
 use clap::{Parser, Subcommand};
 use convert_case::{Case, Casing};
 use log::{info, level_filters::LevelFilter};
+use nimiq::config::{config::ClientConfig, config_file::ConfigFile};
 use nimiq_keys::Address;
-use nimiq_lib::config::{config::ClientConfig, config_file::ConfigFile};
 use nimiq_pow_migration::{
     exit_with_error,
     genesis::write_pos_genesis,

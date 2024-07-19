@@ -175,6 +175,7 @@ rust.unused_qualifications = "warn"
 futures = { package = "futures-util", version = "0.3.30" }
 log = { package = "tracing", version = "0.1.40", features = ["log"] }
 
+nimiq = { path = "lib", package = "nimiq-lib", default-features = false }
 nimiq-account = { path = "primitives/account", default-features = false }
 nimiq-block = { path = "primitives/block", default-features = false }
 nimiq-blockchain = { path = "blockchain", default-features = false }
@@ -196,7 +197,6 @@ nimiq-jsonrpc-derive = { git = "https://github.com/nimiq/jsonrpc.git", default-f
 nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git", default-features = false }
 nimiq-key-derivation = { path = "key-derivation", default-features = false }
 nimiq-keys = { path = "keys", default-features = false }
-nimiq-lib = { path = "lib", default-features = false }
 nimiq-light-blockchain = { path = "light-blockchain", default-features = false }
 nimiq-log = { path = "log", default-features = false }
 nimiq-macros = { path = "macros", default-features = false }

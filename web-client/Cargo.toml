@@ -52,10 +52,7 @@ nimiq-transaction-builder = { workspace = true }
 nimiq-utils = { workspace = true, features = ["merkle"] }
 
 [dependencies.nimiq]
-package = "nimiq-lib"
-path = "../lib"
-version = "0.23.0"
-default-features = false
+workspace = true
 features = [
     "panic",
     "web-logging",

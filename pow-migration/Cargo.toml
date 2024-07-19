@@ -31,7 +31,7 @@ nimiq-database = { workspace = true }
 nimiq-genesis-builder = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true }
-nimiq-lib = { workspace = true, features = [
+nimiq = { workspace = true, features = [
     "database-storage",
     "deadlock",
     "full-consensus",
