@@ -377,6 +377,7 @@ mod serde_derive {
         de::{Deserialize, Deserializer, Error, SeqAccess, Unexpected, Visitor},
         ser::{Serialize, SerializeStruct, Serializer},
     };
+    use serde_bytes::ByteBuf;
 
     use super::{KeyNibbles, RootData, TrieNode, TrieNodeChild};
 
@@ -409,8 +410,9 @@ mod serde_derive {
                 )); // Mismatch flags for root data
             }
             let value: Option<Vec<u8>> = seq
-                .next_element()?
-                .ok_or_else(|| A::Error::invalid_length(2, &self))?;
+                .next_element::<Option<ByteBuf>>()?
+                .ok_or_else(|| A::Error::invalid_length(2, &self))?
+                .map(|v| v.into_vec());
             if has_value != value.is_some() {
                 return Err(A::Error::invalid_value(
                     Unexpected::Other("Flags mismatch for value"),
@@ -459,10 +461,7 @@ mod serde_derive {
             let mut state = serializer.serialize_struct("TrieNode", FIELDS.len())?;
             state.serialize_field(FIELDS[0], &flags)?;
             state.serialize_field(FIELDS[1], &self.root_data)?;
-            state.serialize_field(
-                FIELDS[2],
-                &self.value.as_ref().map(|v| serde_bytes::Bytes::new(v)),
-            )?;
+            state.serialize_field(FIELDS[2], &self.value.as_deref().map(ByteBuf::from))?;
             state.serialize_field(FIELDS[3], &child_count)?;
             state.serialize_field(FIELDS[4], &self.children)?;
             state.end()
