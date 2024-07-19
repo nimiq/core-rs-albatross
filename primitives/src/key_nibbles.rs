@@ -363,6 +363,7 @@ mod serde_derive {
         de::{Deserialize, Deserializer, Error, SeqAccess, Unexpected, Visitor},
         ser::{Serialize, SerializeStruct, Serializer},
     };
+    use serde_bytes::ByteBuf;
 
     use super::KeyNibbles;
 
@@ -387,7 +388,7 @@ mod serde_derive {
                 return Err(A::Error::invalid_length(length as usize, &self)); // length too high
             }
             let bytes_length = (length as usize + 1) / 2;
-            let bytes: Vec<u8> = seq
+            let bytes: ByteBuf = seq
                 .next_element()?
                 .ok_or_else(|| A::Error::invalid_length(1, &self))?;
             if bytes.len() > bytes_length {
@@ -395,7 +396,7 @@ mod serde_derive {
             }
             if length % 2 == 1 && bytes[bytes_length - 1] & 0x0f != 0 {
                 return Err(A::Error::invalid_value(
-                    Unexpected::Other("Unused nubble not zeroed"),
+                    Unexpected::Other("Unused nibble not zeroed"),
                     &self,
                 ));
             }
@@ -415,7 +416,7 @@ mod serde_derive {
         {
             let mut state = serializer.serialize_struct("KeyNibbles", FIELDS.len())?;
             state.serialize_field(FIELDS[0], &self.length)?;
-            state.serialize_field(FIELDS[1], &self.bytes[..self.bytes_len()])?;
+            state.serialize_field(FIELDS[1], &ByteBuf::from(&self.bytes[..self.bytes_len()]))?;
             state.end()
         }
     }
