@@ -13,12 +13,15 @@ jobs:
         test:
         - CodeCov1
         - CodeCov2
+        - CodeCov3
 
         include:
         - test: CodeCov1
-          args: first_half
+          args: first_piece
         - test: CodeCov2
-          args: second_half
+          args: second_piece
+        - test: CodeCov3
+          args: third_piece
 
     runs-on: ubuntu-22.04
 
@@ -69,20 +72,25 @@ jobs:
         # fetch all package names
         pkg_names=($(cargo build -p 2>&1 | grep '    ' |  cut -c 5-))
 
-        # find the middle package index
+      
+        # find splitting package indexes
         num_pkgs=${#pkg_names[@]}
-        half_pkgs=$(expr $num_pkgs / 2)
+        pkgs_split=$(expr $num_pkgs / 3) 
+        last_splitting_point=$(($pkgs_split * 2))
         
         # sets the packages to run for both code cov runs
-        first_half=${pkg_names[@]:0:$half_pkgs}
-        second_half=${pkg_names[@]:$half_pkgs:$num_pkgs}
+        first_piece=${pkg_names[@]:0:$pkgs_split}
+        second_piece=${pkg_names[@]:$pkgs_split:$pkgs_split}
+        third_piece=${pkg_names[@]:$last_splitting_point:$num_pkgs}
 
-        first_half=$(echo $first_half | xargs printf -- '-p %s\n')
-        second_half=$(echo $second_half | xargs printf -- '-p %s\n')
+        first_piece=$(echo $first_piece | xargs printf -- '-p %s\n')
+        second_piece=$(echo $second_piece | xargs printf -- '-p %s\n')
+        third_piece=$(echo $third_piece | xargs printf -- '-p %s\n')
 
-        echo $first_half
-        echo $second_half
-
+        echo $first_piece
+        echo $second_piece
+        echo $third_piece
+        
         set -o pipefail
         echo $${{matrix.args}} | xargs cargo llvm-cov nextest --features=nimiq-zkp-component/test-prover
       # Fixme: --doctest is not supported in stable. See:
