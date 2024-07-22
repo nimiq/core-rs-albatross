@@ -899,6 +899,8 @@ impl<N: Network> Stream for BlockQueue<N> {
                         if let Some(block) = self.check_announced_block(block, peer_id, pubsub_id) {
                             return Poll::Ready(Some(block));
                         }
+                    } else {
+                        log::warn!(%block, %peer_id, "Rejecting block as it doesn't come from a synced peer");
                     }
                 }
                 // If the block_stream is exhausted, we quit as well.
