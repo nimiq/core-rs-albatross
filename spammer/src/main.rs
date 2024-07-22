@@ -470,7 +470,7 @@ fn generate_basic_transactions(
         let current_block_number = state.read().unwrap().current_block_number;
         let mut state = state.write().unwrap();
 
-        if rng.gen_bool(config.many_to_many.into()) && state.balances.len() > (2 * count) {
+        if rng.gen_bool(config.many_to_many.into()) && state.balances.len() > (5 * count) {
             //This is the case where we send from an existing account
 
             // Obtain a random index
@@ -499,14 +499,14 @@ fn generate_basic_transactions(
             }
 
             // We need to have at least sufficient funds to pay the txn + fees
-            if sender_account.balance <= Coin::from_u64_unchecked(50) {
+            if sender_account.balance <= Coin::from_u64_unchecked(100) {
                 state.balances.swap_remove(sender_index);
                 continue;
             }
 
             let recipient = Address::from(&recipient_account.key_pair);
-            let amount = Coin::from_u64_unchecked(rng.gen_range(1..5));
-            let fee = Coin::from_u64_unchecked(rng.gen_range(0..3));
+            let amount = Coin::from_u64_unchecked(rng.gen_range(1..3));
+            let fee = Coin::from_u64_unchecked(rng.gen_range(0..2));
 
             let tx = TransactionBuilder::new_basic(
                 &sender_account.key_pair,
@@ -529,7 +529,7 @@ fn generate_basic_transactions(
         let new_kp = KeyPair::generate(&mut rng);
 
         let recipient = Address::from(&new_kp);
-        let amount = Coin::from_u64_unchecked(500);
+        let amount = Coin::from_u64_unchecked(1000);
 
         if config.many_to_many > 0.0 {
             // We can create a new sender account
