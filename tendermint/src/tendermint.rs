@@ -213,6 +213,39 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             .is_some()
     }
 
+    /// Creates an aggregation for a given `id`. If that aggregation does already exist,
+    /// as indicated by the presence of `id` in `self.aggregation_senders` it has no effect.
+    ///
+    /// The vote for this aggregation must exist in `self.state.votes` otherwise this function panics.
+    pub(crate) fn create_aggregation(&mut self, id: (u32, Step)) {
+        // create the aggregation if it does not exist yet
+        if let Entry::Vacant(entry) = self.aggregation_senders.entry(id) {
+            log::debug!(?id, "Creating Aggregation");
+            // Retrieve the vote this node is going to take.
+            let vote = self
+                .state
+                .votes
+                .get(&id)
+                .expect("The vote must exist when trying to create an aggregation.")
+                .clone();
+            // create the channel to dispatch level updates over
+            let (sender, receiver) = mpsc::channel(100);
+            // create the aggregation
+            let aggregation = self.protocol.create_aggregation(
+                self.state.current_round,
+                self.state.current_step,
+                vote,
+                ReceiverStream::new(receiver).boxed(),
+            );
+
+            // insert the sender into the map, such that level updates for the aggregation can be dispatched
+            entry.insert(sender);
+            // add the aggregation to the SelectAll of all aggregations
+            self.aggregations
+                .push(aggregation.map(move |item| (id, item)).boxed());
+        }
+    }
+
     /// Processes gossipped proposals. Only a single gossipped proposal will be accepted for each round.
     /// Subsequent proposals for a round will be ignored and returned on the stream as such.
     ///

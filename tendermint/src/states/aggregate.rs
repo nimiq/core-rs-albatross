@@ -1,8 +1,6 @@
-use std::{collections::btree_map::Entry, task::Context};
+use std::task::Context;
 
-use futures::{future::FutureExt, stream::StreamExt};
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
+use futures::future::FutureExt;
 
 use crate::{
     protocol::{Aggregation, Protocol},
@@ -12,10 +10,9 @@ use crate::{
 
 impl<TProtocol: Protocol> Tendermint<TProtocol> {
     pub(crate) fn aggregate(&mut self, cx: &mut Context<'_>) -> Option<Return<TProtocol>> {
-        // create  the aggregation if it does not exist yet.
-        self.create_aggregation();
-
+        // Create the current aggregation if it does not exist yet.
         let round_and_step = (self.state.current_round, self.state.current_step);
+        self.create_aggregation(round_and_step);
 
         // get the best aggregate for the identifier. If it does not exist, there is nothing to check.
         let current_best = self.state.best_votes.get(&round_and_step)?;
@@ -198,39 +195,6 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
                     .retain(|round, _contributors| round > &self.state.current_round);
             }
             Step::Propose => unreachable!(),
-        }
-    }
-
-    /// Creates an aggregation for `(self.state.current_round, self.state.current_step)`. If that aggregation does already exist,
-    /// as indicated by the presence of `id` in `self.aggregation_senders` it has no effect.
-    ///
-    /// The vote for this aggregation must exist in `self.state.votes` otherwise this function panics.
-    fn create_aggregation(&mut self) {
-        // Create identifier for the current aggregation
-        let id = (self.state.current_round, self.state.current_step);
-
-        // create the aggregation if it does not exist yet
-        if let Entry::Vacant(entry) = self.aggregation_senders.entry(id) {
-            log::debug!(?id, "Creating Aggregation");
-            // Retrieve the vote this node is going to take.
-            let vote = self.state.votes.get(&id).expect("").clone();
-            // create the corresponding contribution necessary to start an aggregation
-            // let contribution = self.dependencies.create_contribution(self.state.current_round, self.state.current_step, vote);
-            // create the channel to dispatch level updates over
-            let (sender, receiver) = mpsc::channel(100);
-            // create the aggregation
-            let aggregation = self.protocol.create_aggregation(
-                self.state.current_round,
-                self.state.current_step,
-                vote,
-                ReceiverStream::new(receiver).boxed(),
-            );
-
-            // insert the sender into the map, such that level updates for the aggregation can be dispatched
-            entry.insert(sender);
-            // add the aggregation to the SelectAll of all aggregations
-            self.aggregations
-                .push(aggregation.map(move |item| (id, item)).boxed());
         }
     }
 }
