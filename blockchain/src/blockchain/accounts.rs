@@ -11,6 +11,7 @@ use nimiq_primitives::{
 };
 use nimiq_serde::Deserialize;
 use nimiq_trie::WriteTransactionProxy;
+use std::time::Instant;
 
 use crate::{interface::HistoryInterface, Blockchain};
 
@@ -83,6 +84,7 @@ impl Blockchain {
                 );
 
                 // Commit block to AccountsTree and create the receipts.
+                let start = Instant::now();
                 let revert_info: RevertInfo = if accounts.is_complete(Some(txn)) {
                     accounts
                         .commit(
@@ -98,6 +100,8 @@ impl Blockchain {
                 } else {
                     return Err(PushError::MissingAccountsTrieDiff);
                 };
+                let duration = start.elapsed();
+                log::info!("Time elapsed in accounts commit is: {:?}", duration);
 
                 // Check that the transaction results match the ones in the block.
                 if let RevertInfo::Receipts(receipts) = &revert_info {
@@ -126,11 +130,17 @@ impl Blockchain {
                     &revert_info,
                 );
 
+                let start = Instant::now();
                 let total_tx_size = self
                     .history_store
                     .add_block(txn.raw(), block, inherents)
                     .expect("Failed to store history")
                     .1;
+                let duration = start.elapsed();
+                log::info!(
+                    "Time elapsed in history store add block  is: {:?}",
+                    duration
+                );
 
                 Ok(total_tx_size)
             }

@@ -1,5 +1,3 @@
-use std::{cmp, error::Error, ops::Deref};
-
 use nimiq_account::{BlockLog, BlockLogger};
 use nimiq_block::{Block, ForkProof, MicroBlock};
 use nimiq_blockchain_interface::{
@@ -21,6 +19,8 @@ use nimiq_primitives::{
 };
 use nimiq_trie::WriteTransactionProxy as TrieWriteTransactionProxy;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
+use std::time::Instant;
+use std::{cmp, error::Error, ops::Deref};
 use tokio::sync::broadcast::Sender as BroadcastSender;
 
 use crate::{interface::HistoryInterface, Blockchain};
@@ -302,9 +302,12 @@ impl Blockchain {
             block_number,
             chain_info.head.timestamp(),
         );
+        let start = Instant::now();
         let total_tx_size =
             this.check_and_commit(&chain_info.head, diff, &mut txn, &mut block_logger)?;
 
+        let duration = start.elapsed();
+        log::info!("Time elapsed in check and commit is: {:?}", duration);
         chain_info.on_main_chain = true;
         chain_info.set_cumulative_hist_tx_size(&prev_info, total_tx_size);
         chain_info.history_tree_len =
@@ -335,7 +338,10 @@ impl Blockchain {
             }
         }
 
+        let start = Instant::now();
         txn.commit();
+        let duration = start.elapsed();
+        log::info!("Time elapsed in txn.commit is: {:?}", duration);
 
         if let Block::Macro(ref macro_block) = chain_info.head {
             this.state.macro_info = chain_info.clone();
