@@ -361,72 +361,113 @@ mod serde_derive {
     use std::fmt;
 
     use serde::{
-        de::{Deserialize, Deserializer, Error, SeqAccess, Unexpected, Visitor},
-        ser::{Serialize, SerializeStruct, Serializer},
+        de::{Deserializer, Error, Unexpected, Visitor},
+        ser::Serializer,
+        Deserialize, Serialize,
     };
 
-    use super::KeyNibbles;
-
-    const FIELDS: &[&str] = &["length", "bytes"];
-    struct KeyNibblesVisitor;
-
-    impl<'de> Visitor<'de> for KeyNibblesVisitor {
-        type Value = KeyNibbles;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("struct MerklePath")
-        }
-
-        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-        where
-            A: SeqAccess<'de>,
-        {
-            let length: u8 = seq
-                .next_element()?
-                .ok_or_else(|| A::Error::invalid_length(0, &self))?;
-            if length > KeyNibbles::MAX_BYTES as u8 * 2 {
-                return Err(A::Error::invalid_length(length as usize, &self)); // length too high
-            }
-            let bytes_length = (length as usize + 1) / 2;
-            let bytes: Vec<u8> = seq
-                .next_element()?
-                .ok_or_else(|| A::Error::invalid_length(1, &self))?;
-            if bytes.len() > bytes_length {
-                return Err(A::Error::invalid_length(bytes_length, &self)); // bytes length too high
-            }
-            if length % 2 == 1 && bytes[bytes_length - 1] & 0x0f != 0 {
-                return Err(A::Error::invalid_value(
-                    Unexpected::Other("Unused nubble not zeroed"),
-                    &self,
-                ));
-            }
-            let mut nibble_bytes = [0u8; KeyNibbles::MAX_BYTES];
-            nibble_bytes[..bytes_length].copy_from_slice(&bytes);
-            Ok(KeyNibbles {
-                bytes: nibble_bytes,
-                length,
-            })
-        }
-    }
-
-    impl Serialize for KeyNibbles {
+    impl Serialize for super::KeyNibbles {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
         {
-            let mut state = serializer.serialize_struct("KeyNibbles", FIELDS.len())?;
-            state.serialize_field(FIELDS[0], &self.length)?;
-            state.serialize_field(FIELDS[1], &self.bytes[..self.bytes_len()])?;
-            state.end()
+            KeyNibbles {
+                len: self.len() as u8,
+                bytes: KeyNibblesBytes {
+                    len: self.bytes_len() as u8,
+                    bytes: self.bytes,
+                },
+            }
+            .serialize(serializer)
         }
     }
 
-    impl<'de> Deserialize<'de> for KeyNibbles {
+    impl<'de> Deserialize<'de> for super::KeyNibbles {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: Deserializer<'de>,
         {
-            deserializer.deserialize_struct("KeyNibbles", FIELDS, KeyNibblesVisitor)
+            let result: KeyNibbles = Deserialize::deserialize(deserializer)?;
+            if result.len > super::KeyNibbles::MAX_BYTES as u8 * 2 {
+                // length too high
+                return Err(D::Error::invalid_length(
+                    result.len as usize,
+                    &"fewer nibbles",
+                ));
+            }
+            if result.bytes.len != (result.len + 1) / 2 {
+                // bytes length incorrect
+                return Err(D::Error::invalid_length(
+                    result.bytes.len as usize,
+                    &"matching nibble/byte length",
+                ));
+            }
+            if result.len % 2 == 1 && result.bytes.bytes[result.bytes.len as usize - 1] & 0x0f != 0
+            {
+                return Err(D::Error::invalid_value(
+                    Unexpected::Other("Unused nibble not zeroed"),
+                    &"unused nibbles being zeroed",
+                ));
+            }
+            Ok(super::KeyNibbles {
+                length: result.len,
+                bytes: result.bytes.bytes,
+            })
+        }
+    }
+
+    #[derive(Deserialize, Serialize)]
+    struct KeyNibbles {
+        len: u8,
+        bytes: KeyNibblesBytes,
+    }
+
+    struct KeyNibblesBytes {
+        len: u8,
+        bytes: [u8; super::KeyNibbles::MAX_BYTES],
+    }
+
+    struct KeyNibblesBytesVisitor;
+
+    impl<'de> Visitor<'de> for KeyNibblesBytesVisitor {
+        type Value = KeyNibblesBytes;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            write!(
+                formatter,
+                "maximum of {} key nibble bytes",
+                super::KeyNibbles::MAX_BYTES
+            )
+        }
+
+        fn visit_bytes<E: Error>(self, v: &[u8]) -> Result<KeyNibblesBytes, E> {
+            if v.len() > super::KeyNibbles::MAX_BYTES {
+                return Err(E::invalid_length(v.len(), &self)); // length too high
+            }
+            let mut result = KeyNibblesBytes {
+                len: v.len() as u8,
+                bytes: [0; super::KeyNibbles::MAX_BYTES],
+            };
+            result.bytes[..v.len()].copy_from_slice(v);
+            Ok(result)
+        }
+    }
+
+    impl Serialize for KeyNibblesBytes {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            serializer.serialize_bytes(&self.bytes[..self.len as usize])
+        }
+    }
+
+    impl<'de> Deserialize<'de> for KeyNibblesBytes {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            deserializer.deserialize_bytes(KeyNibblesBytesVisitor)
         }
     }
 }
