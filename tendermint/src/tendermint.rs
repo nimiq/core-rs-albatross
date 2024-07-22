@@ -81,6 +81,11 @@ pub struct Tendermint<TProtocol: Protocol> {
     /// of the poll function as well.
     state_return_pending: bool,
 
+    /// Keeps track of aggregations which need to be started. It gets populated in the event of a skip ahead to a future round.
+    /// It will get emptied on a subsequent poll call such that the state which for the first time included the votes to these
+    /// aggregations has been exported, prior to creating them.
+    pending_aggregation_starts: BTreeSet<(u32, Step)>,
+
     /// Set once a decision was reached. The next call to poll will then return Poll::Ready(None)
     decision: bool,
 
@@ -120,6 +125,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             timeout: None,
             decision: false,
             state_return_pending: false,
+            pending_aggregation_starts: BTreeSet::default(),
             waker: None,
         };
 
@@ -396,7 +402,8 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
     }
 
     /// Dispatches incoming aggregation messages to the appropriate aggregations. If messages for future aggregations are received,
-    /// they are accumulated and once any round reaches f+1 contributions that round is fast tracked to.
+    /// they are accumulated and once any round reaches f+1 contributions that round is fast tracked to. That is the only case where
+    /// `should_export_state` will be set to true by this function.
     ///
     /// Returns
     /// * `None` if all messages were successfully dispatched while `level_update_stream` was polled
@@ -431,8 +438,26 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
 
                             // check if the skip ahead condition is fulfilled. If so, the state machine can be set to propose for round id.0
                             if contributors.len() >= TProtocol::F_PLUS_ONE {
-                                // skip to that round
-                                *should_export_state = true;
+                                // Vote None for all aggregations in between, as there is nothing to go by.
+                                // Keep track on aggregations which receive a vote.
+                                for round_number in self.state.current_round..round {
+                                    if let Entry::Vacant(entry) =
+                                        self.state.votes.entry((round_number, Step::Prevote))
+                                    {
+                                        entry.insert(None);
+                                        self.pending_aggregation_starts
+                                            .insert((round_number, Step::Prevote));
+                                    }
+                                    if let Entry::Vacant(entry) =
+                                        self.state.votes.entry((round_number, Step::Precommit))
+                                    {
+                                        entry.insert(None);
+                                        self.pending_aggregation_starts
+                                            .insert((round_number, Step::Precommit));
+                                    }
+                                }
+
+                                // Skip to that round
                                 self.state.current_round = round;
                                 self.state.current_step = Step::Propose;
                                 self.future_contributions.retain(|&round, _contributors| {
@@ -441,7 +466,10 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
                                 self.future_round_messages
                                     .retain(|_, message| message.tag.0 > self.state.current_round);
 
-                                // Return to account the state change
+                                // The state changed and thus must be exported.
+                                *should_export_state = true;
+
+                                // Return to account for the state change
                                 return None;
                             }
                         }
@@ -680,7 +708,6 @@ impl<TProtocol: Protocol> Stream for Tendermint<TProtocol> {
         }
 
         // Poll gossipped proposals.
-        let mut should_export_state = false;
         if let Some(proposal) = self.process_next_proposal(cx) {
             // In case a proposal was received it must be indicated if it was ignored, refused or accepted.
             // If the state has changed by processing the proposal the previous function call has already
@@ -688,6 +715,9 @@ impl<TProtocol: Protocol> Stream for Tendermint<TProtocol> {
             // regardless of the actual result of the next poll call.
             return Poll::Ready(Some(proposal));
         }
+
+        // Keep track of state changes which need to be exported.
+        let mut should_export_state = false;
 
         // These future might eventually return None once
         while let Poll::Ready(Some((signed_proposal, id))) =
@@ -699,13 +729,17 @@ impl<TProtocol: Protocol> Stream for Tendermint<TProtocol> {
                     should_export_state = true;
                 }
             }
-            // Do nothing if the future ultimately resolved to None.
+            // Do nothing if the future ultimately resolved to None or Pending.
         }
 
         // Poll incoming level updates and dispatch to corresponding aggregations.
+        // An incurred state change is a skip ahead to a future round, voting on in between aggregations as well.
+        // In that case the step will be Step::Propose.
         let failed_message_opt = self.dispatch_messages(cx, &mut should_export_state);
 
         // Poll all currently ongoing aggregations
+        // An incurred state change is at least one improved aggregate. Additionally state.valid may change if
+        // an aggregation exceeds the threshold.
         if let Some(decision) = self.poll_aggregations(cx, &mut should_export_state) {
             self.decision = true;
             return Poll::Ready(Some(Return::Decision(decision)));
@@ -769,19 +803,25 @@ impl<TProtocol: Protocol> Stream for Tendermint<TProtocol> {
             return Poll::Ready(Some(Return::Update(self.state.clone())));
         }
 
-        // The state machine returned Poll::Pending and so should the poll function. However whenever we have just
-        // created an aggregation within running the state machine that aggregation has not been polled itself.
-        // Thus it has not produced the first aggregate altering the state. If the poll function loops once to poll it,
-        // it will always produce a first aggregate and thus a new meaningful state to return.
+        // The state machine returned Poll::Pending and so should the poll function.
+        // There may be pending aggregation starts which will create new aggregations.
+        let aggregations_created = !self.pending_aggregation_starts.is_empty();
+        while let Some(id) = self.pending_aggregation_starts.pop_first() {
+            self.create_aggregation(id);
+        }
 
-        if self.state.current_step != Step::Propose
-            && !self
-                .state
-                .best_votes
-                .contains_key(&(self.state.current_round, self.state.current_step))
-            && self
-                .aggregation_senders
-                .contains_key(&(self.state.current_round, self.state.current_step))
+        // Whenever we have just created an aggregation within running the state machine or pending_aggregation_starts,
+        // those aggregations have not yet been polled. Thus they have not produced their first aggregates altering the state.
+        // If the poll function loops once to poll it, they will always produce a first aggregate and thus a new meaningful state to return.
+        if aggregations_created
+            || self.state.current_step != Step::Propose
+                && !self
+                    .state
+                    .best_votes
+                    .contains_key(&(self.state.current_round, self.state.current_step))
+                && self
+                    .aggregation_senders
+                    .contains_key(&(self.state.current_round, self.state.current_step))
         {
             // Poll all currently ongoing aggregations again, as a new aggregation was created.
             if let Some(decision) = self.poll_aggregations(cx, &mut should_export_state) {
