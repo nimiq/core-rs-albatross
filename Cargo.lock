@@ -3359,13 +3359,14 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "0.8.11"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4a650543ca06a924e8b371db273b2756685faae30f8487da1b56505a8f78b0c"
+checksum = "4569e456d394deccd22ce1c1913e6ea0e54519f577285001215d33557431afe4"
 dependencies = [
+ "hermit-abi 0.3.9",
  "libc",
  "wasi",
- "windows-sys 0.48.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3876,7 +3877,7 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-client"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#0a4abc1908c94d277ffb6992a034d8e410d92fcf"
+source = "git+https://github.com/nimiq/jsonrpc.git#cc98d9169199345f47caa5023f8b407a2532f440"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -3897,7 +3898,7 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-core"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#0a4abc1908c94d277ffb6992a034d8e410d92fcf"
+source = "git+https://github.com/nimiq/jsonrpc.git#cc98d9169199345f47caa5023f8b407a2532f440"
 dependencies = [
  "log",
  "serde",
@@ -3908,7 +3909,7 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-derive"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#0a4abc1908c94d277ffb6992a034d8e410d92fcf"
+source = "git+https://github.com/nimiq/jsonrpc.git#cc98d9169199345f47caa5023f8b407a2532f440"
 dependencies = [
  "darling",
  "heck 0.5.0",
@@ -3923,7 +3924,7 @@ dependencies = [
 [[package]]
 name = "nimiq-jsonrpc-server"
 version = "0.1.0"
-source = "git+https://github.com/nimiq/jsonrpc.git#0a4abc1908c94d277ffb6992a034d8e410d92fcf"
+source = "git+https://github.com/nimiq/jsonrpc.git#cc98d9169199345f47caa5023f8b407a2532f440"
 dependencies = [
  "async-trait",
  "blake2",
@@ -6864,21 +6865,20 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.38.1"
+version = "1.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb2caba9f80616f438e09748d5acda951967e1ea58508ef53d9c6402485a46df"
+checksum = "9c3318c4fc7126c339a40fbc025927d0328ca32259f68bfe4321660644c1f626"
 dependencies = [
  "backtrace",
  "bytes",
  "libc",
  "mio",
- "num_cpus",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "tracing",
- "windows-sys 0.48.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6893,9 +6893,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "2.3.0"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f5ae998a069d4b5aba8ee9dad856af7d520c3699e6159b185c2acd48155d39a"
+checksum = "693d596312e88961bc67d7f1f97af8a70227d9f90c31bba5806eec004978d752"
 dependencies = [
  "proc-macro2",
  "quote",
