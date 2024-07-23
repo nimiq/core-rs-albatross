@@ -83,6 +83,8 @@ impl Blockchain {
                     Some(txn),
                 );
 
+                let old_accounts_size = accounts.size();
+
                 // Commit block to AccountsTree and create the receipts.
                 let start = Instant::now();
                 let revert_info: RevertInfo = if accounts.is_complete(Some(txn)) {
@@ -101,7 +103,13 @@ impl Blockchain {
                     return Err(PushError::MissingAccountsTrieDiff);
                 };
                 let duration = start.elapsed();
-                log::info!("Time elapsed in accounts commit is: {:?}", duration);
+                let new_accounts_size = accounts.size();
+                log::info!(
+                    "Time elapsed in accounts commit is: {:?}, old size {}, new size {} ",
+                    duration,
+                    old_accounts_size,
+                    new_accounts_size
+                );
 
                 // Check that the transaction results match the ones in the block.
                 if let RevertInfo::Receipts(receipts) = &revert_info {
