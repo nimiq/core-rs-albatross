@@ -3,7 +3,7 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
-    time::{Duration, SystemTime},
+    time::{Duration, Instant, SystemTime},
 };
 
 use futures::{future::BoxFuture, ready, FutureExt, Stream};
@@ -110,6 +110,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                             self.block_number,
                         );
 
+                        let start = Instant::now();
                         let block = self.produce_micro_block(&blockchain);
                         let num_transactions = block
                             .body
@@ -117,11 +118,14 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                             .map(|body| body.transactions.len())
                             .unwrap_or(0);
 
+                        let duration = start.elapsed();
+
                         debug!(
                             block_number = block.header.block_number,
                             num_transactions,
                             ?delay,
-                            "Produced micro block {} with {} transactions",
+                            "{:?} to produce micro block {} with {} transactions",
+                            duration,
                             block,
                             num_transactions
                         );
