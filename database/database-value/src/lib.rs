@@ -109,7 +109,7 @@ macro_rules! as_db_bytes {
                     #[allow(clippy::size_of_in_element_count)]
                     Cow::Borrowed(slice::from_raw_parts(
                         self.as_ptr() as *const u8,
-                        std::mem::size_of_val(self),
+                        mem::size_of_val(self),
                     ))
                 }
             }
