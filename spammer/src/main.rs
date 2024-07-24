@@ -124,7 +124,7 @@ enum SpamType {
 const UNIT_KEY: &str = "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
 const DEV_KEY: &str = "1ef7aad365c195462ed04c275d47189d5362bbfe36b5e93ce7ba2f3add5f439b";
 
-const MAX_SENDER_ACCOUNTS: usize = 10000;
+const MAX_SENDER_ACCOUNTS: usize = 100;
 
 async fn main_inner() -> Result<(), Error> {
     // Keep for potential future reactivation
@@ -459,7 +459,6 @@ fn generate_basic_transactions(
     let mut txs = Vec::new();
 
     let mut rng = thread_rng();
-    let mut accounts_idx: HashSet<usize> = HashSet::new();
 
     log::debug!(
         "Generating transactions, currently tracking {} accounts",
@@ -470,20 +469,13 @@ fn generate_basic_transactions(
         let current_block_number = state.read().unwrap().current_block_number;
         let mut state = state.write().unwrap();
 
-        if rng.gen_bool(config.many_to_many.into()) && state.balances.len() > (5 * count) {
+        if state.balances.len() > MAX_SENDER_ACCOUNTS {
             //This is the case where we send from an existing account
 
             // Obtain a random index
             let accounts_len = state.balances.len();
 
-            let mut sender_index = rng.gen_range(0..accounts_len);
-
-            // This is used to make sure we select different sender accounts for each set of txns.
-            while accounts_idx.contains(&sender_index) {
-                sender_index = rng.gen_range(0..accounts_len);
-            }
-
-            accounts_idx.insert(sender_index);
+            let sender_index = rng.gen_range(0..accounts_len);
 
             let mut recipient_index = rng.gen_range(0..accounts_len);
             while sender_index == recipient_index {
@@ -498,15 +490,9 @@ fn generate_basic_transactions(
                 continue;
             }
 
-            // We need to have at least sufficient funds to pay the txn + fees
-            if sender_account.balance <= Coin::from_u64_unchecked(100) {
-                state.balances.swap_remove(sender_index);
-                continue;
-            }
-
             let recipient = Address::from(&recipient_account.key_pair);
-            let amount = Coin::from_u64_unchecked(rng.gen_range(1..3));
-            let fee = Coin::from_u64_unchecked(rng.gen_range(0..2));
+            let amount = Coin::from_u64_unchecked(rng.gen_range(1..10));
+            let fee = Coin::from_u64_unchecked(rng.gen_range(0..10));
 
             let tx = TransactionBuilder::new_basic(
                 &sender_account.key_pair,
@@ -529,11 +515,11 @@ fn generate_basic_transactions(
         let new_kp = KeyPair::generate(&mut rng);
 
         let recipient = Address::from(&new_kp);
-        let amount = Coin::from_u64_unchecked(1000);
+        let amount = Coin::from_u64_unchecked(100000);
 
         if config.many_to_many > 0.0 {
             // We can create a new sender account
-            if state.balances.len() < MAX_SENDER_ACCOUNTS {
+            if state.balances.len() <= MAX_SENDER_ACCOUNTS {
                 state.balances.push(SpammerAccounts {
                     key_pair: new_kp,
                     balance: amount,
