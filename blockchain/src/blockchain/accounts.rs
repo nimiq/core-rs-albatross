@@ -10,6 +10,7 @@ use nimiq_primitives::{
     trie::{error::IncompleteTrie, trie_diff::TrieDiff, trie_proof::TrieProof},
 };
 use nimiq_serde::Deserialize;
+use nimiq_transaction::inherent::Inherent;
 use nimiq_trie::WriteTransactionProxy;
 use std::time::Instant;
 
@@ -34,7 +35,7 @@ impl Blockchain {
         diff: Option<TrieDiff>,
         txn: &mut WriteTransactionProxy,
         block_logger: &mut BlockLogger,
-    ) -> Result<u64, PushError> {
+    ) -> Result<Vec<Inherent>, PushError> {
         // Get the accounts from the state.
         let accounts = &self.state.accounts;
         let block_state = BlockState::new(block.block_number(), block.timestamp());
@@ -58,13 +59,7 @@ impl Blockchain {
                 // as rebranching across this block is not possible.
                 self.chain_store.clear_revert_infos(txn.raw());
 
-                let total_tx_size = self
-                    .history_store
-                    .add_block(txn.raw(), block, inherents)
-                    .expect("Failed to store history")
-                    .1;
-
-                Ok(total_tx_size)
+                Ok(inherents)
             }
             Block::Micro(ref micro_block) => {
                 // Get the body of the block.
@@ -137,22 +132,31 @@ impl Blockchain {
                     micro_block.header.block_number,
                     &revert_info,
                 );
-
-                let start = Instant::now();
-                let total_tx_size = self
-                    .history_store
-                    .add_block(txn.raw(), block, inherents)
-                    .expect("Failed to store history")
-                    .1;
-                let duration = start.elapsed();
-                log::info!(
-                    "Time elapsed in history store add block  is: {:?}",
-                    duration
-                );
-
-                Ok(total_tx_size)
+                Ok(inherents)
             }
         }
+    }
+
+    pub(crate) fn commit_history(
+        &self,
+        block: &Block,
+        txn: &mut WriteTransactionProxy,
+        inherents: Vec<Inherent>,
+    ) -> Result<u64, PushError> {
+        // Check the type of the block.
+        let start = Instant::now();
+        let total_tx_size = self
+            .history_store
+            .add_block(txn.raw(), block, inherents)
+            .expect("Failed to store history")
+            .1;
+        let duration = start.elapsed();
+        log::info!(
+            "Time elapsed in history store add block  is: {:?}",
+            duration
+        );
+
+        Ok(total_tx_size)
     }
 
     /// Reverts the accounts given a block. This only applies to micro blocks and skip blocks, since

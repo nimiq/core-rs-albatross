@@ -501,14 +501,10 @@ impl Blockchain {
             "Found common ancestor",
         );
 
-        let mut write_txn = self.write_transaction();
-        if let Err(remove_chain) =
-            Blockchain::rebranch_to(self, &mut fork_chain, &mut ancestor, &mut write_txn)
-        {
+        if let Err(remove_chain) = Blockchain::rebranch_to(self, &mut fork_chain, &mut ancestor) {
             // Failed to apply blocks. All blocks within revert chain must be removed.
             // To do that the txn must be aborted first, as the txn will be committed and
             // prior changes are unwanted.
-            write_txn.abort();
 
             // Delete invalid fork blocks from store.
             // Create a new write transaction which will be committed.
@@ -525,6 +521,7 @@ impl Blockchain {
             return Err(PushError::InvalidFork);
         }
         // The state is now prepared contained within `write_txn` to just invoke verify_proposal_state.
+        let mut write_txn = self.write_transaction();
         self.verify_proposal_state(block, &mut write_txn)
     }
 }

@@ -2,7 +2,7 @@ use std::error::Error;
 
 use nimiq_account::{BlockLog, BlockLogger};
 use nimiq_blockchain_interface::{ChainInfo, PushError};
-use nimiq_database::{TransactionProxy, WriteTransactionProxy};
+use nimiq_database::{traits::WriteTransaction, TransactionProxy, WriteTransactionProxy};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::trie::trie_diff::TrieDiff;
 
@@ -87,11 +87,11 @@ impl Blockchain {
         &self,
         target_chain: &mut [(Blake2bHash, ChainInfo, Option<TrieDiff>)],
         ancestor: &mut (Blake2bHash, ChainInfo, Option<TrieDiff>),
-        write_txn: &mut WriteTransactionProxy,
     ) -> Result<
         (Vec<(Blake2bHash, ChainInfo)>, Vec<BlockLog>),
         Vec<(Blake2bHash, ChainInfo, Option<TrieDiff>)>,
     > {
+        let mut write_txn = self.write_transaction();
         // Keeps track of the currently investigated block
         let mut current = (self.state.head_hash.clone(), self.state.main_chain.clone());
         // Collects the reverted blocks
@@ -112,14 +112,17 @@ impl Blockchain {
             let prev_hash = block.parent_hash().clone();
             let prev_info = self
                 .chain_store
-                .get_chain_info(&prev_hash, true, Some(write_txn))
+                .get_chain_info(&prev_hash, true, Some(&write_txn))
                 .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
 
             // If previously a part of the accounts tree was missing the corresponding chunk must be reverted as well.
             if let Some(ref prev_missing_range) = current.1.prev_missing_range {
                 self.state
                     .accounts
-                    .revert_chunk(&mut write_txn.into(), prev_missing_range.start.clone())
+                    .revert_chunk(
+                        &mut (&mut write_txn).into(),
+                        prev_missing_range.start.clone(),
+                    )
                     .map_err(|error| {
                         warn!(
                             %block,
@@ -138,7 +141,7 @@ impl Blockchain {
             let total_tx_size = self
                 .revert_accounts(
                     &self.state.accounts,
-                    &mut write_txn.into(),
+                    &mut (&mut write_txn).into(),
                     &block,
                     &mut block_logger,
                 )
@@ -156,7 +159,7 @@ impl Blockchain {
             block_logs.push(block_logger.build(total_tx_size));
 
             // Verify accounts hash if the tree is complete or changes only happened in the complete part.
-            if let Some(accounts_hash) = self.state.accounts.get_root_hash(Some(write_txn)) {
+            if let Some(accounts_hash) = self.state.accounts.get_root_hash(Some(&write_txn)) {
                 assert_eq!(
                     prev_info.head.state_root(),
                     &accounts_hash,
@@ -178,6 +181,7 @@ impl Blockchain {
 
         // Pushing must happen in reverse.
         let mut target_chain_iter = target_chain.iter().rev();
+        write_txn.commit();
 
         while let Some(block) = target_chain_iter.next() {
             // Collect logs for the upcoming push.
@@ -191,7 +195,6 @@ impl Blockchain {
             match self.check_and_commit(
                 &block.1.head,
                 block.2.clone(),
-                write_txn,
                 &mut block_logger,
             ) {
                 Ok(total_tx_size)
@@ -220,19 +223,24 @@ impl Blockchain {
             }
         }
 
+        let mut write_txn = self.write_transaction();
         // Unset on_main_chain flag / main_chain_successor on the current main chain up to (excluding) the common ancestor.
         for reverted_block in revert_chain.iter_mut() {
             reverted_block.1.on_main_chain = false;
             reverted_block.1.main_chain_successor = None;
 
-            self.chain_store
-                .put_chain_info(write_txn, &reverted_block.0, &reverted_block.1, false);
+            self.chain_store.put_chain_info(
+                &mut write_txn,
+                &reverted_block.0,
+                &reverted_block.1,
+                false,
+            );
         }
 
         // Update the main_chain_successor of the common ancestor block.
         ancestor.1.main_chain_successor = Some(target_chain.last().unwrap().0.clone());
         self.chain_store
-            .put_chain_info(write_txn, &ancestor.0, &ancestor.1, false);
+            .put_chain_info(&mut write_txn, &ancestor.0, &ancestor.1, false);
 
         // Set on_main_chain flag / main_chain_successor on the fork.
         for i in (0..target_chain.len()).rev() {
@@ -248,12 +256,14 @@ impl Blockchain {
 
             // Include the body of the new block (at position 0).
             self.chain_store
-                .put_chain_info(write_txn, &fork_block.0, &fork_block.1, i == 0);
+                .put_chain_info(&mut write_txn, &fork_block.0, &fork_block.1, i == 0);
         }
 
         // Update the head.
         let new_head_hash = &target_chain[0].0;
-        self.chain_store.set_head(write_txn, new_head_hash);
+        self.chain_store.set_head(&mut write_txn, new_head_hash);
+
+        write_txn.commit();
 
         Ok((revert_chain, block_logs))
     }

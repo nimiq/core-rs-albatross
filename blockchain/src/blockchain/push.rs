@@ -291,7 +291,6 @@ impl Blockchain {
         chunks: Vec<TrieChunkWithStart>,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
-        let mut txn = this.write_transaction();
 
         let block_number = this.block_number() + 1;
         let is_macro_block = Policy::is_macro_block_at(block_number);
@@ -303,9 +302,9 @@ impl Blockchain {
             chain_info.head.timestamp(),
         );
         let start = Instant::now();
-        let total_tx_size =
-            this.check_and_commit(&chain_info.head, diff, &mut txn, &mut block_logger)?;
+        let total_tx_size = this.check_and_commit(&chain_info.head, diff, &mut block_logger)?;
 
+        let mut txn = this.write_transaction();
         let duration = start.elapsed();
         log::info!("Time elapsed in check and commit is: {:?}", duration);
         chain_info.on_main_chain = true;
@@ -427,29 +426,28 @@ impl Blockchain {
         );
 
         let mut write_txn = this.write_transaction();
-        let (revert_chain, block_logs) =
-            match this.rebranch_to(&mut fork_chain, &mut ancestor, &mut write_txn) {
-                Ok(r) => r,
-                Err(remove_chain) => {
-                    // Failed to apply blocks. All blocks within remove chain must be removed.
-                    // To do that the txn must be aborted first, as the changes need to be undone first.
-                    write_txn.abort();
+        let (revert_chain, block_logs) = match this.rebranch_to(&mut fork_chain, &mut ancestor) {
+            Ok(r) => r,
+            Err(remove_chain) => {
+                // Failed to apply blocks. All blocks within remove chain must be removed.
+                // To do that the txn must be aborted first, as the changes need to be undone first.
+                write_txn.abort();
 
-                    // Delete invalid fork blocks from store.
-                    // Create a new write transaction which will be committed.
-                    let mut write_txn = this.write_transaction();
-                    for block in remove_chain {
-                        this.chain_store.remove_chain_info(
-                            &mut write_txn,
-                            &block.0,
-                            block.1.head.block_number(),
-                        );
-                    }
-                    write_txn.commit();
-
-                    return Err(PushError::InvalidFork);
+                // Delete invalid fork blocks from store.
+                // Create a new write transaction which will be committed.
+                let mut write_txn = this.write_transaction();
+                for block in remove_chain {
+                    this.chain_store.remove_chain_info(
+                        &mut write_txn,
+                        &block.0,
+                        block.1.head.block_number(),
+                    );
                 }
-            };
+                write_txn.commit();
+
+                return Err(PushError::InvalidFork);
+            }
+        };
 
         // Commit transaction & update head.
         let new_head_hash = &fork_chain[0].0;
@@ -538,9 +536,9 @@ impl Blockchain {
         &self,
         block: &Block,
         diff: Option<TrieDiff>,
-        txn: &mut WriteTransactionProxy,
         block_logger: &mut BlockLogger,
     ) -> Result<u64, PushError> {
+        let mut txn = self.write_transaction();
         // Check transactions against replay attacks. This is only necessary for micro blocks.
         if block.is_micro() {
             let transactions = block.transactions();
@@ -548,7 +546,7 @@ impl Blockchain {
             if let Some(tx_vec) = transactions {
                 for transaction in tx_vec {
                     let tx_hash = transaction.get_raw_transaction().hash();
-                    if self.contains_tx_in_validity_window(&tx_hash, Some(txn)) {
+                    if self.contains_tx_in_validity_window(&tx_hash, Some(&txn)) {
                         warn!(
                             %block,
                             reason = "transaction already included",
@@ -563,37 +561,56 @@ impl Blockchain {
 
         // Macro blocks: Verify the state against the block before modifying the staking contract.
         // (FinalizeBatch and FinalizeEpoch Inherents clear some fields in preparation for the next epoch.)
-        if let Err(e) = self.verify_block_state_pre_commit(block, txn) {
+        if let Err(e) = self.verify_block_state_pre_commit(block, &txn) {
             warn!(%block, reason = "bad state", error = &e as &dyn Error, "Rejecting block");
             return Err(e);
         }
 
         // Commit block to AccountsTree.
-        let total_tx_size;
-        {
-            let is_complete = self.state.accounts.is_complete(Some(txn));
-            let mut txn: TrieWriteTransactionProxy = txn.into();
+        let total_tx_size = {
+            let is_complete = self.state.accounts.is_complete(Some(&txn));
+            let mut txn_1: TrieWriteTransactionProxy = (&mut txn).into();
             if is_complete {
-                txn.start_recording();
+                txn_1.start_recording();
             }
-            total_tx_size = self.commit_accounts(block, diff, &mut txn, block_logger).map_err(|e| {
+            let inherents = self.commit_accounts(block, diff, &mut txn_1, block_logger).map_err(|e| {
                 warn!(%block, reason = "commit failed", error = &e as &dyn Error, "Rejecting block");
                 #[cfg(feature = "metrics")]
                 self.metrics.note_invalid_block();
                 e
             })?;
             if is_complete {
-                let recorded_diff = txn.stop_recording().into_forward_diff();
+                let recorded_diff = txn_1.stop_recording().into_forward_diff();
                 self.chain_store
-                    .put_accounts_diff(txn.raw(), &block.hash(), &recorded_diff);
+                    .put_accounts_diff(txn_1.raw(), &block.hash(), &recorded_diff);
             }
-        }
+            let start = Instant::now();
+            txn.commit();
+            let duration = start.elapsed();
+            log::info!("Time elapsed in check and commit AT is: {:?}", duration);
 
+            let mut txn = self.write_transaction();
+            let mut txn_1: TrieWriteTransactionProxy = (&mut txn).into();
+            let history_size = self.commit_history(block, &mut txn_1, inherents).map_err(|e| {
+                warn!(%block, reason = "commit failed", error = &e as &dyn Error, "Rejecting block");
+                #[cfg(feature = "metrics")]
+                self.metrics.note_invalid_block();
+                e
+            })?;
+            let start = Instant::now();
+            txn.commit();
+            let duration = start.elapsed();
+            log::info!("Time elapsed in check and commit HS is: {:?}", duration);
+            history_size
+        };
+
+        let txn = self.write_transaction();
         // Verify the state against the block.
-        if let Err(e) = self.verify_block_state_post_commit(block, txn) {
+        if let Err(e) = self.verify_block_state_post_commit(block, &txn) {
             warn!(%block, reason = "bad state", error = &e as &dyn Error, "Rejecting block");
             return Err(e);
         }
+        txn.commit();
 
         Ok(total_tx_size)
     }
