@@ -7,7 +7,7 @@ use std::{
     error::Error,
     pin::Pin,
     sync::Arc,
-    task::{Context, Poll},
+    task::{Context, Poll, Waker},
 };
 
 use futures::{stream::BoxStream, Stream, StreamExt};
@@ -17,7 +17,7 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId};
 use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
-use nimiq_utils::spawn::spawn;
+use nimiq_utils::{spawn::spawn, WakerExt};
 use parking_lot::RwLock;
 use tokio::sync::oneshot::Sender as OneshotSender;
 
@@ -79,6 +79,9 @@ pub struct BlockQueue<N: Network> {
     ///
     pending_requests:
         BTreeMap<u32, HashMap<Blake2bHash, OneshotSender<Result<Block, ResolveBlockError<N>>>>>,
+
+    /// Waker used for the poll function
+    pub(crate) waker: Option<Waker>,
 }
 
 impl<N: Network> BlockQueue<N> {
@@ -134,6 +137,7 @@ impl<N: Network> BlockQueue<N> {
             blocks_pending_push: BTreeSet::new(),
             current_macro_height,
             pending_requests: BTreeMap::default(),
+            waker: None,
         }
     }
 
@@ -933,6 +937,7 @@ impl<N: Network> Stream for BlockQueue<N> {
             }
         }
 
+        self.waker.store_waker(cx);
         Poll::Pending
     }
 }

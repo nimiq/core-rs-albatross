@@ -15,6 +15,7 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::Network;
+use nimiq_utils::WakerExt;
 use parking_lot::Mutex;
 
 use super::QueuedBlock;
@@ -175,6 +176,7 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
         // We need to safely remove the old block stream first.
         let prev_block_stream = mem::replace(&mut self.block_stream, empty().boxed());
         self.block_stream = select(prev_block_stream, block_stream).boxed();
+        self.waker.wake();
     }
 
     fn include_micro_bodies(&self) -> bool {
