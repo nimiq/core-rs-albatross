@@ -21,6 +21,10 @@ path = "src/performance/history-store/main.rs"
 name = "nimiq-performance-accounts-tree"
 path = "src/performance/accounts-tree/main.rs"
 
+[[bin]]
+name = "nimiq-performance-blockchain-push"
+path = "src/performance/blockchain-push/main.rs"
+
 [dependencies]
 ark-ff = "0.4"
 ark-groth16 = { version = "0.4", default-features = false }
@@ -40,6 +44,7 @@ serde = "1.0"
 tempfile = "3.10"
 tokio = { version = "1.39", features = ["rt", "time", "tracing"] }
 tokio-stream = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 nimiq-account = { workspace = true }
 nimiq-block = { workspace = true }
@@ -54,6 +59,7 @@ nimiq-genesis = { workspace = true }
 nimiq-genesis-builder = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true }
+nimiq-log = { workspace = true }
 nimiq-mempool = { workspace = true }
 nimiq-network-interface = { workspace = true }
 nimiq-network-libp2p = { workspace = true }
