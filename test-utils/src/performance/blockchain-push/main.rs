@@ -7,13 +7,11 @@ use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis::{NetworkId, NetworkInfo};
 use nimiq_log::TargetsExt;
-use nimiq_utils::time::OffsetTime;
-
 use nimiq_primitives::policy::Policy;
-
 use nimiq_test_utils::blockchain::{
     fill_micro_blocks_with_txns, sign_macro_block, signing_key, voting_key,
 };
+use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
 use tempfile::tempdir;
 use tracing_subscriber::{
