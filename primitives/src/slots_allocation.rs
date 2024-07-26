@@ -232,7 +232,7 @@ impl Hash for Validators {
         let bytes: Vec<u8> = iter
             .flat_map(|pk| {
                 let mut buffer = [0u8; 285];
-                CanonicalSerialize::serialize_compressed(&pk.into_affine(), &mut &mut buffer[..])
+                CanonicalSerialize::serialize_compressed(&pk.into_affine(), &mut buffer[..])
                     .unwrap();
                 buffer.to_vec()
             })

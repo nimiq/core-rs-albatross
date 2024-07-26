@@ -1656,7 +1656,7 @@ mod tests {
         let key_3 = "413b397fa".parse().unwrap();
         let key_4 = "cfb986f5a".parse().unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let trie = MerkleRadixTrie::new(&env, TestTrie);
         let mut raw_txn = env.write_transaction();
         let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
@@ -1720,7 +1720,7 @@ mod tests {
         let key_3 = "cfb98e0f6".parse().unwrap();
         let key_4 = "cfb98e0f5".parse().unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let trie = MerkleRadixTrie::new(&env, TestTrie);
         let mut raw_txn = env.write_transaction();
         let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
@@ -1780,7 +1780,7 @@ mod tests {
         let key_6 = "ca".parse().unwrap();
         let key_7 = "b".parse().unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let trie = MerkleRadixTrie::new(&env, TestTrie);
         let mut raw_txn = env.write_transaction();
         let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
@@ -1883,7 +1883,7 @@ mod tests {
         let key_4 = "413b391".parse().unwrap();
         let key_5 = "412324".parse().unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let trie = MerkleRadixTrie::new(&env, TestTrie);
         let mut raw_txn = env.write_transaction();
         let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
@@ -1953,7 +1953,7 @@ mod tests {
         let key_4 = "413b391".parse().unwrap();
         let key_5 = "412324".parse().unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let trie = MerkleRadixTrie::new(&env, TestTrie);
 
         let mut raw_txn = env.write_transaction();
@@ -2060,7 +2060,7 @@ mod tests {
         let key_6 = "413f227fb".parse().unwrap();
         let key_7 = "413f227fa0".parse().unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let trie = MerkleRadixTrie::new(&env, TestTrie);
         let mut raw_txn = env.write_transaction();
         let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
@@ -2097,7 +2097,7 @@ mod tests {
             .put_child(&proof_value_2.key, proof_value_2.hash_assert())
             .unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let trie = MerkleRadixTrie::new_incomplete(&env, TestTrie);
         let mut raw_txn = env.write_transaction();
         let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
@@ -2174,7 +2174,7 @@ mod tests {
         let key_4 = "413b391".parse().unwrap();
         let key_5: KeyNibbles = "412324".parse().unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let original = MerkleRadixTrie::new(&env, TestTrie);
         let mut raw_txn = env.write_transaction();
         let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
@@ -2199,7 +2199,7 @@ mod tests {
 
     #[test]
     fn complete_tree_does_not_accept_chunks() {
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let original = MerkleRadixTrie::new(&env, TestTrie);
         let trie = MerkleRadixTrie::new(&env, TestTrieCopy);
         let mut raw_txn = env.write_transaction();
@@ -2222,7 +2222,7 @@ mod tests {
         let key_4 = "413b391".parse().unwrap();
         let key_5 = "412324".parse().unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let original = MerkleRadixTrie::new(&env, TestTrie);
         let trie = MerkleRadixTrie::new_incomplete(&env, TestTrieCopy);
         let mut raw_txn = env.write_transaction();
@@ -2290,7 +2290,7 @@ mod tests {
         let key_4 = "413b391".parse().unwrap();
         let key_5 = "412324".parse().unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
 
         let original = MerkleRadixTrie::new(&env, TestTrie);
         let copy = MerkleRadixTrie::new_incomplete(&env, TestTrieCopy);
@@ -2342,7 +2342,7 @@ mod tests {
         let key_4 = "1c".parse().unwrap();
         let key_5 = "81".parse().unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let original = MerkleRadixTrie::new(&env, TestTrie);
         let copy = MerkleRadixTrie::new_incomplete(&env, TestTrieCopy);
         let mut raw_txn = env.write_transaction();
@@ -2394,7 +2394,7 @@ mod tests {
         let key_4 = "413b391".parse().unwrap();
         let key_5 = "412324".parse().unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let original = MerkleRadixTrie::new(&env, TestTrie);
 
         let init_trie = |env: &MdbxDatabase| -> MerkleRadixTrie<TestTrieCopy> {
@@ -2485,7 +2485,7 @@ mod tests {
         let key_3 = "413f227fa".parse().unwrap();
         let key_4 = "413b391".parse().unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let original = MerkleRadixTrie::new(&env, TestTrie);
 
         let mut raw_txn = env.write_transaction();
@@ -2529,7 +2529,7 @@ mod tests {
         let key_3 = "413f227fa".parse().unwrap();
         let key_4 = "413b391".parse().unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let original = MerkleRadixTrie::new(&env, TestTrie);
 
         let mut raw_txn = env.write_transaction();
@@ -2564,7 +2564,7 @@ mod tests {
     fn remove_chunk_on_empty_tree() {
         let key_1 = "413f22".parse().unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let original = MerkleRadixTrie::new(&env, TestTrie);
 
         let mut raw_txn = env.write_transaction();
@@ -2582,7 +2582,7 @@ mod tests {
         let key_4 = "413b391".parse().unwrap();
         let key_5: KeyNibbles = "415324".parse().unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let original = MerkleRadixTrie::new(&env, TestTrie);
 
         let mut raw_txn = env.write_transaction();
@@ -2618,7 +2618,7 @@ mod tests {
         let key_3 = "413f227fa".parse().unwrap();
         let key_4 = "413b391".parse().unwrap();
 
-        let env = nimiq_database::mdbx::MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let original = MerkleRadixTrie::new(&env, TestTrie);
 
         let mut raw_txn = env.write_transaction();

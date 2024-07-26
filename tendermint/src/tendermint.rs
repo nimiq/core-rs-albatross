@@ -304,7 +304,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
     ///
     /// Failing to verify:
     /// * As failing to verify could indicate a malicious validator we might want to introduce punishment here. One
-    /// option to do so is, similar to how we return proposals on the stream, to introduce another `Return` enum variant for that.
+    ///   option to do so is, similar to how we return proposals on the stream, to introduce another `Return` enum variant for that.
     /// * Potentially make a difference between incorrect signatures and incorrect proposals when it comes to punishment.
     fn process_proposal(
         &mut self,
@@ -407,9 +407,9 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
     ///
     /// Returns
     /// * `None` if all messages were successfully dispatched while `level_update_stream` was polled
-    /// until it returned Poll::Pending.
+    ///   until it returned Poll::Pending.
     /// * `Some(tagged_message)` if any message exists for which the sender reports a full channel.
-    /// In this case the stream was not polled until it returned Pending.
+    ///   In this case the stream was not polled until it returned Pending.
     fn dispatch_messages(
         &mut self,
         cx: &mut Context<'_>,

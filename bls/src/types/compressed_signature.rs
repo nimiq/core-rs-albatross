@@ -93,7 +93,7 @@ impl fmt::Display for CompressedSignature {
 impl From<G1Projective> for CompressedSignature {
     fn from(signature: G1Projective) -> Self {
         let mut buffer = [0u8; SIZE];
-        CanonicalSerialize::serialize_compressed(&signature.into_affine(), &mut &mut buffer[..])
+        CanonicalSerialize::serialize_compressed(&signature.into_affine(), &mut buffer[..])
             .unwrap();
         CompressedSignature { signature: buffer }
     }

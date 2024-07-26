@@ -111,6 +111,7 @@ pub enum LiveSyncPeerEvent<TPeerId> {
 /// - Macro sync: Synchronizes up to the last macro block
 /// - Live Sync: Synchronizes the blockchain to the blocks being processed/announced
 ///   by the peers.
+///
 /// These two dynamic trait objects are necessary to implement the different types of
 /// synchronization such as: history sync, full sync and light sync.
 /// The Syncer handles the interactions between these trait objects, the blockchain and

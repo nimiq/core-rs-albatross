@@ -223,7 +223,7 @@ where
     /// Checks one buffered proposal after another until a proposal which can be returned is found. Proposals which cannot be returned are either
     ///  * invalid and thus rejected/ignored
     ///  * have an unresolved predecessor and can thus not be verified. These proposals get removed from the buffer and a future to
-    /// resolve their predecessor is created.
+    ///    resolve their predecessor is created.
     pub fn poll_proposal(
         &mut self,
         blockchain_arc: Arc<RwLock<Blockchain>>,

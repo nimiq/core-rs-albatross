@@ -102,6 +102,7 @@ impl<T: SerializedSize> SerializedMaxSize for T {
 }
 
 #[rustfmt::skip]
+#[allow(unused_qualifications)] // Remove with a MSVR >= 1.80
 mod integer_impls {
     use super::SerializedFixedSize;
     use super::SerializedMaxSize;

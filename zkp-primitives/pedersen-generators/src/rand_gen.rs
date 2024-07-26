@@ -3,7 +3,7 @@
 //! This file serves two functions:
 //! 1) Hosting a tool that can be used to create a 256 bit random seed.
 //! 2) Documenting in a public way the process so that it can be verified that, in fact,
-//! the seed is random
+//!    the seed is random.
 //!
 //! ## Method
 //! The initial random bytes are going to be the concatenated hashes of 15 Bitcoin block headers

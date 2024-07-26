@@ -133,6 +133,7 @@ const PENDING_SIZE: usize = 5;
 ///   1. Request the latest ZKP from a peer
 ///   2. Request epoch IDs from the peer
 ///   3. Request the last (if any) election or checkpoint blocks
+///
 /// If during the process, a peer is deemed as outdated, then it is emitted
 pub struct LightMacroSync<TNetwork: Network> {
     /// The blockchain

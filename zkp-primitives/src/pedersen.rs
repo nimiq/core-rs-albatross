@@ -32,7 +32,7 @@ impl DefaultPedersenParameters95 for MNT4_753 {
 
     fn g1_to_bytes(g1: &Self::G1) -> [u8; 95] {
         let mut buffer = [0u8; 95];
-        CanonicalSerialize::serialize_compressed(&g1.into_affine(), &mut &mut buffer[..]).unwrap();
+        CanonicalSerialize::serialize_compressed(&g1.into_affine(), &mut buffer[..]).unwrap();
         buffer
     }
 }
@@ -44,7 +44,7 @@ impl DefaultPedersenParameters95 for MNT6_753 {
 
     fn g1_to_bytes(g1: &Self::G1) -> [u8; 95] {
         let mut buffer = [0u8; 95];
-        CanonicalSerialize::serialize_compressed(&g1.into_affine(), &mut &mut buffer[..]).unwrap();
+        CanonicalSerialize::serialize_compressed(&g1.into_affine(), &mut buffer[..]).unwrap();
         buffer
     }
 }

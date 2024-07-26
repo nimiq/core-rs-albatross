@@ -27,7 +27,6 @@ console-subscriber = { version = "0.4", features = [
 derive_builder = "0.20"
 directories = "5.0"
 hex = "0.4"
-# human-panic = { version = "1.0", optional = true } currently unused, might be used in the future
 log = { workspace = true }
 log-panics = { version = "2.1", features = ["with-backtrace"], optional = true }
 parking_lot = "0.12"

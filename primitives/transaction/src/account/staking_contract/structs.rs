@@ -7,7 +7,8 @@ use nimiq_serde::{Deserialize, DeserializeError, Serialize, SerializedMaxSize};
 use crate::{SignatureProof, Transaction, TransactionError};
 
 /// We need to distinguish two types of transactions:
-/// 1. Incoming transactions, which include:
+/// 1. Incoming transactions. The type of transaction, parameters and proof are given in the `data` field of this transaction.
+///    Supported incoming transactions are:
 ///     - Validator
 ///         * Create
 ///         * Update
@@ -18,13 +19,13 @@ use crate::{SignatureProof, Transaction, TransactionError};
 ///         * Create
 ///         * Update
 ///         * AddStake
-///     The type of transaction, parameters and proof are given in the data field of the transaction.
-/// 2. Outgoing transactions, which include:
+///
+/// 2. Outgoing transactions. The type of transaction, parameters and proof are given in the `proof` field of this transaction.
+///    Supported outgoing transactions are:
 ///     - Validator
 ///         * Delete
 ///     - Staker
 ///         * RemoveStake
-///     The type of transaction, parameters and proof are given in the proof field of the transaction.
 ///
 /// It is important to note that all `signature` fields contain the signature
 /// over the complete transaction with the `signature` field set to `Default::default()`.

@@ -170,6 +170,7 @@ clippy.empty_docs = "allow" # false positives: https://github.com/rust-lang/rust
 clippy.large_enum_variant = "allow"
 clippy.too_many_arguments = "allow"
 clippy.type_complexity = "allow"
+rust.unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tokio_unstable)'] }
 rust.unused_qualifications = "warn"
 
 [workspace.dependencies]

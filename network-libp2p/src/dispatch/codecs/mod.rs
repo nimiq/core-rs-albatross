@@ -13,6 +13,7 @@ use libp2p::{request_response, StreamProtocol};
 use nimiq_network_interface::network;
 
 /// Size of a u64
+#[allow(unused_qualifications)] // Remove with a MSVR >= 1.80
 const U64_LENGTH: usize = mem::size_of::<u64>();
 const MAX_REQUEST_SIZE: u64 = network::MIN_SUPPORTED_REQ_SIZE as u64 + U64_LENGTH as u64;
 const MAX_RESPONSE_SIZE: u64 = network::MIN_SUPPORTED_RESP_SIZE as u64 + U64_LENGTH as u64;

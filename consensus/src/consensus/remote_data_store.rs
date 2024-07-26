@@ -24,6 +24,7 @@ use crate::messages::RequestTrieProof;
 /// - Validators
 /// - Stakers
 /// - Tombstones
+///
 /// It also serves as an utility function to extract any type from the Accounts Trie
 /// remotely.
 pub(crate) struct RemoteDataStore<N: Network> {

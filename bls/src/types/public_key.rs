@@ -60,11 +60,8 @@ impl PublicKey {
     /// and one bit indicating if it is the "point-at-infinity".
     pub fn compress(&self) -> CompressedPublicKey {
         let mut buffer = [0u8; CompressedPublicKey::SIZE];
-        CanonicalSerialize::serialize_compressed(
-            &self.public_key.into_affine(),
-            &mut &mut buffer[..],
-        )
-        .unwrap();
+        CanonicalSerialize::serialize_compressed(&self.public_key.into_affine(), &mut buffer[..])
+            .unwrap();
         CompressedPublicKey { public_key: buffer }
     }
 

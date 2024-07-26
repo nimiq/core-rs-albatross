@@ -228,6 +228,7 @@ impl Handler {
     /// Checks if the handler is ready to start the discovery protocol.
     /// This basically checks that:
     /// - Both inbound and outbound are available
+    ///
     /// If these conditions are met, it transitions to sending a handshake and waking
     /// the waker.
     fn check_initialized(&mut self) {
