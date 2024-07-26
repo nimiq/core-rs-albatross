@@ -21,6 +21,8 @@ use ark_serialize::CanonicalSerialize;
 use nimiq_bls::{lazy::LazyPublicKey as LazyBlsPublicKey, G2Projective, PublicKey as BlsPublicKey};
 use nimiq_hash::{Hash, HashOutput};
 use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
+#[cfg(feature = "parallel")]
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{merkle_tree::merkle_tree_construct, policy::Policy};
 
@@ -213,7 +215,6 @@ impl Validators {
 impl Hash for Validators {
     /// This function is meant to calculate the public key tree "off-circuit". Generating the public key
     /// tree with this function guarantees that it is compatible with the ZK circuit.
-    // These should be removed once pk_tree_root does something different than returning default
     fn hash<H: HashOutput>(&self) -> H {
         let public_keys = self.voting_keys_g2();
 
@@ -227,7 +228,7 @@ impl Hash for Validators {
         #[cfg(not(feature = "parallel"))]
         let iter = public_keys.iter();
         #[cfg(feature = "parallel")]
-        let iter = self.public_keys.par_iter();
+        let iter = public_keys.par_iter();
         let bytes: Vec<u8> = iter
             .flat_map(|pk| {
                 let mut buffer = [0u8; 285];

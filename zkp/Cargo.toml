@@ -52,8 +52,25 @@ nimiq-zkp-circuits = { workspace = true, features = ["zkp-prover"] }
 
 [features]
 expensive-tests = []
-parallel = ["nimiq-zkp-circuits/parallel", "nimiq-zkp-primitives/parallel", "ark-crypto-primitives/parallel", "ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "ark-groth16/parallel"]
-zkp-prover = ["nimiq-zkp-circuits/zkp-prover", "nimiq-zkp-primitives/zkp-prover", "ark-crypto-primitives/r1cs", "ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]
+parallel = [
+    "ark-crypto-primitives/parallel",
+    "ark-ec/parallel",
+    "ark-ff/parallel",
+    "ark-std/parallel",
+    "ark-groth16/parallel",
+    "nimiq-primitives/parallel",
+    "nimiq-zkp-circuits/parallel",
+    "nimiq-zkp-primitives/parallel",
+]
+zkp-prover = [
+    "ark-crypto-primitives/r1cs",
+    "ark-groth16/r1cs",
+    "ark-mnt4-753/r1cs",
+    "ark-mnt6-753/r1cs",
+    "nimiq-primitives/zkp-prover",
+    "nimiq-zkp-circuits/zkp-prover",
+    "nimiq-zkp-primitives/zkp-prover",
+]
 
 [[example]]
 name = "setup"

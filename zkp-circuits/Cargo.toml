@@ -33,7 +33,7 @@ rayon = { version = "^1.10", optional = true }
 serde = "1.0"
 tracing-subscriber = { version = "0.3", optional = true }
 
-ark-crypto-primitives = { version = "0.4", features = ["crh", "prf", "r1cs"] }
+ark-crypto-primitives = { version = "0.4", features = ["crh", "prf"] }
 ark-ec = "0.4"
 ark-ff = "0.4"
 ark-groth16 = { version = "0.4", default-features = false }
@@ -68,20 +68,22 @@ nimiq-transaction = { workspace = true }
 [features]
 cli = ["tracing-subscriber", "nimiq-log"]
 expensive-tests = []
-zkp-prover = [
-    "ark-crypto-primitives/r1cs",
-    "ark-mnt4-753/r1cs",
-    "ark-mnt6-753/r1cs",
-    "ark-groth16/r1cs",
-    "nimiq-zkp-primitives/zkp-prover",
-]
 parallel = [
     "ark-crypto-primitives/parallel",
     "ark-ec/parallel",
     "ark-ff/parallel",
     "ark-std/parallel",
     "ark-groth16/parallel",
+    "nimiq-primitives/parallel",
     "nimiq-zkp-primitives/parallel",
     "rayon",
 ]
 test-setup = ["ark-poly", "zkp-prover"]
+zkp-prover = [
+    "ark-crypto-primitives/r1cs",
+    "ark-groth16/r1cs",
+    "ark-mnt4-753/r1cs",
+    "ark-mnt6-753/r1cs",
+    "nimiq-primitives/zkp-prover",
+    "nimiq-zkp-primitives/zkp-prover",
+]

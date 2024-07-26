@@ -105,6 +105,7 @@ metrics-server = [
 ]
 panic = ["log-panics"]
 parallel = [
+    "nimiq-primitives/parallel",
     "nimiq-zkp/parallel",
     "nimiq-zkp-circuits/parallel",
     "nimiq-zkp-component/parallel",
@@ -136,6 +137,7 @@ web-logging = [
     "tracing-web",
 ]
 zkp-prover = [
+    "nimiq-primitives/zkp-prover",
     "nimiq-zkp/zkp-prover",
     "nimiq-zkp-circuits/zkp-prover",
     "nimiq-zkp-component/zkp-prover",

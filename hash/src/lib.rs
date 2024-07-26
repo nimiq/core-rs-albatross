@@ -104,6 +104,8 @@ pub trait HashOutput:
     + Debug
     + std::hash::Hash
     + Hash
+    + Send
+    + Sync
     + ConstantTimeEq
 {
     type Builder: Hasher<Output = Self>;

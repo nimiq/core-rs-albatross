@@ -4357,6 +4357,7 @@ dependencies = [
  "nimiq-utils",
  "once_cell",
  "parking_lot",
+ "rayon",
  "regex",
  "serde",
  "serde_bytes",

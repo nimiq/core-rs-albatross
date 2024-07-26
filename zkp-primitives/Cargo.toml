@@ -44,5 +44,18 @@ nimiq-primitives = { workspace = true, features = ["slots"] }
 nimiq-utils = { workspace = true }
 
 [features]
-parallel = ["rayon", "ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "ark-groth16/parallel"]
-zkp-prover = ["ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]
+parallel = [
+    "rayon",
+    "ark-ec/parallel",
+    "ark-ff/parallel",
+    "ark-std/parallel",
+    "ark-groth16/parallel",
+    "nimiq-primitives/parallel",
+]
+zkp-prover = [
+    "ark-crypto-primitives/r1cs",
+    "ark-mnt4-753/r1cs",
+    "ark-mnt6-753/r1cs",
+    "ark-groth16/r1cs",
+    "nimiq-primitives/zkp-prover",
+]
