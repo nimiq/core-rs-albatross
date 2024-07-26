@@ -635,3 +635,64 @@ mod tests {
         }
     }
 }
+
+#[cfg(all(test, feature = "serde-derive"))]
+mod serde_tests {
+    use nimiq_serde::{Deserialize, Serialize};
+
+    use super::KeyNibbles;
+
+    #[test]
+    fn empty() {
+        assert_eq!(
+            KeyNibbles::deserialize_all(b"\x00\x00").unwrap(),
+            KeyNibbles::ROOT,
+        );
+        assert_eq!(KeyNibbles::ROOT.serialize_to_vec(), b"\x00\x00");
+    }
+
+    #[test]
+    fn one() {
+        let one0: KeyNibbles = "0".parse().unwrap();
+        let one1: KeyNibbles = "1".parse().unwrap();
+        let onef: KeyNibbles = "f".parse().unwrap();
+        assert_eq!(KeyNibbles::deserialize_all(b"\x01\x01\x00").unwrap(), one0);
+        assert_eq!(KeyNibbles::deserialize_all(b"\x01\x01\x10").unwrap(), one1);
+        assert_eq!(KeyNibbles::deserialize_all(b"\x01\x01\xf0").unwrap(), onef);
+        assert_eq!(one0.serialize_to_vec(), b"\x01\x01\x00");
+        assert_eq!(one1.serialize_to_vec(), b"\x01\x01\x10");
+        assert_eq!(onef.serialize_to_vec(), b"\x01\x01\xf0");
+    }
+
+    #[test]
+    fn two() {
+        let two: KeyNibbles = "9a".parse().unwrap();
+        assert_eq!(KeyNibbles::deserialize_all(b"\x02\x01\x9a").unwrap(), two);
+        assert_eq!(two.serialize_to_vec(), b"\x02\x01\x9a");
+    }
+
+    #[test]
+    fn longer() {
+        let longer1: KeyNibbles = "68656c6c6f2c20776f726c6421".parse().unwrap();
+        let longer2: KeyNibbles = "68656c6c6f2c20776f726c64215".parse().unwrap();
+        assert_eq!(
+            KeyNibbles::deserialize_all(b"\x1a\x0dhello, world!").unwrap(),
+            longer1,
+        );
+        assert_eq!(
+            KeyNibbles::deserialize_all(b"\x1b\x0ehello, world!\x50").unwrap(),
+            longer2,
+        );
+        assert_eq!(longer1.serialize_to_vec(), b"\x1a\x0dhello, world!");
+        assert_eq!(longer2.serialize_to_vec(), b"\x1b\x0ehello, world!\x50");
+    }
+
+    #[test]
+    fn error() {
+        assert!(KeyNibbles::deserialize_from_vec(b"").is_err());
+        assert!(KeyNibbles::deserialize_from_vec(b"\x00").is_err());
+        assert!(KeyNibbles::deserialize_from_vec(b"\xff").is_err());
+        assert!(KeyNibbles::deserialize_from_vec(b"\x00\x01\x00").is_err());
+        assert!(KeyNibbles::deserialize_from_vec(b"\x01\x00\x00").is_err());
+    }
+}
