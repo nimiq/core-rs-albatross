@@ -4597,6 +4597,7 @@ dependencies = [
  "nimiq-genesis-builder",
  "nimiq-hash",
  "nimiq-keys",
+ "nimiq-log",
  "nimiq-mempool",
  "nimiq-network-interface",
  "nimiq-network-libp2p",
@@ -4623,6 +4624,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "tracing-subscriber 0.3.18",
 ]
 
 [[package]]

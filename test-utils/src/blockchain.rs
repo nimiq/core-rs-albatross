@@ -129,7 +129,6 @@ pub fn fill_micro_blocks_with_txns(
     let macro_block_number = Policy::macro_block_after(init_height + 1);
 
     for i in (init_height + 1)..macro_block_number {
-        log::debug!(" Current Height: {}", i);
         let blockchain = blockchain.upgradable_read();
 
         // Generate the transactions.
@@ -140,7 +139,7 @@ pub fn fill_micro_blocks_with_txns(
             num_transactions,
             rng_seed,
         );
-        let start = Instant::now();
+        let block_production_start = Instant::now();
         let last_micro_block = producer.next_micro_block(
             &blockchain,
             blockchain.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
@@ -149,21 +148,19 @@ pub fn fill_micro_blocks_with_txns(
             vec![0x42],
             None,
         );
-        let duration = start.elapsed();
-        log::debug!(
-            "   Time elapsed producing micro: {} ms, ",
-            duration.as_millis(),
-        );
+        let block_production_duration = block_production_start.elapsed();
 
-        let start = Instant::now();
+        let block_push_start = Instant::now();
         assert_eq!(
             Blockchain::push(blockchain, Block::Micro(last_micro_block)),
             Ok(PushResult::Extended)
         );
-        let duration = start.elapsed();
-        log::debug!(
-            "   Time elapsed pushing micro: {} ms, ",
-            duration.as_millis(),
+        let block_push_duration = block_push_start.elapsed();
+        log::info!(
+            " Pushed block {}, Time producing block {}ms, Time pushing block {}ms",
+            i,
+            block_production_duration.as_millis(),
+            block_push_duration.as_millis(),
         );
     }
 

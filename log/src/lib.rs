@@ -55,6 +55,7 @@ pub static NIMIQ_MODULES: &[&str] = &[
     "nimiq_spammer",
     "nimiq_subscription",
     "nimiq_tendermint",
+    "nimiq_test_utils",
     "nimiq_transaction",
     "nimiq_transaction_builder",
     "nimiq_trie",
