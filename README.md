@@ -21,6 +21,7 @@ For more detailed information about how to connect and use the testnet network, 
 - [Background](#background)
 - [System requirements](#system-requirements)
 - [Installation](#installation)
+- [Documentation](#documentation)
 - [Usage](#usage)
 - [Configuration](#configuration)
 - [Testnet](#testnet)
@@ -77,6 +78,9 @@ Alternatively, you can install it directly from git:
 cargo install --git https://github.com/nimiq/core-rs-albatross.git
 ```
 
+## Documentation
+Extensive documentation explaining how the protocol is built up, the JSON-RPC specification, how to get started building applications on top of Nimiq and more can be found at the [Nimiq Developer Center](https://www.nimiq.com/developers/).
+
 ## Software Integrity and Authenticity
 You can refer to the [documentation](./build/README.md) to learn more about reproducing Nimiq software for yourself as well as checking software signatures in order to verify the integrity and authenticity of software.
 
@@ -125,7 +129,7 @@ curl -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "address=NQ
 
 #### Becoming a validator
 
-Check [this guide](docs/becoming_validator.md) for steps on becoming a validator.
+Check [this guide](https://www.nimiq.com/developers/build/set-up-your-own-node/becoming-a-validator) for steps on becoming a validator.
 
 ## Docker
 
