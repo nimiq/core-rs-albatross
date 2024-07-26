@@ -1,28 +1,21 @@
 use std::{fs, path::PathBuf, process::exit, time::Instant};
 
 use clap::Parser;
-use nimiq_account::Accounts;
-use nimiq_account::BlockLogger;
-use nimiq_account::BlockState;
+use nimiq_account::{Accounts, BlockLogger, BlockState};
 use nimiq_bls::KeyPair as BLSKeyPair;
-
 use nimiq_database::{
     mdbx::MdbxDatabase,
     traits::{Database, WriteTransaction},
-    DatabaseProxy,
 };
 use nimiq_genesis::NetworkId;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, Ed25519PublicKey, KeyPair, SecureGenerate};
 use nimiq_primitives::policy::Policy;
-use nimiq_test_utils::test_transaction::TestAccount;
 use nimiq_test_utils::{
     test_rng::test_rng,
-    test_transaction::{generate_accounts, generate_transactions, TestTransaction},
+    test_transaction::{generate_accounts, generate_transactions, TestAccount, TestTransaction},
 };
-
-use rand::CryptoRng;
-use rand::Rng;
+use rand::{CryptoRng, Rng};
 use tempfile::tempdir;
 
 /// Command line arguments for the binary
@@ -49,7 +42,7 @@ fn init_accounts<R: Rng + CryptoRng>(
 }
 
 fn accounts_tree_populate(
-    env: &DatabaseProxy,
+    env: &MdbxDatabase,
     tpb: u32,
     batches: u32,
     loops: u32,
@@ -66,7 +59,7 @@ fn accounts_tree_populate(
 
     let mut genesis_builder = GenesisBuilder::default();
     genesis_builder.with_network(NetworkId::UnitAlbatross);
-    let rewards = vec![];
+    let rewards = [];
 
     // Generate and sign transaction from an address
     let mut rng = test_rng(true);
@@ -148,7 +141,7 @@ fn accounts_tree_populate(
             let batch_start = Instant::now();
 
             for _blocks in 0..Policy::blocks_per_batch() {
-                //let block_start = Instant::now();
+                let block_start = Instant::now();
 
                 let block_state = BlockState::new(block_index, 1);
                 let result = accounts.commit(
@@ -158,17 +151,15 @@ fn accounts_tree_populate(
                     &block_state,
                     &mut BlockLogger::empty(),
                 );
-                match result {
-                    Ok(_) => assert!(true),
-                    Err(err) => assert!(false, "Received {}", err),
-                };
 
-                //let block_duration = block_start.elapsed();
-                //println!(
-                //    "Processed block {}, duration {}ms",
-                //    block_index,
-                //    block_duration.as_millis()
-                //);
+                assert!(result.is_ok(), "Failed committing accounts");
+
+                let block_duration = block_start.elapsed();
+                println!(
+                    "Processed block {}, duration {}ms",
+                    block_index,
+                    block_duration.as_millis()
+                );
 
                 block_index += 1;
             }
@@ -204,7 +195,7 @@ fn main() {
     let tmp_dir = temp_dir.path().to_str().unwrap();
     let db_file = temp_dir.path().join("mdbx.dat");
     log::debug!("Creating a non volatile environment in {}", tmp_dir);
-    let env = MdbxDatabase::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
+    let env = MdbxDatabase::new(tmp_dir, Default::default()).unwrap();
 
     let loops = args.loops.unwrap_or(1);
 

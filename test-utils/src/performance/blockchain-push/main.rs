@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, process::exit, sync::Arc, time::Instant};
+use std::{fs, process::exit, sync::Arc, time::Instant};
 
 use clap::Parser;
 use nimiq_block::Block;
@@ -7,13 +7,11 @@ use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis::{NetworkId, NetworkInfo};
 use nimiq_log::TargetsExt;
-use nimiq_utils::time::OffsetTime;
-
 use nimiq_primitives::policy::Policy;
-
 use nimiq_test_utils::blockchain::{
     fill_micro_blocks_with_txns, sign_macro_block, signing_key, voting_key,
 };
+use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
 use tempfile::tempdir;
 use tracing_subscriber::{
@@ -51,10 +49,10 @@ fn main() {
     let genesis_block = network_info.genesis_block();
 
     // Run tests with different policy values:
-    let mut policy_config = Policy::default();
-
-    // The genesis block number must be set accordingly
-    policy_config.genesis_block_number = genesis_block.block_number();
+    let policy_config = Policy {
+        genesis_block_number: genesis_block.block_number(),
+        ..Default::default()
+    };
 
     let _ = Policy::get_or_init(policy_config);
 
@@ -63,7 +61,7 @@ fn main() {
     let tmp_dir = temp_dir.path().to_str().unwrap();
     let db_file = temp_dir.path().join("mdbx.dat");
     log::info!("Creating a non volatile environment in {}", tmp_dir);
-    let env = MdbxDatabase::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
+    let env = MdbxDatabase::new(tmp_dir, Default::default()).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(
@@ -79,8 +77,6 @@ fn main() {
     let batches = args.batches;
     let tpb = args.tpb;
 
-    // Small chain, otherwise test takes too long, use a small number of txns when running in volatile env
-    // This test was intended to be used with an infinite loop and a high number of transactions per block though
     for batch in 0..batches {
         let batch_start = Instant::now();
         fill_micro_blocks_with_txns(&producer, &blockchain, tpb as usize, 0);
@@ -110,7 +106,7 @@ fn main() {
 
         log::info!(
             " ----- {:.2}s to process batch {}, DB size: {:.2}Mb -----",
-            batch_duration.as_millis() as f64 / 1000_f64,
+            batch_duration.as_secs(),
             batch + 1,
             db_file_size as f64 / 1000000_f64,
         );
