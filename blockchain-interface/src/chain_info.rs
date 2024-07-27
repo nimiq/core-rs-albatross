@@ -1,7 +1,7 @@
-use std::{io, ops::RangeFrom};
+use std::{borrow::Cow, io, ops::RangeFrom};
 
 use nimiq_block::Block;
-use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{coin::Coin, key_nibbles::KeyNibbles, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
@@ -125,6 +125,12 @@ impl PartialEq for ChainInfo {
 }
 
 impl Eq for ChainInfo {}
+
+impl AsDatabaseBytes for ChainInfo {
+    fn as_database_bytes(&self) -> Cow<[u8]> {
+        Cow::Owned(Serialize::serialize_to_vec(&self))
+    }
+}
 
 impl IntoDatabaseValue for ChainInfo {
     fn database_byte_size(&self) -> usize {

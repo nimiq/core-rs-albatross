@@ -1,7 +1,7 @@
-use std::{fmt, io};
+use std::{borrow::Cow, fmt, io};
 
 use nimiq_bls::cache::PublicKeyCache;
-use nimiq_database_value::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_database_value::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::Ed25519PublicKey;
 use nimiq_network_interface::network::Topic;
@@ -626,6 +626,12 @@ impl fmt::Display for Block {
             Block::Macro(block) => fmt::Display::fmt(block, f),
             Block::Micro(block) => fmt::Display::fmt(block, f),
         }
+    }
+}
+
+impl AsDatabaseBytes for Block {
+    fn as_database_bytes(&self) -> Cow<[u8]> {
+        Cow::Owned(Serialize::serialize_to_vec(&self))
     }
 }
 

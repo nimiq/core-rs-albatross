@@ -8,5 +8,5 @@ pub mod history_store_proxy;
 mod history_tree_chunk;
 pub mod interface;
 mod mmr_store;
-mod utils;
+pub(crate) mod utils;
 mod validity_store;
