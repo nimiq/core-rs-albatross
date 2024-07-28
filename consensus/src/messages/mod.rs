@@ -148,7 +148,7 @@ impl Topic for BlockBodyTopic {
 
     const BUFFER_SIZE: usize = 16;
     const NAME: &'static str = "block-body";
-    const VALIDATE: bool = false;
+    const VALIDATE: bool = true;
 }
 
 /*
@@ -361,11 +361,8 @@ pub enum HistoryChunkError {
 pub struct RequestBlock {
     /// The hash of the block that is requested.
     pub hash: Blake2bHash,
-    /// Whether to include the body if the requested block is a micro block.
-    ///
-    /// If the requested block is a macro block, this flag has no effect and
-    /// the response will always contain the body.
-    pub include_micro_bodies: bool,
+    /// Whether to include the body.
+    pub include_body: bool,
 }
 
 /// Error response for [`RequestBlock`].
@@ -442,10 +439,8 @@ impl Debug for ResponseBlocks {
 pub struct RequestMissingBlocks {
     /// Target block hash.
     pub target_hash: Blake2bHash,
-    /// Whether to include bodies for micro blocks.
-    ///
-    /// Bodies of macro blocks are always included.
-    pub include_micro_bodies: bool,
+    /// Whether to include block bodies.
+    pub include_body: bool,
     /// Set of hashes of blocks known to the requester, possible starts of the
     /// answer chain.
     ///

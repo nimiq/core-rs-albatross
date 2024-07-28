@@ -27,7 +27,11 @@ use nimiq_primitives::{
 use parking_lot::Mutex;
 
 use crate::{
-    consensus::ResolveBlockRequest, messages::BlockHeaderTopic, sync::syncer::LiveSyncEvent,
+    consensus::ResolveBlockRequest,
+    sync::{
+        live::block_queue::{BlockAndSource, BlockSource},
+        syncer::LiveSyncEvent,
+    },
 };
 
 async fn spawn_blocking<R: Send + 'static, F: FnOnce() -> R + Send + 'static>(f: F) -> R {
@@ -42,15 +46,15 @@ async fn spawn_blocking<R: Send + 'static, F: FnOnce() -> R + Send + 'static>(f:
     }
 }
 
-pub struct ChunkAndId<N: Network> {
+pub struct ChunkAndSource<N: Network> {
     pub chunk: TrieChunk,
     pub start_key: KeyNibbles,
     pub peer_id: N::PeerId,
 }
 
-impl<N: Network> fmt::Debug for ChunkAndId<N> {
+impl<N: Network> fmt::Debug for ChunkAndSource<N> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("ChunkAndId")
+        f.debug_struct("ChunkAndSource")
             .field("chunk", &self.chunk)
             .field("start_key", &self.start_key)
             .field("peer_id", &self.peer_id)
@@ -58,7 +62,7 @@ impl<N: Network> fmt::Debug for ChunkAndId<N> {
     }
 }
 
-impl<N: Network> ChunkAndId<N> {
+impl<N: Network> ChunkAndSource<N> {
     pub fn new(chunk: TrieChunk, start_key: KeyNibbles, peer_id: N::PeerId) -> Self {
         Self {
             chunk,
@@ -87,7 +91,6 @@ pub trait LiveSyncQueue<N: Network>: Stream<Item = Self::QueueResult> + Send + U
         blockchain: BlockchainProxy,
         bls_cache: Arc<Mutex<PublicKeyCache>>,
         result: Self::QueueResult,
-        include_body: bool,
     ) -> VecDeque<BoxFuture<'static, Self::PushResult>>;
 
     fn process_push_result(&mut self, item: Self::PushResult) -> Option<LiveSyncEvent<N::PeerId>>;
@@ -98,12 +101,12 @@ pub trait LiveSyncQueue<N: Network>: Stream<Item = Self::QueueResult> + Send + U
 
     fn add_peer(&self, peer_id: N::PeerId);
 
-    /// Adds an additional block stream by replacing the current block stream with a `select` of both streams.
+    /// Adds a block stream by replacing the current block stream with a `select` of both streams.
     fn add_block_stream<S>(&mut self, block_stream: S)
     where
-        S: Stream<Item = (Block, N::PeerId, Option<N::PubsubId>)> + Send + 'static;
+        S: Stream<Item = BlockAndSource<N>> + Send + 'static;
 
-    fn include_micro_bodies(&self) -> bool;
+    fn include_body(&self) -> bool;
 
     fn state_complete(&self) -> bool {
         true
@@ -124,8 +127,8 @@ pub struct QueueConfig {
     /// How many blocks back into the past we tolerate without returning a peer as Outdated.
     pub tolerate_past_max: u32,
 
-    /// Flag to indicate if blocks should carry a body
-    pub include_micro_bodies: bool,
+    /// Flag to indicate if blocks should carry a body.
+    pub include_body: bool,
 }
 
 impl Default for QueueConfig {
@@ -134,7 +137,7 @@ impl Default for QueueConfig {
             buffer_max: 10 * Policy::blocks_per_batch() as usize,
             window_ahead_max: 2 * Policy::blocks_per_batch(),
             tolerate_past_max: Policy::blocks_per_batch(),
-            include_micro_bodies: true,
+            include_body: true,
         }
     }
 }
@@ -211,10 +214,10 @@ pub async fn push_block_and_chunks<N: Network>(
     network: Arc<N>,
     blockchain: BlockchainProxy,
     bls_cache: Arc<Mutex<PublicKeyCache>>,
-    pubsub_id: Option<N::PubsubId>,
     block: Block,
+    block_source: BlockSource<N>,
     diff: Option<TrieDiff>,
-    chunks: Vec<ChunkAndId<N>>,
+    chunks: Vec<ChunkAndSource<N>>,
 ) -> (
     Result<PushResult, PushError>,
     Result<ChunksPushResult, ChunksPushError>,
@@ -224,7 +227,7 @@ pub async fn push_block_and_chunks<N: Network>(
         spawn_blocking(move || blockchain_push(blockchain, bls_cache, Some(block), diff, chunks))
             .await;
 
-    validate_message(network, pubsub_id, &push_results.block_push_result, true);
+    validate_message(network, block_source, &push_results.block_push_result);
 
     // TODO Ban peer depending on type of chunk error?
 
@@ -240,21 +243,16 @@ pub async fn push_block_only<N: Network>(
     network: Arc<N>,
     blockchain: BlockchainProxy,
     bls_cache: Arc<Mutex<PublicKeyCache>>,
-    pubsub_id: Option<N::PubsubId>,
     block: Block,
-    include_body: bool,
+    block_source: BlockSource<N>,
 ) -> (Result<PushResult, PushError>, Blake2bHash) {
     let push_results = spawn_blocking(move || {
         blockchain_push::<N>(blockchain, bls_cache, Some(block), None, vec![])
     })
     .await;
 
-    validate_message(
-        network,
-        pubsub_id,
-        &push_results.block_push_result,
-        include_body,
-    );
+    validate_message(network, block_source, &push_results.block_push_result);
+
     (
         push_results.block_push_result.unwrap(),
         push_results.block_hash,
@@ -267,7 +265,7 @@ pub async fn push_block_only<N: Network>(
 pub async fn push_multiple_blocks_impl<N: Network>(
     blockchain: BlockchainProxy,
     bls_cache: Arc<Mutex<PublicKeyCache>>,
-    blocks: Vec<(Block, Option<TrieDiff>, Vec<ChunkAndId<N>>)>,
+    blocks: Vec<(BlockAndSource<N>, Option<TrieDiff>, Vec<ChunkAndSource<N>>)>,
 ) -> (
     Result<PushResult, PushError>,
     Result<ChunksPushResult, ChunksPushError>,
@@ -284,7 +282,7 @@ pub async fn push_multiple_blocks_impl<N: Network>(
     let mut push_result = Err(PushError::Orphan);
     let mut push_chunk_result = Ok(ChunksPushResult::EmptyChunks);
     // Try to push blocks, until we encounter an invalid block.
-    for (block, diff, mut chunks) in block_iter.by_ref() {
+    for ((block, _), diff, mut chunks) in block_iter.by_ref() {
         log::debug!("Pushing block {} from missing blocks response", block);
 
         let blockchain2 = blockchain.clone();
@@ -333,7 +331,7 @@ pub async fn push_multiple_blocks_impl<N: Network>(
     // TODO Ban peer depending on type of chunk error?
 
     // If there are remaining blocks in the iterator, those are invalid.
-    for (block, ..) in block_iter {
+    for ((block, _), ..) in block_iter {
         invalid_blocks.insert(block.hash());
     }
     (
@@ -347,7 +345,7 @@ pub async fn push_multiple_blocks_impl<N: Network>(
 pub async fn push_multiple_blocks_with_chunks<N: Network>(
     blockchain: BlockchainProxy,
     bls_cache: Arc<Mutex<PublicKeyCache>>,
-    blocks: Vec<(Block, Option<TrieDiff>, Vec<ChunkAndId<N>>)>,
+    blocks: Vec<(BlockAndSource<N>, Option<TrieDiff>, Vec<ChunkAndSource<N>>)>,
 ) -> (
     Result<PushResult, PushError>,
     Result<ChunksPushResult, ChunksPushError>,
@@ -363,7 +361,7 @@ pub async fn push_multiple_blocks_with_chunks<N: Network>(
 pub async fn push_multiple_blocks<N: Network>(
     blockchain: BlockchainProxy,
     bls_cache: Arc<Mutex<PublicKeyCache>>,
-    blocks: Vec<Block>,
+    blocks: Vec<BlockAndSource<N>>,
 ) -> (
     Result<PushResult, PushError>,
     Vec<Blake2bHash>,
@@ -385,7 +383,7 @@ pub async fn push_multiple_blocks<N: Network>(
 pub async fn push_chunks_only<N: Network>(
     blockchain: BlockchainProxy,
     bls_cache: Arc<Mutex<PublicKeyCache>>,
-    chunks: Vec<ChunkAndId<N>>,
+    chunks: Vec<ChunkAndSource<N>>,
 ) -> (Result<ChunksPushResult, ChunksPushError>, Blake2bHash) {
     let push_results =
         spawn_blocking(move || blockchain_push(blockchain, bls_cache, None, None, chunks)).await;
@@ -406,11 +404,11 @@ fn blockchain_push<N: Network>(
     bls_cache: Arc<Mutex<PublicKeyCache>>,
     block: Option<Block>,
     diff: Option<TrieDiff>,
-    chunks: Vec<ChunkAndId<N>>,
+    chunks: Vec<ChunkAndSource<N>>,
 ) -> BlockchainPushResult<N> {
     #[cfg(feature = "full")]
     let (chunks, peer_ids): (Vec<_>, Vec<N::PeerId>) =
-        chunks.into_iter().map(ChunkAndId::into_pair).unzip();
+        chunks.into_iter().map(ChunkAndSource::into_pair).unzip();
 
     // Push the block to the blockchain.
     let blockchain_push_result;
@@ -472,27 +470,25 @@ fn blockchain_push<N: Network>(
 
 fn validate_message<N: Network>(
     network: Arc<N>,
-    pubsub_id: Option<N::PubsubId>,
+    block_source: BlockSource<N>,
     block_push_result: &Option<Result<PushResult, PushError>>,
-    // TODO Remove this
-    _include_body: bool,
 ) {
-    if let Some(id) = pubsub_id {
-        if let Some(ref push_result) = block_push_result {
-            let acceptance = match &push_result {
-                Ok(result) => match result {
-                    PushResult::Known | PushResult::Extended | PushResult::Rebranched => {
-                        MsgAcceptance::Accept
-                    }
+    let Some(push_result) = block_push_result else {
+        return;
+    };
 
-                    PushResult::Forked | PushResult::Ignored => MsgAcceptance::Ignore,
-                },
-                Err(_) => {
-                    // TODO Ban peer
-                    MsgAcceptance::Reject
-                }
-            };
-            network.validate_message::<BlockHeaderTopic>(id, acceptance);
+    let acceptance = match push_result {
+        Ok(result) => match result {
+            PushResult::Known | PushResult::Extended | PushResult::Rebranched => {
+                MsgAcceptance::Accept
+            }
+            PushResult::Forked | PushResult::Ignored => MsgAcceptance::Ignore,
+        },
+        Err(_) => {
+            // TODO Ban peer
+            MsgAcceptance::Reject
         }
-    }
+    };
+
+    block_source.validate_block(&network, acceptance);
 }

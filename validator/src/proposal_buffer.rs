@@ -301,7 +301,7 @@ where
             .resolve_block(
                 signed_proposal.proposal.block_number - 1,
                 hash,
-                pubsub_id.clone(),
+                pubsub_id.propagation_source(),
             )
             .map(move |result| {
                 match result {

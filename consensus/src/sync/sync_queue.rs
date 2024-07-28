@@ -10,7 +10,7 @@ use std::{
 };
 
 use futures::{future, future::BoxFuture, FutureExt, Stream, StreamExt};
-use nimiq_network_interface::network::{Network, PubsubId};
+use nimiq_network_interface::network::Network;
 use nimiq_utils::{stream::FuturesUnordered, WakerExt as _};
 use parking_lot::RwLock;
 use pin_project::pin_project;
@@ -94,7 +94,7 @@ pub struct SyncQueue<
     pub(crate) peers: Arc<RwLock<PeerList<TNetwork>>>,
     network: Arc<TNetwork>,
     desired_pending_size: usize,
-    ids_to_request: VecDeque<(TId, Option<TNetwork::PubsubId>)>,
+    ids_to_request: VecDeque<(TId, Option<TNetwork::PeerId>)>,
     pending_futures:
         FuturesUnordered<OrderWrapper<TId, BoxFuture<'static, Option<Result<TOutput, TError>>>>>,
     queued_outputs: BinaryHeap<OrderWrapper<TId, Option<TOutput>>>,
@@ -116,7 +116,7 @@ where
 {
     pub fn new(
         network: Arc<TNetwork>,
-        ids: Vec<(TId, Option<TNetwork::PubsubId>)>,
+        ids: Vec<(TId, Option<TNetwork::PeerId>)>,
         peers: Arc<RwLock<PeerList<TNetwork>>>,
         desired_pending_size: usize,
         request_fn: RequestFn<TId, TNetwork, TOutput, TError>,
@@ -146,7 +146,7 @@ where
 
     pub fn with_verification(
         network: Arc<TNetwork>,
-        ids: Vec<(TId, Option<TNetwork::PubsubId>)>,
+        ids: Vec<(TId, Option<TNetwork::PeerId>)>,
         peers: Arc<RwLock<PeerList<TNetwork>>>,
         desired_pending_size: usize,
         request_fn: RequestFn<TId, TNetwork, TOutput, TError>,
@@ -189,13 +189,11 @@ where
 
         // Drain ids and produce futures.
         for _ in 0..num_ids_to_request {
-            let (id, pubsub_id) = self.ids_to_request.pop_front().unwrap();
+            let (id, peer_id) = self.ids_to_request.pop_front().unwrap();
 
             // If we have a pubsub id, try to get the corresponding peer.
             // If this fails, we still want to get and increment.
-            let pubsub_peer = pubsub_id.and_then(|pubsub_id| {
-                let peer_id = pubsub_id.propagation_source();
-
+            let pubsub_peer = peer_id.and_then(|peer_id| {
                 self.peers
                     .read()
                     .index_of(&peer_id)
@@ -319,7 +317,7 @@ where
         self.peers.write().remove_peer(peer_id);
     }
 
-    pub fn add_ids(&mut self, ids: Vec<(TId, Option<TNetwork::PubsubId>)>) {
+    pub fn add_ids(&mut self, ids: Vec<(TId, Option<TNetwork::PeerId>)>) {
         for id in ids {
             self.ids_to_request.push_back(id);
         }

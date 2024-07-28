@@ -296,7 +296,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             .request::<RequestBlock>(
                 RequestBlock {
                     hash,
-                    include_micro_bodies: false,
+                    include_body: false,
                 },
                 peer_id,
             )

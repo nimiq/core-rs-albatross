@@ -24,9 +24,12 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub enum BlockRequestComponentEvent {
-    /// Received blocks for a target block number and block hash.
-    ReceivedBlocks(u32, Blake2bHash, Validators, Vec<Block>),
+pub struct BlockRequestResult<N: Network> {
+    pub target_block_number: u32,
+    pub target_block_hash: Blake2bHash,
+    pub epoch_validators: Validators,
+    pub blocks: Vec<Block>,
+    pub sender: N::PeerId,
 }
 
 #[derive(Debug, Clone)]
@@ -39,20 +42,20 @@ pub struct MissingBlockRequest {
     pub epoch_validators: Validators,
     /// List of locator hashes of blocks, sorted from newest to oldest.
     pub locators: Vec<Blake2bHash>,
-    /// Indicator whether or not micro bodies must be included or omitted.
-    /// Macro bodies are always included.
-    pub include_micro_bodies: bool,
+    /// Flag indicating whether bodies must be included or omitted.
+    pub include_body: bool,
     /// The Direction the request is to be executed in.
     /// See [RequestMissingBlocks] for details on the effect.
     pub direction: Direction,
 }
 
 #[derive(Debug, Clone)]
-pub struct MissingBlockResponse {
+pub struct MissingBlockResponse<N: Network> {
     pub target_block_number: u32,
     pub target_block_hash: Blake2bHash,
     pub epoch_validators: Validators,
     pub blocks: Vec<Block>,
+    pub sender: N::PeerId,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -76,9 +79,9 @@ pub enum MissingBlockError {
 /// The public interface allows to request blocks, which are not immediately returned.
 /// The blocks instead are returned by polling the component.
 pub struct BlockRequestComponent<N: Network> {
-    sync_queue: SyncQueue<N, MissingBlockRequest, MissingBlockResponse, MissingBlockError, ()>, // requesting missing blocks from peers
+    sync_queue: SyncQueue<N, MissingBlockRequest, MissingBlockResponse<N>, MissingBlockError, ()>, // requesting missing blocks from peers
     peers: Arc<RwLock<PeerList<N>>>,
-    include_micro_bodies: bool,
+    include_body: bool,
     /// Pending requests.
     pending_requests: BTreeSet<Blake2bHash>,
 }
@@ -86,7 +89,7 @@ pub struct BlockRequestComponent<N: Network> {
 impl<N: Network> BlockRequestComponent<N> {
     const NUM_PENDING_BLOCKS: usize = 5;
 
-    pub fn new(network: Arc<N>, include_micro_bodies: bool) -> Self {
+    pub fn new(network: Arc<N>, include_body: bool) -> Self {
         let peers = Arc::new(RwLock::new(PeerList::default()));
         let mut network_event_rx = network.subscribe_events();
 
@@ -120,7 +123,7 @@ impl<N: Network> BlockRequestComponent<N> {
                             peer_id,
                             request.target_block_hash.clone(),
                             request.locators,
-                            request.include_micro_bodies,
+                            request.include_body,
                             request.direction,
                         )
                         .await
@@ -130,6 +133,7 @@ impl<N: Network> BlockRequestComponent<N> {
                                 target_block_hash: request.target_block_hash,
                                 epoch_validators: request.epoch_validators,
                                 blocks: missing_blocks,
+                                sender: peer_id,
                             }),
                             Ok(Err(error)) => Err(MissingBlockError::Response(error)),
                             Err(error) => Err(MissingBlockError::Request(error)),
@@ -161,17 +165,11 @@ impl<N: Network> BlockRequestComponent<N> {
                     }
 
                     for block in blocks {
-                        let body_existence_matches_request = match block {
-                            Block::Macro(block) => block.body.is_some(),
-                            Block::Micro(block) => {
-                                block.body.is_some() == request.include_micro_bodies
-                            }
-                        };
-                        if !body_existence_matches_request {
+                        if block.body().is_some() != request.include_body {
                             log::error!(
                                 is_macro = block.is_macro(),
                                 has_body = block.body().is_some(),
-                                include_micro_bodies = request.include_micro_bodies,
+                                include_body = request.include_body,
                                 "Received block with body where none was expected or vice versa",
                             );
                             return false;
@@ -244,7 +242,7 @@ impl<N: Network> BlockRequestComponent<N> {
                 (),
             ),
             peers,
-            include_micro_bodies,
+            include_body,
             pending_requests: BTreeSet::new(),
         }
     }
@@ -254,7 +252,7 @@ impl<N: Network> BlockRequestComponent<N> {
         peer_id: N::PeerId,
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
-        include_micro_bodies: bool,
+        include_body: bool,
         direction: Direction,
     ) -> Result<Result<Vec<Block>, ResponseBlocksError>, RequestError> {
         network
@@ -262,7 +260,7 @@ impl<N: Network> BlockRequestComponent<N> {
                 RequestMissingBlocks {
                     locators,
                     target_hash: target_block_hash,
-                    include_micro_bodies,
+                    include_body,
                     direction,
                 },
                 peer_id,
@@ -278,7 +276,7 @@ impl<N: Network> BlockRequestComponent<N> {
         locators: Vec<Blake2bHash>,
         direction: Direction,
         epoch_validators: Validators,
-        pubsub_id: Option<N::PubsubId>,
+        first_peer_id: Option<N::PeerId>,
     ) {
         self.pending_requests.insert(target_block_hash.clone());
         self.sync_queue.add_ids(vec![(
@@ -288,9 +286,9 @@ impl<N: Network> BlockRequestComponent<N> {
                 epoch_validators,
                 locators,
                 direction,
-                include_micro_bodies: self.include_micro_bodies,
+                include_body: self.include_body,
             },
-            pubsub_id,
+            first_peer_id,
         )]);
     }
 
@@ -323,7 +321,7 @@ impl<N: Network> BlockRequestComponent<N> {
 }
 
 impl<N: Network> Stream for BlockRequestComponent<N> {
-    type Item = BlockRequestComponentEvent;
+    type Item = BlockRequestResult<N>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         // Poll self.sync_queue, return results.
@@ -331,12 +329,13 @@ impl<N: Network> Stream for BlockRequestComponent<N> {
             match result {
                 Ok(response) => {
                     self.pending_requests.remove(&response.target_block_hash);
-                    return Poll::Ready(Some(BlockRequestComponentEvent::ReceivedBlocks(
-                        response.target_block_number,
-                        response.target_block_hash,
-                        response.epoch_validators,
-                        response.blocks,
-                    )));
+                    return Poll::Ready(Some(BlockRequestResult {
+                        target_block_number: response.target_block_number,
+                        target_block_hash: response.target_block_hash,
+                        epoch_validators: response.epoch_validators,
+                        blocks: response.blocks,
+                        sender: response.sender,
+                    }));
                 }
                 Err(request) => {
                     self.pending_requests.remove(&request.target_block_hash);

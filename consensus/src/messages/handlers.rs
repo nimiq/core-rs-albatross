@@ -180,9 +180,9 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestBlock {
         blockchain: &BlockchainProxy,
     ) -> Result<Block, BlockError> {
         let blockchain = blockchain.read();
-        if let Ok(block) = blockchain.get_block(&self.hash, self.include_micro_bodies) {
+        if let Ok(block) = blockchain.get_block(&self.hash, self.include_body) {
             // Macro bodies are always needed, do we have it already?
-            let block = if block.is_macro() && !self.include_micro_bodies {
+            let block = if block.is_macro() && !self.include_body {
                 match blockchain.get_block(&self.hash, true) {
                     Ok(block) => block,
                     Err(_) => return Err(BlockError::TargetHashNotFound),
@@ -232,44 +232,8 @@ impl RequestMissingBlocks {
         let blockchain = blockchain.read();
 
         while !locators.contains(&block_hash) {
-            let block = blockchain.get_block(&block_hash, false);
+            let block = blockchain.get_block(&block_hash, self.include_body);
             if let Ok(block) = block {
-                let block = match block {
-                    // Macro bodies are always needed
-                    Block::Macro(_) => match blockchain.get_block(&block_hash, true) {
-                        Ok(block) => block,
-                        Err(error) => {
-                            debug!(
-                                %error,
-                                blocks_found = blocks.len(),
-                                block_hash = %block_hash,
-                                "ResponseBlocks - Failed to get macro block",
-                            );
-                            return Err(ResponseBlocksError::FailedToGetBlocks);
-                        }
-                    },
-                    // Micro bodies are requested based on `include_micro_bodies`
-                    Block::Micro(_) => {
-                        if self.include_micro_bodies {
-                            match blockchain.get_block(&block_hash, true) {
-                                Ok(block) => block,
-                                Err(error) => {
-                                    debug!(
-                                        %error,
-                                        include_body = self.include_micro_bodies,
-                                        blocks_found = blocks.len(),
-                                        block_hash = %block_hash,
-                                        "ResponseBlocks - Failed to get micro block",
-                                    );
-                                    return Err(ResponseBlocksError::FailedToGetBlocks);
-                                }
-                            }
-                        } else {
-                            // Micro bodies are not requested, so we can return the already block obtained
-                            block
-                        }
-                    }
-                };
                 let is_macro = block.is_macro();
 
                 block_hash = block.parent_hash().clone();
@@ -366,7 +330,7 @@ impl RequestMissingBlocks {
         let mut blocks = match blockchain.get_blocks(
             &start_hash,
             num_blocks - 1,
-            self.include_micro_bodies,
+            self.include_body,
             Direction::Forward,
         ) {
             Ok(blocks) => blocks,
@@ -382,7 +346,7 @@ impl RequestMissingBlocks {
 
         if let Ok(block) = blockchain.get_block_at(
             start_block_number + num_blocks,
-            self.include_micro_bodies || Policy::is_macro_block_at(start_block_number + num_blocks),
+            self.include_body || Policy::is_macro_block_at(start_block_number + num_blocks),
         ) {
             blocks.push(block);
         }

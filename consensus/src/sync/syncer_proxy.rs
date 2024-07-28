@@ -25,7 +25,11 @@ use crate::{
     consensus::ResolveBlockRequest,
     sync::{
         light::LightMacroSync,
-        live::{block_queue::BlockQueue, queue::QueueConfig, BlockLiveSync},
+        live::{
+            block_queue::{BlockQueue, BlockSource},
+            queue::QueueConfig,
+            BlockLiveSync,
+        },
         syncer::{LiveSyncPushEvent, Syncer},
     },
 };
@@ -168,7 +172,7 @@ impl<N: Network> SyncerProxy<N> {
         network_event_rx: SubscribeEvents<N::PeerId>,
     ) -> Self {
         let block_queue_config = QueueConfig {
-            include_micro_bodies: false,
+            include_body: false,
             ..Default::default()
         };
 
@@ -203,8 +207,8 @@ impl<N: Network> SyncerProxy<N> {
     }
 
     /// Pushes a block for the live sync method
-    pub fn push_block(&mut self, block: Block, peer_id: N::PeerId, pubsub_id: Option<N::PubsubId>) {
-        gen_syncer_match!(self, push_block, block, peer_id, pubsub_id)
+    pub fn push_block(&mut self, block: Block, block_source: BlockSource<N>) {
+        gen_syncer_match!(self, push_block, block, block_source)
     }
 
     /// Returns the number of peers doing live synchronization

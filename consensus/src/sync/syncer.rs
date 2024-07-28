@@ -16,7 +16,9 @@ use nimiq_network_interface::network::{CloseReason, Network, NetworkEvent, Subsc
 use nimiq_time::{interval, Interval};
 use nimiq_utils::stream::FuturesUnordered;
 
-use crate::{consensus::ResolveBlockRequest, messages::RequestHead};
+use crate::{
+    consensus::ResolveBlockRequest, messages::RequestHead, sync::live::block_queue::BlockSource,
+};
 
 /// Trait that defines how a node synchronizes macro blocks
 /// The expected functionality is that there could be different methods of syncing but they
@@ -40,12 +42,7 @@ pub trait MacroSync<TPeerId>: Stream<Item = MacroSyncReturn<TPeerId>> + Unpin + 
 pub trait LiveSync<N: Network>: Stream<Item = LiveSyncEvent<N::PeerId>> + Unpin + Send {
     /// This function will be called each time a Block is received or announced by any of the
     /// peers added into the LiveSync.
-    fn push_block(
-        &mut self,
-        block: Block,
-        peer_id: N::PeerId,
-        pubsub_id: Option<<N as Network>::PubsubId>,
-    );
+    fn push_block(&mut self, block: Block, block_source: BlockSource<N>);
     /// Adds a peer to receive or request blocks from it.
     fn add_peer(&mut self, peer_id: N::PeerId);
     /// Returns the number of peers that are being sync'ed with
@@ -173,8 +170,8 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
         }
     }
 
-    pub fn push_block(&mut self, block: Block, peer_id: N::PeerId, pubsub_id: Option<N::PubsubId>) {
-        self.live_sync.push_block(block, peer_id, pubsub_id);
+    pub fn push_block(&mut self, block: Block, block_source: BlockSource<N>) {
+        self.live_sync.push_block(block, block_source);
     }
 
     fn move_peer_into_macro_sync(&mut self, peer_id: N::PeerId) {

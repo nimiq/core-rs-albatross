@@ -637,7 +637,7 @@ async fn request_missing_blocks_across_macro_block() {
     // Run the block_queue one iteration, i.e. until it processed one batch.
     // Needs to be pulled again to send the request missing block over the network.
     syncer.next().await;
-    // syncer.next().await;
+
     let _ = poll!(syncer.next());
     // Yield to allow the internal BlockQueue task to proceed.
     yield_now().await;
@@ -705,7 +705,7 @@ async fn put_peer_back_into_sync_mode() {
             buffer_max: 10,
             window_ahead_max: 10,
             tolerate_past_max: 100,
-            include_micro_bodies: true,
+            include_body: true,
         },
     );
 

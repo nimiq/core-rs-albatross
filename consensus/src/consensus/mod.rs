@@ -33,7 +33,7 @@ use self::remote_event_dispatcher::RemoteEventDispatcher;
 use crate::{
     consensus::head_requests::{HeadRequests, HeadRequestsResult},
     messages::{RequestBlock, RequestHead, RequestMacroChain, RequestMissingBlocks},
-    sync::{syncer::LiveSyncPushEvent, syncer_proxy::SyncerProxy},
+    sync::{live::block_queue::BlockSource, syncer::LiveSyncPushEvent, syncer_proxy::SyncerProxy},
 };
 #[cfg(feature = "full")]
 use crate::{
@@ -109,9 +109,8 @@ pub struct ResolveBlockRequest<N: Network> {
     /// Block hash of the to be resolved block.
     pub(crate) block_hash: Blake2bHash,
 
-    /// The id of the message referencing the block being requested here. These do include peers
-    /// which should have knowledge of the block. They will be used to resolve the block.
-    pub(crate) pubsub_id: N::PubsubId,
+    /// The id of the first peer to ask for this block.
+    pub(crate) first_peer_id: N::PeerId,
 
     /// Sender to a oneshot channel where the response to the request is being awaited.
     pub(crate) response_sender: OneshotSender<Result<Block, ResolveBlockError<N>>>,
@@ -526,7 +525,7 @@ impl<N: Network> Future for Consensus<N> {
 
                 // Push unknown blocks to the block queue, trying to sync.
                 for (block, peer_id) in result.unknown_blocks.drain(..) {
-                    self.sync.push_block(block, peer_id, None);
+                    self.sync.push_block(block, BlockSource::requested(peer_id));
                 }
 
                 // Update established state using the result.

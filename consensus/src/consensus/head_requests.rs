@@ -37,7 +37,7 @@ pub struct HeadRequests<TNetwork: Network + 'static> {
     num_known_blocks: usize,
     num_unknown_blocks: usize,
     unknown_blocks: Vec<(Block, TNetwork::PeerId)>,
-    include_micro_bodies: bool,
+    include_body: bool,
 }
 
 pub struct HeadRequestsResult<TNetwork: Network + 'static> {
@@ -63,9 +63,9 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
             .collect();
 
         #[cfg(feature = "full")]
-        let include_micro_bodies = matches!(blockchain, BlockchainProxy::Full(_));
+        let include_body = matches!(blockchain, BlockchainProxy::Full(_));
         #[cfg(not(feature = "full"))]
-        let include_micro_bodies = false;
+        let include_body = false;
 
         HeadRequests {
             peers,
@@ -77,7 +77,7 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
             num_known_blocks: 0,
             num_unknown_blocks: 0,
             unknown_blocks: Default::default(),
-            include_micro_bodies,
+            include_body,
         }
     }
 
@@ -98,16 +98,10 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
         network: Arc<TNetwork>,
         peer_id: TNetwork::PeerId,
         hash: Blake2bHash,
-        include_micro_bodies: bool,
+        include_body: bool,
     ) -> Result<Result<Block, BlockError>, RequestError> {
         network
-            .request::<RequestBlock>(
-                RequestBlock {
-                    hash,
-                    include_micro_bodies,
-                },
-                peer_id,
-            )
+            .request::<RequestBlock>(RequestBlock { hash, include_body }, peer_id)
             .await
     }
 }
@@ -131,17 +125,12 @@ impl<TNetwork: Network + 'static> Future for HeadRequests<TNetwork> {
                             self.requested_hashes.insert(hash.clone());
                             let network = Arc::clone(&self.network);
                             let peer_id = self.peers[i];
-                            let include_micro_bodies = self.include_micro_bodies;
+                            let include_body = self.include_body;
                             self.head_blocks.push(
                                 async move {
                                     (
-                                        Self::request_block(
-                                            network,
-                                            peer_id,
-                                            hash,
-                                            include_micro_bodies,
-                                        )
-                                        .await,
+                                        Self::request_block(network, peer_id, hash, include_body)
+                                            .await,
                                         peer_id,
                                     )
                                 }

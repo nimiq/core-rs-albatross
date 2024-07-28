@@ -21,8 +21,8 @@ use crate::{
     sync::{
         live::{
             block_queue::{
-                live_sync::PushOpResult, queue::BlockQueue, BlockStream, GossipSubBlockStream,
-                QueuedBlock,
+                live_sync::PushOpResult, queue::BlockQueue, BlockAndSource, BlockStream,
+                GossipSubBlockStream, QueuedBlock,
             },
             queue::{LiveSyncQueue, QueueConfig},
         },
@@ -107,9 +107,8 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueueProxy<N> {
         blockchain: BlockchainProxy,
         bls_cache: Arc<Mutex<PublicKeyCache>>,
         result: Self::QueueResult,
-        include_body: bool,
     ) -> VecDeque<BoxFuture<'static, Self::PushResult>> {
-        BlockQueue::push_queue_result(network, blockchain, bls_cache, result, include_body)
+        BlockQueue::push_queue_result(network, blockchain, bls_cache, result)
     }
 
     fn process_push_result(&mut self, item: Self::PushResult) -> Option<LiveSyncEvent<N::PeerId>> {
@@ -130,13 +129,13 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueueProxy<N> {
 
     fn add_block_stream<S>(&mut self, block_stream: S)
     where
-        S: Stream<Item = (Block, N::PeerId, Option<N::PubsubId>)> + Send + 'static,
+        S: Stream<Item = BlockAndSource<N>> + Send + 'static,
     {
         self.queue.lock().add_block_stream(block_stream)
     }
 
-    fn include_micro_bodies(&self) -> bool {
-        self.queue.lock().include_micro_bodies()
+    fn include_body(&self) -> bool {
+        self.queue.lock().include_body()
     }
 
     fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {

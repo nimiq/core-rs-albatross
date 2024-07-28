@@ -18,7 +18,10 @@ use tokio_stream::wrappers::ReceiverStream;
 use self::state_queue::StateQueue;
 use self::{block_queue::BlockQueue, queue::LiveSyncQueue};
 use super::syncer::{LiveSync, LiveSyncEvent};
-use crate::consensus::ResolveBlockRequest;
+use crate::{
+    consensus::ResolveBlockRequest,
+    sync::live::block_queue::{BlockAndSource, BlockSource},
+};
 
 pub mod block_queue;
 #[cfg(feature = "full")]
@@ -50,7 +53,7 @@ pub struct LiveSyncer<N: Network, Q: LiveSyncQueue<N>> {
     /// Channel used to communicate additional blocks to the queue.
     /// We use this to wake up the queue and pass in new, unknown blocks
     /// received in the consensus as part of the head requests.
-    block_tx: MpscSender<(Block, N::PeerId, Option<N::PubsubId>)>,
+    block_tx: MpscSender<BlockAndSource<N>>,
 }
 
 impl<N: Network, Q: LiveSyncQueue<N>> LiveSyncer<N, Q> {
@@ -78,8 +81,8 @@ impl<N: Network, Q: LiveSyncQueue<N>> LiveSyncer<N, Q> {
 }
 
 impl<N: Network, Q: LiveSyncQueue<N>> LiveSync<N> for LiveSyncer<N, Q> {
-    fn push_block(&mut self, block: Block, peer_id: N::PeerId, pubsub_id: Option<N::PubsubId>) {
-        if let Err(e) = self.block_tx.try_send((block, peer_id, pubsub_id)) {
+    fn push_block(&mut self, block: Block, block_source: BlockSource<N>) {
+        if let Err(e) = self.block_tx.try_send((block, block_source)) {
             error!("Queue not ready to receive data: {}", e);
         }
     }
@@ -124,7 +127,6 @@ impl<N: Network, Q: LiveSyncQueue<N>> Stream for LiveSyncer<N, Q> {
                     self.blockchain.clone(),
                     Arc::clone(&self.bls_cache),
                     item,
-                    self.queue.include_micro_bodies(),
                 );
             } else {
                 // The stream is done

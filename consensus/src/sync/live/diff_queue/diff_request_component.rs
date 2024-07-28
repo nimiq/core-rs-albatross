@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use futures::future::BoxFuture;
-use nimiq_network_interface::network::{Network, PubsubId};
+use nimiq_network_interface::network::Network;
 use nimiq_primitives::{trie::trie_diff::TrieDiff, TreeProof};
 use nimiq_time::sleep;
 use parking_lot::RwLock;
@@ -9,7 +9,7 @@ use tokio::sync::Semaphore;
 
 use super::{RequestTrieDiff, ResponseTrieDiff};
 use crate::sync::{
-    live::block_queue::BlockAndId,
+    live::block_queue::BlockAndSource,
     peer_list::{PeerList, PeerListIndex},
 };
 
@@ -34,7 +34,7 @@ impl<N: Network> DiffRequestComponent<N> {
 
     pub fn request_diff(
         &mut self,
-    ) -> impl FnMut(&BlockAndId<N>) -> BoxFuture<'static, Result<TrieDiff, ()>> {
+    ) -> impl FnMut(&BlockAndSource<N>) -> BoxFuture<'static, Result<TrieDiff, ()>> {
         let mut starting_peer_index = self.current_peer_index.clone();
         self.current_peer_index.increment();
 
@@ -42,14 +42,13 @@ impl<N: Network> DiffRequestComponent<N> {
         let network = Arc::clone(&self.network);
         let concurrent_requests = Arc::clone(&self.concurrent_requests);
 
-        move |(block, pubsub_id)| {
+        move |(block, block_source)| {
             let peers = Arc::clone(&peers);
 
             // If we know the peer that sent us this block, we ask them first.
-            let mut current_peer_index = pubsub_id
-                .as_ref()
-                .map(|id| id.propagation_source())
-                .and_then(|peer_id| peers.read().index_of(&peer_id))
+            let mut current_peer_index = peers
+                .read()
+                .index_of(&block_source.peer_id())
                 .unwrap_or_else(|| {
                     starting_peer_index.increment();
                     starting_peer_index.clone()

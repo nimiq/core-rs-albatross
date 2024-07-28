@@ -28,8 +28,8 @@ use serde::{Deserialize, Serialize};
 
 use self::chunk_request_component::ChunkRequestComponent;
 use super::{
-    block_queue::BlockAndId,
-    queue::{ChunkAndId, QueueConfig},
+    block_queue::BlockAndSource,
+    queue::{ChunkAndSource, QueueConfig},
 };
 use crate::sync::live::diff_queue::{DiffQueue, QueuedDiff};
 
@@ -90,14 +90,14 @@ impl RequestCommon for RequestChunk {
 }
 
 pub enum QueuedStateChunks<N: Network> {
-    Head(BlockAndId<N>, Option<TrieDiff>, Vec<ChunkAndId<N>>),
-    Buffered(Vec<(BlockAndId<N>, Option<TrieDiff>, Vec<ChunkAndId<N>>)>),
-    Missing(Vec<(Block, Option<TrieDiff>, Vec<ChunkAndId<N>>)>),
-    HeadStateChunk(Vec<ChunkAndId<N>>),
+    Head(BlockAndSource<N>, Option<TrieDiff>, Vec<ChunkAndSource<N>>),
+    Buffered(Vec<(BlockAndSource<N>, Option<TrieDiff>, Vec<ChunkAndSource<N>>)>),
+    Missing(Vec<(BlockAndSource<N>, Option<TrieDiff>, Vec<ChunkAndSource<N>>)>),
+    HeadStateChunk(Vec<ChunkAndSource<N>>),
     TooFarFutureBlock(N::PeerId),
     TooDistantPastBlock(N::PeerId),
-    TooFarFutureChunk(ChunkAndId<N>),
-    TooDistantPastChunk(ChunkAndId<N>),
+    TooFarFutureChunk(ChunkAndSource<N>),
+    TooDistantPastChunk(ChunkAndSource<N>),
     PeerIncompleteState(N::PeerId),
 }
 
@@ -157,7 +157,7 @@ pub struct StateQueue<N: Network> {
     /// Buffered chunks - `block_height -> block_hash -> BlockAndId`.
     /// There can be multiple blocks at a height if there are forks.
     /// For each block, we can store multiple chunks.
-    buffer: BTreeMap<u32, HashMap<Blake2bHash, Vec<ChunkAndId<N>>>>,
+    buffer: BTreeMap<u32, HashMap<Blake2bHash, Vec<ChunkAndSource<N>>>>,
 
     buffer_size: usize,
 
@@ -309,7 +309,7 @@ impl<N: Network> StateQueue<N> {
             }
         }
 
-        chunks.push(ChunkAndId::new(response.chunk, start_key, peer_id));
+        chunks.push(ChunkAndSource::new(response.chunk, start_key, peer_id));
         self.buffer_size += 1;
     }
 
@@ -350,7 +350,7 @@ impl<N: Network> StateQueue<N> {
 
             if self.network.has_peer(peer_id) {
                 self.chunk_request_component.remove_peer(&peer_id);
-                return Some(QueuedStateChunks::TooDistantPastChunk(ChunkAndId::new(
+                return Some(QueuedStateChunks::TooDistantPastChunk(ChunkAndSource::new(
                     chunk.chunk,
                     start_key,
                     peer_id,
@@ -365,7 +365,7 @@ impl<N: Network> StateQueue<N> {
 
             if self.network.has_peer(peer_id) {
                 self.chunk_request_component.remove_peer(&peer_id);
-                return Some(QueuedStateChunks::TooFarFutureChunk(ChunkAndId::new(
+                return Some(QueuedStateChunks::TooFarFutureChunk(ChunkAndSource::new(
                     chunk.chunk,
                     start_key,
                     peer_id,
@@ -380,11 +380,9 @@ impl<N: Network> StateQueue<N> {
         } else if chunk.block_hash == current_block_hash {
             // Immediately return chunks for the current head blockchain.
             self.set_start_key(&chunk.chunk.end_key, chunk.block_number);
-            return Some(QueuedStateChunks::HeadStateChunk(vec![ChunkAndId::new(
-                chunk.chunk,
-                start_key,
-                peer_id,
-            )]));
+            return Some(QueuedStateChunks::HeadStateChunk(vec![
+                ChunkAndSource::new(chunk.chunk, start_key, peer_id),
+            ]));
         } else if chunk.block_number <= macro_height {
             // Chunk is from a previous batch/epoch, discard it.
             log::warn!(
@@ -429,7 +427,7 @@ impl<N: Network> StateQueue<N> {
                 let blocks_and_chunks = missing_blocks
                     .into_iter()
                     .map(|(block, diff)| {
-                        let chunks = self.get_block_chunks(&block);
+                        let chunks = self.get_block_chunks(&block.0);
                         (block, diff, chunks)
                     })
                     .collect();
@@ -445,7 +443,7 @@ impl<N: Network> StateQueue<N> {
         }
     }
 
-    fn get_block_chunks(&mut self, block: &Block) -> Vec<ChunkAndId<N>> {
+    fn get_block_chunks(&mut self, block: &Block) -> Vec<ChunkAndSource<N>> {
         let mut chunks = vec![];
         let mut is_empty = false;
         if let Some(blocks) = self.buffer.get_mut(&block.block_number()) {

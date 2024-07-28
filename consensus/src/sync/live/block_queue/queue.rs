@@ -14,7 +14,7 @@ use nimiq_block::Block;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction, ForkEvent};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId};
+use nimiq_network_interface::network::Network;
 use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
 use nimiq_utils::WakerExt;
 use parking_lot::RwLock;
@@ -26,9 +26,8 @@ use crate::{
     sync::{
         live::{
             block_queue::{
-                assembler::BlockAssembler,
-                block_request_component::{BlockRequestComponent, BlockRequestComponentEvent},
-                BlockAndId, BlockStream, GossipSubBlockStream, QueuedBlock,
+                assembler::BlockAssembler, block_request_component::BlockRequestComponent,
+                BlockAndSource, BlockSource, BlockStream, GossipSubBlockStream, QueuedBlock,
             },
             queue::QueueConfig,
         },
@@ -55,7 +54,7 @@ pub struct BlockQueue<N: Network> {
 
     /// Buffered blocks - `block_height -> block_hash -> BlockAndId`.
     /// There can be multiple blocks at a height if there are forks.
-    buffer: BTreeMap<u32, HashMap<Blake2bHash, BlockAndId<N>>>,
+    buffer: BTreeMap<u32, HashMap<Blake2bHash, BlockAndSource<N>>>,
 
     /// Hashes of blocks that are pending to be pushed to the chain.
     blocks_pending_push: BTreeSet<Blake2bHash>,
@@ -91,16 +90,16 @@ impl<N: Network> BlockQueue<N> {
     pub async fn new(network: Arc<N>, blockchain: BlockchainProxy, config: QueueConfig) -> Self {
         let header_stream = network.subscribe::<BlockHeaderTopic>().await.unwrap();
 
-        let block_stream = if config.include_micro_bodies {
+        let block_stream = if config.include_body {
             let body_stream = network.subscribe::<BlockBodyTopic>().await.unwrap().boxed();
-            BlockAssembler::<N>::new(header_stream, body_stream).boxed()
+            BlockAssembler::<N>::new(Arc::clone(&network), header_stream, body_stream).boxed()
         } else {
             header_stream
-                .map(|(header, pubsub_id)| (header.into(), pubsub_id))
+                .map(|(header, pubsub_id)| (header.into(), BlockSource::announced(pubsub_id, None)))
                 .boxed()
         };
 
-        Self::with_gossipsub_block_stream(blockchain, network, block_stream, config)
+        Self::with_block_stream(blockchain, network, block_stream, config)
     }
 
     pub fn with_gossipsub_block_stream(
@@ -110,7 +109,7 @@ impl<N: Network> BlockQueue<N> {
         config: QueueConfig,
     ) -> Self {
         let block_stream = block_stream
-            .map(|(block, pubsub_id)| (block, pubsub_id.propagation_source(), Some(pubsub_id)))
+            .map(|(block, pubsub_id)| (block, BlockSource::announced(pubsub_id, None)))
             .boxed();
         Self::with_block_stream(blockchain, network, block_stream, config)
     }
@@ -125,7 +124,7 @@ impl<N: Network> BlockQueue<N> {
         let blockchain_rx = blockchain.read().notifier_as_stream();
         let fork_rx = blockchain.read().fork_notifier_as_stream();
         let request_component =
-            BlockRequestComponent::new(Arc::clone(&network), config.include_micro_bodies);
+            BlockRequestComponent::new(Arc::clone(&network), config.include_body);
 
         Self {
             config,
@@ -151,15 +150,11 @@ impl<N: Network> BlockQueue<N> {
     fn check_announced_block(
         &mut self,
         block: Block,
-        peer_id: N::PeerId,
-        pubsub_id: Option<<N as Network>::PubsubId>,
+        block_source: BlockSource<N>,
     ) -> Option<QueuedBlock<N>> {
-        let body_existence_matches_topic = match &block {
-            Block::Macro(block) => block.body.is_some(),
-            Block::Micro(block) => block.body.is_some() == self.config.include_micro_bodies,
-        };
-        if !body_existence_matches_topic {
-            self.report_validation_result(pubsub_id, MsgAcceptance::Reject);
+        // Reject block if it includes a body when we didn't request one or vice versa.
+        if block.body().is_some() != self.config.include_body {
+            block_source.reject_block(&self.network);
             return None;
         }
 
@@ -170,14 +165,11 @@ impl<N: Network> BlockQueue<N> {
 
         // Ignore blocks that we already know.
         if let Ok(info) = blockchain.get_chain_info(&block.hash(), false) {
-            self.report_validation_result(
-                pubsub_id,
-                if info.on_main_chain {
-                    MsgAcceptance::Accept
-                } else {
-                    MsgAcceptance::Ignore
-                },
-            );
+            if info.on_main_chain {
+                block_source.accept_block(&self.network)
+            } else {
+                block_source.ignore_block(&self.network)
+            }
             return None;
         }
 
@@ -199,16 +191,17 @@ impl<N: Network> BlockQueue<N> {
                 block,
                 head_height - self.config.tolerate_past_max,
             );
-            self.report_validation_result(pubsub_id, MsgAcceptance::Ignore);
+            block_source.ignore_block(&self.network);
 
+            let peer_id = block_source.peer_id();
             if self.request_component.take_peer(&peer_id).is_some() {
-                return Some(QueuedBlock::TooFarBehind(block, peer_id));
+                return Some(QueuedBlock::TooFarBehind(peer_id));
             }
         } else if parent_known {
             // New head or fork block.
             // Add block to pending blocks and return queued block for the stream.
             if self.blocks_pending_push.insert(block.hash()) {
-                return Some(QueuedBlock::Head((block, pubsub_id)));
+                return Some(QueuedBlock::Head((block, block_source)));
             }
         } else if block_number > head_height + self.config.window_ahead_max {
             log::warn!(
@@ -216,10 +209,11 @@ impl<N: Network> BlockQueue<N> {
                 block,
                 head_height + self.config.window_ahead_max,
             );
-            self.report_validation_result(pubsub_id, MsgAcceptance::Ignore);
+            block_source.ignore_block(&self.network);
 
+            let peer_id = block_source.peer_id();
             if self.request_component.take_peer(&peer_id).is_some() {
-                return Some(QueuedBlock::TooFarAhead(block, peer_id));
+                return Some(QueuedBlock::TooFarAhead(peer_id));
             }
         } else if block_number <= macro_height {
             // Block is from a previous batch/epoch, discard it.
@@ -228,17 +222,17 @@ impl<N: Network> BlockQueue<N> {
                 block,
                 macro_height
             );
-            self.report_validation_result(pubsub_id, MsgAcceptance::Ignore);
+            block_source.ignore_block(&self.network);
         } else {
             // Block is inside the buffer window, put it in the buffer.
-            self.buffer_and_request_missing_blocks(block, pubsub_id);
+            self.buffer_and_request_missing_blocks(block, block_source);
         }
 
         None
     }
 
     /// Buffers the current block and requests any missing blocks in-between.
-    fn buffer_and_request_missing_blocks(&mut self, block: Block, pubsub_id: Option<N::PubsubId>) {
+    fn buffer_and_request_missing_blocks(&mut self, block: Block, block_source: BlockSource<N>) {
         // Make sure that block_number is positive as we subtract from it later on.
         let block_number = block.block_number();
         if block_number == 0 {
@@ -249,7 +243,7 @@ impl<N: Network> BlockQueue<N> {
         let mut parent_block_number = block_number - 1;
 
         // Insert block into buffer. If we already know the block, we're done.
-        if !self.insert_block_into_buffer(block, pubsub_id.clone()) {
+        if !self.insert_block_into_buffer(block, block_source.clone()) {
             log::trace!(
                 block_number,
                 "Not buffering block - already known or exceeded the per peer limit",
@@ -283,9 +277,9 @@ impl<N: Network> BlockQueue<N> {
             parent_block_number,
             parent_hash,
             None,
-            None,
-            pubsub_id,
             Direction::Forward,
+            None,
+            Some(block_source.peer_id()),
         );
     }
 
@@ -300,54 +294,52 @@ impl<N: Network> BlockQueue<N> {
     /// ## Returns
     /// * `true` if the block was added to the buffer
     /// * `false` otherwise
-    fn insert_block_into_buffer(&mut self, block: Block, pubsub_id: Option<N::PubsubId>) -> bool {
-        let peer_id = match pubsub_id {
-            // Blocks without a pubsub_id are requested and will always be buffered.
-            None => {
-                let map = self.buffer.entry(block.block_number()).or_default();
-                if map.contains_key(&block.hash()) {
-                    return false;
-                }
-                assert!(map.insert(block.hash(), (block, None)).is_none());
-                return true;
+    fn insert_block_into_buffer(&mut self, block: Block, block_source: BlockSource<N>) -> bool {
+        // Always buffer blocks that we requested.
+        let block_hash = block.hash();
+        if block_source.is_requested() {
+            let map = self.buffer.entry(block.block_number()).or_default();
+            if map.contains_key(&block_hash) {
+                return false;
             }
-            // For blocks with a pubsub id the propagation source is the peer which can
-            // only have MAX_BUFFERED_PER_PEER_PER_HEIGHT items buffered.
-            Some(ref pubsub_id) => pubsub_id.propagation_source(),
-        };
+            map.insert(block_hash, (block, block_source));
+            return true;
+        }
 
         // Get the entry for the block number if it exists.
-        // Otherwise add the entry and add the block to it and return.
+        // Otherwise, add the entry and add the block to it and return.
         let map = match self.buffer.entry(block.block_number()) {
             BTreeMapEntry::Occupied(occupied_entry) => occupied_entry.into_mut(),
             BTreeMapEntry::Vacant(vacant_entry) => {
                 // Trivially okay to buffer as nothing is buffered yet.
-                vacant_entry.insert(HashMap::from([(block.hash(), (block, pubsub_id))]));
+                vacant_entry.insert(HashMap::from([(block_hash, (block, block_source))]));
                 return true;
             }
         };
 
-        let mut blocks_by_peer = 0;
-        for (hash, (_block, pubsub)) in map.iter() {
-            if *hash == block.hash() {
-                // Block is already buffered. Ignore it here.
-                return false;
+        // If the block is already buffered, ignore it.
+        if map.contains_key(&block_hash) {
+            return false;
+        }
+
+        // Enforce a maximum number of announced blocks per peer per block number.
+        let peer_id = block_source.peer_id();
+        let mut num_buffered_blocks = 0;
+        for (_, (_, block_source)) in map.iter() {
+            // Don't count blocks that we requested.
+            if block_source.is_requested() {
+                continue;
             }
 
-            // Extract the propagation source or move on to the next item
-            let propagation_source = match pubsub {
-                Some(pubsub_id) => pubsub_id.propagation_source(),
-                None => continue,
-            };
+            // Check if the source is the current peer.
+            if block_source.peer_id() == peer_id {
+                // Increment the counter.
+                num_buffered_blocks += 1;
 
-            // Check if the source is the current peer
-            if propagation_source == peer_id {
-                // Increase the counter
-                blocks_by_peer += 1;
-                // Check if the count exceeds the maximum buffer count
-                if blocks_by_peer == Self::MAX_BUFFERED_PER_PEER_PER_HEIGHT {
+                // Check if the count exceeds the maximum buffer count.
+                if num_buffered_blocks == Self::MAX_BUFFERED_PER_PEER_PER_HEIGHT {
                     log::debug!(
-                        ?peer_id, block_number=block.block_number(), dropped_block=?block,
+                        ?peer_id, block_number = block.block_number(), dropped_block = ?block,
                         "Peer buffer exceeded limit, dropping block",
                     );
                     // If so return, as the peer cannot buffer any additional items.
@@ -355,9 +347,8 @@ impl<N: Network> BlockQueue<N> {
                 }
             }
         }
-        // Insert the block. Strictly speaking the .is_none() is redundant with previous checks
-        // and could be replaced with return true;
-        assert!(map.insert(block.hash(), (block, pubsub_id)).is_none());
+
+        map.insert(block.hash(), (block, block_source));
         true
     }
 
@@ -373,7 +364,7 @@ impl<N: Network> BlockQueue<N> {
     /// If a block locator is given, it is inserted at the beginning of the full block locator list.
     /// The list contains all blocks from the head until the last macro block.
     ///
-    /// `pubsub_id` specifies the gossipsub peer ID of the gossip message that
+    /// `first_peer_id` specifies the gossipsub peer ID of the gossip message that
     /// led to this request, if any. It'll be used as the first peer to request
     /// the missing blocks from.
     fn request_missing_blocks(
@@ -381,9 +372,9 @@ impl<N: Network> BlockQueue<N> {
         block_number: u32,
         block_hash: Blake2bHash,
         block_locator: Option<Blake2bHash>,
-        epoch_validators: Option<Validators>,
-        pubsub_id: Option<N::PubsubId>,
         direction: Direction,
+        epoch_validators: Option<Validators>,
+        first_peer_id: Option<N::PeerId>,
     ) {
         let (head_hash, head_height, macro_height, blocks, epoch_validators) = {
             let blockchain = self.blockchain.read();
@@ -444,7 +435,7 @@ impl<N: Network> BlockQueue<N> {
                 block_locators,
                 direction,
                 epoch_validators,
-                pubsub_id,
+                first_peer_id,
             );
         } else {
             log::error!(start_block = %head_hash, count = head_height - macro_height, "Couldn't get blocks")
@@ -458,6 +449,7 @@ impl<N: Network> BlockQueue<N> {
         target_hash: Blake2bHash,
         mut epoch_validators: Validators,
         blocks: Vec<Block>,
+        sender: N::PeerId,
     ) -> Option<QueuedBlock<N>> {
         // Verification is already done by the sync queue.
         if blocks.is_empty() {
@@ -475,9 +467,9 @@ impl<N: Network> BlockQueue<N> {
                 target_block_number,
                 target_hash,
                 Some(block_hash),
+                Direction::Forward,
                 Some(epoch_validators),
                 None,
-                Direction::Forward,
             );
         }
 
@@ -497,11 +489,11 @@ impl<N: Network> BlockQueue<N> {
             // Recursively request missing blocks for the first block we received.
             let mut blocks = blocks.into_iter();
             let first_block = blocks.next().unwrap();
-            self.buffer_and_request_missing_blocks(first_block, None);
+            self.buffer_and_request_missing_blocks(first_block, BlockSource::requested(sender));
 
             // Store the remaining blocks in the buffer.
             for block in blocks {
-                self.insert_block_into_buffer(block, None);
+                self.insert_block_into_buffer(block, BlockSource::requested(sender));
             }
 
             return None;
@@ -511,7 +503,12 @@ impl<N: Network> BlockQueue<N> {
         self.blocks_pending_push
             .extend(blocks.iter().map(|block| block.hash()));
 
-        Some(QueuedBlock::Missing(blocks))
+        let blocks_with_source = blocks
+            .into_iter()
+            .map(|block| (block, BlockSource::requested(sender)))
+            .collect();
+
+        Some(QueuedBlock::Missing(blocks_with_source))
     }
 
     /// Fetches the relevant blocks for any given `BlockchainEvent`
@@ -524,7 +521,7 @@ impl<N: Network> BlockQueue<N> {
                 if let Ok(block) = self
                     .blockchain
                     .read()
-                    .get_block(&block_hash, self.config.include_micro_bodies)
+                    .get_block(&block_hash, self.config.include_body)
                 {
                     block_infos.push(block);
                 }
@@ -566,7 +563,7 @@ impl<N: Network> BlockQueue<N> {
     fn remove_applicable_blocks(
         &mut self,
         block_infos: Vec<(u32, Blake2bHash)>,
-    ) -> Vec<BlockAndId<N>> {
+    ) -> Vec<BlockAndSource<N>> {
         // The only blocks that can now be applied but couldn't be before
         // are those whose parent is one of the newly added blocks.
         // So, we specifically collect and remove those.
@@ -576,10 +573,10 @@ impl<N: Network> BlockQueue<N> {
             let mut is_empty = false;
             if let Some(blocks) = self.buffer.get_mut(&(new_block_number + 1)) {
                 // Collect all blocks with a known parent.
-                blocks.retain(|_, (block, pubsub_id)| {
+                blocks.retain(|_, (block, block_source)| {
                     let push = block.parent_hash() == &new_block_hash;
                     if push {
-                        blocks_to_push.push((block.clone(), pubsub_id.clone()));
+                        blocks_to_push.push((block.clone(), block_source.clone()));
                     }
                     !push
                 });
@@ -606,18 +603,11 @@ impl<N: Network> BlockQueue<N> {
         // Iterate over block buffer, remove element if no blocks remain at that height.
         self.buffer.retain(|_block_number, blocks| {
             // Iterate over all blocks at the current height, remove block if parent is invalid
-            blocks.retain(|hash, (block, pubsub_id)| {
+            blocks.retain(|hash, (block, block_source)| {
                 if invalid_blocks.contains(block.parent_hash()) {
                     log::trace!("Removing block because parent is invalid: {}", hash);
                     invalid_blocks.insert(hash.clone());
-
-                    if let Some(id) = pubsub_id {
-                        self.network.validate_message::<BlockHeaderTopic>(
-                            id.clone(),
-                            MsgAcceptance::Reject,
-                        );
-                    }
-
+                    block_source.reject_block(&self.network);
                     false
                 } else {
                     true
@@ -635,12 +625,8 @@ impl<N: Network> BlockQueue<N> {
                 return true;
             }
             // Tell gossipsub to ignore the removed blocks.
-            for (_, pubsub_id) in blocks.values() {
-                // Inline `report_validation_result` here, because it solves the borrow issue:
-                if let Some(id) = pubsub_id {
-                    self.network
-                        .validate_message::<BlockHeaderTopic>(id.clone(), MsgAcceptance::Ignore);
-                }
+            for (_, block_source) in blocks.values() {
+                block_source.ignore_block(&self.network);
             }
             false
         });
@@ -692,25 +678,13 @@ impl<N: Network> BlockQueue<N> {
         }
     }
 
-    #[inline]
-    fn report_validation_result(
-        &self,
-        pubsub_id: Option<<N as Network>::PubsubId>,
-        acceptance: MsgAcceptance,
-    ) {
-        if let Some(id) = pubsub_id {
-            self.network
-                .validate_message::<BlockHeaderTopic>(id, acceptance);
-        }
-    }
-
     pub(crate) fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
         // Deconstruct the request as the parts are needed in different places and for the sender
         // specifically ownership is needed.
         let ResolveBlockRequest::<N> {
             block_number,
             block_hash,
-            pubsub_id,
+            first_peer_id,
             response_sender,
         } = request;
 
@@ -761,9 +735,9 @@ impl<N: Network> BlockQueue<N> {
             block_number,
             block_hash,
             None,
-            None,
-            Some(pubsub_id),
             Direction::Backward,
+            None,
+            Some(first_peer_id),
         );
     }
 
@@ -825,11 +799,12 @@ impl<N: Network> Stream for BlockQueue<N> {
         // Get as many blocks from the gossipsub stream as possible.
         loop {
             match self.block_stream.poll_next_unpin(cx) {
-                Poll::Ready(Some((block, peer_id, pubsub_id))) => {
+                Poll::Ready(Some((block, block_source))) => {
                     // Only consider announcements from synced peers.
+                    let peer_id = block_source.peer_id();
                     if self.peer_list().read().has_peer(&peer_id) {
                         log::debug!(%block, %peer_id, "Received block via gossipsub");
-                        if let Some(block) = self.check_announced_block(block, peer_id, pubsub_id) {
+                        if let Some(block) = self.check_announced_block(block, block_source) {
                             return Poll::Ready(Some(block));
                         }
                     } else {
@@ -846,17 +821,13 @@ impl<N: Network> Stream for BlockQueue<N> {
         loop {
             let poll_res = self.request_component.poll_next_unpin(cx);
             match poll_res {
-                Poll::Ready(Some(BlockRequestComponentEvent::ReceivedBlocks(
-                    target_block_number,
-                    target_hash,
-                    epoch_validators,
-                    blocks,
-                ))) => {
+                Poll::Ready(Some(result)) => {
                     if let Some(block) = self.handle_missing_blocks(
-                        target_block_number,
-                        target_hash,
-                        epoch_validators,
-                        blocks,
+                        result.target_block_number,
+                        result.target_block_hash,
+                        result.epoch_validators,
+                        result.blocks,
+                        result.sender,
                     ) {
                         return Poll::Ready(Some(block));
                     }

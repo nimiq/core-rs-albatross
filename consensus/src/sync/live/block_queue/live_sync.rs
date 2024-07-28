@@ -9,7 +9,6 @@ use futures::{
     stream::{empty, select},
     FutureExt, Stream, StreamExt,
 };
-use nimiq_block::Block;
 use nimiq_blockchain_interface::{PushError, PushResult};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
@@ -18,7 +17,7 @@ use nimiq_network_interface::network::Network;
 use nimiq_utils::WakerExt;
 use parking_lot::Mutex;
 
-use super::QueuedBlock;
+use super::{BlockAndSource, QueuedBlock};
 use crate::sync::{
     live::{
         block_queue::queue::BlockQueue,
@@ -47,34 +46,25 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
         blockchain: BlockchainProxy,
         bls_cache: Arc<Mutex<PublicKeyCache>>,
         result: Self::QueueResult,
-        include_body: bool,
     ) -> VecDeque<BoxFuture<'static, Self::PushResult>> {
         let mut future_results = VecDeque::new();
         match result {
-            QueuedBlock::Head((block, pubsub_id)) => {
+            QueuedBlock::Head((block, block_source)) => {
                 // Push block.
                 future_results.push_back(
-                    queue::push_block_only(
-                        network,
-                        blockchain,
-                        bls_cache,
-                        pubsub_id,
-                        block,
-                        include_body,
-                    )
-                    .map(|(push_result, hash)| PushOpResult::Head(push_result, hash))
-                    .boxed(),
+                    queue::push_block_only(network, blockchain, bls_cache, block, block_source)
+                        .map(|(push_result, hash)| PushOpResult::Head(push_result, hash))
+                        .boxed(),
                 );
             }
             QueuedBlock::Buffered(buffered_blocks) => {
-                for (block, pubsub_id) in buffered_blocks {
+                for (block, block_source) in buffered_blocks {
                     let res = queue::push_block_only(
                         Arc::clone(&network),
                         blockchain.clone(),
                         Arc::clone(&bls_cache),
-                        pubsub_id,
                         block,
-                        include_body,
+                        block_source,
                     )
                     .map(|(push_result, hash)| PushOpResult::Buffered(push_result, hash))
                     .boxed();
@@ -91,14 +81,14 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
                         .boxed(),
                 );
             }
-            QueuedBlock::TooFarAhead(_, peer_id) => {
+            QueuedBlock::TooFarAhead(peer_id) => {
                 // Peer is too far ahead.
                 future_results.push_back(
                     future::ready(PushOpResult::PeerEvent(LiveSyncPeerEvent::Ahead(peer_id)))
                         .boxed(),
                 );
             }
-            QueuedBlock::TooFarBehind(_, peer_id) => {
+            QueuedBlock::TooFarBehind(peer_id) => {
                 // Peer is too far behind.
                 future_results.push_back(
                     future::ready(PushOpResult::PeerEvent(LiveSyncPeerEvent::Behind(peer_id)))
@@ -168,10 +158,10 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
         self.request_component.add_peer(peer_id)
     }
 
-    /// Adds an additional block stream by replacing the current block stream with a `select` of both streams.
+    /// Adds a block stream by replacing the current block stream with a `select` of both streams.
     fn add_block_stream<S>(&mut self, block_stream: S)
     where
-        S: Stream<Item = (Block, N::PeerId, Option<N::PubsubId>)> + Send + 'static,
+        S: Stream<Item = BlockAndSource<N>> + Send + 'static,
     {
         // We need to safely remove the old block stream first.
         let prev_block_stream = mem::replace(&mut self.block_stream, empty().boxed());
@@ -179,8 +169,8 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
         self.waker.wake();
     }
 
-    fn include_micro_bodies(&self) -> bool {
-        self.config.include_micro_bodies
+    fn include_body(&self) -> bool {
+        self.config.include_body
     }
 
     fn resolve_block(&mut self, request: crate::consensus::ResolveBlockRequest<N>) {

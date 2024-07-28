@@ -7,7 +7,6 @@ use futures::{
     future::{self, BoxFuture},
     FutureExt, Stream,
 };
-use nimiq_block::Block;
 use nimiq_blockchain_interface::{ChunksPushError, ChunksPushResult, PushError, PushResult};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
@@ -15,12 +14,12 @@ use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::Network;
 use parking_lot::Mutex;
 
-use super::{ChunkAndId, QueuedStateChunks, StateQueue};
+use super::{ChunkAndSource, QueuedStateChunks, StateQueue};
 use crate::{
     consensus::ResolveBlockRequest,
     sync::{
         live::{
-            block_queue::live_sync::PushOpResult as BlockPushOpResult,
+            block_queue::{live_sync::PushOpResult as BlockPushOpResult, BlockAndSource},
             queue::{self, LiveSyncQueue},
         },
         syncer::{LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
@@ -106,15 +105,20 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
         blockchain: BlockchainProxy,
         bls_cache: Arc<Mutex<PublicKeyCache>>,
         result: Self::QueueResult,
-        _include_body: bool,
     ) -> VecDeque<BoxFuture<'static, Self::PushResult>> {
         let mut future_results = VecDeque::new();
         match result {
-            QueuedStateChunks::Head((block, pubsub_id), diff, chunks) => {
+            QueuedStateChunks::Head((block, block_source), diff, chunks) => {
                 // Push block.
                 future_results.push_back(
                     queue::push_block_and_chunks(
-                        network, blockchain, bls_cache, pubsub_id, block, diff, chunks,
+                        network,
+                        blockchain,
+                        bls_cache,
+                        block,
+                        block_source,
+                        diff,
+                        chunks,
                     )
                     .map(|(push_result, push_chunk_error, hash)| {
                         PushOpResult::Head(push_result, push_chunk_error, hash)
@@ -123,13 +127,13 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
                 );
             }
             QueuedStateChunks::Buffered(buffered_blocks) => {
-                for ((block, pubsub_id), diff, chunks) in buffered_blocks {
+                for ((block, block_source), diff, chunks) in buffered_blocks {
                     let res = queue::push_block_and_chunks(
                         Arc::clone(&network),
                         blockchain.clone(),
                         Arc::clone(&bls_cache),
-                        pubsub_id,
                         block,
+                        block_source,
                         diff,
                         chunks,
                     )
@@ -168,7 +172,7 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
                 );
             }
             QueuedStateChunks::TooFarFutureBlock(peer_id)
-            | QueuedStateChunks::TooFarFutureChunk(ChunkAndId { peer_id, .. }) => {
+            | QueuedStateChunks::TooFarFutureChunk(ChunkAndSource { peer_id, .. }) => {
                 // Peer is too far ahead.
                 future_results.push_back(
                     future::ready(PushOpResult::PeerEvent(LiveSyncPeerEvent::Ahead(peer_id)))
@@ -177,7 +181,7 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
             }
             QueuedStateChunks::PeerIncompleteState(peer_id)
             | QueuedStateChunks::TooDistantPastBlock(peer_id)
-            | QueuedStateChunks::TooDistantPastChunk(ChunkAndId { peer_id, .. }) => {
+            | QueuedStateChunks::TooDistantPastChunk(ChunkAndSource { peer_id, .. }) => {
                 // Peer is too far behind.
                 future_results.push_back(
                     future::ready(PushOpResult::PeerEvent(LiveSyncPeerEvent::Behind(peer_id)))
@@ -247,15 +251,15 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
         self.diff_queue.add_peer(peer_id)
     }
 
-    /// Adds an additional block stream by replacing the current block stream with a `select` of both streams.
+    /// Adds a block stream by replacing the current block stream with a `select` of both streams.
     fn add_block_stream<S>(&mut self, block_stream: S)
     where
-        S: Stream<Item = (Block, N::PeerId, Option<N::PubsubId>)> + Send + 'static,
+        S: Stream<Item = BlockAndSource<N>> + Send + 'static,
     {
         self.diff_queue.add_block_stream(block_stream)
     }
 
-    fn include_micro_bodies(&self) -> bool {
+    fn include_body(&self) -> bool {
         true
     }
 

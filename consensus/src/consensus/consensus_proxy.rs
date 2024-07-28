@@ -603,7 +603,7 @@ impl<N: Network> ConsensusProxy<N> {
         self,
         block_number: u32,
         block_hash: Blake2bHash,
-        pubsub_id: N::PubsubId,
+        first_peer_id: N::PeerId,
     ) -> Result<Block, ResolveBlockError<N>> {
         // Create the oneshot sender whose receiver this fn will await and whose
         // sender will be given to the consensus proper to resolve the call.
@@ -613,7 +613,7 @@ impl<N: Network> ConsensusProxy<N> {
         let request = ResolveBlockRequest {
             block_number,
             block_hash,
-            pubsub_id,
+            first_peer_id,
             response_sender,
         };
 

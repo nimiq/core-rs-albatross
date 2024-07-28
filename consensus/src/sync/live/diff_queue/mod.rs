@@ -7,7 +7,6 @@ use std::{
 };
 
 use futures::{future::BoxFuture, Stream, StreamExt, TryStreamExt};
-use nimiq_block::Block;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
     network::Network,
@@ -19,7 +18,7 @@ use nimiq_utils::stream::{FuturesOrdered, FuturesUnordered};
 use parking_lot::RwLock;
 
 use self::diff_request_component::DiffRequestComponent;
-use super::block_queue::{BlockAndId, BlockQueue, QueuedBlock};
+use super::block_queue::{BlockAndSource, BlockQueue, QueuedBlock};
 use crate::{
     consensus::ResolveBlockRequest,
     sync::{
@@ -58,9 +57,9 @@ impl RequestCommon for RequestTrieDiff {
 }
 
 pub enum QueuedDiff<N: Network> {
-    Head(BlockAndId<N>, Option<TrieDiff>),
-    Buffered(Vec<(BlockAndId<N>, Option<TrieDiff>)>),
-    Missing(Vec<(Block, Option<TrieDiff>)>),
+    Head(BlockAndSource<N>, Option<TrieDiff>),
+    Buffered(Vec<(BlockAndSource<N>, Option<TrieDiff>)>),
+    Missing(Vec<(BlockAndSource<N>, Option<TrieDiff>)>),
     TooFarAhead(N::PeerId),
     TooFarBehind(N::PeerId),
     PeerIncompleteState(N::PeerId),
@@ -69,16 +68,16 @@ pub enum QueuedDiff<N: Network> {
 async fn augment_block<N, F, R>(block: QueuedBlock<N>, mut get_diff: F) -> Result<QueuedDiff<N>, ()>
 where
     N: Network,
-    F: FnMut(&BlockAndId<N>) -> R,
+    F: FnMut(&BlockAndSource<N>) -> R,
     R: Future<Output = Result<TrieDiff, ()>>,
 {
     async fn get_multiple_diffs<N, F, R>(
-        blocks: &[BlockAndId<N>],
+        blocks: &[BlockAndSource<N>],
         mut get_diff: F,
     ) -> Result<Vec<TrieDiff>, ()>
     where
         N: Network,
-        F: FnMut(&BlockAndId<N>) -> R,
+        F: FnMut(&BlockAndSource<N>) -> R,
         R: Future<Output = Result<TrieDiff, ()>>,
     {
         // This is just a fancy way to collect all the diffs simultaneously.
@@ -121,21 +120,16 @@ where
             )
         }
         QueuedBlock::Missing(blocks) => {
-            let blocks = blocks
-                .into_iter()
-                .map(|block| (block, Option::<N::PubsubId>::None))
-                .collect::<Vec<_>>();
             let diffs = get_multiple_diffs::<N, F, R>(&blocks[..], get_diff).await?;
             QueuedDiff::Missing(
                 blocks
                     .into_iter()
-                    .map(|(block, _)| block)
                     .zip(diffs.into_iter().map(Some))
                     .collect(),
             )
         }
-        QueuedBlock::TooFarAhead(_, peer_id) => QueuedDiff::TooFarAhead(peer_id),
-        QueuedBlock::TooFarBehind(_, peer_id) => QueuedDiff::TooFarBehind(peer_id),
+        QueuedBlock::TooFarAhead(peer_id) => QueuedDiff::TooFarAhead(peer_id),
+        QueuedBlock::TooFarBehind(peer_id) => QueuedDiff::TooFarBehind(peer_id),
     })
 }
 
@@ -194,10 +188,10 @@ impl<N: Network> DiffQueue<N> {
         self.block_queue.add_peer(peer_id)
     }
 
-    /// Adds an additional block stream by replacing the current block stream with a `select` of both streams.
+    /// Adds a block stream by replacing the current block stream with a `select` of both streams.
     pub(crate) fn add_block_stream<S>(&mut self, block_stream: S)
     where
-        S: Stream<Item = (Block, N::PeerId, Option<N::PubsubId>)> + Send + 'static,
+        S: Stream<Item = BlockAndSource<N>> + Send + 'static,
     {
         self.block_queue.add_block_stream(block_stream)
     }
@@ -234,8 +228,8 @@ impl<N: Network> Stream for DiffQueue<N> {
                             QueuedBlock::Missing(blocks) => QueuedDiff::Missing(
                                 blocks.into_iter().map(|block| (block, None)).collect(),
                             ),
-                            QueuedBlock::TooFarAhead(_, peer) => QueuedDiff::TooFarAhead(peer),
-                            QueuedBlock::TooFarBehind(_, peer) => QueuedDiff::TooFarBehind(peer),
+                            QueuedBlock::TooFarAhead(peer_id) => QueuedDiff::TooFarAhead(peer_id),
+                            QueuedBlock::TooFarBehind(peer_id) => QueuedDiff::TooFarBehind(peer_id),
                         }));
                     }
 
