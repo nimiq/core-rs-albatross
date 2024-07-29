@@ -26,7 +26,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@1.78.0 # Also test our Rust MSRV here.
     - uses: Swatinem/rust-cache@v2
     - run: cargo check --all-features --tests --benches
 
