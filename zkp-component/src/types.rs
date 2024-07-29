@@ -258,7 +258,7 @@ impl<N: Network> Handle<N, Arc<ZKPStateEnvironment>> for RequestZKP {
         let block = if self.request_election_block {
             env.blockchain
                 .read()
-                .get_block_at(latest_block_number, true)
+                .get_block_at(latest_block_number, false)
                 .ok()
                 .map(|block| block.unwrap_macro())
         } else {

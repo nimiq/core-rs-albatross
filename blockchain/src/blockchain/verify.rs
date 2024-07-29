@@ -406,7 +406,7 @@ impl Blockchain {
     }
 
     /// Given a transaction containing relevant change to the state this function will
-    /// take the state and compare it pre and post commit to the block.
+    /// take the state and compare it pre- and post-commit to the block.
     fn verify_proposal_state(
         &self,
         block: &mut Block,

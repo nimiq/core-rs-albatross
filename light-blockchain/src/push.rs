@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use nimiq_block::{Block, BlockError, ForkProof, MacroHeader, MicroBlock};
+use nimiq_block::{Block, ForkProof, MacroHeader, MicroBlock};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, ChainOrdering, ForkEvent, PushError, PushResult,
 };
@@ -18,7 +18,7 @@ impl LightBlockchain {
     /// Pushes a block into the chain.
     pub fn push(
         this: RwLockUpgradableReadGuard<Self>,
-        block: Block,
+        mut block: Block,
     ) -> Result<PushResult, PushError> {
         // Ignore all blocks that precede (or are at the same height) as the most recent accepted
         // macro block.
@@ -61,16 +61,11 @@ impl LightBlockchain {
             |height| this.get_block_at(height, false),
         );
 
-        // We expect full blocks (with body) for macro blocks and no body for micro blocks.
-        if block.is_macro() {
-            block
-                .body()
-                .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
-        } else {
-            assert!(
-                block.body().is_none(),
-                "Light blockchain expects micro blocks without body"
-            )
+        // We expect blocks without body here. Defensively strip the block body as opposed to
+        // rejecting the block if the body is present as we can still push it just fine.
+        match block {
+            Block::Macro(ref mut block) => block.body = None,
+            Block::Micro(ref mut block) => block.body = None,
         }
 
         // Perform block intrinsic checks.

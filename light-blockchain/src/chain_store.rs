@@ -73,14 +73,14 @@ impl ChainStore {
 
         // We only store in the ChainStore:
         // - Micro blocks: Headers and Justifications
-        // - Macro blocks: Headers and bodies.
+        // - Macro blocks: Headers
         match &mut chain_info.head {
             Block::Macro(ref mut block) => {
-                assert!(block.body.is_some());
+                block.body = None;
                 block.justification = None;
             }
             Block::Micro(ref mut block) => {
-                assert!(block.body.is_none());
+                block.body = None;
             }
         }
 

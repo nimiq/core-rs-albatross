@@ -1,6 +1,6 @@
 use std::{cmp, mem};
 
-use nimiq_block::{Block, BlockError};
+use nimiq_block::Block;
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
 };
@@ -28,11 +28,6 @@ impl Blockchain {
     ) -> Result<PushResult, PushError> {
         // Must be an election block.
         assert!(block.is_election());
-
-        // Checks if the body exists.
-        block
-            .body()
-            .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
 
         let block_hash_blake2b = block.hash();
 
@@ -175,11 +170,6 @@ impl Blockchain {
             return Ok(PushResult::Ignored);
         }
 
-        // Checks if the body exists.
-        block
-            .body()
-            .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
-
         let read_txn = this.read_transaction();
 
         // Check if we already know this block.
@@ -231,11 +221,6 @@ impl Blockchain {
     ) -> Result<PushResult, PushError> {
         // Must be a macro block.
         assert!(block.is_macro());
-
-        // Checks if the body exists.
-        block
-            .body()
-            .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
 
         let read_txn = this.read_transaction();
 

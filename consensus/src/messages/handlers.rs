@@ -179,21 +179,10 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestBlock {
         _peer_id: N::PeerId,
         blockchain: &BlockchainProxy,
     ) -> Result<Block, BlockError> {
-        let blockchain = blockchain.read();
-        if let Ok(block) = blockchain.get_block(&self.hash, self.include_body) {
-            // Macro bodies are always needed, do we have it already?
-            let block = if block.is_macro() && !self.include_body {
-                match blockchain.get_block(&self.hash, true) {
-                    Ok(block) => block,
-                    Err(_) => return Err(BlockError::TargetHashNotFound),
-                }
-            } else {
-                block
-            };
-            Ok(block)
-        } else {
-            Err(BlockError::TargetHashNotFound)
-        }
+        blockchain
+            .read()
+            .get_block(&self.hash, self.include_body)
+            .map_err(|_| BlockError::TargetHashNotFound)
     }
 }
 
@@ -325,11 +314,10 @@ impl RequestMissingBlocks {
             return Ok(ResponseBlocks { blocks: vec![] });
         }
 
-        // Request `num_blocks - 1` micro blocks first and add the following macro block separately.
-        // We do this because we always include the body for macro blocks.
-        let mut blocks = match blockchain.get_blocks(
+        // Fetch the requested blocks from the chain.
+        let blocks = match blockchain.get_blocks(
             &start_hash,
-            num_blocks - 1,
+            num_blocks,
             self.include_body,
             Direction::Forward,
         ) {
@@ -338,18 +326,12 @@ impl RequestMissingBlocks {
                 debug!(
                     %error,
                     start_hash = %start_hash,
+                    num_blocks,
                     "ResponseBlocks - Failed to get blocks",
                 );
                 return Err(ResponseBlocksError::FailedToGetBlocks);
             }
         };
-
-        if let Ok(block) = blockchain.get_block_at(
-            start_block_number + num_blocks,
-            self.include_body || Policy::is_macro_block_at(start_block_number + num_blocks),
-        ) {
-            blocks.push(block);
-        }
 
         Ok(ResponseBlocks { blocks })
     }

@@ -592,10 +592,7 @@ impl<N: Network> ConsensusProxy<N> {
     }
 
     /// Attempts to resolve a block with `block_hash` header hash at the given `block_height`.
-    /// The `pubsub_id` must contain the pubsup id containing the information which referenced
-    /// the block being resolved here. One example is the predecessor, other could be possible.
-    /// The peers present in the id will be asked for the information as they should be able to
-    /// produce it.
+    /// The first resolution attempt is performed with the peer specified by `first_peer_id`.
     ///
     /// This function fails, if the consensus cannot accept more requests or if the consensus drops
     /// the request on its side, generally indicating that it is no longer of use.

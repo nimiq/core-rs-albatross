@@ -34,7 +34,7 @@ pub struct BlockAssembler<N: Network> {
 }
 
 impl<N: Network> BlockAssembler<N> {
-    const CACHE_TTL: Duration = Duration::from_secs(5);
+    const CACHE_TTL: Duration = Duration::from_secs(10);
 
     pub fn new(
         network: Arc<N>,

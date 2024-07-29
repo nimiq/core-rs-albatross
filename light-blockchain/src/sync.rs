@@ -1,4 +1,4 @@
-use nimiq_block::{Block, BlockError};
+use nimiq_block::Block;
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
 };
@@ -18,17 +18,12 @@ impl LightBlockchain {
     /// We can then set the `trusted_proof` flag to avoid the additional verification.
     pub fn push_zkp(
         this: RwLockUpgradableReadGuard<Self>,
-        block: Block,
+        mut block: Block,
         proof: NanoProof,
         trusted_proof: bool,
     ) -> Result<PushResult, PushError> {
         // Must be an election block.
         assert!(block.is_election());
-
-        // Checks if the body exists.
-        block
-            .body()
-            .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
 
         let block_hash_blake2b = block.hash();
         let block_hash_blake2s = block.unwrap_macro_ref().hash_blake2s();
@@ -44,6 +39,13 @@ impl LightBlockchain {
 
         if block.block_number() <= this.macro_head.block_number() {
             return Ok(PushResult::Ignored);
+        }
+
+        // We expect blocks without body here. Defensively strip the block body as opposed to
+        // rejecting the block if the body is present as we can still push it just fine.
+        match block {
+            Block::Macro(ref mut block) => block.body = None,
+            Block::Micro(ref mut block) => block.body = None,
         }
 
         // Perform block intrinsic checks.
@@ -109,15 +111,11 @@ impl LightBlockchain {
     /// at any state of the node (synced, partially synced, not synced).
     pub fn push_macro(
         this: RwLockUpgradableReadGuard<Self>,
-        block: Block,
+        mut block: Block,
     ) -> Result<PushResult, PushError> {
         // Must be a macro block.
         assert!(block.is_macro());
 
-        // Checks if the body exists.
-        block
-            .body()
-            .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
         let block_hash = block.hash();
 
         // Check if we already know this block.
@@ -127,6 +125,13 @@ impl LightBlockchain {
 
         if block.block_number() <= this.macro_head.block_number() {
             return Ok(PushResult::Ignored);
+        }
+
+        // We expect blocks without body here. Defensively strip the block body as opposed to
+        // rejecting the block if the body is present as we can still push it just fine.
+        match block {
+            Block::Macro(ref mut block) => block.body = None,
+            Block::Micro(ref mut block) => block.body = None,
         }
 
         // Perform block intrinsic checks.

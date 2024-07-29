@@ -61,22 +61,22 @@ impl BlockHeaderMessage {
             Block::Macro(block) => {
                 let header = BlockHeaderMessage::Macro {
                     header: block.header,
-                    justification: block.justification.unwrap(),
+                    justification: block.justification.expect("Justification is required"),
                 };
                 let body = BlockBodyMessage {
                     header_hash: header.hash(),
-                    body: BlockBody::Macro(block.body.unwrap()),
+                    body: BlockBody::Macro(block.body.expect("Body is required")),
                 };
                 (header, body)
             }
             Block::Micro(block) => {
                 let header = BlockHeaderMessage::Micro {
                     header: block.header,
-                    justification: block.justification.unwrap(),
+                    justification: block.justification.expect("Justification is required"),
                 };
                 let body = BlockBodyMessage {
                     header_hash: header.hash(),
-                    body: BlockBody::Micro(block.body.unwrap()),
+                    body: BlockBody::Micro(block.body.expect("Body is required")),
                 };
                 (header, body)
             }

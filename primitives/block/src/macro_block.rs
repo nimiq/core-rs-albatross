@@ -228,13 +228,13 @@ impl MacroHeader {
         Ok(())
     }
 
-    fn legacy_body_root(&self) -> Blake2sHash {
+    fn zkp_body_root(&self) -> Blake2sHash {
         let mut h = <Blake2sHash as HashOutput>::Builder::default();
-        self.legacy_body_serialize_content(&mut h).unwrap();
+        self.zkp_body_serialize_content(&mut h).unwrap();
         h.finish()
     }
 
-    pub fn legacy_body_serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
+    pub fn zkp_body_serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         if let Some(ref validators) = self.validators {
             let pk_tree_root = validators.hash::<Blake2sHash>();
             pk_tree_root.serialize_to_writer(writer)?;
@@ -318,7 +318,7 @@ impl SerializeContent for MacroHeader {
 
         self.state_root.serialize_to_writer(writer)?;
         // This includes validators and next_batch_punished_set.
-        self.legacy_body_root().serialize_to_writer(writer)?;
+        self.zkp_body_root().serialize_to_writer(writer)?;
         self.history_root.serialize_to_writer(writer)?;
 
         Ok(())

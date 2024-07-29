@@ -646,7 +646,7 @@ mod tests {
 
             match sync.next().await {
                 Some(MacroSyncReturn::Good(_)) => {
-                    assert_eq!(chain1.read().head(), chain2.read().head());
+                    assert_eq!(chain1.read().head_hash(), chain2.read().head_hash());
                 }
                 res => panic!("Unexpected HistorySyncReturn: {res:?}"),
             }
@@ -709,7 +709,7 @@ mod tests {
 
             match sync.next().await {
                 Some(MacroSyncReturn::Good(_)) => {
-                    assert_eq!(chain1.read().head(), chain2.read().head());
+                    assert_eq!(chain1.read().head_hash(), chain2.read().head_hash());
                 }
                 res => panic!("Unexpected HistorySyncReturn: {res:?}"),
             }
@@ -765,7 +765,7 @@ mod tests {
 
             match sync.next().await {
                 Some(MacroSyncReturn::Good(_)) => {
-                    assert_eq!(chain1.read().head(), chain2.read().head());
+                    assert_eq!(chain1.read().head_hash(), chain2.read().head_hash());
                 }
                 res => panic!("Unexpected HistorySyncReturn: {res:?}"),
             }
@@ -865,7 +865,7 @@ mod tests {
 
             match sync.next().await {
                 Some(MacroSyncReturn::Good(_)) => {
-                    assert_eq!(chain1.read().head(), chain2.read().head());
+                    assert_eq!(chain1.read().head_hash(), chain2.read().head_hash());
                 }
                 res => panic!("Unexpected HistorySyncReturn: {res:?}"),
             }

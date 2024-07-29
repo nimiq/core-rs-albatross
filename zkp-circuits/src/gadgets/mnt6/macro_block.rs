@@ -252,7 +252,7 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
         let mut body_bytes = Vec::new();
         value
             .header
-            .legacy_body_serialize_content(&mut body_bytes)
+            .zkp_body_serialize_content(&mut body_bytes)
             .map_err(|_| SynthesisError::AssignmentMissing)?;
 
         let pk_tree_root =
@@ -340,7 +340,7 @@ impl AllocVar<MacroBlock, MNT6Fq> for MacroBlockGadget {
         let mut body_bytes = Vec::new();
         value
             .header
-            .legacy_body_serialize_content(&mut body_bytes)
+            .zkp_body_serialize_content(&mut body_bytes)
             .map_err(|_| SynthesisError::AssignmentMissing)?;
 
         let pk_tree_root =

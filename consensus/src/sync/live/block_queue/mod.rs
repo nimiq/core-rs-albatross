@@ -53,7 +53,7 @@ impl<N: Network> BlockSource<N> {
     pub fn peer_id(&self) -> N::PeerId {
         match self {
             BlockSource::Announced { header_id, .. } => header_id.propagation_source(),
-            BlockSource::Requested { id } => id.clone(),
+            BlockSource::Requested { id } => *id,
         }
     }
 

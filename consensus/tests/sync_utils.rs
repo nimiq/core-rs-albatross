@@ -253,10 +253,6 @@ pub async fn sync_two_peers(
         consensus1_proxy.blockchain.read().election_head_hash(),
     );
     assert_eq!(
-        blockchain2_proxy.read().macro_head(),
-        consensus1_proxy.blockchain.read().macro_head(),
-    );
-    assert_eq!(
         blockchain2_proxy.read().macro_head_hash(),
         consensus1_proxy.blockchain.read().macro_head_hash(),
     );
