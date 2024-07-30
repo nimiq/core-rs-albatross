@@ -6,7 +6,6 @@ use nimiq_bls::KeyPair as BLSKeyPair;
 use nimiq_database::{
     mdbx::MdbxDatabase,
     traits::{Database, WriteTransaction},
-    DatabaseProxy,
 };
 use nimiq_genesis::NetworkId;
 use nimiq_genesis_builder::GenesisBuilder;
@@ -43,7 +42,7 @@ fn init_accounts<R: Rng + CryptoRng>(
 }
 
 fn accounts_tree_populate(
-    env: &DatabaseProxy,
+    env: &MdbxDatabase,
     tpb: u32,
     batches: u32,
     loops: u32,
@@ -198,7 +197,7 @@ fn main() {
     let tmp_dir = temp_dir.path().to_str().unwrap();
     let db_file = temp_dir.path().join("mdbx.dat");
     log::debug!("Creating a non volatile environment in {}", tmp_dir);
-    let env = MdbxDatabase::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
+    let env = MdbxDatabase::new(tmp_dir, Default::default()).unwrap();
 
     let loops = args.loops.unwrap_or(1);
 

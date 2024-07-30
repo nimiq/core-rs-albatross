@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, process::exit, sync::Arc, time::Instant};
+use std::{fs, process::exit, sync::Arc, time::Instant};
 
 use clap::Parser;
 use nimiq_block::Block;
@@ -61,7 +61,7 @@ fn main() {
     let tmp_dir = temp_dir.path().to_str().unwrap();
     let db_file = temp_dir.path().join("mdbx.dat");
     log::info!("Creating a non volatile environment in {}", tmp_dir);
-    let env = MdbxDatabase::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
+    let env = MdbxDatabase::new(tmp_dir, Default::default()).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(
