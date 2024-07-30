@@ -1,6 +1,7 @@
 use nimiq_account::RevertInfo;
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{BlockchainError, ChainInfo, Direction};
+use nimiq_database::utils::IndexedValue;
 use nimiq_database::{
     declare_table,
     mdbx::{MdbxDatabase, MdbxReadTransaction, MdbxWriteTransaction, OptionalTransaction},
@@ -9,9 +10,11 @@ use nimiq_database::{
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{policy::Policy, trie::trie_diff::TrieDiff};
 
+type ChainInfoWrapper = IndexedValue<u64, ChainInfo>;
+
 declare_table!(HeadTable, "Head", () => Blake2bHash);
-declare_table!(ChainTable, "ChainData", Blake2bHash => ChainInfo);
-declare_table!(BlockTable, "Block", Blake2bHash => Block);
+declare_table!(ChainTable, "ChainData", Blake2bHash => ChainInfoWrapper);
+declare_table!(BlockTable, "Block", u64 => Block);
 declare_table!(HeightIndex, "HeightIndex", u32 => dup(Blake2bHash));
 declare_table!(RevertTable, "Receipts", u32 => RevertInfo);
 declare_table!(AccountsDiffTable, "AccountsDiff", Blake2bHash => TrieDiff);
@@ -89,13 +92,15 @@ impl ChainStore {
     ) -> Result<ChainInfo, BlockchainError> {
         let txn = txn_option.or_new(&self.db);
 
-        let mut chain_info: ChainInfo = match txn.get(&self.chain_table, hash) {
+        let wrapper: ChainInfoWrapper = match txn.get(&self.chain_table, hash) {
             Some(data) => data,
             None => return Err(BlockchainError::BlockNotFound),
         };
 
+        let mut chain_info = wrapper.value;
+
         if include_body {
-            if let Some(block) = txn.get(&self.block_table, hash) {
+            if let Some(block) = txn.get(&self.block_table, &wrapper.index) {
                 chain_info.head = block;
             } else {
                 warn!("Block body requested but not present");
@@ -120,28 +125,31 @@ impl ChainStore {
             .map(|(_height, hash)| hash);
 
         // Iterate until we find the main chain block.
-        let mut chain_info = None;
-        let mut block_hash = None;
+        let mut wrapper = None;
         for tmp_block_hash in block_hash_iter {
-            let tmp_chain_info: ChainInfo = txn
+            let tmp_wrapper: ChainInfoWrapper = txn
                 .get(&self.chain_table, &tmp_block_hash)
                 .expect("Corrupted store: ChainInfo referenced from index not found");
 
+            let tmp_chain_info = &tmp_wrapper.value;
+
             // If it's on the main chain we can return from loop
             if tmp_chain_info.on_main_chain {
-                chain_info = Some(tmp_chain_info);
-                block_hash = Some(tmp_block_hash);
+                wrapper = Some(tmp_wrapper);
                 break;
             }
         }
-        let mut chain_info = chain_info.ok_or(BlockchainError::BlockNotFound)?;
-        let block_hash = block_hash.unwrap();
+        let wrapper = wrapper.ok_or(BlockchainError::BlockNotFound)?;
+        let mut chain_info = wrapper.value;
 
         if include_body {
-            if let Some(block) = txn.get(&self.block_table, &block_hash) {
+            if let Some(block) = txn.get(&self.block_table, &wrapper.index) {
                 chain_info.head = block;
             } else {
-                warn!("Block body requested but not present");
+                warn!(
+                    index = wrapper.index,
+                    "Block body requested but not present"
+                );
             }
         }
 
@@ -155,13 +163,33 @@ impl ChainStore {
         chain_info: &ChainInfo,
         include_body: bool,
     ) {
+        // Seek to the last leaf index of the block, if it exists.
+        let mut cursor = WriteTransaction::cursor(txn, &self.block_table);
+        let last_block_index = cursor.last().map(|(key, _)| key);
+
+        let block_index = if let Some(index) = last_block_index {
+            let wrapper: Option<ChainInfoWrapper> = txn.get(&self.chain_table, hash);
+            if let Some(wrapper) = wrapper {
+                wrapper.index
+            } else {
+                index + 1
+            }
+        } else {
+            0
+        };
+
         // Store chain data. Block body will not be persisted because the serialization of ChainInfo
         // ignores the block body.
-        txn.put_reserve(&self.chain_table, hash, chain_info);
+        let wrapper = ChainInfoWrapper {
+            value: chain_info.clone(),
+            index: block_index,
+        };
+        txn.put(&self.chain_table, hash, &wrapper);
 
         // Store body if requested.
         if include_body {
-            txn.put_reserve(&self.block_table, hash, &chain_info.head);
+            log::debug!(block_index, "Putting block");
+            cursor.append(&block_index, &chain_info.head);
         }
 
         // Add to height index.
@@ -209,8 +237,11 @@ impl ChainStore {
         hash: &Blake2bHash,
         height: u32,
     ) {
+        let wrapper: ChainInfoWrapper = txn
+            .get(&self.chain_table, hash)
+            .expect("Corrupted store: ChainInfo referenced from index not found");
         txn.remove(&self.chain_table, hash);
-        txn.remove(&self.block_table, hash);
+        txn.remove(&self.block_table, &wrapper.index);
         txn.remove_item(&self.height_idx, &height, hash);
     }
 
@@ -222,13 +253,15 @@ impl ChainStore {
     ) -> Result<Block, BlockchainError> {
         let txn = txn_option.or_new(&self.db);
 
+        let wrapper: ChainInfoWrapper = txn
+            .get(&self.chain_table, hash)
+            .ok_or(BlockchainError::BlockNotFound)?;
+
         if include_body {
-            txn.get(&self.block_table, hash)
+            txn.get(&self.block_table, &wrapper.index)
                 .ok_or(BlockchainError::BlockNotFound)
         } else {
-            txn.get(&self.chain_table, hash)
-                .map(|chain_info: ChainInfo| chain_info.head)
-                .ok_or(BlockchainError::BlockNotFound)
+            Ok(wrapper.value.head)
         }
     }
 
@@ -485,14 +518,14 @@ impl ChainStore {
         {
             let hashes = self.get_block_hashes_at(height, Some(txn));
             for hash in hashes {
-                let chain_info: ChainInfo = txn
+                let wrapper: ChainInfoWrapper = txn
                     .get(&self.chain_table, &hash)
                     .expect("Corrupted store: ChainInfo referenced from index not found");
                 // If we detect a block whose prunable flag is set to false, we don't prune it
                 // Then we need to keep the previous macro block
-                if chain_info.prunable {
+                if wrapper.value.prunable {
                     txn.remove(&self.chain_table, &hash);
-                    txn.remove(&self.block_table, &hash);
+                    txn.remove(&self.block_table, &wrapper.index);
                     txn.remove_item(&self.height_idx, &height, &hash);
                 }
             }
