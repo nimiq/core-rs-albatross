@@ -238,8 +238,8 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             let (sender, receiver) = mpsc::channel(100);
             // create the aggregation
             let aggregation = self.protocol.create_aggregation(
-                self.state.current_round,
-                self.state.current_step,
+                id.0,
+                id.1,
                 vote,
                 ReceiverStream::new(receiver).boxed(),
             );
