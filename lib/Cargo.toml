@@ -21,7 +21,7 @@ workspace = true
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
-console-subscriber = { version = "0.3", features = [
+console-subscriber = { version = "0.4", features = [
     "parking_lot",
 ], optional = true }
 derive_builder = "0.20"
