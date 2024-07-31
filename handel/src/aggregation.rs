@@ -17,7 +17,7 @@ use crate::{
     level::Level,
     network::{LevelUpdateSender, Network},
     partitioner::Partitioner,
-    pending_contributions::{TodoItem, TodoList},
+    pending_contributions::{PendingContribution, PendingContributionList},
     protocol::Protocol,
     store::ContributionStore,
     update::LevelUpdate,
@@ -45,8 +45,8 @@ where
     /// Levels
     levels: Vec<Level>,
 
-    /// Remaining Todos
-    todos: TodoList<TId, P>,
+    /// List of remaining pending contributions
+    pending_contributions: PendingContributionList<TId, P>,
 
     /// The protocol specifying how this aggregation works.
     protocol: P,
@@ -66,9 +66,10 @@ where
     /// the level which needs activation next
     next_level_timeout: usize,
 
-    /// Future of the currently verified todo. There is only ever one todo being verified at a time.
+    /// Future of the currently verified pending contribution.
+    /// There is only ever one contribution being verified at a time.
     current_verification:
-        Option<BoxFuture<'static, (VerificationResult, TodoItem<P::Contribution>)>>,
+        Option<BoxFuture<'static, (VerificationResult, PendingContribution<P::Contribution>)>>,
 }
 
 impl<TId, P, N> OngoingAggregation<TId, P, N>
@@ -87,11 +88,12 @@ where
         // Invoke the partitioner to create the level structure of peers.
         let levels: Vec<Level> = Level::create_levels(protocol.partitioner(), protocol.identify());
 
-        // Create an empty todo list which can later be polled for the best available todo.
-        let mut todos = TodoList::new(protocol.identify(), protocol.evaluator(), input_stream);
+        // Create an empty list which can later be polled for the best available pending contribution.
+        let mut pending_contributions =
+            PendingContributionList::new(protocol.identify(), protocol.evaluator(), input_stream);
 
-        // Add our own contribution to the todo list.
-        todos.add_contribution(own_contribution.clone(), 0);
+        // Add our own contribution to the list.
+        pending_contributions.add_contribution(own_contribution.clone(), 0);
 
         // Regardless of level completion consecutive levels need to be activated at some point. Activate Levels every time this interval ticks,
         // if the level has not already been activated due to level completion
@@ -105,7 +107,7 @@ where
         Self {
             protocol,
             config,
-            todos,
+            pending_contributions,
             levels,
             contribution: own_contribution,
             sender,
@@ -134,7 +136,7 @@ where
 
             // Don't do anything for level 0 as it only contains this node
             if level.id > 0 {
-                // Get the current best for the level. Freeing the lock as soon as possible to continue working on todos
+                // Get the current best for the level. Freeing the lock as soon as possible to continue working on contributions
                 let best = store.combined(level.id - 1);
 
                 if let Some(best) = best {
@@ -183,7 +185,7 @@ where
         }
 
         // first get the current contributor count for this level. Release the lock as soon as possible
-        // to continue working on todos.
+        // to continue working on contributions.
         let best = store
             .best(level_id)
             .unwrap_or_else(|| panic!("Expected a best signature for level {}", level_id));
@@ -285,7 +287,7 @@ where
             };
 
             // Get the current best aggregate from store (no clone() needed as that already happens within the store)
-            // freeing the lock as soon as possible for the todo aggregating to continue.
+            // freeing the lock as soon as possible for the aggregation to continue.
             let aggregate = {
                 let store = self.protocol.store();
                 let store = store.read();
@@ -323,17 +325,20 @@ where
     }
 
     fn into_inner(self) -> (LevelUpdateStream<P, TId>, LevelUpdateSender<N>) {
-        (self.todos.into_stream(), self.sender)
+        (self.pending_contributions.into_stream(), self.sender)
     }
 
-    /// Applies the given todo. It will either be immediately emitted as the new best aggregate if it is completed
+    /// Applies the given pending contribution. It will either be immediately emitted as the new best aggregate if it is completed
     /// or it will be added to the store and the new best aggregate will be emitted.
-    fn apply_todo(&mut self, todo: TodoItem<P::Contribution>) -> P::Contribution {
+    fn apply_pending_contribution(
+        &mut self,
+        pending_contribution: PendingContribution<P::Contribution>,
+    ) -> P::Contribution {
         // special case of full contributions
-        if todo.level == self.protocol.partitioner().levels()
-            && self.is_complete_aggregate(&todo.contribution)
+        if pending_contribution.level == self.protocol.partitioner().levels()
+            && self.is_complete_aggregate(&pending_contribution.contribution)
         {
-            return todo.contribution;
+            return pending_contribution.contribution;
         }
 
         let store_rw = self.protocol.store();
@@ -341,16 +346,16 @@ where
 
         // if the contribution is valid push it to the store, creating a new aggregate
         store.put(
-            todo.contribution.clone(),
-            todo.level,
+            pending_contribution.contribution.clone(),
+            pending_contribution.level,
             self.protocol.registry(),
             self.protocol.identify(),
         );
 
-        // in case the level of this todo has not started, start it now as we have already contributions on it.
-        self.start_level(todo.level, &store);
+        // in case the level of this pending contribution has not started, start it now as we have already contributions on it.
+        self.start_level(pending_contribution.level, &store);
         // check if a level was completed by the addition of the contribution
-        self.check_completed_level(todo.level, &store);
+        self.check_completed_level(pending_contribution.level, &store);
 
         // get the best aggregate
         let last_level = self.levels.last().expect("No levels");
@@ -368,18 +373,18 @@ where
     /// This function will override `self.current_verification` if the created future does not immediately produce a value.
     ///
     /// ## Returns
-    /// Returns the verification result and the todo in question iff the verification resolves immediately.
+    /// Returns the [VerificationResult] and the [PendingContribution] in question iff the verification resolves immediately.
     /// None otherwise
-    fn start_todo_verification(
+    fn start_pending_contribution_verification(
         &mut self,
-        todo: TodoItem<P::Contribution>,
+        pending_contribution: PendingContribution<P::Contribution>,
         cx: &mut Context<'_>,
-    ) -> Option<(VerificationResult, TodoItem<P::Contribution>)> {
+    ) -> Option<(VerificationResult, PendingContribution<P::Contribution>)> {
         // Create a new verification future.
         let verifier = self.protocol.verifier();
         let mut fut = async move {
-            let result = verifier.verify(&todo.contribution).await;
-            (result, todo)
+            let result = verifier.verify(&pending_contribution.contribution).await;
+            (result, pending_contribution)
         }
         .boxed();
 
@@ -403,15 +408,20 @@ where
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // Poll the verification future if there is one.
         let mut best_aggregate = if let Some(verification_future) = &mut self.current_verification {
-            if let Poll::Ready((result, todo)) = verification_future.poll_unpin(cx) {
+            if let Poll::Ready((result, pending_contribution)) = verification_future.poll_unpin(cx)
+            {
                 // If a result is produced, unset the future such that a new one can take its place.
                 self.current_verification = None;
                 if result.is_ok() {
-                    // If the todo was successfully verified, apply it and return the new best aggregate
-                    Some(self.apply_todo(todo))
+                    // If the contribution was successfully verified, apply it and return the new best aggregate
+                    Some(self.apply_pending_contribution(pending_contribution))
                 } else {
-                    // If the Todo failed to verify there is nothing to be done, and also no new best aggregate.
-                    log::debug!(?result, ?todo, "Verification of Todo Item failed.");
+                    // If the contribution failed to verify there is nothing to be done, and also no new best aggregate.
+                    log::debug!(
+                        ?result,
+                        ?pending_contribution,
+                        "Verification of PendingContribution failed."
+                    );
                     None
                 }
             } else {
@@ -419,7 +429,7 @@ where
                 None
             }
         } else {
-            // There is no future to poll and thus no new todo to process. There is no new best aggregate.
+            // There is no future to poll and thus no new pending contribution to process. There is no new best aggregate.
             None
         };
 
@@ -435,24 +445,32 @@ where
             self.activate_next_level();
         }
 
-        // Check and see if a new todo should be verified.
+        // Check and see if a new pending contribution should be verified.
         // Only start a new verification task if there is not already one and also only if the poll does not have produced a value yet.
         // This is necessary as the verification future could resolve immediately producing a second item for the stream.
         // As the new best aggregate will be returned this stream will be polled again creating the future in the next poll
         if self.current_verification.is_none() && best_aggregate.is_none() {
-            // Get the next best todo.
-            while let Poll::Ready(Some(todo)) = self.todos.poll_next_unpin(cx) {
+            // Get the next best pending contribution.
+            while let Poll::Ready(Some(pending_contribution)) =
+                self.pending_contributions.poll_next_unpin(cx)
+            {
                 // Start the verification. This will also poll and thus may immediately return a result.
-                if let Some((result, todo)) = self.start_todo_verification(todo, cx) {
+                if let Some((result, pending_contribution)) =
+                    self.start_pending_contribution_verification(pending_contribution, cx)
+                {
                     // If the future returned immediately it needs to be handled.
                     if result.is_ok() {
-                        // If the todo verified, apply it and return the new best aggregate
-                        let new_aggregate = self.apply_todo(todo);
+                        // If the contribution verified, apply it and return the new best aggregate
+                        let new_aggregate = self.apply_pending_contribution(pending_contribution);
 
                         best_aggregate = Some(new_aggregate);
                         break;
                     } else {
-                        log::debug!(?result, ?todo, "Verification of Todo Item failed.");
+                        log::debug!(
+                            ?result,
+                            ?pending_contribution,
+                            "Verification of PendingContribution failed."
+                        );
                     }
                 } else {
                     break;

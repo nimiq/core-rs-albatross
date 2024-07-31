@@ -57,21 +57,21 @@ where
     TId: Identifier,
     TProtocol: Protocol<TId>,
 {
-    /// If a todo completes a level this is the base score
+    /// If a contribution completes a level this is the base score
     const COMPLETES_LEVEL_BASE_SCORE: usize = 1_000_000;
 
-    /// For todos which complete a level this is a penalty multiplied with the level, resulting
+    /// For contribution which complete a level this is a penalty multiplied with the level, resulting
     /// in higher levels having lower scores.
     const COMPLETES_LEVEL_LEVEL_PENALTY: usize = 10;
 
-    /// If a todo improves the best score on its level this is the base score
+    /// If a contribution improves the best score on its level this is the base score
     const IMPROVEMENT_BASE_SCORE: usize = 100_000;
 
-    /// For a todo which improves the best score this is the penalty per level, resulting
+    /// For a contribution which improves the best score this is the penalty per level, resulting
     /// in higher levels having a lower score.
     const IMPROVEMENT_LEVEL_PENALTY: usize = 100;
 
-    /// For a todo which improves the best score this is a bonus added to th score per signature added.
+    /// For a contribution which improves the best score this is a bonus added to th score per signature added.
     const IMPROVEMENT_ADDED_SIG_BONUS: usize = 10;
 
     pub fn new(
