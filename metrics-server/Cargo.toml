@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-bytes = "1.6"
+bytes = "1.7"
 futures = "0.3"
 http-body-util = { version = "0.1" }
 hyper = { version = "1.4" }
