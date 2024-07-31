@@ -15,9 +15,9 @@ pub mod identity;
 pub mod level;
 pub mod network;
 pub mod partitioner;
+pub(crate) mod pending_contributions;
 pub mod protocol;
 pub mod store;
-pub(crate) mod todo;
 pub mod update;
 pub mod verifier;
 
