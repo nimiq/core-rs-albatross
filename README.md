@@ -58,6 +58,8 @@ the following packages are required to be able to compile the source code:
 - `libssl-dev` (in Debian/Ubuntu) or `openssl-devel` (in Fedora/Red Hat)
 - `pkg-config`
 
+We currently do not make any guarantees about the minimum supported Rust version to consumers, but we currently test two versions older than the current Rust stable.
+
 After installing the previous packages, compiling the project is achieved through [`cargo`](https://doc.rust-lang.org/cargo/):
 
 ```bash
