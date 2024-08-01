@@ -149,8 +149,8 @@ impl<TNetwork: Network + 'static> Future for HeadRequests<TNetwork> {
                         }
                     }
                 }
-                Err(_) => {
-                    trace!("Failed head hash request");
+                Err(error) => {
+                    trace!(%error, "Failed head hash request");
                 } // We don't count failed requests.
             }
         }
