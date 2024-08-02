@@ -158,7 +158,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
             };
             &INFO
         }
-        NetworkId::Main => {
+        NetworkId::MainAlbatross => {
             #[cfg(feature = "genesis-override")]
             {
                 use std::sync::OnceLock;
