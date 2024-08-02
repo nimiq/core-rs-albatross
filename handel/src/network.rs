@@ -5,10 +5,10 @@ use std::{
 
 use futures::{
     future::{BoxFuture, FutureExt},
-    stream::{FuturesUnordered, StreamExt},
+    stream::StreamExt,
     Future,
 };
-use nimiq_utils::WakerExt as _;
+use nimiq_utils::{stream::FuturesUnordered, WakerExt as _};
 
 use crate::{contribution::AggregatableContribution, update::LevelUpdate};
 

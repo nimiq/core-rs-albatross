@@ -6,11 +6,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::{
-    future::BoxFuture,
-    stream::{FuturesOrdered, FuturesUnordered},
-    Stream, StreamExt, TryStreamExt,
-};
+use futures::{future::BoxFuture, Stream, StreamExt, TryStreamExt};
 use nimiq_block::Block;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
@@ -19,6 +15,7 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::trie::trie_diff::TrieDiff;
 use nimiq_serde::{Deserialize, Serialize};
+use nimiq_utils::stream::{FuturesOrdered, FuturesUnordered};
 use parking_lot::RwLock;
 
 use self::diff_request_component::DiffRequestComponent;

@@ -1,13 +1,13 @@
 use std::{
     pin::Pin,
     sync::Arc,
-    task::{Context, Poll, Waker},
+    task::{Context, Poll},
 };
 
-use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, Stream, StreamExt};
+use futures::{future::BoxFuture, FutureExt, Stream, StreamExt};
 use nimiq_block::MacroBlock;
 use nimiq_network_interface::{network::Network, request::RequestError};
-use nimiq_utils::WakerExt as _;
+use nimiq_utils::stream::FuturesUnordered;
 use tokio::sync::oneshot::{channel, Receiver, Sender};
 
 use crate::types::*;
@@ -29,7 +29,6 @@ pub struct ZKPRequestsItem<N: Network> {
 ///
 /// We offer the option to receive back the verification result via a one-shot channel.
 pub struct ZKPRequests<N: Network + 'static> {
-    pub(crate) waker: Option<Waker>,
     network: Arc<N>,
     zkp_request_results: FuturesUnordered<
         BoxFuture<
@@ -47,7 +46,6 @@ pub struct ZKPRequests<N: Network + 'static> {
 impl<N: Network + 'static> ZKPRequests<N> {
     pub fn new(network: Arc<N>) -> Self {
         ZKPRequests {
-            waker: None,
             network,
             zkp_request_results: FuturesUnordered::new(),
         }
@@ -110,9 +108,6 @@ impl<N: Network + 'static> ZKPRequests<N> {
             }
             .boxed(),
         );
-        // Pushing to the futures unordered above does not wake the task that polls zkp_requests_results
-        // So we need to wake the task manually
-        self.waker.wake();
     }
 }
 
@@ -120,8 +115,6 @@ impl<N: Network + 'static> Stream for ZKPRequests<N> {
     type Item = ZKPRequestsItem<N>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.waker.store_waker(cx);
-
         // We poll the zkp requests and return the proof.
         while let Poll::Ready(result) = self.zkp_request_results.poll_next_unpin(cx) {
             match result {

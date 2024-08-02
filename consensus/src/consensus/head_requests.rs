@@ -7,12 +7,13 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
+use futures::{future::BoxFuture, FutureExt, StreamExt};
 use nimiq_block::Block;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::RequestError};
+use nimiq_utils::stream::FuturesUnordered;
 
 use crate::messages::{BlockError, RequestBlock, RequestHead, ResponseHead};
 

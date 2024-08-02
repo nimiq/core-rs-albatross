@@ -4,11 +4,11 @@ use std::{
     task::Waker,
 };
 
-use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt};
+use futures::{future::BoxFuture, FutureExt};
 use nimiq_blockchain::Blockchain;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{Network, SubscribeEvents};
-use nimiq_utils::WakerExt as _;
+use nimiq_utils::stream::FuturesUnordered;
 use parking_lot::RwLock;
 
 use crate::{
@@ -117,9 +117,5 @@ impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for HistoryMacroSync<TNetwor
         )
         .boxed();
         self.epoch_ids_stream.push(future);
-
-        // Pushing the future to FuturesUnordered above does not wake the task that
-        // polls `epoch_ids_stream`. Therefore, we need to wake the task manually.
-        self.waker.wake();
     }
 }

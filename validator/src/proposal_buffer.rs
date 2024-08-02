@@ -7,7 +7,7 @@ use std::{
 
 use futures::{
     future::{BoxFuture, FutureExt},
-    stream::{FuturesUnordered, Stream, StreamExt},
+    stream::{Stream, StreamExt},
 };
 use linked_hash_map::LinkedHashMap;
 use nimiq_block::Block;
@@ -21,7 +21,7 @@ use nimiq_network_interface::network::{CloseReason, MsgAcceptance, Network, Pubs
 use nimiq_primitives::policy::Policy;
 use nimiq_serde::Serialize;
 use nimiq_tendermint::SignedProposalMessage;
-use nimiq_utils::WakerExt as _;
+use nimiq_utils::{stream::FuturesUnordered, WakerExt as _};
 use nimiq_validator_network::{PubsubId, ValidatorNetwork};
 use parking_lot::{Mutex, RwLock};
 
@@ -481,10 +481,6 @@ where
             let mut shared = self.shared.lock();
             // Add the disconnect future to the FuturesUnordered collection.
             shared.unresolved_disconnect_futures.push(future);
-
-            // Wake, as a new future was added and needs to be polled.
-            // A new proposal was admitted into the buffer. Potential waiting tasks can be woken.
-            shared.waker.wake();
         }
     }
 }
@@ -544,7 +540,6 @@ where
         if shared.buffer.is_empty() {
             shared.waker.store_waker(cx);
         }
-        // The futures unordered do not need checking as they can only populate via send or the buffer not being empty.
 
         // There is nothing to return, so return Pending
         Poll::Pending

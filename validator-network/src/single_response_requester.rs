@@ -6,10 +6,10 @@ use std::{
 
 use futures::{
     future::{BoxFuture, Future, FutureExt},
-    stream::FuturesUnordered,
     StreamExt,
 };
 use nimiq_network_interface::request::{Request, RequestCommon};
+use nimiq_utils::stream::FuturesUnordered;
 
 use crate::ValidatorNetwork;
 

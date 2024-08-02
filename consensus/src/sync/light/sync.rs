@@ -1,10 +1,9 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::Arc,
-    task::Waker,
 };
 
-use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt};
+use futures::{future::BoxFuture, FutureExt};
 use nimiq_block::Block;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
@@ -12,7 +11,7 @@ use nimiq_network_interface::{
     network::{CloseReason, Network, SubscribeEvents},
     request::RequestError,
 };
-use nimiq_utils::{spawn, WakerExt as _};
+use nimiq_utils::{spawn, stream::FuturesUnordered};
 use nimiq_zkp_component::{
     types::{Error, ZKPRequestEvent},
     zkp_component::ZKPComponentProxy,
@@ -185,8 +184,6 @@ pub struct LightMacroSync<TNetwork: Network> {
     pub(crate) synced_validity_peers: Vec<TNetwork::PeerId>,
     /// Minimum distance to light sync in #blocks from the peers head.
     pub(crate) full_sync_threshold: u32,
-    /// Waker used for the poll next function
-    pub(crate) waker: Option<Waker>,
 }
 
 impl<TNetwork: Network> LightMacroSync<TNetwork> {
@@ -230,7 +227,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             epoch_ids_stream: FuturesUnordered::new(),
             zkp_component_proxy,
             zkp_requests: FuturesUnordered::new(),
-            waker: None,
             full_sync_threshold,
             block_headers: Default::default(),
             validity_requests: None,
@@ -266,9 +262,5 @@ impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for LightMacroSync<TNetwork>
 
         self.zkp_requests
             .push(Self::request_zkps(self.zkp_component_proxy.clone(), peer_id).boxed());
-
-        // Pushing the future to FuturesUnordered above does not wake the task that
-        // polls `epoch_ids_stream`. Therefore, we need to wake the task manually.
-        self.waker.wake();
     }
 }

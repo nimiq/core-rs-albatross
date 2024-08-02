@@ -237,8 +237,6 @@ impl<TNetwork: Network> Stream for HistoryMacroSync<TNetwork> {
     type Item = MacroSyncReturn<TNetwork::PeerId>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.waker.store_waker(cx);
-
         if let Poll::Ready(o) = self.poll_network_events(cx) {
             return Poll::Ready(o);
         }
@@ -251,6 +249,7 @@ impl<TNetwork: Network> Stream for HistoryMacroSync<TNetwork> {
 
         self.poll_job_queue(cx);
 
+        self.waker.store_waker(cx);
         Poll::Pending
     }
 }

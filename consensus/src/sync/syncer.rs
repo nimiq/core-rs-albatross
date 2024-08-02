@@ -7,13 +7,14 @@ use std::{
     time::Duration,
 };
 
-use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, Stream, StreamExt};
+use futures::{future::BoxFuture, FutureExt, Stream, StreamExt};
 use nimiq_block::Block;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{CloseReason, Network, NetworkEvent, SubscribeEvents};
 use nimiq_time::{interval, Interval};
+use nimiq_utils::stream::FuturesUnordered;
 
 use crate::{consensus::ResolveBlockRequest, messages::RequestHead};
 

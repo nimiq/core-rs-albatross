@@ -6,14 +6,12 @@ use std::{
     future::Future,
     pin::Pin,
     sync::Arc,
-    task::{Context, Poll, Waker},
+    task::{Context, Poll},
 };
 
-use futures::{
-    future, future::BoxFuture, ready, stream::FuturesUnordered, FutureExt, Stream, StreamExt,
-};
+use futures::{future, future::BoxFuture, FutureExt, Stream, StreamExt};
 use nimiq_network_interface::network::{Network, PubsubId};
-use nimiq_utils::WakerExt as _;
+use nimiq_utils::stream::FuturesUnordered;
 use parking_lot::RwLock;
 use pin_project::pin_project;
 
@@ -88,7 +86,7 @@ type VerifyFn<TId, TOutput, TVerifyState> = fn(&TId, &TOutput, &mut TVerifyState
 /// The stream returns an error if an id could not be resolved.
 pub struct SyncQueue<
     TNetwork: Network,
-    TId,
+    TId: Clone,
     TOutput: 'static,
     TError: 'static,
     TVerifyState: 'static,
@@ -106,7 +104,6 @@ pub struct SyncQueue<
     request_fn: RequestFn<TId, TNetwork, TOutput, TError>,
     verify_fn: VerifyFn<TId, TOutput, TVerifyState>,
     verify_state: TVerifyState,
-    waker: Option<Waker>,
 }
 
 impl<TNetwork, TId, TOutput, TError> SyncQueue<TNetwork, TId, TOutput, TError, ()>
@@ -175,7 +172,6 @@ where
             request_fn,
             verify_fn,
             verify_state: initial_verify_state,
-            waker: None,
         }
     }
 
@@ -259,8 +255,6 @@ where
                 self.queued_outputs.len(),
                 self.peers.read().len(),
             );
-
-            self.waker.wake();
         }
     }
 
@@ -325,9 +319,6 @@ where
         for id in ids {
             self.ids_to_request.push_back(id);
         }
-
-        // Adding new ids needs to wake the task that is polling the SyncQueue.
-        self.waker.wake();
     }
 
     /// Truncates the stored ids, retaining only the first `len` elements.
@@ -366,8 +357,6 @@ where
     type Item = Result<TOutput, TId>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.waker.store_waker(cx);
-
         // Try to request more objects.
         self.try_push_futures();
 
@@ -404,8 +393,8 @@ where
         }
 
         loop {
-            match ready!(self.pending_futures.poll_next_unpin(cx)) {
-                Some(result) => {
+            match self.pending_futures.poll_next_unpin(cx) {
+                Poll::Ready(Some(result)) => {
                     match result.data {
                         Some(Ok(output)) => {
                             if result.index == self.next_outgoing_index {
@@ -452,13 +441,22 @@ where
                         }
                     }
                 }
-                None => {
-                    return if self.ids_to_request.is_empty() || self.peers.read().is_empty() {
-                        Poll::Ready(None)
+                Poll::Ready(None) => {
+                    if self.ids_to_request.is_empty() || self.peers.read().is_empty() {
+                        self.waker.store_waker(cx);
                     } else {
                         self.try_push_futures();
-                        Poll::Pending
+                        if self.ids_to_request.is_empty() {
+                            self.waker.store_waker(cx);
+                        }
                     }
+                    return Poll::Pending;
+                }
+                Poll::Pending => {
+                    if self.ids_to_request.is_empty() {
+                        self.waker.store_waker(cx);
+                    }
+                    return Poll::Pending;
                 }
             }
         }
