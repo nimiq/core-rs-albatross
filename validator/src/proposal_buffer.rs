@@ -246,7 +246,7 @@ where
             match blockchain.get_block(&signed_proposal.proposal.parent_hash, false, None) {
                 // Macro block predecessors do not make any sense in the presence of micro blocks.
                 Ok(Block::Macro(_block)) => {
-                    log::debug!(?pubsub_id, "The predecessing block of a macro block cannot be a macro block. Disconnecting the peer.");
+                    log::debug!(?pubsub_id, "The predecessor block of a macro block cannot be a macro block. Disconnecting the peer.");
                     self.disconnect_and_reject(pubsub_id)
                 }
                 // Micro block predecessors can be used to verify the signer. If the block itself is good will be checked later.
@@ -264,7 +264,7 @@ where
                 }
                 Err(_error) => {
                     // The predecessor is not known.
-                    // Remove the proposal form the buffer and create a future resolving the predecessor.
+                    // Remove the proposal from the buffer and create a future resolving the predecessor.
                     log::debug!(
                         ?signed_proposal,
                         "Received Proposal with unknown predecessor. Requesting predecessor."
@@ -525,7 +525,7 @@ where
             ));
         }
 
-        // Poll the resolve block futures to see if a proposals predecessor has resolved..
+        // Poll the resolve block futures to see if a proposals predecessor has resolved.
         let result = shared.poll_resolve_block_futures(cx);
 
         // If a Result was produced, return it as the item on the stream.
