@@ -18,6 +18,8 @@ pub mod tagged_signing;
 #[cfg(feature = "time")]
 pub mod time;
 
+pub mod stream;
+
 mod sensitive;
 mod waker;
 
