@@ -1,3 +1,7 @@
+// We need to silence this lint because we're using the original
+// `FuturesOrdered` and `FuturesUnordered` in this module to reimplement them.
+#![allow(clippy::disallowed_types)]
+
 use std::{
     future::Future,
     pin::Pin,

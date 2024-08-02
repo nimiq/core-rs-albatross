@@ -9,3 +9,11 @@ reason = "use `nimiq_utils::spawn_local` instead, it is also supported in WASM e
 [[disallowed-methods]]
 path = "wasm_bindgen_futures::spawn_local"
 reason = "use `nimiq_utils::spawn` or `nimq_utils::spawn_local` instead, it is also supported in non-WASM environments"
+
+[[disallowed-types]]
+path = "futures_util::stream::FuturesUnordered"
+reason = "use `nimiq_utils::stream::FuturesUnordered` instead, it does not need manual `Waker`s"
+
+[[disallowed-types]]
+path = "futures_util::stream::FuturesOrdered"
+reason = "use `nimiq_utils::stream::FuturesOrdered` instead, it does not need manual `Waker`s"
