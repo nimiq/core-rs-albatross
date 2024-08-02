@@ -128,7 +128,30 @@ impl<'db> WriteTransaction<'db> for MdbxTransaction<'db, RW> {
     }
 
     fn commit(self) {
-        self.txn.commit().unwrap();
+        let stats = self.txn.txn_stat().unwrap();
+        log::info!("Branch pages :{:#?}", stats.branch_pages());
+        log::info!("Depth :{:#?}", stats.depth());
+        log::info!("Entries :{:#?}", stats.entries());
+        log::info!("Leaf pages :{:#?}", stats.leaf_pages());
+        log::info!("Overflow pages :{:#?}", stats.overflow_pages());
+        log::info!("Page size :{:#?}", stats.page_size());
+        log::info!("Total size :{:#?}", stats.total_size());
+        let info = self.txn.txn_info().unwrap();
+        log::info!("Page stats: {:#?}", info.pg_op_stat());
+        log::info!("Last page no: {:#?}", info.last_pgno());
+        log::info!("Map size: {:#?}", info.map_size());
+        log::info!("Num readers: {:#?}", info.num_readers());
+        log::info!("Max readers: {:#?}", info.max_readers());
+
+        let (_, latency, _) = self.txn.commit_and_rebind_open_dbs_with_latency().unwrap();
+        log::info!("Latency preparation: {:#?}", latency.preparation());
+        log::info!("Latency gc wallclock: {:#?}", latency.gc_wallclock());
+        log::info!("Latency audit: {:#?}", latency.audit());
+        log::info!("Latency write: {:#?}", latency.write());
+        log::info!("Latency sync: {:#?}", latency.sync());
+        log::info!("Latency ending: {:#?}", latency.ending());
+        log::info!("Latency whole: {:#?}", latency.whole());
+        log::info!("Latency gc_cputime: {:#?}", latency.gc_cputime());
     }
 
     fn cursor<'txn, T: Table>(&'txn self, table: &T) -> MdbxWriteCursor<'txn, T> {

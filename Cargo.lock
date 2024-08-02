@@ -2715,8 +2715,7 @@ dependencies = [
 [[package]]
 name = "libmdbx"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4693531e6e24c92e6ac110a52ce45a0f6b4aa61f7b8d6a4127dde411e597a927"
+source = "git+https://github.com/paberr/libmdbx-rs#d178a204e15e40f3f8d0e5b03264354002e62a62"
 dependencies = [
  "bitflags 2.6.0",
  "derive_more",
@@ -3307,8 +3306,7 @@ checksum = "0e7465ac9959cc2b1404e8e2367b43684a6d13790fe23056cc8c6c5a6b7bcb94"
 [[package]]
 name = "mdbx-sys"
 version = "12.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14f0fd8a9c29c480c11e163225463e0e8c0d11b009c837dfa7643cd20a20ae70"
+source = "git+https://github.com/paberr/libmdbx-rs#d178a204e15e40f3f8d0e5b03264354002e62a62"
 dependencies = [
  "bindgen",
  "cc",
@@ -3603,6 +3601,7 @@ dependencies = [
  "nimiq-collections",
  "nimiq-database",
  "nimiq-database-value",
+ "nimiq-database-value-derive",
  "nimiq-genesis",
  "nimiq-hash",
  "nimiq-keys",
