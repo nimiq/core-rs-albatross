@@ -16,7 +16,7 @@ use nimiq_test_utils::{
     validator::seeded_rng,
 };
 use nimiq_time::{interval, sleep};
-use nimiq_utils::spawn::spawn;
+use nimiq_utils::spawn;
 
 #[test(tokio::test(flavor = "multi_thread", worker_threads = 4))]
 #[ignore]

@@ -24,7 +24,7 @@ use nimiq_test_utils::{
     },
 };
 use nimiq_time::{sleep, timeout};
-use nimiq_utils::spawn::spawn;
+use nimiq_utils::spawn;
 use nimiq_validator::aggregation::skip_block::SignedSkipBlockMessage;
 use serde::{Deserialize, Serialize};
 
@@ -108,7 +108,9 @@ async fn four_validators_can_create_micro_blocks() {
 
     let blockchain = Arc::clone(&validators.first().unwrap().blockchain);
 
-    spawn(future::join_all(validators));
+    for validator in validators {
+        spawn(validator);
+    }
 
     // Take events until 30 blocks have been produced.
     let blockchain2 = Arc::clone(&blockchain);
@@ -166,7 +168,9 @@ async fn four_validators_can_do_skip_block() {
     // Freeze time to immediately trigger the block producer timeout.
     tokio::time::pause();
 
-    spawn(future::join_all(validators));
+    for validator in validators {
+        spawn(validator);
+    }
 
     // Wait for the new block producer to create a block.
     events.next().await;
@@ -295,7 +299,9 @@ async fn validator_can_catch_up() {
     );
 
     // let the validators run.
-    spawn(future::join_all(validators));
+    for validator in validators {
+        spawn(validator);
+    }
 
     // while waiting for them to run into the block producer timeout (10s)
     sleep(Duration::from_secs(11)).await;

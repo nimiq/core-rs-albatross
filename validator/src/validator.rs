@@ -31,7 +31,7 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_transaction_builder::TransactionBuilder;
-use nimiq_utils::spawn::spawn;
+use nimiq_utils::spawn;
 use nimiq_validator_network::{PubsubId, ValidatorNetwork};
 use parking_lot::RwLock;
 #[cfg(feature = "metrics")]

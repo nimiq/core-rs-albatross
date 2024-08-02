@@ -15,7 +15,7 @@ use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction}
 use nimiq_genesis::NetworkInfo;
 use nimiq_network_interface::network::Network;
 use nimiq_primitives::policy::Policy;
-use nimiq_utils::spawn::spawn;
+use nimiq_utils::spawn;
 use parking_lot::{lock_api::RwLockUpgradableReadGuard, RwLock, RwLockWriteGuard};
 use tokio::sync::oneshot::{channel, Sender};
 

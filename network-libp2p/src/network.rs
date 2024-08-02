@@ -28,7 +28,7 @@ use nimiq_network_interface::{
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_time::{interval, timeout};
 use nimiq_utils::{
-    spawn::spawn,
+    spawn,
     tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned},
 };
 use parking_lot::RwLock;

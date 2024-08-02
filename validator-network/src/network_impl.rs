@@ -9,7 +9,7 @@ use nimiq_network_interface::{
     request::{InboundRequestError, Message, Request, RequestCommon, RequestError},
 };
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_utils::spawn::spawn;
+use nimiq_utils::spawn;
 use parking_lot::RwLock;
 use time::OffsetDateTime;
 

@@ -19,7 +19,7 @@ use nimiq_network_libp2p::{
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng::test_rng;
 use nimiq_time::{sleep, timeout};
-use nimiq_utils::{key_rng::SecureGenerate, spawn::spawn, tagged_signing::TaggedSignable};
+use nimiq_utils::{key_rng::SecureGenerate, spawn, tagged_signing::TaggedSignable};
 use nimiq_validator_network::validator_record::ValidatorRecord;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};

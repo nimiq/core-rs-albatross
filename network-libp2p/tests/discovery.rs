@@ -22,7 +22,7 @@ use nimiq_network_libp2p::discovery::{
     peer_contacts::{PeerContact, PeerContactBook, SignedPeerContact},
 };
 use nimiq_test_log::test;
-use nimiq_utils::spawn::spawn;
+use nimiq_utils::spawn;
 use parking_lot::RwLock;
 use rand::{thread_rng, Rng};
 

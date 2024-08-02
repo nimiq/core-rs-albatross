@@ -16,7 +16,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::{BlockchainProxy, BlockchainReadProxy};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::request_handler};
-use nimiq_utils::spawn::spawn;
+use nimiq_utils::spawn;
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 use tokio::sync::{
     broadcast::{channel as broadcast, Sender as BroadcastSender},

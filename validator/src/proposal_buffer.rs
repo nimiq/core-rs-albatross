@@ -588,7 +588,7 @@ mod test {
         test_network::TestNetwork,
     };
     use nimiq_time::{sleep, timeout};
-    use nimiq_utils::spawn::spawn;
+    use nimiq_utils::spawn;
     use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
     use nimiq_zkp_component::ZKPComponent;
     use parking_lot::{Mutex, RwLock};

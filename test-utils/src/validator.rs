@@ -12,7 +12,7 @@ use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_utils::spawn::spawn;
+use nimiq_utils::spawn;
 use nimiq_validator::validator::Validator;
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 use rand::{rngs::StdRng, SeedableRng};

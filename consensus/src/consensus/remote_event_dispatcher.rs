@@ -17,7 +17,7 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::account::AccountType;
 use nimiq_transaction::account::staking_contract::IncomingStakingTransactionData;
-use nimiq_utils::spawn::spawn;
+use nimiq_utils::spawn;
 use parking_lot::RwLock;
 
 use crate::{

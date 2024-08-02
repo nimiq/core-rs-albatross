@@ -269,7 +269,7 @@ mod tests {
     use nimiq_primitives::{networks::NetworkId, policy::Policy};
     use nimiq_test_log::test;
     use nimiq_test_utils::blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key};
-    use nimiq_utils::{spawn::spawn, time::OffsetTime};
+    use nimiq_utils::{spawn, time::OffsetTime};
     use parking_lot::RwLock;
 
     use crate::{

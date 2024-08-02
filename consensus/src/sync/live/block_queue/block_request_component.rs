@@ -14,7 +14,7 @@ use nimiq_network_interface::{
     request::RequestError,
 };
 use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
-use nimiq_utils::spawn::spawn;
+use nimiq_utils::spawn;
 use parking_lot::RwLock;
 use thiserror::Error;
 

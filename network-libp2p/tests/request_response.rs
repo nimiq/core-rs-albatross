@@ -22,7 +22,7 @@ use nimiq_network_libp2p::{
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_time::sleep;
-use nimiq_utils::spawn::spawn;
+use nimiq_utils::spawn;
 use rand::{thread_rng, Rng};
 
 mod helper;

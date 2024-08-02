@@ -75,7 +75,7 @@ pub mod tests {
     use nimiq_network_interface::network::{Network, NetworkEvent, SubscribeEvents, Topic};
     use nimiq_test_log::test;
     use nimiq_test_utils::test_rng::test_rng;
-    use nimiq_utils::{spawn::spawn, tagged_signing::TaggedSignable};
+    use nimiq_utils::{spawn, tagged_signing::TaggedSignable};
     use serde::{Deserialize, Serialize};
 
     use super::{network::MockNetworkError, MockHub, MockPeerId};

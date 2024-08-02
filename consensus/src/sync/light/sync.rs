@@ -12,7 +12,7 @@ use nimiq_network_interface::{
     network::{CloseReason, Network, SubscribeEvents},
     request::RequestError,
 };
-use nimiq_utils::{spawn::spawn, WakerExt as _};
+use nimiq_utils::{spawn, WakerExt as _};
 use nimiq_zkp_component::{
     types::{Error, ZKPRequestEvent},
     zkp_component::ZKPComponentProxy,

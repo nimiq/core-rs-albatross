@@ -25,7 +25,7 @@ use nimiq_tendermint::{
     Proposal, ProposalError, ProposalMessage, Protocol, ProtocolError, SignedProposalMessage, Step,
     TaggedAggregationMessage,
 };
-use nimiq_utils::spawn::spawn;
+use nimiq_utils::spawn;
 use nimiq_validator_network::{
     single_response_requester::SingleResponseRequester, PubsubId, ValidatorNetwork,
 };
@@ -243,8 +243,9 @@ where
     ) {
         let nw = Arc::clone(&self.network);
         spawn(async move {
-            nw.publish::<ProposalTopic<TValidatorNetwork>>(proposal.into())
-                .await
+            let _ = nw
+                .publish::<ProposalTopic<TValidatorNetwork>>(proposal.into())
+                .await;
         });
     }
 

@@ -10,7 +10,7 @@ use nimiq_genesis_builder::GenesisInfo;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::{networks::NetworkId, trie::TrieItem};
-use nimiq_utils::{spawn::spawn, time::OffsetTime};
+use nimiq_utils::{spawn, time::OffsetTime};
 use nimiq_zkp_component::{
     proof_store::{DBProofStore, ProofStore},
     ZKPComponent,

@@ -22,7 +22,7 @@ use nimiq_test_utils::{
     node::TESTING_BLS_CACHE_MAX_CAPACITY,
     test_network::TestNetwork,
 };
-use nimiq_utils::{spawn::spawn, time::OffsetTime};
+use nimiq_utils::{spawn, time::OffsetTime};
 use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
 

@@ -15,7 +15,7 @@ use nimiq_network_interface::{
     network::{MsgAcceptance, Network, PubsubId},
     request::request_handler,
 };
-use nimiq_utils::spawn::spawn;
+use nimiq_utils::spawn;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use tokio::sync::{
     broadcast::{channel as broadcast, Sender as BroadcastSender},

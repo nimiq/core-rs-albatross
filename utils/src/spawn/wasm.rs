@@ -1,12 +1,11 @@
 use std::future::Future;
 
-use futures::FutureExt;
+pub fn spawn<F: Future<Output = ()> + Send + 'static>(future: F) {
+    #[allow(clippy::disallowed_methods)]
+    wasm_bindgen_futures::spawn_local(future);
+}
 
-pub fn spawn<F>(future: F)
-where
-    F: Future + Send + 'static,
-    F::Output: Send + 'static,
-{
-    // `spawn_local` only supports futures that return the unit type.
-    wasm_bindgen_futures::spawn_local(future.map(|_| ()))
+pub fn spawn_local<F: Future<Output = ()> + 'static>(future: F) {
+    #[allow(clippy::disallowed_methods)]
+    wasm_bindgen_futures::spawn_local(future);
 }

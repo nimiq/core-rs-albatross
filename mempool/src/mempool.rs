@@ -20,7 +20,7 @@ use nimiq_transaction::{
     historic_transaction::RawTransactionHash, ControlTransactionTopic, Transaction,
     TransactionTopic,
 };
-use nimiq_utils::spawn::spawn;
+use nimiq_utils::spawn;
 use parking_lot::RwLock;
 use tokio_metrics::TaskMonitor;
 
@@ -111,7 +111,9 @@ impl Mempool {
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
 
         // Create the abortable future using the executor and the abort registration
-        let future = Abortable::new(executor, abort_registration);
+        let future = async move {
+            let _ = Abortable::new(executor, abort_registration).await;
+        };
 
         // if a monitor was given, instrument the spawned task
         if let Some(monitor) = monitor {
