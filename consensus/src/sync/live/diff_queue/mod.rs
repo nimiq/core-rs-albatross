@@ -146,8 +146,8 @@ pub struct DiffQueue<N: Network> {
     /// The BlockQueue component.
     block_queue: BlockQueue<N>,
 
-    /// The chunk request component.
-    /// We use it to request chunks from up-to-date peers
+    /// The diff request component.
+    /// We use it to request trie diffs from up-to-date peers
     diff_request_component: DiffRequestComponent<N>,
 
     /// The pending TreeDiff requests to peers.
