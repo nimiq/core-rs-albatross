@@ -26,6 +26,8 @@ log = { workspace = true }
 tokio = { version = "1.39", features = ["macros", "rt-multi-thread", "time", "tracing"] }
 tokio-metrics = "0.3"
 
+nimiq-utils = { workspace = true, features = ["spawn"] }
+
 [dependencies.nimiq]
 workspace = true
 features = [

@@ -30,10 +30,10 @@ use nimiq_network_interface::{
     Multiaddr,
 };
 use nimiq_primitives::policy::Policy;
+use nimiq_utils::spawn_local;
 use tokio::sync::oneshot;
 use tsify::Tsify;
 use wasm_bindgen::{prelude::*, JsCast};
-use wasm_bindgen_futures::spawn_local;
 use web_sys::MessageEvent;
 
 use crate::{

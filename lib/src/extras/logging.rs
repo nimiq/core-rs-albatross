@@ -200,7 +200,8 @@ pub fn initialize_logging(
             .init();
 
         if let Some(task) = loki_task {
-            tokio::spawn(task);
+            use nimiq_utils::spawn;
+            spawn(task);
         }
     }
     #[cfg(not(feature = "loki"))]

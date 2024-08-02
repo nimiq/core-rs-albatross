@@ -28,6 +28,7 @@ use nimiq_mempool::mempool::Mempool;
 use nimiq_primitives::{coin::Coin, networks::NetworkId, policy::Policy};
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
+use nimiq_utils::spawn;
 use rand::{
     distributions::{Distribution, WeightedIndex},
     thread_rng, Rng,
@@ -214,7 +215,7 @@ async fn main_inner() -> Result<(), Error> {
         use nimiq::extras::rpc_server::initialize_rpc_server;
         let rpc_server = initialize_rpc_server(&client, rpc_config, client.wallet_store())
             .expect("Failed to initialize RPC server");
-        tokio::spawn(async move { rpc_server.run().await });
+        spawn(async move { rpc_server.run().await });
     }
 
     // Start consensus.
@@ -226,7 +227,7 @@ async fn main_inner() -> Result<(), Error> {
     };
 
     log::info!("Spawning consensus");
-    tokio::spawn(consensus);
+    spawn(consensus);
     let consensus = client.consensus_proxy();
 
     // Initialize metrics server
@@ -246,7 +247,7 @@ async fn main_inner() -> Result<(), Error> {
     let mempool = if let Some(validator) = client.take_validator() {
         log::info!("Spawning spammer");
         let mempool = Arc::clone(&validator.mempool_task.mempool);
-        tokio::spawn(validator);
+        spawn(validator);
         mempool
     } else {
         panic!("Could not start spammer");
@@ -433,7 +434,7 @@ async fn spam(
         for tx in txs {
             let consensus1 = consensus.clone();
             let mp = Arc::clone(&mempool);
-            tokio::spawn(async move {
+            spawn(async move {
                 if let Err(e) = mp.add_transaction(tx.clone(), None).await {
                     log::warn!("Mempool rejected transaction: {:?} - {:#?}", e, tx);
                 }

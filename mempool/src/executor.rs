@@ -14,6 +14,7 @@ use nimiq_blockchain::Blockchain;
 use nimiq_network_interface::network::{MsgAcceptance, Network, Topic};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::Transaction;
+use nimiq_utils::spawn;
 use parking_lot::RwLock;
 
 use crate::{
@@ -102,7 +103,7 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
             let network_id = self.network_id;
 
             // Spawn the transaction verification task
-            tokio::task::spawn(async move {
+            spawn(async move {
                 let verify_tx_ret = verify_tx(
                     &tx,
                     blockchain,

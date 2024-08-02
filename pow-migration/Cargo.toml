@@ -49,6 +49,7 @@ nimiq = { workspace = true, features = [
 nimiq-primitives = { workspace = true, features = ["policy"] }
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
+nimiq-utils = { workspace = true, features = ["spawn"] }
 nimiq-vrf = { workspace = true }
 nimiq_rpc = "0.4.0"
 percentage = "0.1"

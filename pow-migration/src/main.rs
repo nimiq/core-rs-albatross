@@ -15,6 +15,7 @@ use nimiq_pow_migration::{
 };
 use nimiq_primitives::networks::NetworkId;
 use nimiq_rpc::Client;
+use nimiq_utils::spawn;
 use tokio::{
     sync::{mpsc, watch},
     time::sleep,
@@ -236,8 +237,8 @@ async fn main() {
         let (tx_migration_completed, rx_migration_completed) =
             watch::channel(get_history_store_height(env.clone(), config.network_id).await);
 
-        // Spawn PoW-to-PoS migrator as seperate task
-        tokio::spawn(migrate_history(
+        // Spawn PoW-to-PoS migrator as separate task
+        spawn(migrate_history(
             rx_candidate_block,
             tx_migration_completed,
             env.clone(),

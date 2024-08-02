@@ -4,6 +4,7 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::ConsensusProxy;
 use nimiq_mempool::mempool::Mempool;
 use nimiq_network_interface::network::Network;
+use nimiq_utils::spawn;
 use parking_lot::RwLock;
 use prometheus_client::{
     encoding::{EncodeGaugeValue, EncodeMetric, MetricEncoder},
@@ -117,19 +118,19 @@ pub fn start_metrics_server<TNetwork: Network>(
         let tokio_rt_metrics = Arc::new(RwLock::new(tokio_rt_metrics));
 
         // Spawn Tokio runtime metrics updater
-        tokio::spawn(TokioRuntimeMetrics::update_metric_values(
+        spawn(TokioRuntimeMetrics::update_metric_values(
             tokio_rt_metrics,
             tokio_rt_monitor,
         ));
     }
 
     // Spawn the metrics server
-    tokio::spawn(metrics_server(addr, registry));
+    spawn(async move { metrics_server(addr, registry).await.unwrap() });
 
     // Spawn Tokio task monitor updaters
     for i in 0..task_monitors.len() {
         let task_monitors = task_monitors.to_vec();
-        tokio::spawn({
+        spawn({
             let task_metrics = Arc::clone(&task_metrics);
             let task_monitors = task_monitors;
             async move {

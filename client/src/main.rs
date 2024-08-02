@@ -13,6 +13,7 @@ pub use nimiq::{
         signal_handling::initialize_signal_handler,
     },
 };
+use nimiq_utils::spawn;
 
 async fn main_inner() -> Result<(), Error> {
     // Keep for potential future reactivation
@@ -71,7 +72,7 @@ async fn main_inner() -> Result<(), Error> {
         use nimiq::extras::rpc_server::initialize_rpc_server;
         let rpc_server = initialize_rpc_server(&client, rpc_config, client.wallet_store())
             .expect("Failed to initialize RPC server");
-        tokio::spawn(async move { rpc_server.run().await });
+        spawn(async move { rpc_server.run().await });
     }
 
     // Vector for task monitors (Tokio task metrics)
@@ -83,19 +84,19 @@ async fn main_inner() -> Result<(), Error> {
     if metrics_enabled {
         let con_metrics_monitor = tokio_metrics::TaskMonitor::new();
         let instr_con = con_metrics_monitor.instrument(consensus);
-        tokio::spawn(instr_con);
+        spawn(instr_con);
         nimiq_task_metric.push(NimiqTaskMonitor {
             name: "consensus".to_string(),
             monitor: con_metrics_monitor,
         });
     } else {
-        tokio::spawn(consensus);
+        spawn(consensus);
     }
     let consensus = client.consensus_proxy();
     let mempool = client.mempool();
 
     let zkp_component = client.take_zkp_component().unwrap();
-    tokio::spawn(zkp_component); //ITODO get metrics on this? ask JD
+    spawn(zkp_component); //ITODO get metrics on this? ask JD
 
     // Start validator
     let val_metric_monitor = tokio_metrics::TaskMonitor::new();
@@ -105,7 +106,7 @@ async fn main_inner() -> Result<(), Error> {
         if metrics_enabled {
             let mp_metrics_monitor = validator.get_mempool_monitor();
             let inst_validator = val_metric_monitor.instrument(validator);
-            tokio::spawn(inst_validator);
+            spawn(inst_validator);
             nimiq_task_metric.push(NimiqTaskMonitor {
                 name: "mempool".to_string(),
                 monitor: mp_metrics_monitor,
@@ -115,7 +116,7 @@ async fn main_inner() -> Result<(), Error> {
                 monitor: val_metric_monitor,
             });
         } else {
-            tokio::spawn(validator);
+            spawn(validator);
         }
     } else if let Some(mempool_task) = client.take_mempool() {
         info!("Initializing mempool");
@@ -123,7 +124,7 @@ async fn main_inner() -> Result<(), Error> {
         if metrics_enabled {
             let mp_metrics_monitor = mempool_task.get_mempool_monitor();
             let inst_mempool = val_metric_monitor.instrument(mempool_task);
-            tokio::spawn(inst_mempool);
+            spawn(inst_mempool);
             nimiq_task_metric.push(NimiqTaskMonitor {
                 name: "mempool".to_string(),
                 monitor: mp_metrics_monitor,
@@ -133,7 +134,7 @@ async fn main_inner() -> Result<(), Error> {
                 monitor: val_metric_monitor,
             });
         } else {
-            tokio::spawn(mempool_task);
+            spawn(mempool_task);
         }
     }
 

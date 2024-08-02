@@ -11,6 +11,7 @@ use hyper_util::{
     server::conn::auto::Builder,
 };
 use log::{error, info};
+use nimiq_utils::spawn;
 use parking_lot::RwLock;
 use prometheus_client::{encoding::text::encode, registry::Registry};
 use tokio::net::TcpListener;
@@ -23,7 +24,7 @@ pub async fn metrics_server(addr: SocketAddr, registry: Registry) -> Result<(), 
         let (stream, _) = listener.accept().await?;
         let io = TokioIo::new(stream);
         let svc_clone = metrics_service.clone();
-        tokio::spawn(async move {
+        spawn(async move {
             if let Err(error) = Builder::new(TokioExecutor::new())
                 .serve_connection(io, svc_clone)
                 .await
