@@ -23,7 +23,7 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-libmdbx = { git = "https://github.com/paberr/libmdbx-rs" }
+libmdbx = { git = "https://github.com/jsdanielh/libmdbx-rs" }
 log = { workspace = true }
 tempfile = "3"
 thiserror = "1.0"

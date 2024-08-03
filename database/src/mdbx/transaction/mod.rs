@@ -144,14 +144,20 @@ impl<'db> WriteTransaction<'db> for MdbxTransaction<'db, RW> {
         log::info!("Max readers: {:#?}", info.max_readers());
 
         let (_, latency, _) = self.txn.commit_and_rebind_open_dbs_with_latency().unwrap();
-        log::info!("Latency preparation: {:#?}", latency.preparation());
-        log::info!("Latency gc wallclock: {:#?}", latency.gc_wallclock());
-        log::info!("Latency audit: {:#?}", latency.audit());
-        log::info!("Latency write: {:#?}", latency.write());
-        log::info!("Latency sync: {:#?}", latency.sync());
-        log::info!("Latency ending: {:#?}", latency.ending());
-        log::info!("Latency whole: {:#?}", latency.whole());
-        log::info!("Latency gc_cputime: {:#?}", latency.gc_cputime());
+        log::info!(
+            "Latency preparation: {}ms",
+            latency.preparation().as_millis()
+        );
+        log::info!(
+            "Latency gc wallclock: {}ms",
+            latency.gc_wallclock().as_millis()
+        );
+        log::info!("Latency audit: {}ms", latency.audit().as_millis());
+        log::info!("Latency write: {}ms", latency.write().as_millis());
+        log::info!("Latency sync: {}ms", latency.sync().as_millis());
+        log::info!("Latency ending: {}ms", latency.ending().as_millis());
+        log::info!("Latency whole: {}ms", latency.whole().as_millis());
+        log::info!("Latency gc_cputime: {}ms", latency.gc_cputime().as_millis());
     }
 
     fn cursor<'txn, T: Table>(&'txn self, table: &T) -> MdbxWriteCursor<'txn, T> {

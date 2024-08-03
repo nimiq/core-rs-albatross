@@ -9,6 +9,7 @@ use nimiq_database::{
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{policy::Policy, trie::trie_diff::TrieDiff};
+use nimiq_serde::Serialize;
 
 type ChainInfoWrapper = IndexedValue<u64, ChainInfo>;
 
@@ -188,7 +189,11 @@ impl ChainStore {
 
         // Store body if requested.
         if include_body {
-            log::debug!(block_index, "Putting block");
+            log::info!(
+                size = &chain_info.head.serialized_size(),
+                block_index,
+                "Putting block"
+            );
             cursor.append(&block_index, &chain_info.head);
         }
 

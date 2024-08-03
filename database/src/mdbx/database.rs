@@ -13,6 +13,7 @@ use crate::{
 const GIGABYTE: usize = 1024 * 1024 * 1024;
 const TERABYTE: usize = GIGABYTE * 1024;
 
+#[derive(Clone)]
 /// Database config options.
 pub struct DatabaseConfig {
     /// The maximum number of tables that can be opened.
@@ -98,12 +99,16 @@ impl MdbxDatabase {
     pub fn new<P: AsRef<Path>>(path: P, config: DatabaseConfig) -> Result<Self, Error> {
         fs::create_dir_all(path.as_ref()).map_err(Error::CreateDirectory)?;
 
-        let db =
-            libmdbx::Database::open_with_options(path, libmdbx::DatabaseOptions::from(config))?;
+        let db = libmdbx::Database::open_with_options(
+            path,
+            libmdbx::DatabaseOptions::from(config.clone()),
+        )?;
 
         let info = db.info()?;
         let cur_mapsize = info.map_size();
         info!(cur_mapsize, "MDBX memory map size");
+        let size = libmdbx::Database::size(&db, libmdbx::DatabaseOptions::from(config));
+        info!(size, "MDBX memory map size");
 
         let mdbx = MdbxDatabase {
             db: Arc::new(db),

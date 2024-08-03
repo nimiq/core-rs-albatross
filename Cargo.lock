@@ -2715,7 +2715,7 @@ dependencies = [
 [[package]]
 name = "libmdbx"
 version = "0.5.0"
-source = "git+https://github.com/paberr/libmdbx-rs#d178a204e15e40f3f8d0e5b03264354002e62a62"
+source = "git+https://github.com/jsdanielh/libmdbx-rs#06c84475f0a007285247ed33efb4c8034162d0d6"
 dependencies = [
  "bitflags 2.6.0",
  "derive_more",
@@ -3306,7 +3306,7 @@ checksum = "0e7465ac9959cc2b1404e8e2367b43684a6d13790fe23056cc8c6c5a6b7bcb94"
 [[package]]
 name = "mdbx-sys"
 version = "12.10.0"
-source = "git+https://github.com/paberr/libmdbx-rs#d178a204e15e40f3f8d0e5b03264354002e62a62"
+source = "git+https://github.com/jsdanielh/libmdbx-rs#06c84475f0a007285247ed33efb4c8034162d0d6"
 dependencies = [
  "bindgen",
  "cc",
