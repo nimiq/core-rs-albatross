@@ -4,11 +4,15 @@
 const { parentPort } = require('node:worker_threads');
 const Comlink = require('comlink');
 const nodeEndpoint = require('comlink/dist/umd/node-adapter.js');
-const { w3cwebsocket } = require('websocket');
 const { Client } = require('./worker-wasm/index.js');
 
-// Provide a global WebSocket implementation, which is expected by the WASM code built for browsers.
-global.WebSocket = w3cwebsocket;
+// WebSocket was added to Node in v22. Polyfill it for older versions.
+if (!global.WebSocket) {
+    console.debug("Polyfilling WebSocket");
+    // Provide a global WebSocket implementation, which is expected by the WASM code built for browsers.
+    const { w3cwebsocket } = require('websocket');
+    global.WebSocket = w3cwebsocket;
+}
 // Workaround for Node.js as it currently lacks support for Web Workers by pretending there is
 // a WorkerGlobalScope object available which is checked within the libp2p's websocket-websys transport.
 global.WorkerGlobalScope = global;

@@ -7,8 +7,12 @@ import nodeEndpoint from 'comlink/dist/esm/node-adapter.mjs';
 import websocket from 'websocket';
 import wasm from './worker-wasm/index.js';
 
-// Provide a global WebSocket implementation, which is expected by the WASM code built for browsers.
-global.WebSocket = websocket.w3cwebsocket;
+// WebSocket was added to Node in v22. Polyfill it for older versions.
+if (!global.WebSocket) {
+    console.debug("Polyfilling WebSocket");
+    // Provide a global WebSocket implementation, which is expected by the WASM code built for browsers.
+    global.WebSocket = websocket.w3cwebsocket;
+}
 // Workaround for Node.js as it currently lacks support for Web Workers by pretending there is
 // a WorkerGlobalScope object available which is checked within the libp2p's websocket-websys transport.
 global.WorkerGlobalScope = global;
