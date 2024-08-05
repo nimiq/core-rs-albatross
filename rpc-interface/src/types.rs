@@ -901,7 +901,6 @@ impl Account {
 pub struct Staker {
     pub address: Address,
     pub balance: Coin,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub delegation: Option<Address>,
     pub inactive_balance: Coin,
     pub inactive_from: Option<u32>,
@@ -928,14 +927,11 @@ pub struct Validator {
     pub signing_key: Ed25519PublicKey,
     pub voting_key: CompressedPublicKey,
     pub reward_address: Address,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub signal_data: Option<Blake2bHash>,
     pub balance: Coin,
     pub num_stakers: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub inactivity_flag: Option<u32>,
     pub retired: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub jailed_from: Option<u32>,
 }
 
