@@ -3177,8 +3177,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-websocket-websys"
-version = "0.3.2"
-source = "git+https://github.com/sisou/rust-libp2p?branch=sisou/websocket-websys-drop#1b14ee1a5ae5375a11731328afce361fafa8ad6a"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f95cd8a32fcf94ad1e5c2de37c2a05a5a4188d8358b005859a0fc9e63b6953bc"
 dependencies = [
  "bytes",
  "futures",
