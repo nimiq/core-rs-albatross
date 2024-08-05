@@ -166,6 +166,10 @@ impl Block {
         macro_block: nimiq_block::MacroBlock,
         include_body: bool,
     ) -> Result<Self, BlockchainError> {
+        if include_body && macro_block.body.is_none() {
+            return Err(BlockchainError::BlockBodyNotFound);
+        }
+
         let block_number = macro_block.block_number();
 
         let slots = macro_block.get_validators().map(Slots::from_slots);
@@ -238,6 +242,10 @@ impl Block {
         micro_block: nimiq_block::MicroBlock,
         include_body: bool,
     ) -> Result<Self, BlockchainError> {
+        if include_body && micro_block.body.is_none() {
+            return Err(BlockchainError::BlockBodyNotFound);
+        }
+
         let block_number = micro_block.block_number();
 
         let (equivocation_proofs, transactions) = match micro_block.body {
