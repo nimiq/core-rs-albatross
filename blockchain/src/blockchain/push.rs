@@ -319,6 +319,10 @@ impl Blockchain {
             .put_chain_info(&mut txn, chain_info.head.parent_hash(), &prev_info, false);
         this.chain_store.set_head(&mut txn, &block_hash);
 
+        if is_macro_block {
+            this.chain_store.finalize_batch(&mut txn);
+        }
+
         if is_election_block {
             let max_epochs_stored =
                 cmp::max(this.config.max_epochs_stored, Policy::MIN_EPOCHS_STORED);

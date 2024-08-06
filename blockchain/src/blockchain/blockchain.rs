@@ -45,7 +45,7 @@ pub struct Blockchain {
     /// The chain store is a database containing all of the chain infos, blocks and receipts.
     pub chain_store: ChainStore,
     /// The history store is a database containing all of the history trees and transactions.
-    pub history_store: HistoryStoreProxy,
+    pub history_store: Arc<HistoryStoreProxy>,
     /// The current state of the blockchain.
     pub state: BlockchainState,
     /// A reference to a "function" to test whether a given transaction is known and valid.
@@ -136,13 +136,27 @@ impl Blockchain {
             return Err(BlockchainError::InvalidGenesisBlock);
         }
 
-        let chain_store = ChainStore::new(env.clone());
+        let history_store = if config.index_history {
+            Arc::new(HistoryStoreProxy::WithIndex(HistoryStoreIndex::new(
+                env.clone(),
+                network_id,
+            )))
+        } else {
+            Arc::new(HistoryStoreProxy::WithoutIndex(Box::new(HistoryStore::new(
+                env.clone(),
+                network_id,
+            ))
+                as Box<dyn HistoryInterface + Sync + Send>))
+        };
+
+        let chain_store = ChainStore::new(env.clone(), Arc::clone(&history_store));
 
         Ok(match chain_store.get_head(None) {
             Some(head_hash) => Blockchain::load(
                 env,
                 config,
                 chain_store,
+                history_store,
                 time,
                 network_id,
                 genesis_block,
@@ -152,6 +166,7 @@ impl Blockchain {
                 env,
                 config,
                 chain_store,
+                history_store,
                 time,
                 network_id,
                 genesis_block,
@@ -165,7 +180,7 @@ impl Blockchain {
         env: MdbxDatabase,
         config: BlockchainConfig,
         chain_store: ChainStore,
-
+        history_store: Arc<HistoryStoreProxy>,
         time: Arc<OffsetTime>,
         network_id: NetworkId,
         genesis_block: Block,
@@ -266,13 +281,6 @@ impl Blockchain {
         let (tx_fork, _rx_fork) = broadcast(BROADCAST_MAX_CAPACITY);
         let (tx_log, _rx_log) = broadcast(BROADCAST_MAX_CAPACITY);
 
-        let history_store = if config.index_history {
-            HistoryStoreProxy::WithIndex(HistoryStoreIndex::new(env.clone(), network_id))
-        } else {
-            HistoryStoreProxy::WithoutIndex(Box::new(HistoryStore::new(env.clone(), network_id))
-                as Box<dyn HistoryInterface + Sync + Send>)
-        };
-
         Ok(Blockchain {
             db: env,
             config,
@@ -309,7 +317,7 @@ impl Blockchain {
         env: MdbxDatabase,
         config: BlockchainConfig,
         chain_store: ChainStore,
-
+        history_store: Arc<HistoryStoreProxy>,
         time: Arc<OffsetTime>,
         network_id: NetworkId,
         genesis_block: Block,
@@ -339,13 +347,6 @@ impl Blockchain {
         let (tx, _rx) = broadcast(BROADCAST_MAX_CAPACITY);
         let (tx_fork, _rx_fork) = broadcast(BROADCAST_MAX_CAPACITY);
         let (tx_log, _rx_log) = broadcast(BROADCAST_MAX_CAPACITY);
-
-        let history_store = if config.index_history {
-            HistoryStoreProxy::WithIndex(HistoryStoreIndex::new(env.clone(), network_id))
-        } else {
-            HistoryStoreProxy::WithoutIndex(Box::new(HistoryStore::new(env.clone(), network_id))
-                as Box<dyn HistoryInterface + Sync + Send>)
-        };
 
         Ok(Blockchain {
             db: env,

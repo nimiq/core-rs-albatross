@@ -14,6 +14,7 @@ use nimiq_transaction::{
 use super::history_store_index::HistoryStoreIndex;
 use crate::{interface::HistoryInterface, HistoryTreeChunk};
 
+#[derive(Debug)]
 pub enum HistoryStoreProxy {
     WithIndex(HistoryStoreIndex),
     WithoutIndex(Box<dyn HistoryInterface + Send + Sync>),

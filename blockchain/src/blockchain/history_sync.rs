@@ -378,7 +378,7 @@ impl Blockchain {
         );
 
         this.chain_store
-            .put_chain_info(&mut txn, &block_hash, &chain_info, true);
+            .put_chain_info(&mut txn, &block_hash, &chain_info, false);
 
         let wanted_history_root = this
             .history_store
