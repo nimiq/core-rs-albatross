@@ -3,32 +3,34 @@ updates:
 - package-ecosystem: github-actions
   directory: "/"
   groups:
-    minor-and-patch-updates:
+    minor-and-patch-actions-updates:
       applies-to: version-updates
       update-types:
-      - "minor"
-      - "patch"
+        - "minor"
+        - "patch"
   schedule:
     interval: daily
     timezone: America/Costa_Rica
+  ignore:
+    - dependency-name: "dtolnay/rust-toolchain" # We manually bump the Rust toolchain as we test two versions older than the current Rust stable
   open-pull-requests-limit: 10
   reviewers:
-  - jsdanielh
+    - jsdanielh
   assignees:
-  - jsdanielh
+    - jsdanielh
 - package-ecosystem: cargo
   directory: "/"
   groups:
-    minor-and-patch-updates:
+    minor-and-patch-cargo-updates:
       applies-to: version-updates
       update-types:
-      - "minor"
-      - "patch"
+        - "minor"
+        - "patch"
   schedule:
     interval: daily
     timezone: America/Costa_Rica
   open-pull-requests-limit: 10
   reviewers:
-  - jsdanielh
+    - jsdanielh
   assignees:
-  - jsdanielh
+    - jsdanielh
