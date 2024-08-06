@@ -824,7 +824,7 @@ pub enum AccountAdditionalFields {
 
     /// Additional account information for HTLC contracts.
     #[serde(rename_all = "camelCase")]
-    HTLC {
+    Htlc {
         /// User friendly address (NQ-address) of the sender of the HTLC.
         sender: Address,
         /// User friendly address (NQ-address) of the recipient of the HTLC.
@@ -866,7 +866,7 @@ impl Account {
             nimiq_account::Account::HTLC(htlc) => Account {
                 address,
                 balance: htlc.balance,
-                account_additional_fields: AccountAdditionalFields::HTLC {
+                account_additional_fields: AccountAdditionalFields::Htlc {
                     sender: htlc.sender,
                     recipient: htlc.recipient,
                     hash_root: htlc.hash_root,
