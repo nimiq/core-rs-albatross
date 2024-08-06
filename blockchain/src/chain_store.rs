@@ -1,21 +1,87 @@
 use nimiq_account::RevertInfo;
-use nimiq_block::Block;
+use nimiq_block::{Block, BlockBody, BlockJustification, MacroBlock, MicroBlock};
 use nimiq_blockchain_interface::{BlockchainError, ChainInfo, Direction};
-use nimiq_database::utils::IndexedValue;
 use nimiq_database::{
     declare_table,
     mdbx::{MdbxDatabase, MdbxReadTransaction, MdbxWriteTransaction, OptionalTransaction},
     traits::{Database, DupReadCursor, ReadCursor, ReadTransaction, WriteCursor, WriteTransaction},
+    utils::IndexedValue,
 };
+use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{policy::Policy, trie::trie_diff::TrieDiff};
-use nimiq_serde::Serialize;
+use nimiq_serde::{Deserialize, Serialize};
+use serde;
 
 type ChainInfoWrapper = IndexedValue<u64, ChainInfo>;
 
+/// HeaderlessBlock is the non-header content of a block except that
+/// to optimize micro blocks storage, transactions are not stored.
+#[derive(Debug, Serialize, Deserialize, DbSerializable)]
+pub struct HeaderlessBlock {
+    justification: Option<BlockJustification>,
+    #[serde(serialize_with = "HeaderlessBlock::serialize_body")]
+    body: Option<BlockBody>,
+}
+
+impl From<Block> for HeaderlessBlock {
+    fn from(block: Block) -> Self {
+        HeaderlessBlock {
+            justification: block.justification(),
+            body: block.body(),
+        }
+    }
+}
+
+impl HeaderlessBlock {
+    fn block_from_header(&self, block: &Block) -> Block {
+        if let Some(justification) = &self.justification {
+            assert!(block.ty() == justification.ty());
+        }
+        if let Some(body) = &self.body {
+            assert!(block.ty() == body.ty());
+        }
+        match block {
+            Block::Macro(header_only_block) => Block::Macro(MacroBlock {
+                header: header_only_block.header.clone(),
+                justification: self
+                    .justification
+                    .as_ref()
+                    .map(|justification| justification.clone().unwrap_macro()),
+                body: self.body.as_ref().map(|body| body.clone().unwrap_macro()),
+            }),
+            Block::Micro(header_only_block) => Block::Micro(MicroBlock {
+                header: header_only_block.header.clone(),
+                justification: self
+                    .justification
+                    .as_ref()
+                    .map(|justification| justification.clone().unwrap_micro()),
+                body: self.body.as_ref().map(|body| body.clone().unwrap_micro()),
+            }),
+        }
+    }
+
+    fn serialize_body<S>(body: &Option<BlockBody>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Empty out micro body transactions if there is any
+        if let Some(body) = body {
+            let mut body_to_ser = body.clone();
+            match body_to_ser {
+                BlockBody::Micro(ref mut body) => body.transactions = vec![],
+                BlockBody::Macro(_) => {}
+            }
+            serde::Serialize::serialize(&Some(body_to_ser), serializer)
+        } else {
+            serde::Serialize::serialize(&body, serializer)
+        }
+    }
+}
+
 declare_table!(HeadTable, "Head", () => Blake2bHash);
 declare_table!(ChainTable, "ChainData", Blake2bHash => ChainInfoWrapper);
-declare_table!(BlockTable, "Block", u64 => Block);
+declare_table!(BlockTable, "Block", u64 => HeaderlessBlock);
 declare_table!(HeightIndex, "HeightIndex", u32 => dup(Blake2bHash));
 declare_table!(RevertTable, "Receipts", u32 => RevertInfo);
 declare_table!(AccountsDiffTable, "AccountsDiff", Blake2bHash => TrieDiff);
@@ -102,7 +168,7 @@ impl ChainStore {
 
         if include_body {
             if let Some(block) = txn.get(&self.block_table, &wrapper.index) {
-                chain_info.head = block;
+                chain_info.head = block.block_from_header(&chain_info.head);
             } else {
                 warn!("Block body requested but not present");
             }
@@ -145,7 +211,7 @@ impl ChainStore {
 
         if include_body {
             if let Some(block) = txn.get(&self.block_table, &wrapper.index) {
-                chain_info.head = block;
+                chain_info.head = block.block_from_header(&chain_info.head);
             } else {
                 warn!(
                     index = wrapper.index,
@@ -194,7 +260,11 @@ impl ChainStore {
                 block_index,
                 "Putting block"
             );
-            cursor.append(&block_index, &chain_info.head);
+            log::debug!(block_index, "Putting block");
+            cursor.append(
+                &block_index,
+                &HeaderlessBlock::from(chain_info.head.clone()),
+            );
         }
 
         // Add to height index.
@@ -263,8 +333,10 @@ impl ChainStore {
             .ok_or(BlockchainError::BlockNotFound)?;
 
         if include_body {
-            txn.get(&self.block_table, &wrapper.index)
-                .ok_or(BlockchainError::BlockNotFound)
+            let headerless_block = txn
+                .get(&self.block_table, &wrapper.index)
+                .ok_or(BlockchainError::BlockNotFound)?;
+            Ok(headerless_block.block_from_header(&wrapper.value.head))
         } else {
             Ok(wrapper.value.head)
         }
