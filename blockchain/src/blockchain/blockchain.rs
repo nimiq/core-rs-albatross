@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use nimiq_account::{Accounts, BlockLog};
 use nimiq_block::Block;
-use nimiq_blockchain_interface::{BlockchainError, BlockchainEvent, ChainInfo, ForkEvent};
+use nimiq_blockchain_interface::{
+    BlockchainError, BlockchainEvent, ChainInfo, ForkEvent, TaintedBlockchainConfig,
+};
 use nimiq_database::{
     mdbx::{MdbxDatabase, MdbxReadTransaction, MdbxWriteTransaction},
     traits::{Database, WriteTransaction},
@@ -72,6 +74,8 @@ pub struct BlockchainConfig {
     pub max_epochs_stored: u32,
     /// Enables/Disables indices in the history store.
     pub index_history: bool,
+    /// Tainted configuration.
+    pub tainted_blockchain: TaintedBlockchainConfig,
 }
 
 impl Default for BlockchainConfig {
@@ -80,6 +84,7 @@ impl Default for BlockchainConfig {
             keep_history: true,
             max_epochs_stored: Policy::MIN_EPOCHS_STORED,
             index_history: true,
+            tainted_blockchain: TaintedBlockchainConfig::default(),
         }
     }
 }

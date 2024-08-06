@@ -14,6 +14,10 @@ use tokio_stream::wrappers::BroadcastStream;
 use crate::{interface::HistoryInterface, Blockchain};
 
 impl AbstractBlockchain for Blockchain {
+    fn get_tainted_config(&self) -> &nimiq_blockchain_interface::TaintedBlockchainConfig {
+        &self.config.tainted_blockchain
+    }
+
     fn network_id(&self) -> NetworkId {
         self.network_id
     }

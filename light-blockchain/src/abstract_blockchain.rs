@@ -2,6 +2,7 @@ use futures::{future, stream::BoxStream, StreamExt};
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainError, BlockchainEvent, ChainInfo, Direction, ForkEvent,
+    TaintedBlockchainConfig,
 };
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
@@ -12,6 +13,10 @@ use crate::blockchain::LightBlockchain;
 
 /// Implements several basic methods for blockchains.
 impl AbstractBlockchain for LightBlockchain {
+    fn get_tainted_config(&self) -> &TaintedBlockchainConfig {
+        todo!()
+    }
+
     fn network_id(&self) -> NetworkId {
         self.network_id
     }
