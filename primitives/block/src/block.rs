@@ -629,6 +629,24 @@ impl BlockJustification {
             BlockJustification::Micro(_) => BlockType::Micro,
         }
     }
+
+    /// Unwraps a block justification and returns the underlying Micro justification.
+    pub fn unwrap_micro(self) -> MicroJustification {
+        if let BlockJustification::Micro(justification) = self {
+            justification
+        } else {
+            unreachable!()
+        }
+    }
+
+    /// Unwraps a block justification and returns the underlying Macro justification.
+    pub fn unwrap_macro(self) -> TendermintProof {
+        if let BlockJustification::Macro(justification) = self {
+            justification
+        } else {
+            unreachable!()
+        }
+    }
 }
 
 /// Struct representing the body of a block.
