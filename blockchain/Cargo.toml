@@ -38,6 +38,7 @@ nimiq-bls = { workspace = true, features = ["serde-derive"] }
 nimiq-collections = { workspace = true }
 nimiq-database = { workspace = true }
 nimiq-database-value = { workspace = true }
+nimiq-database-value-derive = { workspace = true }
 nimiq-genesis = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true }
