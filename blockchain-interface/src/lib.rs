@@ -1,4 +1,4 @@
-pub use abstract_blockchain::AbstractBlockchain;
+pub use abstract_blockchain::{AbstractBlockchain, TaintedBlockchainConfig};
 pub use chain_info::ChainInfo;
 pub use chain_ordering::*;
 pub use error::{
