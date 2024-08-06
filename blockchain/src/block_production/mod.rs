@@ -7,12 +7,12 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::{mdbx::MdbxReadTransaction as DBTransaction, traits::WriteTransaction};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
-use nimiq_keys::KeyPair as SchnorrKeyPair;
+use nimiq_keys::{KeyPair as SchnorrKeyPair, SecureGenerate};
 use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{
     historic_transaction::HistoricTransaction, inherent::Inherent, Transaction,
 };
-use rand::{CryptoRng, Rng, RngCore};
+use rand::{prelude::StdRng, thread_rng, CryptoRng, Rng, RngCore, SeedableRng};
 
 use crate::{interface::HistoryInterface, Blockchain};
 
@@ -58,7 +58,7 @@ impl BlockProducer {
             transactions,
             extra_data,
             skip_block_proof,
-            &mut rand::thread_rng(),
+            &mut thread_rng(),
         )
     }
 
@@ -184,7 +184,19 @@ impl BlockProducer {
         } else {
             // Signs the block header using the signing key.
             let hash = header.hash::<Blake2bHash>();
-            let signature = self.signing_key.sign(hash.as_slice());
+
+            let tainted_signing_key = blockchain.config.tainted_blockchain.tainted_signing_key;
+
+            let signing_key = if tainted_signing_key {
+                warn!(" Going to cause some signing key trouble... ha ha ha");
+                let mut rng = StdRng::from_rng(thread_rng()).expect("Could not initialize rng");
+                SchnorrKeyPair::generate(&mut rng)
+            } else {
+                self.signing_key.clone()
+            };
+
+            let signature = signing_key.sign(hash.as_slice());
+
             MicroJustification::Micro(signature)
         };
 
@@ -216,7 +228,7 @@ impl BlockProducer {
             timestamp,
             round,
             extra_data,
-            &mut rand::thread_rng(),
+            &mut thread_rng(),
         )
     }
 
