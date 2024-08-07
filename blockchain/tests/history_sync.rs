@@ -13,6 +13,90 @@ use nimiq_test_utils::blockchain::{
 use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
 
+// Test that when we try to adopt an empty batch through history sync, while the preceding batch has transactions, reverting the history is not
+// necessary based on the history we already have locally. Part of pushing something through history sync is to find a common state
+// where we potentially should revert to. As the batch we are trying to push is empty, reverting to the last history transaction of the previous batch shouldn't happen.
+// No revert should occur at all, and the batch should be adopted immediately.
+#[test]
+fn history_sync_does_not_need_to_revert_when_pushing_empty_batch() {
+    let genesis_block_number = Policy::genesis_block_number();
+    let time1 = Arc::new(OffsetTime::new());
+    let env1 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+
+    let blockchain1 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env1,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time1,
+        )
+        .unwrap(),
+    ));
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    fill_micro_blocks_with_txns(&producer, &blockchain1, 1, 1);
+    produce_macro_blocks(&producer, &blockchain1, 1);
+
+    let macro_block1 = blockchain1
+        .upgradable_read()
+        .chain_store
+        .get_block_at(
+            genesis_block_number + Policy::blocks_per_batch(),
+            false,
+            None,
+        )
+        .unwrap();
+
+    assert!(macro_block1.is_macro());
+
+    let batch1_txns = blockchain1
+        .upgradable_read()
+        .history_store
+        .get_epoch_transactions(Policy::epoch_at(macro_block1.block_number()), None);
+
+    produce_macro_blocks(&producer, &blockchain1, 1);
+
+    let macro_block2 = blockchain1
+        .upgradable_read()
+        .chain_store
+        .get_block_at(
+            genesis_block_number + Policy::blocks_per_batch() * 2,
+            false,
+            None,
+        )
+        .unwrap();
+
+    assert!(macro_block2.is_macro());
+
+    let batch2_txns = blockchain1
+        .upgradable_read()
+        .history_store
+        .get_epoch_transactions_after(macro_block1.block_number(), None);
+
+    let time2 = Arc::new(OffsetTime::new());
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+
+    let blockchain2 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env2,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time2,
+        )
+        .unwrap(),
+    ));
+
+    assert_eq!(
+        Blockchain::push_history_sync(blockchain2.upgradable_read(), macro_block1, &batch1_txns,),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(
+        Blockchain::push_history_sync(blockchain2.upgradable_read(), macro_block2, &batch2_txns,),
+        Ok(PushResult::Extended)
+    );
+}
+
 // Tests if the basic history sync works. It will try to push a succession of election and checkpoint
 // blocks. It does test if election blocks can be pushed after checkpoint blocks and vice-versa. It
 // does NOT test if macro blocks can be pushed with micro blocks already in the blockchain.
