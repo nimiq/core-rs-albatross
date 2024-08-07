@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use nimiq_account::RevertInfo;
 use nimiq_block::{Block, BlockBody, BlockJustification, MacroBlock, MicroBlock};
 use nimiq_blockchain_interface::{BlockchainError, ChainInfo, Direction};
@@ -11,6 +13,9 @@ use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{policy::Policy, trie::trie_diff::TrieDiff};
 use nimiq_serde::{Deserialize, Serialize};
 use serde;
+
+use crate::history::interface::HistoryInterface;
+use crate::history_store_proxy::HistoryStoreProxy;
 
 /// HeaderlessBlock is the non-header content of a block except that
 /// to optimize micro blocks storage, transactions are not stored.
@@ -31,7 +36,12 @@ impl From<Block> for HeaderlessBlock {
 }
 
 impl HeaderlessBlock {
-    fn block_from_header(&self, block: &Block) -> Block {
+    fn block_from_header(
+        &self,
+        block: &Block,
+        history_store: &Arc<HistoryStoreProxy>,
+        txn: &MdbxReadTransaction,
+    ) -> Block {
         if let Some(justification) = &self.justification {
             assert!(block.ty() == justification.ty());
         }
@@ -53,7 +63,21 @@ impl HeaderlessBlock {
                     .justification
                     .as_ref()
                     .map(|justification| justification.clone().unwrap_micro()),
-                body: self.body.as_ref().map(|body| body.clone().unwrap_micro()),
+                body: self.body.as_ref().map(|body| {
+                    let mut full_micro_body = body.clone().unwrap_micro();
+                    full_micro_body.transactions = history_store
+                        .get_block_transactions(header_only_block.block_number(), Some(txn))
+                        .iter()
+                        .filter_map(|hist_txn| {
+                            if !hist_txn.is_not_basic() {
+                                Some(hist_txn.unwrap_basic().to_owned())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    full_micro_body
+                }),
             }),
         }
     }
@@ -99,10 +123,12 @@ pub struct ChainStore {
     revert_table: RevertTable,
     /// A database of accounts trie diffs for a block.
     accounts_diff_table: AccountsDiffTable,
+    /// A reference to the history store
+    history_store: Arc<HistoryStoreProxy>,
 }
 
 impl ChainStore {
-    pub fn new(db: MdbxDatabase) -> Self {
+    pub fn new(db: MdbxDatabase, history_store: Arc<HistoryStoreProxy>) -> Self {
         let chain_store = ChainStore {
             db,
             head_table: HeadTable,
@@ -111,6 +137,7 @@ impl ChainStore {
             height_idx: HeightIndex,
             revert_table: RevertTable,
             accounts_diff_table: AccountsDiffTable,
+            history_store,
         };
 
         chain_store.db.create_regular_table(&chain_store.head_table);
@@ -163,7 +190,8 @@ impl ChainStore {
 
         if include_body {
             if let Some(block) = txn.get(&self.block_table, &hash) {
-                chain_info.head = block.block_from_header(&chain_info.head);
+                chain_info.head =
+                    block.block_from_header(&chain_info.head, &self.history_store, &txn);
             } else {
                 warn!("Block body requested but not present");
             }
@@ -206,7 +234,8 @@ impl ChainStore {
 
         if include_body {
             if let Some(block) = txn.get(&self.block_table, &block_hash) {
-                chain_info.head = block.block_from_header(&chain_info.head);
+                chain_info.head =
+                    block.block_from_header(&chain_info.head, &self.history_store, &txn);
             } else {
                 warn!("Block body requested but not present");
             }
@@ -301,7 +330,7 @@ impl ChainStore {
             let headerless_block = txn
                 .get(&self.block_table, hash)
                 .ok_or(BlockchainError::BlockNotFound)?;
-            Ok(headerless_block.block_from_header(&chain_info.head))
+            Ok(headerless_block.block_from_header(&chain_info.head, &self.history_store, &txn))
         } else {
             Ok(chain_info.head)
         }

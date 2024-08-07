@@ -16,7 +16,7 @@ use nimiq_transaction::{
 use crate::HistoryTreeChunk;
 
 /// Defines several methods to interact with a history store.
-pub trait HistoryInterface {
+pub trait HistoryInterface: std::fmt::Debug {
     /// Adds all the transactions included in a given block into the history store.
     fn add_block(
         &self,
