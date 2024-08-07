@@ -31,6 +31,8 @@ pub struct TaintedBlockchainConfig {
     pub tainted_request_batch_set: bool,
     // Tainted request history chunk
     pub tainted_request_history_chunk: bool,
+    // Tainted request block
+    pub tainted_request_block: bool,
 }
 
 impl Default for TaintedBlockchainConfig {
@@ -44,6 +46,7 @@ impl Default for TaintedBlockchainConfig {
             tainted_request_macro_chain: false,
             tainted_request_batch_set: false,
             tainted_request_history_chunk: false,
+            tainted_request_block: false,
         }
     }
 }
