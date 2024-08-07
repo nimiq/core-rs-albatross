@@ -199,6 +199,9 @@ pub struct TaintedSettings {
     #[serde(default)]
     // Produce tainted macro chain responses
     pub tainted_request_batch_set: bool,
+    #[serde(default)]
+    // Produce tainted macro chain responses
+    pub tainted_request_history_chunk: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]

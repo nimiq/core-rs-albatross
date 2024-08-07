@@ -141,7 +141,16 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
     ) -> Result<BatchSetInfo, BatchSetError> {
         let blockchain = blockchain.read();
 
-        let block = match blockchain.get_block(&self.hash, true, None) {
+        let mut rng = thread_rng();
+        let tainted_config = blockchain.get_tainted_config();
+
+        let mut include_body = true;
+        if tainted_config.tainted_request_batch_set && rng.gen_bool(1.0 / 4.0) {
+            warn!(" Messing up the body inclusion.. ha ha ha");
+            include_body = false;
+        }
+
+        let block = match blockchain.get_block(&self.hash, include_body, None) {
             Ok(Block::Macro(block)) => block,
             Ok(Block::Micro(_)) => return Err(BatchSetError::MicroBlockGiven),
             Err(_) => return Err(BatchSetError::TargetHashNotFound),
@@ -154,12 +163,19 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
             let mut batch_sets = vec![];
             for macro_hash in macro_hashes {
                 let macro_block = blockchain
-                    .get_block(&macro_hash, true, None)
+                    .get_block(&macro_hash, include_body, None)
                     .expect("Macro block must exist since it can't be pruned");
+
+                let mut block_number = block.block_number();
+
+                if tainted_config.tainted_request_batch_set && rng.gen_bool(1.0 / 4.0) {
+                    warn!(" Messing up the block number in prove num leaves 1.. ha ha ha");
+                    block_number = block.block_number() - 10;
+                }
 
                 let history_len = blockchain
                     .history_store
-                    .prove_num_leaves(macro_block.block_number(), None)
+                    .prove_num_leaves(block_number, None)
                     .expect("Failed to prove history size");
 
                 let batch_set = BatchSet {
@@ -170,9 +186,16 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
             }
             batch_sets
         } else {
+            let mut block_number = block.block_number();
+
+            if tainted_config.tainted_request_batch_set && rng.gen_bool(1.0 / 4.0) {
+                warn!(" Messing up the block number in prove num leaves 2.. ha ha ha");
+                block_number = block.block_number() - 10;
+            }
+
             let history_len = blockchain
                 .history_store
-                .prove_num_leaves(block.block_number(), None)
+                .prove_num_leaves(block_number, None)
                 .expect("Failed to prove history size");
 
             let batch_set = BatchSet {
@@ -189,10 +212,18 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
             None
         };
 
-        Ok(BatchSetInfo {
-            election_macro_block,
-            batch_sets,
-        })
+        if tainted_config.tainted_request_batch_set && rng.gen_bool(1.0 / 4.0) {
+            warn!(" Messing up the batch set response .. ha ha ha");
+            Ok(BatchSetInfo {
+                election_macro_block: None,
+                batch_sets,
+            })
+        } else {
+            Ok(BatchSetInfo {
+                election_macro_block,
+                batch_sets,
+            })
+        }
     }
 }
 
@@ -203,11 +234,39 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
         _peer_id: N::PeerId,
         blockchain: &Arc<RwLock<Blockchain>>,
     ) -> Result<HistoryChunk, HistoryChunkError> {
-        if let Some(chunk) = blockchain.read().history_store.prove_chunk(
-            self.epoch_number,
-            self.block_number,
+        let blockchain = blockchain.read();
+        let mut rng = thread_rng();
+        let tainted_config = blockchain.get_tainted_config();
+
+        let epoch_number =
+            if tainted_config.tainted_request_history_chunk && rng.gen_bool(1.0 / 3.0) {
+                warn!(" Messing up the history chunk epoch number.. ha ha ha");
+                self.epoch_number - 1
+            } else {
+                self.epoch_number
+            };
+
+        let block_number =
+            if tainted_config.tainted_request_history_chunk && rng.gen_bool(1.0 / 3.0) {
+                warn!(" Messing up the history chunk block number.. ha ha ha");
+                self.block_number - 10
+            } else {
+                self.block_number
+            };
+
+        let chunk_index = if tainted_config.tainted_request_history_chunk && rng.gen_bool(1.0 / 3.0)
+        {
+            warn!(" Messing up the history chunk index.. ha ha ha");
+            self.chunk_index + 10
+        } else {
+            self.chunk_index
+        };
+
+        if let Some(chunk) = blockchain.history_store.prove_chunk(
+            epoch_number,
+            block_number,
             CHUNK_SIZE,
-            self.chunk_index as usize,
+            chunk_index as usize,
             None,
         ) {
             Ok(HistoryChunk { chunk })

@@ -352,6 +352,7 @@ impl ClientInner {
             tainted_signing_key: config.tainted.tainted_signing_key,
             tainted_request_macro_chain: config.tainted.tainted_request_macro_chain,
             tainted_request_batch_set: config.tainted.tainted_request_batch_set,
+            tainted_request_history_chunk: config.tainted.tainted_request_history_chunk,
         };
 
         #[cfg(feature = "full-consensus")]
