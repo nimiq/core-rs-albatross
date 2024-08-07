@@ -187,6 +187,18 @@ pub struct TaintedSettings {
     #[serde(default)]
     // Produce invalid blocks
     pub invalid_blocks: bool,
+    #[serde(default)]
+    // Tainted validator voting key
+    pub tainted_voting_key: bool,
+    #[serde(default)]
+    // Tainted validator signing key
+    pub tainted_signing_key: bool,
+    #[serde(default)]
+    // Produce tainted macro chain responses
+    pub tainted_request_macro_chain: bool,
+    #[serde(default)]
+    // Produce tainted macro chain responses
+    pub tainted_request_batch_set: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]

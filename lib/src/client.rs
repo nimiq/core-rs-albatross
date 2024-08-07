@@ -3,7 +3,7 @@ use std::{fs, num::NonZeroU8, sync::Arc};
 use nimiq_block::Block;
 #[cfg(feature = "full-consensus")]
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
-use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_blockchain_interface::{AbstractBlockchain, TaintedBlockchainConfig};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_consensus::{
@@ -344,9 +344,20 @@ impl ClientInner {
             Policy::BLS_CACHE_MAX_CAPACITY,
         )));
 
+        let tainted_config = TaintedBlockchainConfig {
+            always_produce: config.tainted.always_produce,
+            fork_blocks: config.tainted.fork_blocks,
+            invalid_blocks: config.tainted.invalid_blocks,
+            tainted_voting_key: config.tainted.tainted_voting_key,
+            tainted_signing_key: config.tainted.tainted_signing_key,
+            tainted_request_macro_chain: config.tainted.tainted_request_macro_chain,
+            tainted_request_batch_set: config.tainted.tainted_request_batch_set,
+        };
+
         #[cfg(feature = "full-consensus")]
         let mut blockchain_config = BlockchainConfig {
             max_epochs_stored: config.consensus.max_epochs_stored,
+            tainted_blockchain: tainted_config,
             ..Default::default()
         };
 
