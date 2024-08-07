@@ -1,4 +1,4 @@
-use nimiq_account::BlockState;
+use nimiq_account::{Account, AccountsError, BlockState};
 use nimiq_block::{
     EquivocationProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader,
     MicroJustification, SkipBlockInfo, SkipBlockProof,
@@ -8,7 +8,7 @@ use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::{mdbx::MdbxReadTransaction as DBTransaction, traits::WriteTransaction};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_keys::KeyPair as SchnorrKeyPair;
-use nimiq_primitives::{account::AccountError, policy::Policy};
+use nimiq_primitives::policy::Policy;
 use nimiq_transaction::{
     historic_transaction::HistoricTransaction, inherent::Inherent, Transaction,
 };
@@ -19,12 +19,35 @@ use crate::{interface::HistoryInterface, Blockchain};
 
 #[derive(Debug, Error)]
 pub enum BlockProducerError {
-    #[error("Failed to commit accounts: {0}")]
-    AccountError(#[from] AccountError),
+    #[error("Failed to commit: error={0}, account={1:?}, transactions={2:?}, inherents={3:?}")]
+    AccountsError(AccountsError, Account, Vec<Transaction>, Vec<Inherent>),
     #[error("Failed to add to history")]
     HistoryError,
     #[error("Accounts are incomplete")]
     AccountsIncomplete,
+}
+
+impl BlockProducerError {
+    fn accounts_error(
+        blockchain: &Blockchain,
+        error: AccountsError,
+        transactions: Vec<Transaction>,
+        inherents: Vec<Inherent>,
+    ) -> Self {
+        let Some(account) = (match &error {
+            AccountsError::InvalidTransaction(_, transaction) => {
+                blockchain.get_account_if_complete(&transaction.sender)
+            }
+            AccountsError::InvalidInherent(_, inherent) => {
+                blockchain.get_account_if_complete(inherent.target())
+            }
+            AccountsError::InvalidDiff(_) => unreachable!(),
+        }) else {
+            return BlockProducerError::AccountsIncomplete;
+        };
+
+        BlockProducerError::AccountsError(error, account, transactions, inherents)
+    }
 }
 
 /// Struct that contains all necessary information to actually produce blocks.
@@ -140,7 +163,15 @@ impl BlockProducer {
         let (state_root, diff_root, executed_txns) = blockchain
             .state
             .accounts
-            .exercise_transactions(&transactions, &inherents, &block_state)?;
+            .exercise_transactions(&transactions, &inherents, &block_state)
+            .map_err(|error| {
+                BlockProducerError::accounts_error(
+                    blockchain,
+                    error,
+                    transactions,
+                    inherents.clone(),
+                )
+            })?;
 
         // Calculate the historic transactions from the transactions and the inherents.
         let hist_txs = HistoricTransaction::from(
@@ -331,11 +362,13 @@ impl BlockProducer {
 
         // Update the state and add the state root to the header.
         let block_state = BlockState::new(block_number, timestamp);
-        let (state_root, diff_root, _) =
-            blockchain
-                .state
-                .accounts
-                .exercise_transactions(&[], &inherents, &block_state)?;
+        let (state_root, diff_root, _) = blockchain
+            .state
+            .accounts
+            .exercise_transactions(&[], &inherents, &block_state)
+            .map_err(|error| {
+                BlockProducerError::accounts_error(blockchain, error, vec![], inherents.clone())
+            })?;
 
         macro_block.header.state_root = state_root;
         macro_block.header.diff_root = diff_root;

@@ -27,7 +27,6 @@ pub enum AccountType {
     Vesting = 1,
     HTLC = 2,
     Staking = 3,
-    // HistoricTransaction = 0xff,
 }
 
 impl fmt::Display for AccountType {

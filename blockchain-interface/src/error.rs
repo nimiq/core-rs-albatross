@@ -1,3 +1,4 @@
+use nimiq_account::AccountsError;
 use nimiq_block::{Block, BlockError, EquivocationProofError, ForkProof};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{account::AccountError, networks::NetworkId};
@@ -74,8 +75,8 @@ pub enum PushError {
     DuplicateTransaction,
     #[error("Equivocation proof: {0}")]
     InvalidEquivocationProof(#[from] EquivocationProofError),
-    #[error("Account error: {0}")]
-    AccountsError(#[from] AccountError),
+    #[error("Accounts error: {0}")]
+    AccountsError(#[from] AccountsError),
     #[error("Invalid fork")]
     InvalidFork,
     #[error("Blockchain error: {0}")]

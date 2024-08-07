@@ -27,6 +27,7 @@ serde = "1.0"
 thiserror = "1.0"
 tokio-stream = { version = "0.1", features = ["sync"] }
 
+nimiq-account = { workspace = true, features = [] }
 nimiq-block = { workspace = true }
 nimiq-collections = { workspace = true }
 nimiq-database-value = { workspace = true }

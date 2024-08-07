@@ -3661,6 +3661,7 @@ name = "nimiq-blockchain-interface"
 version = "0.24.0"
 dependencies = [
  "futures-util",
+ "nimiq-account",
  "nimiq-block",
  "nimiq-collections",
  "nimiq-database-value",

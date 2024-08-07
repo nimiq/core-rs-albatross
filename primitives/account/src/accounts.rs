@@ -23,9 +23,9 @@ use nimiq_trie::{trie::MerkleRadixTrie, WriteTransactionProxy};
 
 use crate::{
     Account, AccountInherentInteraction, AccountPruningInteraction, AccountReceipt,
-    AccountTransactionInteraction, BlockLogger, BlockState, DataStore, InherentLogger,
-    InherentOperationReceipt, OperationReceipt, Receipts, ReservedBalance, RevertInfo,
-    TransactionLog, TransactionOperationReceipt, TransactionReceipt,
+    AccountTransactionInteraction, AccountsError, BlockLogger, BlockState, DataStore,
+    InherentLogger, InherentOperationReceipt, OperationReceipt, Receipts, ReservedBalance,
+    RevertInfo, TransactionLog, TransactionOperationReceipt, TransactionReceipt,
 };
 
 declare_table!(AccountsTrieTable, "AccountsTrie", KeyNibbles => TrieNode);
@@ -269,7 +269,7 @@ impl Accounts {
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_state: &BlockState,
-    ) -> Result<(Blake2bHash, Blake2bHash, Vec<ExecutedTransaction>), AccountError> {
+    ) -> Result<(Blake2bHash, Blake2bHash, Vec<ExecutedTransaction>), AccountsError> {
         let mut raw_txn = self.env.write_transaction();
         let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
         assert!(self.is_complete(Some(&txn)), "Tree must be complete");
@@ -310,7 +310,7 @@ impl Accounts {
         inherents: &[Inherent],
         block_state: &BlockState,
         block_logger: &mut BlockLogger,
-    ) -> Result<Receipts, AccountError> {
+    ) -> Result<Receipts, AccountsError> {
         let receipts =
             self.commit_batch(txn, transactions, inherents, block_state, block_logger)?;
         self.tree.update_root(txn).expect("Tree must be complete");
@@ -321,7 +321,7 @@ impl Accounts {
         &self,
         txn: &mut WriteTransactionProxy,
         diff: TrieDiff,
-    ) -> Result<RevertTrieDiff, AccountError> {
+    ) -> Result<RevertTrieDiff, AccountsError> {
         let diff = self.tree.apply_diff(txn, diff)?;
         self.tree.update_root(txn).ok();
         Ok(diff)
@@ -334,27 +334,31 @@ impl Accounts {
         inherents: &[Inherent],
         block_state: &BlockState,
         block_logger: &mut BlockLogger,
-    ) -> Result<Receipts, AccountError> {
+    ) -> Result<Receipts, AccountsError> {
         assert!(self.is_complete(Some(txn)), "Tree must be complete");
         let mut receipts = Receipts::default();
 
         for transaction in transactions {
-            let receipt = self.commit_transaction(
-                txn,
-                transaction,
-                block_state,
-                block_logger.new_tx_log(transaction.hash()),
-            )?;
+            let receipt = self
+                .commit_transaction(
+                    txn,
+                    transaction,
+                    block_state,
+                    block_logger.new_tx_log(transaction.hash()),
+                )
+                .map_err(|error| AccountsError::InvalidTransaction(error, transaction.clone()))?;
             receipts.transactions.push(receipt);
         }
 
         for inherent in inherents {
-            let receipt = self.commit_inherent(
-                txn,
-                inherent,
-                block_state,
-                &mut block_logger.inherent_logger(),
-            )?;
+            let receipt = self
+                .commit_inherent(
+                    txn,
+                    inherent,
+                    block_state,
+                    &mut block_logger.inherent_logger(),
+                )
+                .map_err(|error| AccountsError::InvalidInherent(error, inherent.clone()))?;
             receipts.inherents.push(receipt);
         }
 
@@ -560,7 +564,7 @@ impl Accounts {
         block_state: &BlockState,
         revert_info: RevertInfo,
         block_logger: &mut BlockLogger,
-    ) -> Result<(), AccountError> {
+    ) -> Result<(), AccountsError> {
         match revert_info {
             RevertInfo::Receipts(receipts) => {
                 self.revert_batch(
@@ -584,7 +588,7 @@ impl Accounts {
         &self,
         txn: &mut WriteTransactionProxy,
         diff: RevertTrieDiff,
-    ) -> Result<(), AccountError> {
+    ) -> Result<(), AccountsError> {
         self.tree.revert_diff(txn, diff)?;
         Ok(())
     }
@@ -597,7 +601,7 @@ impl Accounts {
         block_state: &BlockState,
         receipts: Receipts,
         block_logger: &mut BlockLogger,
-    ) -> Result<(), AccountError> {
+    ) -> Result<(), AccountsError> {
         // Revert inherents in reverse order.
         assert_eq!(inherents.len(), receipts.inherents.len());
         let iter = inherents.iter().zip(receipts.inherents).rev();
@@ -608,7 +612,8 @@ impl Accounts {
                 block_state,
                 receipt,
                 &mut block_logger.inherent_logger(),
-            )?;
+            )
+            .map_err(|error| AccountsError::InvalidInherent(error, inherent.clone()))?;
         }
 
         // Revert transactions in reverse order.
@@ -621,7 +626,8 @@ impl Accounts {
                 block_state,
                 receipt,
                 block_logger.new_tx_log(transaction.hash()),
-            )?;
+            )
+            .map_err(|error| AccountsError::InvalidTransaction(error, transaction.clone()))?;
         }
 
         Ok(())
