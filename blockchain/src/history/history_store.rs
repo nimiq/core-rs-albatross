@@ -48,6 +48,7 @@ declare_table!(LastLeafTable, "LastLeafIndexesByBlock", u32 => u32);
 /// are representations of transactions).
 /// The history trees allow a node in possession of a transaction to prove to another node (that
 /// only has macro block headers) that that given transaction happened.
+#[derive(Debug)]
 pub struct HistoryStore {
     /// Database handle.
     db: MdbxDatabase,

@@ -32,6 +32,7 @@ declare_table!(TxHashTable, "LeafIndexByTxHash", RawTransactionHash => EpochBase
 // `Address` -> `EpochBasedIndex` -> `Blake2bHash`
 declare_table!(AddressTable, "TxHashesByAddress", Address => EpochBasedIndex => Blake2bHash);
 
+#[derive(Debug)]
 /// A struct that contains databases to store history indices.
 pub struct HistoryStoreIndex {
     /// Database handle.
