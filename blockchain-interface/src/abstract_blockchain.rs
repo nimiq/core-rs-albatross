@@ -25,8 +25,10 @@ pub struct TaintedBlockchainConfig {
     pub tainted_voting_key: bool,
     // Tainted signing key
     pub tainted_signing_key: bool,
-    // Tainted signing key
+    // Tainted request macro chain
     pub tainted_request_macro_chain: bool,
+    // Tainted request batch set
+    pub tainted_request_batch_set: bool,
 }
 
 impl Default for TaintedBlockchainConfig {
@@ -38,6 +40,7 @@ impl Default for TaintedBlockchainConfig {
             tainted_voting_key: false,
             tainted_signing_key: false,
             tainted_request_macro_chain: false,
+            tainted_request_batch_set: false,
         }
     }
 }
