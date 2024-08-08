@@ -548,18 +548,24 @@ impl<N: Network> Stream for StateQueue<N> {
         loop {
             match self.chunk_request_component.poll_next_unpin(cx) {
                 Poll::Ready(Some((chunk, start_key, peer_id))) => {
-                    let key = u32::from_str_radix(&format!("{}00000000", start_key)[..8], 16)
-                        .unwrap_or(0);
+                    // We throw away the remaining incoming chunks if we are complete.
+                    // This avoids breaking the state sync invariant new block + no diffs, then no chunks.
+                    if !self.start_key.is_complete() {
+                        let key = u32::from_str_radix(&format!("{}00000000", start_key)[..8], 16)
+                            .unwrap_or(0);
 
-                    let percentage = (key as f32 / u32::MAX as f32) * 100.0;
-                    log::info!(
-                        ?start_key,
-                        "Received state sync chunk, ~{:.2}% complete",
-                        percentage,
-                    );
+                        let percentage = (key as f32 / u32::MAX as f32) * 100.0;
+                        log::info!(
+                            ?start_key,
+                            "Received state sync chunk, ~{:.2}% complete",
+                            percentage,
+                        );
 
-                    if let Some(state_chunks) = self.on_chunk_received(chunk, start_key, peer_id) {
-                        return Poll::Ready(Some(state_chunks));
+                        if let Some(state_chunks) =
+                            self.on_chunk_received(chunk, start_key, peer_id)
+                        {
+                            return Poll::Ready(Some(state_chunks));
+                        }
                     }
                 }
                 // If the chunk stream is exhausted, we quit as well.
