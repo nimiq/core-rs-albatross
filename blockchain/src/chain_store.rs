@@ -48,7 +48,7 @@ impl HeaderlessBlock {
         if let Some(body) = &self.body {
             assert!(block.ty() == body.ty());
         }
-        match block {
+        let block_to_return = match block {
             Block::Macro(header_only_block) => Block::Macro(MacroBlock {
                 header: header_only_block.header.clone(),
                 justification: self
@@ -79,7 +79,9 @@ impl HeaderlessBlock {
                     full_micro_body
                 }),
             }),
-        }
+        };
+        assert!(block_to_return.verify(block.network()).is_ok());
+        block_to_return
     }
 
     fn serialize_body<S>(body: &Option<BlockBody>, serializer: S) -> Result<S::Ok, S::Error>
