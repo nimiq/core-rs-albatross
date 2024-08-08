@@ -283,7 +283,31 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestBlock {
         blockchain: &BlockchainProxy,
     ) -> Result<Block, BlockError> {
         let blockchain = blockchain.read();
-        if let Ok(block) = blockchain.get_block(&self.hash, self.include_micro_bodies) {
+
+        let mut rng = thread_rng();
+        let tainted_config = blockchain.get_tainted_config();
+
+        // Lets return a different block than the one that is requested
+        let hash = if tainted_config.tainted_request_history_chunk && rng.gen_bool(1.0 / 2.0) {
+            if let Ok(block) = blockchain.get_block(&self.hash, false) {
+                warn!(" Messing up the block request response.... ha ha ha");
+                block.parent_hash().clone()
+            } else {
+                return Err(BlockError::TargetHashNotFound);
+            }
+        } else {
+            self.hash.clone()
+        };
+
+        // We can also mess the include bodies flag.. because why not?
+        let mut include_micro_bodies = self.include_micro_bodies;
+
+        if tainted_config.tainted_request_history_chunk && rng.gen_bool(1.0 / 3.0) {
+            warn!(" Messing up the include micro bodies flag... bua ha ha ha");
+            include_micro_bodies = !include_micro_bodies;
+        }
+
+        if let Ok(block) = blockchain.get_block(&hash, include_micro_bodies) {
             // Macro bodies are always needed, do we have it already?
             let block = if block.is_macro() && !self.include_micro_bodies {
                 match blockchain.get_block(&self.hash, true) {
