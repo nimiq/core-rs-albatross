@@ -1404,6 +1404,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_more"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a9b99b9cbbe49445b21764dc0625032a89b145a2642e67603e1c936f5458d05"
+dependencies = [
+ "derive_more-impl",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.72",
+ "unicode-xid",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2719,7 +2740,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4693531e6e24c92e6ac110a52ce45a0f6b4aa61f7b8d6a4127dde411e597a927"
 dependencies = [
  "bitflags 2.6.0",
- "derive_more",
+ "derive_more 0.99.18",
  "indexmap 2.2.6",
  "libc",
  "mdbx-sys",
@@ -4270,7 +4291,7 @@ name = "nimiq-network-mock"
 version = "0.23.0"
 dependencies = [
  "async-trait",
- "derive_more",
+ "derive_more 1.0.0",
  "futures-util",
  "nimiq-keys",
  "nimiq-network-interface",
@@ -7390,6 +7411,12 @@ name = "unicode-segmentation"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4c87d22b6e3f4a18d4d40ef354e97c90fcb14dd91d7dc0aa9d8a1172ebf7202"
+
+[[package]]
+name = "unicode-xid"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f962df74c8c05a667b5ee8bcf162993134c104e96440b663c8daa176dc772d8c"
 
 [[package]]
 name = "universal-hash"
