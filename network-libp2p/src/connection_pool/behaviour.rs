@@ -11,7 +11,7 @@ use futures::{future::BoxFuture, Future, FutureExt, StreamExt};
 use instant::Instant;
 use ip_network::IpNetwork;
 use libp2p::{
-    core::{multiaddr::Protocol, ConnectedPoint, Endpoint},
+    core::{multiaddr::Protocol, transport::PortUse, ConnectedPoint, Endpoint},
     swarm::{
         behaviour::{ConnectionClosed, ConnectionEstablished, DialFailure},
         dial_opts::{DialOpts, PeerCondition},
@@ -965,6 +965,7 @@ impl NetworkBehaviour for Behaviour {
         _peer: PeerId,
         _addr: &Multiaddr,
         _role_override: Endpoint,
+        _port_use: PortUse,
     ) -> Result<THandler<Self>, ConnectionDenied> {
         Ok(dummy::ConnectionHandler)
     }

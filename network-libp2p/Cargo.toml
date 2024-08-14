@@ -57,7 +57,7 @@ nimiq-utils = { workspace = true, features = [
 nimiq-validator-network = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-libp2p = { version = "0.53.2", default-features = false, features = [
+libp2p = { version = "0.54", default-features = false, features = [
     "autonat",
     "gossipsub",
     "kad",
@@ -71,7 +71,7 @@ libp2p = { version = "0.53.2", default-features = false, features = [
 ] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-libp2p = { version = "0.53.2", default-features = false, features = [
+libp2p = { version = "0.54", default-features = false, features = [
     "autonat",
     "gossipsub",
     "kad",

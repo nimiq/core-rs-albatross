@@ -7,7 +7,7 @@ use std::{
 
 use futures::StreamExt;
 use libp2p::{
-    core::Endpoint,
+    core::{transport::PortUse, Endpoint},
     identity::Keypair,
     swarm::{
         behaviour::{ConnectionClosed, ConnectionEstablished},
@@ -186,6 +186,7 @@ impl NetworkBehaviour for Behaviour {
         peer: PeerId,
         addr: &Multiaddr,
         _role_override: Endpoint,
+        _port_use: PortUse,
     ) -> Result<Handler, ConnectionDenied> {
         Ok(Handler::new(
             peer,

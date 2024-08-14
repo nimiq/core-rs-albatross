@@ -71,8 +71,7 @@ impl Config {
             .build()
             .expect("Invalid Gossipsub config");
 
-        let mut kademlia = kad::Config::default();
-        kademlia.set_protocol_names(std::iter::once(StreamProtocol::new(DHT_PROTOCOL)).collect());
+        let mut kademlia = kad::Config::new(StreamProtocol::new(DHT_PROTOCOL));
         kademlia.set_kbucket_inserts(kad::BucketInserts::OnConnected);
         kademlia.set_record_ttl(Some(Duration::from_secs(2 * 60 * 60))); // 2h
         kademlia.set_publication_interval(Some(Duration::from_secs(10 * 60))); // 10 min
