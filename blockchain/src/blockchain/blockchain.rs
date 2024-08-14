@@ -340,7 +340,7 @@ impl Blockchain {
         accounts.init(&mut (&mut txn).into(), genesis_accounts);
 
         // Store genesis block.
-        chain_store.put_chain_info(&mut txn, &head_hash, &main_chain, true);
+        chain_store.put_chain_info(&mut txn, &head_hash, &main_chain, true, true);
         chain_store.set_head(&mut txn, &head_hash);
         txn.commit();
 

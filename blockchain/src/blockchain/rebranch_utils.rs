@@ -225,14 +225,19 @@ impl Blockchain {
             reverted_block.1.on_main_chain = false;
             reverted_block.1.main_chain_successor = None;
 
-            self.chain_store
-                .put_chain_info(write_txn, &reverted_block.0, &reverted_block.1, false);
+            self.chain_store.put_chain_info(
+                write_txn,
+                &reverted_block.0,
+                &reverted_block.1,
+                false,
+                true,
+            );
         }
 
         // Update the main_chain_successor of the common ancestor block.
         ancestor.1.main_chain_successor = Some(target_chain.last().unwrap().0.clone());
         self.chain_store
-            .put_chain_info(write_txn, &ancestor.0, &ancestor.1, false);
+            .put_chain_info(write_txn, &ancestor.0, &ancestor.1, false, true);
 
         // Set on_main_chain flag / main_chain_successor on the fork.
         for i in (0..target_chain.len()).rev() {
@@ -248,7 +253,7 @@ impl Blockchain {
 
             // Include the body of the new block (at position 0).
             self.chain_store
-                .put_chain_info(write_txn, &fork_block.0, &fork_block.1, i == 0);
+                .put_chain_info(write_txn, &fork_block.0, &fork_block.1, i == 0, true);
         }
 
         // Update the head.

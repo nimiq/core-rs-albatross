@@ -17,30 +17,32 @@ use crate::{history::interface::HistoryInterface, history_store_proxy::HistorySt
 
 declare_table!(HeadTable, "Head", () => Blake2bHash);
 declare_table!(ChainTable, "ChainData", Blake2bHash => ChainInfo);
-declare_table!(BlockTable, "Block", Blake2bHash => HeaderlessBlock);
+declare_table!(PushedBlockTable, "PushedBlockTable", Blake2bHash => PushedBlock);
+declare_table!(StoredBlockTable, "StoredBlockTable", Blake2bHash => Block);
 declare_table!(HeightIndex, "HeightIndex", u32 => dup(Blake2bHash));
 declare_table!(RevertTable, "Receipts", u32 => RevertInfo);
 declare_table!(AccountsDiffTable, "AccountsDiff", Blake2bHash => TrieDiff);
 
 /// The non-header content of a block except that micro block transactions are not
-/// stored to optimize micro blocks storage.
+/// stored to optimize micro blocks storage. This assumes that a block has been pushed
+/// and that there is history associated with this block.
 #[derive(Debug, Serialize, Deserialize, DbSerializable)]
-pub struct HeaderlessBlock {
+pub struct PushedBlock {
     justification: Option<BlockJustification>,
-    #[serde(serialize_with = "HeaderlessBlock::serialize_body")]
+    #[serde(serialize_with = "PushedBlock::serialize_body")]
     body: Option<BlockBody>,
 }
 
-impl From<Block> for HeaderlessBlock {
+impl From<Block> for PushedBlock {
     fn from(block: Block) -> Self {
-        HeaderlessBlock {
+        PushedBlock {
             justification: block.justification(),
             body: block.body(),
         }
     }
 }
 
-impl HeaderlessBlock {
+impl PushedBlock {
     fn block_from_header(
         &self,
         block: &Block,
@@ -116,8 +118,10 @@ pub struct ChainStore {
     head_table: HeadTable,
     /// A database of chain infos (it excludes the block body) indexed by their block hashes.
     chain_table: ChainTable,
-    /// A database of block bodies indexed by their block hashes.
-    block_table: BlockTable,
+    /// A database of block justification and bodies indexed by their block hashes.
+    pushed_block_table: PushedBlockTable,
+    /// A database of blocks indexed by their block hashes.
+    stored_block_table: StoredBlockTable,
     /// A database of block hashes indexed by their block number.
     height_idx: HeightIndex,
     /// A database of revert infos indexed by their corresponding block hashes.
@@ -134,7 +138,8 @@ impl ChainStore {
             db,
             head_table: HeadTable,
             chain_table: ChainTable,
-            block_table: BlockTable,
+            pushed_block_table: PushedBlockTable,
+            stored_block_table: StoredBlockTable,
             height_idx: HeightIndex,
             revert_table: RevertTable,
             accounts_diff_table: AccountsDiffTable,
@@ -147,7 +152,10 @@ impl ChainStore {
             .create_regular_table(&chain_store.chain_table);
         chain_store
             .db
-            .create_regular_table(&chain_store.block_table);
+            .create_regular_table(&chain_store.pushed_block_table);
+        chain_store
+            .db
+            .create_regular_table(&chain_store.stored_block_table);
         chain_store.db.create_dup_table(&chain_store.height_idx);
         chain_store
             .db
@@ -161,7 +169,8 @@ impl ChainStore {
 
     pub fn clear(&self, txn: &mut MdbxWriteTransaction) {
         txn.clear_table(&self.chain_table);
-        txn.clear_table(&self.block_table);
+        txn.clear_table(&self.pushed_block_table);
+        txn.clear_table(&self.stored_block_table);
         txn.clear_table(&self.height_idx);
         txn.clear_table(&self.revert_table);
         txn.clear_table(&self.accounts_diff_table);
@@ -190,7 +199,10 @@ impl ChainStore {
         };
 
         if include_body {
-            if let Some(block) = txn.get(&self.block_table, hash) {
+            // Check the stored block table, then the pushed block table
+            if let Some(full_block) = txn.get(&self.stored_block_table, hash) {
+                chain_info.head = full_block
+            } else if let Some(block) = txn.get(&self.pushed_block_table, hash) {
                 chain_info.head =
                     block.block_from_header(&chain_info.head, &self.history_store, &txn);
             } else {
@@ -234,7 +246,10 @@ impl ChainStore {
         let block_hash = block_hash.unwrap();
 
         if include_body {
-            if let Some(block) = txn.get(&self.block_table, &block_hash) {
+            // Check the stored block table, then the pushed block table
+            if let Some(full_block) = txn.get(&self.stored_block_table, &block_hash) {
+                chain_info.head = full_block
+            } else if let Some(block) = txn.get(&self.pushed_block_table, &block_hash) {
                 chain_info.head =
                     block.block_from_header(&chain_info.head, &self.history_store, &txn);
             } else {
@@ -251,6 +266,7 @@ impl ChainStore {
         hash: &Blake2bHash,
         chain_info: &ChainInfo,
         include_body: bool,
+        is_block_pushed: bool,
     ) {
         // Store chain data. Block body will not be persisted because the serialization of ChainInfo
         // ignores the block body.
@@ -258,11 +274,15 @@ impl ChainStore {
 
         // Store body if requested.
         if include_body {
-            txn.put_reserve(
-                &self.block_table,
-                hash,
-                &HeaderlessBlock::from(chain_info.head.clone()),
-            );
+            if is_block_pushed {
+                txn.put_reserve(
+                    &self.pushed_block_table,
+                    hash,
+                    &PushedBlock::from(chain_info.head.clone()),
+                );
+            } else {
+                txn.put_reserve(&self.stored_block_table, hash, &chain_info.head);
+            }
         }
 
         // Add to height index.
@@ -311,7 +331,8 @@ impl ChainStore {
         height: u32,
     ) {
         txn.remove(&self.chain_table, hash);
-        txn.remove(&self.block_table, hash);
+        txn.remove(&self.pushed_block_table, hash);
+        txn.remove(&self.stored_block_table, hash);
         txn.remove_item(&self.height_idx, &height, hash);
     }
 
@@ -328,10 +349,15 @@ impl ChainStore {
             .ok_or(BlockchainError::BlockNotFound)?;
 
         if include_body {
-            let headerless_block = txn
-                .get(&self.block_table, hash)
-                .ok_or(BlockchainError::BlockNotFound)?;
-            Ok(headerless_block.block_from_header(&chain_info.head, &self.history_store, &txn))
+            // Check first the store blocks table since it is smaller then the pushed blocks table
+            if let Some(full_block) = txn.get(&self.stored_block_table, hash) {
+                Ok(full_block)
+            } else {
+                let headerless_block = txn
+                    .get(&self.pushed_block_table, hash)
+                    .ok_or(BlockchainError::BlockNotFound)?;
+                Ok(headerless_block.block_from_header(&chain_info.head, &self.history_store, &txn))
+            }
         } else {
             Ok(chain_info.head)
         }
@@ -597,13 +623,31 @@ impl ChainStore {
                 // Then we need to keep the previous macro block
                 if chain_info.prunable {
                     txn.remove(&self.chain_table, &hash);
-                    txn.remove(&self.block_table, &hash);
+                    txn.remove(&self.pushed_block_table, &hash);
                     txn.remove_item(&self.height_idx, &height, &hash);
                 }
             }
         }
+
+        // Clear the stored block table since epoch is finalized
+        txn.clear_table(&self.stored_block_table);
     }
 
+    /// Finalizes a batch by removing blocks that were only stored
+    pub fn finalize_batch(&self, txn: &mut MdbxWriteTransaction) {
+        let mut cursor = WriteTransaction::cursor(txn, &self.stored_block_table);
+        let mut pos: Option<(Blake2bHash, Block)> = cursor.first();
+
+        // Remove the item first from the height index table
+        while let Some((hash, block)) = pos {
+            txn.remove_item(&self.height_idx, &block.block_number(), &hash);
+            pos = cursor.next();
+        }
+        // Then clear the stored block table
+        txn.clear_table(&self.stored_block_table);
+    }
+
+    /// Puts a revert info for a block height
     pub fn put_revert_info(
         &self,
         txn: &mut MdbxWriteTransaction,
@@ -613,6 +657,7 @@ impl ChainStore {
         txn.put_reserve(&self.revert_table, &block_height, receipts);
     }
 
+    /// Gets the revert info for a particular block height
     pub fn get_revert_info(
         &self,
         block_height: u32,
