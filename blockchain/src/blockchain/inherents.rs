@@ -99,6 +99,12 @@ impl Blockchain {
             offense_event_block: equivocation_proof.block_number(),
         };
 
+        log::info!(
+            address = %equivocation_proof.validator_address().clone(),
+            block = equivocation_proof.block_number(),
+            "Jailing a validator from an equivocation proof"
+        );
+
         // Create the corresponding jail inherent.
         Inherent::Jail {
             jailed_validator,
