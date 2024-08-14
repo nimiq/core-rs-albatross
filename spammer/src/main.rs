@@ -541,7 +541,7 @@ fn generate_basic_transactions(
                     block_number: current_block_number,
                 });
             } else {
-                // We are already at the maximum of the sender accounts that we can mantain
+                // We are already at the maximum of the sender accounts that we can maintain
                 continue;
             }
         }

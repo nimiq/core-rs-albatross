@@ -119,7 +119,7 @@ impl ValidityStore {
         db_txn.remove(&self.block_txns, &block_number);
     }
 
-    /// Prunes the validity store keeping only 'validity_window_blocks'
+    /// Prunes the validity store keeping only `validity_window_blocks + blocks_per_batch` blocks
     pub(crate) fn prune_validity_store(&self, db_txn: &mut MdbxWriteTransaction) {
         // Compute the number of blocks we currently have in the store
         let first_bn = self.first_bn(db_txn);
@@ -139,7 +139,7 @@ impl ValidityStore {
             "Pruning the validity store"
         );
 
-        // We need to keep at least 'validity_window_blocks' + 'blocks_per_batch' blocks
+        // We need to keep at least `validity_window_blocks + blocks_per_batch` blocks
         // to account for potential rebranches (when the window moves backwards).
         let num_blocks_to_keep =
             Policy::transaction_validity_window_blocks() + Policy::blocks_per_batch();
@@ -156,8 +156,8 @@ impl ValidityStore {
 
     /// Updates the validity store with the latest block number in the history store
     /// Note: Sometimes we have blocks that do not include transactions
-    /// but we still need to track them in the validity store to mantain up to
-    /// 'validity_window_blocks' inside the validity store
+    /// but we still need to track them in the validity store to maintain up to
+    /// `validity_window_blocks` inside the validity store
     pub(crate) fn update_validity_store(&self, db_txn: &mut MdbxWriteTransaction, latest_bn: u32) {
         if latest_bn > self.last_bn(db_txn) {
             db_txn.put(&self.block_txns, &latest_bn, &RawTransactionHash::default());
