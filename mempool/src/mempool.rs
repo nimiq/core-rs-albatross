@@ -6,7 +6,7 @@ use std::{
 use futures::{
     future::{AbortHandle, Abortable},
     lock::{Mutex, MutexGuard},
-    stream::{BoxStream, StreamExt},
+    stream::{select, BoxStream, StreamExt},
 };
 use nimiq_account::ReservedBalance;
 use nimiq_block::Block;
@@ -28,10 +28,11 @@ use tokio_metrics::TaskMonitor;
 use crate::mempool_metrics::MempoolMetrics;
 use crate::{
     config::MempoolConfig,
-    executor::MempoolExecutor,
+    executor::{MempoolExecutor, PubsubIdOrPeerId},
     filter::{MempoolFilter, MempoolRules},
     mempool_state::{EvictionReason, MempoolState},
     mempool_transactions::{MempoolTransactions, TxPriority},
+    sync::{messages::MempoolTransactionType, MempoolSyncer},
     verify::{verify_tx, VerifyErr},
 };
 
@@ -90,7 +91,7 @@ impl Mempool {
         network: Arc<N>,
         monitor: Option<TaskMonitor>,
         mut handle: MutexGuard<'_, Option<AbortHandle>>,
-        txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
+        txn_stream: BoxStream<'static, (Transaction, PubsubIdOrPeerId<N>)>,
     ) {
         if handle.is_some() {
             // If we already have an executor running, don't do anything
@@ -144,14 +145,41 @@ impl Mempool {
             return;
         }
 
+        // TODO: get correct peers
+        // TODO: only get peers that are synced with us
+        // Sync regular transactions with the mempool of other peers
+        let regular_transactions_syncer = MempoolSyncer::new(
+            network.get_peers(),
+            MempoolTransactionType::Regular,
+            Arc::clone(&network),
+            Arc::clone(&self.blockchain),
+            Arc::clone(&self.state),
+        );
+
         // Subscribe to the network TX topic
-        let txn_stream = network.subscribe::<TransactionTopic>().await.unwrap();
+        let txn_stream = network
+            .subscribe::<TransactionTopic>()
+            .await
+            .unwrap()
+            .map(|(tx, pubsub_id)| (tx, PubsubIdOrPeerId::PubsubId(pubsub_id)))
+            .boxed();
 
         self.start_executor::<N, TransactionTopic>(
             Arc::clone(&network),
             monitor,
             executor_handle,
-            txn_stream,
+            select(regular_transactions_syncer, txn_stream).boxed(),
+        );
+
+        // TODO: get correct peers
+        // TODO: only get peers that are synced with us
+        // Sync control transactions with the mempool of other peers
+        let control_transactions_syncer = MempoolSyncer::new(
+            network.get_peers(),
+            MempoolTransactionType::Control,
+            Arc::clone(&network),
+            Arc::clone(&self.blockchain),
+            Arc::clone(&self.state),
         );
 
         // Subscribe to the control transaction topic
@@ -159,14 +187,14 @@ impl Mempool {
             .subscribe::<ControlTransactionTopic>()
             .await
             .unwrap()
-            .map(|(tx, pubsub_id)| (Transaction::from(tx), pubsub_id))
+            .map(|(tx, pubsub_id)| (Transaction::from(tx), PubsubIdOrPeerId::PubsubId(pubsub_id)))
             .boxed();
 
         self.start_executor::<N, ControlTransactionTopic>(
             network,
             control_monitor,
             control_executor_handle,
-            txn_stream,
+            select(control_transactions_syncer, txn_stream).boxed(),
         );
     }
 
@@ -177,7 +205,7 @@ impl Mempool {
     /// stream instead.
     pub async fn start_executor_with_txn_stream<N: Network>(
         &self,
-        txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
+        txn_stream: BoxStream<'static, (Transaction, PubsubIdOrPeerId<N>)>,
         network: Arc<N>,
     ) {
         self.start_executor::<N, TransactionTopic>(
@@ -195,7 +223,7 @@ impl Mempool {
     /// stream instead.
     pub async fn start_control_executor_with_txn_stream<N: Network>(
         &self,
-        txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
+        txn_stream: BoxStream<'static, (Transaction, PubsubIdOrPeerId<N>)>,
         network: Arc<N>,
     ) {
         self.start_executor::<N, ControlTransactionTopic>(
