@@ -9,7 +9,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::{stream::BoxStream, Stream, StreamExt};
+use futures::{future::BoxFuture, stream::BoxStream, Stream, StreamExt};
 use nimiq_block::Block;
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 use self::chunk_request_component::ChunkRequestComponent;
 use super::{
     block_queue::BlockAndId,
-    queue::{ChunkAndId, LiveSyncQueue, QueueConfig},
+    queue::{ChunkAndId, QueueConfig},
 };
 use crate::sync::live::diff_queue::{DiffQueue, QueuedDiff};
 
@@ -173,6 +173,14 @@ pub struct StateQueue<N: Network> {
 
     /// The blockchain event stream.
     blockchain_rx: BoxStream<'static, BlockchainEvent>,
+
+    /// Waiter for the peer list to become nonempty.
+    ///
+    /// Since we only want to dispatch requests from the
+    /// `ChunkRequestComponent` when its peer list is nonempty, we need some
+    /// notification mechanism to wake us up once the list becomes nonempty if
+    /// we find it empty.
+    peers_became_nonempty: Option<BoxFuture<'static, ()>>,
 }
 
 impl<N: Network> StateQueue<N> {
@@ -211,6 +219,7 @@ impl<N: Network> StateQueue<N> {
             current_macro_height,
             start_key,
             blockchain_rx,
+            peers_became_nonempty: None,
         }
     }
 
@@ -574,8 +583,22 @@ impl<N: Network> Stream for StateQueue<N> {
             }
         }
 
+        // Check if we have peers.
+        if self.peers_became_nonempty.is_none() {
+            self.peers_became_nonempty = self.chunk_request_component.wait_for_peers();
+        }
+        if let Some(peers_became_nonempty) = &mut self.peers_became_nonempty {
+            if peers_became_nonempty.as_mut().poll(cx).is_ready() {
+                self.peers_became_nonempty = None;
+            }
+        }
+        // Obvious TOCTOU, but it would otherwise need to lock the
+        // `chunk_request_component`'s peer list.
+        //
         // Request chunks via ChunkRequestComponent.
-        if !self.chunk_request_component.has_pending_requests() && self.num_peers() > 0 {
+        if self.peers_became_nonempty.is_none()
+            && !self.chunk_request_component.has_pending_requests()
+        {
             self.request_chunk();
         }
 

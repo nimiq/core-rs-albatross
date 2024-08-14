@@ -6,12 +6,12 @@ use std::{
     future::Future,
     pin::Pin,
     sync::Arc,
-    task::{Context, Poll},
+    task::{Context, Poll, Waker},
 };
 
 use futures::{future, future::BoxFuture, FutureExt, Stream, StreamExt};
 use nimiq_network_interface::network::{Network, PubsubId};
-use nimiq_utils::stream::FuturesUnordered;
+use nimiq_utils::{stream::FuturesUnordered, WakerExt as _};
 use parking_lot::RwLock;
 use pin_project::pin_project;
 
@@ -104,6 +104,7 @@ pub struct SyncQueue<
     request_fn: RequestFn<TId, TNetwork, TOutput, TError>,
     verify_fn: VerifyFn<TId, TOutput, TVerifyState>,
     verify_state: TVerifyState,
+    waker: Option<Waker>,
 }
 
 impl<TNetwork, TId, TOutput, TError> SyncQueue<TNetwork, TId, TOutput, TError, ()>
@@ -172,6 +173,7 @@ where
             request_fn,
             verify_fn,
             verify_state: initial_verify_state,
+            waker: None,
         }
     }
 
@@ -255,6 +257,8 @@ where
                 self.queued_outputs.len(),
                 self.peers.read().len(),
             );
+
+            self.waker.wake();
         }
     }
 
@@ -319,6 +323,9 @@ where
         for id in ids {
             self.ids_to_request.push_back(id);
         }
+
+        // Adding new ids needs to wake the task that is polling the SyncQueue.
+        self.waker.wake();
     }
 
     /// Truncates the stored ids, retaining only the first `len` elements.
@@ -357,6 +364,8 @@ where
     type Item = Result<TOutput, TId>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.waker.store_waker(cx);
+
         // Try to request more objects.
         self.try_push_futures();
 

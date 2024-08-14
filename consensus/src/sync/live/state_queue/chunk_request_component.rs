@@ -4,7 +4,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::{FutureExt, Stream, StreamExt};
+use futures::{future::BoxFuture, FutureExt, Stream, StreamExt};
 use nimiq_network_interface::{network::Network, request::RequestError};
 use nimiq_primitives::key_nibbles::KeyNibbles;
 use parking_lot::RwLock;
@@ -71,6 +71,14 @@ impl<N: Network> ChunkRequestComponent<N> {
         request: RequestChunk,
     ) -> Result<ResponseChunk, RequestError> {
         network.request::<RequestChunk>(request, peer_id).await
+    }
+
+    /// Returns a future that resolves when the peer list of the chunk request
+    /// component becomes nonempty.
+    ///
+    /// Returns `None` is the chunk request component already has peers.
+    pub fn wait_for_peers(&self) -> Option<BoxFuture<'static, ()>> {
+        self.peers.read().wait_for_peers()
     }
 }
 

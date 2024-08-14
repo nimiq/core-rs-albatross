@@ -1,6 +1,8 @@
-use std::{collections::HashSet, fmt, ops::Index, slice::SliceIndex};
+use std::{collections::HashSet, fmt, ops::Index, slice::SliceIndex, sync::Arc};
 
+use futures::future::BoxFuture;
 use nimiq_network_interface::network::Network;
+use tokio::sync::Notify;
 
 /// A list of peers to be used while syncing.
 /// This contains an ordered list of peers as well as a hashmap.
@@ -9,6 +11,8 @@ use nimiq_network_interface::network::Network;
 pub struct PeerList<N: Network> {
     peers_set: HashSet<N::PeerId>,
     peers: Vec<N::PeerId>,
+    /// Used to notify listeners when the peer list becomes nonempty.
+    notify_nonempty: Arc<Notify>,
 }
 
 /// Stores an index into a [`PeerList`].
@@ -58,6 +62,7 @@ impl<N: Network> Default for PeerList<N> {
         Self {
             peers_set: Default::default(),
             peers: Default::default(),
+            notify_nonempty: Default::default(),
         }
     }
 }
@@ -67,6 +72,7 @@ impl<N: Network> Clone for PeerList<N> {
         Self {
             peers_set: self.peers_set.clone(),
             peers: self.peers.clone(),
+            notify_nonempty: Default::default(),
         }
     }
 }
@@ -74,6 +80,9 @@ impl<N: Network> Clone for PeerList<N> {
 impl<N: Network> PeerList<N> {
     pub fn add_peer(&mut self, peer_id: N::PeerId) -> bool {
         if self.peers_set.insert(peer_id) {
+            if self.peers.is_empty() {
+                self.notify_nonempty.notify_waiters();
+            }
             self.peers.push(peer_id);
             return true;
         }
@@ -129,6 +138,16 @@ impl<N: Network> PeerList<N> {
         }
         peer_index.index = peer_index.index.wrapping_add(1) % self.peers.len();
         Some(self.peers[peer_index.index])
+    }
+
+    /// Returns a future that resolves when the list becomes nonempty.
+    ///
+    /// Returns `None` is the list has peers already.
+    pub fn wait_for_peers(&self) -> Option<BoxFuture<'static, ()>> {
+        self.is_empty().then(|| {
+            let notify = self.notify_nonempty.clone();
+            Box::pin(async move { notify.notified().await }) as _
+        })
     }
 }
 
