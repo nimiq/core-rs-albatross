@@ -11,7 +11,7 @@ use std::{
 
 use futures::{ready, stream::BoxStream, StreamExt};
 use nimiq_blockchain::Blockchain;
-use nimiq_network_interface::network::{MsgAcceptance, Network, Topic};
+use nimiq_network_interface::network::{CloseReason, MsgAcceptance, Network, Topic};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::Transaction;
 use nimiq_utils::spawn;
@@ -25,6 +25,14 @@ use crate::{
 };
 
 const CONCURRENT_VERIF_TASKS: u32 = 10000;
+
+/// Enum describing whether a network response directly comes from a peer or through Gossipsub
+pub enum PubsubIdOrPeerId<N: Network> {
+    /// A network response coming directly from another peer
+    PeerId(N::PeerId),
+    /// A network response coming over Gossipsub
+    PubsubId(N::PubsubId),
+}
 
 pub(crate) struct MempoolExecutor<N: Network, T: Topic + Unpin + Sync> {
     // Blockchain reference
@@ -45,8 +53,8 @@ pub(crate) struct MempoolExecutor<N: Network, T: Topic + Unpin + Sync> {
     // Network ID, used for tx verification
     network_id: NetworkId,
 
-    // Transaction stream that is used to listen to transactions from the network
-    txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
+    // Transaction stream that is used to listen to transactions from the network and the Mempool Syncer
+    txn_stream: BoxStream<'static, (Transaction, PubsubIdOrPeerId<N>)>,
 
     // Phantom data for the unused type T
     _phantom: PhantomData<T>,
@@ -58,7 +66,7 @@ impl<N: Network, T: Topic + Unpin + Sync> MempoolExecutor<N, T> {
         state: Arc<RwLock<MempoolState>>,
         filter: Arc<RwLock<MempoolFilter>>,
         network: Arc<N>,
-        txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
+        txn_stream: BoxStream<'static, (Transaction, PubsubIdOrPeerId<N>)>,
         verification_tasks: Arc<AtomicU32>,
     ) -> Self {
         Self {
@@ -85,7 +93,9 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
             }
         }
 
-        while let Some((tx, pubsub_id)) = ready!(self.txn_stream.as_mut().poll_next_unpin(cx)) {
+        while let Some((tx, pubsub_or_peer_id)) =
+            ready!(self.txn_stream.as_mut().poll_next_unpin(cx))
+        {
             let decrement = Decrementer(Arc::clone(&self.verification_tasks));
             if self
                 .verification_tasks
@@ -113,16 +123,37 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
                     TxPriority::Medium,
                 );
 
-                let acceptance = match verify_tx_ret {
-                    Ok(_) => MsgAcceptance::Accept,
-                    // Reject the message if signature verification fails or transaction is invalid
-                    // for current validation window
-                    Err(VerifyErr::InvalidTransaction(_)) => MsgAcceptance::Reject,
-                    Err(VerifyErr::AlreadyIncluded) => MsgAcceptance::Reject,
-                    Err(_) => MsgAcceptance::Ignore,
-                };
+                match pubsub_or_peer_id {
+                    PubsubIdOrPeerId::PeerId(peer_id) => match verify_tx_ret {
+                        Ok(_) => (),
+                        Err(VerifyErr::InvalidAccount(_))
+                        | Err(VerifyErr::InvalidBlockNumber)
+                        | Err(VerifyErr::InvalidTransaction(_)) => {
+                            if network.has_peer(peer_id) {
+                                warn!(
+                                    %peer_id,
+                                    "Banning peer because it responded with an invalid mempool transaction while syncing"
+                                );
+                                network
+                                    .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
+                                    .await;
+                            }
+                        }
+                        Err(_) => (),
+                    },
+                    PubsubIdOrPeerId::PubsubId(pubsub_id) => {
+                        let acceptance = match verify_tx_ret {
+                            Ok(_) => MsgAcceptance::Accept,
+                            // Reject the message if signature verification fails or transaction is invalid
+                            // for current validation window
+                            Err(VerifyErr::InvalidTransaction(_)) => MsgAcceptance::Reject,
+                            Err(VerifyErr::AlreadyIncluded) => MsgAcceptance::Reject,
+                            Err(_) => MsgAcceptance::Ignore,
+                        };
 
-                network.validate_message::<T>(pubsub_id, acceptance);
+                        network.validate_message::<T>(pubsub_id, acceptance);
+                    }
+                }
 
                 drop(decrement);
             });

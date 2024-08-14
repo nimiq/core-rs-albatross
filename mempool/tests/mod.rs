@@ -89,7 +89,7 @@ async fn send_txn_to_mempool(
     tokio::task::spawn(async move {
         for txn in transactions {
             txn_stream_tx
-                .send((txn.clone(), mock_id.clone()))
+                .send((txn.clone(), Some(mock_id.clone())))
                 .await
                 .unwrap();
         }
@@ -121,7 +121,7 @@ async fn send_control_txn_to_mempool(
     tokio::task::spawn(async move {
         for txn in transactions {
             txn_stream_tx
-                .send((txn.clone(), mock_id.clone()))
+                .send((txn.clone(), Some(mock_id.clone())))
                 .await
                 .unwrap();
         }
