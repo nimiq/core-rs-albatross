@@ -62,17 +62,3 @@ otp = ["clear_on_drop", "nimiq-hash", "rand"]
 spawn = ["tokio", "tokio/rt", "wasm-bindgen-futures"]
 tagged-signing = ["hex"]
 time = []
-
-# Compiles this package with all features.
-all = [
-    "key-store",
-    "merkle",
-    "otp",
-    "time",
-]
-# Compiles this package with the features needed for the nimiq client.
-full-nimiq = [
-    "key-store",
-    "merkle",
-    "time",
-]
