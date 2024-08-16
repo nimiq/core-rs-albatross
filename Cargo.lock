@@ -3696,7 +3696,6 @@ dependencies = [
 name = "nimiq-bls"
 version = "0.23.0"
 dependencies = [
- "ark-crypto-primitives",
  "ark-ec",
  "ark-ff",
  "ark-mnt4-753",
@@ -4266,7 +4265,6 @@ dependencies = [
  "nimiq-hash",
  "nimiq-macros",
  "nimiq-network-interface",
- "nimiq-primitives",
  "nimiq-serde",
  "nimiq-test-log",
  "nimiq-test-utils",
@@ -4610,7 +4608,6 @@ dependencies = [
  "ark-serialize",
  "async-trait",
  "clap",
- "convert_case 0.6.0",
  "futures-util",
  "hex",
  "nimiq-account",
@@ -4772,7 +4769,6 @@ dependencies = [
  "nimiq-serde",
  "nimiq-test-log",
  "nimiq-test-utils",
- "parking_lot",
  "pin-project",
  "rand",
  "rand_core",

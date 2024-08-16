@@ -27,7 +27,6 @@ ark-ff = "0.4"
 ark-ec = "0.4"
 ark-mnt4-753 = "0.4"
 ark-mnt6-753 = "0.4"
-ark-crypto-primitives = { version = "0.4", features = ["prf"] }
 ark-serialize = "0.4"
 
 nimiq-hash = { workspace = true }

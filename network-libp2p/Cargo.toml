@@ -45,7 +45,6 @@ void = "1.0"
 nimiq-bls = { workspace = true }
 nimiq-macros = { workspace = true }
 nimiq-network-interface = { workspace = true }
-nimiq-primitives = { workspace = true, features = ["policy"] }
 nimiq-hash = { workspace = true }
 nimiq-serde = { workspace = true }
 nimiq-time = { workspace = true }
