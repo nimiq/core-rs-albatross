@@ -36,7 +36,7 @@ pub fn it_can_create_valid_transactions() {
         Coin::from_u64_unchecked(1),
         Coin::ZERO,
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
 
     let data1 = CommitmentsBuilder::with_private_commitments(kp1.public, commitment_pairs1)
@@ -73,7 +73,7 @@ pub fn it_can_create_valid_transactions() {
         )
         .unwrap();
 
-    assert!(tx.verify(NetworkId::Dummy).is_ok())
+    assert!(tx.verify(NetworkId::UnitAlbatross).is_ok())
 }
 
 #[test]

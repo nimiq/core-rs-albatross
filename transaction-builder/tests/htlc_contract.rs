@@ -36,7 +36,7 @@ fn it_can_create_creation_transaction() {
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
 
     let mut htlc_builder = Recipient::new_htlc_builder();
@@ -52,7 +52,7 @@ fn it_can_create_creation_transaction() {
         .with_recipient(htlc_builder.generate().unwrap())
         .with_value(100.try_into().unwrap())
         .with_validity_start_height(0)
-        .with_network_id(NetworkId::Dummy);
+        .with_network_id(NetworkId::UnitAlbatross);
     let result = builder
         .generate()
         .expect("Builder should be able to create transaction");
@@ -100,7 +100,7 @@ fn prepare_outgoing_transaction() -> (
         1000.try_into().unwrap(),
         0.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
 
     let sender_signature = sender_key_pair.sign(&tx.serialize_content()[..]);
@@ -142,7 +142,7 @@ fn it_can_create_regular_transfer() {
         .with_value(1000.try_into().unwrap())
         .with_fee(0.try_into().unwrap())
         .with_validity_start_height(1)
-        .with_network_id(NetworkId::Dummy);
+        .with_network_id(NetworkId::UnitAlbatross);
     let proof_builder = builder
         .generate()
         .expect("Builder should be able to create transaction");
@@ -182,7 +182,7 @@ fn it_can_create_early_resolve() {
         .with_value(1000.try_into().unwrap())
         .with_fee(0.try_into().unwrap())
         .with_validity_start_height(1)
-        .with_network_id(NetworkId::Dummy);
+        .with_network_id(NetworkId::UnitAlbatross);
     let proof_builder = builder
         .generate()
         .expect("Builder should be able to create transaction");
@@ -215,7 +215,7 @@ fn it_can_create_timeout_resolve() {
         .with_value(1000.try_into().unwrap())
         .with_fee(0.try_into().unwrap())
         .with_validity_start_height(1)
-        .with_network_id(NetworkId::Dummy);
+        .with_network_id(NetworkId::UnitAlbatross);
     let proof_builder = builder
         .generate()
         .expect("Builder should be able to create transaction");

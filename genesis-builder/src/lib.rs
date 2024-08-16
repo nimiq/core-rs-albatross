@@ -103,7 +103,7 @@ impl Default for GenesisBuilder {
 impl GenesisBuilder {
     fn new_without_defaults() -> Self {
         GenesisBuilder {
-            network: NetworkId::Dummy,
+            network: NetworkId::UnitAlbatross,
             timestamp: None,
             vrf_seed: None,
             parent_election_hash: None,

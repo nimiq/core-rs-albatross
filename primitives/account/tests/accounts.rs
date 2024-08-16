@@ -803,7 +803,7 @@ fn it_commits_valid_and_failing_txns() {
         2000.try_into().unwrap(),
         200.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
     tx.sender_type = AccountType::Vesting;
 
@@ -847,7 +847,7 @@ fn it_commits_valid_and_failing_txns() {
         2000.try_into().unwrap(),
         200.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
     // tx.sender_type = AccountType::Basic;
 

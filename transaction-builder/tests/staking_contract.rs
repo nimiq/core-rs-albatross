@@ -40,7 +40,7 @@ fn it_can_create_staker_transactions() {
         100_000_000.try_into().unwrap(),
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     )
     .unwrap();
 
@@ -61,7 +61,7 @@ fn it_can_create_staker_transactions() {
         100_000_000.try_into().unwrap(),
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     )
     .unwrap();
 
@@ -85,7 +85,7 @@ fn it_can_create_staker_transactions() {
         false,
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     )
     .unwrap();
 
@@ -98,7 +98,7 @@ fn it_can_create_staker_transactions() {
         false,
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     )
     .unwrap();
 
@@ -113,7 +113,7 @@ fn it_can_create_staker_transactions() {
         150_000_000.try_into().unwrap(),
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     )
     .unwrap();
 
@@ -132,7 +132,7 @@ fn it_can_fail_creating_staker_transactions() {
         0.try_into().unwrap(), // InvalidValue
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     )
     .err();
 
@@ -172,7 +172,7 @@ fn it_can_create_validator_transactions() {
         Some(Blake2bHash::default()),
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     )
     .unwrap();
 
@@ -201,7 +201,7 @@ fn it_can_create_validator_transactions() {
         None,
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
 
     assert_eq!(tx, tx2);
@@ -222,7 +222,7 @@ fn it_can_create_validator_transactions() {
         &key_pair,
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
 
     assert_eq!(tx, tx2);
@@ -243,7 +243,7 @@ fn it_can_create_validator_transactions() {
         &key_pair,
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
 
     assert_eq!(tx, tx2);
@@ -257,7 +257,7 @@ fn it_can_create_validator_transactions() {
         100.try_into().unwrap(),
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT - 100),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     )
     .unwrap();
 
@@ -278,7 +278,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
             value.try_into().unwrap(),
             100.try_into().unwrap(),
             1,
-            NetworkId::Dummy,
+            NetworkId::UnitAlbatross,
         ),
         _ => Transaction::new_signaling(
             Address::from_any_str(ADDRESS).unwrap(),
@@ -288,7 +288,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
             100.try_into().unwrap(),
             data.serialize_to_vec(),
             1,
-            NetworkId::Dummy,
+            NetworkId::UnitAlbatross,
         ),
     }
 }
@@ -322,7 +322,7 @@ fn make_remove_stake_transaction(key_pair: &KeyPair, value: u64) -> Transaction 
         value.try_into().unwrap(),
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
     tx.proof = key_pair.sign(&tx.serialize_content()).serialize_to_vec();
     tx
@@ -340,7 +340,7 @@ fn make_delete_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
         value.try_into().unwrap(),
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
     tx.proof = key_pair.sign(&tx.serialize_content()).serialize_to_vec();
     tx

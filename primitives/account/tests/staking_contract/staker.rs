@@ -56,7 +56,7 @@ fn make_remove_stake_transaction_with_fee(value: u64, fee: u64) -> Transaction {
         value.try_into().unwrap(),
         fee.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
 
     let private_key =

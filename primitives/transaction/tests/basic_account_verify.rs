@@ -15,7 +15,7 @@ fn it_does_not_allow_creation() {
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
 
     assert_eq!(
@@ -36,7 +36,7 @@ fn it_does_not_allow_signalling() {
         0.try_into().unwrap(),
         vec![],
         0,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
 
     assert_eq!(

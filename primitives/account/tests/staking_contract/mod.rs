@@ -85,7 +85,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
             value.try_into().unwrap(),
             100.try_into().unwrap(),
             1,
-            NetworkId::Dummy,
+            NetworkId::UnitAlbatross,
         ),
         _ => Transaction::new_signaling(
             non_existent_address(),
@@ -95,7 +95,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
             100.try_into().unwrap(),
             data.serialize_to_vec(),
             1,
-            NetworkId::Dummy,
+            NetworkId::UnitAlbatross,
         ),
     }
 }
@@ -143,7 +143,7 @@ fn make_delete_validator_transaction() -> Transaction {
         (Policy::VALIDATOR_DEPOSIT - 100).try_into().unwrap(),
         100.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
 
     let private_key =

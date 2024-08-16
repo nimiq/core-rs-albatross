@@ -52,7 +52,7 @@ fn create_transaction(block: u32, value: u64) -> HistoricTransaction {
                 Coin::from_u64_unchecked(value),
                 Coin::from_u64_unchecked(0),
                 0,
-                NetworkId::Dummy,
+                NetworkId::UnitAlbatross,
             ),
         )),
     }

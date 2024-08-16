@@ -24,7 +24,7 @@ fn it_can_create_creation_transaction() {
         100.try_into().unwrap(),
         0.try_into().unwrap(),
         0,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
 
     // Valid
@@ -38,7 +38,7 @@ fn it_can_create_creation_transaction() {
         .with_recipient(recipient.generate().unwrap())
         .with_value(100.try_into().unwrap())
         .with_validity_start_height(0)
-        .with_network_id(NetworkId::Dummy);
+        .with_network_id(NetworkId::UnitAlbatross);
     let proof_builder = builder
         .generate()
         .expect("Builder should be able to create transaction");
@@ -68,7 +68,7 @@ fn it_can_create_creation_transaction() {
         .with_recipient(recipient.generate().unwrap())
         .with_value(100.try_into().unwrap())
         .with_validity_start_height(0)
-        .with_network_id(NetworkId::Dummy);
+        .with_network_id(NetworkId::UnitAlbatross);
     let proof_builder = builder
         .generate()
         .expect("Builder should be able to create transaction");
@@ -98,7 +98,7 @@ fn it_can_create_creation_transaction() {
         .with_recipient(recipient.generate().unwrap())
         .with_value(100.try_into().unwrap())
         .with_validity_start_height(0)
-        .with_network_id(NetworkId::Dummy);
+        .with_network_id(NetworkId::UnitAlbatross);
     let proof_builder = builder
         .generate()
         .expect("Builder should be able to create transaction");
@@ -120,7 +120,7 @@ fn it_can_create_outgoing_transactions() {
         1.try_into().unwrap(),
         1000.try_into().unwrap(),
         1,
-        NetworkId::Dummy,
+        NetworkId::UnitAlbatross,
     );
     tx.sender_type = AccountType::Vesting;
 
@@ -135,7 +135,7 @@ fn it_can_create_outgoing_transactions() {
         .with_value(1.try_into().unwrap())
         .with_fee(1000.try_into().unwrap())
         .with_validity_start_height(1)
-        .with_network_id(NetworkId::Dummy);
+        .with_network_id(NetworkId::UnitAlbatross);
     let proof_builder = builder
         .generate()
         .expect("Builder should be able to create transaction");
