@@ -166,6 +166,13 @@ impl Blockchain {
                 );
             }
 
+            // Remove block from chain store (we will add it fully later on with its full body)
+            self.chain_store.remove_chain_info(
+                write_txn,
+                &current.0,
+                current.1.head.block_number(),
+            );
+
             // Block was reverted, add it to the reverted chain collection.
             revert_chain.push(current);
 
@@ -225,12 +232,14 @@ impl Blockchain {
             reverted_block.1.on_main_chain = false;
             reverted_block.1.main_chain_successor = None;
 
+            // Block isn't pushed since it was reverted (no history associated) and we need to store fully the block again
+            // since it was partially stored before and removed from the `pushed` set of blocks above.
             self.chain_store.put_chain_info(
                 write_txn,
                 &reverted_block.0,
                 &reverted_block.1,
-                false,
                 true,
+                false,
             );
         }
 
