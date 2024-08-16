@@ -54,7 +54,7 @@ nimiq-serde = { workspace = true }
 nimiq-tendermint = { workspace = true }
 nimiq-time = { workspace = true }
 nimiq-transaction-builder = { workspace = true }
-nimiq-utils = { workspace = true, features = ["time"] }
+nimiq-utils = { workspace = true, features = ["futures", "time"] }
 nimiq-validator-network = { workspace = true }
 nimiq-vrf = { workspace = true }
 

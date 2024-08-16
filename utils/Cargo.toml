@@ -21,7 +21,7 @@ workspace = true
 
 [dependencies]
 clear_on_drop = { version = "0.2", optional = true }
-futures = { workspace = true }
+futures = { workspace = true, optional = true }
 hex = { version = "0.4", optional = true }
 libp2p-identity = { version = "0.2", optional = true }
 log = { workspace = true, optional = true }
@@ -51,6 +51,7 @@ nimiq-test-utils = { workspace = true }
 
 [features]
 crc = []
+futures = ["dep:futures"]
 key-rng = ["rand", "rand_core"]
 key-store = ["log", "thiserror"]
 libp2p = ["libp2p-identity"]

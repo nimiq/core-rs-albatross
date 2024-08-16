@@ -28,7 +28,7 @@ nimiq-collections = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-serde = { workspace = true }
 nimiq-time = { workspace = true }
-nimiq-utils = { workspace = true }
+nimiq-utils = { workspace = true, features = ["futures"] }
 
 [dev-dependencies]
 nimiq-network-interface = { workspace = true }

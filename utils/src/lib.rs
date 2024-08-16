@@ -18,6 +18,7 @@ pub mod tagged_signing;
 #[cfg(feature = "time")]
 pub mod time;
 
+#[cfg(feature = "futures")]
 pub mod stream;
 
 mod sensitive;

@@ -55,7 +55,7 @@ nimiq-network-interface = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["policy"] }
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
-nimiq-utils = { workspace = true, features = ["merkle", "spawn", "time"] }
+nimiq-utils = { workspace = true, features = ["futures", "merkle", "spawn", "time"] }
 nimiq-zkp = { workspace = true }
 nimiq-zkp-circuits = { workspace = true }
 nimiq-zkp-primitives = { workspace = true }
