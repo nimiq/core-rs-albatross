@@ -656,7 +656,7 @@ impl Default for Policy {
 pub const TEST_POLICY: Policy = Policy {
     blocks_per_batch: 32,
     batches_per_epoch: 4,
-    state_chunks_max_size: 2,
+    state_chunks_max_size: 3,
     transaction_validity_window: 2,
     genesis_block_number: 0,
 };
