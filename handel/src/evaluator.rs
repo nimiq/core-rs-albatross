@@ -33,7 +33,6 @@ where
 }
 
 /// A signature counts as it was signed N times, where N is the signers weight
-#[derive(Debug)]
 pub struct WeightedVote<TId, TProtocol>
 where
     TId: Identifier,
@@ -48,8 +47,8 @@ where
     /// Partitioner that registers the handel levels and its IDs.
     partitioner: Arc<TProtocol::Partitioner>,
 
-    /// Threshold after which a signature could be considered final according to the weights of the signers.
-    pub threshold: usize,
+    /// Closure used to determine the finality of a given contribution.
+    finality_check: Box<dyn Fn(&TProtocol::Contribution) -> bool + Send + Sync>,
 }
 
 impl<TId, TProtocol> WeightedVote<TId, TProtocol>
@@ -78,13 +77,13 @@ where
         store: Arc<RwLock<TProtocol::Store>>,
         weights: Arc<TProtocol::Registry>,
         partitioner: Arc<TProtocol::Partitioner>,
-        threshold: usize,
+        finality_check: impl Fn(&TProtocol::Contribution) -> bool + Send + Sync + 'static,
     ) -> Self {
         Self {
             store,
             weights,
             partitioner,
-            threshold,
+            finality_check: Box::new(finality_check),
         }
     }
 }
@@ -236,17 +235,7 @@ where
     }
 
     fn is_final(&self, signature: &TProtocol::Contribution) -> bool {
-        let votes = self
-            .weights
-            .signature_weight(signature)
-            .unwrap_or_else(|| panic!("Missing weights for signature: {signature:?}"));
-
-        trace!(
-            "is_final(): votes={}, final={}",
-            votes,
-            votes >= self.threshold
-        );
-        votes >= self.threshold
+        (self.finality_check)(signature)
     }
 
     fn level_contains_origin(&self, msg: &LevelUpdate<TProtocol::Contribution>) -> bool {
