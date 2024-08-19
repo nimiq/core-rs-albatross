@@ -110,11 +110,12 @@ impl Protocol {
             partitioner.clone(),
         )));
 
+        let cloned_registry = Arc::clone(&registry);
         let evaluator = Arc::new(WeightedVote::new(
             store.clone(),
             Arc::clone(&registry),
             partitioner.clone(),
-            threshold,
+            move |c| cloned_registry.signature_weight(c).unwrap_or(0) >= threshold,
         ));
 
         Protocol {
@@ -230,7 +231,7 @@ async fn it_can_aggregate() {
         let net = Arc::new(hub.new_network_with_address(id as u64));
         // Create a protocol with `contributor_num + 1` peers set its id to `id`. Require `contributor_num` contributions
         // meaning all contributions need to be aggregated with the additional node initialized after this for loop.
-        let protocol = Protocol::new(id, contributor_num + 1, contributor_num);
+        let protocol = Protocol::new(id, contributor_num + 1, contributor_num + 1);
         // the sole contributor for soon to be created contribution is this node.
         let mut contributors = BitSet::new();
         contributors.insert(id);

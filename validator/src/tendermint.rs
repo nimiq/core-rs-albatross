@@ -403,7 +403,6 @@ where
         let protocol = TendermintAggregationProtocol::new(
             Arc::clone(&self.validator_registry),
             self.validator_slot_band as usize,
-            1, // to be removed
             id,
         );
 
@@ -439,7 +438,6 @@ where
         let protocol = TendermintAggregationProtocol::new(
             Arc::clone(&self.validator_registry),
             self.validator_slot_band as usize,
-            1,
             id,
         );
 
