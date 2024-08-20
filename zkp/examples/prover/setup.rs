@@ -1,27 +1,42 @@
-use std::{path::PathBuf, time::Instant};
+use std::{io, path::PathBuf, time::Instant};
 
-use nimiq_genesis::NetworkInfo;
-use nimiq_primitives::{
-    networks::NetworkId,
-    policy::{Policy, TEST_POLICY},
-};
+use log::metadata::LevelFilter;
+use nimiq_genesis::{NetworkId, NetworkInfo};
+use nimiq_log::TargetsExt;
+use nimiq_primitives::policy::Policy;
 use nimiq_zkp_circuits::setup::setup;
 use rand::thread_rng;
+use tracing_subscriber::{filter::Targets, prelude::*};
 
 const DEFAULT_EXAMPLE_PATH: &str = ".zkp_example";
+
+fn initialize() {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_writer(io::stderr))
+        .with(
+            Targets::new()
+                .with_default(LevelFilter::INFO)
+                .with_nimiq_targets(LevelFilter::DEBUG)
+                .with_target("r1cs", LevelFilter::WARN)
+                .with_env(),
+        )
+        .init();
+    let network_info = NetworkInfo::from_network_id(NetworkId::UnitAlbatross);
+    let genesis_block = network_info.genesis_block();
+
+    // Run tests with different policy values:
+    let mut policy_config = Policy::default();
+    // The genesis block number must be set accordingly
+    policy_config.genesis_block_number = genesis_block.block_number();
+
+    let _ = Policy::get_or_init(policy_config);
+}
 
 /// Generates the parameters (proving and verifying keys) for the entire zkp circuit.
 /// This function will store the parameters in file.
 /// Run this example with `cargo run --all-features --release --example setup`.
 fn main() {
-    // Run tests with different policy values:
-    let mut policy_config = TEST_POLICY;
-    // The genesis block number must be set accordingly
-    let network_info = NetworkInfo::from_network_id(NetworkId::UnitAlbatross);
-    let genesis_block = network_info.genesis_block();
-    policy_config.genesis_block_number = genesis_block.block_number();
-
-    let _ = Policy::get_or_init(policy_config);
+    initialize();
 
     println!("====== Parameter generation for ZKP Circuit initiated ======");
     let start = Instant::now();
