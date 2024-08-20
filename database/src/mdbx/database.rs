@@ -10,8 +10,8 @@ use crate::{
     Error,
 };
 
-const GIGABYTE: usize = 1024 * 1024 * 1024;
-const TERABYTE: usize = GIGABYTE * 1024;
+pub const GIGABYTE: usize = 1024 * 1024 * 1024;
+pub const TERABYTE: usize = GIGABYTE * 1024;
 
 /// Database config options.
 pub struct DatabaseConfig {

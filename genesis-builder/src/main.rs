@@ -1,6 +1,6 @@
 use std::{env, process::exit};
 
-use nimiq_database::mdbx::MdbxDatabase;
+use nimiq_database::mdbx::{DatabaseConfig, MdbxDatabase, GIGABYTE};
 use nimiq_genesis_builder::{GenesisBuilder, GenesisInfo};
 
 fn usage(args: Vec<String>) -> ! {
@@ -16,8 +16,12 @@ fn main() {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let db =
-        MdbxDatabase::new_volatile(Default::default()).expect("Could not open a volatile database");
+    let db = MdbxDatabase::new_volatile(DatabaseConfig {
+        // Limit the database to 100GB to support platforms with a lower allowed maximum
+        size: Some(0..(100 * GIGABYTE as isize)),
+        ..Default::default()
+    })
+    .expect("Could not open a volatile database");
     let args = env::args().collect::<Vec<String>>();
 
     if let Some(file) = args.get(1) {
