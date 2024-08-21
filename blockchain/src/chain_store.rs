@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use nimiq_account::RevertInfo;
-use nimiq_block::{Block, BlockBody, BlockJustification, MacroBlock, MicroBlock};
+use nimiq_block::{Block, BlockBody, BlockJustification, MacroBlock, MacroBody, MicroBlock};
 use nimiq_blockchain_interface::{BlockchainError, ChainInfo, Direction};
 use nimiq_database::{
     declare_table,
@@ -12,7 +12,7 @@ use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{policy::Policy, trie::trie_diff::TrieDiff};
 use nimiq_serde::{Deserialize, Serialize};
-use serde;
+use nimiq_transaction::{historic_transaction::HistoricTransactionData, reward::RewardTransaction};
 
 use crate::history::interface::HistoryInterface;
 use crate::history_store_proxy::HistoryStoreProxy;
@@ -25,9 +25,9 @@ declare_table!(HeightIndex, "HeightIndex", u32 => dup(Blake2bHash));
 declare_table!(RevertTable, "Receipts", u32 => RevertInfo);
 declare_table!(AccountsDiffTable, "AccountsDiff", Blake2bHash => TrieDiff);
 
-/// The non-header content of a block except that micro block transactions are not
-/// stored to optimize micro blocks storage. This assumes that a block has been pushed
-/// and that there is history associated with this block.
+/// The non-header content of a block except that transactions are not stored to
+/// optimize blocks storage. This assumes that a block has been pushed and that there
+/// is history associated with this block.
 #[derive(Debug, Serialize, Deserialize, DbSerializable)]
 pub struct PushedBlock {
     justification: Option<BlockJustification>,
@@ -64,7 +64,27 @@ impl PushedBlock {
                     .justification
                     .as_ref()
                     .map(|justification| justification.clone().unwrap_macro()),
-                body: self.body.as_ref().map(|body| body.clone().unwrap_macro()),
+                body: self.body.as_ref().map(|_| {
+                    let mut full_macro_body = MacroBody::default();
+                    // Recover transactions from the history store
+                    full_macro_body.transactions = history_store
+                        .get_block_transactions(header_only_block.block_number(), Some(txn))
+                        .iter()
+                        .filter_map(|hist_txn| {
+                            if matches!(hist_txn.data, HistoricTransactionData::Reward(_)) {
+                                let reward_event = hist_txn.unwrap_reward();
+                                Some(RewardTransaction {
+                                    recipient: reward_event.reward_address.clone(),
+                                    validator_address: reward_event.validator_address.clone(),
+                                    value: reward_event.value,
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    full_macro_body
+                }),
             }),
             Block::Micro(header_only_block) => Block::Micro(MicroBlock {
                 header: header_only_block.header.clone(),
@@ -97,12 +117,12 @@ impl PushedBlock {
     where
         S: serde::Serializer,
     {
-        // Empty out micro body transactions if there is any
+        // Empty out body transactions if there is any: these are already stored in the History Store.
         if let Some(body) = body {
             let mut body_to_ser = body.clone();
             match body_to_ser {
                 BlockBody::Micro(ref mut body) => body.transactions = vec![],
-                BlockBody::Macro(_) => {}
+                BlockBody::Macro(ref mut body) => body.transactions = vec![],
             }
             serde::Serialize::serialize(&Some(body_to_ser), serializer)
         } else {
