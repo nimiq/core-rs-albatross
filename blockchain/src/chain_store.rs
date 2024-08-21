@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use nimiq_account::RevertInfo;
-use nimiq_block::{Block, BlockBody, BlockJustification, MacroBlock, MicroBlock};
+use nimiq_block::{Block, BlockType, EquivocationProof, MacroBody, MicroBody};
 use nimiq_blockchain_interface::{BlockchainError, ChainInfo, Direction};
 use nimiq_database::{
     declare_table,
@@ -12,6 +12,7 @@ use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{policy::Policy, trie::trie_diff::TrieDiff};
 use nimiq_serde::{Deserialize, Serialize};
+use nimiq_transaction::{historic_transaction::HistoricTransactionData, reward::RewardTransaction};
 
 use crate::{history::interface::HistoryInterface, history_store_proxy::HistoryStoreProxy};
 
@@ -23,57 +24,73 @@ declare_table!(HeightIndex, "HeightIndex", u32 => dup(Blake2bHash));
 declare_table!(RevertTable, "Receipts", u32 => RevertInfo);
 declare_table!(AccountsDiffTable, "AccountsDiff", Blake2bHash => TrieDiff);
 
-/// The non-header content of a block except that micro block transactions are not
-/// stored to optimize micro blocks storage. This assumes that a block has been pushed
-/// and that there is history associated with this block.
+/// The non-header content of a block except that transactions are not stored to
+/// optimize blocks storage. This assumes that a block has been pushed and that there
+/// is history associated with this block.
 #[derive(Debug, Serialize, Deserialize, DbSerializable)]
-pub struct PushedBlock {
-    justification: Option<BlockJustification>,
-    #[serde(serialize_with = "PushedBlock::serialize_body")]
-    body: Option<BlockBody>,
+pub enum PushedBlock {
+    Macro,
+    Micro {
+        equivocation_proofs: Vec<EquivocationProof>,
+    },
 }
 
 impl From<Block> for PushedBlock {
     fn from(block: Block) -> Self {
-        PushedBlock {
-            justification: block.justification(),
-            body: block.body(),
+        match block {
+            Block::Macro(_) => PushedBlock::Macro,
+            Block::Micro(micro_block) => PushedBlock::Micro {
+                equivocation_proofs: micro_block
+                    .body
+                    .expect("Block body must be present in full blockchain implementation")
+                    .equivocation_proofs,
+            },
         }
     }
 }
 
 impl PushedBlock {
-    fn block_from_header(
-        &self,
+    fn ty(&self) -> BlockType {
+        match self {
+            PushedBlock::Macro => BlockType::Macro,
+            PushedBlock::Micro {
+                equivocation_proofs: _,
+            } => BlockType::Micro,
+        }
+    }
+    fn into_block(
+        self,
         block: &Block,
         history_store: &Arc<HistoryStoreProxy>,
         txn: &MdbxReadTransaction,
     ) -> Block {
-        if let Some(justification) = &self.justification {
-            assert!(block.ty() == justification.ty());
-        }
-        if let Some(body) = &self.body {
-            assert!(block.ty() == body.ty());
-        }
+        assert_eq!(self.ty(), block.ty());
+        let mut block_to_return = block.clone();
         match block {
-            Block::Macro(header_only_block) => Block::Macro(MacroBlock {
-                header: header_only_block.header.clone(),
-                justification: self
-                    .justification
-                    .as_ref()
-                    .map(|justification| justification.clone().unwrap_macro()),
-                body: self.body.as_ref().map(|body| body.clone().unwrap_macro()),
-            }),
-            Block::Micro(header_only_block) => Block::Micro(MicroBlock {
-                header: header_only_block.header.clone(),
-                justification: self
-                    .justification
-                    .as_ref()
-                    .map(|justification| justification.clone().unwrap_micro()),
-                body: self.body.as_ref().map(|body| {
-                    let mut full_micro_body = body.clone().unwrap_micro();
+            Block::Macro(header_only_block) => {
+                block_to_return.unwrap_macro_ref_mut().body = Some(MacroBody {
                     // Recover transactions from the history store
-                    full_micro_body.transactions = history_store
+                    transactions: history_store
+                        .get_block_transactions(header_only_block.block_number(), Some(txn))
+                        .iter()
+                        .filter_map(|hist_txn| {
+                            if matches!(hist_txn.data, HistoricTransactionData::Reward(_)) {
+                                let reward_event = hist_txn.unwrap_reward();
+                                Some(RewardTransaction {
+                                    recipient: reward_event.reward_address.clone(),
+                                    validator_address: reward_event.validator_address.clone(),
+                                    value: reward_event.value,
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect(),
+                })
+            }
+            Block::Micro(header_only_block) => {
+                block_to_return.unwrap_micro_ref_mut().body = Some(MicroBody {
+                    transactions: history_store
                         .get_block_transactions(header_only_block.block_number(), Some(txn))
                         .iter()
                         .filter_map(|hist_txn| {
@@ -83,28 +100,17 @@ impl PushedBlock {
                                 None
                             }
                         })
-                        .collect();
-                    full_micro_body
-                }),
-            }),
-        }
-    }
-
-    fn serialize_body<S>(body: &Option<BlockBody>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        // Empty out micro body transactions if there is any: these are already stored in the History Store.
-        if let Some(body) = body {
-            let mut body_to_ser = body.clone();
-            match body_to_ser {
-                BlockBody::Micro(ref mut body) => body.transactions = vec![],
-                BlockBody::Macro(_) => {}
+                        .collect(),
+                    equivocation_proofs: match self {
+                        PushedBlock::Macro => unreachable!("Expected a micro block type"),
+                        PushedBlock::Micro {
+                            equivocation_proofs,
+                        } => equivocation_proofs,
+                    },
+                })
             }
-            serde::Serialize::serialize(&Some(body_to_ser), serializer)
-        } else {
-            serde::Serialize::serialize(&body, serializer)
         }
+        block_to_return
     }
 }
 
@@ -199,12 +205,16 @@ impl ChainStore {
         };
 
         if include_body {
-            // Check the stored block table, then the pushed block table
-            if let Some(full_block) = txn.get(&self.stored_block_table, hash) {
+            // Check tables according to the `chain_info.on_main_chain` flag
+            if chain_info.on_main_chain {
+                if let Some(pushed_block) = txn.get(&self.pushed_block_table, hash) {
+                    chain_info.head =
+                        pushed_block.into_block(&chain_info.head, &self.history_store, &txn);
+                } else {
+                    warn!("Block body requested but not present");
+                }
+            } else if let Some(full_block) = txn.get(&self.stored_block_table, hash) {
                 chain_info.head = full_block
-            } else if let Some(block) = txn.get(&self.pushed_block_table, hash) {
-                chain_info.head =
-                    block.block_from_header(&chain_info.head, &self.history_store, &txn);
             } else {
                 warn!("Block body requested but not present");
             }
@@ -246,12 +256,16 @@ impl ChainStore {
         let block_hash = block_hash.unwrap();
 
         if include_body {
-            // Check the stored block table, then the pushed block table
-            if let Some(full_block) = txn.get(&self.stored_block_table, &block_hash) {
+            // Check tables according to the `chain_info.on_main_chain` flag
+            if chain_info.on_main_chain {
+                if let Some(pushed_block) = txn.get(&self.pushed_block_table, &block_hash) {
+                    chain_info.head =
+                        pushed_block.into_block(&chain_info.head, &self.history_store, &txn);
+                } else {
+                    warn!("Block body requested but not present");
+                }
+            } else if let Some(full_block) = txn.get(&self.stored_block_table, &block_hash) {
                 chain_info.head = full_block
-            } else if let Some(block) = txn.get(&self.pushed_block_table, &block_hash) {
-                chain_info.head =
-                    block.block_from_header(&chain_info.head, &self.history_store, &txn);
             } else {
                 warn!("Block body requested but not present");
             }
@@ -266,7 +280,6 @@ impl ChainStore {
         hash: &Blake2bHash,
         chain_info: &ChainInfo,
         include_body: bool,
-        is_block_pushed: bool,
     ) {
         // Store chain data. Block body will not be persisted because the serialization of ChainInfo
         // ignores the block body.
@@ -274,7 +287,10 @@ impl ChainStore {
 
         // Store body if requested.
         if include_body {
-            if is_block_pushed {
+            // If block is on main chain we store it in the `pushed` block table: we should be able to retrieve
+            // the block from the `chain_info` table and the history store.
+            // Otherwise it goes completely to the `stored` block table.
+            if chain_info.on_main_chain {
                 txn.put_reserve(
                     &self.pushed_block_table,
                     hash,
@@ -349,14 +365,16 @@ impl ChainStore {
             .ok_or(BlockchainError::BlockNotFound)?;
 
         if include_body {
-            // Check first the store blocks table since it is smaller then the pushed blocks table
-            if let Some(full_block) = txn.get(&self.stored_block_table, hash) {
-                Ok(full_block)
-            } else {
-                let headerless_block = txn
+            if chain_info.on_main_chain {
+                let pushed_block = txn
                     .get(&self.pushed_block_table, hash)
                     .ok_or(BlockchainError::BlockNotFound)?;
-                Ok(headerless_block.block_from_header(&chain_info.head, &self.history_store, &txn))
+                Ok(pushed_block.into_block(&chain_info.head, &self.history_store, &txn))
+            } else {
+                let full_block = txn
+                    .get(&self.stored_block_table, hash)
+                    .ok_or(BlockchainError::BlockNotFound)?;
+                Ok(full_block)
             }
         } else {
             Ok(chain_info.head)

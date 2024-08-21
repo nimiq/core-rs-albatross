@@ -153,13 +153,8 @@ impl Blockchain {
         };
 
         let mut txn = this.write_transaction();
-        this.chain_store.put_chain_info(
-            &mut txn,
-            &chain_info.head.hash(),
-            &chain_info,
-            true,
-            false,
-        );
+        this.chain_store
+            .put_chain_info(&mut txn, &chain_info.head.hash(), &chain_info, true);
         if let Some(diff) = &diff {
             this.chain_store
                 .put_accounts_diff(&mut txn, &chain_info.head.hash(), diff);
@@ -319,14 +314,9 @@ impl Blockchain {
         prev_info.main_chain_successor = Some(chain_info.head.hash());
 
         this.chain_store
-            .put_chain_info(&mut txn, &block_hash, &chain_info, true, true);
-        this.chain_store.put_chain_info(
-            &mut txn,
-            chain_info.head.parent_hash(),
-            &prev_info,
-            false,
-            true,
-        );
+            .put_chain_info(&mut txn, &block_hash, &chain_info, true);
+        this.chain_store
+            .put_chain_info(&mut txn, chain_info.head.parent_hash(), &prev_info, false);
         this.chain_store.set_head(&mut txn, &block_hash);
 
         if is_macro_block {

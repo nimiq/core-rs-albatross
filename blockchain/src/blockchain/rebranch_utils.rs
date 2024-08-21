@@ -234,19 +234,14 @@ impl Blockchain {
 
             // Block isn't pushed since it was reverted (no history associated) and we need to store fully the block again
             // since it was partially stored before and removed from the `pushed` set of blocks above.
-            self.chain_store.put_chain_info(
-                write_txn,
-                &reverted_block.0,
-                &reverted_block.1,
-                true,
-                false,
-            );
+            self.chain_store
+                .put_chain_info(write_txn, &reverted_block.0, &reverted_block.1, true);
         }
 
         // Update the main_chain_successor of the common ancestor block.
         ancestor.1.main_chain_successor = Some(target_chain.last().unwrap().0.clone());
         self.chain_store
-            .put_chain_info(write_txn, &ancestor.0, &ancestor.1, false, true);
+            .put_chain_info(write_txn, &ancestor.0, &ancestor.1, false);
 
         // Set on_main_chain flag / main_chain_successor on the fork.
         for i in (0..target_chain.len()).rev() {
@@ -260,9 +255,11 @@ impl Blockchain {
             fork_block.1.on_main_chain = true;
             fork_block.1.main_chain_successor = main_chain_successor;
 
-            // Include the body of the new block (at position 0).
+            // Block is pushed and we have history for it, so we make sure that block ends in the `pushed` block table (by setting `chain_info.on_main_chain`).
+            // The block was probably also previously stored in the `stored` block table (inferior chain path) but it is not pruned since worst case
+            // scenario it will be removed on a batch finalization.
             self.chain_store
-                .put_chain_info(write_txn, &fork_block.0, &fork_block.1, i == 0, true);
+                .put_chain_info(write_txn, &fork_block.0, &fork_block.1, true);
         }
 
         // Update the head.

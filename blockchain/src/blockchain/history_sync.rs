@@ -169,7 +169,7 @@ impl Blockchain {
         };
 
         this.chain_store
-            .put_chain_info(&mut txn, &block_hash, &chain_info, true, true);
+            .put_chain_info(&mut txn, &block_hash, &chain_info, true);
 
         // Update the chain info for the previous macro block and store it.
         prev_macro_info.main_chain_successor = Some(chain_info.head.hash());
@@ -179,7 +179,6 @@ impl Blockchain {
             &prev_macro_info.head.hash(),
             &prev_macro_info,
             false,
-            true,
         );
 
         // Set the head of the chain store to the current block.
@@ -379,7 +378,7 @@ impl Blockchain {
         );
 
         this.chain_store
-            .put_chain_info(&mut txn, &block_hash, &chain_info, true, true);
+            .put_chain_info(&mut txn, &block_hash, &chain_info, false);
 
         let wanted_history_root = this
             .history_store

@@ -94,10 +94,10 @@ impl Blockchain {
         // Restore genesis block.
         let genesis_info = ChainInfo::new(genesis_block, true);
         this.chain_store
-            .put_chain_info(&mut txn, &genesis_hash_blake2b, &genesis_info, true, true);
+            .put_chain_info(&mut txn, &genesis_hash_blake2b, &genesis_info, true);
 
         this.chain_store
-            .put_chain_info(&mut txn, &block_hash_blake2b, &chain_info, true, true);
+            .put_chain_info(&mut txn, &block_hash_blake2b, &chain_info, true);
         this.chain_store.set_head(&mut txn, &block_hash_blake2b);
 
         txn.commit();
@@ -263,7 +263,7 @@ impl Blockchain {
         let is_election_block = Policy::is_election_block_at(block_number);
 
         this.chain_store
-            .put_chain_info(&mut txn, &block_hash, &chain_info, true, true);
+            .put_chain_info(&mut txn, &block_hash, &chain_info, true);
         this.chain_store.set_head(&mut txn, &block_hash);
 
         // Since it's a macro block, we have to clear the ChainStore.
