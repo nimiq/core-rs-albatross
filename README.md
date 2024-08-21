@@ -46,7 +46,7 @@ For more detailed information about how to connect and use the testnet network, 
 - File systems with sparse file support.
 - It is highly recommended to run a clock synchronization protocol such as NTP. This
   is needed to properly accept blocks according to the timestamp and it is especially
-  important for validators in order to produce blocks in the expected timestamps.
+  important for validators in order to produce blocks within the expected timestamps.
 
 ## Installation
 
