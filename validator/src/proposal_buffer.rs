@@ -226,7 +226,7 @@ where
     ///    resolve their predecessor is created.
     pub fn poll_proposal(
         &mut self,
-        blockchain_arc: Arc<RwLock<Blockchain>>,
+        blockchain_arc: &Arc<RwLock<Blockchain>>,
     ) -> Option<(SignedProposal, PubsubId<TValidatorNetwork>)> {
         while let Some((_peer, (signed_proposal, pubsub_id))) = self.buffer.pop_front() {
             // Get a read lock of the blockchain.
@@ -277,7 +277,7 @@ where
                         let fut = Self::resolve_block(
                             (signed_proposal, pubsub_id),
                             consensus,
-                            Arc::clone(&blockchain_arc),
+                            Arc::clone(blockchain_arc),
                         )
                         .boxed();
                         self.resolve_block_futures.push(fut);
@@ -512,20 +512,14 @@ where
         let mut shared = self.shared.lock();
 
         // Poll proposals from the shared buffer.
-        let result = shared.poll_proposal(Arc::clone(&self.blockchain));
-
-        // If a Result was produced, return it as the item on the stream.
-        if let Some((proposal, pubsub_id)) = result {
+        if let Some((proposal, pubsub_id)) = shared.poll_proposal(&self.blockchain) {
             return Poll::Ready(Some(
                 proposal.into_tendermint_signed_message(Some(pubsub_id)),
             ));
         }
 
-        // Poll the resolve block futures to see if a proposals predecessor has resolved..
-        let result = shared.poll_resolve_block_futures(cx);
-
-        // If a Result was produced, return it as the item on the stream.
-        if let Some((proposal, pubsub_id)) = result {
+        // Poll the resolve block futures to see if a proposals predecessor has resolved.
+        if let Some((proposal, pubsub_id)) = shared.poll_resolve_block_futures(cx) {
             return Poll::Ready(Some(
                 proposal.into_tendermint_signed_message(Some(pubsub_id)),
             ));
@@ -536,12 +530,11 @@ where
             // nothing to do for any of the completed futures
         }
 
-        // Before returning, check if the buffer is empty, if so, store a waker.
         if shared.buffer.is_empty() {
             shared.waker.store_waker(cx);
         }
 
-        // There is nothing to return, so return Pending
+        // There is nothing to return.
         Poll::Pending
     }
 }
