@@ -15,6 +15,8 @@ use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{CloseReason, Network, NetworkEvent, SubscribeEvents};
 use nimiq_time::{interval, Interval};
 use nimiq_utils::stream::FuturesUnordered;
+use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{
     consensus::ResolveBlockRequest, messages::RequestHead, sync::live::block_queue::BlockSource,
@@ -103,6 +105,11 @@ pub enum LiveSyncPeerEvent<TPeerId> {
     Ahead(TPeerId),
 }
 
+#[derive(Clone)]
+pub enum SyncerEvent<TPeerId> {
+    AddLiveSync(TPeerId),
+}
+
 /// Syncer is the main synchronization object inside `Consensus`
 /// It has a reference to the main blockchain and network and has two dynamic
 /// trait objects:
@@ -123,6 +130,9 @@ pub struct Syncer<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> {
 
     /// A proxy to the blockchain
     blockchain: BlockchainProxy,
+
+    /// Sending-half of a broadcast channel for publishing syncer events
+    events: BroadcastSender<SyncerEvent<N::PeerId>>,
 
     /// A reference to the network
     network: Arc<N>,
@@ -156,12 +166,15 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
         macro_sync: M,
     ) -> Syncer<N, M, L> {
         let network_events = network.subscribe_events();
+        let (tx, _rx) = broadcast(256);
+
         Syncer {
             live_sync,
             macro_sync,
             blockchain,
             network,
             network_events,
+            events: tx,
             outdated_peers: Default::default(),
             incompatible_peers: Default::default(),
             check_interval: interval(Self::CHECK_INTERVAL),
@@ -181,11 +194,16 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
 
     pub fn move_peer_into_live_sync(&mut self, peer_id: N::PeerId) {
         debug!(%peer_id, "Adding peer to live sync");
-        self.live_sync.add_peer(peer_id);
+        self.live_sync.add_peer(peer_id.clone());
+        self.events.send(SyncerEvent::AddLiveSync(peer_id)).ok();
     }
 
     pub fn num_peers(&self) -> usize {
         self.live_sync.num_peers()
+    }
+
+    pub fn subscribe_events(&self) -> BroadcastStream<SyncerEvent<<N as Network>::PeerId>> {
+        BroadcastStream::new(self.events.subscribe())
     }
 
     pub fn peers(&self) -> Vec<N::PeerId> {
