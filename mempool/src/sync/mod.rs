@@ -65,7 +65,7 @@ impl<N: Network> HashRequestStatus<N> {
     }
 
     pub fn is_requested(&self) -> bool {
-        matches!(self.status, RequestStatus::Requested)
+        !matches!(self.status, RequestStatus::Pending)
     }
 
     pub fn mark_as_requested(&mut self) {
@@ -84,7 +84,7 @@ const SHUTDOWN_TIMEOUT_DURATION: Duration = Duration::from_secs(10 * 60); // 10 
 /// Struct responsible for discovering hashes and retrieving transactions from the mempool of other nodes that have mempool
 pub(crate) struct MempoolSyncer<N: Network> {
     /// Timeout to gracefully shutdown the mempool syncer entirely
-    abort_timeout: Pin<Box<Sleep>>,
+    shutdown_timer: Pin<Box<Sleep>>,
 
     /// Blockchain reference
     blockchain: Arc<RwLock<Blockchain>>,
@@ -111,7 +111,7 @@ pub(crate) struct MempoolSyncer<N: Network> {
         BoxFuture<'static, (N::PeerId, Result<ResponseMempoolTransactions, RequestError>)>,
     >,
 
-    /// Collection of transaction hashes we don't have in our local mempool
+    /// Collection of transaction hashes not present in the local mempool
     unknown_hashes: HashMap<Blake2bHash, HashRequestStatus<N>>,
 
     /// Abort handle for the hashes request handler
@@ -148,7 +148,7 @@ impl<N: Network> MempoolSyncer<N> {
         debug!(num_peers = %peers.len(), ?transaction_type, "Fetching mempool hashes from peers");
 
         let mut syncer = Self {
-            abort_timeout: Box::pin(sleep_until(Instant::now() + SHUTDOWN_TIMEOUT_DURATION)),
+            shutdown_timer: Box::pin(sleep_until(Instant::now() + SHUTDOWN_TIMEOUT_DURATION)),
             blockchain,
             hashes_requests,
             network: Arc::clone(&network),
@@ -338,8 +338,11 @@ impl<N: Network> Stream for MempoolSyncer<N> {
         }
 
         // Then we check if we should shutdown ourself
-        if self.abort_timeout.poll_unpin(cx).is_ready() {
-            info!("Shutdown mempool syncer");
+        if self.shutdown_timer.poll_unpin(cx).is_ready() {
+            info!(
+                syncer_type = ?self.mempool_transaction_type,
+                "Shutdown mempool syncer"
+            );
             self.shutdown_request_handlers();
             return Poll::Ready(None);
         }
