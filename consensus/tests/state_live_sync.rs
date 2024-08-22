@@ -331,10 +331,9 @@ async fn can_sync_state() {
         ),
         "Should immediately receive block"
     );
-    yield_now().await;
-
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
     assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    yield_now().await;
 
     let size = mock_node.blockchain.read().state.accounts.size();
     let num_chunks = size.div_ceil(Policy::state_chunks_max_size() as u64);
@@ -352,10 +351,9 @@ async fn can_sync_state() {
             ),
             "Should receive and accept chunks"
         );
-        yield_now().await;
-
         assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
         assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+        yield_now().await;
 
         let blockchain_rg = incomplete_blockchain.read();
         log::info!(
@@ -390,10 +388,9 @@ async fn can_sync_state() {
         ),
         "Should receive missing blocks"
     );
-    yield_now().await;
-
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 1);
+    yield_now().await;
 
     // Will apply the buffered block.
     assert!(
@@ -405,10 +402,9 @@ async fn can_sync_state() {
         ),
         "Should apply buffered block"
     );
-    yield_now().await;
-
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
     assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    yield_now().await;
 
     push_micro_block(&producer, &mock_node.blockchain);
     gossip_head_block(&block_tx, mock_id.clone(), &mock_node.blockchain).await;
@@ -423,10 +419,9 @@ async fn can_sync_state() {
         ),
         "Should apply announced block"
     );
-    yield_now().await;
-
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
     assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    yield_now().await;
 
     let blockchain_rg = incomplete_blockchain.read();
     assert!(blockchain_rg.accounts_complete());
@@ -491,6 +486,7 @@ async fn revert_chunks_for_state_live_sync() {
     );
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
     assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    yield_now().await;
 
     info!("Applying chunk #{}", 0);
     assert!(
@@ -507,6 +503,7 @@ async fn revert_chunks_for_state_live_sync() {
     );
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
     assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    yield_now().await;
 
     let blockchain_rg = incomplete_blockchain.read();
     log::info!(
@@ -551,6 +548,7 @@ async fn revert_chunks_for_state_live_sync() {
     );
     assert_eq!(live_sync.queue().num_buffered_chunks(), 1);
     assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    yield_now().await;
 
     info!("Applying chunk #{}", 2);
     assert!(
@@ -567,6 +565,7 @@ async fn revert_chunks_for_state_live_sync() {
     );
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
     assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    yield_now().await;
 
     info!("Applying chunk #{}", 3);
     assert!(
@@ -595,6 +594,7 @@ async fn revert_chunks_for_state_live_sync() {
         ),
         "Should receive and accept chunks"
     );
+    yield_now().await;
 
     // Checks that the state is complete but that the sync is still incomplete
     // and waiting for the macro block.
@@ -898,11 +898,10 @@ async fn clears_buffer_after_macro_block() {
         ),
         "Should receive and accept chunks after reset"
     );
-    yield_now().await;
-
     // Check buffer.
     assert_eq!(live_sync.queue().num_buffered_chunks(), 1);
     assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    yield_now().await;
 
     produce_macro_blocks(&producer, &mock_node.blockchain, 1);
     gossip_head_block(&block_tx, mock_id.clone(), &mock_node.blockchain).await;
@@ -922,11 +921,10 @@ async fn clears_buffer_after_macro_block() {
         ),
         "Should accept missing blocks"
     );
-    yield_now().await;
-
     // Check buffer.
     assert_eq!(live_sync.queue().num_buffered_chunks(), 1);
-    assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
+    assert_eq!(live_sync.queue().num_buffered_blocks(), 1);
+    yield_now().await;
 
     assert!(
         matches!(
@@ -940,7 +938,6 @@ async fn clears_buffer_after_macro_block() {
         ),
         "Should accept missing blocks"
     );
-    yield_now().await;
 
     mock_node.request_chunk_handler.unpause();
 
@@ -956,8 +953,6 @@ async fn clears_buffer_after_macro_block() {
         ),
         "Should accept chunks"
     );
-    yield_now().await;
-
     // Check buffer.
     assert_eq!(live_sync.queue().num_buffered_chunks(), 0);
     assert_eq!(live_sync.queue().num_buffered_blocks(), 0);
