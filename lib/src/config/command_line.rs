@@ -18,7 +18,7 @@ pub struct CommandLine {
     #[clap(long, short = 'c')]
     pub config: Option<PathBuf>,
 
-    /// Configure global log level.
+    /// Configure global log level, one of error, warn, info (default), debug, trace.
     ///
     /// # Examples
     ///
@@ -46,7 +46,7 @@ pub struct CommandLine {
     #[clap(long)]
     pub passive: bool,
 
-    /// Configure sync mode, one of history (default)
+    /// Configure sync mode, one of history (default), full, light.
     ///
     /// # Examples
     ///
@@ -55,7 +55,7 @@ pub struct CommandLine {
     #[clap(long = "mode", value_parser)]
     pub sync_mode: Option<SyncMode>,
 
-    /// Configure the network to connect to, one of test-albatross, dev-albatross (default)
+    /// Configure the network to connect to, one of main-albatross, test-albatross (default), dev-albatross.
     ///
     /// # Examples
     ///

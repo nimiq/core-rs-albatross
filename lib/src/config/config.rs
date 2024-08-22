@@ -118,11 +118,11 @@ pub struct NetworkConfig {
     pub advertised_addresses: Option<Vec<Multiaddr>>,
 
     /// The user agent is a custom string that is sent during the handshake. Usually it contains
-    /// the kind of node, Nimiq version, processor architecture and operating system. This enable
+    /// the kind of node, Nimiq version, processor architecture and operating system. This enables
     /// gathering information on which Nimiq versions are being run on the network. A typical
-    /// user agent would be `core-rs-albatross/0.1.0 (native; linux x86_64)`
+    /// user agent string looks like `core-rs-albatross/0.1.0 (native; linux x86_64)`
     ///
-    /// Default will generate a value from system information. This is recommended.
+    /// Default will generate a value from system information, this is recommended.
     ///
     #[builder(default)]
     pub user_agent: UserAgent,
@@ -556,7 +556,7 @@ pub struct RpcServerConfig {
     #[builder(default = "consts::RPC_DEFAULT_PORT")]
     pub port: u16,
 
-    /// TODO
+    /// TODO: Use this config setting and add it to the config.example.toml file
     #[builder(setter(strip_option))]
     pub corsdomain: Option<Vec<String>>,
 

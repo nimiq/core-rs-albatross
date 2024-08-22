@@ -1,56 +1,73 @@
 ##############################################################################
 #
-#   Nimiq core-rs example configuration file
+#   Nimiq core-rs-albatross example configuration file
 #
 #   Copy this to client.toml and edit appropriately.
 #
-#   The client will look for this config file in:
-#    * './' (current directory)
-#    * '$HOME/.config/nimiq'
+#   The client will look for this config file in '$HOME/.nimiq'
+#   if not specified with the --config option.
 #
 ##############################################################################
 
 ##############################################################################
-#
-# Network specific configuration
-#
+# Network configuration
 ##############################################################################
 
 [network]
 
-listen_addresses = ["/ip4/0.0.0.0/tcp/8443/ws"]
+# The local multiaddresses this node should bind to. Usually these are loopback addresses.
+# Multiple addresses can be specified.
+#
+# If `advertised_addresses` is not used, these addresses will also be advertised to peers.
+listen_addresses = [
+  "/ip4/0.0.0.0/tcp/8443/ws",
+  "/ip6/::/tcp/8443/ws",
+]
 
-seed_nodes = [{ address = "/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss" }]
+# Seed nodes to connect to when the node starts up. Multiple addresses can be specified.
+seed_nodes = [
+  { address = "/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss" },
+]
 
-# Optionally specify address(es) that will be advertised to peers instead of the ones in `listen_addresses`
+# Address(es) that will be advertised to peers instead of the ones in `listen_addresses`.
 #
 # This can be used to advertise the public URL and port that peers should connect to, while
 # `listen_addresses` contains the loopback IP and port that this nodes listens on, which may
 # not be publicly reachable.
-# For validators it is strongly recommended to list a public reachable IPv4 IP.
+# For validators it is strongly recommended to list a public reachable IPv4 IP. This IPv4
+# address must be the same as the node uses for outbound connections for autonat to work.
+# Default: []
 #advertised_addresses = [
-#        "/ip4/my.ip/tcp/8444/ws",
-#        "/dns4/my.public.domain.com/tcp/8443/wss",
+#  "/ip4/my.ip/tcp/8443/ws",
+#  "/dns4/my.public.domain.com/tcp/8443/wss",
 #]
 
-# User Agent
-#
-# String that describes what kind of node is running.
+# User Agent string that describes what kind of node is running.
 #
 # Default: Generated from version, operating system and processor architecture
-#user_agent = "core-rs/0.1.0 (native; linux x86_64)"
+#user_agent = "core-rs-albatross/0.1.0 (native; linux x86_64)"
 
-# Optionally specify if the network should allow the autonat feature to use non global IPs
-# Recommended setting is to keep it in false.
-#
+# If the network should allow the autonat feature to use non-global IPs.
 # Default: false
 #autonat_allow_non_global_ips = false
 
-# Optionally specify the desired number of peer connections the network should try to maintain
-# Recommended setting is to keep it in the default value (12).
-#
+# If the node should try to connect to loopback addresses, which are usually not reachable
+# from the public internet. This setting is useful for testing inside a local (Docker) network.
+# Default: false
+#allow_loopback_addresses = false
+
+# The desired number of peer connections the network should try to maintain.
 # Default: 12
 #desired_peer_count = 12
+
+# Where the peer key should be stored.
+# Default: "~/.nimiq/peer_key.dat"
+#peer_key_file = "path/to/peer_key.dat"
+
+# The peer key to use. This must be an Ed25519 keypair in hex format.
+# Only used when the `peer_key_file` does not exist.
+# Default: randomly generated
+#peer_key = ""
 
 ##############################################################################
 #
@@ -62,202 +79,202 @@ seed_nodes = [{ address = "/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss" }]
 #
 ##############################################################################
 #[network.tls]
-#private_key = "./my_private_key.pem"
-#certificates = "./my_certificate.pem"
+#private_key = "./path/to/private_key.pem"
+#certificates = "./path/to/certificate.pem"
 
 ##############################################################################
-#
-# Consensus specific configuration
-#
+# Consensus configuration
 ##############################################################################
 [consensus]
 
-# Specify the network to connect to.
-# Possible values: "main", "test", "dev", "test-albatross", "dev-albatross"
-# Default: "dev-albatross"
+# The network to connect to.
+# Possible values: "main-albatross", "test-albatross", "dev-albatross"
+# Default: "test-albatross"
 network = "test-albatross"
 
-# Specify the sync menchanism according to the client type
-# Possible values: history, full or light
+# The sync mode, which determines the client type.
+# Validator nodes require "full" or "history" sync mode.
+# Possible values: "history", "full", "light"
+# Default: "history"
 sync_mode = "full"
 
-# Specify the minimum distance away, in number of blocks, from the head to switch from state sync to live sync.
-# This property only has an effect when the sync_mode has the value "full"
-# Default: 10800
-# full_sync_threshold = 1000
+# The number of epochs that the node stores. This only concerns nodes with "full" sync mode.
+# Default: 1
+#max_epochs_stored = 1
+
+# The number of synced peers required to establish consensus.
+# Default: 3
+#min_peers = 3
+
+# The minimum distance away, in number of blocks, from the head to switch from state sync to live sync.
+# This property only has an effect when the sync_mode is "full"
+# Default: 10800 (3 hours worth of blocks)
+#full_sync_threshold = 10800
 
 # Enable or disable transaction indexing for history nodes.
-# This property only has an effect when the sync_mode has the value "history"
+# This property only has an effect when the sync_mode is "history"
 # Default: true
-# index_history = true
+#index_history = true
 
 ##############################################################################
-#
-# Database specific configuration
-#
+# Database configuration
 ##############################################################################
-#[database]
+[database]
 
-# Path to database
+# Path to folder in which the database is stored.
 # Default: ~/.nimiq
-#path=""
+#path = ""
 
-# Size of mapped memory (in bytes)
-# Default: 10 MB
-#size=0
+# Size of mapped virtual memory (in bytes).
+# Default: 1 TB
+#size = 0
 
-# Max number of databases
-# Default: 13
-#max_dbs=13
+# Max number of databases.
+# Default: 20
+#max_dbs = 20
+
+# Max number of reader threads.
+# Default: 600
+#max_readers = 600
 
 ##############################################################################
+# ZK Prover configuration
 #
-# ZK Prover specific configuration
-#
-# To enable, uncomment the section header '[zk-prover]'
-#
-#
-#
+# If the section header is uncommented, the prover is enabled.
 ##############################################################################
-# Uncomment the following line to enable the ZK prover.
 #[zk_prover]
 
-# Defines the path for the proving keys folders
+# The path for the proving keys folder.
 # Default: ".zkp"
-# prover_keys_path = "some_folder"
+#prover_keys_path = "path/to/folder"
 
 ##############################################################################
+# JSON-RPC server configuration
 #
-# Configure the JSON-RPC server.
-#
-# To enable, uncomment the section header '[rpc-server]'
-#
-#
-#
+# If the section header is uncommented, the server is enabled.
 ##############################################################################
-
-# Uncomment the following line to enable the RPC server.
 [rpc-server]
 
-# Bind the RPC server to specified IP
+# IP-address the RPC server should bind to.
 # Default: 127.0.0.1
-bind = "127.0.0.1"
+#bind = "127.0.0.1"
 
-# TCP-Port to use to create a listening socket for the JSON-RPC server.
-# Possible values: any valid port number
+# TCP-port the JSON-RPC server should listen on.
 # Default: 8648
-port = 8648
+#port = 8648
 
 # Allow only the RPC methods listed here. All methods are allowed if this is empty.
-# Example: ["getBlockByNumber", "peerCount"],
+# Example: ["getBlockByNumber", "getPeerCount"],
 # Default: []
-methods = []
+#methods = []
+
+# Allow connections only from the IP addresses listed here. All IP addresses are allowed if this is empty.
+# Default: []
+#allowip = []
 
 # Declare a username and password required to access the JSON-RPC server.
 # Default: none
-username = "super"
+#username = "super"
 # Default: none
-password = "secret"
+#password = "secret"
 
 ##############################################################################
-#
 # Metrics-server configuration.
-# If the section header is uncommented, the server is enabled.
 #
+# If the section header is uncommented, the server is enabled.
 ##############################################################################
-
 [metrics-server]
 
-# Bind the metrics server to the specified IP
+# Bind the metrics server to the specified IP.
 # Default: 127.0.0.1
-bind = "127.0.0.1"
+#bind = "127.0.0.1"
 
 # Port to use to create a listening socket for the metrics server.
-# Possible values: any valid port number
 # Default: 9100
-port = 9100
+#port = 9100
 
 # Declare a username and password required to access the metrics server.
 # Default: none
-username = "super"
-
+#username = "super"
 # Default: none
-password = "secret"
+#password = "secret"
 
 ##############################################################################
-#
-# Configure log output.
-#
+# Log output configuration
 ##############################################################################
-
 [log]
-# Configure global log level.
+
+# The global log level.
 # Possible values: "trace", "debug", "info", "warn", "error"
 # Default: "info"
 level = "debug"
 
-# Define specific log levels for tags.
+# Individual log levels for specific tags.
 # Default: none
 #tags = { BaseConsensus = "debug" }
 
-# Specify whether timestamps should be included for log statements.
+# Whether timestamps should be included for log statements.
 # Default: true
 #timestamps = false
 
-# Save log output to a file.
-# If not specified, log to stdout.
+# Interval in seconds in which the client status is logged.
+# Default: 10
+#statistics = 10
+
+# Save log output to a file. If not specified, logs to stderr.
 # Default: none
 #file = "nimiq-client.log"
 
-# Tokio console
+# Tokio console.
 # Default: None
 #tokio_console_bind_address = "127.0.0.1:6669"
 
 # Loki target
-# [log.loki]
+#[log.loki]
 
-# Loki server address
+# Loki server address.
 # Default: None
-# url = "http://localhost:3100"
+#url = "http://localhost:3100"
 
 # Labels set on the log messages. There should only be a finite amount of
 # different label values, and ideally very few labels. See the Loki
-# documentation for details:
-# labels = { host = "mine" }
+# documentation for details.
+#labels = { host = "mine" }
 
-# Extra fields added to each log message (e.g. to distinguish runs)
-# extra_fields = { run = "e2f8e044-0067-4902-914f-261b7f500ba7" }
+# Extra fields added to each log message (e.g. to distinguish runs).
+#extra_fields = { run = "e2f8e044-0067-4902-914f-261b7f500ba7" }
 
 ##############################################################################
-#
 # Configure log output for the prover process.
-# This section offers the same options as the [log] section.
 #
+# This section offers the same options as the [log] section.
 ##############################################################################
 
-# [prover-log]
-# Configure global log level.
+#[prover-log]
+
+# The prover log level.
 # Possible values: "trace", "debug", "info", "warn", "error"
 # Default: "info"
-# level = "debug"
+#level = "debug"
 
 ##############################################################################
-##
-## Configure mempool
-##
+# Mempool configuration
 ###############################################################################
-
 [mempool]
 
-# Total size limit of transactions in the mempool (bytes)
-# Default: 12_000_000 (~ 100000 basic tx)
+# Total size limit for transactions in the mempool, in bytes.
+# Default: 12_000_000 (~ 100_000 basic tx)
 #size_limit = 12_000_000
 
-# Configure max size of transaction black list
+# Total size limit for control transactions in the mempool, in bytes.
+# Default: 6_000_000
+#control_size_limit = 6_000_000
+
+# Maximum size of the transaction black list.
 # Default: 25000
 #blacklist_limit = 25000
 
-# Rules to filter certain transaction
+# Rules to filter mempool transaction by.
 #[mempool.filter]
 #tx_fee = 0
 #tx_fee_per_byte = 0
@@ -273,17 +290,42 @@ level = "debug"
 #recipient_balance = 0
 
 ##############################################################################
-##
-## Configure validator
-##
+# Validator configuration
+#
+# If the section header is uncommented, validator mode is enabled.
 ###############################################################################
+#[validator]
 
-[validator]
-validator_address = "NQ07 0000 0000 0000 0000 0000 0000 0000 0000"
-signing_key_file = "signing_key.dat"
-voting_key_file = "voting_key.dat"
-fee_key_file = "fee_key.dat"
-#signing_key = "Schnorr Private Key"
-#fee_key = "Schnorr Private Key"
-#voting_key = "BLS Private Key"
-automatic_reactivate = true
+# The address of the validator.
+#validator_address = "NQ07 0000 0000 0000 0000 0000 0000 0000 0000"
+
+# Whether to automatically create and send reactivation transactions when the validator becomes inactive.
+# Default: false
+#automatic_reactivate = true
+
+# Where to store the validator signing key.
+# Default: "~/.nimiq/signing_key.dat"
+#signing_key_file = "signing_key.dat"
+
+# The validator signing key. This must be an Ed25519 private key in hex format.
+# Only used when the `signing_key_file` does not exist.
+# Default: randomly generated
+#signing_key = ""
+
+# Where to store the validator voting key.
+# Default: "~/.nimiq/voting_key.dat"
+#voting_key_file = "voting_key.dat"
+
+# The validator voting key. This must be a BLS private key in hex format.
+# Only used when the `voting_key_file` does not exist.
+# Default: randomly generated
+#voting_key = ""
+
+# Where to store the validator fee key.
+# Default: "~/.nimiq/fee_key.dat"
+#fee_key_file = "fee_key.dat"
+
+# The validator fee key. This must be an Ed25519 private key in hex format.
+# Only used when the `fee_key_file` does not exist.
+# Default: randomly generated
+#fee_key = ""

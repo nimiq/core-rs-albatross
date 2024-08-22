@@ -210,8 +210,8 @@ impl Default for ConsensusSettings {
 #[serde(rename_all = "lowercase")]
 /// Synchronization mode used by the client based upon its client type
 pub enum SyncMode {
-    #[default]
     /// Synchronization mode used by History nodes (full transaction history is maintained)
+    #[default]
     History,
     /// Full Nodes. They use LightMacroSync + State Sync to reach consensus
     Full,
