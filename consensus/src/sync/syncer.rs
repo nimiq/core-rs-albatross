@@ -194,7 +194,7 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
 
     pub fn move_peer_into_live_sync(&mut self, peer_id: N::PeerId) {
         debug!(%peer_id, "Adding peer to live sync");
-        self.live_sync.add_peer(peer_id.clone());
+        self.live_sync.add_peer(peer_id);
         self.events.send(SyncerEvent::AddLiveSync(peer_id)).ok();
     }
 
