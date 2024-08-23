@@ -68,11 +68,17 @@ impl Mempool {
     pub const DEFAULT_CONTROL_SIZE_LIMIT: usize = 6_000_000;
 
     /// Creates a new mempool
-    pub fn new(blockchain: Arc<RwLock<Blockchain>>, config: MempoolConfig) -> Self {
+    pub fn new<N: Network>(
+        blockchain: Arc<RwLock<Blockchain>>,
+        config: MempoolConfig,
+        network: Arc<N>,
+    ) -> Self {
         let state = Arc::new(RwLock::new(MempoolState::new(
             config.size_limit,
             config.control_size_limit,
         )));
+
+        MempoolSyncer::init_network_request_receivers(network, Arc::clone(&state));
 
         Self {
             blockchain,

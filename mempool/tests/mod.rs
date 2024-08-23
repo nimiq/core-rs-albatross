@@ -60,10 +60,14 @@ async fn send_get_mempool_txns(
     txn_len: usize,
 ) -> (Vec<Transaction>, usize) {
     // Create mempool and subscribe with a custom txn stream.
-    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let mut hub = MockHub::new();
     let mock_id = MockId::new(hub.new_address().into());
     let mock_network = Arc::new(hub.new_network());
+    let mempool = Mempool::new(
+        Arc::clone(&blockchain),
+        MempoolConfig::default(),
+        Arc::clone(&mock_network),
+    );
 
     send_txn_to_mempool(&mempool, mock_network, mock_id, transactions).await;
 
@@ -1122,10 +1126,14 @@ async fn mempool_update() {
     ));
 
     // Create mempool and subscribe with a custom txn stream.
-    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let mut hub = MockHub::new();
     let mock_id = MockId::new(hub.new_address().into());
     let mock_network = Arc::new(hub.new_network());
+    let mempool = Mempool::new(
+        Arc::clone(&blockchain),
+        MempoolConfig::default(),
+        Arc::clone(&mock_network),
+    );
 
     // Send txns to mempool
     send_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
@@ -1250,10 +1258,14 @@ async fn mempool_update_aged_transaction() {
     ));
 
     // Create mempool and subscribe with a custom txn stream
-    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
     let mut hub = MockHub::new();
     let mock_id = MockId::new(hub.new_address().into());
     let mock_network = Arc::new(hub.new_network());
+    let mempool = Mempool::new(
+        blockchain.clone(),
+        MempoolConfig::default(),
+        Arc::clone(&mock_network),
+    );
 
     // Send txns to mempool
     send_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
@@ -1401,10 +1413,14 @@ async fn mempool_update_not_enough_balance() {
     ));
 
     // Create mempool and subscribe with a custom txn stream
-    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
     let mut hub = MockHub::new();
     let mock_id = MockId::new(hub.new_address().into());
     let mock_network = Arc::new(hub.new_network());
+    let mempool = Mempool::new(
+        blockchain.clone(),
+        MempoolConfig::default(),
+        Arc::clone(&mock_network),
+    );
 
     // Send txns to mempool
     send_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
@@ -1563,10 +1579,14 @@ async fn mempool_update_pruned_account() {
     ));
 
     // Create mempool and subscribe with a custom txn stream.
-    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
     let mut hub = MockHub::new();
     let mock_id = MockId::new(hub.new_address().into());
     let mock_network = Arc::new(hub.new_network());
+    let mempool = Mempool::new(
+        blockchain.clone(),
+        MempoolConfig::default(),
+        Arc::clone(&mock_network),
+    );
 
     // Send txns to mempool
     send_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
@@ -1664,10 +1684,14 @@ async fn mempool_basic_prioritization_control_tx() {
     ));
 
     // Create mempool and subscribe with a custom txn stream.
-    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
     let mut hub = MockHub::new();
     let mock_id = MockId::new(hub.new_address().into());
     let mock_network = Arc::new(hub.new_network());
+    let mempool = Mempool::new(
+        blockchain.clone(),
+        MempoolConfig::default(),
+        Arc::clone(&mock_network),
+    );
 
     // Send txns to mempool
     send_control_txn_to_mempool(&mempool, mock_network, mock_id, txns.clone()).await;
@@ -1773,10 +1797,14 @@ async fn mempool_regular_and_control_tx() {
     ));
 
     // Create mempool and subscribe with a custom txn stream.
-    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
     let mut hub = MockHub::new();
     let mock_id = MockId::new(hub.new_address().into());
     let mock_network = Arc::new(hub.new_network());
+    let mempool = Mempool::new(
+        blockchain.clone(),
+        MempoolConfig::default(),
+        Arc::clone(&mock_network),
+    );
 
     // This is the transaction produced in the block
     let control_tx = TransactionBuilder::new_create_staker(
@@ -1919,7 +1947,10 @@ async fn applies_total_tx_size_limits() {
         size_limit: txns_len - (1 + txns[1].serialized_size()),
         ..Default::default()
     };
-    let mempool = Mempool::new(blockchain, mempool_config);
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
+    let mempool = Mempool::new(blockchain, mempool_config, Arc::clone(&mock_network));
 
     // The worst transaction is the second transaction with the lowest fee.
     let worst_tx = txns[1].hash::<Blake2bHash>();
@@ -2132,10 +2163,14 @@ async fn it_can_reject_invalid_vesting_contract_transaction() {
     let producer = BlockProducer::new(signing_key(), voting_key());
 
     // Create mempool and subscribe with a custom txn stream
-    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
     let mut hub = MockHub::new();
     let mock_id = MockId::new(hub.new_address().into());
     let mock_network = Arc::new(hub.new_network());
+    let mempool = Mempool::new(
+        blockchain.clone(),
+        MempoolConfig::default(),
+        Arc::clone(&mock_network),
+    );
 
     // #1.0: Micro block that creates a vesting contract
     let bc = blockchain.upgradable_read();

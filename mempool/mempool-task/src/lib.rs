@@ -60,7 +60,11 @@ impl<N: Network> MempoolTask<N> {
         let blockchain_event_rx = blockchain.read().notifier_as_stream();
 
         let peers_in_live_sync = HashSet::from_iter(consensus.sync.peers());
-        let mempool = Arc::new(Mempool::new(Arc::clone(&blockchain), mempool_config));
+        let mempool = Arc::new(Mempool::new(
+            Arc::clone(&blockchain),
+            mempool_config,
+            Arc::clone(&consensus.network),
+        ));
         let mempool_active = false;
 
         Self {
