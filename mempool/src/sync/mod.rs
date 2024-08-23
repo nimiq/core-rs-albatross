@@ -12,11 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::{
-    future::BoxFuture,
-    stream::{AbortHandle, Abortable},
-    FutureExt, Stream, StreamExt,
-};
+use futures::{future::BoxFuture, FutureExt, Stream, StreamExt};
 use messages::{
     MempoolTransactionType, RequestMempoolHashes, RequestMempoolTransactions,
     ResponseMempoolHashes, ResponseMempoolTransactions,
@@ -114,11 +110,8 @@ pub(crate) struct MempoolSyncer<N: Network> {
     /// Collection of transaction hashes not present in the local mempool
     unknown_hashes: HashMap<Blake2bHash, HashRequestStatus<N>>,
 
-    /// Abort handle for the hashes request handler
-    hashes_request_abort_handle: Option<AbortHandle>,
-
-    /// Abort handle for the transactions request handler
-    transactions_request_abort_handle: Option<AbortHandle>,
+    /// The type of mempool transactions requested to other peers
+    mempool_transaction_type: MempoolTransactionType,
 }
 
 impl<N: Network> MempoolSyncer<N> {
@@ -147,7 +140,7 @@ impl<N: Network> MempoolSyncer<N> {
 
         debug!(num_peers = %peers.len(), ?transaction_type, "Fetching mempool hashes from peers");
 
-        let mut syncer = Self {
+        Self {
             shutdown_timer: Box::pin(sleep_until(Instant::now() + SHUTDOWN_TIMEOUT_DURATION)),
             blockchain,
             hashes_requests,
@@ -157,13 +150,8 @@ impl<N: Network> MempoolSyncer<N> {
             unknown_hashes: HashMap::new(),
             transactions: VecDeque::new(),
             transactions_requests: FuturesUnordered::new(),
-            hashes_request_abort_handle: None,
-            transactions_request_abort_handle: None,
-        };
-
-        syncer.init_network_request_receivers(&network, &mempool_state);
-
-        syncer
+            mempool_transaction_type: transaction_type,
+        }
     }
 
     /// Push newly discovered hashes into the `unknown_hashes` and keep track which peers have those hashes
@@ -223,49 +211,27 @@ impl<N: Network> MempoolSyncer<N> {
     }
 
     /// Spawn request handlers in order to process network responses
-    fn init_network_request_receivers(
-        &mut self,
-        network: &Arc<N>,
-        mempool_state: &Arc<RwLock<MempoolState>>,
+    pub fn init_network_request_receivers(
+        network: Arc<N>,
+        mempool_state: Arc<RwLock<MempoolState>>,
     ) {
-        // Register an abort handle and spawn the request handler for RequestMempoolHashes responses as a task
-        let stream = request_handler(
-            network,
+        // Spawn the request handler for RequestMempoolHashes responses as a task
+        let fut = request_handler(
+            &network,
             network.receive_requests::<RequestMempoolHashes>(),
-            mempool_state,
+            &mempool_state,
         )
         .boxed();
-        let (abort_handle, abort_registration) = AbortHandle::new_pair();
-        let future = async move {
-            let _ = Abortable::new(stream, abort_registration).await;
-        };
-        spawn(future);
-        self.hashes_request_abort_handle = Some(abort_handle);
+        spawn(fut);
 
-        // Register an abort handle and spawn the request handler for RequestMempoolTransactions responses as a task
-        let stream = request_handler(
-            network,
+        // Spawn the request handler for RequestMempoolTransactions responses as a task
+        let fut = request_handler(
+            &network,
             network.receive_requests::<RequestMempoolTransactions>(),
-            mempool_state,
+            &mempool_state,
         )
         .boxed();
-        let (abort_handle, abort_registration) = AbortHandle::new_pair();
-        let future = async move {
-            let _ = Abortable::new(stream, abort_registration).await;
-        };
-        spawn(future);
-        self.transactions_request_abort_handle = Some(abort_handle);
-    }
-
-    /// Abort the spawned request handlers
-    fn shutdown_request_handlers(&mut self) {
-        if let Some(abort_handle) = self.hashes_request_abort_handle.take() {
-            abort_handle.abort();
-        }
-
-        if let Some(abort_handle) = self.transactions_request_abort_handle.take() {
-            abort_handle.abort()
-        }
+        spawn(fut);
     }
 
     /// While there still are unknown transaction hashes which are not part of a request, generate requests and send them to other peers
@@ -343,7 +309,6 @@ impl<N: Network> Stream for MempoolSyncer<N> {
                 syncer_type = ?self.mempool_transaction_type,
                 "Shutdown mempool syncer"
             );
-            self.shutdown_request_handlers();
             return Poll::Ready(None);
         }
 
