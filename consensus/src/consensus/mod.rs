@@ -18,6 +18,7 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::request_handler};
+use nimiq_time::{interval, Interval};
 use nimiq_utils::spawn;
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 use tokio::sync::{
@@ -134,8 +135,10 @@ pub struct Consensus<N: Network> {
     #[cfg(feature = "full")]
     last_batch_number: u32,
     synced_validity_window_flag: Arc<AtomicBool>,
+
     head_requests: Option<HeadRequests<N>>,
     head_requests_time: Option<Instant>,
+    head_requests_interval: Interval,
 
     min_peers: usize,
 
@@ -218,6 +221,7 @@ impl<N: Network> Consensus<N> {
             synced_validity_window_flag,
             head_requests: None,
             head_requests_time: None,
+            head_requests_interval: interval(Self::HEAD_REQUESTS_TIMEOUT),
             min_peers,
             // Choose a small buffer as having a lot of items buffered here indicates a bigger problem.
             requests: mpsc_channel(10),
@@ -410,8 +414,10 @@ impl<N: Network> Consensus<N> {
                     // Also stop any other checks.
                     self.head_requests = None;
                     self.head_requests_time = None;
+
                     self.zkp_proxy
                         .request_zkp_from_peers(self.sync.peers(), false);
+
                     let (synced_validity_window, _) = self.check_validity_window();
                     return Some(ConsensusEvent::Established {
                         synced_validity_window,
@@ -426,14 +432,17 @@ impl<N: Network> Consensus<N> {
                         if head_request.num_known_blocks >= 2 * head_request.num_unknown_blocks {
                             info!("Consensus established, 2/3 of heads known.");
                             self.established_flag.swap(true, Ordering::Release);
+
                             self.zkp_proxy
                                 .request_zkp_from_peers(self.sync.peers(), false);
+
                             let (synced_validity_window, _) = self.check_validity_window();
                             return Some(ConsensusEvent::Established {
                                 synced_validity_window,
                             });
                         }
                     }
+
                     // If there's no ongoing head request, check whether we should start a new one.
                     self.request_heads();
                 }
@@ -442,29 +451,42 @@ impl<N: Network> Consensus<N> {
         None
     }
 
-    /// Requests heads from connected peers in a predefined interval.
+    /// Requests heads from connected peers.
     fn request_heads(&mut self) {
-        // If there's no ongoing head request and we have at least one peer, check whether we should
-        // start a new one.
-        if self.head_requests.is_none() && (self.num_agents() > 0 || self.min_peers == 0) {
-            // This is the case if `head_requests_time` is unset or the timeout is hit.
-            let should_start_request = self
-                .head_requests_time
-                .map(|time| time.elapsed() >= Self::HEAD_REQUESTS_TIMEOUT)
-                .unwrap_or(true);
-            if should_start_request {
-                debug!(
-                    "Initiating head requests (to {} peers)",
-                    self.sync.num_peers()
-                );
-                self.head_requests = Some(HeadRequests::new(
-                    self.sync.peers(),
-                    Arc::clone(&self.network),
-                    self.blockchain.clone(),
-                ));
-                self.head_requests_time = Some(Instant::now());
-            }
+        // Wait for an ongoing head request to finish.
+        if self.head_requests.is_some() {
+            return;
         }
+
+        // We need at least one synced peer to perform a head request.
+        // Specifying `min_peers = 0` in the consensus config allows the first seed node
+        // on a network to establish consensus without any other nodes present.
+        if self.num_agents() == 0 && self.min_peers > 0 {
+            return;
+        }
+
+        // This is the case if `head_requests_time` is unset or the timeout is hit.
+        let should_start_request = self
+            .head_requests_time
+            .map(|time| time.elapsed() >= Self::HEAD_REQUESTS_TIMEOUT)
+            .unwrap_or(true);
+        if !should_start_request {
+            return;
+        }
+
+        debug!(
+            "Initiating head requests (to {} peers)",
+            self.sync.num_peers()
+        );
+
+        self.head_requests = Some(HeadRequests::new(
+            self.sync.peers(),
+            Arc::clone(&self.network),
+            self.blockchain.clone(),
+        ));
+
+        self.head_requests_time = Some(Instant::now());
+        self.head_requests_interval = interval(Self::HEAD_REQUESTS_TIMEOUT);
     }
 
     fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
@@ -482,6 +504,7 @@ impl<N: Network> Future for Consensus<N> {
                 LiveSyncPushEvent::AcceptedAnnouncedBlock(_) => {
                     // Reset the head request timer when an announced block was accepted.
                     self.head_requests_time = Some(Instant::now());
+                    self.head_requests_interval = interval(Self::HEAD_REQUESTS_TIMEOUT);
                 }
                 LiveSyncPushEvent::AcceptedBufferedBlock(_, remaining_in_buffer) => {
                     if !self.is_established() {
@@ -545,6 +568,9 @@ impl<N: Network> Future for Consensus<N> {
                 ConsensusRequest::ResolveBlock(request) => self.resolve_block(request),
             }
         }
+
+        // Poll interval to wake up this task on a regular basis to perform head requests.
+        while self.head_requests_interval.poll_next_unpin(cx).is_ready() {}
 
         // Advance consensus and catch-up through head requests.
         self.request_heads();
