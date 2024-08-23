@@ -403,7 +403,7 @@ impl GenesisBuilder {
             parent_election_hash,
             interlink: Some(vec![]),
             seed,
-            extra_data: supply.serialize_to_vec(),
+            extra_data: u64::from(supply).to_be_bytes().to_vec(),
             state_root,
             body_root,
             diff_root: TreeProof::empty().root_hash(),
