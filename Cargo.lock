@@ -4962,6 +4962,7 @@ dependencies = [
  "rand",
  "rand_chacha",
  "serde",
+ "serde_json",
  "thiserror",
  "tracing",
  "tracing-subscriber 0.3.18",
@@ -5003,6 +5004,7 @@ dependencies = [
  "rand_chacha",
  "rayon",
  "serde",
+ "serde_json",
  "tracing",
  "tracing-subscriber 0.3.18",
 ]

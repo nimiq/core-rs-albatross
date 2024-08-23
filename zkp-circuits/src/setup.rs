@@ -44,6 +44,8 @@ pub fn setup<R: Rng + CryptoRng>(
     prover_active: bool,
 ) -> Result<(), NanoZKPError> {
     if all_files_created(path, prover_active) {
+        save_metadata_to_file(path, network_id)?;
+
         return Ok(());
     }
 
@@ -67,12 +69,7 @@ pub fn setup<R: Rng + CryptoRng>(
 
     setup_merger_wrapper(&mut rng, path)?;
 
-    let network_info = NetworkInfo::from_network_id(network_id);
-    let genesis_block = network_info.genesis_block().unwrap_macro();
-    let keys = load_keys(path)?;
-    let meta_data = VerifyingKeyMetadata::new(genesis_block.hash(), keys.commitment());
-
-    meta_data.save_to_file(path)?;
+    save_metadata_to_file(path, network_id)?;
 
     Ok(())
 }
@@ -80,6 +77,7 @@ pub fn setup<R: Rng + CryptoRng>(
 pub fn load_verifying_data(path: &Path) -> Result<VerifyingData, NanoZKPError> {
     let metadata = fs::read(path.join("meta_data.bin"))?;
     let metadata = VerifyingKeyMetadata::deserialize_from_vec(&metadata)?;
+
     Ok(VerifyingData {
         merger_wrapper_vk: load_key(&path.join("verifying_keys"), "merger_wrapper")?,
         keys_commitment: metadata.vks_commitment(),
@@ -89,6 +87,16 @@ pub fn load_verifying_data(path: &Path) -> Result<VerifyingData, NanoZKPError> {
 fn load_key<E: Pairing>(dir_path: &Path, file_name: &str) -> Result<VerifyingKey<E>, NanoZKPError> {
     let mut file = File::open(dir_path.join(format!("{file_name}.bin")))?;
     Ok(VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?)
+}
+
+pub fn save_metadata_to_file(path: &Path, network_id: NetworkId) -> Result<(), NanoZKPError> {
+    let network_info = NetworkInfo::from_network_id(network_id);
+    let genesis_block = network_info.genesis_block().unwrap_macro();
+    let keys = load_keys(path)?;
+
+    let meta_data = VerifyingKeyMetadata::new(genesis_block.hash(), keys.commitment());
+
+    Ok(meta_data.save_to_file(path)?)
 }
 
 pub fn load_keys(dir_path: &Path) -> Result<VerifyingKeys, NanoZKPError> {

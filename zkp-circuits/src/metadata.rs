@@ -1,4 +1,8 @@
-use std::{fs::File, io, path::Path};
+use std::{
+    fs::File,
+    io::{self, BufWriter, Write},
+    path::Path,
+};
 
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
@@ -7,6 +11,7 @@ use nimiq_serde::{Deserialize, Serialize};
 /// This data structure holds metadata about the verifying keys.
 /// It can be used to check whether verifying keys are still up to date.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct VerifyingKeyMetadata {
     genesis_hash: Blake2bHash,
     vks_commitment: Vec<u8>,
@@ -38,9 +43,11 @@ impl VerifyingKeyMetadata {
     }
 
     pub fn save_to_file(self, path: &Path) -> Result<(), io::Error> {
-        let mut file = File::create(path.join("meta_data.bin"))?;
-        self.serialize_to_writer(&mut file)?;
-        file.sync_all()?;
+        let file = File::create(path.join("meta_data.json"))?;
+        let mut writer = BufWriter::new(file);
+
+        serde_json::to_writer_pretty(&mut writer, &self)?;
+        writer.flush()?;
 
         Ok(())
     }

@@ -3,7 +3,6 @@ use std::{env, io::Cursor};
 use ark_groth16::VerifyingKey;
 use ark_serialize::CanonicalDeserialize;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_serde::Deserialize;
 use nimiq_zkp_circuits::metadata::VerifyingKeyMetadata;
 use nimiq_zkp_primitives::VerifyingData;
 use once_cell::sync::OnceCell;
@@ -35,9 +34,9 @@ impl ZKPVerifyingKey {
                     env!("CARGO_MANIFEST_DIR"),
                     "/../.zkp/verifying_keys/merger_wrapper.bin"
                 )),
-                include_bytes!(concat!(
+                include_str!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
-                    "/../.zkp/meta_data.bin"
+                    "/../.zkp/meta_data.json"
                 )),
             ),
             NetworkId::TestAlbatross => (
@@ -45,9 +44,19 @@ impl ZKPVerifyingKey {
                     env!("CARGO_MANIFEST_DIR"),
                     "/../.zkp_testnet/verifying_keys/merger_wrapper.bin"
                 )),
+                include_str!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../.zkp_testnet/meta_data.json"
+                )),
+            ),
+            NetworkId::MainAlbatross => (
                 include_bytes!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
-                    "/../.zkp_testnet/meta_data.bin"
+                    "/../.zkp_mainnet/verifying_keys/merger_wrapper.bin"
+                )),
+                include_str!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../.zkp_mainnet/meta_data.json"
                 )),
             ),
             NetworkId::UnitAlbatross => (
@@ -55,15 +64,14 @@ impl ZKPVerifyingKey {
                     env!("CARGO_MANIFEST_DIR"),
                     "/../.zkp_tests/verifying_keys/merger_wrapper.bin"
                 )),
-                include_bytes!(concat!(
+                include_str!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
-                    "/../.zkp_tests/meta_data.bin"
+                    "/../.zkp_tests/meta_data.json"
                 )),
             ),
             _ => panic!("Network id {:?} does not have a verifying key!", network_id),
         };
-
-        let metadata = VerifyingKeyMetadata::deserialize_from_vec(metadata_bytes)
+        let metadata: VerifyingKeyMetadata = serde_json::from_str(metadata_bytes)
             .expect("Invalid metadata. Please rebuild the ZKP keys.");
 
         assert!(
