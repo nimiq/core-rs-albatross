@@ -228,6 +228,89 @@ mod tests {
         assert!(syncer.unknown_hashes.is_empty());
     }
 
+    #[test(tokio::test)]
+    async fn it_can_dynamically_add_a_new_peer() {
+        // Generate test transactions
+        let num_transactions = 10;
+        let mut rng = test_rng(true);
+        let mempool_transactions = generate_test_transactions(num_transactions, &mut rng);
+
+        // Turn test transactions into transactions
+        let (txns, _): (Vec<Transaction>, usize) =
+            generate_transactions(mempool_transactions, true);
+        let hashes: Vec<Blake2bHash> = txns.iter().map(|txn| txn.hash()).collect();
+
+        // Create an empty blockchain
+        let time = Arc::new(OffsetTime::new());
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let blockchain = Arc::new(RwLock::new(
+            Blockchain::new(
+                env,
+                BlockchainConfig::default(),
+                NetworkId::UnitAlbatross,
+                time,
+            )
+            .unwrap(),
+        ));
+
+        // Setup empty Mempool State
+        let state = Arc::new(RwLock::new(MempoolState::new(100, 100)));
+
+        // Setup network
+        let mut hub = MockHub::default();
+        let net1 = Arc::new(hub.new_network());
+
+        // Create a new mempool syncer with 0 peers to sync with
+        let mut syncer = MempoolSyncer::new(
+            vec![],
+            MempoolTransactionType::Regular,
+            Arc::clone(&net1),
+            Arc::clone(&blockchain),
+            Arc::clone(&state),
+        );
+
+        // Poll to send out requests to peers and verify nothing has been received
+        let _ = poll!(syncer.next());
+        sleep(Duration::from_millis(200)).await;
+        assert!(syncer.unknown_hashes.is_empty());
+
+        // Add new peer and dial it
+        let net2 = Arc::new(hub.new_network());
+        net1.dial_mock(&net2);
+
+        // Setup stream to respond to requests
+        let hash_stream = net2.receive_requests::<RequestMempoolHashes>();
+
+        let hashes_repsonse = ResponseMempoolHashes {
+            hashes: hashes.clone(),
+        };
+
+        let net2_clone = Arc::clone(&net2);
+        let hashes_listener_future =
+            hash_stream.for_each(move |(_request, request_id, _peer_id)| {
+                let test_response = hashes_repsonse.clone();
+                let net2 = Arc::clone(&net2_clone);
+                async move {
+                    net2.respond::<RequestMempoolHashes>(request_id, test_response.clone())
+                        .await
+                        .unwrap();
+                }
+            });
+
+        // Spawn the request responder
+        spawn(hashes_listener_future);
+
+        // Dynamically add new peer to mempool syncer
+        syncer.add_peer(net2.peer_id());
+
+        let _ = poll!(syncer.next());
+        sleep(Duration::from_millis(200)).await;
+
+        // we have received unknown hashes from the added peer
+        let _ = poll!(syncer.next());
+        assert_eq!(syncer.unknown_hashes.len(), num_transactions);
+    }
+
     fn generate_test_transactions(num: usize, mut rng: &mut StdRng) -> Vec<TestTransaction> {
         let mut mempool_transactions = vec![];
 

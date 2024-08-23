@@ -181,6 +181,26 @@ impl<N: Network> MempoolSyncer<N> {
         })
     }
 
+    /// Add peer to discover its mempool
+    fn add_peer(&mut self, peer_id: N::PeerId) {
+        if self.peers.contains(&peer_id) {
+            return;
+        }
+
+        self.peers.push(peer_id);
+        let network = Arc::clone(&self.network);
+        let transaction_type = self.mempool_transaction_type.clone();
+        let request = async move {
+            (
+                peer_id,
+                Self::request_mempool_hashes(network, peer_id, transaction_type).await,
+            )
+        }
+        .boxed();
+
+        self.hashes_requests.push(request);
+    }
+
     /// Create a batch of transaction hashes that haven't yet been requested
     fn batch_hashes_by_peer_id(
         &mut self,
