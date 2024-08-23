@@ -8,9 +8,9 @@ use futures::{future::BoxFuture, FutureExt, Stream};
 use nimiq_block::Block;
 #[cfg(feature = "full")]
 use nimiq_blockchain::Blockchain;
-use nimiq_blockchain_interface::{
-    AbstractBlockchain, ChunksPushError, ChunksPushResult, PushError, PushResult,
-};
+#[cfg(feature = "full")]
+use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_blockchain_interface::{ChunksPushError, ChunksPushResult, PushError, PushResult};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_hash::Blake2bHash;
@@ -163,6 +163,7 @@ impl<N: Network> BlockchainPushResult<N> {
         }
     }
 
+    #[cfg(feature = "full")]
     fn with_block_result(
         push_result: Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError>,
         block_hash: Blake2bHash,
@@ -187,6 +188,7 @@ impl<N: Network> BlockchainPushResult<N> {
         }
     }
 
+    #[cfg(feature = "full")]
     fn with_chunks_result(
         push_chunks_result: Result<ChunksPushResult, ChunksPushError>,
         block_hash: Blake2bHash,

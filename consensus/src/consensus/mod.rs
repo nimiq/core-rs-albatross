@@ -13,7 +13,9 @@ use futures::{FutureExt, StreamExt};
 use instant::Instant;
 use nimiq_block::Block;
 use nimiq_blockchain_interface::AbstractBlockchain;
-use nimiq_blockchain_proxy::{BlockchainProxy, BlockchainReadProxy};
+use nimiq_blockchain_proxy::BlockchainProxy;
+#[cfg(feature = "full")]
+use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::request_handler};
 use nimiq_utils::spawn;
@@ -129,6 +131,7 @@ pub struct Consensus<N: Network> {
 
     events: BroadcastSender<ConsensusEvent>,
     established_flag: Arc<AtomicBool>,
+    #[cfg(feature = "full")]
     last_batch_number: u32,
     synced_validity_window_flag: Arc<AtomicBool>,
     head_requests: Option<HeadRequests<N>>,
@@ -210,6 +213,7 @@ impl<N: Network> Consensus<N> {
             sync: syncer,
             events: tx,
             established_flag,
+            #[cfg(feature = "full")]
             last_batch_number: 0,
             synced_validity_window_flag,
             head_requests: None,
@@ -221,11 +225,11 @@ impl<N: Network> Consensus<N> {
         }
     }
 
+    #[cfg(feature = "full")]
     fn init_remote_event_dispatcher(network: &Arc<N>, blockchain: &BlockchainProxy) {
         // We spawn the Remote Event Dispatcher into its own task (this is only available for full nodes and history nodes)
 
         match blockchain {
-            #[cfg(feature = "full")]
             BlockchainProxy::Full(blockchain) => {
                 let network = Arc::clone(network);
                 let blockchain = Arc::clone(blockchain);

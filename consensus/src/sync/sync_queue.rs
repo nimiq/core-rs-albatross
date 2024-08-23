@@ -114,6 +114,7 @@ where
     TError: Debug + Display + Send,
     TNetwork: Network,
 {
+    #[cfg(feature = "full")]
     pub fn new(
         network: Arc<TNetwork>,
         ids: Vec<(TId, Option<TNetwork::PeerId>)>,
@@ -309,10 +310,12 @@ where
         true
     }
 
+    #[cfg(feature = "full")]
     pub fn add_peer(&mut self, peer_id: TNetwork::PeerId) -> bool {
         self.peers.write().add_peer(peer_id)
     }
 
+    #[cfg(feature = "full")]
     pub fn remove_peer(&mut self, peer_id: &TNetwork::PeerId) {
         self.peers.write().remove_peer(peer_id);
     }
@@ -326,6 +329,7 @@ where
         self.waker.wake();
     }
 
+    #[cfg(feature = "full")]
     /// Truncates the stored ids, retaining only the first `len` elements.
     /// The elements are counted from the *original* start of the ids vector.
     pub fn truncate_ids(&mut self, len: usize) {
@@ -333,6 +337,7 @@ where
             .truncate(len.saturating_sub(self.next_incoming_index));
     }
 
+    #[cfg(feature = "full")]
     pub fn num_peers(&self) -> usize {
         self.peers.read().len()
     }
@@ -341,10 +346,12 @@ where
         self.ids_to_request.len() + self.pending_futures.len() + self.queued_outputs.len()
     }
 
+    #[cfg(feature = "full")]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    #[cfg(feature = "full")]
     pub fn set_verify_state(&mut self, verify_state: TVerifyState) {
         self.verify_state = verify_state;
     }

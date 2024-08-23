@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use bytes::Bytes;
+#[cfg(feature = "metrics")]
 use instant::Instant;
 use libp2p::{
     gossipsub,

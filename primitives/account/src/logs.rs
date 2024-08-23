@@ -422,6 +422,7 @@ impl<'a> InherentLogger<'a> {
         }
     }
 
+    #[cfg(feature = "interaction-traits")]
     pub(crate) fn push_tx_logger(&mut self, mut tx_logger: TransactionLog) {
         if let Some(ref mut inherents) = self.inherents {
             inherents.append(&mut tx_logger.logs)

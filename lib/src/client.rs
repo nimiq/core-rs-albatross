@@ -6,9 +6,11 @@ use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
+#[cfg(feature = "full-consensus")]
+use nimiq_consensus::Error::BlockchainError;
 use nimiq_consensus::{
     sync::syncer_proxy::SyncerProxy, Consensus as AbstractConsensus,
-    ConsensusProxy as AbstractConsensusProxy, Error::BlockchainError,
+    ConsensusProxy as AbstractConsensusProxy,
 };
 #[cfg(feature = "zkp-prover")]
 use nimiq_genesis::NetworkId;
@@ -28,6 +30,7 @@ use nimiq_network_libp2p::{
     TlsConfig as NetworkTls,
 };
 use nimiq_primitives::policy::Policy;
+#[cfg(feature = "full-consensus")]
 use nimiq_utils::time::OffsetTime;
 #[cfg(feature = "validator")]
 use nimiq_validator::validator::Validator as AbstractValidator;
@@ -210,6 +213,7 @@ impl ClientInner {
             )));
         }
 
+        #[cfg(feature = "full-consensus")]
         // Initialize clock
         let time = Arc::new(OffsetTime::new());
 

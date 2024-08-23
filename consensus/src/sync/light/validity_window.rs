@@ -4,10 +4,7 @@ use std::{
 };
 
 use futures::StreamExt;
-#[cfg(feature = "full")]
-use nimiq_blockchain::interface::HistoryInterface;
-#[cfg(feature = "full")]
-use nimiq_blockchain::{Blockchain, CHUNK_SIZE};
+use nimiq_blockchain::{interface::HistoryInterface, Blockchain, CHUNK_SIZE};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
@@ -18,11 +15,11 @@ use nimiq_network_interface::{
 use nimiq_primitives::policy::Policy;
 
 use super::LightMacroSync;
-#[cfg(feature = "full")]
-use crate::messages::{HistoryChunk, HistoryChunkError, RequestHistoryChunk};
-use crate::sync::{light::sync::ValidityChunkRequest, syncer::MacroSyncReturn};
+use crate::{
+    messages::{HistoryChunk, HistoryChunkError, RequestHistoryChunk},
+    sync::{light::sync::ValidityChunkRequest, syncer::MacroSyncReturn},
+};
 
-#[cfg(feature = "full")]
 impl<TNetwork: Network> LightMacroSync<TNetwork> {
     pub async fn request_validity_window_chunk(
         network: Arc<TNetwork>,

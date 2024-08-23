@@ -9,8 +9,6 @@ use std::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{future::BoxFuture, ready, stream::BoxStream, Stream, StreamExt};
-#[cfg(all(target_family = "wasm", not(feature = "tokio-websocket")))]
-use libp2p::websocket_websys;
 use libp2p::{
     gossipsub, request_response::InboundRequestId, swarm::NetworkInfo, Multiaddr, PeerId, Swarm,
 };

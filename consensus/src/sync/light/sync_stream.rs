@@ -12,6 +12,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::network::{CloseReason, Network, NetworkEvent};
+#[cfg(feature = "full")]
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_component::types::ZKPRequestEvent::{OutdatedProof, Proof};
 

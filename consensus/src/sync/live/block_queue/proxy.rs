@@ -13,9 +13,13 @@ use nimiq_bls::cache::PublicKeyCache;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::Network;
 use nimiq_utils::spawn;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
+#[cfg(feature = "full")]
+use parking_lot::RwLock;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
+#[cfg(feature = "full")]
+use crate::sync::peer_list::PeerList;
 use crate::{
     consensus::ResolveBlockRequest,
     sync::{
@@ -26,7 +30,6 @@ use crate::{
             },
             queue::{LiveSyncQueue, QueueConfig},
         },
-        peer_list::PeerList,
         syncer::LiveSyncEvent,
     },
 };
@@ -93,6 +96,7 @@ impl<N: Network> BlockQueueProxy<N> {
         self.queue.lock().num_buffered_blocks()
     }
 
+    #[cfg(feature = "full")]
     pub(crate) fn peer_list(&self) -> Arc<RwLock<PeerList<N>>> {
         self.queue.lock().peer_list()
     }

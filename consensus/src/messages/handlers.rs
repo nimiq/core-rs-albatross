@@ -9,7 +9,9 @@ use nimiq_block::BlockInclusionProof;
 use nimiq_blockchain::interface::{HistoryIndexInterface, HistoryInterface};
 #[cfg(feature = "full")]
 use nimiq_blockchain::{Blockchain, CHUNK_SIZE};
-use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError, Direction};
+#[cfg(feature = "full")]
+use nimiq_blockchain_interface::BlockchainError;
+use nimiq_blockchain_interface::{AbstractBlockchain, Direction};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_network_interface::{network::Network, request::Handle};
 use nimiq_primitives::policy::Policy;

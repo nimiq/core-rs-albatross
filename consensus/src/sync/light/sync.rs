@@ -1,5 +1,7 @@
+#[cfg(feature = "full")]
+use std::collections::HashSet;
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     sync::Arc,
 };
 
@@ -16,13 +18,17 @@ use nimiq_zkp_component::{
     types::{Error, ZKPRequestEvent},
     zkp_component::ZKPComponentProxy,
 };
+#[cfg(feature = "full")]
 use parking_lot::RwLock;
 
-#[cfg(feature = "full")]
-use crate::messages::{HistoryChunk, HistoryChunkError, RequestHistoryChunk};
 use crate::{
     messages::{BlockError, Checkpoint},
-    sync::{peer_list::PeerList, sync_queue::SyncQueue, syncer::MacroSync},
+    sync::syncer::MacroSync,
+};
+#[cfg(feature = "full")]
+use crate::{
+    messages::{HistoryChunk, HistoryChunkError, RequestHistoryChunk},
+    sync::{peer_list::PeerList, sync_queue::SyncQueue},
 };
 
 #[derive(Clone)]
@@ -53,6 +59,7 @@ impl<T> EpochIds<T> {
     }
 }
 
+#[cfg(feature = "full")]
 /// Struct used to track the progress of the validity window chunk process.
 pub struct ValidityChunkRequest {
     /// This corresponds to the block that should be used to verify the proof.
@@ -123,6 +130,7 @@ impl PeerMacroRequests {
     }
 }
 
+#[cfg(feature = "full")]
 /// Validity sync queue pending size
 const PENDING_SIZE: usize = 5;
 
@@ -176,12 +184,16 @@ pub struct LightMacroSync<TNetwork: Network> {
         (),
     >,
 
+    #[cfg(feature = "full")]
     /// Used to track the validity chunks we are requesting
     pub(crate) validity_requests: Option<ValidityChunkRequest>,
+    #[cfg(feature = "full")]
     /// The peers we are currently syncing with
     pub(crate) syncing_peers: HashSet<TNetwork::PeerId>,
+    #[cfg(feature = "full")]
     /// A vec of all the peers that we successfully synced with
     pub(crate) synced_validity_peers: Vec<TNetwork::PeerId>,
+    #[cfg(feature = "full")]
     /// Minimum distance to light sync in #blocks from the peers head.
     pub(crate) full_sync_threshold: u32,
 }
@@ -227,12 +239,16 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             epoch_ids_stream: FuturesUnordered::new(),
             zkp_component_proxy,
             zkp_requests: FuturesUnordered::new(),
+            #[cfg(feature = "full")]
             full_sync_threshold,
             block_headers: Default::default(),
+            #[cfg(feature = "full")]
             validity_requests: None,
+            #[cfg(feature = "full")]
             syncing_peers: HashSet::new(),
             #[cfg(feature = "full")]
             validity_queue,
+            #[cfg(feature = "full")]
             synced_validity_peers: Vec::new(),
         }
     }

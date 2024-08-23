@@ -2,6 +2,7 @@ use std::{collections::HashMap, num::NonZeroU8, sync::Arc};
 
 use base64::Engine;
 use futures::StreamExt;
+#[cfg(feature = "metrics")]
 use instant::Instant;
 #[cfg(all(target_family = "wasm", not(feature = "tokio-websocket")))]
 use libp2p::websocket_websys;

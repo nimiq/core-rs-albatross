@@ -153,6 +153,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         }
     }
 
+    #[cfg(feature = "full")]
     pub(crate) fn request_single_macro_block(
         &mut self,
         peer_id: TNetwork::PeerId,

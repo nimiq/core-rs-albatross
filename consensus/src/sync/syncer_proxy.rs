@@ -11,6 +11,7 @@ use nimiq_block::Block;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_bls::cache::PublicKeyCache;
 use nimiq_network_interface::network::{Network, SubscribeEvents};
+#[cfg(feature = "full")]
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 use parking_lot::Mutex;

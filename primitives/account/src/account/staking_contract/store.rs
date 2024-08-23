@@ -1,5 +1,7 @@
 use nimiq_keys::Address;
-use nimiq_primitives::{account::AccountError, key_nibbles::KeyNibbles};
+#[cfg(feature = "interaction-traits")]
+use nimiq_primitives::account::AccountError;
+use nimiq_primitives::key_nibbles::KeyNibbles;
 
 #[cfg(feature = "interaction-traits")]
 use crate::data_store::DataStoreWrite;
@@ -142,12 +144,14 @@ impl<'write, 'store, 'tree, 'txn, 'txni, 'env> StakingContractStoreReadOps
     }
 }
 
+#[cfg(feature = "interaction-traits")]
 pub trait StakingContractStoreReadOpsExt {
     fn expect_validator(&self, address: &Address) -> Result<Validator, AccountError>;
 
     fn expect_staker(&self, address: &Address) -> Result<Staker, AccountError>;
 }
 
+#[cfg(feature = "interaction-traits")]
 impl<T: StakingContractStoreReadOps> StakingContractStoreReadOpsExt for T {
     fn expect_validator(&self, address: &Address) -> Result<Validator, AccountError> {
         self.get_validator(address)
