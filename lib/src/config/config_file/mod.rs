@@ -350,36 +350,48 @@ pub struct MempoolSettings {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MempoolFilterSettings {
+    /// Minimum fee for all transactions
     #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
     pub tx_fee: Coin,
+    /// Minimum fee per byte for all transactions
     #[serde(default)]
     pub tx_fee_per_byte: f64,
+    /// Minimum value for all transactions
     #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
     pub tx_value: Coin,
+    /// Minimum total value (value + fee) for all transactions
     #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
     pub tx_value_total: Coin,
+    /// Minimum fee for transactions creating a contract
     #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
     pub contract_fee: Coin,
+    /// Minimum fee per byte for transactions creating a contract
     #[serde(default)]
     pub contract_fee_per_byte: f64,
+    /// Minimum value for transactions creating a contract
     #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
     pub contract_value: Coin,
-    #[serde(default)]
+    /// Minimum fee for transactions creating a new account
     #[serde(deserialize_with = "deserialize_coin")]
+    #[serde(default)]
     pub creation_fee: Coin,
+    /// Minimum fee per byte for transactions creating a new account
     #[serde(default)]
     pub creation_fee_per_byte: f64,
+    /// Minimum value for transactions creating a new account
     #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
     pub creation_value: Coin,
+    /// Minimum balance that the recipient account must have after the transaction
     #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
     pub recipient_balance: Coin,
+    /// Minimum balance that must remain on the sender account after the transaction, if not zero
     #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
     pub sender_balance: Coin,

@@ -110,29 +110,29 @@ impl Default for MempoolFilter {
 /// Struct defining a Mempool rule
 #[derive(Debug, Clone)]
 pub struct MempoolRules {
-    /// Transaction fee
+    /// Minimum fee for all transactions
     pub tx_fee: Coin,
-    /// Transaction fee per byte
+    /// Minimum fee per byte for all transactions
     pub tx_fee_per_byte: f64,
-    /// Transaction value
+    /// Minimum value for all transactions
     pub tx_value: Coin,
-    /// Transaction total value
+    /// Minimum total value (value + fee) for all transactions
     pub tx_value_total: Coin,
-    /// Contract fee
+    /// Minimum fee for transactions creating a contract
     pub contract_fee: Coin,
-    /// Contract fee per byte
+    /// Minimum fee per byte for transactions creating a contract
     pub contract_fee_per_byte: f64,
-    /// Contract value
+    /// Minimum value for transactions creating a contract
     pub contract_value: Coin,
-    /// Creation fee
+    /// Minimum fee for transactions creating a new account
     pub creation_fee: Coin,
-    /// Creation fee per byte
+    /// Minimum fee per byte for transactions creating a new account
     pub creation_fee_per_byte: f64,
-    /// Creation value
+    /// Minimum value for transactions creating a new account
     pub creation_value: Coin,
-    /// Recipient balance
+    /// Minimum balance that the recipient account must have after the transaction
     pub recipient_balance: Coin,
-    /// Sender balance
+    /// Minimum balance that must remain on the sender account after the transaction, if not zero
     pub sender_balance: Coin,
 }
 

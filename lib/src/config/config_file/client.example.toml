@@ -276,17 +276,30 @@ level = "debug"
 
 # Rules to filter mempool transaction by.
 #[mempool.filter]
+
+# Minimum fee for all transactions.
 #tx_fee = 0
+# Minimum fee per byte for all transactions.
 #tx_fee_per_byte = 0
+# Minimum value for all transactions.
 #tx_value = 0
+# Minimum total value (value + fee) for all transactions.
 #tx_value_total = 0
+# Minimum fee for transactions creating a contract.
 #contract_fee = 0
+# Minimum fee per byte for transactions creating a contract.
 #contract_fee_per_byte = 0
+# Minimum value for transactions creating a contract.
 #contract_value = 0
+# Minimum fee for transactions creating a new account.
 #creation_fee = 0
+# Minimum fee per byte for transactions creating a new account.
 #creation_fee_per_byte = 0
+# Minimum value for transactions creating a new account.
 #creation_value = 0
+# Minimum balance that the recipient account must have after the transaction.
 #sender_balance = 0
+# Minimum balance that must remain on the sender account after the transaction, if not zero.
 #recipient_balance = 0
 
 ##############################################################################
