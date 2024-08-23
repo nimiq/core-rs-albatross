@@ -211,7 +211,7 @@ pub async fn sync_two_peers(
             BlockchainEvent::Finalized(_) | BlockchainEvent::EpochFinalized(_)
         ))
     });
-    let mut consensus_events = consensus2_proxy.subscribe_events();
+    let mut consensus_events = consensus2_proxy.subscribe_consensus_events();
     spawn(consensus2);
 
     for _ in 0..num_batches_live_sync {

@@ -188,9 +188,9 @@ impl<N: Network> MempoolTask<N> {
         }
     }
 
-    fn on_syncer_event(&mut self, event: SyncerEvent<N::PeerId>) {
+    fn on_syncer_event(&mut self, event: SyncEvent<N::PeerId>) {
         match event {
-            SyncerEvent::AddLiveSync(peer_id) => {
+            SyncEvent::AddLiveSync(peer_id) => {
                 self.peers_in_live_sync.insert(peer_id);
             }
         }

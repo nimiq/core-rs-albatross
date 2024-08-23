@@ -36,7 +36,11 @@ use self::remote_event_dispatcher::RemoteEventDispatcher;
 use crate::{
     consensus::head_requests::{HeadRequests, HeadRequestsResult},
     messages::{RequestBlock, RequestHead, RequestMacroChain, RequestMissingBlocks},
-    sync::{live::block_queue::BlockSource, syncer::LiveSyncPushEvent, syncer_proxy::SyncerProxy},
+    sync::{
+        live::block_queue::BlockSource,
+        syncer::{LiveSyncPushEvent, SyncEvent},
+        syncer_proxy::SyncerProxy,
+    },
 };
 #[cfg(feature = "full")]
 use crate::{
@@ -130,7 +134,8 @@ pub struct Consensus<N: Network> {
 
     pub sync: SyncerProxy<N>,
 
-    events: BroadcastSender<ConsensusEvent>,
+    consensus_events: BroadcastSender<ConsensusEvent>,
+    sync_events: BroadcastSender<SyncEvent<N::PeerId>>,
     established_flag: Arc<AtomicBool>,
     #[cfg(feature = "full")]
     last_batch_number: u32,
@@ -196,6 +201,7 @@ impl<N: Network> Consensus<N> {
         zkp_proxy: ZKPComponentProxy<N>,
     ) -> Self {
         let (tx, _rx) = broadcast(256);
+        let sync_event_sender = syncer.broadcast_sender();
 
         Self::init_network_request_receivers(&network, &blockchain);
 
@@ -216,7 +222,8 @@ impl<N: Network> Consensus<N> {
             blockchain,
             network,
             sync: syncer,
-            events: tx,
+            consensus_events: tx,
+            sync_events: sync_event_sender,
             established_flag,
             #[cfg(feature = "full")]
             last_batch_number: 0,
@@ -299,7 +306,7 @@ impl<N: Network> Consensus<N> {
     }
 
     pub fn subscribe_events(&self) -> BroadcastStream<ConsensusEvent> {
-        BroadcastStream::new(self.events.subscribe())
+        BroadcastStream::new(self.consensus_events.subscribe())
     }
 
     pub fn is_established(&self) -> bool {
@@ -316,7 +323,8 @@ impl<N: Network> Consensus<N> {
             network: Arc::clone(&self.network),
             established_flag: Arc::clone(&self.established_flag),
             synced_validity_window_flag: Arc::clone(&self.synced_validity_window_flag),
-            events: self.events.clone(),
+            consensus_events: self.consensus_events.clone(),
+            sync_events: self.sync_events.clone(),
             request: self.requests.0.clone(),
         }
     }
@@ -332,7 +340,7 @@ impl<N: Network> Consensus<N> {
 
         // We don't care if anyone is listening.
         let (synced_validity_window, _) = self.check_validity_window();
-        self.events
+        self.consensus_events
             .send(ConsensusEvent::Established {
                 synced_validity_window,
             })
@@ -547,7 +555,7 @@ impl<N: Network> Future for Consensus<N> {
 
         // Check consensus established state on changes.
         if let Some(event) = self.check_established(None) {
-            self.events.send(event).ok();
+            self.consensus_events.send(event).ok();
         }
 
         // Poll any head requests if active.
@@ -563,7 +571,7 @@ impl<N: Network> Future for Consensus<N> {
 
                 // Update established state using the result.
                 if let Some(event) = self.check_established(Some(result)) {
-                    self.events.send(event).ok();
+                    self.consensus_events.send(event).ok();
                 }
             }
         }
