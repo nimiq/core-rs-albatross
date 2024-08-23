@@ -17,7 +17,7 @@ WORKDIR /home/nimiq
 RUN mkdir -p /home/nimiq/.nimiq
 
 # Set default config can be overwritten by mounting
-COPY ./client.toml /home/nimiq/.nimiq
+COPY ./lib/src/config/config_file/client.example.toml /home/nimiq/.nimiq/client.toml
 
 COPY ./target/release/nimiq-client /usr/local/bin/nimiq-client
 COPY ./target/release/nimiq-bls /usr/local/bin/nimiq-bls
