@@ -54,8 +54,7 @@ use crate::{
 enum ValidatorStakingState {
     Active,
     Inactive(Option<u32>),
-    NoStake,
-    Unknown,
+    UnknownOrNoStake,
 }
 
 pub struct ConsensusState {
@@ -305,18 +304,17 @@ where
         });
 
         // Check validator configuration
-        let _ = self.get_validator(&blockchain)
-            .map(|validator| validator.map(|validator| {
-                // Compare configured validator voting key to the one in the contract to make sure it is the same.
-                if validator.voting_key != self.voting_key().public_key.compress() {
-                    error!("Invalid validator configuration: Configured voting key does not match voting key in staking contract");
-                }
+        if let Some(validator) = self.get_validator(&blockchain) {
+            // Compare configured validator voting key to the one in the contract to make sure it is the same.
+            if validator.voting_key != self.voting_key().public_key.compress() {
+                error!("Invalid validator configuration: Configured voting key does not match voting key in staking contract");
+            }
 
-                // Compare configured validator signing key to the one in the contract to make sure it is the same.
-                if validator.signing_key != self.signing_key().public {
-                    error!("Invalid validator configuration: Configured signing key does not match signing key in staking contract");
-                }
-            }));
+            // Compare configured validator signing key to the one in the contract to make sure it is the same.
+            if validator.signing_key != self.signing_key().public {
+                error!("Invalid validator configuration: Configured signing key does not match signing key in staking contract");
+            }
+        }
     }
 
     fn init_block_producer(&mut self, head_hash: Option<&Blake2bHash>) {
@@ -642,31 +640,26 @@ where
         self.consensus.is_ready_for_validation()
     }
 
-    fn get_validator(&self, blockchain: &Blockchain) -> Result<Option<ValidatorAccount>, ()> {
+    fn get_validator(&self, blockchain: &Blockchain) -> Option<ValidatorAccount> {
         let validator_address = self.validator_address();
-        let staking_contract = match blockchain.get_staking_contract_if_complete(None) {
-            Some(contract) => contract,
-            None => return Err(()),
-        };
-
-        // Then fetch the validator to see if it is active.
-        let data_store = blockchain.get_staking_contract_store();
-        let txn = blockchain.read_transaction();
-        Ok(staking_contract.get_validator(&data_store.read(&txn), &validator_address))
+        blockchain
+            .get_staking_contract_if_complete(None)
+            .and_then(|staking_contract| {
+                // Then fetch the validator to see if it is active.
+                let data_store = blockchain.get_staking_contract_store();
+                let txn = blockchain.read_transaction();
+                staking_contract.get_validator(&data_store.read(&txn), &validator_address)
+            })
     }
 
     fn get_staking_state(&self, blockchain: &Blockchain) -> ValidatorStakingState {
-        match self.get_validator(blockchain) {
-            Err(_) => ValidatorStakingState::Unknown,
-            Ok(validator) => {
-                validator.map_or(ValidatorStakingState::NoStake, |validator| match validator
-                    .inactive_from
-                {
-                    Some(_) => ValidatorStakingState::Inactive(validator.jailed_from),
-                    None => ValidatorStakingState::Active,
-                })
-            }
-        }
+        self.get_validator(blockchain).map_or(
+            ValidatorStakingState::UnknownOrNoStake,
+            |validator| match validator.inactive_from {
+                Some(_) => ValidatorStakingState::Inactive(validator.jailed_from),
+                None => ValidatorStakingState::Active,
+            },
+        )
     }
 
     fn reactivate(&self, blockchain: &Blockchain) -> InactivityState {
@@ -819,7 +812,7 @@ where
                         self.validator_state = Some(inactivity_state);
                     }
                 }
-                ValidatorStakingState::NoStake | ValidatorStakingState::Unknown => {}
+                ValidatorStakingState::UnknownOrNoStake => {}
             }
         }
 
