@@ -18,6 +18,7 @@ use messages::{
     ResponseMempoolHashes, ResponseMempoolTransactions,
 };
 use nimiq_blockchain::Blockchain;
+use nimiq_consensus::{sync::syncer::SyncEvent, ConsensusProxy};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_network_interface::{
     network::Network,
@@ -28,6 +29,7 @@ use nimiq_transaction::{historic_transaction::RawTransactionHash, Transaction};
 use nimiq_utils::{spawn, stream::FuturesUnordered};
 use parking_lot::RwLock;
 use tokio::time::Sleep;
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{executor::PubsubIdOrPeerId, mempool_state::MempoolState};
 
@@ -77,10 +79,13 @@ const MAX_HASHES_PER_REQUEST: usize = 500;
 const MAX_TOTAL_TRANSACTIONS: usize = 5000;
 const SHUTDOWN_TIMEOUT_DURATION: Duration = Duration::from_secs(10 * 60); // 10 minutes
 
-/// Struct responsible for discovering hashes and retrieving transactions from the mempool of other nodes that have mempool
+/// Struct responsible for discovering hashes and retrieving transactions from the mempool of other nodes that have a mempool
 pub(crate) struct MempoolSyncer<N: Network> {
     /// Timeout to gracefully shutdown the mempool syncer entirely
     shutdown_timer: Pin<Box<Sleep>>,
+
+    /// Consensus sync event receiver
+    consensus_sync_event_rx: BroadcastStream<SyncEvent<<N as Network>::PeerId>>,
 
     /// Blockchain reference
     blockchain: Arc<RwLock<Blockchain>>,
@@ -118,15 +123,15 @@ impl<N: Network> MempoolSyncer<N> {
     pub fn new(
         peers: Vec<N::PeerId>,
         transaction_type: MempoolTransactionType,
-        network: Arc<N>,
         blockchain: Arc<RwLock<Blockchain>>,
+        consensus: ConsensusProxy<N>,
         mempool_state: Arc<RwLock<MempoolState>>,
     ) -> Self {
         let hashes_requests = peers
             .iter()
             .map(|peer_id| {
                 let peer_id = *peer_id;
-                let network = Arc::clone(&network);
+                let network = Arc::clone(&consensus.network);
                 let transaction_type = transaction_type.to_owned();
                 async move {
                     (
@@ -142,9 +147,10 @@ impl<N: Network> MempoolSyncer<N> {
 
         Self {
             shutdown_timer: Box::pin(sleep_until(Instant::now() + SHUTDOWN_TIMEOUT_DURATION)),
+            consensus_sync_event_rx: consensus.subscribe_sync_events(),
             blockchain,
             hashes_requests,
-            network: Arc::clone(&network),
+            network: consensus.network,
             peers,
             mempool_state: Arc::clone(&mempool_state),
             unknown_hashes: HashMap::new(),
@@ -332,6 +338,13 @@ impl<N: Network> Stream for MempoolSyncer<N> {
             return Poll::Ready(None);
         }
 
+        // Then we check if peers got added to live sync in the mean time
+        while let Poll::Ready(Some(Ok(event))) = self.consensus_sync_event_rx.poll_next_unpin(cx) {
+            match event {
+                SyncEvent::AddLiveSync(peer_id) => self.add_peer(peer_id),
+            }
+        }
+
         // Then we check our RequestMempoolHashes responses
         while let Poll::Ready(Some((peer_id, result))) = self.hashes_requests.poll_next_unpin(cx) {
             match result {
@@ -375,7 +388,7 @@ impl<N: Network> Stream for MempoolSyncer<N> {
                         continue;
                     }
 
-                    info!(num = %transactions.len(), "Pushed synced mempool transactions into the mempool");
+                    info!(num = %transactions.len(), "Synced mempool transactions");
                     self.transactions.extend(transactions);
                 }
                 Err(err) => {

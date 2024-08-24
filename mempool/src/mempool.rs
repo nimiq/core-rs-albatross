@@ -12,6 +12,7 @@ use nimiq_account::ReservedBalance;
 use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, TransactionVerificationCache};
 use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_consensus::ConsensusProxy;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_network_interface::{
@@ -146,6 +147,7 @@ impl Mempool {
         monitor: Option<TaskMonitor>,
         control_monitor: Option<TaskMonitor>,
         mut peers: Vec<N::PeerId>,
+        consensus: ConsensusProxy<N>,
     ) {
         let executor_handle = self.executor_handle.lock().await;
         let control_executor_handle = self.control_executor_handle.lock().await;
@@ -161,8 +163,8 @@ impl Mempool {
         let regular_transactions_syncer = MempoolSyncer::new(
             peers.clone(),
             MempoolTransactionType::Regular,
-            Arc::clone(&network),
             Arc::clone(&self.blockchain),
+            consensus.clone(),
             Arc::clone(&self.state),
         );
 
@@ -185,8 +187,8 @@ impl Mempool {
         let control_transactions_syncer = MempoolSyncer::new(
             peers,
             MempoolTransactionType::Control,
-            Arc::clone(&network),
             Arc::clone(&self.blockchain),
+            consensus.clone(),
             Arc::clone(&self.state),
         );
 

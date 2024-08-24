@@ -4453,6 +4453,7 @@ dependencies = [
  "nimiq-blockchain",
  "nimiq-blockchain-interface",
  "nimiq-bls",
+ "nimiq-consensus",
  "nimiq-database",
  "nimiq-genesis",
  "nimiq-genesis-builder",
