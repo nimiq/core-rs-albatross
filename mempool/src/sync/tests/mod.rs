@@ -12,6 +12,7 @@ mod tests {
     use nimiq_network_mock::MockHub;
     use nimiq_test_log::test;
     use nimiq_test_utils::{
+        consensus::consensus,
         test_rng::test_rng,
         test_transaction::{generate_transactions, TestAccount, TestTransaction},
     };
@@ -70,6 +71,10 @@ mod tests {
         net1.dial_mock(&net2);
         let peer_ids = net1.get_peers();
 
+        // Setup consensus proxy
+        let consensus = consensus(Arc::clone(&blockchain), Arc::clone(&net1)).await;
+        let proxy = consensus.proxy();
+
         // Setup streams to respond to requests
         let hash_stream = net2.receive_requests::<RequestMempoolHashes>();
         let txns_stream = net2.receive_requests::<RequestMempoolTransactions>();
@@ -111,8 +116,8 @@ mod tests {
         let mut syncer = MempoolSyncer::new(
             peer_ids,
             MempoolTransactionType::Regular,
-            net1,
             Arc::clone(&blockchain),
+            proxy,
             Arc::clone(&state),
         );
 
@@ -186,6 +191,10 @@ mod tests {
         net1.dial_mock(&net2);
         let peer_ids = net1.get_peers();
 
+        // Setup consensus proxy
+        let consensus = consensus(Arc::clone(&blockchain), Arc::clone(&net1)).await;
+        let proxy = consensus.proxy();
+
         // Setup stream to respond to requests
         let hash_stream = net2.receive_requests::<RequestMempoolHashes>();
 
@@ -212,8 +221,8 @@ mod tests {
         let mut syncer = MempoolSyncer::new(
             peer_ids,
             MempoolTransactionType::Regular,
-            net1,
             Arc::clone(&blockchain),
+            proxy,
             Arc::clone(&state),
         );
 
@@ -260,12 +269,16 @@ mod tests {
         let mut hub = MockHub::default();
         let net1 = Arc::new(hub.new_network());
 
+        // Setup consensus proxy
+        let consensus = consensus(Arc::clone(&blockchain), Arc::clone(&net1)).await;
+        let proxy = consensus.proxy();
+
         // Create a new mempool syncer with 0 peers to sync with
         let mut syncer = MempoolSyncer::new(
             vec![],
             MempoolTransactionType::Regular,
-            Arc::clone(&net1),
             Arc::clone(&blockchain),
+            proxy,
             Arc::clone(&state),
         );
 
@@ -306,7 +319,7 @@ mod tests {
         let _ = poll!(syncer.next());
         sleep(Duration::from_millis(200)).await;
 
-        // we have received unknown hashes from the added peer
+        // We have received unknown hashes from the added peer
         let _ = poll!(syncer.next());
         assert_eq!(syncer.unknown_hashes.len(), num_transactions);
     }

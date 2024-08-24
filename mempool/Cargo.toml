@@ -36,6 +36,7 @@ nimiq-account = { workspace = true }
 nimiq-block = { workspace = true }
 nimiq-blockchain = { workspace = true }
 nimiq-blockchain-interface = { workspace = true }
+nimiq-consensus = { workspace = true }
 nimiq-database = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true }

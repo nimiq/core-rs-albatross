@@ -9,7 +9,7 @@ use futures::{stream::BoxStream, Future, Stream, StreamExt};
 use log::{debug, warn};
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
-use nimiq_consensus::{sync::syncer::SyncerEvent, Consensus, ConsensusEvent, ConsensusProxy};
+use nimiq_consensus::{sync::syncer::SyncEvent, Consensus, ConsensusEvent, ConsensusProxy};
 use nimiq_mempool::{config::MempoolConfig, mempool::Mempool};
 use nimiq_network_interface::network::{Network, NetworkEvent, SubscribeEvents};
 use nimiq_utils::spawn;
@@ -36,7 +36,7 @@ pub struct MempoolTask<N: Network> {
     consensus_event_rx: BroadcastStream<ConsensusEvent>,
     blockchain_event_rx: BoxStream<'static, BlockchainEvent>,
     network_event_rx: SubscribeEvents<N::PeerId>,
-    syncer_event_rx: BroadcastStream<SyncerEvent<N::PeerId>>,
+    sync_event_rx: BroadcastStream<SyncEvent<<N as Network>::PeerId>>,
 
     peers_in_live_sync: HashSet<N::PeerId>,
 
@@ -56,8 +56,10 @@ impl<N: Network> MempoolTask<N> {
     ) -> Self {
         let consensus_event_rx = consensus.subscribe_events();
         let network_event_rx = consensus.network.subscribe_events();
-        let syncer_event_rx = consensus.sync.subscribe_events();
         let blockchain_event_rx = blockchain.read().notifier_as_stream();
+
+        let proxy = consensus.proxy();
+        let sync_event_rx = proxy.subscribe_sync_events();
 
         let peers_in_live_sync = HashSet::from_iter(consensus.sync.peers());
         let mempool = Arc::new(Mempool::new(
@@ -68,13 +70,13 @@ impl<N: Network> MempoolTask<N> {
         let mempool_active = false;
 
         Self {
-            consensus: consensus.proxy(),
+            consensus: proxy,
             peers_in_live_sync,
 
             consensus_event_rx,
             blockchain_event_rx,
             network_event_rx,
-            syncer_event_rx,
+            sync_event_rx,
 
             mempool: Arc::clone(&mempool),
             mempool_active,
@@ -109,17 +111,21 @@ impl<N: Network> MempoolTask<N> {
         let peers = self.peers_in_live_sync.clone().into_iter().collect();
         #[cfg(not(feature = "metrics"))]
         spawn({
+            let consensus = self.consensus.clone();
             async move {
                 // The mempool is not updated while consensus is lost.
                 // Thus, we need to check all transactions if they are still valid.
                 mempool.cleanup();
-                mempool.start_executors(network, None, None, peers).await;
+                mempool
+                    .start_executors(network, None, None, peers, consensus)
+                    .await;
             }
         });
         #[cfg(feature = "metrics")]
         spawn({
             let mempool_monitor = self.mempool_monitor.clone();
             let ctrl_mempool_monitor = self.control_mempool_monitor.clone();
+            let consensus = self.consensus.clone();
             async move {
                 // The mempool is not updated while consensus is lost.
                 // Thus, we need to check all transactions if they are still valid.
@@ -131,6 +137,7 @@ impl<N: Network> MempoolTask<N> {
                         Some(mempool_monitor),
                         Some(ctrl_mempool_monitor),
                         peers,
+                        consensus,
                     )
                     .await;
             }
@@ -188,7 +195,7 @@ impl<N: Network> MempoolTask<N> {
         }
     }
 
-    fn on_syncer_event(&mut self, event: SyncEvent<N::PeerId>) {
+    fn on_consensus_sync_event(&mut self, event: SyncEvent<N::PeerId>) {
         match event {
             SyncEvent::AddLiveSync(peer_id) => {
                 self.peers_in_live_sync.insert(peer_id);
@@ -210,9 +217,9 @@ impl<N: Network> Stream for MempoolTask<N> {
     type Item = MempoolEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // Process syncer updates.
-        while let Poll::Ready(Some(Ok(event))) = self.syncer_event_rx.poll_next_unpin(cx) {
-            self.on_syncer_event(event)
+        // Process consensus sync updates.
+        while let Poll::Ready(Some(Ok(event))) = self.sync_event_rx.poll_next_unpin(cx) {
+            self.on_consensus_sync_event(event)
         }
 
         // Process network updates.
