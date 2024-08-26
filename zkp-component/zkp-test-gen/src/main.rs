@@ -15,7 +15,7 @@ use nimiq_serde::Serialize;
 use nimiq_test_utils::{
     blockchain::{signing_key, voting_key},
     blockchain_with_rng::produce_macro_blocks_with_rng,
-    zkp_test_data::{get_base_seed, DEFAULT_TEST_KEYS_PATH},
+    zkp_test_data::get_base_seed,
 };
 use nimiq_utils::time::OffsetTime;
 use nimiq_zkp::ZKP_VERIFYING_DATA;
@@ -72,15 +72,9 @@ fn blockchain() -> Arc<RwLock<Blockchain>> {
 }
 
 async fn produce_two_consecutive_valid_zk_proofs() {
-    setup(
-        get_base_seed(),
-        Path::new(DEFAULT_TEST_KEYS_PATH),
-        NetworkId::UnitAlbatross,
-        true,
-    )
-    .unwrap();
-    ZKP_VERIFYING_DATA
-        .init_with_data(load_verifying_data(Path::new(DEFAULT_TEST_KEYS_PATH)).unwrap());
+    let keys_path = Path::new(NetworkId::UnitAlbatross.default_zkp_path().unwrap());
+    setup(get_base_seed(), keys_path, NetworkId::UnitAlbatross, true).unwrap();
+    ZKP_VERIFYING_DATA.init_with_data(load_verifying_data(keys_path).unwrap());
 
     let blockchain = blockchain();
 
@@ -107,7 +101,7 @@ async fn produce_two_consecutive_valid_zk_proofs() {
         zkp_state.latest_proof,
         block,
         genesis_header_hash,
-        Path::new(DEFAULT_TEST_KEYS_PATH),
+        keys_path,
     )
     .unwrap();
     let proof = zkp_state.clone().into();
@@ -134,7 +128,7 @@ async fn produce_two_consecutive_valid_zk_proofs() {
         zkp_state.latest_proof,
         block,
         genesis_header_hash,
-        Path::new(DEFAULT_TEST_KEYS_PATH),
+        keys_path,
     )
     .unwrap();
     let proof = zkp_state.into();

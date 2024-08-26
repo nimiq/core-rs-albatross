@@ -79,7 +79,7 @@ parallel = [
     "nimiq-zkp-primitives/parallel",
     "rayon",
 ]
-test-setup = ["ark-poly", "zkp-prover"]
+test-setup = ["ark-poly", "zkp-prover", "cli"]
 zkp-prover = [
     "ark-crypto-primitives/r1cs",
     "ark-groth16/r1cs",

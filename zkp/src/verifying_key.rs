@@ -32,11 +32,11 @@ impl ZKPVerifyingKey {
             NetworkId::DevAlbatross => (
                 include_bytes!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
-                    "/../.zkp/verifying_keys/merger_wrapper.bin"
+                    "/../.zkp_devnet/verifying_keys/merger_wrapper.bin"
                 )),
                 include_str!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
-                    "/../.zkp/meta_data.json"
+                    "/../.zkp_devnet/meta_data.json"
                 )),
             ),
             NetworkId::TestAlbatross => (

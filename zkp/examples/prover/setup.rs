@@ -8,7 +8,7 @@ use nimiq_zkp_circuits::setup::setup;
 use rand::thread_rng;
 use tracing_subscriber::{filter::Targets, prelude::*};
 
-const DEFAULT_EXAMPLE_PATH: &str = ".zkp_example";
+const DEFAULT_EXAMPLE_ZKP_PATH: &str = ".zkp_example";
 
 fn initialize() {
     tracing_subscriber::registry()
@@ -44,7 +44,7 @@ fn main() {
     // use the current directory
     setup(
         thread_rng(),
-        &PathBuf::from(DEFAULT_EXAMPLE_PATH),
+        &PathBuf::from(DEFAULT_EXAMPLE_ZKP_PATH),
         NetworkId::TestAlbatross,
         true,
     )

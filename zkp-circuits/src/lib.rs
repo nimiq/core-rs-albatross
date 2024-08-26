@@ -21,4 +21,4 @@ pub mod recursive {
     pub use crate::gadgets::recursive_input::RecursiveInputVar;
 }
 
-pub const DEFAULT_KEYS_PATH: &str = ".zkp";
+pub const DEFAULT_PROVER_KEYS_PATH: &str = ".zkp";

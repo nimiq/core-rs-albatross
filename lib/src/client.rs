@@ -179,38 +179,50 @@ impl ClientInner {
         }
 
         #[cfg(feature = "zkp-prover")]
-        // If the Prover is active for devnet we need to ensure that the proving keys are present.
-        if config.network_id == NetworkId::DevAlbatross
-            && config.zkp.prover_active
-            && !all_files_created(&config.zkp.prover_keys_path, config.zkp.prover_active)
-        {
-            log::info!("Setting up zero-knowledge prover keys for devnet.");
-            log::info!("This task only needs to be run once and might take about an hour.");
-            log::info!(
-                "Alternatively, you can place the proving keys in this folder: {:?}.",
-                config.zkp.prover_keys_path
-            );
-            setup(
-                ChaCha20Rng::from_seed(DEVELOPMENT_SEED),
-                &config.zkp.prover_keys_path,
-                config.network_id,
-                config.zkp.prover_active,
-            )?;
-            log::info!("Setting the verification key.");
-            let vk = load_verifying_data(&config.zkp.prover_keys_path)?;
-            assert_eq!(vk, *ZKP_VERIFYING_DATA, "Verifying keys don't match. The build in verifying keys don't match the newly generated ones.");
-            log::debug!("Finished ZKP setup.");
-        } else if config.network_id == NetworkId::TestAlbatross
-            && config.zkp.prover_active
-            && !all_files_created(&config.zkp.prover_keys_path, config.zkp.prover_active)
-        {
-            log::error!(
-                "Proving keys missing, please place them in this folder: {:?}.",
-                config.zkp.prover_keys_path
-            );
-            return Err(Error::NanoZKP(NanoZKPError::Filesystem(
-                std::io::Error::new(std::io::ErrorKind::Other, "Proving keys do not exist."),
-            )));
+        // If the Prover is active we need to ensure that the proving keys are present.
+        if config.zkp.prover_active {
+            let prover_keys_path = config
+                .zkp
+                .prover_keys_path
+                .as_ref()
+                .expect("Prover node must have a path for the zkp keys.");
+            if !all_files_created(prover_keys_path, config.zkp.prover_active) {
+                match config.network_id {
+                    NetworkId::DevAlbatross => {
+                        log::info!("Setting up zero-knowledge prover keys for devnet.");
+                        log::info!(
+                            "This task only needs to be run once and might take about an hour."
+                        );
+                        log::info!(
+                            "Alternatively, you can place the proving keys in this folder: {:?}.",
+                            prover_keys_path
+                        );
+                        setup(
+                            ChaCha20Rng::from_seed(DEVELOPMENT_SEED),
+                            prover_keys_path,
+                            config.network_id,
+                            config.zkp.prover_active,
+                        )?;
+                        log::info!("Setting the verification key.");
+                        let vk = load_verifying_data(prover_keys_path)?;
+                        assert_eq!(vk, *ZKP_VERIFYING_DATA, "Verifying keys don't match. The build in verifying keys don't match the newly generated ones.");
+                        log::debug!("Finished ZKP setup.");
+                    }
+                    NetworkId::TestAlbatross | NetworkId::MainAlbatross => {
+                        log::error!(
+                            "Proving keys missing, please place them in this folder: {:?}.",
+                            prover_keys_path
+                        );
+                        return Err(Error::NanoZKP(NanoZKPError::Filesystem(
+                            std::io::Error::new(
+                                std::io::ErrorKind::Other,
+                                "Proving keys do not exist.",
+                            ),
+                        )));
+                    }
+                    _ => {}
+                }
+            }
         }
 
         #[cfg(feature = "full-consensus")]
@@ -393,7 +405,10 @@ impl ClientInner {
                         Arc::clone(&network),
                         config.zkp.prover_active,
                         None,
-                        config.zkp.prover_keys_path,
+                        config
+                            .zkp
+                            .prover_keys_path
+                            .expect("Prover node must have a path for the zkp keys."),
                         zkp_storage,
                     )
                     .await
@@ -439,7 +454,10 @@ impl ClientInner {
                         Arc::clone(&network),
                         config.zkp.prover_active,
                         None,
-                        config.zkp.prover_keys_path,
+                        config
+                            .zkp
+                            .prover_keys_path
+                            .expect("Prover node must have a path for the zkp keys."),
                         zkp_storage,
                     )
                     .await

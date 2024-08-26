@@ -86,6 +86,10 @@ impl FromStr for NetworkId {
     }
 }
 
+#[derive(Error, Debug)]
+#[error("Input is not a valid albatross network: {0}")]
+pub struct NetworkIdNotAlbatross(String);
+
 impl NetworkId {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -98,6 +102,18 @@ impl NetworkId {
             NetworkId::DevAlbatross => "DevAlbatross",
             NetworkId::UnitAlbatross => "UnitAlbatross",
             NetworkId::MainAlbatross => "MainAlbatross",
+        }
+    }
+
+    /// This returns the default path for the zk keys based on the network id.
+    /// Important note: Changing these constants must be reflected on several other places.
+    pub fn default_zkp_path(&self) -> Result<&'static str, NetworkIdNotAlbatross> {
+        match self {
+            NetworkId::TestAlbatross => Ok(".zkp_testnet"),
+            NetworkId::DevAlbatross => Ok(".zkp_devnet"),
+            NetworkId::UnitAlbatross => Ok(".zkp_tests"),
+            NetworkId::MainAlbatross => Ok(".zkp_mainnet"),
+            _ => Err(NetworkIdNotAlbatross(self.as_str().to_owned())),
         }
     }
 }

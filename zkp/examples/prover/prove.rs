@@ -18,7 +18,7 @@ use nimiq_test_utils::{
 use nimiq_zkp::prove::prove;
 use tracing_subscriber::{filter::Targets, prelude::*};
 
-const DEFAULT_EXAMPLE_PATH: &str = ".zkp_example";
+const DEFAULT_EXAMPLE_ZKP_PATH: &str = ".zkp_example";
 
 fn initialize() {
     tracing_subscriber::registry()
@@ -80,7 +80,7 @@ fn main() {
     );
 
     let offset = Policy::genesis_block_number();
-    let path = &PathBuf::from(DEFAULT_EXAMPLE_PATH);
+    let path = &PathBuf::from(DEFAULT_EXAMPLE_ZKP_PATH);
     let total_start = Instant::now();
 
     for i in 0..number_epochs {
@@ -116,7 +116,7 @@ fn main() {
         )
         .unwrap();
 
-        let proofs_path = format!("{}/{}", DEFAULT_EXAMPLE_PATH, "proofs");
+        let proofs_path = format!("{}/{}", DEFAULT_EXAMPLE_ZKP_PATH, "proofs");
         if !Path::new(&proofs_path).is_dir() {
             DirBuilder::new().create(proofs_path.clone()).unwrap();
         }

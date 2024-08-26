@@ -25,11 +25,8 @@ pub fn get_base_seed() -> ChaCha20Rng {
 pub const ZKP_TEST_BIN_NAME: &str = "nimiq-test-prove";
 /// The path to the zkp directory for tests relative to the test binaries.
 /// This should be used while running unit tests.
+/// We have other places (eg. default zkp paths on network id) that need to be updated when updating this.
 pub const ZKP_TEST_KEYS_PATH: &str = "../.zkp_tests";
-/// The path to the zkp directory for tests relative to the project root.
-/// This should be used while running test related binaries.
-/// We have copies of this constant in several places that need to be updated when updating this.
-pub const DEFAULT_TEST_KEYS_PATH: &str = ".zkp_tests";
 
 pub fn zkp_test_exe() -> std::path::PathBuf {
     // Cargo puts the integration test binary in target/debug/deps

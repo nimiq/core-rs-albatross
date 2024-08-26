@@ -18,13 +18,9 @@
 
 [network]
 
-listen_addresses = [
-  "/ip4/0.0.0.0/tcp/8443/ws",
-]
+listen_addresses = ["/ip4/0.0.0.0/tcp/8443/ws"]
 
-seed_nodes = [
-  { address = "/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss" },
-]
+seed_nodes = [{ address = "/dns4/seed1.pos.nimiq-testnet.com/tcp/8443/wss" }]
 
 # Optionally specify address(es) that will be advertised to peers instead of the ones in `listen_addresses`
 #
@@ -116,20 +112,20 @@ sync_mode = "full"
 
 ##############################################################################
 #
-# ZK Proof specific configuration
+# ZK Prover specific configuration
 #
 ##############################################################################
 #[zkp]
 
-# Specify the proof generation capabilities.
+# Specify the proof generation settings.
 
 # Defines if the proof generation is active
 # Default: false
 # prover_active = true
 
 # Defines the path for the proving keys folders
-# Default: ".zkp"
-# prover_keys_path = "some_folder" #defaults to .zkp folder
+# Default: ".zkp" if prover is active
+# prover_keys_path = "some_folder"
 
 ##############################################################################
 #

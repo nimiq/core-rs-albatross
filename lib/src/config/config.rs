@@ -26,7 +26,7 @@ use nimiq_serde::Deserialize;
 #[cfg(feature = "validator")]
 use nimiq_utils::key_rng::SecureGenerate;
 use nimiq_utils::{file_store::FileStore, Sensitive};
-use nimiq_zkp_circuits::DEFAULT_KEYS_PATH;
+use nimiq_zkp_circuits::DEFAULT_PROVER_KEYS_PATH;
 use subtle::ConstantTimeEq;
 
 #[cfg(feature = "database-storage")]
@@ -643,10 +643,10 @@ pub struct ClientConfig {
     #[builder(default)]
     pub validator: Option<ValidatorConfig>,
 
-    /// The optional zkp configuration
+    /// The optional zk prover configuration
     ///
     #[builder(default)]
-    pub zkp: ZKPConfig,
+    pub zkp: ZKProverConfig,
 
     /// The optional rpc-server configuration
     ///
@@ -830,12 +830,17 @@ impl ClientConfigBuilder {
 
         // Configure the zk prover
         if let Some(zkp_settings) = config_file.zkp.as_ref() {
-            let mut prover_keys_path = PathBuf::from(DEFAULT_KEYS_PATH);
-            if let Some(zkp_path) = zkp_settings.prover_keys_path.as_ref() {
-                prover_keys_path = PathBuf::from(zkp_path);
+            let mut prover_keys_path = None;
+            if zkp_settings.prover_active {
+                prover_keys_path = Some(
+                    zkp_settings
+                        .prover_keys_path
+                        .as_ref()
+                        .map_or(PathBuf::from(DEFAULT_PROVER_KEYS_PATH), PathBuf::from),
+                );
             }
 
-            self.zkp = Some(ZKPConfig {
+            self.zkp = Some(ZKProverConfig {
                 prover_active: zkp_settings.prover_active,
                 prover_keys_path,
             });
@@ -949,20 +954,10 @@ impl ClientConfigBuilder {
 }
 
 /// Contains the configurations for the ZKP storage, verification and proof generation.
-#[derive(Debug, Clone, Builder)]
-pub struct ZKPConfig {
+#[derive(Debug, Clone, Builder, Default)]
+pub struct ZKProverConfig {
     /// ZK Proof generation activation config.
     pub prover_active: bool,
-
     /// Prover keys path for the zkp prover.
-    pub prover_keys_path: PathBuf,
-}
-
-impl Default for ZKPConfig {
-    fn default() -> Self {
-        Self {
-            prover_active: false,
-            prover_keys_path: PathBuf::from(DEFAULT_KEYS_PATH),
-        }
-    }
+    pub prover_keys_path: Option<PathBuf>,
 }

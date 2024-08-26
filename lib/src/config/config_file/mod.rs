@@ -35,7 +35,7 @@ pub struct ConfigFile {
     #[serde(default)]
     pub consensus: ConsensusSettings,
     #[serde(default)]
-    pub zkp: Option<ZKPSettings>,
+    pub zkp: Option<ZKProverSettings>,
     pub rpc_server: Option<RpcServerSettings>,
     pub metrics_server: Option<MetricsServerSettings>,
     #[serde(default)]
@@ -182,7 +182,7 @@ pub struct ConsensusSettings {
     #[serde(default)]
     /// The maximum amount of epochs that are stored in the client
     pub max_epochs_stored: usize,
-    /// Different possible networks (Albatross, DevAlbatross, UnitAlbatross)
+    /// Different possible networks (MainAlbatross, TestAlbatross, DevAlbatross, UnitAlbatross)
     pub network: Option<NetworkId>,
     /// Minimum number of peers necessary to reach consensus
     pub min_peers: Option<usize>,
@@ -438,7 +438,7 @@ pub struct ValidatorSettings {
 
 #[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
-pub struct ZKPSettings {
+pub struct ZKProverSettings {
     #[serde(default)]
     pub prover_active: bool,
     #[serde(default)]

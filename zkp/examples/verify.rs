@@ -14,7 +14,7 @@ use nimiq_zkp::{verify::verify, ZKP_VERIFYING_DATA};
 use nimiq_zkp_circuits::setup::load_verifying_data;
 use tracing_subscriber::{filter::Targets, prelude::*};
 
-const DEFAULT_EXAMPLE_PATH: &str = ".zkp_example";
+const DEFAULT_EXAMPLE_ZKP_PATH: &str = ".zkp_example";
 
 fn initialize() {
     tracing_subscriber::registry()
@@ -45,7 +45,7 @@ fn initialize() {
 fn main() {
     initialize();
     // The default directory
-    let path = &PathBuf::from(DEFAULT_EXAMPLE_PATH);
+    let path = &PathBuf::from(DEFAULT_EXAMPLE_ZKP_PATH);
 
     ZKP_VERIFYING_DATA
         .init_with_data(load_verifying_data(&path).expect("No keys in current directory"));
@@ -93,7 +93,7 @@ fn main() {
 
     // Load the proof from file.
     let mut file = File::open(format!(
-        "{DEFAULT_EXAMPLE_PATH}/proofs/proof_epoch_{number_epochs}.bin"
+        "{DEFAULT_EXAMPLE_ZKP_PATH}/proofs/proof_epoch_{number_epochs}.bin"
     ))
     .unwrap();
 
