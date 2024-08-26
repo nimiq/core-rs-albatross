@@ -12,10 +12,10 @@ pub use serde_derive::{Deserialize, Serialize};
 ///
 /// This error is mostly a wrapper over `postcard::Error` but adds more
 /// variants.
-#[derive(Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct DeserializeError(DeserializeErrorInner);
 
-#[derive(Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 enum DeserializeErrorInner {
     Postcard(postcard::Error),
     ExtraData,

@@ -116,7 +116,7 @@ pub struct CoinUnderflowError {
     pub rhs: Coin,
 }
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
 #[error("Can't convert u64 to Coin value: {0}")]
 pub struct CoinConvertError(u64);
 
@@ -208,7 +208,7 @@ impl fmt::Display for Coin {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 #[error("Can't parse Coin value: '{0}'")]
 pub struct CoinParseError(String);
 

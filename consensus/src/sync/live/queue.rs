@@ -7,7 +7,7 @@ use std::{
 use futures::{future::BoxFuture, FutureExt, Stream};
 use nimiq_block::Block;
 #[cfg(feature = "full")]
-use nimiq_blockchain::Blockchain;
+use nimiq_blockchain::{Blockchain, PostValidationHook};
 #[cfg(feature = "full")]
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_interface::{ChunksPushError, ChunksPushResult, PushError, PushResult};
@@ -225,11 +225,20 @@ pub async fn push_block_and_chunks<N: Network>(
     Result<ChunksPushResult, ChunksPushError>,
     Blake2bHash,
 ) {
-    let push_results =
-        spawn_blocking(move || blockchain_push(blockchain, bls_cache, Some(block), diff, chunks))
-            .await;
-
-    validate_message(network, block_source, &push_results.block_push_result);
+    let push_results = spawn_blocking(move || {
+        blockchain_push(
+            blockchain,
+            bls_cache,
+            Some(block),
+            diff,
+            chunks,
+            Some(MessageValidator {
+                network,
+                block_source,
+            }),
+        )
+    })
+    .await;
 
     // TODO Ban peer depending on type of chunk error?
 
@@ -249,11 +258,19 @@ pub async fn push_block_only<N: Network>(
     block_source: BlockSource<N>,
 ) -> (Result<PushResult, PushError>, Blake2bHash) {
     let push_results = spawn_blocking(move || {
-        blockchain_push::<N>(blockchain, bls_cache, Some(block), None, vec![])
+        blockchain_push::<N>(
+            blockchain,
+            bls_cache,
+            Some(block),
+            None,
+            vec![],
+            Some(MessageValidator {
+                network,
+                block_source,
+            }),
+        )
     })
     .await;
-
-    validate_message(network, block_source, &push_results.block_push_result);
 
     (
         push_results.block_push_result.unwrap(),
@@ -295,7 +312,7 @@ pub async fn push_multiple_blocks_impl<N: Network>(
             chunks.clear();
         }
         let push_results = spawn_blocking(move || {
-            blockchain_push::<N>(blockchain2, bls_cache2, Some(block), diff, chunks)
+            blockchain_push::<N>(blockchain2, bls_cache2, Some(block), diff, chunks, None)
         })
         .await;
 
@@ -388,11 +405,37 @@ pub async fn push_chunks_only<N: Network>(
     chunks: Vec<ChunkAndSource<N>>,
 ) -> (Result<ChunksPushResult, ChunksPushError>, Blake2bHash) {
     let push_results =
-        spawn_blocking(move || blockchain_push(blockchain, bls_cache, None, None, chunks)).await;
+        spawn_blocking(move || blockchain_push(blockchain, bls_cache, None, None, chunks, None))
+            .await;
 
     // TODO Ban peer depending on type of chunk error?
 
     (push_results.push_chunks_result, push_results.block_hash)
+}
+
+pub struct MessageValidator<N: Network> {
+    network: Arc<N>,
+    block_source: BlockSource<N>,
+}
+
+#[cfg(feature = "full")]
+impl<N: Network> PostValidationHook for MessageValidator<N> {
+    fn post_validation(&self, _block: Block, push_result: Result<PushResult, PushError>) {
+        let acceptance = match push_result {
+            Ok(result) => match result {
+                PushResult::Known | PushResult::Extended | PushResult::Rebranched => {
+                    MsgAcceptance::Accept
+                }
+                PushResult::Forked | PushResult::Ignored => MsgAcceptance::Ignore,
+            },
+            Err(_) => {
+                // TODO Ban peer
+                MsgAcceptance::Reject
+            }
+        };
+
+        self.block_source.validate_block(&self.network, acceptance);
+    }
 }
 
 /// Pushes the a single block and the respective chunks into the blockchain. If a light
@@ -407,6 +450,7 @@ fn blockchain_push<N: Network>(
     block: Option<Block>,
     diff: Option<TrieDiff>,
     chunks: Vec<ChunkAndSource<N>>,
+    msg_validator: Option<MessageValidator<N>>,
 ) -> BlockchainPushResult<N> {
     #[cfg(feature = "full")]
     let (chunks, peer_ids): (Vec<_>, Vec<N::PeerId>) =
@@ -428,10 +472,11 @@ fn blockchain_push<N: Network>(
                         block,
                         diff,
                         chunks,
+                        &msg_validator,
                     ),
                     None => {
                         assert!(chunks.is_empty());
-                        Blockchain::push(blockchain.upgradable_read(), block)
+                        Blockchain::push(blockchain.upgradable_read(), block, &msg_validator)
                             .map(|r| (r, Ok(ChunksPushResult::EmptyChunks)))
                     }
                 };
@@ -468,29 +513,4 @@ fn blockchain_push<N: Network>(
     }
 
     blockchain_push_result
-}
-
-fn validate_message<N: Network>(
-    network: Arc<N>,
-    block_source: BlockSource<N>,
-    block_push_result: &Option<Result<PushResult, PushError>>,
-) {
-    let Some(push_result) = block_push_result else {
-        return;
-    };
-
-    let acceptance = match push_result {
-        Ok(result) => match result {
-            PushResult::Known | PushResult::Extended | PushResult::Rebranched => {
-                MsgAcceptance::Accept
-            }
-            PushResult::Forked | PushResult::Ignored => MsgAcceptance::Ignore,
-        },
-        Err(_) => {
-            // TODO Ban peer
-            MsgAcceptance::Reject
-        }
-    };
-
-    block_source.validate_block(&network, acceptance);
 }

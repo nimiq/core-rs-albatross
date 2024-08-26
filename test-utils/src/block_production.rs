@@ -88,7 +88,7 @@ impl TemporaryBlockProducer {
     }
 
     pub fn push(&self, block: Block) -> Result<PushResult, PushError> {
-        Blockchain::push(self.blockchain.upgradable_read(), block)
+        Blockchain::push(self.blockchain.upgradable_read(), block, &())
     }
 
     pub fn push_with_chunks(
@@ -97,7 +97,7 @@ impl TemporaryBlockProducer {
         diff: TrieDiff,
         chunks: Vec<TrieChunkWithStart>,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
-        Blockchain::push_with_chunks(self.blockchain.upgradable_read(), block, diff, chunks)
+        Blockchain::push_with_chunks(self.blockchain.upgradable_read(), block, diff, chunks, &())
     }
 
     pub fn get_chunk(&self, start_key: KeyNibbles, limit: usize) -> TrieChunkWithStart {

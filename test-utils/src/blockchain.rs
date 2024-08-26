@@ -97,7 +97,7 @@ pub fn produce_macro_blocks_with_txns(
         );
 
         assert_eq!(
-            Blockchain::push(blockchain, Block::Macro(block)),
+            Blockchain::push(blockchain, Block::Macro(block), &()),
             Ok(PushResult::Extended)
         );
     }
@@ -157,7 +157,7 @@ pub fn fill_micro_blocks_with_txns(
 
         let block_push_start = Instant::now();
         assert_eq!(
-            Blockchain::push(blockchain, Block::Micro(last_micro_block)),
+            Blockchain::push(blockchain, Block::Micro(last_micro_block), &()),
             Ok(PushResult::Extended)
         );
         let block_push_duration = block_push_start.elapsed();

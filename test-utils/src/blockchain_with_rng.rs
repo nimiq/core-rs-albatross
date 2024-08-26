@@ -39,7 +39,7 @@ pub fn produce_macro_blocks_with_rng<R: Rng + CryptoRng>(
         );
 
         assert_eq!(
-            Blockchain::push(blockchain, Block::Macro(block)),
+            Blockchain::push(blockchain, Block::Macro(block), &()),
             Ok(PushResult::Extended)
         );
     }
@@ -75,7 +75,7 @@ pub fn push_micro_block_with_rng<R: Rng + CryptoRng>(
     let block = next_micro_block_with_rng(producer, blockchain, rng);
     let blockchain = blockchain.upgradable_read();
     assert_eq!(
-        Blockchain::push(blockchain, block.clone()),
+        Blockchain::push(blockchain, block.clone(), &()),
         Ok(PushResult::Extended)
     );
     block

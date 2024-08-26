@@ -23,6 +23,7 @@ use nimiq_trie::WriteTransactionProxy as TrieMdbxWriteTransaction;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 use tokio::sync::broadcast::Sender as BroadcastSender;
 
+use super::PostValidationHook;
 use crate::{interface::HistoryInterface, Blockchain};
 
 fn send_vec(log_notifier: &BroadcastSender<BlockLog>, logs: Vec<BlockLog>) {
@@ -40,12 +41,13 @@ impl Blockchain {
     /// Private function to push a block.
     /// Set the trusted flag to true to skip VRF and signature verifications: when the source of the
     /// block can be trusted.
-    fn do_push(
+    fn do_push<F: PostValidationHook>(
         this: RwLockUpgradableReadGuard<Self>,
         mut block: Block,
         trusted: bool,
         diff: Option<TrieDiff>,
         chunks: Vec<TrieChunkWithStart>,
+        post_validation_hook: &F,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         // Ignore all blocks that precede (or are at the same height) as the most recent accepted
         // macro block.
@@ -125,10 +127,25 @@ impl Blockchain {
         // Extend, rebranch or just store the block depending on the chain ordering.
         let result = match chain_order {
             ChainOrdering::Extend => {
-                return Blockchain::extend(this, block_hash, chain_info, prev_info, diff, chunks);
+                return Blockchain::extend(
+                    this,
+                    block_hash,
+                    chain_info,
+                    prev_info,
+                    diff,
+                    chunks,
+                    post_validation_hook,
+                );
             }
             ChainOrdering::Superior => {
-                return Blockchain::rebranch(this, block_hash, chain_info, diff, chunks);
+                return Blockchain::rebranch(
+                    this,
+                    block_hash,
+                    chain_info,
+                    diff,
+                    chunks,
+                    post_validation_hook,
+                );
             }
             ChainOrdering::Inferior => {
                 debug!(block = %chain_info.head, "Storing block - on inferior chain");
@@ -164,9 +181,10 @@ impl Blockchain {
     // Note that there can always only ever be at most one RwLockUpgradableRead thus the push calls are also
     // sequentialized by it.
     /// Pushes a block into the chain.
-    pub fn push(
+    pub fn push<F: PostValidationHook>(
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
+        post_validation_hook: &F,
     ) -> Result<PushResult, PushError> {
         // The following assert requires fetching the root node from the accounts trie,
         // which is why we opted to only run it in debug builds.
@@ -174,16 +192,18 @@ impl Blockchain {
             this.get_missing_accounts_range(None).is_none(),
             "Should call push only for complete tries"
         );
-        Self::push_wrapperfn(this, block, false, None, vec![]).map(|res| res.0)
+        Self::push_wrapperfn(this, block, false, None, vec![], post_validation_hook)
+            .map(|res| res.0)
     }
 
-    pub fn push_with_chunks(
+    pub fn push_with_chunks<F: PostValidationHook>(
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
         diff: TrieDiff,
         chunks: Vec<TrieChunkWithStart>,
+        post_validation_hook: &F,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
-        Self::push_wrapperfn(this, block, false, Some(diff), chunks)
+        Self::push_wrapperfn(this, block, false, Some(diff), chunks, post_validation_hook)
     }
 
     // To retain the option of having already taken a lock before this call the self was exchanged.
@@ -194,11 +214,12 @@ impl Blockchain {
     /// Pushes a block into the chain.
     /// The trusted version of the push function will skip some verifications that can only be skipped if
     /// the source is trusted. This is the case of a validator pushing its own blocks
-    pub fn trusted_push(
+    pub fn trusted_push<F: PostValidationHook>(
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
+        post_validation_hook: &F,
     ) -> Result<PushResult, PushError> {
-        Self::push_wrapperfn(this, block, true, None, vec![]).map(|res| res.0)
+        Self::push_wrapperfn(this, block, true, None, vec![], post_validation_hook).map(|res| res.0)
     }
 
     /// Commits a set of chunks to the blockchain.
@@ -249,34 +270,63 @@ impl Blockchain {
         chunk_result
     }
 
-    fn push_wrapperfn(
+    fn push_wrapperfn<F: PostValidationHook>(
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
         trust: bool,
         diff: Option<TrieDiff>,
         chunks: Vec<TrieChunkWithStart>,
+        post_validation_hook: &F,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         #[cfg(not(feature = "metrics"))]
         {
-            Self::do_push(this, block, trust, diff, chunks)
+            let res = Self::do_push(
+                this,
+                block.clone(),
+                trust,
+                diff,
+                chunks,
+                post_validation_hook,
+            );
+            match res {
+                // Extended and Rebranched are already handled pre-commit.
+                Ok((PushResult::Extended | PushResult::Rebranched, _)) => {}
+                Ok((ref res, _)) => post_validation_hook.post_validation(&block, &Ok(res.clone())),
+                Err(ref res) => post_validation_hook.post_validation(&block, &Err(res.clone())),
+            }
+            res
         }
         #[cfg(feature = "metrics")]
         {
             let metrics = this.metrics.clone();
-            let res = Self::do_push(this, block, trust, diff, chunks);
+            let res = Self::do_push(
+                this,
+                block.clone(),
+                trust,
+                diff,
+                chunks,
+                post_validation_hook,
+            );
+            match res {
+                // Extended and Rebranched are already handled pre-commit.
+                Ok((PushResult::Extended | PushResult::Rebranched, _)) => {}
+                Ok((ref res, _)) => post_validation_hook.post_validation(block, Ok(res.clone())),
+                Err(ref res) => post_validation_hook.post_validation(block, Err(res.clone())),
+            }
             metrics.note_push_result(&res);
             res
         }
     }
 
     /// Extends the current main chain.
-    fn extend(
+    fn extend<F: PostValidationHook>(
         this: RwLockUpgradableReadGuard<Blockchain>,
         block_hash: Blake2bHash,
         mut chain_info: ChainInfo,
         mut prev_info: ChainInfo,
         diff: Option<TrieDiff>,
         chunks: Vec<TrieChunkWithStart>,
+        post_validation_hook: &F,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         let start = Instant::now();
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
@@ -327,6 +377,9 @@ impl Blockchain {
                     .remove_history(&mut txn, Policy::epoch_at(block_number).saturating_sub(1));
             }
         }
+
+        // Call the post-validation hook before commiting to the database.
+        post_validation_hook.post_validation(chain_info.head.clone(), Ok(PushResult::Extended));
 
         txn.commit();
 
@@ -391,12 +444,13 @@ impl Blockchain {
     }
 
     /// Rebranches the current main chain.
-    fn rebranch(
+    fn rebranch<F: PostValidationHook>(
         this: RwLockUpgradableReadGuard<Blockchain>,
         block_hash: Blake2bHash,
         chain_info: ChainInfo,
         diff: Option<TrieDiff>,
         chunks: Vec<TrieChunkWithStart>,
+        post_validation_hook: &F,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         let target_block = chain_info.head.to_string();
         debug!(block = target_block, "Rebranching");
@@ -445,6 +499,11 @@ impl Blockchain {
         let new_head_hash = &fork_chain[0].0;
         let new_head_info = &fork_chain[0].1;
         this.chain_store.set_head(&mut write_txn, new_head_hash);
+
+        // Call the post-validation hook before commiting to the database.
+        post_validation_hook
+            .post_validation(new_head_info.head.clone(), Ok(PushResult::Rebranched));
+
         write_txn.commit();
 
         if let Block::Macro(ref macro_block) = new_head_info.head {

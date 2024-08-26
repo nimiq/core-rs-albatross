@@ -1422,7 +1422,7 @@ async fn mempool_update_not_enough_balance() {
             .unwrap();
 
         assert_eq!(
-            Blockchain::push(bc, Block::Micro(block)),
+            Blockchain::push(bc, Block::Micro(block), &()),
             Ok(PushResult::Extended)
         );
     }
@@ -1450,7 +1450,7 @@ async fn mempool_update_not_enough_balance() {
 
         // We should succeed producing a block with the remaining mempool transactions
         assert_eq!(
-            Blockchain::push(bc, Block::Micro(block)),
+            Blockchain::push(bc, Block::Micro(block), &()),
             Ok(PushResult::Extended)
         );
     }
@@ -1584,7 +1584,7 @@ async fn mempool_update_pruned_account() {
             .unwrap();
 
         assert_eq!(
-            Blockchain::push(bc, Block::Micro(block)),
+            Blockchain::push(bc, Block::Micro(block), &()),
             Ok(PushResult::Extended)
         );
     }
@@ -1610,7 +1610,7 @@ async fn mempool_update_pruned_account() {
 
         // We should succeed producing a block with the remaining mempool transactions
         assert_eq!(
-            Blockchain::push(bc, Block::Micro(block)),
+            Blockchain::push(bc, Block::Micro(block), &()),
             Ok(PushResult::Extended)
         );
     }
@@ -1979,7 +1979,7 @@ async fn it_can_reject_invalid_vesting_contract_transaction() {
         .unwrap();
 
     assert_eq!(
-        Blockchain::push(bc, Block::Micro(block)),
+        Blockchain::push(bc, Block::Micro(block), &()),
         Ok(PushResult::Extended)
     );
     assert_eq!(

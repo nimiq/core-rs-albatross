@@ -421,7 +421,7 @@ fn history_sync_works_with_micro_blocks() {
     // Now go into follow mode.
     for micro in micro_blocks_2_2 {
         assert_eq!(
-            Blockchain::push(blockchain2.upgradable_read(), micro),
+            Blockchain::push(blockchain2.upgradable_read(), micro, &()),
             Ok(PushResult::Extended)
         );
     }
@@ -439,7 +439,7 @@ fn history_sync_works_with_micro_blocks() {
     // Into follow mode one more time.
     for micro in micro_blocks_3_1 {
         assert_eq!(
-            Blockchain::push(blockchain2.upgradable_read(), micro),
+            Blockchain::push(blockchain2.upgradable_read(), micro, &()),
             Ok(PushResult::Extended)
         );
     }

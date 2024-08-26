@@ -99,7 +99,7 @@ fn main() {
         );
 
         assert_eq!(
-            Blockchain::push(blockchain, Block::Macro(block)),
+            Blockchain::push(blockchain, Block::Macro(block), &()),
             Ok(PushResult::Extended)
         );
 

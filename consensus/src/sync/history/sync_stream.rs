@@ -317,7 +317,8 @@ mod tests {
                 .unwrap();
             assert!(chain_info.on_main_chain);
 
-            Blockchain::push(to.upgradable_read(), chain_info.head).expect("Failed to push block");
+            Blockchain::push(to.upgradable_read(), chain_info.head, &())
+                .expect("Failed to push block");
             block_hash = chain_info.main_chain_successor;
 
             num_blocks += 1;

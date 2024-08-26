@@ -63,7 +63,11 @@ async fn validator_update() {
         .unwrap();
 
     assert_eq!(
-        Blockchain::push(blockchain.upgradable_read(), Block::Micro(new_micro_block)),
+        Blockchain::push(
+            blockchain.upgradable_read(),
+            Block::Micro(new_micro_block),
+            &()
+        ),
         Ok(PushResult::Extended)
     );
 
