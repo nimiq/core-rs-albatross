@@ -110,6 +110,7 @@ impl PushedBlock {
                 })
             }
         }
+        assert!(block_to_return.verify(block.network()).is_ok());
         block_to_return
     }
 }
