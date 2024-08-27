@@ -59,7 +59,7 @@ pub enum PushResult {
     Ignored,
 }
 
-#[derive(Error, Clone, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum PushError {
     #[error("Orphan block")]
     Orphan,

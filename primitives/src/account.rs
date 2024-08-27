@@ -64,7 +64,7 @@ impl From<AccountType> for u8 {
     }
 }
 
-#[derive(Debug, Clone, Error, PartialEq, Eq)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum AccountError {
     #[error("Insufficient funds: needed {needed}, but has balance {balance}")]
     InsufficientFunds { needed: Coin, balance: Coin },

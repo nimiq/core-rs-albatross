@@ -310,8 +310,8 @@ impl Blockchain {
             match res {
                 // Extended and Rebranched are already handled pre-commit.
                 Ok((PushResult::Extended | PushResult::Rebranched, _)) => {}
-                Ok((ref res, _)) => post_validation_hook.post_validation(block, Ok(res.clone())),
-                Err(ref res) => post_validation_hook.post_validation(block, Err(res.clone())),
+                Ok((ref res, _)) => post_validation_hook.post_validation(&block, Ok(res)),
+                Err(ref res) => post_validation_hook.post_validation(&block, Err(res)),
             }
             metrics.note_push_result(&res);
             res
@@ -379,7 +379,7 @@ impl Blockchain {
         }
 
         // Call the post-validation hook before commiting to the database.
-        post_validation_hook.post_validation(chain_info.head.clone(), Ok(PushResult::Extended));
+        post_validation_hook.post_validation(&chain_info.head, Ok(&PushResult::Extended));
 
         txn.commit();
 
@@ -501,8 +501,7 @@ impl Blockchain {
         this.chain_store.set_head(&mut write_txn, new_head_hash);
 
         // Call the post-validation hook before commiting to the database.
-        post_validation_hook
-            .post_validation(new_head_info.head.clone(), Ok(PushResult::Rebranched));
+        post_validation_hook.post_validation(&new_head_info.head, Ok(&PushResult::Rebranched));
 
         write_txn.commit();
 

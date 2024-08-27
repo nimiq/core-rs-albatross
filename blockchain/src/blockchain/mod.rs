@@ -19,19 +19,17 @@ pub mod zkp_sync;
 /// It thus provides a timing advantage.
 pub trait PostValidationHook {
     /// Run the pre-commit hook.
-    fn post_validation(&self, block: Block, push_result: Result<PushResult, PushError>);
+    fn post_validation(&self, block: &Block, push_result: Result<&PushResult, &PushError>);
 }
 
 /// A dummy pre-commit hook that does nothing.
 impl PostValidationHook for () {
-    fn post_validation(&self, _block: Block, _push_result: Result<PushResult, PushError>) {}
+    fn post_validation(&self, _block: &Block, _push_result: Result<&PushResult, &PushError>) {}
 }
 
 impl<F: PostValidationHook> PostValidationHook for Option<F> {
-    fn post_validation(&self, block: Block, push_result: Result<PushResult, PushError>) {
-        match self {
-            Some(hook) => hook.post_validation(block, push_result),
-            None => {}
-        }
+    fn post_validation(&self, block: &Block, push_result: Result<&PushResult, &PushError>) {
+        self.as_ref()
+            .inspect(|hook| hook.post_validation(block, push_result));
     }
 }

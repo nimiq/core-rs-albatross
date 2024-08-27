@@ -420,7 +420,7 @@ pub struct MessageValidator<N: Network> {
 
 #[cfg(feature = "full")]
 impl<N: Network> PostValidationHook for MessageValidator<N> {
-    fn post_validation(&self, _block: Block, push_result: Result<PushResult, PushError>) {
+    fn post_validation(&self, _block: &Block, push_result: Result<&PushResult, &PushError>) {
         let acceptance = match push_result {
             Ok(result) => match result {
                 PushResult::Known | PushResult::Extended | PushResult::Rebranched => {

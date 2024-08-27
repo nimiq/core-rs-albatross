@@ -3,7 +3,7 @@ use std::fmt;
 use thiserror::Error;
 
 /// An enum containing possible errors that can happen in the Merkle Radix Trie.
-#[derive(Clone, Error, Debug, Eq, PartialEq)]
+#[derive(Error, Debug, Eq, PartialEq)]
 pub enum MerkleRadixTrieError {
     #[error("Prefix doesn't match node's key.")]
     WrongPrefix,

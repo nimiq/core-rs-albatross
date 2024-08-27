@@ -849,12 +849,13 @@ pub(crate) struct BlockPublisher<TValidatorNetwork: ValidatorNetwork> {
 impl<TValidatorNetwork: ValidatorNetwork + 'static> PostValidationHook
     for BlockPublisher<TValidatorNetwork>
 {
-    fn post_validation(&self, block: Block, push_result: Result<PushResult, PushError>) {
+    fn post_validation(&self, block: &Block, push_result: Result<&PushResult, &PushError>) {
         // Do not publish faulty blocks.
         if push_result.is_err() {
             return;
         }
 
+        let block = block.clone();
         if block.is_election() {
             info!(%block, "Publishing Election MacroBlock");
         } else if block.is_macro() {

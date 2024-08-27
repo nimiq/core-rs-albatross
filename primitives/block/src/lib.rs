@@ -22,7 +22,7 @@ mod skip_block;
 mod tendermint;
 
 /// Enum containing a variety of block error types.
-#[derive(Error, Clone, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum BlockError {
     #[error("Block is from the wrong network")]
     NetworkMismatch,

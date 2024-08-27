@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Error, Clone, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum TransactionError {
     #[error("Transaction is for a foreign network")]
     ForeignNetwork,
