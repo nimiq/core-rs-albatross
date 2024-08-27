@@ -148,10 +148,10 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
     }
 
     pub fn start_validity_synchronization(&mut self, peer_id: TNetwork::PeerId) {
-        let macro_head = self.blockchain.read().macro_head();
+        let macro_head = self.blockchain.read().macro_head().header.clone();
 
         let validity_start = macro_head
-            .block_number()
+            .block_number
             .saturating_sub(Policy::transaction_validity_window_blocks());
 
         let validity_window_bn = if validity_start <= Policy::genesis_block_number() {
@@ -164,7 +164,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         assert!(Policy::is_macro_block_at(validity_window_bn));
 
         log::trace!(
-            macro_head = macro_head.block_number(),
+            macro_head = macro_head.block_number,
             validity_start = validity_window_bn,
             "Starting a new validity synchronization process"
         );
@@ -173,7 +173,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
         // Now we determine which is the right root and block number to verify the first chunks
         let (verifier_block_number, expected_root, election_in_window) =
-            if next_election < macro_head.block_number() {
+            if next_election < macro_head.block_number {
                 // This is the case where we are crossing an election block
                 let election = self
                     .blockchain
@@ -184,11 +184,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 (next_election, election.history_root().clone(), true)
             } else {
                 // We don't have any election in between so we use the macro head
-                (
-                    macro_head.block_number(),
-                    macro_head.header.history_root.clone(),
-                    false,
-                )
+                (macro_head.block_number, macro_head.history_root, false)
             };
 
         self.start_validity_chunk_request(
@@ -272,9 +268,14 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         let mut chunk_index = peer_request.chunk_index + 1;
 
                         // We need to check the latest macro head.
-                        let latest_macro_head = self.blockchain.read().macro_head();
-                        let latest_macro_head_number = latest_macro_head.block_number();
-                        let latest_history_root = latest_macro_head.header.history_root;
+                        let (latest_macro_head_number, latest_history_root) = {
+                            let blockchain = self.blockchain.read();
+                            let macro_head = blockchain.macro_head();
+                            (
+                                macro_head.block_number(),
+                                macro_head.header.history_root.clone(),
+                            )
+                        };
 
                         if latest_macro_head_number > verifier_block_number {
                             // A new macro head was adopted.

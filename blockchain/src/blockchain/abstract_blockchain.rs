@@ -26,8 +26,8 @@ impl AbstractBlockchain for Blockchain {
         &self.state.main_chain.head
     }
 
-    fn macro_head(&self) -> MacroBlock {
-        self.state.macro_info.head.unwrap_macro_ref().clone()
+    fn macro_head(&self) -> &MacroBlock {
+        self.state.macro_info.head.unwrap_macro_ref()
     }
 
     fn election_head(&self) -> &MacroBlock {

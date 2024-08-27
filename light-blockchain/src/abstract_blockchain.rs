@@ -24,8 +24,8 @@ impl AbstractBlockchain for LightBlockchain {
         &self.head
     }
 
-    fn macro_head(&self) -> MacroBlock {
-        self.macro_head.clone()
+    fn macro_head(&self) -> &MacroBlock {
+        &self.macro_head
     }
 
     fn election_head(&self) -> &MacroBlock {

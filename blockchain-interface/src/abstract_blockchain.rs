@@ -26,7 +26,7 @@ pub trait AbstractBlockchain {
     fn head(&self) -> &Block;
 
     /// Returns the last macro block.
-    fn macro_head(&self) -> MacroBlock;
+    fn macro_head(&self) -> &MacroBlock;
 
     /// Returns the last election macro block.
     fn election_head(&self) -> &MacroBlock;

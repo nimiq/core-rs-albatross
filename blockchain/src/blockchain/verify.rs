@@ -386,7 +386,7 @@ impl Blockchain {
         }
 
         // Make sure that the (macro) block is the macro successor to the current macro head of the blockchain.
-        if let Err(error) = block.verify_macro_successor(&self.macro_head()) {
+        if let Err(error) = block.verify_macro_successor(self.macro_head()) {
             debug!(%error, %block, "Tendermint - await_proposal: Invalid block header for blockchain macro head");
             return Err(PushError::InvalidBlock(error));
         }
