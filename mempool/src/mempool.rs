@@ -71,7 +71,7 @@ impl Mempool {
         )));
 
         Self {
-            blockchain: Arc::clone(&blockchain),
+            blockchain,
             state: Arc::clone(&state),
             filter: Arc::new(RwLock::new(MempoolFilter::new(
                 config.filter_rules,
