@@ -1,10 +1,10 @@
 [package]
-name = "nimiq-zkp-test-gen"
+name = "nimiq-zkp-prove"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-description = "All functionality related to the zk proof storage, dissemination and request handeling."
+description = "Binary to generate 2 consecutive proofs."
 homepage.workspace = true
 repository.workspace = true
 categories.workspace = true
@@ -14,6 +14,7 @@ keywords.workspace = true
 workspace = true
 
 [dependencies]
+clap = { version = "4.5", features = ["cargo", "string", "derive"] }
 hex = "0.4"
 log = { workspace = true }
 parking_lot = "0.12"
@@ -31,9 +32,7 @@ nimiq-log = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["policy"] }
 nimiq-serde = { workspace = true }
 nimiq-test-utils = { workspace = true }
-nimiq-utils = { workspace = true, features = [
-    "time",
-] }
+nimiq-utils = { workspace = true, features = ["time"] }
 nimiq-zkp = { workspace = true, features = ["zkp-prover"] }
 nimiq-zkp-circuits = { workspace = true, features = ["zkp-prover"] }
 nimiq-zkp-component = { workspace = true, features = ["zkp-prover"] }

@@ -22,7 +22,7 @@ pub fn get_base_seed() -> ChaCha20Rng {
     ChaCha20Rng::from_seed(seed)
 }
 
-pub const ZKP_TEST_BIN_NAME: &str = "nimiq-test-prove";
+pub const ZKP_TEST_BIN_NAME: &str = "nimiq-test-prover";
 /// The path to the zkp directory for tests relative to the test binaries.
 /// This should be used while running unit tests.
 /// We have other places (eg. default zkp paths on network id) that need to be updated when updating this.
@@ -46,7 +46,7 @@ pub fn zkp_test_exe() -> std::path::PathBuf {
 
     assert!(
         path.exists(),
-        "Run `cargo build --bin=nimiq-test-prove --all-features` to build the test prover binary at {path:?}"
+        "Run `cargo build --bin=nimiq-test-prover --all-features` to build the test prover binary at {path:?}"
     );
     path
 }

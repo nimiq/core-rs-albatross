@@ -14,8 +14,8 @@ keywords.workspace = true
 workspace = true
 
 [[bin]]
-name = "nimiq-zkp-setup"
-path = "zkp-setup/main.rs"
+name = "nimiq-zkp-keys-setup"
+path = "zkp-keys-setup/main.rs"
 required-features = ["zkp-prover", "parallel", "test-setup"]
 
 [[bin]]

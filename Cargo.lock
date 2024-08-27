@@ -5087,9 +5087,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "nimiq-zkp-test-gen"
+name = "nimiq-zkp-prove"
 version = "0.23.0"
 dependencies = [
+ "clap",
  "hex",
  "nimiq-block",
  "nimiq-blockchain",

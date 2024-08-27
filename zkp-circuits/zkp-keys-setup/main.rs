@@ -1,4 +1,4 @@
-use std::{io, path::Path, time::Instant};
+use std::{io, path::PathBuf, time::Instant};
 
 use clap::Parser;
 use log::level_filters::LevelFilter;
@@ -60,7 +60,7 @@ fn main() -> Result<(), NanoZKPError> {
     let network_id = args.network_id;
 
     initialize(network_id);
-    let keys_path = Path::new(network_id.default_zkp_path().unwrap());
+    let keys_path = PathBuf::from(&network_id.default_zkp_path().unwrap());
 
     // Generates the verifying keys if they don't exist yet.
     println!("====== Devnet Parameter generation for ZKP initiated ======");
@@ -70,20 +70,20 @@ fn main() -> Result<(), NanoZKPError> {
     match network_id {
         NetworkId::UnitAlbatross | NetworkId::DevAlbatross => setup(
             ChaCha20Rng::from_seed(DEVELOPMENT_SEED),
-            keys_path,
+            &keys_path,
             network_id,
             true,
         )
         .unwrap(),
         NetworkId::TestAlbatross | NetworkId::MainAlbatross => {
-            setup(thread_rng(), keys_path, network_id, true).unwrap()
+            setup(thread_rng(), &keys_path, network_id, true).unwrap()
         }
         _ => panic!("Invalid network id."),
     };
     if matches!(network_id, NetworkId::UnitAlbatross) {
         setup_merger_wrapper_simulation(
             &mut ChaCha20Rng::from_seed(UNIT_TOXIC_WASTE_SEED),
-            keys_path,
+            &keys_path,
         )
         .unwrap();
     }

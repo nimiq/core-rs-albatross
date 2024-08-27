@@ -8,8 +8,8 @@ ignore:
   - rpc-interface
   - spammer
   - tools
-  - zkp-component/zkp-test-gen
-  - zkp-circuits/zkp-setup
+  - zkp-component/zkp-prove
+  - zkp-circuits/zkp-keys-setup
   - zkp-circuits/zkp-constraints
 
 coverage:
