@@ -21,4 +21,4 @@ tpb = 50
 
 [[seed]]
 restartable = false
-sync_mode = "history"
+sync_mode = "full"
