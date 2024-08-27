@@ -92,7 +92,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                 // Calculate the expected block time as expected by the reward function.
                 expected_next_ts = self.expected_next_timestamp(&blockchain);
 
-                if !in_current_state(&blockchain.head()) {
+                if !in_current_state(blockchain.head()) {
                     break Some(None);
                 } else if self.is_our_turn(&blockchain) {
                     // We want to produce a block at the expected timestamp for this block in this batch
@@ -183,7 +183,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         // Acquire a blockchain read lock and check if the state still matches to fetch active validators.
         let active_validators = {
             let blockchain = self.blockchain.read();
-            if in_current_state(&blockchain.head()) {
+            if in_current_state(blockchain.head()) {
                 Some(blockchain.current_validators().unwrap())
             } else {
                 None
@@ -213,7 +213,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             let blockchain = self.blockchain.upgradable_read();
             let head = blockchain.head();
 
-            if !in_current_state(&head) {
+            if !in_current_state(head) {
                 None
             } else {
                 let timestamp = head.timestamp() + self.producer_timeout.as_millis() as u64;
