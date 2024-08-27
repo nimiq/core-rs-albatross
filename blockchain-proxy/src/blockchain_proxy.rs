@@ -111,7 +111,7 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         gen_blockchain_match!(self, BlockchainReadProxy, macro_head)
     }
 
-    fn election_head(&self) -> MacroBlock {
+    fn election_head(&self) -> &MacroBlock {
         gen_blockchain_match!(self, BlockchainReadProxy, election_head)
     }
 

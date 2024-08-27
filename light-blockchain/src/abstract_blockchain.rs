@@ -28,8 +28,8 @@ impl AbstractBlockchain for LightBlockchain {
         self.macro_head.clone()
     }
 
-    fn election_head(&self) -> MacroBlock {
-        self.election_head.clone()
+    fn election_head(&self) -> &MacroBlock {
+        &self.election_head
     }
 
     fn can_enforce_validity_window(&self) -> bool {

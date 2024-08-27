@@ -30,8 +30,8 @@ impl AbstractBlockchain for Blockchain {
         self.state.macro_info.head.unwrap_macro_ref().clone()
     }
 
-    fn election_head(&self) -> MacroBlock {
-        self.state.election_head.clone()
+    fn election_head(&self) -> &MacroBlock {
+        &self.state.election_head
     }
 
     fn block_number(&self) -> u32 {

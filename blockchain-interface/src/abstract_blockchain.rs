@@ -29,7 +29,7 @@ pub trait AbstractBlockchain {
     fn macro_head(&self) -> MacroBlock;
 
     /// Returns the last election macro block.
-    fn election_head(&self) -> MacroBlock;
+    fn election_head(&self) -> &MacroBlock;
 
     /// Returns the hash of the head of the main chain.
     fn head_hash(&self) -> Blake2bHash {

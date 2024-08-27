@@ -213,7 +213,7 @@ impl<N: Network> ConsensusProxy<N> {
         min_peers: usize,
     ) -> Result<Vec<HistoricTransaction>, RequestError> {
         let blockchain = self.blockchain.read();
-        let election_head = blockchain.election_head();
+        let election_head = blockchain.election_head().clone();
         let checkpoint_head = blockchain.macro_head();
         let current_head_hash = blockchain.head_hash();
         let current_block_number = blockchain.block_number();

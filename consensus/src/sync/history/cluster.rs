@@ -210,7 +210,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             let blockchain = blockchain.read();
             BatchSetVerifyState {
                 network: blockchain.network_id,
-                predecessor: Block::Macro(blockchain.election_head()),
+                predecessor: Block::Macro(blockchain.election_head().clone()),
                 validators: blockchain.election_head().get_validators().unwrap(),
             }
         };
@@ -575,7 +575,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         let blockchain = self.blockchain.read();
         let verify_state = BatchSetVerifyState {
             network: blockchain.network_id,
-            predecessor: Block::Macro(blockchain.election_head()),
+            predecessor: Block::Macro(blockchain.election_head().clone()),
             validators: blockchain.election_head().get_validators().unwrap(),
         };
         self.batch_set_queue.set_verify_state(verify_state);

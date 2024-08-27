@@ -41,7 +41,7 @@ impl Blockchain {
         // If the block is a macro block, check that it is a valid successor to the current
         // election block.
         if block.is_macro() {
-            block.verify_macro_successor(&self.election_head())?;
+            block.verify_macro_successor(self.election_head())?;
         }
 
         // Verify the interlink (or its absence)

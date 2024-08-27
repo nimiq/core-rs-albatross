@@ -192,8 +192,11 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         if blockchain_rg.state.previous_slots.is_none()
                             && blockchain_rg.election_head().block_number() > 0
                         {
-                            let previous_election_block =
-                                blockchain_rg.election_head().header.parent_election_hash;
+                            let previous_election_block = blockchain_rg
+                                .election_head()
+                                .header
+                                .parent_election_hash
+                                .clone();
                             drop(blockchain_rg);
 
                             self.request_single_macro_block(
