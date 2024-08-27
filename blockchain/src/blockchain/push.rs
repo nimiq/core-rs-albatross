@@ -609,14 +609,10 @@ impl Blockchain {
         // verified the validator for the current slot, this is enough to check for fork proofs.
         // Note: We don't verify the justifications for the other blocks here, since they had to
         // already be verified in order to be added to the blockchain.
-        let mut micro_blocks: Vec<Block> =
-            match self
-                .chain_store
-                .get_blocks_at(block.header.block_number, false, Some(txn))
-            {
-                Ok(blocks) => blocks,
-                Err(_) => vec![],
-            };
+        let mut micro_blocks: Vec<Block> = self
+            .chain_store
+            .get_blocks_at(block.header.block_number, false, Some(txn))
+            .unwrap_or_default();
 
         // Filter out any skip blocks.
         micro_blocks.retain(|block| block.is_micro() && !block.is_skip());
