@@ -120,7 +120,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         include_body: Option<bool>,
     ) -> RPCResult<Block, (), Self::Error> {
         let blockchain = self.blockchain.read();
-        let block = blockchain.head();
+        let block = blockchain.head().clone();
 
         Ok(
             Block::from_block(&blockchain, block, include_body.unwrap_or(false))

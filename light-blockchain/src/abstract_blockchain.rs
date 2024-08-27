@@ -20,8 +20,8 @@ impl AbstractBlockchain for LightBlockchain {
         self.time.now()
     }
 
-    fn head(&self) -> Block {
-        self.head.clone()
+    fn head(&self) -> &Block {
+        &self.head
     }
 
     fn macro_head(&self) -> MacroBlock {

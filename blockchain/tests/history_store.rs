@@ -60,7 +60,7 @@ fn setup_blockchain_with_history() -> (TemporaryBlockProducer, TemporaryBlockPro
 
     add_block_assert_history_store(&temp_producer1, vec![], vec![], true);
 
-    let block = temp_producer1.blockchain.read().head();
+    let block = temp_producer1.blockchain.read().head().clone();
 
     assert_eq!(&temp_producer2.push(block), &Ok(PushResult::Extended));
 
@@ -125,12 +125,14 @@ fn do_double_proposal(
         .blockchain
         .read()
         .head()
+        .clone()
         .unwrap_macro()
         .header;
     let header2 = temp_producer2
         .blockchain
         .read()
         .head()
+        .clone()
         .unwrap_macro()
         .header;
     let justification1 = signing_key.sign(MacroHeader::hash::<Blake2bHash>(&header1).as_bytes());
@@ -155,6 +157,7 @@ fn do_double_vote(temp_producer1: &TemporaryBlockProducer) -> EquivocationProof 
         .blockchain
         .read()
         .head()
+        .clone()
         .unwrap_macro()
         .header;
 
@@ -398,7 +401,12 @@ fn it_pushes_macro_block_with_rewards() {
 
     // Simple case. 1x Reward to validator.
     let reward_txs = {
-        let macro_block = temp_producer1.blockchain.read().head().unwrap_macro();
+        let macro_block = temp_producer1
+            .blockchain
+            .read()
+            .head()
+            .clone()
+            .unwrap_macro();
         macro_block.body.unwrap().transactions
     };
     assert_eq!(reward_txs.len(), 1);

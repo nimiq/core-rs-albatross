@@ -103,7 +103,7 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         gen_blockchain_match!(self, BlockchainReadProxy, now)
     }
 
-    fn head(&self) -> Block {
+    fn head(&self) -> &Block {
         gen_blockchain_match!(self, BlockchainReadProxy, head)
     }
 

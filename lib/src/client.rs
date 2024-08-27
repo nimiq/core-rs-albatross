@@ -638,7 +638,7 @@ impl Client {
 
     /// Returns the blockchain head
     pub fn blockchain_head(&self) -> Block {
-        self.inner.blockchain.read().head()
+        self.inner.blockchain.read().head().clone()
     }
 
     #[cfg(feature = "wallet")]

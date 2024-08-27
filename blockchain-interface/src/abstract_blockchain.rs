@@ -23,7 +23,7 @@ pub trait AbstractBlockchain {
     fn now(&self) -> u64;
 
     /// Returns the head of the main chain.
-    fn head(&self) -> Block;
+    fn head(&self) -> &Block;
 
     /// Returns the last macro block.
     fn macro_head(&self) -> MacroBlock;

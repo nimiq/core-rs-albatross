@@ -22,8 +22,8 @@ impl AbstractBlockchain for Blockchain {
         self.time.now()
     }
 
-    fn head(&self) -> Block {
-        self.state.main_chain.head.clone()
+    fn head(&self) -> &Block {
+        &self.state.main_chain.head
     }
 
     fn macro_head(&self) -> MacroBlock {

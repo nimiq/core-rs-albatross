@@ -215,8 +215,8 @@ impl<N: Network> ConsensusProxy<N> {
         let blockchain = self.blockchain.read();
         let election_head = blockchain.election_head();
         let checkpoint_head = blockchain.macro_head();
-        let current_head = blockchain.head();
-        let current_block_number = current_head.block_number();
+        let current_head_hash = blockchain.head_hash();
+        let current_block_number = blockchain.block_number();
 
         // We drop the blockchain lock because it's no longer needed while we request proofs
         drop(blockchain);
@@ -282,7 +282,7 @@ impl<N: Network> ConsensusProxy<N> {
                     } else {
                         // Third Case: Transactions from the current batch
                         hashes_by_block
-                            .entry(Some(current_head.block_number()))
+                            .entry(Some(current_block_number))
                             .or_insert(vec![])
                             .push(hash.clone());
                     }
@@ -398,7 +398,7 @@ impl<N: Network> ConsensusProxy<N> {
                                 log::debug!(peer = %peer_id, "BlockProof does not correspond to expected checkpoint block");
                                 continue;
                             }
-                        } else if response.block.hash() != current_head.hash() {
+                        } else if response.block.hash() != current_head_hash {
                             log::debug!(block_number = %response.block.block_number(), peer=%peer_id, "BlockProof does not correspond to expected block");
                             continue;
                         }

@@ -691,7 +691,7 @@ async fn can_reset_chain_of_chunks() {
                 .set(|_, _, _| ResponseTrieDiff::PartialDiff(TrieDiff::default()));
         },
         |mock_id, block_tx, blockchain| async move {
-            let mut block = blockchain.read().head();
+            let mut block = blockchain.read().head().clone();
             match block {
                 Block::Micro(ref mut micro_block) => {
                     micro_block.header.body_root = Blake2sHash::default();
