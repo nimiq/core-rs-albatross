@@ -158,7 +158,7 @@ impl TemporaryBlockProducer {
         let block = if Policy::is_macro_block_at(height) {
             let macro_block_proposal = self.producer.next_macro_block_proposal(
                 &blockchain,
-                blockchain.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+                blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
                 0,
                 extra_data,
             );
@@ -189,7 +189,7 @@ impl TemporaryBlockProducer {
         } else if skip_block {
             Block::Micro(self.producer.next_micro_block(
                 &blockchain,
-                blockchain.head().timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT,
+                blockchain.timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT,
                 vec![],
                 vec![],
                 extra_data,
@@ -198,7 +198,7 @@ impl TemporaryBlockProducer {
         } else {
             Block::Micro(self.producer.next_micro_block(
                 &blockchain,
-                blockchain.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+                blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
                 vec![],
                 transactions,
                 extra_data,

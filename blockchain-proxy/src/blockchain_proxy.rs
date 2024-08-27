@@ -115,12 +115,12 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         gen_blockchain_match!(self, BlockchainReadProxy, election_head)
     }
 
-    fn can_enforce_validity_window(&self) -> bool {
-        gen_blockchain_match!(self, BlockchainReadProxy, can_enforce_validity_window)
-    }
-
     fn accounts_complete(&self) -> bool {
         gen_blockchain_match!(self, BlockchainReadProxy, accounts_complete)
+    }
+
+    fn can_enforce_validity_window(&self) -> bool {
+        gen_blockchain_match!(self, BlockchainReadProxy, can_enforce_validity_window)
     }
 
     fn current_validators(&self) -> Option<Validators> {
@@ -145,12 +145,12 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         )
     }
 
-    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Result<Block, BlockchainError> {
-        gen_blockchain_match!(self, BlockchainReadProxy, get_block, hash, include_body)
-    }
-
     fn get_genesis_hash(&self) -> Blake2bHash {
         gen_blockchain_match!(self, BlockchainReadProxy, get_genesis_hash)
+    }
+
+    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Result<Block, BlockchainError> {
+        gen_blockchain_match!(self, BlockchainReadProxy, get_block, hash, include_body)
     }
 
     fn get_blocks(

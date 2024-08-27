@@ -57,7 +57,7 @@ fn it_can_produce_micro_blocks() {
     // #1.0: Empty standard micro block
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         vec![],
         vec![0x41],
@@ -100,7 +100,7 @@ fn it_can_produce_micro_blocks() {
     // #2.0: Empty micro block with fork proof
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![fork_proof.into()],
         vec![],
         vec![0x41],
@@ -120,7 +120,7 @@ fn it_can_produce_micro_blocks() {
     let bc = blockchain.upgradable_read();
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         vec![],
         vec![0x41],
@@ -141,7 +141,7 @@ fn it_can_produce_micro_blocks() {
     let bc = blockchain.upgradable_read();
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         vec![],
         vec![0x41],
@@ -178,7 +178,7 @@ fn it_can_produce_macro_blocks() {
     let macro_block = {
         producer.next_macro_block_proposal(
             &bc,
-            bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0u32,
             vec![],
         )
@@ -205,7 +205,7 @@ fn it_can_produce_macro_block_after_punishment() {
     let macro_block = {
         producer.producer.next_macro_block_proposal(
             &bc,
-            bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0u32,
             vec![],
         )
@@ -254,7 +254,7 @@ fn it_can_produce_macro_block_after_punishment() {
     let macro_block = {
         producer.producer.next_macro_block_proposal(
             &bc,
-            bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0u32,
             vec![],
         )
@@ -308,7 +308,7 @@ fn it_can_produce_election_blocks() {
         let macro_block = {
             producer.next_macro_block_proposal(
                 &bc,
-                bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+                bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
                 0u32,
                 vec![0x42],
             )
@@ -353,7 +353,7 @@ fn it_can_produce_a_chain_with_txns() {
 
         let macro_block_proposal = producer.next_macro_block_proposal(
             &blockchain,
-            blockchain.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0u32,
             vec![],
         );
@@ -391,7 +391,7 @@ fn it_can_revert_create_staker_transaction() {
 
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         vec![],
         vec![0x41],
@@ -411,7 +411,7 @@ fn it_can_revert_create_staker_transaction() {
     // One empty block
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         vec![],
         vec![0x41],
@@ -452,7 +452,7 @@ fn it_can_revert_create_staker_transaction() {
     // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         transactions,
         vec![0x41],
@@ -503,7 +503,7 @@ fn it_can_revert_failed_transactions() {
 
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         vec![],
         vec![0x41],
@@ -523,7 +523,7 @@ fn it_can_revert_failed_transactions() {
     // One empty block
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         vec![],
         vec![0x41],
@@ -578,7 +578,7 @@ fn it_can_revert_failed_transactions() {
     // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         transactions,
         vec![0x41],
@@ -665,7 +665,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
 
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         transactions,
         vec![0x41],
@@ -727,7 +727,7 @@ fn it_can_revert_failed_vesting_contract_transaction() {
     // Block with redeem funds transaction
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         transactions,
         vec![0x41],
@@ -830,7 +830,7 @@ fn it_can_revert_reactivate_transaction() {
     // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         transactions,
         vec![0x41],
@@ -870,7 +870,7 @@ fn it_can_revert_reactivate_transaction() {
     // Block with staking transactions
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         transactions,
         vec![0x41],
@@ -955,7 +955,7 @@ fn it_can_consume_all_validator_deposit() {
     let bc = blockchain.upgradable_read();
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         vec![create_tx, retire_tx, vesting_tx.clone()],
         vec![],
@@ -994,7 +994,7 @@ fn it_can_consume_all_validator_deposit() {
     let bc = blockchain.upgradable_read();
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         vec![invalid_tx.clone()],
         vec![],
@@ -1051,7 +1051,7 @@ fn it_can_consume_all_validator_deposit() {
     let bc = blockchain.upgradable_read();
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         vec![invalid_tx.clone()],
         vec![],
@@ -1167,7 +1167,7 @@ fn it_can_revert_failed_delete_validator() {
     let bc = blockchain.upgradable_read();
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         vec![create_tx, retire_tx, vesting_tx.clone()],
         vec![],
@@ -1206,7 +1206,7 @@ fn it_can_revert_failed_delete_validator() {
     let bc = blockchain.upgradable_read();
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         vec![invalid_tx.clone()],
         vec![],
@@ -1351,7 +1351,7 @@ fn it_can_revert_basic_and_create_contracts_txns() {
     // Block with txns
     let block = producer.next_micro_block(
         &bc,
-        bc.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         transactions,
         vec![0x41],

@@ -83,7 +83,7 @@ pub fn produce_macro_blocks_with_txns(
 
         let macro_block_proposal = producer.next_macro_block_proposal(
             &blockchain,
-            blockchain.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0u32,
             vec![],
         );
@@ -142,7 +142,7 @@ pub fn fill_micro_blocks_with_txns(
         let block_production_start = Instant::now();
         let last_micro_block = producer.next_micro_block(
             &blockchain,
-            blockchain.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
             vec![],
             txns,
             vec![0x42],

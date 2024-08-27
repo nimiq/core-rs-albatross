@@ -85,7 +85,7 @@ fn main() {
 
         let macro_block_proposal = producer.next_macro_block_proposal(
             &blockchain,
-            blockchain.head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0u32,
             vec![],
         );

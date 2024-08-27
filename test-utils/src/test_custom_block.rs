@@ -93,7 +93,7 @@ pub fn next_micro_block(
 
     let block_number = (blockchain.block_number() as i32 + 1 + config.block_number_offset) as u32;
 
-    let timestamp = (blockchain.head().timestamp() as i64 + 1 + config.timestamp_offset) as u64;
+    let timestamp = (blockchain.timestamp() as i64 + 1 + config.timestamp_offset) as u64;
 
     let parent_hash = config
         .parent_hash
@@ -195,9 +195,9 @@ pub fn next_skip_block(
     let block_number = (blockchain.block_number() as i32 + 1 + config.block_number_offset) as u32;
 
     let timestamp = if config.timestamp_offset != 0 {
-        (blockchain.head().timestamp() as i64 + config.timestamp_offset) as u64
+        (blockchain.timestamp() as i64 + config.timestamp_offset) as u64
     } else {
-        blockchain.head().timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT
+        blockchain.timestamp() + Policy::BLOCK_PRODUCER_TIMEOUT
     };
 
     let parent_hash = config
@@ -291,7 +291,7 @@ pub fn next_macro_block_proposal(
 
     let block_number = (blockchain.block_number() as i32 + 1 + config.block_number_offset) as u32;
 
-    let timestamp = (blockchain.head().timestamp() as i64 + config.timestamp_offset) as u64;
+    let timestamp = (blockchain.timestamp() as i64 + config.timestamp_offset) as u64;
 
     let parent_hash = config
         .parent_hash

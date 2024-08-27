@@ -53,7 +53,7 @@ async fn validator_update() {
     );
     let new_micro_block = producer1.next_micro_block(
         &blockchain.read(),
-        blockchain.read().head().timestamp() + Policy::BLOCK_SEPARATION_TIME,
+        blockchain.read().timestamp() + Policy::BLOCK_SEPARATION_TIME,
         vec![],
         vec![tx],
         vec![0x42],

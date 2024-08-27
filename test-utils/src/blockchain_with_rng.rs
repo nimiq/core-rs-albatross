@@ -24,7 +24,7 @@ pub fn produce_macro_blocks_with_rng<R: Rng + CryptoRng>(
 
         let macro_block_proposal = producer.next_macro_block_proposal_with_rng(
             &blockchain,
-            blockchain.head().timestamp() + next_block_height * 1000,
+            blockchain.timestamp() + next_block_height * 1000,
             0u32,
             vec![],
             rng,
@@ -52,7 +52,7 @@ pub fn next_micro_block_with_rng<R: Rng + CryptoRng>(
     let blockchain = blockchain.upgradable_read();
     let block = producer.next_micro_block_with_rng(
         &blockchain,
-        blockchain.head().timestamp() + 500,
+        blockchain.timestamp() + 500,
         vec![],
         vec![],
         vec![0x42],

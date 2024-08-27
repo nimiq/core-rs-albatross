@@ -46,6 +46,10 @@ impl AbstractBlockchain for Blockchain {
         self.state.main_chain.head.epoch_number()
     }
 
+    fn accounts_complete(&self) -> bool {
+        self.state.accounts.is_complete(None)
+    }
+
     fn can_enforce_validity_window(&self) -> bool {
         // If we are at the genesis block, we can enforce the validity window
         if self.block_number() == Policy::genesis_block_number() {
@@ -58,10 +62,6 @@ impl AbstractBlockchain for Blockchain {
                     .get_history_tree_root(self.block_number(), None)
                     .unwrap()
         }
-    }
-
-    fn accounts_complete(&self) -> bool {
-        self.state.accounts.is_complete(None)
     }
 
     fn current_validators(&self) -> Option<Validators> {
@@ -83,12 +83,12 @@ impl AbstractBlockchain for Blockchain {
         self.get_block_at(height, include_body, None)
     }
 
-    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Result<Block, BlockchainError> {
-        self.get_block(hash, include_body, None)
-    }
-
     fn get_genesis_hash(&self) -> Blake2bHash {
         self.genesis_hash.clone()
+    }
+
+    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Result<Block, BlockchainError> {
+        self.get_block(hash, include_body, None)
     }
 
     fn get_blocks(
