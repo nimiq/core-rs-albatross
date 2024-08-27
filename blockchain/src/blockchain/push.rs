@@ -291,7 +291,11 @@ impl Blockchain {
         chunks: Vec<TrieChunkWithStart>,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         let start = Instant::now();
+        let upgrade_start = Instant::now();
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
+        let upgrade_duration = upgrade_start.elapsed();
+        log::debug!("Upgraded blockchain lock, took {:?}", upgrade_duration);
+
         let mut txn = this.write_transaction();
 
         let block_number = this.block_number() + 1;
@@ -303,8 +307,11 @@ impl Blockchain {
             block_number,
             chain_info.head.timestamp(),
         );
+        let cc_start = Instant::now();
         let total_tx_size =
             this.check_and_commit(&chain_info.head, diff, &mut txn, &mut block_logger)?;
+        let cc_duration = cc_start.elapsed();
+        log::debug!("Check and commit complete, took {:?}", cc_duration);
 
         chain_info.on_main_chain = true;
         chain_info.set_cumulative_hist_tx_size(&prev_info, total_tx_size);
@@ -336,7 +343,10 @@ impl Blockchain {
             }
         }
 
+        let commit_start = Instant::now();
         txn.commit();
+        let commit_duration = commit_start.elapsed();
+        log::debug!("Commit complete, took {:?}", commit_duration);
 
         if let Block::Macro(ref macro_block) = chain_info.head {
             this.state.macro_info = chain_info.clone();
