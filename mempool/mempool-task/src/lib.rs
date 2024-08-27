@@ -31,7 +31,6 @@ impl From<MempoolEvent> for BlockchainEvent {
 /// It can be spawned as a task individually or be polled by the validator as a stream.
 pub struct MempoolTask<N: Network> {
     pub consensus: ConsensusProxy<N>,
-    pub blockchain: Arc<RwLock<Blockchain>>,
 
     consensus_event_rx: BroadcastStream<ConsensusEvent>,
     blockchain_event_rx: BoxStream<'static, BlockchainEvent>,
@@ -52,16 +51,13 @@ impl<N: Network> MempoolTask<N> {
     ) -> Self {
         let consensus_event_rx = consensus.subscribe_events();
 
-        let blockchain_rg = blockchain.read();
-        let blockchain_event_rx = blockchain_rg.notifier_as_stream();
-        drop(blockchain_rg);
-
         let mempool = Arc::new(Mempool::new(Arc::clone(&blockchain), mempool_config));
         let mempool_active = false;
 
+        let blockchain_event_rx = blockchain.read().notifier_as_stream();
+
         Self {
             consensus: consensus.proxy(),
-            blockchain,
 
             consensus_event_rx,
             blockchain_event_rx,
