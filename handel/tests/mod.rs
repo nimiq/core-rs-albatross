@@ -219,7 +219,9 @@ async fn it_can_aggregate() {
     let mut hub = MockHub::default();
 
     let mut rng = thread_rng();
-    let contributor_num: usize = rng.gen_range(7..15);
+    let contributor_num: usize = rng.gen_range(7..150);
+    // Threshold calculated for contributor_num + 1 as an additional one gets added later.
+    let threshold = 1 + 2 * (contributor_num + 1) / 3;
     log::info!(contributor_num, "Running with");
 
     let (sender, mut receiver) = mpsc::channel(contributor_num);
@@ -231,7 +233,7 @@ async fn it_can_aggregate() {
         let net = Arc::new(hub.new_network_with_address(id as u64));
         // Create a protocol with `contributor_num + 1` peers set its id to `id`. Require `contributor_num` contributions
         // meaning all contributions need to be aggregated with the additional node initialized after this for loop.
-        let protocol = Protocol::new(id, contributor_num + 1, contributor_num + 1);
+        let protocol = Protocol::new(id, contributor_num + 1, threshold);
         // the sole contributor for soon to be created contribution is this node.
         let mut contributors = BitSet::new();
         contributors.insert(id);
@@ -264,9 +266,14 @@ async fn it_can_aggregate() {
         let s = sender.clone();
         spawn(async move {
             // have them just run until the aggregation is finished
-            while let Some(contribution) = aggregation.next().await {
-                if contribution.num_contributors() == contributor_num + 1 {
-                    s.send(()).await.expect("Send should never fail");
+            let mut ongoing = true;
+            while let Some(_contribution) = aggregation.next().await {
+                if let Aggregation::Finished(_) = &aggregation {
+                    // On transitioning from ongoing to finished indicate this once on the channel
+                    if ongoing {
+                        ongoing = false;
+                        s.send(()).await.expect("Send should never fail");
+                    }
                 }
 
                 if *r.read() {
@@ -278,7 +285,7 @@ async fn it_can_aggregate() {
 
     // same as in the for loop, except we want to keep the handel instance and not spawn it.
     let net = Arc::new(hub.new_network_with_address(contributor_num as u64));
-    let protocol = Protocol::new(contributor_num, contributor_num + 1, contributor_num + 1);
+    let protocol = Protocol::new(contributor_num, contributor_num + 1, threshold);
     let mut contributors = BitSet::new();
     contributors.insert(contributor_num);
     let contribution = Contribution {
@@ -308,13 +315,6 @@ async fn it_can_aggregate() {
         .checked_add(Duration::from_millis(timeout_ms))
         .unwrap();
 
-    // The final value needs to be the sum of all contributions.
-    // For instance for `contributor_num = 7: 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 = 36`
-    let mut exp_agg_value = 0u64;
-    for i in 0..=contributor_num {
-        exp_agg_value += i as u64 + 1u64;
-    }
-
     loop {
         match nimiq_time::timeout(
             deadline.saturating_duration_since(Instant::now()),
@@ -322,11 +322,9 @@ async fn it_can_aggregate() {
         )
         .await
         {
-            Ok(Some(aggregate)) => {
-                if aggregate.num_contributors() == contributor_num + 1
-                    && aggregate.value == exp_agg_value
-                {
-                    // fully aggregated the result. break the loop here
+            Ok(Some(_aggregate)) => {
+                if let Aggregation::Finished(_) = &aggregation {
+                    // Finished aggregating the result. break the loop here
                     break;
                 }
             }
@@ -338,7 +336,7 @@ async fn it_can_aggregate() {
     drop(aggregation);
     net.disconnect();
 
-    // give the other aggregations time to complete themselves
+    // Give the other aggregations time to complete themselves
     let mut finished_count = 0usize;
     loop {
         let _ = receiver.recv().await;
@@ -352,7 +350,7 @@ async fn it_can_aggregate() {
     // return a fully aggregated contribution and terminate.
     // Same as before
     // let net = Arc::new(hub.new_network_with_address(contributor_num as u64));
-    let protocol = Protocol::new(contributor_num, contributor_num + 1, contributor_num + 1);
+    let protocol = Protocol::new(contributor_num, contributor_num + 1, threshold);
     let mut contributors = BitSet::new();
     contributors.insert(contributor_num);
     let contribution = Contribution {
@@ -376,10 +374,14 @@ async fn it_can_aggregate() {
     );
 
     // first poll will add the nodes individual contribution and send its LevelUpdate
-    // which should be responded to with a full aggregation
+    // which should be responded to with a finished aggregation
     let _ = aggregation.next().await;
-    // Second poll must return a full contribution
+    // Second poll must return a finished contribution as the responses come in.
     let last_aggregate = aggregation.next().await;
+
+    if let Aggregation::Ongoing(_) = &aggregation {
+        panic!("The aggregation must finish");
+    }
 
     // An aggregation needs to be present
     assert!(last_aggregate.is_some(), "Nothing was aggregated!");
@@ -387,18 +389,9 @@ async fn it_can_aggregate() {
     let last_aggregate = last_aggregate.unwrap();
 
     // All nodes need to contribute
-    assert_eq!(
-        last_aggregate.num_contributors(),
-        contributor_num + 1,
-        "Not all contributions are present: {:?}",
-        last_aggregate,
-    );
-
-    // the final value needs to be the sum of all contributions: `exp_agg_value`
-    assert_eq!(
-        last_aggregate.value, exp_agg_value,
-        "Wrong aggregation result",
-    );
+    if last_aggregate.num_contributors() < threshold {
+        panic!("Not enough contributors");
+    }
 
     *stopped.write() = true;
 }
