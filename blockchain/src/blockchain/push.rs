@@ -1,4 +1,4 @@
-use std::{cmp, error::Error, ops::Deref};
+use std::{cmp, error::Error, ops::Deref, time::Instant};
 
 use nimiq_account::{BlockLog, BlockLogger};
 use nimiq_block::{Block, ForkProof, MicroBlock};
@@ -290,6 +290,7 @@ impl Blockchain {
         diff: Option<TrieDiff>,
         chunks: Vec<TrieChunkWithStart>,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
+        let start = Instant::now();
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
         let mut txn = this.write_transaction();
 
@@ -361,6 +362,7 @@ impl Blockchain {
 
         // Try to apply any chunks we received.
         let chunk_result = this.commit_chunks(chunks, &block_hash);
+        let duration = start.elapsed();
 
         let num_transactions = this.state.main_chain.head.num_transactions();
         #[cfg(feature = "metrics")]
@@ -369,6 +371,7 @@ impl Blockchain {
             block = %this.state.main_chain.head,
             num_transactions,
             kind = "extend",
+            ?duration,
             "Accepted block",
         );
 
@@ -405,6 +408,7 @@ impl Blockchain {
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         let target_block = chain_info.head.to_string();
         debug!(block = target_block, "Rebranching");
+        let start = Instant::now();
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
         let read_txn = this.read_transaction();
         // Find the common ancestor between our current main chain and the fork chain.
@@ -496,11 +500,12 @@ impl Blockchain {
             );
             adopted_blocks.push((hash, chain_info.head));
         }
-
+        let duration = start.elapsed();
         debug!(
             block = %this.state.main_chain.head,
             num_reverted_blocks = reverted_blocks.len(),
             num_adopted_blocks = adopted_blocks.len(),
+            ?duration,
             "Rebranched",
         );
         #[cfg(feature = "metrics")]
