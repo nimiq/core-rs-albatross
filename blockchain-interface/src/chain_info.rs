@@ -1,16 +1,27 @@
-use std::ops::RangeFrom;
+use std::{fmt::Formatter, ops::RangeFrom};
 
-use nimiq_block::Block;
+use nimiq_block::{
+    Block, BlockType, MacroBlock, MacroHeader, MicroBlock, MicroHeader, MicroJustification,
+    TendermintProof,
+};
 use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{coin::Coin, key_nibbles::KeyNibbles, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
+use serde::{
+    de::{Error, SeqAccess, Visitor},
+    ser::SerializeStruct,
+    Deserializer, Serializer,
+};
 
 /// Struct that, for each block, keeps information relative to the chain the block is on.
 #[derive(Clone, Debug, Serialize, Deserialize, DbSerializable)]
 pub struct ChainInfo {
     /// This is the block (excluding the body).
-    #[serde(serialize_with = "ChainInfo::serialize_head")]
+    #[serde(
+        serialize_with = "ChainInfo::serialize_head",
+        deserialize_with = "ChainInfo::deserialize_head"
+    )]
     pub head: Block,
     /// A boolean stating if this block is in the main chain.
     pub on_main_chain: bool,
@@ -98,21 +109,24 @@ impl ChainInfo {
         }
     }
 
-    fn serialize_head<S>(block: &Block, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        // Empty body if there is some
-        if block.body().is_some() {
-            let mut block_to_ser = block.clone();
-            match block_to_ser {
-                Block::Macro(ref mut block) => block.body = None,
-                Block::Micro(ref mut block) => block.body = None,
+    fn serialize_head<S: Serializer>(block: &Block, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut state = serializer.serialize_struct("ChainHead", CHAIN_HEAD_FIELDS.len())?;
+        state.serialize_field(CHAIN_HEAD_FIELDS[0], &block.ty())?;
+        match block {
+            Block::Macro(block) => {
+                state.serialize_field(CHAIN_HEAD_FIELDS[1], &block.header)?;
+                state.serialize_field(CHAIN_HEAD_FIELDS[2], &block.justification)?;
             }
-            serde::Serialize::serialize(&block_to_ser, serializer)
-        } else {
-            serde::Serialize::serialize(&block, serializer)
+            Block::Micro(block) => {
+                state.serialize_field(CHAIN_HEAD_FIELDS[1], &block.header)?;
+                state.serialize_field(CHAIN_HEAD_FIELDS[2], &block.justification)?;
+            }
         }
+        state.end()
+    }
+
+    fn deserialize_head<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Block, D::Error> {
+        deserializer.deserialize_struct("ChainHead", CHAIN_HEAD_FIELDS, ChainHeadVisitor)
     }
 }
 
@@ -125,3 +139,52 @@ impl PartialEq for ChainInfo {
 }
 
 impl Eq for ChainInfo {}
+
+const CHAIN_HEAD_FIELDS: &[&str] = &["type", "header", "justification"];
+
+struct ChainHeadVisitor;
+
+impl<'de> Visitor<'de> for ChainHeadVisitor {
+    type Value = Block;
+
+    fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+        formatter.write_str("struct Block")
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+        let ty: BlockType = seq
+            .next_element()?
+            .ok_or_else(|| Error::invalid_length(0, &self))?;
+
+        let block = match ty {
+            BlockType::Macro => {
+                let header: MacroHeader = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(1, &self))?;
+                let justification: Option<TendermintProof> = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(2, &self))?;
+                Block::Macro(MacroBlock {
+                    header,
+                    justification,
+                    body: None,
+                })
+            }
+            BlockType::Micro => {
+                let header: MicroHeader = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(1, &self))?;
+                let justification: Option<MicroJustification> = seq
+                    .next_element()?
+                    .ok_or_else(|| Error::invalid_length(2, &self))?;
+                Block::Micro(MicroBlock {
+                    header,
+                    justification,
+                    body: None,
+                })
+            }
+        };
+
+        Ok(block)
+    }
+}
