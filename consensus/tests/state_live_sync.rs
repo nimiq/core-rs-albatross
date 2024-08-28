@@ -521,11 +521,11 @@ async fn revert_chunks_for_state_live_sync() {
 
     // Make a rebranch on the complete node
     assert_eq!(
-        Blockchain::push(mock_node.blockchain.upgradable_read(), fork1a, &()),
+        Blockchain::push(mock_node.blockchain.upgradable_read(), fork1a),
         Ok(PushResult::Forked),
     );
     assert_eq!(
-        Blockchain::push(mock_node.blockchain.upgradable_read(), fork1b, &()),
+        Blockchain::push(mock_node.blockchain.upgradable_read(), fork1b),
         Ok(PushResult::Rebranched),
     );
 

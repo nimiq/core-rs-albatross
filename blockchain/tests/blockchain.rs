@@ -65,24 +65,21 @@ fn prune_epoch_micro_blocks() {
     assert_eq!(
         Blockchain::push(
             blockchain.upgradable_read(),
-            Block::Micro(micro_block1.clone()),
-            &()
+            Block::Micro(micro_block1.clone())
         ),
         Ok(PushResult::Extended)
     );
     assert_eq!(
         Blockchain::push(
             blockchain.upgradable_read(),
-            Block::Micro(micro_block2.clone()),
-            &()
+            Block::Micro(micro_block2.clone())
         ),
         Ok(PushResult::Forked)
     );
     assert_eq!(
         Blockchain::push(
             blockchain.upgradable_read(),
-            Block::Micro(micro_block3.clone()),
-            &()
+            Block::Micro(micro_block3.clone())
         ),
         Ok(PushResult::Forked)
     );

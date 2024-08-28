@@ -589,7 +589,7 @@ where
                         .map_err(|e| error!("Failed to push macro block onto the chain: {:?}", e))
                         .ok()
                     } else {
-                        Blockchain::push(
+                        Blockchain::push_with_hook(
                             self.blockchain.upgradable_read(),
                             Block::Macro(block),
                             &block_publisher,

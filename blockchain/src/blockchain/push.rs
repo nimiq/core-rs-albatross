@@ -181,7 +181,7 @@ impl Blockchain {
     // Note that there can always only ever be at most one RwLockUpgradableRead thus the push calls are also
     // sequentialized by it.
     /// Pushes a block into the chain.
-    pub fn push<F: PostValidationHook>(
+    pub fn push_with_hook<F: PostValidationHook>(
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
         post_validation_hook: &F,
@@ -194,6 +194,13 @@ impl Blockchain {
         );
         Self::push_wrapperfn(this, block, false, None, vec![], post_validation_hook)
             .map(|res| res.0)
+    }
+
+    pub fn push(
+        this: RwLockUpgradableReadGuard<Self>,
+        block: Block,
+    ) -> Result<PushResult, PushError> {
+        Self::push_with_hook(this, block, &())
     }
 
     pub fn push_with_chunks<F: PostValidationHook>(

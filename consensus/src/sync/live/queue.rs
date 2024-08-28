@@ -476,8 +476,12 @@ fn blockchain_push<N: Network>(
                     ),
                     None => {
                         assert!(chunks.is_empty());
-                        Blockchain::push(blockchain.upgradable_read(), block, &msg_validator)
-                            .map(|r| (r, Ok(ChunksPushResult::EmptyChunks)))
+                        Blockchain::push_with_hook(
+                            blockchain.upgradable_read(),
+                            block,
+                            &msg_validator,
+                        )
+                        .map(|r| (r, Ok(ChunksPushResult::EmptyChunks)))
                     }
                 };
 

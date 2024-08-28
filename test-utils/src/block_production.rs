@@ -88,7 +88,7 @@ impl TemporaryBlockProducer {
     }
 
     pub fn push(&self, block: Block) -> Result<PushResult, PushError> {
-        Blockchain::push(self.blockchain.upgradable_read(), block, &())
+        Blockchain::push(self.blockchain.upgradable_read(), block)
     }
 
     pub fn push_with_chunks(
