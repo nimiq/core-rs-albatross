@@ -106,7 +106,7 @@ impl HistoryStore {
         leaf_indices: Range<u32>,
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Vec<HistoricTransaction> {
-        let mut hist_txs = Vec::with_capacity(leaf_indices.len() as usize);
+        let mut hist_txs = Vec::with_capacity(leaf_indices.len());
         let txn = txn_option.or_new(&self.db);
 
         // Get consecutive transactions with fast cursor.
