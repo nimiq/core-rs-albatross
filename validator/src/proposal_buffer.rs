@@ -397,10 +397,6 @@ where
         // Fetch current validators.
         let validators = bc.current_validators().unwrap();
 
-        // No need to hold the lock as validators would only change with an election block which makes
-        // the validity of proposals moot.
-        drop(bc);
-
         // Make sure the given validator id is not outside of the range of valid validator ids for the current validator set.
         if proposal.0.signer as usize > validators.num_validators() {
             // The proposal indicates a nonsensical proposer as the validator id is out of bounds.
@@ -425,15 +421,21 @@ where
         )
         .serialize_to_vec();
 
+        // Verify the stated signer did in fact sign this proposal.
+        let signature_valid = stated_proposer
+            .signing_key
+            .verify(&proposal.0.signature, &data);
+
+        // No need to hold the lock as validators would only change with an election block which makes
+        // the validity of proposals moot.
+        drop(bc);
+
         // Get the propagation source, as it is going to be required either way the verification goes,
         // either for storing the proposal in the buffer, or to ban the relaying peer.
         let source = proposal.1.propagation_source();
 
         // Verify the stated signer did in fact sign this proposal.
-        if stated_proposer
-            .signing_key
-            .verify(&proposal.0.signature, &data)
-        {
+        if signature_valid {
             // Acquire the lock on the shared buffer.
             let mut shared = self.shared.lock();
 

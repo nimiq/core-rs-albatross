@@ -123,11 +123,11 @@ impl<'a> AbstractBlockchain for BlockchainReadProxy<'a> {
         gen_blockchain_match!(self, BlockchainReadProxy, can_enforce_validity_window)
     }
 
-    fn current_validators(&self) -> Option<Validators> {
+    fn current_validators(&self) -> Option<&Validators> {
         gen_blockchain_match!(self, BlockchainReadProxy, current_validators)
     }
 
-    fn previous_validators(&self) -> Option<Validators> {
+    fn previous_validators(&self) -> Option<&Validators> {
         gen_blockchain_match!(self, BlockchainReadProxy, previous_validators)
     }
 

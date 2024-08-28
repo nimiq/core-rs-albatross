@@ -84,7 +84,7 @@ impl Blockchain {
         block.verify_macro_successor(this.state.macro_info.head.unwrap_macro_ref())?;
 
         // Verify that the block is valid for the current validators.
-        block.verify_validators(&this.current_validators().unwrap())?;
+        block.verify_validators(this.current_validators().unwrap())?;
 
         drop(read_txn);
 

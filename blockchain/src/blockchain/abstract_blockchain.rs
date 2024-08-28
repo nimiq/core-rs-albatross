@@ -64,12 +64,12 @@ impl AbstractBlockchain for Blockchain {
         }
     }
 
-    fn current_validators(&self) -> Option<Validators> {
-        self.state.current_slots.clone()
+    fn current_validators(&self) -> Option<&Validators> {
+        self.state.current_slots.as_ref()
     }
 
-    fn previous_validators(&self) -> Option<Validators> {
-        self.state.previous_slots.clone()
+    fn previous_validators(&self) -> Option<&Validators> {
+        self.state.previous_slots.as_ref()
     }
 
     fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {

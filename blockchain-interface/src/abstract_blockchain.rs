@@ -73,10 +73,10 @@ pub trait AbstractBlockchain {
     fn can_enforce_validity_window(&self) -> bool;
 
     /// Returns the current set of validators.
-    fn current_validators(&self) -> Option<Validators>;
+    fn current_validators(&self) -> Option<&Validators>;
 
     /// Returns the set of validators of the previous epoch.
-    fn previous_validators(&self) -> Option<Validators>;
+    fn previous_validators(&self) -> Option<&Validators>;
 
     /// Checks if the blockchain contains a specific block, by its hash.
     fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool;

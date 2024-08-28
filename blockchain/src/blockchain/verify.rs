@@ -88,7 +88,7 @@ impl Blockchain {
             block.verify_proposer(&proposer.signing_key, predecessor.seed())?;
 
             // Verify that the block is valid for the current validators.
-            block.verify_validators(&self.current_validators().unwrap())?;
+            block.verify_validators(self.current_validators().unwrap())?;
 
             // Verify that the transactions in the block are valid.
             self.verify_transactions(block)?;

@@ -98,7 +98,7 @@ impl LightBlockchain {
         block.verify_proposer(&proposer.signing_key, predecessor.seed())?;
 
         // Verify that the block is valid for the current validators.
-        block.verify_validators(&this.current_validators().unwrap())?;
+        block.verify_validators(this.current_validators().unwrap())?;
 
         // Detect forks in non-skip micro blocks.
         if block.is_micro() && !block.is_skip() {

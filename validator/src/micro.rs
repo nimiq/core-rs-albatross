@@ -184,7 +184,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         let active_validators = {
             let blockchain = self.blockchain.read();
             if in_current_state(blockchain.head()) {
-                Some(blockchain.current_validators().unwrap())
+                Some(blockchain.current_validators().unwrap().clone())
             } else {
                 None
             }

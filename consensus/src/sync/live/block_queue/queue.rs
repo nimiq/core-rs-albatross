@@ -402,6 +402,7 @@ impl<N: Network> BlockQueue<N> {
                     blockchain
                         .current_validators()
                         .expect("Blockchain does not have a current validator set")
+                        .clone()
                 }),
             )
         };

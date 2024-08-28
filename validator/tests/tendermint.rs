@@ -113,7 +113,7 @@ async fn it_verifies_inferior_chain_proposals() {
     // blockchain2 here has not seen any of the inferior micro blocks nor any of the proposals.
 
     // Create TendermintProtocol for blockchain2
-    let current_validators = blockchain1.read().current_validators().unwrap();
+    let current_validators = blockchain1.read().current_validators().unwrap().clone();
     let hub = MockHub::default();
     let nw: Arc<Network> = TestNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
     let val_net = Arc::new(ValidatorNetworkImpl::new(nw));

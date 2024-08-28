@@ -333,7 +333,7 @@ where
 
         match BlockType::of(next_block_number) {
             BlockType::Macro => {
-                let active_validators = blockchain.current_validators().unwrap();
+                let active_validators = blockchain.current_validators().unwrap().clone();
                 let proposal_stream = self.proposal_receiver.clone().boxed();
 
                 drop(blockchain);

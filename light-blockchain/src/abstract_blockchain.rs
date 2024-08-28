@@ -40,11 +40,11 @@ impl AbstractBlockchain for LightBlockchain {
         false
     }
 
-    fn current_validators(&self) -> Option<Validators> {
-        self.current_validators.clone()
+    fn current_validators(&self) -> Option<&Validators> {
+        self.current_validators.as_ref()
     }
 
-    fn previous_validators(&self) -> Option<Validators> {
+    fn previous_validators(&self) -> Option<&Validators> {
         unreachable!()
     }
 

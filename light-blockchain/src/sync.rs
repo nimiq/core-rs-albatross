@@ -141,7 +141,7 @@ impl LightBlockchain {
         block.verify_macro_successor(&this.macro_head)?;
 
         // Verify that the block is valid for the current validators.
-        block.verify_validators(&this.current_validators().unwrap())?;
+        block.verify_validators(this.current_validators().unwrap())?;
 
         // At this point we know that the block is correct. We just have to push it.
 
