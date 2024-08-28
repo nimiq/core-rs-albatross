@@ -90,7 +90,7 @@ impl Behaviour {
 
         // Request Response behaviour
         let protocol = StreamProtocol::new("/nimiq/reqres/0.0.1");
-        let req_res_config = request_response::Config::default();
+        let req_res_config = request_response::Config::default().with_max_concurrent_streams(1000);
         let request_response = request_response::Behaviour::new(
             iter::once((protocol, request_response::ProtocolSupport::Full)),
             req_res_config,
