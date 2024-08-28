@@ -18,11 +18,12 @@ pub mod zkp_sync;
 /// For `extend` and `rebranch` operations, this is called before a block is committed to the database.
 /// It thus provides a timing advantage.
 pub trait PostValidationHook {
-    /// Run the pre-commit hook.
+    /// Run the post-validation hook. 
+    /// For `extend` and `rebranch` this is called before a block is committed to the database.
     fn post_validation(&self, block: &Block, push_result: Result<&PushResult, &PushError>);
 }
 
-/// A dummy pre-commit hook that does nothing.
+/// A dummy post-validation hook that does nothing.
 impl PostValidationHook for () {
     fn post_validation(&self, _block: &Block, _push_result: Result<&PushResult, &PushError>) {}
 }
