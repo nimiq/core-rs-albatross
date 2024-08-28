@@ -341,11 +341,10 @@ impl HistoryStore {
     pub(crate) fn put_historic_txns(
         &self,
         txn: &mut MdbxWriteTransaction,
+        epoch_number: u32,
         block_number: u32,
         hist_txs: &[HistoricTransaction],
     ) -> Option<(Blake2bHash, u64, Vec<u32>)> {
-        let epoch_number = Policy::epoch_at(block_number);
-
         // Get the history tree.
         let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
             &self.hist_tree_table,
@@ -453,6 +452,18 @@ impl HistoryInterface for HistoryStore {
         tree.len()
     }
 
+    /// Same as `add_to_history_for_epoch` but calculates the `epoch_number` using
+    /// `Policy` functions.
+    fn add_to_history(
+        &self,
+        txn: &mut MdbxWriteTransaction,
+        block_number: u32,
+        hist_txs: &[HistoricTransaction],
+    ) -> Option<(Blake2bHash, u64)> {
+        let epoch_number = Policy::epoch_at(block_number);
+        self.add_to_history_for_epoch(txn, epoch_number, block_number, hist_txs)
+    }
+
     /// Add a list of historic transactions to an existing history tree. It returns the root of the
     /// resulting tree and the total size of the transactions added.
     /// This function assumes that:
@@ -460,13 +471,14 @@ impl HistoryInterface for HistoryStore {
     ///     2. All the blocks are consecutive.
     ///     3. We only push transactions for one epoch at a time.
     /// This method will fail if we try to push transactions from previous epochs.
-    fn add_to_history(
+    fn add_to_history_for_epoch(
         &self,
         txn: &mut MdbxWriteTransaction,
+        epoch_number: u32,
         block_number: u32,
         hist_txs: &[HistoricTransaction],
     ) -> Option<(Blake2bHash, u64)> {
-        self.put_historic_txns(txn, block_number, hist_txs)
+        self.put_historic_txns(txn, epoch_number, block_number, hist_txs)
             .map(|(root, size, _)| (root, size))
     }
 

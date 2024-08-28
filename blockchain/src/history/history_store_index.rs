@@ -437,23 +437,35 @@ impl HistoryInterface for HistoryStoreIndex {
             .prove_num_leaves(block_number, txn_option)
     }
 
-    /// Add a list of historic transactions to an existing history tree. It returns the root of the
-    /// resulting tree and the total size of the transactions added.
-    /// This function assumes that:
-    ///     1. The transactions are pushed in increasing block number order.
-    ///     2. All the blocks are consecutive.
-    ///     3. We only push transactions for one epoch at a time.
+    /// Same as `add_to_history_for_epoch` but calculates the `epoch_number` using
+    /// `Policy` functions.
     fn add_to_history(
         &self,
         txn: &mut MdbxWriteTransaction,
         block_number: u32,
         hist_txs: &[HistoricTransaction],
     ) -> Option<(Blake2bHash, u64)> {
+        let epoch_number = Policy::epoch_at(block_number);
+        self.add_to_history_for_epoch(txn, epoch_number, block_number, hist_txs)
+    }
+
+    /// Adds a list of historic transactions to an existing history tree. It returns the root of the
+    /// resulting tree and the total size of the transactions added.
+    /// This function assumes that:
+    ///     1. The transactions are pushed in increasing block number order.
+    ///     2. All the blocks are consecutive.
+    ///     3. We only push transactions for one epoch at a time.
+    fn add_to_history_for_epoch(
+        &self,
+        txn: &mut MdbxWriteTransaction,
+        epoch_number: u32,
+        block_number: u32,
+        hist_txs: &[HistoricTransaction],
+    ) -> Option<(Blake2bHash, u64)> {
         if let Some((root, size, leaf_idx)) =
             self.history_store
-                .put_historic_txns(txn, block_number, hist_txs)
+                .put_historic_txns(txn, epoch_number, block_number, hist_txs)
         {
-            let epoch_number = Policy::epoch_at(block_number);
             // Add the historic transactions into the respective database.
             // Sort everything first and then put with a cursor for improved database performance.
             let mut hashes = BTreeMap::new();

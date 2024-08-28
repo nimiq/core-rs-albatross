@@ -63,15 +63,26 @@ pub trait HistoryInterface {
     /// Returns the first and last block number stored in the history store
     fn history_store_range(&self, txn_option: Option<&MdbxReadTransaction>) -> (u32, u32);
 
+    /// Same as `add_to_history_for_epoch` but calculates the `epoch_number` using
+    /// `Policy` functions.
+    fn add_to_history(
+        &self,
+        txn: &mut MdbxWriteTransaction,
+        block_number: u32,
+        hist_txs: &[HistoricTransaction],
+    ) -> Option<(Blake2bHash, u64)>;
+
     /// Add a list of historic transactions to an existing history tree. It returns the root of the
     /// resulting tree and the total size of the transactions added.
     /// This function assumes that:
     ///     1. The transactions are pushed in increasing block number order.
     ///     2. All the blocks are consecutive.
     ///     3. We only push transactions for one epoch at a time.
-    fn add_to_history(
+    /// This method will fail if we try to push transactions from previous epochs.
+    fn add_to_history_for_epoch(
         &self,
         txn: &mut MdbxWriteTransaction,
+        epoch_number: u32,
         block_number: u32,
         hist_txs: &[HistoricTransaction],
     ) -> Option<(Blake2bHash, u64)>;

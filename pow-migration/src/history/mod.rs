@@ -194,8 +194,9 @@ pub async fn migrate_history(
 
             // Add transactions to the history store
             let mut txn = env.write_transaction();
-            history_store.add_to_history(
+            history_store.add_to_history_for_epoch(
                 &mut txn,
+                0,
                 block_height,
                 &HistoricTransaction::from(
                     network_id,
