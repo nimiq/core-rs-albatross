@@ -115,7 +115,7 @@ pub struct TendermintProtocol<TValidatorNetwork: ValidatorNetwork> {
     // The validators for the current epoch.
     pub current_validators: Validators,
     // The main blockchain struct. Contains all of this validator information about the current chain.
-    pub blockchain: Arc<RwLock<Blockchain>>,
+    blockchain: Arc<RwLock<Blockchain>>,
     // Validator registry on the heap for easy cloning into handel protocol.
     validator_registry: Arc<ValidatorRegistry>,
 }

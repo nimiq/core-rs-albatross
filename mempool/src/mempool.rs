@@ -38,7 +38,7 @@ use crate::{
 /// Struct defining the Mempool
 pub struct Mempool {
     /// Blockchain reference
-    pub blockchain: Arc<RwLock<Blockchain>>,
+    blockchain: Arc<RwLock<Blockchain>>,
 
     /// The mempool state: the data structure where the transactions are stored
     pub(crate) state: Arc<RwLock<MempoolState>>,

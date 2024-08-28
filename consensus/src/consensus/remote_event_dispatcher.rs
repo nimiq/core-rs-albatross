@@ -80,10 +80,10 @@ impl<N: Network> Handle<N, Arc<RwLock<RemoteEventDispatcherState<N>>>>
 /// essentially the addresses and peers that are subscribed to us.
 pub struct RemoteEventDispatcherState<N: Network> {
     /// HashMap containing a mapping from peers to their interesting addresses
-    pub subscribed_peers: HashMap<N::PeerId, HashSet<Address>>,
+    subscribed_peers: HashMap<N::PeerId, HashSet<Address>>,
 
     /// Maintains the current list of interesting addresses and the peers that are interested in those addresses
-    pub subscriptions: HashMap<Address, HashSet<N::PeerId>>,
+    subscriptions: HashMap<Address, HashSet<N::PeerId>>,
 }
 
 impl<N: Network> RemoteEventDispatcherState<N> {

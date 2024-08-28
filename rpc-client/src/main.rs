@@ -82,7 +82,7 @@ impl Command {
 pub struct Client {
     pub ws_client: ArcClient<WebsocketClient>,
     pub policy: PolicyProxy<ArcClient<WebsocketClient>>,
-    pub blockchain: BlockchainProxy<ArcClient<WebsocketClient>>,
+    blockchain: BlockchainProxy<ArcClient<WebsocketClient>>,
     pub consensus: ConsensusProxy<ArcClient<WebsocketClient>>,
     pub mempool: MempoolProxy<ArcClient<WebsocketClient>>,
     pub wallet: WalletProxy<ArcClient<WebsocketClient>>,
