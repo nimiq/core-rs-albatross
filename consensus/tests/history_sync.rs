@@ -211,7 +211,9 @@ async fn sync_ingredients() {
         net1.subscribe_events(),
     )
     .await;
-    let consensus1 = Consensus::from_network(
+    // The consensus itself is unused, but in from_network the request handlers are
+    // spawned and thus this needs to execute as they are used later.
+    let _consensus1 = Consensus::from_network(
         blockchain1_proxy.clone(),
         Arc::clone(&net1),
         syncer1,
@@ -248,8 +250,9 @@ async fn sync_ingredients() {
         net2.subscribe_events(),
     )
     .await;
-
-    let consensus2 = Consensus::from_network(
+    // The consensus itself is unused, but in from_network the request handlers are
+    // spawned and thus this needs to execute as they are used later.
+    let _consensus2 = Consensus::from_network(
         blockchain2_proxy.clone(),
         Arc::clone(&net2),
         syncer2,
@@ -267,21 +270,19 @@ async fn sync_ingredients() {
     // Request macro chain, first request must return all epochs and one checkpoint.
     let peer_id = net2.get_peers()[0];
 
-    let macro_chain = HistoryMacroSync::request_macro_chain(
-        Arc::clone(&net2),
-        peer_id,
-        vec![consensus2.blockchain.read().head_hash()],
-        3,
-    )
-    .await
-    .expect("Should yield macro chain")
-    .expect("Should yield macro chain 2");
+    let head_hash = blockchain2.read().head_hash();
+
+    let macro_chain =
+        HistoryMacroSync::request_macro_chain(Arc::clone(&net2), peer_id, vec![head_hash], 3)
+            .await
+            .expect("Should yield macro chain")
+            .expect("Should yield macro chain 2");
 
     assert!(
         macro_chain.checkpoint.is_some(),
         "Should contain checkpoint"
     );
-    let blockchain = consensus1.blockchain.read();
+    let blockchain = blockchain1.read();
     assert_eq!(macro_chain.epochs.len(), 1);
     assert_eq!(macro_chain.epochs[0], blockchain.election_head_hash());
 
@@ -296,10 +297,7 @@ async fn sync_ingredients() {
         .expect("Should have block");
 
     assert_eq!(epoch.total_history_len(), 3);
-    assert_eq!(
-        block1.hash(),
-        consensus1.blockchain.read().election_head_hash()
-    );
+    assert_eq!(block1.hash(), blockchain1.read().election_head_hash());
 
     // Request history chunk of epoch 1.
     let chunk = SyncCluster::request_history_chunk(
@@ -312,15 +310,7 @@ async fn sync_ingredients() {
 
     assert_eq!(chunk.history.len(), 3);
     assert_eq!(
-        chunk.verify(
-            &consensus1
-                .blockchain
-                .read()
-                .election_head()
-                .header
-                .history_root,
-            0
-        ),
+        chunk.verify(&blockchain1.read().election_head().header.history_root, 0),
         Some(true)
     );
 
@@ -328,7 +318,7 @@ async fn sync_ingredients() {
     let macro_chain = HistoryMacroSync::request_macro_chain(
         Arc::clone(&net2),
         peer_id,
-        vec![consensus1.blockchain.read().election_head_hash()],
+        vec![blockchain1.read().election_head_hash()],
         3,
     )
     .await
@@ -336,7 +326,7 @@ async fn sync_ingredients() {
     .expect("Should yield macro chain 2");
     let checkpoint = macro_chain.checkpoint.expect("Should contain checkpoint");
     assert!(macro_chain.epochs.is_empty(), "Should not contain epochs");
-    let blockchain = consensus1.blockchain.read();
+    let blockchain = blockchain1.read();
     assert_eq!(checkpoint.hash, blockchain.macro_head_hash());
 
     // Request epoch 2 using the returned checkpoint
@@ -351,10 +341,7 @@ async fn sync_ingredients() {
         .clone();
 
     assert_eq!(epoch.total_history_len(), 1);
-    assert_eq!(
-        block2.hash(),
-        consensus1.blockchain.read().macro_head_hash()
-    );
+    assert_eq!(block2.hash(), blockchain1.read().macro_head_hash());
 
     // Request HistoryChunk for epoch 2 containing the checkpoint
     let chunk = SyncCluster::request_history_chunk(
@@ -367,15 +354,7 @@ async fn sync_ingredients() {
 
     assert_eq!(chunk.history.len(), 1);
     assert_eq!(
-        chunk.verify(
-            &consensus1
-                .blockchain
-                .read()
-                .macro_head()
-                .header
-                .history_root,
-            0
-        ),
+        chunk.verify(&blockchain1.read().macro_head().header.history_root, 0),
         Some(true)
     );
 
@@ -383,7 +362,7 @@ async fn sync_ingredients() {
     let macro_chain = HistoryMacroSync::request_macro_chain(
         Arc::clone(&net2),
         peer_id,
-        vec![consensus1.blockchain.read().macro_head_hash()],
+        vec![blockchain1.read().macro_head_hash()],
         3,
     )
     .await

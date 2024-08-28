@@ -406,10 +406,9 @@ where
 
     fn on_blockchain_extended(&mut self, hash: &Blake2bHash) {
         let block = self
-            .consensus
             .blockchain
             .read()
-            .get_block(hash, true)
+            .get_block(hash, true, None)
             .expect("Head block not found");
 
         // Update mempool and blockchain state
