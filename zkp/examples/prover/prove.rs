@@ -59,7 +59,7 @@ fn main() {
 
     let number_epochs: u32 = data.trim().parse().expect("Couldn't read user input.");
 
-    println!("====== Proof generation for Nano Sync initiated ======");
+    println!("====== Proof generation initiated ======");
 
     let mut genesis_header_hash = [0; 32];
     let mut genesis_data = None;
@@ -132,6 +132,6 @@ fn main() {
         );
     }
 
-    println!("====== Proof generation for Nano Sync finished ======");
+    println!("====== Proof generation for finished ======");
     println!("Total time elapsed: {:?}", total_start.elapsed());
 }

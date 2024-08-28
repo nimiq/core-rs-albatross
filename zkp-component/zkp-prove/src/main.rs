@@ -20,7 +20,7 @@ use nimiq_test_utils::{
 };
 use nimiq_utils::time::OffsetTime;
 use nimiq_zkp::ZKP_VERIFYING_DATA;
-use nimiq_zkp_circuits::setup::{load_verifying_data, setup};
+use nimiq_zkp_circuits::setup::load_verifying_data;
 use nimiq_zkp_component::{
     proof_gen_utils::generate_new_proof, proof_utils::validate_proof, types::ZKPState,
 };
@@ -28,8 +28,8 @@ use nimiq_zkp_primitives::NanoZKPError;
 use parking_lot::RwLock;
 use tracing_subscriber::{filter::Targets, prelude::*};
 
-#[derive(Debug, Parser)]
 /// Run the zk proof generation.
+#[derive(Debug, Parser)]
 struct TestProving {
     /// Network ID to utilize.
     /// Only Albatross network ids are supported.
@@ -94,9 +94,7 @@ fn blockchain(network_id: NetworkId) -> Arc<RwLock<Blockchain>> {
 async fn produce_two_consecutive_valid_zk_proofs(network_id: NetworkId) {
     let keys_path = PathBuf::from(format!("../{}", network_id.default_zkp_path().unwrap()));
 
-    setup(get_base_seed(), &keys_path, network_id, true).unwrap();
     ZKP_VERIFYING_DATA.init_with_data(load_verifying_data(&keys_path).unwrap());
-
     let blockchain = blockchain(network_id);
 
     // Produce the 1st election block after genesis.
@@ -112,10 +110,10 @@ async fn produce_two_consecutive_valid_zk_proofs(network_id: NetworkId) {
     let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
     let genesis_block = network_info.genesis_block().unwrap_macro();
     let zkp_state = ZKPState::with_genesis(&genesis_block).expect("Invalid genesis block");
-
     let genesis_header_hash = genesis_block.hash_blake2s().0;
 
     log::info!("Going to wait for the 1st proof");
+    let proving_start = Instant::now();
     // Waits for the proof generation and verifies the proof.
     let zkp_state = generate_new_proof(
         zkp_state.latest_block,
@@ -125,8 +123,12 @@ async fn produce_two_consecutive_valid_zk_proofs(network_id: NetworkId) {
         &keys_path,
     )
     .unwrap();
-    let proof = zkp_state.clone().into();
+    println!(
+        "Proof generated! Elapsed time: {:?}",
+        proving_start.elapsed()
+    );
 
+    let proof = zkp_state.clone().into();
     log::info!(
         "Proof validation: {:?}",
         validate_proof(&BlockchainProxy::from(&blockchain), &proof, None)
@@ -139,11 +141,10 @@ async fn produce_two_consecutive_valid_zk_proofs(network_id: NetworkId) {
         Policy::batches_per_epoch() as usize,
         &mut get_base_seed(),
     );
-
     let block = blockchain.read().state.election_head.clone();
 
     log::info!("Going to wait for the 2nd proof");
-
+    let proving_start = Instant::now();
     let zkp_state = generate_new_proof(
         zkp_state.latest_block,
         zkp_state.latest_proof,
@@ -152,8 +153,12 @@ async fn produce_two_consecutive_valid_zk_proofs(network_id: NetworkId) {
         &keys_path,
     )
     .unwrap();
-    let proof = zkp_state.into();
+    println!(
+        "Proof generated! Elapsed time: {:?}",
+        proving_start.elapsed()
+    );
 
+    let proof = zkp_state.into();
     log::info!(
         "Proof validation: {:?}",
         validate_proof(&BlockchainProxy::from(&blockchain), &proof, None)

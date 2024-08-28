@@ -14,8 +14,8 @@ use nimiq_serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct VerifyingKeyMetadata {
     genesis_hash: Blake2bHash,
-    vks_commitment: Vec<u8>,
-    #[serde(with = "nimiq_serde::fixint::be")]
+    #[serde(with = "nimiq_serde::HexArray")]
+    vks_commitment: [u8; 95 * 2],
     blocks_per_epoch: u32,
 }
 
@@ -24,7 +24,7 @@ impl VerifyingKeyMetadata {
         Self {
             genesis_hash,
             blocks_per_epoch: Policy::blocks_per_epoch(),
-            vks_commitment: vks_commitment.to_vec(),
+            vks_commitment,
         }
     }
 
@@ -35,11 +35,8 @@ impl VerifyingKeyMetadata {
         self.blocks_per_epoch == Policy::blocks_per_epoch()
     }
 
-    pub fn vks_commitment(&self) -> [u8; 95 * 2] {
-        self.vks_commitment
-            .clone()
-            .try_into()
-            .expect("Verifying keys commitment has wrong size")
+    pub fn vks_commitment(&self) -> &[u8; 95 * 2] {
+        &self.vks_commitment
     }
 
     pub fn save_to_file(self, path: &Path) -> Result<(), io::Error> {

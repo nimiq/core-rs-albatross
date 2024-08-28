@@ -32,4 +32,6 @@ pub enum NanoZKPError {
     EmptyProof,
     #[error("invalid block")]
     InvalidBlock,
+    #[error("invalid metadata")]
+    InvalidMetadata,
 }

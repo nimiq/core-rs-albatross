@@ -99,7 +99,7 @@ fn main() {
 
     let proof = Proof::deserialize_uncompressed_unchecked(&mut file).unwrap();
 
-    println!("====== Proof verification for Nano Sync initiated ======");
+    println!("====== Proof verification initiated ======");
 
     let start = Instant::now();
 
@@ -114,6 +114,6 @@ fn main() {
 
     println!("Proof verification finished. It returned {result}.");
 
-    println!("====== Proof verification for Nano Sync finished ======");
+    println!("====== Proof verification finished ======");
     println!("Total time elapsed: {:?}", start.elapsed());
 }

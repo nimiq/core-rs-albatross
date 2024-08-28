@@ -17,9 +17,8 @@ use rand::{thread_rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt};
 
-#[derive(Debug, Parser)]
-
 /// Create the zkp keys for Devnet or Unit test.
+#[derive(Debug, Parser)]
 struct Setup {
     /// Network ID to generate ZKP keys for.
     /// Only supports Albatross network ids.
@@ -89,7 +88,7 @@ fn main() -> Result<(), NanoZKPError> {
     }
 
     println!("====== Devnet Parameter generation for ZKP finished ======");
-    println!("Total time elapsed: {:?} seconds", start.elapsed());
+    println!("Total time elapsed: {:?}", start.elapsed());
 
     Ok(())
 }

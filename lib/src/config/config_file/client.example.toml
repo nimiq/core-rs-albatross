@@ -114,17 +114,16 @@ sync_mode = "full"
 #
 # ZK Prover specific configuration
 #
+# To enable, uncomment the section header '[zk-prover]'
+#
+#
+#
 ##############################################################################
-#[zkp]
-
-# Specify the proof generation settings.
-
-# Defines if the proof generation is active
-# Default: false
-# prover_active = true
+# Uncomment the following line to enable the ZK prover.
+#[zk_prover]
 
 # Defines the path for the proving keys folders
-# Default: ".zkp" if prover is active
+# Default: ".zkp"
 # prover_keys_path = "some_folder"
 
 ##############################################################################

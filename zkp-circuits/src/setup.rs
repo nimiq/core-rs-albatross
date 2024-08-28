@@ -80,7 +80,7 @@ pub fn load_verifying_data(path: &Path) -> Result<VerifyingData, NanoZKPError> {
 
     Ok(VerifyingData {
         merger_wrapper_vk: load_key(&path.join("verifying_keys"), "merger_wrapper")?,
-        keys_commitment: metadata.vks_commitment(),
+        keys_commitment: *metadata.vks_commitment(),
     })
 }
 
@@ -89,6 +89,8 @@ fn load_key<E: Pairing>(dir_path: &Path, file_name: &str) -> Result<VerifyingKey
     Ok(VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?)
 }
 
+/// Stores the zkp metadata to the provided path. The directory should be the same as the network id zkp default path.
+/// Fails if the file could not be created.
 pub fn save_metadata_to_file(path: &Path, network_id: NetworkId) -> Result<(), NanoZKPError> {
     let network_info = NetworkInfo::from_network_id(network_id);
     let genesis_block = network_info.genesis_block().unwrap_macro();

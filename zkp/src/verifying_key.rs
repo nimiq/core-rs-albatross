@@ -85,7 +85,7 @@ impl ZKPVerifyingKey {
                 &mut serialized_cursor,
             )
             .expect("Invalid verifying key. Please rebuild the client."),
-            keys_commitment: metadata.vks_commitment(),
+            keys_commitment: *metadata.vks_commitment(),
         }
     }
 }

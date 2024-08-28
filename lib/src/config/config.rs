@@ -646,7 +646,7 @@ pub struct ClientConfig {
     /// The optional zk prover configuration
     ///
     #[builder(default)]
-    pub zkp: ZKProverConfig,
+    pub zk_prover: Option<ZKProverConfig>,
 
     /// The optional rpc-server configuration
     ///
@@ -829,21 +829,13 @@ impl ClientConfigBuilder {
         self.database(config_file.database.clone());
 
         // Configure the zk prover
-        if let Some(zkp_settings) = config_file.zkp.as_ref() {
-            let mut prover_keys_path = None;
-            if zkp_settings.prover_active {
-                prover_keys_path = Some(
-                    zkp_settings
-                        .prover_keys_path
-                        .as_ref()
-                        .map_or(PathBuf::from(DEFAULT_PROVER_KEYS_PATH), PathBuf::from),
-                );
-            }
+        if let Some(zkp_settings) = config_file.zk_prover.as_ref() {
+            let prover_keys_path = zkp_settings
+                .prover_keys_path
+                .as_ref()
+                .map_or(PathBuf::from(DEFAULT_PROVER_KEYS_PATH), PathBuf::from);
 
-            self.zkp = Some(ZKProverConfig {
-                prover_active: zkp_settings.prover_active,
-                prover_keys_path,
-            });
+            self.zk_prover = Some(Some(ZKProverConfig { prover_keys_path }));
         }
 
         // Configure RPC server
@@ -953,11 +945,9 @@ impl ClientConfigBuilder {
     }
 }
 
-/// Contains the configurations for the ZKP storage, verification and proof generation.
-#[derive(Debug, Clone, Builder, Default)]
+/// Contains the configurations for the ZK proof generation.
+#[derive(Debug, Clone, Builder)]
 pub struct ZKProverConfig {
-    /// ZK Proof generation activation config.
-    pub prover_active: bool,
     /// Prover keys path for the zkp prover.
-    pub prover_keys_path: Option<PathBuf>,
+    pub prover_keys_path: PathBuf,
 }

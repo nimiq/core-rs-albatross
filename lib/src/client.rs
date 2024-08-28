@@ -174,19 +174,14 @@ impl ClientInner {
         ZKP_VERIFYING_DATA.init_with_network_id(config.network_id);
 
         #[cfg(not(feature = "zkp-prover"))]
-        if config.zkp.prover_active {
+        if config.zk_prover.is_some() {
             panic!("Can't build a prover node without the zkp-prover feature enabled")
         }
 
         #[cfg(feature = "zkp-prover")]
         // If the Prover is active we need to ensure that the proving keys are present.
-        if config.zkp.prover_active {
-            let prover_keys_path = config
-                .zkp
-                .prover_keys_path
-                .as_ref()
-                .expect("Prover node must have a path for the zkp keys.");
-            if !all_files_created(prover_keys_path, config.zkp.prover_active) {
+        if let Some(ref zk_prover_config) = config.zk_prover {
+            if !all_files_created(&zk_prover_config.prover_keys_path, true) {
                 match config.network_id {
                     NetworkId::DevAlbatross => {
                         log::info!("Setting up zero-knowledge prover keys for devnet.");
@@ -195,23 +190,25 @@ impl ClientInner {
                         );
                         log::info!(
                             "Alternatively, you can place the proving keys in this folder: {:?}.",
-                            prover_keys_path
+                            zk_prover_config.prover_keys_path
                         );
                         setup(
                             ChaCha20Rng::from_seed(DEVELOPMENT_SEED),
-                            prover_keys_path,
+                            &zk_prover_config.prover_keys_path,
                             config.network_id,
-                            config.zkp.prover_active,
+                            true,
                         )?;
                         log::info!("Setting the verification key.");
-                        let vk = load_verifying_data(prover_keys_path)?;
-                        assert_eq!(vk, *ZKP_VERIFYING_DATA, "Verifying keys don't match. The build in verifying keys don't match the newly generated ones.");
+                        let vk = load_verifying_data(&zk_prover_config.prover_keys_path)?;
+                        if vk != *ZKP_VERIFYING_DATA {
+                            return Err(Error::NanoZKP(NanoZKPError::InvalidMetadata));
+                        }
                         log::debug!("Finished ZKP setup.");
                     }
                     NetworkId::TestAlbatross | NetworkId::MainAlbatross => {
                         log::error!(
                             "Proving keys missing, please place them in this folder: {:?}.",
-                            prover_keys_path
+                            zk_prover_config.prover_keys_path
                         );
                         return Err(Error::NanoZKP(NanoZKPError::Filesystem(
                             std::io::Error::new(
@@ -399,16 +396,13 @@ impl ClientInner {
 
                 let blockchain_proxy = BlockchainProxy::from(&blockchain);
                 #[cfg(feature = "zkp-prover")]
-                let zkp_component = if config.zkp.prover_active {
+                let zkp_component = if let Some(zk_prover_config) = config.zk_prover {
                     ZKPComponent::with_prover(
                         blockchain_proxy.clone(),
                         Arc::clone(&network),
-                        config.zkp.prover_active,
+                        true,
                         None,
-                        config
-                            .zkp
-                            .prover_keys_path
-                            .expect("Prover node must have a path for the zkp keys."),
+                        zk_prover_config.prover_keys_path,
                         zkp_storage,
                     )
                     .await
@@ -448,16 +442,13 @@ impl ClientInner {
 
                 let blockchain_proxy = BlockchainProxy::from(&blockchain);
                 #[cfg(feature = "zkp-prover")]
-                let zkp_component = if config.zkp.prover_active {
+                let zkp_component = if let Some(zk_prover_config) = config.zk_prover {
                     ZKPComponent::with_prover(
                         blockchain_proxy.clone(),
                         Arc::clone(&network),
-                        config.zkp.prover_active,
+                        true,
                         None,
-                        config
-                            .zkp
-                            .prover_keys_path
-                            .expect("Prover node must have a path for the zkp keys."),
+                        zk_prover_config.prover_keys_path,
                         zkp_storage,
                     )
                     .await
