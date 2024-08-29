@@ -1,6 +1,6 @@
 use std::cmp;
 
-use nimiq_block::{Block, BlockType};
+use nimiq_block::Block;
 use nimiq_hash::Blake2bHash;
 
 use crate::{AbstractBlockchain, BlockchainError, ChainInfo};
@@ -51,27 +51,21 @@ impl ChainOrdering {
             // Let's thus find the first block on the branch (not on the main chain).
             // If there is a malicious fork, it might happen that the two skip blocks before
             // the branch are the same. Then, we need to follow and compare.
-            let mut blocks = vec![block.clone()];
+            let mut skip_block_flags = vec![block.is_skip()];
+            let mut start_block_number = block.block_number();
 
-            let mut current = ChainInfo::new(block.clone(), false);
-            let mut prev = prev_info.clone();
+            if !prev_info.on_main_chain {
+                skip_block_flags.push(prev_info.head.is_skip());
+                start_block_number = prev_info.head.block_number();
+                let mut prev_chain_info = get_chain_info(prev_info.head.parent_hash())
+                    .expect("Corrupted store: Failed to find fork predecessor");
 
-            while !prev.on_main_chain {
-                // Macro blocks are final
-                assert!(
-                    prev.head.ty() != BlockType::Macro,
-                    "Trying to rebranch across macro block"
-                );
-
-                let prev_hash = prev.head.parent_hash();
-                blocks.push(prev.head.clone());
-
-                let prev_info = get_chain_info(prev_hash)
-                    .expect("Corrupted store: Failed to find fork predecessor while rebranching");
-
-                current = prev;
-
-                prev = prev_info;
+                while !prev_chain_info.on_main_chain {
+                    skip_block_flags.push(prev_chain_info.head.is_skip());
+                    start_block_number = prev_chain_info.head.block_number();
+                    prev_chain_info = get_chain_info(prev_chain_info.head.parent_hash())
+                        .expect("Corrupted store: Failed to find fork predecessor");
+                }
             }
 
             // Now go forward from the first block on the branch and detect which chain has an earlier
@@ -82,21 +76,20 @@ impl ChainOrdering {
             // Otherwise take the longest:
             // [0] - [0] - [1] - [0]  *correct chain*
             //    \- [0] - [1]
-            let current_height = current.head.block_number();
-            let min_height = cmp::min(blockchain.block_number(), block.block_number());
+            let end_block_number = cmp::min(blockchain.block_number(), block.block_number());
 
             // Iterate over common block heights starting from right after the intersection.
-            for h in current_height..=min_height {
-                let current_block = blocks.pop().unwrap();
+            for h in start_block_number..=end_block_number {
+                let block_is_skip = skip_block_flags.pop().unwrap();
 
                 // Get equivalent block on main chain.
                 let current_on_main_chain = get_block_at(h)
                     .expect("Corrupted store: Failed to find main chain equivalent of fork");
 
-                if current_block.is_skip() && !current_on_main_chain.is_skip() {
+                if block_is_skip && !current_on_main_chain.is_skip() {
                     chain_order = ChainOrdering::Superior;
                     break;
-                } else if !current_block.is_skip() && current_on_main_chain.is_skip() {
+                } else if !block_is_skip && current_on_main_chain.is_skip() {
                     chain_order = ChainOrdering::Inferior;
                     break;
                 }
@@ -110,7 +103,7 @@ impl ChainOrdering {
             }
 
             log::info!(
-                fork_block_number = current_height - 1,
+                fork_block_number = start_block_number - 1,
                 current_block_number = blockchain.block_number(),
                 new_block_number = block.block_number(),
                 "New block in {:?} chain",
