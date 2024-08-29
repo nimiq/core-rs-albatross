@@ -142,7 +142,7 @@ sync_mode = "full"
 #
 # If the section header is uncommented, the prover is enabled.
 ##############################################################################
-#[zk_prover]
+#[zk-prover]
 
 # The path for the proving keys folder.
 # Default: ".zkp"
