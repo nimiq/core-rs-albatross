@@ -186,14 +186,12 @@ impl SkipBlockAggregationProtocol {
         ))));
 
         let registry = Arc::new(ValidatorRegistry::new(validators));
-        // This will be moved into the closure.
-        let cloned_registry = Arc::clone(&registry);
 
         let evaluator = Arc::new(WeightedVote::new(
             Arc::clone(&store),
             Arc::clone(&registry),
             Arc::clone(&partitioner),
-            move |message| cloned_registry.signature_weight(message).unwrap_or(0) >= threshold,
+            threshold,
         ));
 
         SkipBlockAggregationProtocol {
