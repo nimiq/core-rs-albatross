@@ -99,8 +99,8 @@ where
     /// `0` being not useful at all, can be discarded.
     /// `>0` being more useful the bigger the number.
     fn evaluate(&self, contribution: &TProtocol::Contribution, level: usize, id: TId) -> usize {
-        // Special case for final aggregations.
-        if level == self.partitioner.levels() && self.is_final(contribution) {
+        // Special case for final aggregations, full contribution is already checked.
+        if level == self.partitioner.levels() {
             return usize::MAX;
         }
 
@@ -251,7 +251,12 @@ where
 
     fn level_contains_origin(&self, msg: &LevelUpdate<TProtocol::Contribution>) -> bool {
         if msg.level as usize == self.partitioner.levels() {
-            return self.is_final(&msg.aggregate);
+            let weight = self
+                .weights
+                .signers_identity(&msg.aggregate.contributors())
+                .len();
+            // Only available to full aggregations
+            return weight == self.partitioner.size();
         }
         let range = self.partitioner.range(msg.level as usize);
         if let Ok(range) = range {

@@ -13,7 +13,6 @@ use nimiq_time::{interval, Interval};
 use crate::{
     config::Config,
     contribution::AggregatableContribution,
-    evaluator::Evaluator,
     identity::IdentityRegistry,
     level::Level,
     network::{LevelUpdateSender, Network},
@@ -160,7 +159,7 @@ where
     }
 
     fn is_complete_aggregate(&self, aggregate: &P::Contribution) -> bool {
-        self.protocol.evaluator().is_final(aggregate)
+        self.num_contributors(aggregate) == self.protocol.partitioner().size()
     }
 
     /// Check if a level was completed
