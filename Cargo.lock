@@ -4119,7 +4119,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-macros"
-version = "0.1.1"
+version = "0.24.0"
 dependencies = [
  "hex",
  "nimiq-serde",
@@ -4365,7 +4365,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-primitives"
-version = "0.1.0"
+version = "0.24.0"
 dependencies = [
  "ark-ec",
  "ark-mnt6-753",
