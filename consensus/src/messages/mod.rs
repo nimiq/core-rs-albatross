@@ -479,9 +479,8 @@ pub struct RequestHead {}
 
 #[derive(Clone, Debug, Deserialize, Serialize, SerializedMaxSize)]
 pub struct ResponseHead {
-    pub micro: Blake2bHash,
-    pub r#macro: Blake2bHash,
-    pub election: Blake2bHash,
+    pub block_number: u32,
+    pub block_hash: Blake2bHash,
 }
 
 impl RequestCommon for RequestHead {

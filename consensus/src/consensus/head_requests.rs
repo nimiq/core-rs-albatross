@@ -133,7 +133,7 @@ impl<TNetwork: Network + 'static> Future for HeadRequests<TNetwork> {
             // If we got a result, check it and classify it as known block/unknown block.
             match result {
                 Ok(head) => {
-                    let hash = head.micro;
+                    let hash = head.block_hash;
                     if self.blockchain.read().get_block(&hash, false).is_ok() {
                         self.num_known_blocks += 1;
                     } else {
