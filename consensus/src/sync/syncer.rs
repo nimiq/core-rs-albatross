@@ -13,6 +13,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{CloseReason, Network, NetworkEvent, SubscribeEvents};
+use nimiq_primitives::policy::Policy;
 use nimiq_time::{interval, Interval};
 use nimiq_utils::stream::FuturesUnordered;
 
@@ -248,47 +249,15 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
             }
         };
 
-        // Fetch the reported election block from our chain.
-        // If we don't know the block, the peer is either ahead of us or on a different chain.
-        // In this case, we conservatively assume that the peer is not synced.
-        let blockchain = blockchain.read();
-        let election_block = match blockchain.get_block(&head.election, false) {
-            Ok(block) => block,
-            Err(_) => {
-                debug!(
-                    %peer_id,
-                    election_head = %head.election,
-                    "Incompatible peer's election block not found"
-                );
-                return false;
-            }
-        };
-
-        // If the peer is in a different epoch than us, we assume that it's not synced.
-        if election_block.epoch_number() != blockchain.election_head().epoch_number() {
+        // Check the peer's head block number. We consider the peer synced if the peer is
+        // at most one batch behind us.
+        let peers_batch = Policy::batch_at(head.block_number);
+        let our_batch = blockchain.read().batch_number();
+        if peers_batch < our_batch.saturating_sub(1) {
             debug!(
                 %peer_id,
-                peers_epoch = election_block.epoch_number(),
-                our_epoch = blockchain.election_head().epoch_number(),
-                "Incompatible peer is in a different epoch"
-            );
-            return false;
-        }
-
-        // Fetch the reported checkpoint block from our chain.
-        // If we don't know the block, the peer is either ahead of us or on a different chain,
-        // We consider the peer as not in sync until we catch up and is sufficiently close (see below).
-        let checkpoint = match blockchain.get_block(&head.r#macro, false) {
-            Ok(block) => block,
-            Err(_) => return false,
-        };
-
-        // We consider the peer synced if it's at most one batch behind us.
-        if checkpoint.batch_number() < blockchain.macro_head().batch_number().saturating_sub(1) {
-            debug!(
-                %peer_id,
-                peers_batch = checkpoint.batch_number(),
-                our_batch = blockchain.macro_head().batch_number(),
+                peers_batch,
+                our_batch,
                 "Incompatible peer is in a different batch"
             );
             return false;
