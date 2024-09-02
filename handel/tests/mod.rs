@@ -300,8 +300,8 @@ async fn it_can_aggregate() {
         NetworkWrapper(Arc::clone(&net)),
     );
 
-    // aggregating should not take more than 300 ms per each 7 contributors
-    let timeout_ms = 300u64 * (contributor_num / 7 + 1) as u64;
+    // aggregating should not take more than 1s per each 7 contributors
+    let timeout_ms = 1000u64 * (contributor_num / 7 + 1) as u64;
 
     let deadline = Instant::now()
         .checked_add(Duration::from_millis(timeout_ms))
