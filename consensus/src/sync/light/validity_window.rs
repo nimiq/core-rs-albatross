@@ -50,7 +50,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         mut election_in_window: bool,
     ) {
         if self.validity_requests.is_none() {
-            // By default we set the parameters assuming we are starting from stratch
+            // By default we set the parameters assuming we are starting from the beginning of the epoch.
             let mut epoch_number = Policy::epoch_at(verifier_block_number);
             let mut chunk_index = 0;
             let mut root_hash = expected_root.clone();
@@ -157,6 +157,20 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         let validity_window_bn = if validity_start <= Policy::genesis_block_number() {
             Policy::genesis_block_number()
         } else {
+            // We move the validity window to the beginning of the epoch for simplicity reasons.
+            // There are two possible cases:
+            // A - The validity window is contained in the current epoch
+            // B - The validity window spans across the previous epoch and the current one
+            //
+            // For case A we move the validity window to the beginning of the epoch because
+            // apart from syncing the window, we also want to be able to verify the history root
+            // of blocks that belong to the current epoch; by doing the latter we can also verify the former.
+            //
+            // For case B it is not necessary to move the validity window to the beginning of the previous
+            // epoch because we already have an election block that can be used to proof txns within the
+            // previous epoch, but, for simplicity reasons we decided to still move it because otherwise
+            // we would need to start at a specific chunk of the previous epoch and consequently we will need a proof
+            // that the server is not omiting or adding information when starting from any chunk index.
             Policy::election_block_before(validity_start)
         };
 
