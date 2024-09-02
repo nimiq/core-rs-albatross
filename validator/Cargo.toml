@@ -28,7 +28,7 @@ parking_lot = "0.12"
 rand = "0.8"
 rayon = "1.10"
 serde = "1.0"
-tokio = { version = "1.39", features = ["rt", "time", "tracing"] }
+tokio = { version = "1.40", features = ["rt", "time", "tracing"] }
 tokio-metrics = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
 
@@ -60,7 +60,7 @@ nimiq-vrf = { workspace = true }
 
 [dev-dependencies]
 hex = "0.4"
-tokio = { version = "1.39", features = ["rt", "test-util", "time", "tracing"] }
+tokio = { version = "1.40", features = ["rt", "test-util", "time", "tracing"] }
 tracing-core = "0.1"
 tracing-subscriber = "0.3"
 
