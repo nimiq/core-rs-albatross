@@ -18,5 +18,5 @@ futures = "0.3"
 gloo-timers = { version = "0.3", features = ["futures"] }
 instant = { version = "0.1", features = ["wasm-bindgen"] }
 send_wrapper = { version = "0.6", features = ["futures"] }
-tokio = { version = "1.39", features = ["time"] }
+tokio = { version = "1.40", features = ["time"] }
 tokio-stream = { version = "0.1", features = ["time"] }
