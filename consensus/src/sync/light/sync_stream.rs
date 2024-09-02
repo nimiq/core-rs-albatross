@@ -226,6 +226,8 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 if let BlockchainProxy::Full(_) = self.blockchain {
                     let blockchain = self.blockchain.read();
                     let our_head = blockchain.block_number();
+                    let can_enforce_validity_window = blockchain.can_enforce_validity_window();
+                    drop(blockchain);
 
                     // Calculate an upper bound on the peer's head block.
                     // The upper bound is the last micro block of the latest batch of the peer.
@@ -243,13 +245,18 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                         .saturating_add(Policy::blocks_per_batch() - 1);
 
                     if peer_head_upper_bound.saturating_sub(our_head) <= self.full_sync_threshold {
-                        log::debug!(
-                            our_head,
-                            peer_head = peer_head_upper_bound,
-                            peer_id = %epoch_ids.sender,
-                            "Peer is sufficiently close for a live sync instead of macro sync."
-                        );
-                        return Poll::Ready(Some(MacroSyncReturn::Good(epoch_ids.sender)));
+                        if can_enforce_validity_window {
+                            log::debug!(
+                                our_head,
+                                peer_head = peer_head_upper_bound,
+                                peer_id = %epoch_ids.sender,
+                                "Peer is sufficiently close for a live sync instead of macro sync."
+                            );
+                            return Poll::Ready(Some(MacroSyncReturn::Good(epoch_ids.sender)));
+                        } else {
+                            #[cfg(feature = "full")]
+                            self.start_validity_synchronization(epoch_ids.sender);
+                        }
                     }
                 }
             }
