@@ -24,7 +24,7 @@ use crate::{
     verify::{verify_tx, VerifyErr},
 };
 
-const CONCURRENT_VERIF_TASKS: u32 = 1000;
+const CONCURRENT_VERIF_TASKS: u32 = 10000;
 
 pub(crate) struct MempoolExecutor<N: Network, T: Topic + Unpin + Sync> {
     // Blockchain reference
