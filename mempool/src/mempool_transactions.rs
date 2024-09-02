@@ -169,14 +169,12 @@ impl MempoolTransactions {
         self.transactions.get(hash)
     }
 
-    pub(crate) fn insert(&mut self, tx: &Transaction, priority: TxPriority) -> bool {
+    pub(crate) fn insert(&mut self, tx: Transaction, priority: TxPriority) -> bool {
         let tx_hash = tx.hash();
 
         if self.transactions.contains_key(&tx_hash) {
             return false;
         }
-
-        self.transactions.insert(tx_hash.clone(), tx.clone());
 
         self.best_transactions.push(
             tx_hash.clone(),
@@ -198,10 +196,12 @@ impl MempoolTransactions {
         self.tx_counter += 1;
 
         self.oldest_transactions
-            .push(tx_hash, Reverse(tx.validity_start_height));
+            .push(tx_hash.clone(), Reverse(tx.validity_start_height));
 
         // Update total tx size
         self.total_size += tx.serialized_size();
+
+        self.transactions.insert(tx_hash, tx);
 
         true
     }

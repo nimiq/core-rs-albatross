@@ -1683,7 +1683,6 @@ async fn mempool_basic_prioritization_control_tx() {
     // Insert reactivate with high priority
     mempool
         .add_transaction(reactivate.clone(), Some(TxPriority::High))
-        .await
         .unwrap();
 
     // Get control txns from mempool
@@ -1928,7 +1927,7 @@ async fn applies_total_tx_size_limits() {
     let worst_tx = txns[1].hash::<Blake2bHash>();
 
     for tx in txns {
-        mempool.add_transaction(tx, None).await.unwrap();
+        mempool.add_transaction(tx, None).unwrap();
     }
 
     let (mempool_txns, _) = mempool.get_transactions_for_block(txns_len);

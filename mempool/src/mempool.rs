@@ -369,7 +369,9 @@ impl Mempool {
                     }
 
                     // Add the transaction to the mempool. Balance checks are performed within put().
-                    mempool_state.put(&blockchain, tx, TxPriority::Medium).ok();
+                    mempool_state
+                        .put(&blockchain, tx.clone(), TxPriority::Medium)
+                        .ok();
                 }
             }
         }
@@ -598,7 +600,7 @@ impl Mempool {
     }
 
     /// Adds a transaction to the Mempool.
-    pub async fn add_transaction(
+    pub fn add_transaction(
         &self,
         transaction: Transaction,
         tx_priority: Option<TxPriority>,
@@ -608,14 +610,13 @@ impl Mempool {
         let filter = Arc::clone(&self.filter);
         let network_id = blockchain.read().network_id;
         verify_tx(
-            &transaction,
+            transaction,
             blockchain,
             network_id,
             &mempool_state,
             filter,
             tx_priority.unwrap_or(TxPriority::Medium),
         )
-        .await
     }
 
     /// Checks whether a transaction has been filtered

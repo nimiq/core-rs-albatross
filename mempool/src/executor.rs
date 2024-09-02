@@ -105,14 +105,13 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
             // Spawn the transaction verification task
             spawn(async move {
                 let verify_tx_ret = verify_tx(
-                    &tx,
+                    tx,
                     blockchain,
                     network_id,
                     &mempool_state,
                     filter,
                     TxPriority::Medium,
-                )
-                .await;
+                );
 
                 let acceptance = match verify_tx_ret {
                     Ok(_) => MsgAcceptance::Accept,

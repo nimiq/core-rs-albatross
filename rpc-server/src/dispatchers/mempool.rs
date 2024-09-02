@@ -35,7 +35,7 @@ impl MempoolInterface for MempoolDispatcher {
         let tx = Transaction::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
         let txid = tx.hash::<Blake2bHash>();
 
-        match self.mempool.add_transaction(tx, None).await {
+        match self.mempool.add_transaction(tx, None) {
             Ok(_) => Ok(txid.into()),
             Err(e) => Err(Error::MempoolError(e)),
         }
@@ -48,11 +48,7 @@ impl MempoolInterface for MempoolDispatcher {
         let tx = Transaction::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
         let txid = tx.hash::<Blake2bHash>();
 
-        match self
-            .mempool
-            .add_transaction(tx, Some(TxPriority::High))
-            .await
-        {
+        match self.mempool.add_transaction(tx, Some(TxPriority::High)) {
             Ok(_) => Ok(txid.into()),
             Err(e) => Err(Error::MempoolError(e)),
         }
