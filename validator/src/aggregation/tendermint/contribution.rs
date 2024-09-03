@@ -1,16 +1,19 @@
-use std::{collections::BTreeMap, ops};
+use std::{collections::BTreeMap, ops, sync::Arc};
 
 use nimiq_block::MultiSignature;
 use nimiq_bls::{AggregateSignature, SecretKey};
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::{
     contribution::{AggregatableContribution, ContributionError},
+    identity::WeightRegistry,
     update::LevelUpdate,
 };
 use nimiq_hash::Blake2sHash;
-use nimiq_primitives::TendermintVote;
+use nimiq_primitives::{policy::Policy, TendermintVote};
 use nimiq_tendermint::{Aggregation, AggregationMessage};
 use serde::{Deserialize, Serialize};
+
+use crate::aggregation::registry::ValidatorRegistry;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TendermintContribution {
@@ -132,5 +135,55 @@ impl Aggregation<Blake2sHash> for AggregateMessage {
 impl AggregationMessage<Blake2sHash> for AggregateMessage {
     fn sender(&self) -> u16 {
         self.0.origin().try_into().expect("validator ID")
+    }
+}
+
+pub(crate) fn finality_fn_from_validators(
+    validators: Arc<ValidatorRegistry>,
+) -> impl Fn(&TendermintContribution) -> bool {
+    move |message: &TendermintContribution| {
+        // Conditions for final contributions:
+        // * Any proposal has 2f+1
+        // (* Nil has f+1) would be implicit in the next condition
+        // * The biggest proposal (NOT Nil) combined with the non cast votes is less than 2f+1
+
+        let mut uncast_votes = Policy::SLOTS;
+        let mut biggest_weight = 0;
+
+        // Check every proposal present, including None
+        for (hash, signature) in message.contributions.iter() {
+            let weight = u16::try_from(validators.signers_weight(&signature.signers).unwrap_or(0))
+                // Maybe this should panic as whenever the conversion from usize to u16 is impossible
+                // due to overflow, this contribution is faulty as a whole and should never have ended up here.
+                .unwrap_or(0);
+            // Any option which has at least 2f+1 votes make this contribution final.
+            if weight >= Policy::TWO_F_PLUS_ONE {
+                return true;
+            }
+            // If the proposal does not have 2f+1 check if it has the new biggest_weight
+            if hash.is_some() && weight > biggest_weight {
+                biggest_weight = weight;
+            }
+            // The cast votes need to be removed from the uncast votes
+            uncast_votes = uncast_votes.saturating_sub(weight);
+        }
+
+        let cast_votes = Policy::SLOTS.saturating_sub(uncast_votes);
+        if cast_votes < Policy::TWO_F_PLUS_ONE {
+            // This should not be here. The criteria that the best vote can be elevated above the threshold
+            // using the uncast votes is enough. In our case that means that seeing f+1 different proposals
+            // with 1 vote each is a final aggregate. That is currently not handled that way in tendermint
+            // as it only looks at contributions above 2f contributors. That behavior is thus maintained
+            // here, but can be removed in the future if tendermint is changed as well.
+            return false;
+        }
+
+        // If the uncast votes are not able to put the biggest vote over the threshold
+        // they cannot push any proposal over the threshold and thus the aggregate is final.
+        if uncast_votes + biggest_weight < Policy::TWO_F_PLUS_ONE {
+            return true;
+        }
+
+        false
     }
 }

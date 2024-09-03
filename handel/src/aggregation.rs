@@ -29,7 +29,6 @@ use crate::{
 // TODOS:
 // * protocol.store RwLock.
 // * level.state RwLock
-// * Evaluator::new -> threshold (now covered outside of this crate)
 
 type LevelUpdateStream<P, T> = BoxStream<'static, LevelUpdate<<P as Protocol<T>>::Contribution>>;
 

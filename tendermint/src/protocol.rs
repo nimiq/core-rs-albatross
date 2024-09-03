@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use futures::{future::BoxFuture, stream::BoxStream};
 use nimiq_collections::BitSet;
 use serde::{Deserialize, Serialize};
@@ -163,4 +165,8 @@ pub trait Protocol: Clone + Send + Sync + Unpin + Sized + 'static {
         step: Step,
         message: Self::AggregationMessage,
     ) -> BoxFuture<'static, Result<(), ()>>;
+
+    /// Compares the two given aggregations. This is used to determine whether or not to overwrite
+    /// a given aggregate with a better one.
+    fn compare_contributions(&self, lhs: &Self::Aggregation, rhs: &Self::Aggregation) -> Ordering;
 }

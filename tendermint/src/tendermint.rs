@@ -572,14 +572,14 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             self.aggregations.poll_next_unpin(cx)
         {
             // For every update received, first update the best_vote for that aggregation.
-            // If the updated value is better (more votes) make sure, that a state update will be required.
+            // If the updated value is better make sure, that a state update will be required.
             // If this is the first update for the aggregation, create the entry.
             let best_vote = self
                 .state
                 .best_votes
                 .entry(round_and_step)
                 .and_modify(|agg| {
-                    if agg.all_contributors().len() < aggregate.all_contributors().len() {
+                    if self.protocol.compare_contributions(agg, &aggregate).is_lt() {
                         *agg = aggregate.clone();
                         *should_export_state = true;
                     }

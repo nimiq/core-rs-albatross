@@ -1,4 +1,5 @@
 use std::{
+    cmp::Ordering,
     collections::BTreeMap,
     sync::{Arc, Mutex},
 };
@@ -259,5 +260,15 @@ impl Protocol for Validator {
         self.observe_sender
             .try_send(Observe::Proposal(proposal))
             .expect("Failed to send proposal to observer");
+    }
+
+    fn compare_contributions(&self, lhs: &Self::Aggregation, rhs: &Self::Aggregation) -> Ordering {
+        if lhs.all_contributors().len() < rhs.all_contributors().len() {
+            return Ordering::Less;
+        }
+        if lhs.all_contributors().len() > rhs.all_contributors().len() {
+            return Ordering::Greater;
+        }
+        Ordering::Equal
     }
 }

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{cmp::Ordering, sync::Arc};
 
 use futures::{
     future::{self, BoxFuture, FutureExt},
@@ -22,8 +22,8 @@ use nimiq_primitives::{
 };
 use nimiq_serde::Serialize;
 use nimiq_tendermint::{
-    Proposal, ProposalError, ProposalMessage, Protocol, ProtocolError, SignedProposalMessage, Step,
-    TaggedAggregationMessage,
+    Aggregation as _, Proposal, ProposalError, ProposalMessage, Protocol, ProtocolError,
+    SignedProposalMessage, Step, TaggedAggregationMessage,
 };
 use nimiq_utils::spawn;
 use nimiq_validator_network::{
@@ -35,7 +35,7 @@ use crate::{
     aggregation::{
         registry::ValidatorRegistry,
         tendermint::{
-            contribution::{AggregateMessage, TendermintContribution},
+            contribution::{finality_fn_from_validators, AggregateMessage, TendermintContribution},
             proposal::{Body, Header, RequestProposal, SignedProposal},
             protocol::TendermintAggregationProtocol,
             update_message::TendermintUpdate,
@@ -112,8 +112,6 @@ pub struct TendermintProtocol<TValidatorNetwork: ValidatorNetwork> {
     pub block_height: u32,
     // Information relative to our validator that is necessary to produce blocks.
     pub block_producer: BlockProducer,
-    // The validators for the current epoch.
-    pub current_validators: Validators,
     // The main blockchain struct. Contains all of this validator information about the current chain.
     blockchain: Arc<RwLock<Blockchain>>,
     // Validator registry on the heap for easy cloning into handel protocol.
@@ -128,7 +126,6 @@ impl<TValidatorNetwork: ValidatorNetwork> Clone for TendermintProtocol<TValidato
             network_id: self.network_id,
             block_height: self.block_height,
             block_producer: self.block_producer.clone(),
-            current_validators: self.current_validators.clone(),
             blockchain: Arc::clone(&self.blockchain),
             validator_registry: Arc::clone(&self.validator_registry),
         }
@@ -154,8 +151,7 @@ where
             network_id,
             block_height,
             validator_slot_band,
-            validator_registry: Arc::new(ValidatorRegistry::new(current_validators.clone())),
-            current_validators,
+            validator_registry: Arc::new(ValidatorRegistry::new(current_validators)),
             network,
         }
     }
@@ -486,5 +482,22 @@ where
                 panic!("Body hash mismatch!");
             }
         }
+    }
+
+    fn compare_contributions(&self, lhs: &Self::Aggregation, rhs: &Self::Aggregation) -> Ordering {
+        let is_final = finality_fn_from_validators(Arc::clone(&self.validator_registry));
+        if is_final(lhs) {
+            return Ordering::Greater;
+        }
+        if is_final(rhs) {
+            return Ordering::Less;
+        }
+        if lhs.all_contributors().len() > rhs.all_contributors().len() {
+            return Ordering::Greater;
+        }
+        if lhs.all_contributors().len() < rhs.all_contributors().len() {
+            return Ordering::Less;
+        }
+        Ordering::Equal
     }
 }
