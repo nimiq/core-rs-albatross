@@ -809,7 +809,7 @@ impl<N: Network> Stream for BlockQueue<N> {
                             return Poll::Ready(Some(block));
                         }
                     } else {
-                        log::warn!(%block, %peer_id, "Rejecting block as it doesn't come from a synced peer");
+                        log::trace!(%block, %peer_id, "Rejecting block as it doesn't come from a synced peer");
                     }
                 }
                 // If the block_stream is exhausted, we quit as well.
