@@ -437,7 +437,9 @@ impl<TNetwork: Network> Stream for LightMacroSync<TNetwork> {
             }
 
             if let Some(peer_id) = self.synced_validity_peers.pop() {
-                return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
+                // We move the validity synced peer to another round of macro sync,
+                // to re-check if there is new state that we need to sync with.
+                self.add_peer(peer_id);
             }
         }
 

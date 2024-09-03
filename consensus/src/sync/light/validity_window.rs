@@ -348,6 +348,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                     "Validity window syncing is complete"
                                 );
 
+                                self.synced_validity_peers.push(peer_id);
                                 self.validity_queue.remove_peer(&peer_id);
                                 self.syncing_peers.remove(&peer_id);
 
@@ -360,8 +361,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                                 // We are complete so we emit the peer
                                 self.validity_requests = None;
                                 self.syncing_peers.clear();
-
-                                return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
+                                break;
                             }
                         }
 
