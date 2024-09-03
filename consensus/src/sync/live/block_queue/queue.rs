@@ -826,7 +826,7 @@ impl<N: Network> Stream for BlockQueue<N> {
         loop {
             let poll_res = self.request_component.poll_next_unpin(cx);
             match poll_res {
-                Poll::Ready(Some(result)) => {
+                Poll::Ready(Some(Ok(result))) => {
                     if let Some(block) = self.handle_missing_blocks(
                         result.target_block_number,
                         result.target_block_hash,
@@ -835,6 +835,26 @@ impl<N: Network> Stream for BlockQueue<N> {
                         result.sender,
                     ) {
                         return Poll::Ready(Some(block));
+                    }
+                }
+                Poll::Ready(Some(Err(syn_queue_error))) => {
+                    // The request failed, remove from the buffer all blocks from the target block chain that errored.
+                    // Do this by locating the successor of the block if it exists and see if there is a block whose
+                    // parent hash is the block in question.
+                    let mut block_number = syn_queue_error.target_block_number;
+                    let mut block_hash = syn_queue_error.target_block_hash;
+                    while let Some(blocks) = self.buffer.get_mut(&(block_number + 1)) {
+                        let Some((hash, (block, _source))) = blocks
+                            .iter()
+                            .find(|(_hash, (block, _source))| *block.parent_hash() == block_hash)
+                        else {
+                            // No block found whose parent block is the one we're looking: we should have already removed
+                            // all blocks from the target block chain that errored.
+                            break;
+                        };
+                        block_number = block.block_number();
+                        block_hash = hash.clone();
+                        blocks.remove(&block_hash);
                     }
                 }
                 Poll::Ready(None) => return Poll::Ready(None),

@@ -79,6 +79,15 @@ pub enum MissingBlockError {
     Response(ResponseBlocksError),
 }
 
+#[derive(Debug, Error)]
+#[error("Sync queue error. Target block hash: {target_block_hash}, target block number {target_block_number}")]
+pub struct SyncQueueError {
+    /// Target block hash
+    pub target_block_hash: Blake2bHash,
+    /// Target block number
+    pub target_block_number: u32,
+}
+
 /// Peer Tracking & Block Request Component.
 /// We use this component to request missing blocks from peers.
 ///
@@ -334,33 +343,35 @@ impl<N: Network> BlockRequestComponent<N> {
 }
 
 impl<N: Network> Stream for BlockRequestComponent<N> {
-    type Item = BlockRequestResult<N>;
+    type Item = Result<BlockRequestResult<N>, SyncQueueError>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         // Poll self.sync_queue, return results.
-        while let Poll::Ready(Some(result)) = self.sync_queue.poll_next_unpin(cx) {
+        while let Poll::Ready(result) = self.sync_queue.poll_next_unpin(cx) {
             match result {
-                Ok(response) => {
+                Some(Ok(response)) => {
                     self.pending_requests.remove(&response.target_block_hash);
-                    return Poll::Ready(Some(BlockRequestResult {
+                    return Poll::Ready(Some(Ok(BlockRequestResult {
                         target_block_number: response.target_block_number,
                         target_block_hash: response.target_block_hash,
                         epoch_validators: response.epoch_validators,
                         blocks: response.blocks,
                         sender: response.sender,
-                    }));
+                    })));
                 }
-                Err(request) => {
+                Some(Err(request)) => {
                     self.pending_requests.remove(&request.target_block_hash);
                     debug!(
                         request.target_block_number,
                         ?request.target_block_hash,
                         "Failed to retrieve missing blocks"
                     );
-                    // TODO: Do we need to do anything else?
-                    //  We might want to delete the target hash from our buffer
-                    //  since none of our peers is sending us a good response.
+                    return Poll::Ready(Some(Err(SyncQueueError {
+                        target_block_hash: request.target_block_hash,
+                        target_block_number: request.target_block_number,
+                    })));
                 }
+                None => {}
             }
         }
 
