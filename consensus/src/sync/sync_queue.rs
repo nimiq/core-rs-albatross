@@ -154,13 +154,6 @@ where
         verify_fn: VerifyFn<TId, TOutput, TVerifyState>,
         initial_verify_state: TVerifyState,
     ) -> Self {
-        log::trace!(
-            "Creating SyncQueue for {} with {} ids and {} peers",
-            std::any::type_name::<TOutput>(),
-            ids.len(),
-            peers.read().len(),
-        );
-
         SyncQueue {
             network,
             peers,

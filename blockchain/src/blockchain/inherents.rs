@@ -43,10 +43,6 @@ impl Blockchain {
         let mut inherents = vec![];
 
         for equivocation_proof in equivocation_proofs {
-            trace!(
-                ?equivocation_proof,
-                "Creating inherent from equivocation proof",
-            );
             inherents.push(self.inherent_from_equivocation_proof(
                 block_number,
                 equivocation_proof,
@@ -55,7 +51,6 @@ impl Blockchain {
         }
 
         if let Some(skip_block_info) = skip_block_info {
-            trace!("Creating inherent from skip block: {:?}", skip_block_info);
             inherents.push(self.inherent_from_skip_block_info(&skip_block_info, txn_option));
         }
 
@@ -112,7 +107,7 @@ impl Blockchain {
         }
     }
 
-    /// It creates a penalize inherent from a skip block. It expects a *verified* skip block!
+    /// It creates a `Penalize` inherent from a skip block. It expects a *verified* skip block!
     pub fn inherent_from_skip_block_info(
         &self,
         skip_block_info: &SkipBlockInfo,
@@ -128,11 +123,6 @@ impl Blockchain {
             )
             .expect("Couldn't calculate slot owner!");
 
-        debug!(
-            address = %proposer_slot.validator.address,
-            "Penalize inherent from skip block"
-        );
-
         // Create the PenalizedSlot struct.
         let slot = PenalizedSlot {
             slot: proposer_slot.number,
@@ -140,7 +130,7 @@ impl Blockchain {
             offense_event_block: skip_block_info.block_number,
         };
 
-        // Create the corresponding penalize inherent.
+        // Create the corresponding `Penalize` inherent.
         Inherent::Penalize { slot }
     }
 

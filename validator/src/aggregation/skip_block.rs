@@ -290,7 +290,7 @@ impl SkipBlockAggregation {
                 proof: MultiSignature::new(signature, signers),
             };
 
-            warn!(
+            info!(
                 block_number = &skip_block_info.block_number,
                 "Starting skip block signature aggregation"
             );

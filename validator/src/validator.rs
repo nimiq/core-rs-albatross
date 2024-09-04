@@ -762,11 +762,6 @@ where
 
         // Process blockchain updates.
         while let Poll::Ready(Some(event)) = self.mempool_task.poll_next_unpin(cx) {
-            trace!(
-                ?event,
-                is_synced = self.is_synced(),
-                "mempool/blockchain event"
-            );
             self.on_blockchain_event(event.into());
         }
 

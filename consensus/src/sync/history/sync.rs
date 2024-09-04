@@ -109,7 +109,8 @@ impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for HistoryMacroSync<TNetwor
             return;
         }
 
-        debug!("Requesting epoch ids for peer: {:?}", peer_id);
+        debug!(%peer_id, "Requesting epoch ids from peer");
+
         let future = Self::request_epoch_ids(
             Arc::clone(&self.blockchain),
             Arc::clone(&self.network),

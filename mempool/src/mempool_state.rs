@@ -130,11 +130,6 @@ impl MempoolState {
             None => {
                 // We don't know the sender account so we can't do any balance tracking.
                 // Throw away all transactions from this sender.
-                warn!(
-                    sender_address = %tx.sender,
-                    num_transactions = sender_state.txns.len(),
-                    "Sender account is gone"
-                );
                 for hash in &sender_state.txns {
                     self.regular_transactions
                         .delete(hash)

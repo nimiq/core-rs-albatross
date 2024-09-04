@@ -5,7 +5,7 @@ use std::{
 };
 
 use futures::{stream::BoxStream, Future, Stream, StreamExt};
-use log::{debug, trace, warn};
+use log::{debug, warn};
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_consensus::{Consensus, ConsensusEvent, ConsensusProxy};
@@ -193,7 +193,6 @@ impl<N: Network> Stream for MempoolTask<N> {
 
         // Process blockchain updates.
         if let Poll::Ready(Some(event)) = self.blockchain_event_rx.poll_next_unpin(cx) {
-            trace!(?event, is_active = self.mempool_active, "blockchain event");
             self.on_blockchain_event(&event);
             return Poll::Ready(Some(MempoolEvent(event)));
         }

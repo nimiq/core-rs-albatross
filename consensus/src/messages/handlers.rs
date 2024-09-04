@@ -43,7 +43,6 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMacroChain {
             if let Ok(chain_info) = chain_info {
                 if chain_info.on_main_chain {
                     // We found a block, ignore remaining block locator hashes.
-                    trace!("Start block found: {:?}", &locator);
                     start_block_hash = Some(locator.clone());
                     break;
                 }
