@@ -251,32 +251,12 @@ impl NetworkBehaviour for Behaviour {
             }
             FromSwarm::ConnectionEstablished(ConnectionEstablished {
                 peer_id,
-                connection_id,
-                endpoint,
-                failed_addresses,
                 other_established,
+                ..
             }) => {
                 if other_established == 0 {
-                    trace!(%peer_id, ?connection_id, ?endpoint, "Behaviour::inject_connection_established:");
-
                     // This is the first connection to this peer
                     self.connected_peers.insert(peer_id);
-
-                    if endpoint.is_listener() {
-                        // Peer failed to connect with some of our own addresses, remove them from our own addresses
-                        if !failed_addresses.is_empty() {
-                            debug!(
-                                ?failed_addresses,
-                                "Removing failed address from own addresses"
-                            );
-                            self.peer_contact_book.write().remove_own_addresses(
-                                failed_addresses.iter().cloned(),
-                                &self.keypair,
-                            )
-                        }
-                    }
-                } else {
-                    trace!(%peer_id, "Behaviour::inject_connection_established: Already have a connection established to peer");
                 }
             }
             _ => {}
