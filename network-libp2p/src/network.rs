@@ -4,6 +4,7 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
+    time::Duration,
 };
 
 use async_trait::async_trait;
@@ -42,6 +43,8 @@ use crate::{
     swarm::{new_swarm, swarm_task},
     Config, NetworkError,
 };
+
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct Network {
     /// The local ID that is used to identify our peer
@@ -197,93 +200,84 @@ impl Network {
         let (output_tx, output_rx) = oneshot::channel();
         let (response_tx, response_rx) = oneshot::channel();
 
-        let buf = request.serialize_request();
+        let action = NetworkAction::SendRequest {
+            peer_id,
+            request: request.serialize_request()[..].into(),
+            response_channel: response_tx,
+            output: output_tx,
+        };
 
-        if self
-            .action_tx
-            .clone()
-            .send(NetworkAction::SendRequest {
-                peer_id,
-                request: buf[..].into(),
-                request_type_id: RequestType::from_request::<Req>(),
-                response_channel: response_tx,
-                output: output_tx,
-            })
-            .await
-            .is_err()
-        {
-            return Err(RequestError::OutboundRequest(
-                OutboundRequestError::SendError,
-            ));
+        if self.action_tx.clone().send(action).await.is_err() {
+            return Err(OutboundRequestError::SendError.into());
         }
 
-        if let Ok(request_id) = output_rx.await {
-            let result = match timeout(Req::TIME_WINDOW.mul_f32(1.5f32), response_rx).await {
-                Ok(res) => res,
-                Err(_) => {
-                    warn!(
-                        %request_id,
-                        request_type = std::any::type_name::<Req>(),
-                        %peer_id,
-                        "Request timed out with no response from libp2p"
-                    );
-                    return Err(RequestError::OutboundRequest(
-                        OutboundRequestError::SenderFutureDropped,
-                    ));
-                }
-            };
+        let Ok(request_id) = output_rx.await else {
+            return Err(OutboundRequestError::SendError.into());
+        };
 
-            match result {
-                Err(_) => {
-                    debug!(
-                        %request_id,
-                        request_type = std::any::type_name::<Req>(),
-                        %peer_id,
-                        "Request failed - sender future dropped"
-                    );
-                    Err(RequestError::OutboundRequest(
-                        OutboundRequestError::SenderFutureDropped,
-                    ))
-                }
-                Ok(result) => {
-                    let data = result?;
-                    if let Ok((message, left_over)) =
-                        <Result<Req::Response, InboundRequestError>>::deserialize_take(&data)
-                    {
-                        if !left_over.is_empty() {
-                            warn!(
-                            %request_id,
-                            %peer_id,
-                            type_id = std::any::type_name::<Req::Response>(),
-                            unread_data_len = left_over.len(),
-                            "Unexpected content size deserializing",
-                            );
-                        }
-                        // Check if there was an actual response from the application or a default response from
-                        // the network. If the network replied with the default response, it was because there wasn't a
-                        // receiver for the request
-                        match message {
-                            Ok(message) => Ok(message),
-                            Err(e) => Err(RequestError::InboundRequest(e)),
-                        }
-                    } else {
-                        error!(
-                        %request_id,
-                        %peer_id,
-                        type_id = std::any::type_name::<Req::Response>(),
-                        "Failed to deserialize response from peer",
-                        );
-                        Err(RequestError::InboundRequest(
-                            InboundRequestError::DeSerializationError,
-                        ))
-                    }
-                }
-            }
-        } else {
-            Err(RequestError::OutboundRequest(
-                OutboundRequestError::SendError,
-            ))
+        trace!(
+            r#type = Req::type_name::<Req>(),
+            %request_id,
+            %peer_id,
+            "Request sent",
+        );
+
+        let Ok(result) = timeout(REQUEST_TIMEOUT, response_rx).await else {
+            warn!(
+                r#type = Req::type_name::<Req>(),
+                %request_id,
+                %peer_id,
+                "Request timed out with no response from libp2p"
+            );
+            return Err(OutboundRequestError::SenderFutureDropped.into());
+        };
+
+        let Ok(result) = result else {
+            debug!(
+                r#type = Req::type_name::<Req>(),
+                %request_id,
+                %peer_id,
+                "Request failed - sender future dropped"
+            );
+            return Err(OutboundRequestError::SenderFutureDropped.into());
+        };
+
+        let data = result?;
+
+        let result = <Result<Req::Response, InboundRequestError>>::deserialize_take(&data);
+        let Ok((message, left_over)) = result else {
+            debug!(
+                r#type = Req::type_name::<Req>(),
+                %request_id,
+                %peer_id,
+                "Failed to deserialize response",
+            );
+            return Err(InboundRequestError::DeSerializationError.into());
+        };
+
+        if !left_over.is_empty() {
+            debug!(
+                r#type = Req::type_name::<Req>(),
+                %request_id,
+                %peer_id,
+                unread_data_len = left_over.len(),
+                "Unexpected content size deserializing",
+            );
         }
+
+        // Check if there was an actual response from the application or a default response from
+        // the network. If the network replied with the default response, it was because there wasn't a
+        // receiver for the request.
+        if message.is_ok() {
+            trace!(
+                r#type = Req::type_name::<Req>(),
+                %request_id,
+                %peer_id,
+                "Response received",
+            );
+        }
+
+        message.map_err(Into::into)
     }
 
     fn receive_requests_impl<Req: RequestCommon>(
@@ -337,14 +331,22 @@ impl Network {
             async move {
                 // Map the (data, peer) stream to (message, peer) by deserializing the messages.
                 match Req::deserialize_request(&data) {
-                    Ok(message) => Some((message, request_id, peer_id)),
-                    Err(e) => {
-                        error!(
+                    Ok(request) => {
+                        trace!(
+                            r#type = Req::type_name::<Req>(),
                             %request_id,
                             %peer_id,
-                            type_id = std::any::type_name::<Req>(),
-                            error = %e,
-                            "Failed to deserialize request from peer",
+                            "Incoming request",
+                        );
+                        Some((request, request_id, peer_id))
+                    }
+                    Err(error) => {
+                        trace!(
+                            r#type = Req::type_name::<Req>(),
+                            %request_id,
+                            %peer_id,
+                            %error,
+                            "Failed to deserialize request",
                         );
                         None
                     }

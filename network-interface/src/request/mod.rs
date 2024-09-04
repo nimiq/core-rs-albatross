@@ -4,8 +4,6 @@ use futures::{stream::BoxStream, Future, StreamExt};
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use thiserror::Error;
 
-// The max number of request to be processed per peerID and per request type.
-
 /// The range to restrict the responses to the requests on the network layer.
 pub const DEFAULT_MAX_REQUEST_RESPONSE_TIME_WINDOW: Duration = Duration::from_secs(10);
 
@@ -51,10 +49,10 @@ impl RequestType {
 pub enum RequestError {
     /// Outbound request error
     #[error("Outbound error: {0}")]
-    OutboundRequest(OutboundRequestError),
+    OutboundRequest(#[from] OutboundRequestError),
     /// Inbound request error
     #[error("Inbound error: {0}")]
-    InboundRequest(InboundRequestError),
+    InboundRequest(#[from] InboundRequestError),
 }
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
@@ -138,6 +136,14 @@ pub trait RequestCommon:
     type Response: Deserialize + Serialize + Send;
     const MAX_REQUESTS: u32;
     const TIME_WINDOW: Duration = DEFAULT_MAX_REQUEST_RESPONSE_TIME_WINDOW;
+
+    fn type_name<T>() -> &'static str {
+        let name = std::any::type_name::<T>();
+        match name.rfind("::") {
+            Some(index) => &name[index + 2..],
+            None => &name[..],
+        }
+    }
 }
 
 pub trait RequestSerialize: RequestCommon {
@@ -217,20 +223,12 @@ pub fn request_handler<T: Send + Sync + Clone + 'static, Req: Handle<N, T>, N: N
                 let network = Arc::clone(&network);
                 let req_environment = req_environment.clone();
                 async move {
-                    log::trace!("[{:?}] {:?} {:#?}", request_id, peer_id, msg);
-
-                    // Try to send the response, logging to debug if it fails
-                    if let Err(err) = network
+                    // Try to send the response. If it fails, it usually means that the peer has
+                    // disconnected, so we silently ignore any errors here.
+                    network
                         .respond::<Req>(request_id, msg.handle(peer_id, &req_environment))
                         .await
-                    {
-                        log::debug!(
-                            "[{:?}] Failed to send {} response: {:?}",
-                            request_id,
-                            std::any::type_name::<Req>(),
-                            err
-                        );
-                    };
+                        .ok();
                 }
             })
             .await
@@ -253,8 +251,6 @@ pub fn message_handler<
             .for_each_concurrent(MAX_CONCURRENT_HANDLERS, |(msg, peer_id)| {
                 let req_environment = req_environment.clone();
                 async move {
-                    log::trace!("{:?} {:#?}", peer_id, msg);
-
                     // Messages do not have a response (so the response is ignored)
                     msg.message_handle(peer_id, &req_environment);
                 }

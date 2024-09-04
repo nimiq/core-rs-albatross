@@ -1,6 +1,5 @@
 use std::{collections::HashMap, num::NonZeroU8, sync::Arc};
 
-use base64::Engine;
 use futures::StreamExt;
 #[cfg(feature = "metrics")]
 use instant::Instant;
@@ -361,7 +360,9 @@ fn handle_event(
             connection_id: _,
         } => {
             // This event is only triggered if the network behaviour performs the dial
-            debug!(?peer_id, "Dialing peer");
+            if let Some(peer_id) = peer_id {
+                debug!(%peer_id, "Dialing peer");
+            }
         }
 
         SwarmEvent::NewListenAddr {
@@ -379,10 +380,10 @@ fn handle_event(
             match event {
                 behaviour::BehaviourEvent::Autonat(event) => match event {
                     autonat::Event::InboundProbe(event) => {
-                        log::trace!(?event, "Inbound probe");
+                        log::trace!(?event, "Autonat inbound probe");
                     }
                     autonat::Event::OutboundProbe(event) => {
-                        log::trace!(?event, "Outbound probe");
+                        log::trace!(?event, "Autonat outbound probe");
                     }
                     autonat::Event::StatusChanged { old, new } => {
                         log::debug!(?old, ?new, "Autonat status changed");
@@ -622,7 +623,7 @@ fn handle_event(
                         let topic = message.topic.clone();
                         if let Some(topic_info) = state.gossip_topics.get_mut(&topic) {
                             let (output, validate) = topic_info;
-                            if !&*validate {
+                            if !*validate {
                                 if let Err(error) = swarm
                                     .behaviour_mut()
                                     .gossipsub
@@ -632,7 +633,7 @@ fn handle_event(
                                         gossipsub::MessageAcceptance::Accept,
                                     )
                                 {
-                                    error!(%message_id, %error, "could not send message validation result to channel");
+                                    error!(%message_id, %error, "Failed to report message validation result");
                                 }
                             }
 
@@ -664,14 +665,14 @@ fn handle_event(
                 behaviour::BehaviourEvent::Ping(event) => {
                     match event.result {
                         Err(error) => {
-                            log::debug!(%error, ?event.peer, "Ping failed with peer");
+                            debug!(%error, peer_id = %event.peer, "Ping failed with peer");
                             swarm
                                 .behaviour_mut()
                                 .pool
                                 .close_connection(event.peer, CloseReason::RemoteClosed);
                         }
                         Ok(duration) => {
-                            log::trace!(?event.peer, ?duration, "Successful ping from peer");
+                            trace!(?duration, peer_id = %event.peer, "Ping completed");
                         }
                     };
                 }
@@ -689,15 +690,6 @@ fn handle_event(
                             // We might get empty requests (None) because of our codec implementation
                             if let Some(request) = request {
                                 if let Ok(type_id) = peek_type(&request) {
-                                    trace!(
-                                        %request_id,
-                                        %peer_id,
-                                        %type_id,
-                                        content = &*base64::prelude::BASE64_STANDARD.encode(&request),
-                                        "Incoming request from peer",
-                                    );
-                                    // Check if we have a receiver registered for this message type
-
                                     // Filter off sender if not alive.
                                     let sender_data = state
                                         .receive_requests
@@ -711,13 +703,13 @@ fn handle_event(
                                             type_id,
                                             request_rate_limit_data,
                                         ) {
-                                            log::debug!(
+                                            debug!(
+                                                %type_id,
                                                 %request_id,
                                                 %peer_id,
-                                                %type_id,
-                                                max_requests=%request_rate_limit_data.max_requests,
-                                                time_window=?request_rate_limit_data.time_window,
-                                                "Exceeded max requests rate.",
+                                                max_requests = %request_rate_limit_data.max_requests,
+                                                time_window = ?request_rate_limit_data.time_window,
+                                                "Denied request - exceeded max requests rate",
                                             );
                                             let response: Result<(), InboundRequestError> =
                                                 Err(InboundRequestError::ExceedsRateLimit);
@@ -731,9 +723,9 @@ fn handle_event(
                                                 .is_err()
                                             {
                                                 error!(
+                                                    %type_id,
                                                     %request_id,
                                                     %peer_id,
-                                                    %type_id,
                                                     "Could not send rate limit error response"
                                                 );
                                             }
@@ -754,9 +746,9 @@ fn handle_event(
                                                     .is_err()
                                                 {
                                                     error!(
+                                                        %type_id,
                                                         %request_id,
                                                         %peer_id,
-                                                        %type_id,
                                                         "Could not send auto response",
                                                     );
                                                 }
@@ -767,20 +759,20 @@ fn handle_event(
                                                 peer_id,
                                             )) {
                                                 error!(
+                                                    %type_id,
                                                     %request_id,
                                                     %peer_id,
-                                                    %type_id,
                                                     error = %e,
-                                                    "Failed to dispatch request from peer",
+                                                    "Failed to dispatch request to handler",
                                                 );
                                             }
                                         }
                                     } else {
                                         trace!(
+                                            %type_id,
                                             %request_id,
                                             %peer_id,
-                                            %type_id,
-                                            "No receiver found for requests of this type, replying with a 'NoReceiver' error",
+                                            "No request handler registered, replying with a 'NoReceiver' error",
                                         );
                                         let err: Result<(), InboundRequestError> =
                                             Err(InboundRequestError::NoReceiver);
@@ -791,9 +783,9 @@ fn handle_event(
                                             .is_err()
                                         {
                                             error!(
+                                                %type_id,
                                                 %request_id,
                                                 %peer_id,
-                                                %type_id,
                                                 "Could not send default response",
                                             );
                                         };
@@ -802,10 +794,9 @@ fn handle_event(
                                         state.receive_requests.remove(&type_id);
                                     }
                                 } else {
-                                    error!(
+                                    debug!(
                                         %request_id,
                                         %peer_id,
-                                        content = &*base64::prelude::BASE64_STANDARD.encode(&request),
                                         "Could not parse request type",
                                     );
                                 }
@@ -815,25 +806,17 @@ fn handle_event(
                             request_id,
                             response,
                         } => {
-                            trace!(
-                                %request_id,
-                                %peer_id,
-                                "Incoming response from peer",
-                            );
                             if let Some(channel) = state.requests.remove(&request_id) {
                                 // We might get empty responses (None) because of the implementation of our codecs.
-                                if channel
-                                    .send(
-                                        response
-                                            .ok_or(RequestError::OutboundRequest(
-                                                OutboundRequestError::Timeout,
-                                            ))
-                                            .map(|data| data.into()),
-                                    )
-                                    .is_err()
-                                {
-                                    error!(%request_id, %peer_id, error = "receiver hung up", "could not send response to channel");
-                                }
+                                let response = response
+                                    .ok_or_else(|| {
+                                        RequestError::OutboundRequest(OutboundRequestError::Timeout)
+                                    })
+                                    .map(|data| data.into());
+
+                                // The initiator of the request might no longer exist, so we
+                                // silently ignore any errors when delivering the response.
+                                channel.send(response).ok();
 
                                 #[cfg(feature = "metrics")]
                                 if let Some(instant) = state.requests_initiated.remove(&request_id)
@@ -841,9 +824,9 @@ fn handle_event(
                                     metrics.note_response_time(instant.elapsed());
                                 }
                             } else {
-                                error!(
+                                debug!(
                                     %request_id,
-                                    "No such request ID found",
+                                    "No request found for response",
                                 );
                             }
                         }
@@ -860,14 +843,14 @@ fn handle_event(
                             "Failed to send request to peer",
                         );
                         if let Some(channel) = state.requests.remove(&request_id) {
-                            if channel.send(Err(to_response_error(error))).is_err() {
-                                error!(%request_id, %peer_id, error = "receiver hung up", "could not send outbound failure to channel");
-                            }
+                            // The request initiator might no longer exist, so silently ignore
+                            // any errors while delivering the response.
+                            channel.send(Err(to_response_error(error))).ok();
                         } else {
-                            error!(
+                            debug!(
                                 %request_id,
                                 %peer_id,
-                                "No such request ID found"
+                                "No request found for outbound failure"
                             );
                         }
                     }
@@ -880,16 +863,10 @@ fn handle_event(
                             %request_id,
                             peer_id = %peer,
                             %error,
-                            "Response to request sent from peer failed",
+                            "Inbound request failed",
                         );
                     }
-                    request_response::Event::ResponseSent { peer, request_id } => {
-                        trace!(
-                            %request_id,
-                            peer_id = %peer,
-                            "Response sent to peer",
-                        );
-                    }
+                    request_response::Event::ResponseSent { .. } => {}
                 },
             }
         }
@@ -898,36 +875,20 @@ fn handle_event(
 }
 
 fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut TaskState) {
-    // FIXME implement compact debug format for NetworkAction
-    // trace!(?action, "performing action");
-
     match action {
         NetworkAction::Dial { peer_id, output } => {
-            if output
-                .send(
-                    Swarm::dial(
-                        swarm,
-                        DialOpts::peer_id(peer_id)
-                            .condition(PeerCondition::Disconnected)
-                            .build(),
-                    )
-                    .map_err(Into::into),
-                )
-                .is_err()
-            {
-                error!(%peer_id, error = "receiver hung up", "could not send dial to channel");
-            }
+            let dial_opts = DialOpts::peer_id(peer_id)
+                .condition(PeerCondition::Disconnected)
+                .build();
+            let result = swarm.dial(dial_opts).map_err(Into::into);
+
+            // The initiator might no longer exist, so we silently ignore any errors here.
+            output.send(result).ok();
         }
         NetworkAction::DialAddress { address, output } => {
-            if output
-                .send(
-                    Swarm::dial(swarm, DialOpts::unknown_peer_id().address(address).build())
-                        .map_err(Into::into),
-                )
-                .is_err()
-            {
-                error!(error = "receiver hung up", "could not send dial to channel");
-            }
+            let dial_opts = DialOpts::unknown_peer_id().address(address).build();
+            let result = swarm.dial(dial_opts).map_err(Into::into);
+            output.send(result).ok();
         }
         NetworkAction::DhtGet { key, output } => {
             let query_id = swarm.behaviour_mut().dht.get_record(key.into());
@@ -949,12 +910,7 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
                     state.dht_puts.insert(query_id, output);
                 }
                 Err(e) => {
-                    if output.send(Err(e.into())).is_err() {
-                        error!(
-                            error = "receiver hung up",
-                            "could not send dht put error to channel",
-                        );
-                    }
+                    output.send(Err(e.into())).ok();
                 }
             }
         }
@@ -973,92 +929,67 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
 
                     state.gossip_topics.insert(topic.hash(), (tx, validate));
 
-                    match swarm
+                    let result = swarm
                         .behaviour_mut()
                         .gossipsub
-                        .set_topic_params(topic, gossipsub::TopicScoreParams::default())
-                    {
-                        Ok(_) => {
-                            if output.send(Ok(rx)).is_err() {
-                                error!(%topic_name, error = "receiver hung up", "could not send subscribe result to channel");
-                            }
-                        }
+                        .set_topic_params(topic, gossipsub::TopicScoreParams::default());
+                    match result {
+                        Ok(_) => output.send(Ok(rx)).ok(),
                         Err(e) => {
-                            if output
-                                .send(Err(NetworkError::TopicScoreParams {
-                                    topic_name: topic_name.clone(),
-                                    error: e,
-                                }))
-                                .is_err()
-                            {
-                                error!(%topic_name, error = "receiver hung up", "could not send subscribe error to channel");
-                            }
+                            let error = NetworkError::TopicScoreParams {
+                                topic_name: topic_name.clone(),
+                                error: e,
+                            };
+                            output.send(Err(error)).ok()
                         }
                     };
                 }
 
                 // Apparently we're already subscribed.
                 Ok(false) => {
-                    if output
-                        .send(Err(NetworkError::AlreadySubscribed {
-                            topic_name: topic_name.clone(),
-                        }))
-                        .is_err()
-                    {
-                        error!(%topic_name, error = "receiver hung up", "could not send subscribe already subscribed error to channel");
-                    }
+                    let error = NetworkError::AlreadySubscribed {
+                        topic_name: topic_name.clone(),
+                    };
+                    output.send(Err(error)).ok();
                 }
 
                 // Subscribe failed. Send back error.
                 Err(e) => {
-                    if output.send(Err(e.into())).is_err() {
-                        error!(%topic_name, error = "receiver hung up", "could not send subscribe error2 to channel");
-                    }
+                    output.send(Err(e.into())).ok();
                 }
             }
         }
         NetworkAction::Unsubscribe { topic_name, output } => {
             let topic = gossipsub::IdentTopic::new(topic_name.clone());
 
-            if state.gossip_topics.get_mut(&topic.hash()).is_some() {
-                match swarm.behaviour_mut().gossipsub.unsubscribe(&topic) {
-                    // Unsubscription. Remove the topic from the subscription table.
-                    Ok(true) => {
-                        drop(state.gossip_topics.remove(&topic.hash()).unwrap().0);
-                        if output.send(Ok(())).is_err() {
-                            error!(%topic_name, error = "receiver hung up", "could not send unsubscribe result to channel");
-                        }
-                    }
-
-                    // Apparently we're already unsubscribed.
-                    Ok(false) => {
-                        drop(state.gossip_topics.remove(&topic.hash()).unwrap().0);
-                        if output
-                            .send(Err(NetworkError::AlreadyUnsubscribed {
-                                topic_name: topic_name.clone(),
-                            }))
-                            .is_err()
-                        {
-                            error!(%topic_name, error = "receiver hung up", "could not send unsubscribe already unsubscribed error to channel");
-                        }
-                    }
-
-                    // Unsubscribe failed. Send back error.
-                    Err(e) => {
-                        if output.send(Err(e.into())).is_err() {
-                            error!(%topic_name, error = "receiver hung up", "could not send unsubscribe error to channel");
-                        }
-                    }
-                }
-            } else {
+            if !state.gossip_topics.contains_key(&topic.hash()) {
                 // If the topic wasn't in the topics list, we're not subscribed to it.
-                if output
-                    .send(Err(NetworkError::AlreadyUnsubscribed {
+                let error = NetworkError::AlreadyUnsubscribed {
+                    topic_name: topic_name.clone(),
+                };
+                output.send(Err(error)).ok();
+                return;
+            }
+
+            match swarm.behaviour_mut().gossipsub.unsubscribe(&topic) {
+                // Unsubscription. Remove the topic from the subscription table.
+                Ok(true) => {
+                    drop(state.gossip_topics.remove(&topic.hash()).unwrap().0);
+                    output.send(Ok(())).ok();
+                }
+
+                // Apparently we're already unsubscribed.
+                Ok(false) => {
+                    drop(state.gossip_topics.remove(&topic.hash()).unwrap().0);
+                    let error = NetworkError::AlreadyUnsubscribed {
                         topic_name: topic_name.clone(),
-                    }))
-                    .is_err()
-                {
-                    error!(%topic_name, error = "receiver hung up", "could not send unsubscribe already unsubscribed2 error to channel");
+                    };
+                    output.send(Err(error)).ok();
+                }
+
+                // Unsubscribe failed. Send back error.
+                Err(e) => {
+                    output.send(Err(e.into())).ok();
                 }
             }
         }
@@ -1069,31 +1000,23 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
         } => {
             let topic = gossipsub::IdentTopic::new(topic_name.clone());
 
-            if output
-                .send(
-                    swarm
-                        .behaviour_mut()
-                        .gossipsub
-                        .publish(topic, data)
-                        .map(|_| ())
-                        .or_else(|e| match e {
-                            gossipsub::PublishError::Duplicate => Ok(()),
-                            _ => Err(e),
-                        })
-                        .map_err(Into::into),
-                )
-                .is_err()
-            {
-                error!(%topic_name, error = "receiver hung up", "could not send publish result to channel");
-            }
+            let result = swarm
+                .behaviour_mut()
+                .gossipsub
+                .publish(topic, data)
+                .map(|_| ())
+                .or_else(|e| match e {
+                    gossipsub::PublishError::Duplicate => Ok(()),
+                    _ => Err(e),
+                })
+                .map_err(Into::into);
+
+            // The initiator might no longer exist, so we silently ignore any errors here.
+            output.send(result).ok();
         }
         NetworkAction::NetworkInfo { output } => {
-            if output.send(Swarm::network_info(swarm)).is_err() {
-                error!(
-                    error = "receiver hung up",
-                    "could not send network info result to channel",
-                );
-            }
+            // The initiator might no longer exist, so we silently ignore any errors here.
+            output.send(Swarm::network_info(swarm)).ok();
         }
         NetworkAction::ReceiveRequests {
             type_id,
@@ -1107,7 +1030,6 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
         NetworkAction::SendRequest {
             peer_id,
             request,
-            request_type_id,
             response_channel,
             output,
         } => {
@@ -1115,47 +1037,34 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
                 .behaviour_mut()
                 .request_response
                 .send_request(&peer_id, Some(request));
-            trace!(
-                %request_id,
-                %peer_id,
-                type_id = %request_type_id,
-                "Request was sent to peer",
-            );
+
             state.requests.insert(request_id, response_channel);
             #[cfg(feature = "metrics")]
             state.requests_initiated.insert(request_id, Instant::now());
-            if output.send(request_id).is_err() {
-                error!(%peer_id, %request_type_id, error = "receiver hung up", "could not send send request result to channel");
-            }
+
+            // The request initiator might no longer exist, so we silently ignore any errors here.
+            output.send(request_id).ok();
         }
         NetworkAction::SendResponse {
             request_id,
             response,
             output,
         } => {
-            if let Some(response_channel) = state.response_channels.remove(&request_id) {
-                if output
-                    .send(
-                        swarm
-                            .behaviour_mut()
-                            .request_response
-                            .send_response(response_channel, Some(response))
-                            .map_err(NetworkError::ResponseChannelClosed),
-                    )
-                    .is_err()
-                {
-                    error!(
-                        %request_id,
-                        error = "receiver hung up",
-                        "Response was sent but the action channel was dropped",
-                    );
-                };
-            } else {
+            let Some(response_channel) = state.response_channels.remove(&request_id) else {
                 error!(%request_id, "Tried to respond to a non existing request");
-                if output.send(Err(NetworkError::UnknownRequestId)).is_err() {
-                    error!(%request_id, error = "receiver hung up", "could not send unknown request ID to channel");
-                }
-            }
+                // The request initiator might no longer exist, so we silently ignore any errors here.
+                output.send(Err(NetworkError::UnknownRequestId)).ok();
+                return;
+            };
+
+            let result = swarm
+                .behaviour_mut()
+                .request_response
+                .send_response(response_channel, Some(response))
+                .map_err(NetworkError::ResponseChannelClosed);
+
+            // The request initiator might no longer exist, so we silently ignore any errors here.
+            output.send(result).ok();
         }
         NetworkAction::ListenOn { listen_addresses } => {
             for listen_address in listen_addresses {
@@ -1178,21 +1087,15 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
             let mut successful_peers = vec![];
 
             for peer_id in peers_candidates {
-                if Swarm::dial(
-                    swarm,
-                    DialOpts::peer_id(peer_id)
-                        .condition(PeerCondition::Disconnected)
-                        .build(),
-                )
-                .is_ok()
-                {
+                let dial_opts = DialOpts::peer_id(peer_id)
+                    .condition(PeerCondition::Disconnected)
+                    .build();
+                if swarm.dial(dial_opts).is_ok() {
                     successful_peers.push(peer_id);
                 }
             }
 
-            if output.send(successful_peers).is_err() {
-                error!("Could not send successful peers vector");
-            }
+            output.send(successful_peers).ok();
         }
         NetworkAction::DisconnectPeer { peer_id, reason } => {
             swarm.behaviour_mut().pool.close_connection(peer_id, reason)

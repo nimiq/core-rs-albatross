@@ -78,7 +78,6 @@ pub(crate) enum NetworkAction {
     SendRequest {
         peer_id: PeerId,
         request: IncomingRequest,
-        request_type_id: RequestType,
         response_channel: oneshot::Sender<Result<Bytes, RequestError>>,
         output: oneshot::Sender<OutboundRequestId>,
     },
