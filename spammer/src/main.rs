@@ -64,9 +64,9 @@ pub struct SpammerCommandLine {
 pub struct SpammerAccounts {
     // KeyPair associated with the account
     key_pair: KeyPair,
-    // Current balance for that account
+    // Current balance for that account (from the spammer point of view)
     balance: Coin,
-    // The block number where the txn was sent
+    // The block number where the account was created
     block_number: u32,
 }
 
@@ -268,7 +268,7 @@ async fn main_inner() -> Result<(), Error> {
         SpammerGenerationOptions::default()
     };
 
-    //Command line option takes precedence over config file
+    // Command line option takes precedence over config file
     if let Some(tpb) = spammer_command_line.tpb {
         conf_options.tpb = tpb as usize;
     }
@@ -436,7 +436,7 @@ async fn spam(
             let mp = Arc::clone(&mempool);
             spawn(async move {
                 if let Err(e) = mp.add_transaction(tx.clone(), None).await {
-                    log::warn!("Mempool rejected transaction: {:?} - {:#?}", e, tx);
+                    log::warn!("Mempool rejected transaction: {:?}", e);
                 }
                 if let Err(e) = consensus1.send_transaction(tx).await {
                     log::warn!("Failed to send transaction: {:?}", e);
@@ -471,7 +471,9 @@ fn generate_basic_transactions(
         let current_block_number = state.read().unwrap().current_block_number;
         let mut state = state.write().unwrap();
 
-        if rng.gen_bool(config.many_to_many.into()) && state.balances.len() > (2 * count) {
+        // This ensures that first we create 10 * count, and after that,
+        // we start sending txns from those accounts
+        if rng.gen_bool(config.many_to_many.into()) && state.balances.len() > (10 * count) {
             //This is the case where we send from an existing account
 
             // Obtain a random index
@@ -500,7 +502,7 @@ fn generate_basic_transactions(
             }
 
             // We need to have at least sufficient funds to pay the txn + fees
-            if sender_account.balance <= Coin::from_u64_unchecked(50) {
+            if sender_account.balance <= Coin::from_u64_unchecked(100) {
                 state.balances.swap_remove(sender_index);
                 continue;
             }
@@ -526,11 +528,12 @@ fn generate_basic_transactions(
             continue;
         }
 
-        // This is the case where we are creating new recipient accounts
+        // This is the case where we are creating new accounts
         let new_kp = KeyPair::generate(&mut rng);
-
         let recipient = Address::from(&new_kp);
-        let amount = Coin::from_u64_unchecked(500);
+
+        // We initialize each of those accounts with this amount:
+        let amount = Coin::from_u64_unchecked(10000);
 
         if config.many_to_many > 0.0 {
             // We can create a new sender account
