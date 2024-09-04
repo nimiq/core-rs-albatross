@@ -364,33 +364,46 @@ impl PeerContactBook {
         let info = PeerContactInfo::from(contact);
 
         // A peer is interesting to us in two cases:
-        // - I'm configured as a validator, and the peer is also a validator, then that peer is interesting to me
-        //   regardless of the services that are provided by that peer.
+        // - We are configured as a validator, and the peer is also a validator, then that peer is
+        //   interesting regardless of the services that are provided by that peer.
         // - The services provided by the peer are a superset of the requested services.
-        if (self
+        let we_are_validator = self
             .own_peer_contact
             .services()
-            .contains(Services::VALIDATOR)
-            && info.services().contains(Services::VALIDATOR))
-            || info.matches(services_filter)
-        {
+            .contains(Services::VALIDATOR);
+        let keep_validator = we_are_validator && info.services().contains(Services::VALIDATOR);
+        if !keep_validator && !info.matches(services_filter) {
+            return;
+        }
+
+        // Check that the peer provides secure ws addresses if required.
+        if only_secure_ws_connections {
             let peer_contact = &info.contact.inner;
             let has_secure_ws_connections = peer_contact
                 .addresses
                 .iter()
                 .any(Self::is_address_ws_secure);
-
-            if !only_secure_ws_connections || has_secure_ws_connections {
-                log::trace!(
-                    added_peer = %info.peer_id,
-                    services = ?info.services(),
-                    addresses = ?peer_contact.addresses,
-                    only_secure_ws_connections,
-                    "Inserting into my peer contacts, because the peer is also a validator or because it is interesting to us",
-                );
-                let peer_id = info.peer_id;
-                self.peer_contacts.insert(peer_id, Arc::new(info));
+            if !has_secure_ws_connections {
+                return;
             }
+        }
+
+        // TODO Check peer contact timestamp
+        //  Call `insert()` here instead?
+
+        let info = Arc::new(info);
+        let is_new = self
+            .peer_contacts
+            .insert(info.peer_id, Arc::clone(&info))
+            .is_none();
+        if is_new {
+            log::trace!(
+                added_peer = %info.peer_id,
+                services = ?info.services(),
+                addresses = ?info.contact.inner.addresses,
+                only_secure_ws_connections,
+                "Adding peer contact",
+            );
         }
     }
 
