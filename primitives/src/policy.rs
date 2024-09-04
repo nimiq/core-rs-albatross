@@ -96,7 +96,7 @@ impl Policy {
     /// Tendermint's initial timeout, in milliseconds.
     ///
     /// See <https://arxiv.org/abs/1807.04938v3> for more information.
-    pub const TENDERMINT_TIMEOUT_INIT: u64 = 1000;
+    pub const TENDERMINT_TIMEOUT_INIT: u64 = 4 * 1000;
 
     /// Tendermint's timeout delta, in milliseconds.
     ///
