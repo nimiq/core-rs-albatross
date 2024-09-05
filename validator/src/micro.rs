@@ -9,7 +9,7 @@ use std::{
 use futures::{future::BoxFuture, ready, FutureExt, Stream};
 use nimiq_block::{Block, EquivocationProof, MicroBlock, SkipBlockInfo};
 use nimiq_blockchain::{BlockProducer, BlockProducerError, Blockchain};
-use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_mempool::mempool::Mempool;
 use nimiq_primitives::policy::Policy;
 use nimiq_time::sleep;
@@ -20,11 +20,8 @@ use parking_lot::RwLock;
 
 use crate::{aggregation::skip_block::SkipBlockAggregation, validator::BlockPublisher};
 
-// Ignoring this clippy warning since size difference is not that much (320
-// bytes) and we probably don't want the performance penalty of the allocation.
-#[allow(clippy::large_enum_variant)]
 pub(crate) enum ProduceMicroBlockEvent {
-    MicroBlock(MicroBlock, PushResult),
+    MicroBlock,
 }
 
 #[derive(Clone)]
@@ -189,7 +186,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             }
 
             let event = result
-                .map(move |result| ProduceMicroBlockEvent::MicroBlock(block, result))
+                .map(move |_result| ProduceMicroBlockEvent::MicroBlock)
                 .ok();
             break Some(event);
         };
@@ -312,9 +309,9 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             }
         };
 
-        if let Some((result, block)) = result {
+        if let Some((result, _block)) = result {
             let event = result
-                .map(move |result| ProduceMicroBlockEvent::MicroBlock(block, result))
+                .map(move |_result| ProduceMicroBlockEvent::MicroBlock)
                 .ok();
             info!(block_number = self.block_number, "Skip block pushed");
 
@@ -455,7 +452,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream
         };
 
         self.next_event = match &event {
-            ProduceMicroBlockEvent::MicroBlock(..) => None,
+            ProduceMicroBlockEvent::MicroBlock => None,
         };
         Poll::Ready(Some(event))
     }
