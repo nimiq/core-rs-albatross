@@ -253,6 +253,9 @@ async fn main_inner() -> Result<(), Error> {
         panic!("Could not start spammer");
     };
 
+    let zkp_component = client.take_zkp_component().unwrap();
+    spawn(zkp_component);
+
     let rolling_window = Policy::blocks_per_batch() as usize;
 
     let mut stat_exerts: VecDeque<StatsExert> = VecDeque::new();
