@@ -9,7 +9,7 @@ use std::{
 use futures::{
     future::FutureExt,
     ready,
-    stream::{select, BoxStream, Stream, StreamExt},
+    stream::{BoxStream, Stream, StreamExt},
 };
 use nimiq_block::{MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof};
 use nimiq_bls::{AggregateSignature, KeyPair};
@@ -31,8 +31,6 @@ use nimiq_primitives::{policy, slots_allocation::Validators, Message};
 use nimiq_validator_network::ValidatorNetwork;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
-use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use super::{registry::ValidatorRegistry, verifier::MultithreadedVerifier};
 
@@ -49,18 +47,11 @@ struct InputStreamSwitch {
 }
 
 impl InputStreamSwitch {
-    fn new(
-        input: BoxStream<'static, SkipBlockUpdate>,
-        current_skip_block: SkipBlockInfo,
-    ) -> (Self, UnboundedReceiver<SkipBlockResult>) {
-        let (_, receiver) = unbounded_channel();
-
-        let this = Self {
+    fn new(input: BoxStream<'static, SkipBlockUpdate>, current_skip_block: SkipBlockInfo) -> Self {
+        Self {
             input,
             current_skip_block,
-        };
-
-        (this, receiver)
+        }
     }
 }
 
@@ -264,87 +255,81 @@ impl SkipBlockAggregation {
             .slots
             .clone();
 
-        loop {
-            let message_hash = skip_block_info.hash_with_prefix();
-            trace!(
-                "message: {:?}, message_hash: {:?}",
-                &skip_block_info,
-                message_hash
-            );
-            let signed_skip_block_info = SignedSkipBlockInfo::from_message(
-                skip_block_info.clone(),
-                &voting_key.secret_key,
-                validator_id,
-            );
+        let message_hash = skip_block_info.hash_with_prefix();
+        trace!(
+            %message_hash,
+            ?skip_block_info,
+            "Starting skip block aggregation",
+        );
+        let signed_skip_block_info = SignedSkipBlockInfo::from_message(
+            skip_block_info.clone(),
+            &voting_key.secret_key,
+            validator_id,
+        );
 
-            let signature = AggregateSignature::from_signatures(&[signed_skip_block_info
-                .signature
-                .multiply(slots.len() as u16)]);
+        let signature = AggregateSignature::from_signatures(&[signed_skip_block_info
+            .signature
+            .multiply(slots.len() as u16)]);
 
-            let mut signers = BitSet::new();
-            for slot in slots.clone() {
-                signers.insert(slot as usize);
-            }
+        let mut signers = BitSet::new();
+        for slot in slots.clone() {
+            signers.insert(slot as usize);
+        }
 
-            let own_contribution = SignedSkipBlockMessage {
-                proof: MultiSignature::new(signature, signers),
-            };
+        let own_contribution = SignedSkipBlockMessage {
+            proof: MultiSignature::new(signature, signers),
+        };
 
-            info!(
-                block_number = &skip_block_info.block_number,
-                "Starting skip block signature aggregation"
-            );
+        let protocol = SkipBlockAggregationProtocol::new(
+            active_validators.clone(),
+            validator_id as usize,
+            policy::Policy::TWO_F_PLUS_ONE as usize,
+            message_hash,
+            skip_block_info.block_number,
+        );
 
-            let protocol = SkipBlockAggregationProtocol::new(
-                active_validators.clone(),
-                validator_id as usize,
-                policy::Policy::TWO_F_PLUS_ONE as usize,
-                message_hash,
-                skip_block_info.block_number,
-            );
+        let input_switch = InputStreamSwitch::new(
+            Box::pin(network.receive::<SkipBlockUpdate>().map(|item| item.0)),
+            skip_block_info.clone(),
+        );
 
-            let (input_switch, receiver) = InputStreamSwitch::new(
-                Box::pin(network.receive::<SkipBlockUpdate>().map(|item| item.0)),
-                skip_block_info.clone(),
-            );
+        let aggregation = Aggregation::new(
+            protocol,
+            Config::default(),
+            own_contribution,
+            Box::pin(input_switch),
+            NetworkWrapper::new(skip_block_info.clone(), Arc::clone(&network)),
+        );
 
-            let aggregation = Aggregation::new(
-                protocol,
-                Config::default(),
-                own_contribution,
-                Box::pin(input_switch),
-                NetworkWrapper::new(skip_block_info.clone(), Arc::clone(&network)),
-            );
+        let mut stream = aggregation.map(SkipBlockResult::SkipBlock);
+        while let Some(msg) = stream.next().await {
+            match msg {
+                SkipBlockResult::SkipBlock(sb_msg) => {
+                    if let Some(aggregate_weight) = weights.signature_weight(&sb_msg) {
+                        info!(
+                            aggregate_weight,
+                            signers = %sb_msg.contributors(),
+                            "New skip block aggregate weight {}/{} with signers {}",
+                            aggregate_weight,
+                            policy::Policy::TWO_F_PLUS_ONE,
+                            &sb_msg.contributors(),
+                        );
 
-            let mut stream = select(
-                aggregation.map(SkipBlockResult::SkipBlock),
-                UnboundedReceiverStream::new(receiver),
-            );
-            while let Some(msg) = stream.next().await {
-                match msg {
-                    SkipBlockResult::SkipBlock(sb_msg) => {
-                        if let Some(aggregate_weight) = weights.signature_weight(&sb_msg) {
-                            trace!(
-                                "New Skip Block Aggregate weight: {} / {} Signers: {:?}",
-                                aggregate_weight,
-                                policy::Policy::TWO_F_PLUS_ONE,
-                                &sb_msg.contributors(),
-                            );
+                        // Check if the combined weight of the aggregation is at least 2f+1.
+                        if aggregate_weight >= policy::Policy::TWO_F_PLUS_ONE as usize {
+                            // Create SkipBlockProof out of the aggregate
+                            let skip_block_proof = SkipBlockProof { sig: sb_msg.proof };
+                            trace!("Skip block completed, proof={:?}", &skip_block_proof);
 
-                            // Check if the combined weight of the aggregation is at least 2f+1.
-                            if aggregate_weight >= policy::Policy::TWO_F_PLUS_ONE as usize {
-                                // Create SkipBlockProof out of the aggregate
-                                let skip_block_proof = SkipBlockProof { sig: sb_msg.proof };
-                                trace!("Skip block completed, proof={:?}", &skip_block_proof);
-
-                                // return the SkipBlockProof
-                                return (skip_block_info, skip_block_proof);
-                            }
+                            // return the SkipBlockProof
+                            return (skip_block_info, skip_block_proof);
                         }
                     }
                 }
             }
         }
+
+        unreachable!("Aggregation stream should not terminate without result");
     }
 }
 
