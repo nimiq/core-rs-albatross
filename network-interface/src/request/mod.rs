@@ -137,10 +137,19 @@ pub trait RequestCommon:
     const MAX_REQUESTS: u32;
     const TIME_WINDOW: Duration = DEFAULT_MAX_REQUEST_RESPONSE_TIME_WINDOW;
 
+    /// Returns the type name of the given request type `T`.
+    /// This only works for
+    ///   - non-generic types
+    ///   - generic types with a single level of nesting, in which case the name of
+    ///     the type parameter is returned
     fn type_name<T>() -> &'static str {
         let name = std::any::type_name::<T>();
-        match name.rfind("::") {
+        let name = match name.rfind("::") {
             Some(index) => &name[index + 2..],
+            None => &name[..],
+        };
+        match name.rfind(">") {
+            Some(index) => &name[..index],
             None => &name[..],
         }
     }

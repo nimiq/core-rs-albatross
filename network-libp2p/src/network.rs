@@ -223,13 +223,13 @@ impl Network {
         );
 
         let Ok(result) = timeout(REQUEST_TIMEOUT, response_rx).await else {
-            warn!(
+            debug!(
                 r#type = Req::type_name::<Req>(),
                 %request_id,
                 %peer_id,
                 "Request timed out with no response from libp2p"
             );
-            return Err(OutboundRequestError::SenderFutureDropped.into());
+            return Err(OutboundRequestError::Timeout.into());
         };
 
         let Ok(result) = result else {
@@ -261,7 +261,7 @@ impl Network {
                 %request_id,
                 %peer_id,
                 unread_data_len = left_over.len(),
-                "Unexpected content size deserializing",
+                "Unexpected content size deserializing response",
             );
         }
 

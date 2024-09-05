@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeSet,
+    fmt::{Debug, Formatter},
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -32,7 +33,7 @@ pub struct BlockRequestResult<N: Network> {
     pub sender: N::PeerId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct MissingBlockRequest {
     /// The block number of the requested block.
     pub target_block_number: u32,
@@ -47,6 +48,18 @@ pub struct MissingBlockRequest {
     /// The Direction the request is to be executed in.
     /// See [RequestMissingBlocks] for details on the effect.
     pub direction: Direction,
+}
+
+impl Debug for MissingBlockRequest {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        let mut dbg = f.debug_struct("MissingBlockRequest");
+        dbg.field("target_block_number", &self.target_block_number);
+        dbg.field("target_block_hash", &self.target_block_hash);
+        dbg.field("num_locators", &self.locators.len());
+        dbg.field("include_body", &self.include_body);
+        dbg.field("direction", &self.direction);
+        dbg.finish()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -104,7 +117,7 @@ impl<N: Network> BlockRequestComponent<N> {
                         None => break,
                     };
 
-                    debug!(%peer_id, "Removing peer from live sync");
+                    trace!(%peer_id, "Removing peer from live sync");
                     peers.write().remove_peer(&peer_id);
                 }
             }

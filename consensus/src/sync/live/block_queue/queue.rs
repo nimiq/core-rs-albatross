@@ -607,7 +607,10 @@ impl<N: Network> BlockQueue<N> {
             // Iterate over all blocks at the current height, remove block if parent is invalid
             blocks.retain(|hash, (block, block_source)| {
                 if invalid_blocks.contains(block.parent_hash()) {
-                    log::trace!("Removing block because parent is invalid: {}", hash);
+                    log::trace!(
+                        %block,
+                        "Removing block because parent is invalid"
+                    );
                     invalid_blocks.insert(hash.clone());
                     block_source.reject_block(&self.network);
                     false
@@ -810,7 +813,7 @@ impl<N: Network> Stream for BlockQueue<N> {
                             return Poll::Ready(Some(block));
                         }
                     } else {
-                        log::trace!(%block, %peer_id, "Rejecting block as it doesn't come from a synced peer");
+                        log::trace!(%block, %peer_id, "Ignoring block as it doesn't come from a synced peer");
                     }
                 }
                 // If the block_stream is exhausted, we quit as well.

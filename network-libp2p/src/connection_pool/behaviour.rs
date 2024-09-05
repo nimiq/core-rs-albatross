@@ -754,7 +754,7 @@ impl Behaviour {
     fn on_dial_failure(&mut self, peer_id: Option<PeerId>, error: &DialError) {
         let error_msg = match error {
             DialError::Transport(errors) => {
-                let str = errors
+                errors
                     .iter()
                     .map(|(address, error)| {
                         let mut address = address.clone();
@@ -772,9 +772,7 @@ impl Behaviour {
                         format!("{} => {}", address, err)
                     })
                     .collect::<Vec<String>>()
-                    .join(", ");
-
-                format!("No transport: {}", str)
+                    .join(", ")
             }
             e => e.to_string(),
         };
@@ -785,18 +783,23 @@ impl Behaviour {
             | DialError::Aborted
             | DialError::NoAddresses
             | DialError::Denied { .. } => {
-                let peer_id = match peer_id {
-                    Some(id) => id,
-                    // Not interested in dial failures to unknown peers right now.
-                    None => return,
+                // We're not interested in dial failures to unknown peers right now.
+                let Some(peer_id) = peer_id else {
+                    return;
                 };
 
                 debug!(%peer_id, error = error_msg, "Failed to dial peer");
+
                 self.peer_ids.mark_failed(peer_id);
                 self.maintain_peers();
             }
             DialError::Transport(addresses) => {
-                debug!(?peer_id, error = error_msg, ?addresses, "Failed to dial");
+                let peer_str = match peer_id {
+                    Some(id) => id.to_string(),
+                    None => "None".to_string(),
+                };
+                debug!(peer_id = %peer_str, error = error_msg, "Failed to dial");
+
                 if let Some(peer_id) = peer_id {
                     self.peer_ids.mark_failed(peer_id);
                 }
@@ -814,7 +817,7 @@ impl Behaviour {
                 // failure.
             }
             DialError::DialPeerConditionFalse(PeerCondition::Always) => {
-                unreachable!("DialPeerCondition::Always can not trigger DialPeerConditionFalse.");
+                unreachable!("DialPeerCondition::Always can not trigger DialPeerConditionFalse");
             }
         }
     }

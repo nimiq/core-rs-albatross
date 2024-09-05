@@ -269,8 +269,6 @@ impl NetworkBehaviour for Behaviour {
         _connection: ConnectionId,
         event: HandlerOutEvent,
     ) {
-        trace!(%peer_id, ?event, "on_connection_handler_event");
-
         match event {
             HandlerOutEvent::PeerExchangeEstablished {
                 peer_address,

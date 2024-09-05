@@ -398,10 +398,9 @@ impl PeerContactBook {
             .is_none();
         if is_new {
             log::trace!(
-                added_peer = %info.peer_id,
+                peer_id = %info.peer_id,
                 services = ?info.services(),
                 addresses = ?info.contact.inner.addresses,
-                only_secure_ws_connections,
                 "Adding peer contact",
             );
         }
