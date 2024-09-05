@@ -118,9 +118,9 @@ impl Blockchain {
                 .0;
 
             debug!(
-                num_transactions = hist_txs.len(),
+                transactions = hist_txs.len(),
                 block = bn,
-                "Pushed txns to the history store during validity sync"
+                "Pushed txns to the history store"
             );
         }
 

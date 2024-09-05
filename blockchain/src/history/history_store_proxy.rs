@@ -98,7 +98,11 @@ impl HistoryInterface for HistoryStoreProxy {
     /// Returns the length (i.e. the number of leaves) of the History Tree at a given block height.
     /// Note that this returns the number of leaves for only the epoch of the given block height,
     /// this is because we have separate History Trees for separate epochs.
-    fn length_at(&self, block_number: u32, txn_option: Option<&MdbxReadTransaction>) -> u32 {
+    fn length_at(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<u32> {
         match self {
             HistoryStoreProxy::WithIndex(index) => index.length_at(block_number, txn_option),
             HistoryStoreProxy::WithoutIndex(store) => store.length_at(block_number, txn_option),

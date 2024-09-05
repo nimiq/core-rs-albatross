@@ -407,7 +407,12 @@ impl HistoryInterface for HistoryStore {
     /// Returns the length (i.e. the number of leaves) of the History Tree at a given block height.
     /// Note that this returns the number of leaves for only the epoch of the given block height,
     /// this is because we have separate History Trees for separate epochs.
-    fn length_at(&self, block_number: u32, txn_option: Option<&MdbxReadTransaction>) -> u32 {
+    /// If we dont have a block number at the given block height, we return None.
+    fn length_at(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<u32> {
         let txn = txn_option.or_new(&self.db);
 
         let mut cursor = txn.cursor(&self.last_leaf_table);
@@ -416,20 +421,17 @@ impl HistoryInterface for HistoryStore {
         match cursor.set_lowerbound_key(&block_number) {
             // If it exists, we simply get the last leaf index for the block. We increment by 1
             // because the leaf index is 0-based and we want the number of leaves.
-            Some((n, i)) if n == block_number => i + 1,
-            // Otherwise, seek to the previous block, if it exists.
-            _ => match cursor.prev() {
-                // If it exists, we also need to check if the previous block is in the same epoch.
-                Some((n, i)) => {
-                    if Policy::epoch_at(n) == Policy::epoch_at(block_number) {
-                        i + 1
-                    } else {
-                        0
-                    }
+            Some((n, i)) if n == block_number => Some(i + 1),
+            // Otherwise, seek to the previous block
+            // If it exists, we also need to check if the previous block is in the same epoch.
+            // If it doesn't exist, then the HistoryStore is empty at this block height.
+            _ => cursor.prev().map(|(n, i)| {
+                if Policy::epoch_at(n) == Policy::epoch_at(block_number) {
+                    i + 1
+                } else {
+                    0
                 }
-                // If it doesn't exist, then the HistoryStore is empty at this block height.
-                None => 0,
-            },
+            }),
         }
     }
 
@@ -672,7 +674,7 @@ impl HistoryInterface for HistoryStore {
         ));
 
         // Calculate number of nodes in the verifier's history tree.
-        let leaf_count = self.length_at(verifier_block_number, Some(&txn)) as usize;
+        let leaf_count = self.length_at(verifier_block_number, Some(&txn))? as usize;
         let number_of_nodes = leaf_number_to_index(leaf_count);
 
         // Calculate chunk boundaries.
@@ -787,7 +789,11 @@ impl HistoryInterface for HistoryStore {
         let f = |leaf_index| self.get_historic_tx(epoch_number, leaf_index as u32, txn_option);
 
         // Calculate number of nodes in the verifier's history tree.
-        let leaf_count = self.length_at(block_number, Some(&txn)) as usize;
+        let leaf_count = match self.length_at(block_number, Some(&txn)) {
+            Some(count) => count as usize,
+            None => return Err(MMRError::IncompleteProof),
+        };
+
         let number_of_nodes = leaf_number_to_index(leaf_count);
 
         tree.prove_num_leaves(f, Some(number_of_nodes))
@@ -899,19 +905,12 @@ mod tests {
         let history_store = HistoryStore::new(env.clone(), NetworkId::UnitAlbatross);
 
         let mut txn = env.write_transaction();
-        let history_root_initial = history_store.get_history_tree_root(0, Some(&txn)).unwrap();
 
-        let size_proof = history_store
-            .prove_num_leaves(0, Some(&txn))
-            .expect("Should be able to prove number of leaves");
-        assert!(size_proof.verify(&history_root_initial));
-        assert_eq!(size_proof.size(), 0);
+        let size_proof = history_store.prove_num_leaves(0, Some(&txn));
+        assert!(size_proof.is_err());
 
-        let size_proof = history_store
-            .prove_num_leaves(100, Some(&txn))
-            .expect("Should be able to prove number of leaves");
-        assert!(size_proof.verify(&history_root_initial));
-        assert_eq!(size_proof.size(), 0);
+        let size_proof = history_store.prove_num_leaves(100, Some(&txn));
+        assert!(size_proof.is_err());
 
         // Create historic transactions.
         let ext_0 = create_transaction(3, 0);
@@ -922,11 +921,9 @@ mod tests {
         // Add first historic transaction to History Store.
         let (history_root0, _) = history_store.add_to_history(&mut txn, 3, &[ext_0]).unwrap();
 
-        let size_proof = history_store
-            .prove_num_leaves(0, Some(&txn))
-            .expect("Should be able to prove number of leaves");
-        assert!(size_proof.verify(&history_root_initial));
-        assert_eq!(size_proof.size(), 0);
+        let size_proof = history_store.prove_num_leaves(0, Some(&txn));
+        // This fails because we added block number 3, so block 0 does not exist.
+        assert!(size_proof.is_err());
 
         let size_proof = history_store
             .prove_num_leaves(100, Some(&txn))
@@ -940,11 +937,9 @@ mod tests {
         let (history_root3, _) = history_store.add_to_history(&mut txn, 8, &[ext_3]).unwrap();
 
         // Prove number of leaves.
-        let size_proof = history_store
-            .prove_num_leaves(2, Some(&txn))
-            .expect("Should be able to prove number of leaves");
-        assert!(size_proof.verify(&history_root_initial));
-        assert_eq!(size_proof.size(), 0);
+        let size_proof = history_store.prove_num_leaves(2, Some(&txn));
+        // This fails because the first block number is 3, so block 2 does not exist.
+        assert!(size_proof.is_err());
 
         let size_proof = history_store
             .prove_num_leaves(3, Some(&txn))
@@ -996,13 +991,13 @@ mod tests {
         history_store.add_to_history(&mut txn, 8, &hist_txs);
 
         // Verify method works.
-        assert_eq!(history_store.length_at(0, Some(&txn)), 0);
-        assert_eq!(history_store.length_at(1, Some(&txn)), 1);
-        assert_eq!(history_store.length_at(3, Some(&txn)), 2);
-        assert_eq!(history_store.length_at(5, Some(&txn)), 2);
-        assert_eq!(history_store.length_at(7, Some(&txn)), 3);
-        assert_eq!(history_store.length_at(8, Some(&txn)), 4);
-        assert_eq!(history_store.length_at(9, Some(&txn)), 4);
+        assert_eq!(history_store.length_at(0, Some(&txn)), None);
+        assert_eq!(history_store.length_at(1, Some(&txn)), Some(1));
+        assert_eq!(history_store.length_at(3, Some(&txn)), Some(2));
+        assert_eq!(history_store.length_at(5, Some(&txn)), Some(2));
+        assert_eq!(history_store.length_at(7, Some(&txn)), Some(3));
+        assert_eq!(history_store.length_at(8, Some(&txn)), Some(4));
+        assert_eq!(history_store.length_at(9, Some(&txn)), Some(4));
     }
 
     #[test]

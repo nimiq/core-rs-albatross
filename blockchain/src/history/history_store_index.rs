@@ -318,7 +318,11 @@ impl HistoryInterface for HistoryStoreIndex {
         txn.clear_table(&self.address_table);
     }
 
-    fn length_at(&self, block_number: u32, txn_option: Option<&MdbxReadTransaction>) -> u32 {
+    fn length_at(
+        &self,
+        block_number: u32,
+        txn_option: Option<&MdbxReadTransaction>,
+    ) -> Option<u32> {
         self.history_store.length_at(block_number, txn_option)
     }
 
@@ -631,19 +635,12 @@ mod tests {
         let history_store = HistoryStoreIndex::new(env.clone(), NetworkId::UnitAlbatross);
 
         let mut txn = env.write_transaction();
-        let history_root_initial = history_store.get_history_tree_root(0, Some(&txn)).unwrap();
 
-        let size_proof = history_store
-            .prove_num_leaves(0, Some(&txn))
-            .expect("Should be able to prove number of leaves");
-        assert!(size_proof.verify(&history_root_initial));
-        assert_eq!(size_proof.size(), 0);
+        let size_proof = history_store.prove_num_leaves(0, Some(&txn));
+        assert!(size_proof.is_err());
 
-        let size_proof = history_store
-            .prove_num_leaves(100, Some(&txn))
-            .expect("Should be able to prove number of leaves");
-        assert!(size_proof.verify(&history_root_initial));
-        assert_eq!(size_proof.size(), 0);
+        let size_proof = history_store.prove_num_leaves(100, Some(&txn));
+        assert!(size_proof.is_err());
 
         // Create historic transactions.
         let ext_0 = create_transaction(3, 0);
@@ -654,11 +651,9 @@ mod tests {
         // Add first historic transaction to History Store.
         let (history_root0, _) = history_store.add_to_history(&mut txn, 3, &[ext_0]).unwrap();
 
-        let size_proof = history_store
-            .prove_num_leaves(0, Some(&txn))
-            .expect("Should be able to prove number of leaves");
-        assert!(size_proof.verify(&history_root_initial));
-        assert_eq!(size_proof.size(), 0);
+        let size_proof = history_store.prove_num_leaves(0, Some(&txn));
+        // This fails because we added block number 3, so block 0 does not exist.
+        assert!(size_proof.is_err());
 
         let size_proof = history_store
             .prove_num_leaves(100, Some(&txn))
@@ -672,11 +667,9 @@ mod tests {
         let (history_root3, _) = history_store.add_to_history(&mut txn, 8, &[ext_3]).unwrap();
 
         // Prove number of leaves.
-        let size_proof = history_store
-            .prove_num_leaves(2, Some(&txn))
-            .expect("Should be able to prove number of leaves");
-        assert!(size_proof.verify(&history_root_initial));
-        assert_eq!(size_proof.size(), 0);
+        let size_proof = history_store.prove_num_leaves(2, Some(&txn));
+        // This fails because the first block number is 3, so block 2 does not exist.
+        assert!(size_proof.is_err());
 
         let size_proof = history_store
             .prove_num_leaves(3, Some(&txn))
@@ -728,13 +721,13 @@ mod tests {
         history_store.add_to_history(&mut txn, 8, &hist_txs);
 
         // Verify method works.
-        assert_eq!(history_store.length_at(0, Some(&txn)), 0);
-        assert_eq!(history_store.length_at(1, Some(&txn)), 1);
-        assert_eq!(history_store.length_at(3, Some(&txn)), 2);
-        assert_eq!(history_store.length_at(5, Some(&txn)), 2);
-        assert_eq!(history_store.length_at(7, Some(&txn)), 3);
-        assert_eq!(history_store.length_at(8, Some(&txn)), 4);
-        assert_eq!(history_store.length_at(9, Some(&txn)), 4);
+        assert_eq!(history_store.length_at(0, Some(&txn)), None);
+        assert_eq!(history_store.length_at(1, Some(&txn)), Some(1));
+        assert_eq!(history_store.length_at(3, Some(&txn)), Some(2));
+        assert_eq!(history_store.length_at(5, Some(&txn)), Some(2));
+        assert_eq!(history_store.length_at(7, Some(&txn)), Some(3));
+        assert_eq!(history_store.length_at(8, Some(&txn)), Some(4));
+        assert_eq!(history_store.length_at(9, Some(&txn)), Some(4));
     }
 
     #[test]

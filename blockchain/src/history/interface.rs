@@ -49,7 +49,9 @@ pub trait HistoryInterface: std::fmt::Debug {
     /// Returns the length (i.e. the number of leaves) of the History Tree at a given block height.
     /// Note that this returns the number of leaves for only the epoch of the given block height,
     /// this is because we have separate History Trees for separate epochs.
-    fn length_at(&self, block_number: u32, txn_option: Option<&MdbxReadTransaction>) -> u32;
+    /// If we dont have a block number at the given block height, we return None.
+    fn length_at(&self, block_number: u32, txn_option: Option<&MdbxReadTransaction>)
+        -> Option<u32>;
 
     /// Returns the total length of the History Tree at a given epoch number.
     /// The size of the history length is useful for getting a proof for a previous state
