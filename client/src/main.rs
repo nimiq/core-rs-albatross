@@ -90,13 +90,13 @@ async fn main_inner() -> Result<(), Error> {
             monitor: con_metrics_monitor,
         });
     } else {
-        spawn(consensus);
+        // spawn(consensus);
     }
     let consensus = client.consensus_proxy();
     let mempool = client.mempool();
 
     let zkp_component = client.take_zkp_component().unwrap();
-    spawn(zkp_component); //ITODO get metrics on this? ask JD
+    // spawn(zkp_component); //ITODO get metrics on this? ask JD
 
     // Start validator
     let val_metric_monitor = tokio_metrics::TaskMonitor::new();
@@ -124,7 +124,7 @@ async fn main_inner() -> Result<(), Error> {
         if metrics_enabled {
             let mp_metrics_monitor = mempool_task.get_mempool_monitor();
             let inst_mempool = val_metric_monitor.instrument(mempool_task);
-            spawn(inst_mempool);
+            // spawn(inst_mempool);
             nimiq_task_metric.push(NimiqTaskMonitor {
                 name: "mempool".to_string(),
                 monitor: mp_metrics_monitor,
@@ -134,7 +134,7 @@ async fn main_inner() -> Result<(), Error> {
                 monitor: val_metric_monitor,
             });
         } else {
-            spawn(mempool_task);
+            // spawn(mempool_task);
         }
     }
 
