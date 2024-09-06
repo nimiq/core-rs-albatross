@@ -1,46 +1,67 @@
 use std::{
+    fmt::Debug,
+    future::Future,
     pin::Pin,
     task::{Context, Poll, Waker},
+    time::Duration,
 };
 
 use futures::{
     future::{BoxFuture, FutureExt},
     stream::StreamExt,
-    Future,
 };
+use instant::Instant;
+use nimiq_collections::BitSet;
 use nimiq_utils::{stream::FuturesUnordered, WakerExt as _};
 
 use crate::{contribution::AggregatableContribution, update::LevelUpdate};
 
 /// Trait defining the interface to the network. The only requirement for handel is that the network is able to send
 /// a message to a specific validator.
-pub trait Network: Unpin + Send + 'static {
+pub trait Network: Unpin + Send + Sync + 'static {
     type Contribution: AggregatableContribution;
-    /// Sends message `msg.0` to validator identified by index `msg.1`. The mapping for the identifier is the
-    /// same as the one given by the identity register
-    fn send_to(&self, msg: (LevelUpdate<Self::Contribution>, u16)) -> BoxFuture<'static, ()>;
+    type Error: Debug + Send;
+
+    /// Sends a level update to the node specified by `node_id`.
+    /// The node_id is the same one given by the IdentityRegistry.
+    fn send_update(
+        &self,
+        node_id: u16,
+        update: LevelUpdate<Self::Contribution>,
+    ) -> BoxFuture<'static, Result<(), Self::Error>>;
+}
+
+#[derive(Clone)]
+struct LastLevelUpdate {
+    signers: BitSet,
+    sent_at: Instant,
 }
 
 /// Struct to facilitate sending multiple messages.
 /// It will buffer up to one message per recipient, while maintaining the order of messages.
 /// Messages that do not fit the buffer will be dropped.
 pub struct LevelUpdateSender<TNetwork: Network> {
-    /// Buffer for one message per recipient. Second value of the pair is the index of the next message which needs to
-    /// be sent after this one. In case there is none it will be set to the len of the Vec, which is an OOB index.
+    /// Buffer for one message per recipient. Second value of the pair is the index of the next
+    /// message which needs to be sent after this one. If there is no message buffered, it will
+    /// point to `message_buffer.len()` which is the first OOB index.
     message_buffer: Vec<Option<(LevelUpdate<TNetwork::Contribution>, usize)>>,
 
-    /// Index of the first message in this buffer that should be sent. If there is no message buffered it will point to
-    /// `message_buffer.len()` which is the first OOB index.
+    /// Information about the last message sent to each recipient, used to deduplicate messages.
+    last_messages: Vec<Option<LastLevelUpdate>>,
+
+    /// Index of the first message in this buffer that should be sent. If there is no message
+    /// buffered it will point to `message_buffer.len()` which is the first OOB index.
     first: usize,
 
-    /// Index of the last message in this buffer that should be sent. It is used to quickly append messages.
-    /// If there is no message buffered it will point to `message_buffer.len()` which is the first OOB index.
+    /// Index of the last message in this buffer that should be sent. It is used to quickly append
+    /// messages. If there is no message buffered it will point to `message_buffer.len()` which is
+    /// the first OOB index.
     last: usize,
 
-    /// The collection of currently being awaited sending futures.
-    pending: FuturesUnordered<BoxFuture<'static, ()>>,
+    /// The collection of currently pending sender futures.
+    pending: FuturesUnordered<BoxFuture<'static, Result<(usize, BitSet), TNetwork::Error>>>,
 
-    /// The network used to create the futures for sending a message.
+    /// The network to send messages to other nodes.
     network: TNetwork,
 
     /// A waker option which is set whenever the future was called while there was no future pending.
@@ -49,11 +70,12 @@ pub struct LevelUpdateSender<TNetwork: Network> {
 
 impl<TNetwork: Network> LevelUpdateSender<TNetwork> {
     const MAX_PARALLEL_SENDS: usize = 10;
+    const ALLOW_RESEND_AFTER: Duration = Duration::from_secs(5);
 
     pub fn new(len: usize, network: TNetwork) -> Self {
-        let message_buffer = vec![None; len];
         Self {
-            message_buffer,
+            message_buffer: vec![None; len],
+            last_messages: vec![None; len],
             first: len,
             last: len,
             pending: FuturesUnordered::new(),
@@ -62,40 +84,51 @@ impl<TNetwork: Network> LevelUpdateSender<TNetwork> {
         }
     }
 
-    pub fn send(&mut self, (msg, recipient): (LevelUpdate<TNetwork::Contribution>, usize)) {
+    pub fn send(&mut self, node_id: usize, msg: LevelUpdate<TNetwork::Contribution>) {
+        // `message_buffer` and `last_messages` have the same length, so this check prevents
+        // out-of-bounds access to both of these vectors.
         let len = self.message_buffer.len();
+        if node_id >= len {
+            error!(node_id, len, "Attempted to send to out-of-bounds node_id");
+            return;
+        }
 
-        let recipient_buffer = self
-            .message_buffer
-            .get_mut(recipient)
-            .expect("send for recipient must not be out of bounds.");
-
-        if let Some(msg_and_recipient) = recipient_buffer.as_mut() {
-            // Preserve the previous ordering if there is one
-            msg_and_recipient.0 = msg;
-        } else {
-            // otherwise add to the end
-            *recipient_buffer = Some((msg, len));
-            // if there was nothing buffered before, the added message is first and last
-            if self.message_buffer.len() == self.first {
-                self.first = recipient;
-                self.last = recipient;
-                // wake
-            } else {
-                // otherwise the previously last message must be updated to point to the now new last message
-                self.message_buffer
-                    .get_mut(self.last)
-                    .expect(
-                        "The last index must not point out of bounds if the buffer is non empty",
-                    )
-                    .as_mut()
-                    .expect("The last index must point to a set buffered message")
-                    .1 = recipient;
-                // and the last index also needs to be updated.
-                self.last = recipient;
+        // If an update with the same signers was recently sent to node_id, we drop it to avoid
+        // unnecessarily repeating the same updates.
+        if let Some(last_update) = &self.last_messages[node_id] {
+            let same_signers = last_update.signers == msg.aggregate.contributors();
+            let recently_sent = last_update.sent_at.elapsed() < Self::ALLOW_RESEND_AFTER;
+            if same_signers && recently_sent {
+                // FIXME Without this return, things are MUCH faster... why?
+                //return;
             }
         }
-        // wake as a new message was added.
+
+        // Insert the message into the message buffer for the recipient.
+        let recipient_buffer = &mut self.message_buffer[node_id];
+        if let Some(msg_and_recipient) = recipient_buffer {
+            // Preserve the previous ordering if there is one.
+            msg_and_recipient.0 = msg;
+        } else {
+            // Otherwise add to the end.
+            *recipient_buffer = Some((msg, len));
+            // If there was nothing buffered before, the added message is first and last.
+            if self.message_buffer.len() == self.first {
+                self.first = node_id;
+                self.last = node_id;
+                // wake
+            } else {
+                // Otherwise the previously last message must be updated to point to the now new last message
+                self.message_buffer[self.last]
+                    .as_mut()
+                    .expect("The last index must point to a set buffered message")
+                    .1 = node_id;
+                // And the last index also needs to be updated.
+                self.last = node_id;
+            }
+        }
+
+        // Wake as a new message was added.
         self.waker.wake();
     }
 }
@@ -109,24 +142,19 @@ impl<TNetwork: Network + Unpin> Future for LevelUpdateSender<TNetwork> {
         loop {
             let len = self.message_buffer.len();
 
-            // create futures if there is free room and if there are messages to send
+            // Create futures if there is free room and if there are messages to send.
             while self.first < len && self.pending.len() < Self::MAX_PARALLEL_SENDS {
-                let first = self.first;
-                // take the first message
-                let (msg, next) = self
-                    .message_buffer
-                    .get_mut(first)
-                    .expect("First must not point out of bounds")
+                let node_id = self.first;
+                // Take the first message
+                let (update, next) = self.message_buffer[node_id]
                     .take()
                     .expect("First must point to a valid buffered message");
 
-                // Create the future sending the message
-                let mut fut = self.network.send_to((msg, self.first.try_into().unwrap()));
-                // Poll it, and only add it to the pending futures if it is in fact pending.
-                if fut.poll_unpin(cx).is_pending() {
-                    // If the Future does not resolve immediately add it to the pending futures.
-                    self.pending.push(fut);
-                }
+                // Create the future to send the message and add it to the pending futures.
+                let signers = update.aggregate.contributors();
+                let sender = self.network.send_update(node_id as u16, update);
+                let future = async move { sender.await.map(|_| (node_id, signers)) }.boxed();
+                self.pending.push(future);
 
                 // Update indices.
                 // Note that `next` might be `== len` here in the case of `first == last`
@@ -136,10 +164,23 @@ impl<TNetwork: Network + Unpin> Future for LevelUpdateSender<TNetwork> {
                 }
             }
 
-            // Keep on polling the futures until they no longer return a result.
-            while let Poll::Ready(Some(_)) = self.pending.poll_next_unpin(cx) {
-                // Nothing to do here. Message was send.
+            // Poll the pending level update senders.
+            while let Poll::Ready(Some(result)) = self.pending.poll_next_unpin(cx) {
+                match result {
+                    Ok((node_id, signers)) => {
+                        self.last_messages[node_id] = Some(LastLevelUpdate {
+                            signers,
+                            sent_at: Instant::now(),
+                        })
+                    }
+                    Err(error) => {
+                        // TODO When we fail to send a level update, we should immediately move on
+                        //  to the next peer.
+                        debug!(?error, "Failed to send level update");
+                    }
+                };
             }
+
             // Once there is either the maximum amount of parallel sends or there is no more messages
             // in the buffer, break the loop returning poll pending.
             if self.pending.len() == Self::MAX_PARALLEL_SENDS || self.first == len {
@@ -159,7 +200,7 @@ impl<TNetwork: Network + Unpin> Future for LevelUpdateSender<TNetwork> {
 mod test {
     use std::{sync::Arc, task::Context, time::Duration};
 
-    use futures::FutureExt;
+    use futures::{future::BoxFuture, FutureExt};
     use nimiq_collections::BitSet;
     use nimiq_test_log::test;
     use parking_lot::Mutex;
@@ -190,13 +231,20 @@ mod test {
     struct Net(pub Arc<Mutex<Vec<(LevelUpdate<<Self as Network>::Contribution>, u16)>>>);
     impl Network for Net {
         type Contribution = Contribution;
-        fn send_to(
-            &self,
-            msg: (LevelUpdate<Self::Contribution>, u16),
-        ) -> futures::future::BoxFuture<'static, ()> {
-            self.0.lock().push(msg);
+        type Error = ();
 
-            async move { nimiq_time::sleep(Duration::from_millis(100)).await }.boxed()
+        fn send_update(
+            &self,
+            node_id: u16,
+            update: LevelUpdate<Self::Contribution>,
+        ) -> BoxFuture<'static, Result<(), Self::Error>> {
+            self.0.lock().push((update, node_id));
+
+            async move {
+                nimiq_time::sleep(Duration::from_millis(100)).await;
+                Ok(())
+            }
+            .boxed()
         }
     }
 
@@ -208,7 +256,7 @@ mod test {
 
         fn send(sender: &mut LevelUpdateSender<Net>, i: u32) {
             // Actual values do not matter here.
-            sender.send((LevelUpdate::new(Contribution(i), None, 0, 0), i as usize));
+            sender.send(i as usize, LevelUpdate::new(Contribution(i), None, 0, 0));
         }
 
         fn poll(sender: &mut LevelUpdateSender<Net>) {

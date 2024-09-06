@@ -145,7 +145,7 @@ impl MockHub {
 
     pub fn new_network_with_address<A: Into<MockAddress>>(&mut self, address: A) -> MockNetwork {
         let address: MockAddress = address.into();
-        log::debug!("New mock network with address={}", address);
+        log::trace!("New mock network with address={}", address);
         MockNetwork::new(address, Arc::clone(&self.inner))
     }
 }

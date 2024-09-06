@@ -12,6 +12,7 @@ use nimiq_handel::{
     aggregation::Aggregation,
     identity::IdentityRegistry,
     protocol::Protocol as _,
+    update::LevelUpdate,
     verifier::{VerificationResult, Verifier},
 };
 use nimiq_hash::{Blake2sHash, Hash};
@@ -70,33 +71,30 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
     for NetworkWrapper<TValidatorNetwork>
 {
     type Contribution = TendermintContribution;
+    type Error = TValidatorNetwork::Error;
 
-    fn send_to(
+    fn send_update(
         &self,
-        (msg, recipient): (nimiq_handel::update::LevelUpdate<Self::Contribution>, u16),
-    ) -> BoxFuture<'static, ()> {
+        node_id: u16,
+        update: LevelUpdate<Self::Contribution>,
+    ) -> BoxFuture<'static, Result<(), Self::Error>> {
         // Tag the LevelUpdate, while also converting it to the serializable representation.
         // The origin gets lost here, but will get re-set by the ValidatorNetwork in its sent_to call.
         let tagged_aggregation_message = TaggedAggregationMessage {
             tag: self.tag,
-            aggregation: msg.into(),
+            aggregation: update.into(),
         };
-        // and create the update.
+        // And create the update.
         let update_message = TendermintUpdate {
             message: tagged_aggregation_message,
-            height: self.height,
+            block_number: self.height,
         };
 
-        // clone network so it can be moved into the future
-        let nw = Arc::clone(&self.network);
+        // Clone network so it can be moved into the future.
+        let network = Arc::clone(&self.network);
 
-        // create the send future and return it.
-        async move {
-            if let Err(error) = nw.send_to(recipient, update_message).await {
-                log::error!(?error, recipient, "Failed to send message");
-            }
-        }
-        .boxed()
+        // Create the request future and return it.
+        async move { network.send_to(node_id, update_message).await }.boxed()
     }
 }
 

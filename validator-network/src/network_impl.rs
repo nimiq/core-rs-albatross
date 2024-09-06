@@ -274,9 +274,9 @@ struct ValidatorMessage<M> {
 
 impl<M: RequestCommon> RequestCommon for ValidatorMessage<M> {
     type Kind = M::Kind;
+    type Response = M::Response;
     // Use distinct type IDs for the validator network.
     const TYPE_ID: u16 = 10_000 + M::TYPE_ID;
-    type Response = M::Response;
     const MAX_REQUESTS: u32 = M::MAX_REQUESTS;
 }
 
@@ -407,13 +407,51 @@ where
                             .map(|pid| *pid != peer_id)
                             .unwrap_or(true)
                         {
-                            warn!(%peer_id, ?validator_peer_id, claimed_validator_id = message.validator_id, "dropping validator message");
+                            warn!(%peer_id, ?validator_peer_id, claimed_validator_id = message.validator_id, "Dropping validator message");
                             return None;
                         }
                         Some((message.inner, message.validator_id))
                     }
                 }),
         )
+    }
+
+    fn receive_requests<TRequest: Request>(
+        &self,
+    ) -> BoxStream<'static, (TRequest, <Self::NetworkType as Network>::RequestId, u16)> {
+        let self_ = self.arc_clone();
+
+        self.network
+            .receive_requests::<ValidatorMessage<TRequest>>()
+            .filter_map(move |(message, request_id, peer_id)| {
+                let self_ = self_.arc_clone();
+                async move {
+                    let validator_peer_id = self_.get_validator_cache(message.validator_id).potentially_outdated_peer_id();
+                    // Check that each message actually comes from the peer that it
+                    // claims it comes from. Reject it otherwise.
+                    if validator_peer_id
+                        .as_ref()
+                        .map(|pid| *pid != peer_id)
+                        .unwrap_or(true)
+                    {
+                        warn!(%peer_id, ?validator_peer_id, claimed_validator_id = message.validator_id, "Dropping validator request");
+                        return None;
+                    }
+                    Some((message.inner, request_id, message.validator_id))
+                }
+            })
+            .boxed()
+    }
+
+    async fn respond<TRequest: Request>(
+        &self,
+        request_id: <Self::NetworkType as Network>::RequestId,
+        response: TRequest::Response,
+    ) -> Result<(), Self::Error> {
+        self.network
+            .respond::<TRequest>(request_id, response)
+            .await
+            .map_err(Into::into)
     }
 
     async fn publish<TTopic>(&self, item: TTopic::Item) -> Result<(), Self::Error>

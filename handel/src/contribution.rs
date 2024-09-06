@@ -16,14 +16,6 @@ pub trait AggregatableContribution:
     /// A BitSet signaling which contributors have contributed in this Contribution
     fn contributors(&self) -> BitSet;
 
-    /// Returns the id of the single contributor
-    ///
-    /// Panics if there is more than one contributor
-    fn contributor(&self) -> usize {
-        assert_eq!(self.num_contributors(), 1);
-        self.contributors().iter().next().unwrap()
-    }
-
     /// Returns the number of contributions aggregated in this contribution.
     fn num_contributors(&self) -> usize {
         self.contributors().len()
@@ -36,6 +28,6 @@ pub trait AggregatableContribution:
 
     /// Combines this contribution with `other_contribution` to create the aggregate of the two.
     ///
-    /// The combining contributions must be disjoint. The original must be retained in case of an error
+    /// The combining contributions must be disjoint. The original must be retained in case of an error.
     fn combine(&mut self, other_contribution: &Self) -> Result<(), ContributionError>;
 }

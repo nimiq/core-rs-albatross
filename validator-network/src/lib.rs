@@ -52,6 +52,19 @@ pub trait ValidatorNetwork: Send + Sync {
     where
         M: Message + Clone;
 
+    /// Receives requests from peers.
+    /// This function returns a stream where the requests are going to be propagated.
+    fn receive_requests<TRequest: Request>(
+        &self,
+    ) -> BoxStream<'static, (TRequest, <Self::NetworkType as Network>::RequestId, u16)>;
+
+    /// Sends a response to a specific request.
+    async fn respond<TRequest: Request>(
+        &self,
+        request_id: <Self::NetworkType as Network>::RequestId,
+        response: TRequest::Response,
+    ) -> Result<(), Self::Error>;
+
     /// Publishes an item into a Gossipsub topic.
     async fn publish<TTopic: Topic + Sync>(&self, item: TTopic::Item) -> Result<(), Self::Error>;
 

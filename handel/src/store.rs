@@ -84,18 +84,11 @@ where
 {
     /// Create a new Replace Store using the Partitioner `partitioner`.
     pub fn new(partitioner: Arc<TProtocol::Partitioner>) -> Self {
-        let mut individual_verified = Vec::with_capacity(partitioner.levels());
-        let mut individual_signatures = Vec::with_capacity(partitioner.levels());
-        for _level in 0..partitioner.levels() {
-            individual_verified.push(Identity::default());
-            individual_signatures.push(BTreeMap::new())
-        }
-
         Self {
+            individual_verified: vec![Identity::default(); partitioner.levels()],
+            individual_contributions: vec![BTreeMap::default(); partitioner.levels()],
             partitioner,
             best_level: 0,
-            individual_verified,
-            individual_contributions: individual_signatures,
             best_contribution: BTreeMap::new(),
         }
     }
@@ -121,8 +114,8 @@ where
             // This is normal whenever the first signature for a level is processed.
             trace!(
                 id = ?identifier,
-                ?level,
-                contributors = ?contribution.contributors(),
+                level,
+                contributors = %contribution.contributors(),
                 "Level was empty",
             );
             let contributors = registry.signers_identity(&contribution.contributors());
@@ -131,17 +124,16 @@ where
 
         trace!(
             id = ?identifier,
-            ?best_contribution,
-            ?best_contributors,
             level,
+            ?best_contribution,
             "Current best for level"
         );
 
-        // Try to combine
+        // Try to combine the contributions.
         // If combining fails, it is due to the contributions having an overlap.
         // One may be the superset of the other which makes it the strictly better set.
         // If that is the case the better can be immediately returned.
-        // Otherwise individual signatures must still be checked.
+        // Otherwise, individual signatures must still be checked.
         let mut contributors = if let Err(e) = contribution.combine(best_contribution) {
             // The contributors of contribution represented as an Identity.
             let contributors = registry.signers_identity(&contribution.contributors());
@@ -150,14 +142,16 @@ where
             if contributors.is_superset_of(best_contributors) {
                 trace!(
                     id = ?identifier,
+                    level,
                     ?contribution,
                     ?best_contribution,
-                    "New signature is superset of current best. Replacing",
+                    "Contribution is superset of current best, replacing",
                 );
                 return Some((contribution, contributors));
             } else {
                 trace!(
                     id = ?identifier,
+                    level,
                     ?contribution,
                     ?best_contribution,
                     error = ?e,
@@ -245,8 +239,8 @@ where
             if level > self.best_level {
                 trace!(
                     id = ?identifier,
-                    ?level,
-                    "best level is now",
+                    level,
+                    "Best level is now",
                 );
                 self.best_level = level;
             }

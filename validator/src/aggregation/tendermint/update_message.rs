@@ -15,13 +15,13 @@ pub(crate) struct TendermintUpdate {
     /// this will be an outgoing message and the origin will be set by the ValidatorNetwork in its own structure.
     pub message: TaggedAggregationMessage<SerializableLevelUpdate<TendermintContribution>>,
     /// The height this aggregation runs over.
-    pub height: u32,
+    pub block_number: u32,
 }
 
 impl RequestCommon for TendermintUpdate {
     type Kind = MessageMarker;
+    type Response = ();
     const TYPE_ID: u16 = 124;
     const MAX_REQUESTS: u32 = 500;
     const TIME_WINDOW: Duration = Duration::from_millis(500);
-    type Response = ();
 }

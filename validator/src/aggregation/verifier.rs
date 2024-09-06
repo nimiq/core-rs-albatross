@@ -26,7 +26,6 @@ impl<I: IdentityRegistry> MultithreadedVerifier<I> {
 
 #[async_trait]
 impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for MultithreadedVerifier<I> {
-    // type Output = CpuFuture<VerificationResult, ()>;
     type Contribution = SignedSkipBlockMessage;
 
     async fn verify(&self, contribution: &Self::Contribution) -> VerificationResult {

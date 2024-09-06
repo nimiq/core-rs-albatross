@@ -25,11 +25,8 @@ where
     /// `>0` being more useful the bigger the number.
     fn evaluate(&self, signature: &TProtocol::Contribution, level: usize, id: TId) -> usize;
 
-    /// Returns whether a signature could be considered final.
-    fn is_final(&self, signature: &TProtocol::Contribution) -> bool;
-
     /// Returns whether a level contains a specific peer ID.
-    fn level_contains_origin(&self, msg: &LevelUpdate<TProtocol::Contribution>) -> bool;
+    fn verify(&self, msg: &LevelUpdate<TProtocol::Contribution>) -> bool;
 }
 
 /// A signature counts as it was signed N times, where N is the signers weight
@@ -235,34 +232,63 @@ where
             - combined_sigs
     }
 
-    fn is_final(&self, signature: &TProtocol::Contribution) -> bool {
-        let votes = self
-            .weights
-            .signature_weight(signature)
-            .unwrap_or_else(|| panic!("Missing weights for signature: {signature:?}"));
+    fn verify(&self, msg: &LevelUpdate<TProtocol::Contribution>) -> bool {
+        // Check that the level is within bounds.
+        let level = msg.level as usize;
+        let num_levels = self.partitioner.levels();
+        if level > num_levels || level < 1 {
+            return false;
+        }
 
-        trace!(
-            "is_final(): votes={}, final={}",
-            votes,
-            votes >= self.threshold
-        );
-        votes >= self.threshold
-    }
-
-    fn level_contains_origin(&self, msg: &LevelUpdate<TProtocol::Contribution>) -> bool {
-        if msg.level as usize == self.partitioner.levels() {
+        // Special case for full aggregations, which are sent at level `max_level + 1`.
+        // They are only valid if they contain all signers.
+        if level == num_levels {
             let weight = self
                 .weights
                 .signers_identity(&msg.aggregate.contributors())
                 .len();
-            // Only available to full aggregations
             return weight == self.partitioner.size();
         }
-        let range = self.partitioner.range(msg.level as usize);
-        if let Ok(range) = range {
-            range.contains(&(msg.origin as usize))
-        } else {
-            false
+
+        // Get the valid contributors for this level.
+        let Ok(range) = self.partitioner.range(level) else {
+            return false;
+        };
+
+        // Check that the message origin is a valid contributor.
+        let origin = msg.origin as usize;
+        if !range.contains(&origin) {
+            return false;
         }
+
+        // Check that the signer of the individual contribution corresponds to the message origin.
+        if let Some(individual) = &msg.individual {
+            if individual.num_contributors() != 1 || !individual.contributors().contains(origin) {
+                return false;
+            }
+        }
+
+        // Check that all contributors to the aggregate contribution are allowed on this level.
+        // Contributors can come from lower levels, so we need to check on all levels up to the
+        // given one.
+        // FIXME
+        'outer: for contributor in msg.aggregate.contributors().iter() {
+            for lvl in 0..=level {
+                // If the level is empty, check the next level.
+                let Ok(range) = self.partitioner.range(lvl) else {
+                    continue;
+                };
+
+                // If we found the contributor on this level, check the next contributor.
+                if range.contains(&contributor) {
+                    continue 'outer;
+                }
+            }
+
+            // We didn't find the contributor on any level, thus the aggregate is invalid.
+            return false;
+        }
+
+        true
     }
 }

@@ -119,7 +119,7 @@ impl MockNetwork {
     fn dial_mock_address(&self, address: MockAddress) -> Result<(), MockNetworkError> {
         let hub = self.hub.lock();
 
-        log::debug!("Peer {} dialing peer {}", self.address, address);
+        log::trace!("Peer {} dialing peer {}", self.address, address);
 
         // Insert ourselves into peer's peer list.
         // This also makes sure the other peer actually exists.

@@ -3,25 +3,21 @@ use std::time::Duration;
 /// Handel configuration settings
 #[derive(Clone, Debug)]
 pub struct Config {
-    /// Number of peers contacted during an update at each level
-    pub update_count: usize,
-
-    /// Frequency at which updates are sent to peers
+    /// Frequency at which updates are sent to peers.
     pub update_interval: Duration,
 
-    /// Timeout for levels
-    pub timeout: Duration,
+    /// Maximum time to wait for a level to complete before starting the next level.
+    pub level_timeout: Duration,
 
-    /// How many peers are contacted at each level
+    /// Number of peers that are contacted at each level.
     pub peer_count: usize,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
-            update_count: 1,
             update_interval: Duration::from_millis(500),
-            timeout: Duration::from_millis(400),
+            level_timeout: Duration::from_millis(400),
             peer_count: 2,
         }
     }

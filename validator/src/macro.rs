@@ -5,10 +5,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::{
-    future,
-    stream::{BoxStream, Stream, StreamExt},
-};
+use futures::stream::{BoxStream, Stream, StreamExt};
 use nimiq_block::MacroBlock;
 use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_keys::Ed25519Signature as SchnorrSignature;
@@ -90,14 +87,15 @@ where
     ) -> Self {
         let input = network
             .receive::<TendermintUpdate>()
-            .filter_map(move |(item, validator_id)| {
-                future::ready((item.height == block_height).then(|| {
+            .filter_map(move |(item, validator_id)| async move {
+                // Check that the update is for the correct block.
+                (item.block_number == block_height).then(|| {
                     let TaggedAggregationMessage { tag, aggregation } = item.message;
                     TaggedAggregationMessage {
                         tag,
                         aggregation: AggregateMessage(aggregation.into_level_update(validator_id)),
                     }
-                }))
+                })
             })
             .boxed();
 
