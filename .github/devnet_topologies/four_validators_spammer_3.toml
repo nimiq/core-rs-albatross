@@ -17,7 +17,7 @@ sync_mode = "history"
 [[spammer]]
 restartable = false
 sync_mode = "history"
-tpb = 150
+tpb = 300
 
 [[seed]]
 restartable = false
