@@ -35,8 +35,7 @@ class Spammer(Node):
         self.address = "NQ40 GCAA U3UX 8BKD GUN0 PG3T 17HA 4X5H TXVE"
         self.profile = profile
 
-        nimiq_exec_extra_args = ['--profile',
-                                     profile]
+        nimiq_exec_extra_args = ['--profile', profile]
 
         super(Spammer, self).__init__(NodeType.SPAMMER,
                                       name, "nimiq-spammer", listen_port,

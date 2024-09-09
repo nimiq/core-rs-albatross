@@ -94,17 +94,25 @@ pub struct SpammerGenerationOptions {
     many_to_many: f32,
     // transactions per block, has different meaning depending on burst option
     tpb: usize,
+    // Min fee to be used for transactions
+    min_fee: u64,
+    // Max fee to be used for transactions
+    max_fee: u64,
 }
 
 impl Default for SpammerGenerationOptions {
     fn default() -> Self {
         Self {
-            //By default, only base basic transactions
+            // By default, only base basic transactions
             weights: [10, 0, 0],
-            //By default, only "one to many" distribution
+            // By default, only "one to many" distribution
             many_to_many: 0.0,
-            //Default constant TPB
+            // Default constant TPB
             tpb: 500,
+            // Default min fee
+            min_fee: 0,
+            // Default max fee
+            max_fee: 0,
         }
     }
 }
@@ -512,7 +520,7 @@ fn generate_basic_transactions(
 
             let recipient = Address::from(&recipient_account.key_pair);
             let amount = Coin::from_u64_unchecked(rng.gen_range(1..5));
-            let fee = Coin::from_u64_unchecked(rng.gen_range(0..3));
+            let fee = Coin::from_u64_unchecked(rng.gen_range(config.min_fee..config.max_fee));
 
             let tx = TransactionBuilder::new_basic(
                 &sender_account.key_pair,
@@ -526,7 +534,7 @@ fn generate_basic_transactions(
             txs.push(tx);
 
             //Update the senders balance
-            state.balances[sender_index].balance -= amount;
+            state.balances[sender_index].balance -= amount + fee;
             state.balances[recipient_index].balance += amount;
             continue;
         }
@@ -540,7 +548,7 @@ fn generate_basic_transactions(
             Coin::from_u64_unchecked(10000)
         } else {
             // When only creating new accounts we send a smaller value
-            Coin::from_u64_unchecked(5)
+            Coin::from_u64_unchecked(rng.gen_range(1..5))
         };
 
         if config.many_to_many > 0.0 {
@@ -557,11 +565,13 @@ fn generate_basic_transactions(
             }
         }
 
+        let fee = Coin::from_u64_unchecked(rng.gen_range(config.min_fee..config.max_fee));
+
         let tx = TransactionBuilder::new_basic(
             key_pair,
             recipient,
             amount,
-            Coin::ZERO,
+            fee,
             start_height,
             network_id,
         )

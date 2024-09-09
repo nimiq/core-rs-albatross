@@ -1,6 +1,6 @@
 #[generation]
 # Generation weights in terms of: BaseBasicTransactions, BurstyBasicTransactions, Vesting Contracts
-weights = [ 10, 0, 0]
+weights = [10, 0, 0]
 
 # Probability of sending from existing accounts to other accounts
 many_to_many = 0.0
@@ -8,3 +8,8 @@ many_to_many = 0.0
 # The Base of BasicTransactions that are generated per block.
 # Bursty transactions are generated in the range [tpb * 10, tpb * 20]
 tpb = 500
+
+# Sets the fee that is used for the transactions
+# A low fee will cause a low transaction priority in the mempool
+min_fee = 0
+max_fee = 1

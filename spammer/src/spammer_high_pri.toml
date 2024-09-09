@@ -1,6 +1,6 @@
 #[generation]
 # Generation weights in terms of: BaseBasicTransactions, BurstyBasicTransactions, Vesting Contracts
-weights = [ 5, 5, 0]
+weights = [5, 5, 0]
 
 # Probability of sending from existing accounts to other accounts
 many_to_many = 0.0
