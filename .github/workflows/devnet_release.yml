@@ -16,11 +16,9 @@ jobs:
         - FourValidatorsReconnectRmDatabase
         - FourValidatorsReconnectSpammer
         - MacroBlockProduction
-        - Validators90sDown
         - Validators90sDownFullNodes
         - LowBlockProducerTimeout
         - FiveValidatorsWithSpammer
-        - FiveValidatorsWithSpammerFullNodes
         - ValidatorsStress
 
         include:
@@ -35,17 +33,13 @@ jobs:
         - test: MacroBlockProduction
           pre: "sed -i 's/BLOCKS_PER_BATCH: u32 = 32;/BLOCKS_PER_BATCH: u32 = 2;/g' primitives/src/policy.rs"
           devnet_args: -t .github/devnet_topologies/four_validators_spammer_2.toml -k 0 -R -sp spammer/src/spammer_profile.toml
-        - test: Validators90sDown
-          devnet_args: -t .github/devnet_topologies/four_validators_spammer_3.toml -dt 90 -R
         - test: Validators90sDownFullNodes
-          devnet_args: -t .github/devnet_topologies/four_validators_spammer_3_full_nodes.toml -dt 90 -R
+          devnet_args: -t .github/devnet_topologies/four_validators_spammer_3.toml -dt 90 -R
         - test: LowBlockProducerTimeout
           pre: "sed -i 's/BLOCK_PRODUCER_TIMEOUT: u64 = 4 * 1000;/BLOCK_PRODUCER_TIMEOUT: u64 = 2 * 1000;/g' primitives/src/policy.rs"
           devnet_args: -t .github/devnet_topologies/four_validators_spammer_2.toml -k 0 -R
         - test: FiveValidatorsWithSpammer
           devnet_args: -t .github/devnet_topologies/five_validators_spammer.toml -R -k 0
-        - test: FiveValidatorsWithSpammerFullNodes
-          devnet_args: -t .github/devnet_topologies/five_validators_spammer_full_nodes.toml -R -k 0 -sp spammer/src/spammer_profile.toml
         - test: ValidatorsStress
           devnet_args: -t .github/devnet_topologies/validators_stress.toml -R -k 2 -as -dt 30
 

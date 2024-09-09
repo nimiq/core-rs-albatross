@@ -1,6 +1,10 @@
 [[validator]]
 restartable = true
-sync_mode = "history"
+sync_mode = "full"
+
+[[validator]]
+restartable = true
+sync_mode = "full"
 
 [[validator]]
 restartable = true
@@ -8,16 +12,12 @@ sync_mode = "history"
 
 [[validator]]
 restartable = true
-sync_mode = "history"
-
-[[validator]]
-restartable = true
-sync_mode = "history"
+sync_mode = "full"
 
 [[spammer]]
 restartable = false
 sync_mode = "history"
-tpb = 300
+profile = "spammer/src/spammer_default.toml"
 
 [[seed]]
 restartable = false

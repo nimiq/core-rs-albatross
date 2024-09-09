@@ -102,8 +102,6 @@ class TopologySettings:
     :type namespace: str
     :param env: Type of environment this topology will be run in.
     :type env: Environment
-    :param spammer_profile: Spammer profile to be used (if any)
-    :type spammer_profile: str
     :param loki_settings: Optional Loki settings.
     :type loki_settings: Optional[LokiSettings]
     """
@@ -111,7 +109,6 @@ class TopologySettings:
     def __init__(
             self, nimiq_dir: str, logs_dir: str, conf_dir: str, state_dir: str,
             release: bool, namespace: str, env: Environment,
-            spammer_profile: str,
             loki_settings: Optional[LokiSettings] = None):
         self.nimiq_dir = nimiq_dir
         self.logs_dir = logs_dir
@@ -121,7 +118,6 @@ class TopologySettings:
         self.namespace = namespace
         self.loki_settings = loki_settings
         self.env = env
-        self.spammer_profile = spammer_profile
 
     def get_nimiq_dir(self):
         """
@@ -238,15 +234,6 @@ class TopologySettings:
         :rtype: Environment
         """
         return self.env
-
-    def get_spammer_profile(self):
-        """
-        Gets the spammer profile (if any)
-
-        :return: The path to the spammer profile
-        :rtype: str
-        """
-        return self.spammer_profile
 
     def is_env_containerized(self):
         """

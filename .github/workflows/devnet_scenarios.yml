@@ -34,13 +34,13 @@ jobs:
                 grep 'batches_per_epoch: 720,' primitives/src/policy.rs &&
                 sed -i 's/blocks_per_batch: 60,/blocks_per_batch: 60 \\/ 30,/g' primitives/src/policy.rs &&
                 sed -i 's/batches_per_epoch: 720,/batches_per_epoch: 720 \\* 30,/g' primitives/src/policy.rs"
-          devnet_args: -t .github/devnet_topologies/four_validators_spammer_0.toml -k 0 -ut 100
+          devnet_args: -t .github/devnet_topologies/four_validators_spammer_1.toml -k 0 -ut 100
         - test: Validators90sDown
           devnet_args: -t .github/devnet_topologies/four_validators_spammer_1.toml -dt 90 -ut 100
         - test: LowBlockProducerTimeout
           pre: "grep 'BLOCK_PRODUCER_TIMEOUT: u64 = 4 \\* 1000;' primitives/src/policy.rs &&
                 sed -i 's/BLOCK_PRODUCER_TIMEOUT: u64 = 4 \\* 1000;/BLOCK_PRODUCER_TIMEOUT: u64 = 1000;/g' primitives/src/policy.rs"
-          devnet_args: -t .github/devnet_topologies/four_validators_spammer_0.toml -k 0 -ut 100
+          devnet_args: -t .github/devnet_topologies/four_validators_spammer_1.toml -k 0 -ut 100
 
     runs-on: ubuntu-22.04
 

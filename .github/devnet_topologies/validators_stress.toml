@@ -33,7 +33,7 @@ sync_mode = "history"
 [[spammer]]
 restartable = false
 sync_mode = "history"
-tpb = 700
+profile = "spammer/src/spammer_profile_stress.toml"
 
 [[seed]]
 restartable = false

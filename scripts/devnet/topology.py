@@ -184,14 +184,17 @@ class Topology:
                     )
                     regular_nodes.append(topology_node)
                 elif key == 'spammer':
-                    if 'tpb' not in node:
-                        raise Exception("Missing tpb for a spammer")
-                    elif not isinstance(node['tpb'], int):
+                    if 'profile' not in node:
+                        raise Exception("Missing profile for a spammer")
+                    elif not isinstance(node['profile'], str):
                         raise Exception(
-                            "Unexpected tpb value for a spammer: "
-                            f"{node['tpb']}")
+                            "Unexpected profile for spammer: "
+                            f"{node['profile']}")
+                    elif not Path(node['profile']).is_file():
+                        raise Exception(
+                            "Spammer profile file does not exist!")
                     topology_node = Spammer(
-                        name, port, self.topology_settings, node['tpb'],
+                        name, port, self.topology_settings, node['profile'],
                         node['sync_mode'], rpc=rpc, metrics=metrics,
                         container_image=container_image)
                     spammers.append(topology_node)

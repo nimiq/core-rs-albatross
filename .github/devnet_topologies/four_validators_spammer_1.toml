@@ -8,7 +8,7 @@ sync_mode = "history"
 
 [[validator]]
 restartable = true
-sync_mode = "history"
+sync_mode = "full"
 
 [[validator]]
 restartable = true
@@ -17,7 +17,7 @@ sync_mode = "history"
 [[spammer]]
 restartable = false
 sync_mode = "history"
-tpb = 50
+profile = "spammer/src/spammer_profile_debug.toml"
 
 [[seed]]
 restartable = false

@@ -535,8 +535,13 @@ fn generate_basic_transactions(
         let new_kp = KeyPair::generate(&mut rng);
         let recipient = Address::from(&new_kp);
 
-        // We initialize each of those accounts with this amount:
-        let amount = Coin::from_u64_unchecked(10000);
+        let amount = if config.many_to_many > 0.0 {
+            // We initialize each of those accounts with this amount:
+            Coin::from_u64_unchecked(10000)
+        } else {
+            // When only creating new accounts we send a smaller value
+            Coin::from_u64_unchecked(5)
+        };
 
         if config.many_to_many > 0.0 {
             // We can create a new sender account

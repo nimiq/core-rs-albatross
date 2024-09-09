@@ -1,10 +1,10 @@
 #[generation]
 # Generation weights in terms of: BaseBasicTransactions, BurstyBasicTransactions, Vesting Contracts
-weights = [ 7, 2, 1]
+weights = [ 10, 0, 0]
 
 # Probability of sending from existing accounts to other accounts
-many_to_many = 0.5
+many_to_many = 0.0
 
 # The Base of BasicTransactions that are generated per block.
 # Bursty transactions are generated in the range [tpb * 10, tpb * 20]
-tpb = 50
+tpb = 500

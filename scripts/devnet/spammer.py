@@ -15,8 +15,8 @@ class Spammer(Node):
     :type listen_port: int
     :param topology_settings: General topology settings
     :type topology_settings: TopologySettings
-    :param tpb: Transactions per block to send when running the binary
-    :type tpb: int
+    :param profile: Path to the spammer profile that should be used
+    :type profile: str
     :param sync_mode: The node sync mode (history, full or light)
     :type sync_mode: str
     :param rpc: Optional rpc settings
@@ -28,17 +28,15 @@ class Spammer(Node):
     """
 
     def __init__(self, name: str, listen_port: int,
-                 topology_settings: TopologySettings, tpb: int,
+                 topology_settings: TopologySettings, profile: str,
                  sync_mode: str = 'history', rpc: Optional[dict] = None,
                  metrics: Optional[dict] = None,
                  container_image: Optional[str] = None):
         self.address = "NQ40 GCAA U3UX 8BKD GUN0 PG3T 17HA 4X5H TXVE"
+        self.profile = profile
 
-        if topology_settings.get_spammer_profile() is None:
-            nimiq_exec_extra_args = ['-t', str(tpb)]
-        else:
-            nimiq_exec_extra_args = ['--profile',
-                                     topology_settings.spammer_profile]
+        nimiq_exec_extra_args = ['--profile',
+                                     profile]
 
         super(Spammer, self).__init__(NodeType.SPAMMER,
                                       name, "nimiq-spammer", listen_port,
@@ -55,14 +53,14 @@ class Spammer(Node):
         """
         return self.address
 
-    def get_tpb(self):
+    def get_profile(self):
         """
-        Gets the number of transactions per block
+        Gets the spammer profile
 
-        :return: The number of transactions per block.
-        :rtype: int
+        :return: Path to the spammer profile
+        :rtype: str
         """
-        return self.tpb
+        return self.profile
 
     def generate_config_files(self, jinja_env: Environment, listen_ip: str,
                               seed_addresses: list):
