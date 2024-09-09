@@ -36,6 +36,6 @@ pub trait AggregatableContribution:
 
     /// Combines this contribution with `other_contribution` to create the aggregate of the two.
     ///
-    /// The combining contributions must be disjoint. The orginal must be retained in case of an error
+    /// The combining contributions must be disjoint. The original must be retained in case of an error
     fn combine(&mut self, other_contribution: &Self) -> Result<(), ContributionError>;
 }

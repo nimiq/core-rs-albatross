@@ -78,7 +78,7 @@ impl HistoryStoreIndex {
             if txn.get(&self.tx_hash_table, &raw_tx_hash).is_none() {
                 info!("History index out-of-date. Starting to rebuild index (this can take a long time).");
                 self.rebuild_index(&mut txn);
-                debug!("Commiting rebuilt index.");
+                debug!("Committing rebuilt index.");
                 txn.commit();
                 info!("Finished rebuilding history index.")
             }
