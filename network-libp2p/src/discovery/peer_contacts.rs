@@ -185,6 +185,7 @@ impl SignedPeerContact {
 /// Meta information attached to peer contact info objects. This is meant to be mutable and change over time.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct PeerContactMeta {
+    outer_protocol_address: Option<Multiaddr>,
     score: f64,
 }
 
@@ -209,7 +210,10 @@ impl From<SignedPeerContact> for PeerContactInfo {
         Self {
             peer_id,
             contact,
-            meta: RwLock::new(PeerContactMeta { score: 0. }),
+            meta: RwLock::new(PeerContactMeta {
+                score: 0.,
+                outer_protocol_address: None,
+            }),
         }
     }
 }
@@ -272,6 +276,22 @@ impl PeerContactInfo {
     /// Sets the peer score
     pub fn set_score(&self, score: f64) {
         self.meta.write().score = score;
+    }
+
+    /// Gets the outer protocol address of the peer. For example `/ip4/x.x.x.x` or `/dns4/foo.bar`
+    pub fn get_outer_protocol_address(&self) -> Option<Multiaddr> {
+        self.meta.read().outer_protocol_address.clone()
+    }
+
+    /// Sets the outer protocol address of the peer once
+    pub fn set_outer_protocol_address(&self, addr: Multiaddr) {
+        self.meta
+            .write()
+            .outer_protocol_address
+            .get_or_insert_with(|| {
+                trace!(peer_id = %self.peer_id, %addr, "Set outer protocol address for peer");
+                addr
+            });
     }
 }
 
