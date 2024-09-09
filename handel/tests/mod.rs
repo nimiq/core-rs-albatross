@@ -240,7 +240,7 @@ impl<N: NetworkInterface<PeerId = MockPeerId>> Network for NetworkWrapper<N> {
 #[test(tokio::test)]
 async fn handel_aggregation() {
     let config = Config {
-        update_interval: Duration::from_millis(500),
+        update_interval: Duration::from_millis(100),
         level_timeout: Duration::from_millis(500),
         peer_count: 1,
     };
@@ -249,7 +249,7 @@ async fn handel_aggregation() {
 
     let mut hub = MockHub::default();
 
-    let num_contributors: usize = 12;
+    let num_contributors: usize = 20;
     log::info!(num_contributors, "Running with");
 
     // The final value needs to be the sum of all contributions.
@@ -324,7 +324,7 @@ async fn handel_aggregation() {
     // Check that all aggregations completed.
     let mut num_finished = 0usize;
     loop {
-        let _ = timeout(Duration::from_secs(5), receiver.recv())
+        let _ = timeout(Duration::from_secs(2), receiver.recv())
             .await
             .expect("An aggregation took too long to return");
         num_finished += 1;

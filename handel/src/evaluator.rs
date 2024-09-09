@@ -269,24 +269,10 @@ where
         }
 
         // Check that all contributors to the aggregate contribution are allowed on this level.
-        // Contributors can come from lower levels, so we need to check on all levels up to the
-        // given one.
-        // FIXME
-        'outer: for contributor in msg.aggregate.contributors().iter() {
-            for lvl in 0..=level {
-                // If the level is empty, check the next level.
-                let Ok(range) = self.partitioner.range(lvl) else {
-                    continue;
-                };
-
-                // If we found the contributor on this level, check the next contributor.
-                if range.contains(&contributor) {
-                    continue 'outer;
-                }
+        for contributor in msg.aggregate.contributors().iter() {
+            if !range.contains(&contributor) {
+                return false;
             }
-
-            // We didn't find the contributor on any level, thus the aggregate is invalid.
-            return false;
         }
 
         true

@@ -192,58 +192,54 @@ where
         }
 
         // Check if the level is complete.
+        // Levels with 0 peers are always considered complete.
         let num_peers = level.num_peers();
-        let level_complete = if num_peers == 0 {
-            // If there are no peers on this level, it is always complete.
-            trace!("Level {} is empty and thus complete", level_id);
-            true
-        } else {
+        if num_peers > 0 {
             // Get the number of contributors that we have stored for this level.
-            let best = store
-                .best(level_id)
-                .unwrap_or_else(|| panic!("Expected a best signature for level {}", level_id));
+            let Some(best) = store.best(level_id) else {
+                return;
+            };
             let num_contributors = self.num_contributors(best);
 
-            // The level is complete if the number of contributors equals the number of peers.
-            num_contributors == num_peers
-        };
-
-        if level_complete {
-            trace!(
-                id = ?self.protocol.identify(),
-                level_id,
-                num_peers,
-                "Level complete",
-            );
-
-            // Mark the level as complete.
-            self.levels[level_id].state.write().complete = true;
-
-            // If there is a level above the completed one, it needs to be activated.
-            if level_id + 1 < self.levels.len() {
-                self.start_level(level_id + 1, store, "LevelComplete");
+            // If we don't have enough contributors, the level is not complete yet.
+            if num_contributors < num_peers {
+                return;
             }
         }
 
-        // In order to send updated messages iterate all levels higher than the given level.
-        // TODO Why do we need this?
-        // let num_levels = self.levels.len();
-        // for i in level_id + 1..num_levels {
-        //     let combined = store.combined(i - 1);
-        //
-        //     // if there is an aggregate contribution for given level i send it out to the peers of that level.
-        //     if let Some(multisig) = combined {
-        //         let level = &self.levels[i];
-        //         if level.update_signature(&multisig.clone()) {
-        //             self.send_update(
-        //                 multisig,
-        //                 level.id,
-        //                 !level.is_complete(),
-        //                 level.select_next_peers(self.config.peer_count),
-        //             );
-        //         }
-        //     }
-        // }
+        trace!(
+            id = ?self.protocol.identify(),
+            level_id,
+            num_peers,
+            "Level complete",
+        );
+
+        // Mark the level as complete.
+        self.levels[level_id].state.write().complete = true;
+
+        // If this level is the last one, we're done.
+        if level_id == self.levels.len() - 1 {
+            return;
+        }
+
+        // If the next level has not been started yet, start it (which also immediately sends an
+        // update), otherwise send the improved contribution.
+        let next_level_id = level_id + 1;
+        let next_level = &self.levels[next_level_id];
+
+        if !next_level.is_started() {
+            self.start_level(next_level_id, store, "LevelComplete");
+        } else if let Some(best_aggregate) = store.combined(next_level_id - 1) {
+            self.send_update(
+                best_aggregate,
+                next_level_id,
+                true,
+                next_level.select_next_peers(self.config.peer_count),
+            );
+        }
+
+        // Recursively check if the next level was completed as well.
+        self.check_completed_level(next_level_id, store);
     }
 
     /// Send updated `contribution` for `level` to `count` peers
