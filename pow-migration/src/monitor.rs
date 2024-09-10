@@ -1,5 +1,3 @@
-pub mod types;
-
 use std::ops::Range;
 
 use log::{error, info};
@@ -11,11 +9,27 @@ use nimiq_rpc::{
     Client,
 };
 use percentage::Percentage;
+use thiserror::Error;
 
-use crate::{
-    monitor::types::{Error, ValidatorsReadiness},
-    state::types::GenesisValidator,
-};
+use crate::types::GenesisValidator;
+
+/// Readiness state of all of the validators registered in the PoW chain
+pub enum ValidatorsReadiness {
+    /// Validators are not ready.
+    /// Encodes the stake that is ready in the inner type.
+    NotReady(Coin),
+    /// Validators are ready.
+    /// Encodes the stake that is ready in the inner type.
+    Ready(Coin),
+}
+
+/// Error types that can be returned by the monitor
+#[derive(Error, Debug)]
+pub enum Error {
+    /// RPC error
+    #[error("RPC error: {0}")]
+    Rpc(#[from] nimiq_rpc::jsonrpsee::core::ClientError),
+}
 
 /// Stake percentage that is considered to indicate that the validators are ready
 pub const READY_PERCENTAGE: u8 = 80;

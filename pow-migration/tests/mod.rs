@@ -7,7 +7,10 @@ mod pow_migration_test {
     use nimiq_database::mdbx::MdbxDatabase;
     use nimiq_genesis_builder::config::GenesisConfig;
     use nimiq_keys::Address;
-    use nimiq_pow_migration::{migrate, BlockWindows, Error};
+    use nimiq_pow_migration::{
+        migrate,
+        types::{BlockWindows, Error},
+    };
     use nimiq_primitives::networks::NetworkId;
     use nimiq_rpc::Client;
     use nimiq_test_log::test;

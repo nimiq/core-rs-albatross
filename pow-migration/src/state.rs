@@ -1,5 +1,3 @@
-pub mod types;
-
 use std::{
     collections::{hash_map::Entry, HashMap},
     ops::Range,
@@ -23,7 +21,7 @@ use nimiq_rpc::{
 use nimiq_serde::Deserialize;
 use nimiq_transaction::account::htlc_contract::{AnyHash, AnyHash32, AnyHash64};
 
-use crate::state::types::{Error, GenesisAccounts, GenesisValidator};
+use crate::types::{GenesisAccounts, GenesisValidator, StateError};
 
 /// PoW target block time in seconds
 pub(crate) const POW_BLOCK_TIME: u64 = 60; // 1 min
@@ -35,7 +33,9 @@ pub(crate) const POW_BLOCK_TIME_MS: u64 = POW_BLOCK_TIME * 1000; // 1 min
 // such that we can get accounts snapshots of blocks within [head - `POW_MAX_SNAPSHOTS`, head].
 const POW_MAX_SNAPSHOTS: u64 = 2000;
 
-fn pos_basic_account_from_account(pow_account: &PoWBasicAccount) -> Result<GenesisAccount, Error> {
+fn pos_basic_account_from_account(
+    pow_account: &PoWBasicAccount,
+) -> Result<GenesisAccount, StateError> {
     let address = Address::from_user_friendly_address(&pow_account.address)?;
     let balance = Coin::try_from(pow_account.balance)?;
     Ok(GenesisAccount { address, balance })
@@ -44,7 +44,7 @@ fn pos_basic_account_from_account(pow_account: &PoWBasicAccount) -> Result<Genes
 fn pos_vesting_account_from_account(
     pow_account: &PoWVestingAccount,
     cutting_block: &Block,
-) -> Result<GenesisVestingContract, Error> {
+) -> Result<GenesisVestingContract, StateError> {
     let owner = Address::from_user_friendly_address(&pow_account.owner_address)?;
     let address = Address::from_user_friendly_address(&pow_account.address)?;
     let balance = Coin::try_from(pow_account.balance)?;
@@ -72,7 +72,7 @@ fn pos_vesting_account_from_account(
 fn pos_htlc_account_from_account(
     pow_account: &PoWHTLCAccount,
     cutting_block: &Block,
-) -> Result<GenesisHTLC, Error> {
+) -> Result<GenesisHTLC, StateError> {
     let address = Address::from_user_friendly_address(&pow_account.address)?;
     let recipient = Address::from_user_friendly_address(&pow_account.recipient_address)?;
     let sender = Address::from_user_friendly_address(&pow_account.sender_address)?;
@@ -99,17 +99,17 @@ fn pos_htlc_account_from_account(
     })
 }
 
-fn pos_anyhash_from_hash_root(hash_root: &str, algorithm: u8) -> Result<AnyHash, Error> {
+fn pos_anyhash_from_hash_root(hash_root: &str, algorithm: u8) -> Result<AnyHash, StateError> {
     match algorithm {
         1u8 => Ok(AnyHash::Blake2b(AnyHash32::from_str(hash_root)?)),
         3u8 => Ok(AnyHash::Sha256(AnyHash32::from_str(hash_root)?)),
         4u8 => Ok(AnyHash::Sha512(AnyHash64::from_str(hash_root)?)),
-        _ => Err(Error::InvalidValue),
+        _ => Err(StateError::InvalidValue),
     }
 }
 
 /// Sets up the POW RPC server for migrating accounts
-pub async fn setup_pow_rpc_server(client: &Client) -> Result<(), Error> {
+pub async fn setup_pow_rpc_server(client: &Client) -> Result<(), StateError> {
     let _ = client
         .set_constant("Policy.NUM_SNAPSHOTS_MAX", POW_MAX_SNAPSHOTS)
         .await
@@ -125,7 +125,7 @@ pub async fn get_accounts(
     client: &Client,
     cutting_block: &Block,
     burnt_registration_balance: Coin,
-) -> Result<GenesisAccounts, Error> {
+) -> Result<GenesisAccounts, StateError> {
     let mut genesis_accounts = GenesisAccounts {
         vesting_accounts: vec![],
         basic_accounts: vec![],
@@ -138,7 +138,7 @@ pub async fn get_accounts(
         log::error!(
             "RPC client is not set up for accounts migration. Call `setup_pow_rpc_server` first"
         );
-        return Err(Error::RPCServerNotReady);
+        return Err(StateError::RPCServerNotReady);
     }
 
     loop {
@@ -184,7 +184,7 @@ pub async fn get_accounts(
 pub async fn get_validators(
     client: &Client,
     block_window: Range<u32>,
-) -> Result<Vec<GenesisValidator>, Error> {
+) -> Result<Vec<GenesisValidator>, StateError> {
     let mut txns_by_sender = HashMap::<String, Vec<TransactionDetails>>::new();
     let mut transactions = client
         .get_transactions_by_address(&Address::burn_address().to_string(), u16::MAX)
@@ -325,7 +325,7 @@ pub async fn get_stakers(
     client: &Client,
     registered_validators: &[GenesisValidator],
     block_window: Range<u32>,
-) -> Result<(Vec<GenesisStaker>, Vec<GenesisValidator>), Error> {
+) -> Result<(Vec<GenesisStaker>, Vec<GenesisValidator>), StateError> {
     let mut txns_by_sender = HashMap::<String, Vec<TransactionDetails>>::new();
     let mut transactions = client
         .get_transactions_by_address(&Address::burn_address().to_string(), u16::MAX)

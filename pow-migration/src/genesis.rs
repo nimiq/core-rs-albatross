@@ -1,5 +1,3 @@
-pub mod types;
-
 use std::{fs, path::PathBuf, str::FromStr, time::Instant};
 
 use nimiq_database::mdbx::MdbxDatabase;
@@ -14,38 +12,38 @@ use time::OffsetDateTime;
 
 use crate::{
     exit_with_error,
-    genesis::types::{Error, PoSRegisteredAgents, PoWRegistrationWindow},
     history::get_history_root,
     state::{get_accounts, get_stakers, get_validators, POW_BLOCK_TIME},
+    types::{BlockWindows, GenesisError, PoSRegisteredAgents},
 };
 
 /// Gets the genesis config file
 pub async fn get_pos_genesis(
     client: &Client,
-    pow_reg_window: &PoWRegistrationWindow,
+    pow_reg_window: &BlockWindows,
     network_id: NetworkId,
     env: MdbxDatabase,
     pos_registered_agents: Option<PoSRegisteredAgents>,
-) -> Result<GenesisConfig, Error> {
+) -> Result<GenesisConfig, GenesisError> {
     match network_id {
         NetworkId::TestAlbatross => {}
         NetworkId::MainAlbatross => {}
         _ => {
             log::error!(%network_id, "Unsupported network ID as a target for the migration process");
-            return Err(Error::InvalidNetworkId(network_id));
+            return Err(GenesisError::InvalidNetworkId(network_id));
         }
     }
 
     // Get block according to arguments and check if it exists
     let final_block = client
-        .get_block_by_hash(&pow_reg_window.final_block, false)
+        .get_block_by_number(pow_reg_window.election_candidate, false)
         .await
         .map_err(|_| {
             log::error!(
-                hash = pow_reg_window.final_block,
+                block_number = pow_reg_window.election_candidate,
                 "Could not find provided block"
             );
-            Error::UnknownBlock
+            GenesisError::UnknownBlock
         })?;
     let pow_genesis = client.get_block_by_number(1, false).await?;
 
@@ -69,7 +67,7 @@ pub async fn get_pos_genesis(
 
     // The PoS genesis timestamp is the cutting block timestamp plus a custom delay
     let pos_genesis_ts_unix =
-        pow_reg_window.confirmations as u64 * POW_BLOCK_TIME + final_block.timestamp as u64;
+        pow_reg_window.block_confirmations as u64 * POW_BLOCK_TIME + final_block.timestamp as u64;
     // The parent election hash of the PoS genesis is the hash of the PoW genesis block
     let parent_election_hash = Blake2bHash::from_str(&pow_genesis.hash)?;
     // The parent hash of the PoS genesis is the hash of cutting block
@@ -90,7 +88,7 @@ pub async fn get_pos_genesis(
             log::info!("Getting registered validators in the PoW chain");
             let genesis_validators = get_validators(
                 client,
-                pow_reg_window.validator_start..pow_reg_window.pre_stake_start,
+                pow_reg_window.registration_start..pow_reg_window.registration_end,
             )
             .await?;
 
@@ -133,6 +131,9 @@ pub async fn get_pos_genesis(
 }
 
 /// Write the genesis config file to a TOML file
-pub fn write_pos_genesis(file_path: &PathBuf, genesis_config: GenesisConfig) -> Result<(), Error> {
+pub fn write_pos_genesis(
+    file_path: &PathBuf,
+    genesis_config: GenesisConfig,
+) -> Result<(), GenesisError> {
     Ok(fs::write(file_path, toml::to_string(&genesis_config)?)?)
 }

@@ -2,6 +2,7 @@ pub mod genesis;
 pub mod history;
 pub mod monitor;
 pub mod state;
+pub mod types;
 
 use std::{
     fmt::Debug,
@@ -17,19 +18,15 @@ use nimiq_keys::Address;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_rpc::Client;
 use nimiq_serde::Serialize;
-use thiserror::Error;
 use tokio::time::sleep;
 
 use crate::{
-    genesis::{
-        get_pos_genesis,
-        types::{PoSRegisteredAgents, PoWRegistrationWindow},
-    },
+    genesis::get_pos_genesis,
     monitor::{
-        check_validators_ready, generate_ready_tx, get_ready_txns, send_tx,
-        types::ValidatorsReadiness,
+        check_validators_ready, generate_ready_tx, get_ready_txns, send_tx, ValidatorsReadiness,
     },
     state::{get_stakers, get_validators, setup_pow_rpc_server},
+    types::{BlockWindows, Error, PoSRegisteredAgents},
 };
 
 static TESTNET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
@@ -70,82 +67,6 @@ static MAINET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     // This corresponds to ~24 hours.
     readiness_window: 1440,
 };
-
-/// PoW block registration window
-///
-/// The registration window is a set of blocks in the PoW chain that marks
-/// the start and end of different windows as follows:
-///
-/// ```text
-///
-///     1              2     3              4     5     6         7          8
-/// --- | ------------ | --- | ------------ | --- | --- | ------- | -------- | ---
-///
-/// ```
-///
-/// 1. Validator registration window start block.
-/// 2. Validator registration window end block.
-/// 3. Pre-stake registration window start.
-/// 4. Pre-stake registration window end block.
-/// 5. The transition candidate block in the PoW chain that will be taken as genesis
-///    block for the PoS chain.
-/// 6. This is a block whose block number is a number of confirmations away from
-///    the final block described in 5 and marks the beginning of the activation window.
-/// 7. Marks the end of an activation window. If not enough validators signaled readiness
-///    within blocks 6 and 7, then another window is used (between blocks 7 and 8) and 7
-///    becomes now the new transition candidate block. This process would repeat until
-///    reaching enough validators signaling readiness.
-#[derive(Debug)]
-pub struct BlockWindows {
-    /// Block number of the validator registration window start.
-    pub registration_start: u32,
-    /// Block number of the validator registration window wnd.
-    pub registration_end: u32,
-    /// Block number of the pre stake registration window start.
-    pub pre_stake_start: u32,
-    /// Block number of the pre stake registration window end.
-    pub pre_stake_end: u32,
-
-    /// The first block from the PoW that is used to create the first PoS candidate block.
-    pub election_candidate: u32,
-
-    /// Number of confirmations after any block is considered final in the PoW chain.
-    pub block_confirmations: u32,
-
-    /// If not enough validators are ready to start the PoS chain at the election candidate,
-    /// a new candidate is elected after readiness_window blocks.
-    /// This process is repeated until we start the PoS chain.
-    pub readiness_window: u32,
-}
-
-/// Error types that can be returned
-#[derive(Error, Debug)]
-pub enum Error {
-    /// Invalid Network ID
-    #[error("Invalid Network ID")]
-    InvalidNetworkID(NetworkId),
-    /// PoS client unexpectedly exited
-    #[error("PoS client unexpectedly exited with status: {0}")]
-    PoSUnexpectedExit(ExitStatus),
-    /// I/O error
-    #[error("I/O error: {0}")]
-    IO(#[from] std::io::Error),
-    /// Genesis building error
-    #[error("Error building genesis: {0}")]
-    Genesis(#[from] genesis::types::Error),
-    /// State migration error
-    #[error("State migration error: {0}")]
-    State(#[from] state::types::Error),
-    /// Migration monitor error
-    #[error("Migration monitor error: {0}")]
-    Monitor(#[from] monitor::types::Error),
-    /// History migration error
-    #[error("History migration error: {0}")]
-    History(#[from] history::Error),
-    /// Validator key hasn't been imported
-    #[error("Validator key hasn't been imported: {0}")]
-    ValidatorKey(Address),
-}
 
 /// Get the block windows according to the specified network ID.
 pub fn get_block_windows(network_id: NetworkId) -> Result<&'static BlockWindows, Error> {
@@ -299,17 +220,9 @@ pub async fn migrate(
     );
 
     // Start the genesis generation process
-    let pow_registration_window = PoWRegistrationWindow {
-        pre_stake_start: block_windows.pre_stake_start,
-        pre_stake_end: block_windows.pre_stake_end,
-        validator_start: block_windows.registration_start,
-        final_block: block.hash,
-        confirmations: block_windows.block_confirmations,
-    };
-
     genesis_config = get_pos_genesis(
         pow_client,
-        &pow_registration_window,
+        block_windows,
         network_id,
         env.clone(),
         Some(PoSRegisteredAgents {

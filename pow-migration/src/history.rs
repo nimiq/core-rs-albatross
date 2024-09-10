@@ -6,12 +6,8 @@ use nimiq_database::{
     traits::{Database, WriteTransaction},
 };
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::{Address, AddressParseError};
-use nimiq_primitives::{
-    account::AccountType,
-    coin::{Coin, CoinConvertError},
-    networks::NetworkId,
-};
+use nimiq_keys::Address;
+use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
 use nimiq_rpc::{
     primitives::{
         TransactionDetails2 as PoWTransaction, TransactionSequence as PoWTransactionSequence,
@@ -21,56 +17,31 @@ use nimiq_rpc::{
 use nimiq_transaction::{
     historic_transaction::HistoricTransaction, ExecutedTransaction, Transaction, TransactionFlags,
 };
-use thiserror::Error;
 use tokio::{
     sync::{mpsc, watch},
     time::sleep,
 };
 
-/// Error types that can be returned
-#[derive(Error, Debug)]
-pub enum Error {
-    /// RPC error
-    #[error("RPC error: {0}")]
-    Rpc(#[from] nimiq_rpc::jsonrpsee::core::ClientError),
-    /// Unknown PoW block
-    #[error("Unknown PoW block")]
-    UnknownBlock,
-    /// Address parsing error
-    #[error("Failed to parse Nimiq address")]
-    Address(#[from] AddressParseError),
-    /// Coin conversion error
-    #[error("Failed to convert to coin")]
-    Coin(#[from] CoinConvertError),
-    /// Hex decoding error
-    #[error("Failed to decode HEX string")]
-    Hex(#[from] hex::FromHexError),
-    /// Invalid value
-    #[error("Invalid value")]
-    InvalidValue,
-    /// Error calculating history root
-    #[error("History root error")]
-    HistoryRootError,
-}
+use crate::types::HistoryError;
 
-fn from_pow_network_id(pow_network_id: u8) -> Result<NetworkId, Error> {
+fn from_pow_network_id(pow_network_id: u8) -> Result<NetworkId, HistoryError> {
     match pow_network_id {
         1u8 => Ok(NetworkId::Test),
         42u8 => Ok(NetworkId::Main),
-        _ => Err(Error::InvalidValue),
+        _ => Err(HistoryError::InvalidValue),
     }
 }
 
-fn get_account_type(pow_account_type: &u8) -> Result<AccountType, Error> {
+fn get_account_type(pow_account_type: &u8) -> Result<AccountType, HistoryError> {
     match pow_account_type {
         0u8 => Ok(AccountType::Basic),
         1u8 => Ok(AccountType::Vesting),
         2u8 => Ok(AccountType::HTLC),
-        _ => Err(Error::InvalidValue),
+        _ => Err(HistoryError::InvalidValue),
     }
 }
 
-fn from_pow_transaction(pow_transaction: &PoWTransaction) -> Result<Transaction, Error> {
+fn from_pow_transaction(pow_transaction: &PoWTransaction) -> Result<Transaction, HistoryError> {
     let sender = Address::from_user_friendly_address(&pow_transaction.from_address)?;
     let sender_type = get_account_type(&pow_transaction.from_type)?;
     let recipient = Address::from_user_friendly_address(&pow_transaction.to_address)?;
@@ -100,8 +71,8 @@ fn from_pow_transaction(pow_transaction: &PoWTransaction) -> Result<Transaction,
     if let Some(proof) = &pow_transaction.proof {
         tx.proof = hex::decode(proof)?;
     }
-    tx.flags =
-        TransactionFlags::try_from(pow_transaction.flags).map_err(|_| Error::InvalidValue)?;
+    tx.flags = TransactionFlags::try_from(pow_transaction.flags)
+        .map_err(|_| HistoryError::InvalidValue)?;
     Ok(tx)
 }
 
@@ -227,10 +198,10 @@ pub async fn migrate_history(
 pub async fn get_history_root(
     env: MdbxDatabase,
     network_id: NetworkId,
-) -> Result<Blake2bHash, Error> {
+) -> Result<Blake2bHash, HistoryError> {
     HistoryStore::new(env.clone(), network_id)
         .get_history_tree_root(0, None)
-        .ok_or(Error::HistoryRootError)
+        .ok_or(HistoryError::HistoryRootError)
 }
 
 /// Get the current block height of the PoS history store
