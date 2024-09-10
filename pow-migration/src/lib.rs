@@ -78,38 +78,38 @@ static MAINET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
 ///
 /// ```text
 ///
-///     1              2              3              4              5        6
-/// --- | ------------ | ------------ | ------------ | ------------ |------- |
+///     1              2     3              4     5     6         7          8
+/// --- | ------------ | --- | ------------ | --- | --- | ------- | -------- | ---
 ///
 /// ```
 ///
 /// 1. Validator registration window start block.
 /// 2. Validator registration window end block.
 /// 3. Pre-stake registration window start.
-/// 4. Pre-stake registration window end block. This block is also the activation
-///    window start.
-/// 5. The final block in the PoW chain that will be taken as genesis block for the
-///    PoS chain.
+/// 4. Pre-stake registration window end block.
+/// 5. The transition candidate block in the PoW chain that will be taken as genesis
+///    block for the PoS chain.
 /// 6. This is a block whose block number is a number of confirmations away from
-///    the final block described in 4.
-///
+///    the final block described in 5 and marks the beginning of the activation window.
+/// 7. Marks the end of an activation window. If not enough validators signaled readiness
+///    within blocks 6 and 7, then another window is used (between blocks 7 and 8) and 7
+///    becomes now the new transition candidate block. This process would repeat until
+///    reaching enough validators signaling readiness.
 #[derive(Debug)]
 pub struct BlockWindows {
     /// Block number of the validator registration window start.
     pub registration_start: u32,
     /// Block number of the validator registration window wnd.
     pub registration_end: u32,
-    /// Block number of the validator registration window end which is also
-    /// the pre stake registration window start.
+    /// Block number of the pre stake registration window start.
     pub pre_stake_start: u32,
     /// Block number of the pre stake registration window end.
     pub pre_stake_end: u32,
 
-    /// The final block from the PoW that is used to create the first PoS election block.
+    /// The first block from the PoW that is used to create the first PoS candidate block.
     pub election_candidate: u32,
 
-    /// Number of confirmations after the final block needed for the PoS chain to
-    /// start.
+    /// Number of confirmations after any block is considered final in the PoW chain.
     pub block_confirmations: u32,
 
     /// If not enough validators are ready to start the PoS chain at the election candidate,
@@ -249,8 +249,8 @@ pub async fn migrate(
 
     let mut reported_ready = false;
     let mut genesis_config;
-    let genesis_config_hash;
 
+    // Wait for enough confirmations for the candidate block
     loop {
         let current_height = pow_client.block_number().await.unwrap();
 
@@ -274,70 +274,67 @@ pub async fn migrate(
             return Ok(None);
         }
 
-        log::info!("Waiting for more confirmations...");
-
-        // We are past the election candidate, so we are now in one of the activation windows
+        // We are past the candidate block, so we are now in one of the activation windows
         if current_height > candidate_block + block_windows.block_confirmations {
-            // Start the PoS genesis generation process
-
-            // Obtain the genesis candidate block
-            let block = pow_client
-                .get_block_by_number(candidate_block, false)
-                .await
-                .unwrap();
-
-            let current_hash = block.hash.clone();
-            log::info!(
-                candidate_block = candidate_block,
-                current_hash = current_hash,
-                "We are ready to start the genesis generation process"
-            );
-
-            // Start the genesis generation process
-            let pow_registration_window = PoWRegistrationWindow {
-                pre_stake_start: block_windows.pre_stake_start,
-                pre_stake_end: block_windows.pre_stake_end,
-                validator_start: block_windows.registration_start,
-                final_block: block.hash,
-                confirmations: block_windows.block_confirmations,
-            };
-
-            genesis_config = get_pos_genesis(
-                pow_client,
-                &pow_registration_window,
-                network_id,
-                env.clone(),
-                Some(PoSRegisteredAgents {
-                    validators: validators.clone(),
-                    stakers: stakers.clone(),
-                }),
-            )
-            .await?;
-
-            // Sort vectors for a consistent hash digest
-            genesis_config.validators.sort();
-            genesis_config.stakers.sort();
-            genesis_config.basic_accounts.sort();
-            genesis_config.vesting_accounts.sort();
-            genesis_config.htlc_accounts.sort();
-
-            let mut hasher = Blake2bHasher::new();
-            genesis_config
-                .serialize_to_writer(&mut hasher)
-                .unwrap_or_else(|error| {
-                    exit_with_error(error, "Failed to serialize genesis config")
-                });
-            genesis_config_hash = hasher.finish();
-            log::info!(
-                genesis_config_hash = %genesis_config_hash,
-                "PoS Genesis generation is completed"
-            );
-
             break;
         }
 
+        log::info!(current_height, "Waiting for more confirmations...");
         sleep(Duration::from_secs(60)).await;
     }
+
+    // We have enough confirmations for the candidate block, start the PoS genesis generation process
+
+    // Obtain the genesis candidate block
+    let block = pow_client
+        .get_block_by_number(candidate_block, false)
+        .await
+        .unwrap();
+
+    let current_hash = block.hash.clone();
+    log::info!(
+        candidate_block = candidate_block,
+        current_hash = current_hash,
+        "We are ready to start the genesis generation process"
+    );
+
+    // Start the genesis generation process
+    let pow_registration_window = PoWRegistrationWindow {
+        pre_stake_start: block_windows.pre_stake_start,
+        pre_stake_end: block_windows.pre_stake_end,
+        validator_start: block_windows.registration_start,
+        final_block: block.hash,
+        confirmations: block_windows.block_confirmations,
+    };
+
+    genesis_config = get_pos_genesis(
+        pow_client,
+        &pow_registration_window,
+        network_id,
+        env.clone(),
+        Some(PoSRegisteredAgents {
+            validators: validators.clone(),
+            stakers: stakers.clone(),
+        }),
+    )
+    .await?;
+
+    // Sort vectors for a consistent hash digest
+    genesis_config.validators.sort();
+    genesis_config.stakers.sort();
+    genesis_config.basic_accounts.sort();
+    genesis_config.vesting_accounts.sort();
+    genesis_config.htlc_accounts.sort();
+
+    let mut hasher = Blake2bHasher::new();
+    genesis_config
+        .serialize_to_writer(&mut hasher)
+        .unwrap_or_else(|error| exit_with_error(error, "Failed to serialize genesis config"));
+    let genesis_config_hash = hasher.finish();
+    log::info!(
+        genesis_config_hash = %genesis_config_hash,
+        "PoS Genesis generation is completed"
+    );
 
     loop {
         let current_height = pow_client.block_number().await.unwrap();
@@ -359,7 +356,7 @@ pub async fn migrate(
         if !reported_ready && registered_validator {
             let validator_address = validator_address
                 .as_ref()
-                .expect("Validator needs to be some to be reported as `registered_validator`");
+                .expect("Validator needs to be reported as `registered_validator`");
 
             // Obtain all the transactions that we have sent previously.
             let transactions = get_ready_txns(
@@ -382,14 +379,11 @@ pub async fn migrate(
                     &genesis_config_hash,
                 );
 
-                match send_tx(pow_client, transaction).await {
-                    Ok(_) => reported_ready = true,
-                    Err(error) => return Err(error.into()),
-                }
+                send_tx(pow_client, transaction).await?;
             } else {
                 log::info!("We found a ready transaction from our validator in the current window");
-                reported_ready = true;
             }
+            reported_ready = true;
         }
 
         // Check if we have enough validators ready at this point

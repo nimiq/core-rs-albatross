@@ -21,11 +21,11 @@ use crate::{
 pub const READY_PERCENTAGE: u8 = 80;
 
 /// Sends a transaction to the Nimiq PoW chain to report that we are ready
-/// The transaction format is defined as follow:
-///   Sender: Validator address
-///   Recipient: Burn address
-///   Value: 1 Luna
-///   Data: Hash of the generated `GenesisConfig`
+/// The transaction format is defined as follows:
+/// - Sender: Validator address
+/// - Recipient: Burn address
+/// - Value: 1 Luna
+/// - Data: Hash of the generated `GenesisConfig`
 ///
 pub fn generate_ready_tx(validator: String, hash: &Blake2bHash) -> OutgoingTransaction {
     info!(

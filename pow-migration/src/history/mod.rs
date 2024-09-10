@@ -106,6 +106,9 @@ fn from_pow_transaction(pow_transaction: &PoWTransaction) -> Result<Transaction,
 }
 
 /// Task that is responsible for migrating the PoW history into a PoS history up until an instructed block height.
+/// It migrates the history up to the `candidate_block` received in `rx_candidate_block` if the head of the PoW chain
+/// is greater than `candidate_block + block_confirmations` and if not waits for this to happen.
+/// Note that this waiting process is done per block such that the migration can be triggered per confirmed block.
 pub async fn migrate_history(
     mut rx_candidate_block: mpsc::Receiver<u32>,
     tx_migration_completed: watch::Sender<u32>,
@@ -126,6 +129,7 @@ pub async fn migrate_history(
         }
 
         log::info!(
+            history_store_height,
             candidate_block,
             "Start migrating PoW history up to the next candidate block"
         );

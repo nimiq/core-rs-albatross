@@ -39,6 +39,7 @@ struct Args {
     /// Optional PoW RPC server password
     #[arg(short, long)]
     password: Option<String>,
+    /// Optional additional subcommands
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -71,12 +72,14 @@ fn initialize_logging() {
 
 #[tokio::main]
 async fn main() {
-    //    1 - Use the monitor library to send ready txn and determine if enough validators are ready
-    //    2 - Once enough validators are ready we select the next genesis candidate and wait until that block is mined
-    //    3 - When the genesis candidate is mined we start the genesis generation process
-    //    4 - Monitor the PoW chain to detect if the genesis candidate is forked
-    //    5 - After X confirmations, start the 2.0 client with the generated genesis block
-    //    6 - If a fork is detected, go back to step 3 and repeat
+    // 1. Migrate the PoW history up until the first candidate block (or up until
+    //    the PoW head minus the required confirmations).
+    // 2. Wait for the pre-stake window to close (by waiting the confirmations).
+    // 3. Select the next genesis candidate and wait until that block is mined to
+    //    generate the corresponding PoS genesis.
+    // 4. Wait for enough validators to signal readiness for the genesis candidate
+    // 5. If enough validators signal readiness start the 2.0 client with the generated genesis block
+    // 6. If not enough validators signal readiness after the activation window span, go to 2.
 
     initialize_logging();
 
@@ -279,11 +282,17 @@ async fn main() {
 
         // Continue the migration process once the pre-stake window is closed and confirmed
         loop {
-            if pow_client.block_number().await.unwrap()
-                > block_windows.pre_stake_end + block_windows.block_confirmations
-            {
+            let pow_block_number = pow_client.block_number().await.unwrap();
+            let expected_block_number =
+                block_windows.pre_stake_end + block_windows.block_confirmations;
+            if pow_block_number > expected_block_number {
                 break;
             }
+            log::info!(
+                pow_block_number,
+                waiting_for = expected_block_number,
+                "Waiting for the pre-stake window to close"
+            );
             sleep(Duration::from_secs(60)).await;
         }
 
@@ -305,7 +314,7 @@ async fn main() {
             }
 
             // Do the migration
-            match migrate(
+            let obtained_genesis_config = migrate(
                 &pow_client,
                 block_windows,
                 candidate_block,
@@ -314,35 +323,31 @@ async fn main() {
                 config.network_id,
             )
             .await
-            {
-                Ok(obtained_genesis_config) => match obtained_genesis_config {
-                    Some(genesis_cfg) => {
-                        // We obtained the genesis configuration so we are done
-                        genesis_config = genesis_cfg;
-                        break;
-                    }
-                    None => {
-                        candidate_block += block_windows.readiness_window;
-                        // Instruct to migrate the PoW history up until the next candidate block
-                        tx_candidate_block
-                            .send(candidate_block)
-                            .await
-                            .unwrap_or_else(|error| {
-                                exit_with_error(
-                                    error,
-                                    "Failed instructing to migrate to the next candidate block",
-                                )
-                            });
-                        log::info!(
-                            new_candidate = candidate_block,
-                            "Moving to the next activation window",
-                        );
-                    }
-                },
-                Err(error) => {
-                    exit_with_error(error, "Could not migrate");
-                }
+            .unwrap_or_else(|error| exit_with_error(error, "Could not migrate"));
+
+            if let Some(genesis_cfg) = obtained_genesis_config {
+                // We obtained the genesis configuration so we are done
+                genesis_config = genesis_cfg;
+                break;
             }
+
+            // We didn't obtain the genesis configuration: select the new candidate block
+            candidate_block += block_windows.readiness_window;
+
+            // Instruct to migrate the PoW history up until the this next candidate block
+            tx_candidate_block
+                .send(candidate_block)
+                .await
+                .unwrap_or_else(|error| {
+                    exit_with_error(
+                        error,
+                        "Failed instructing to migrate to the next candidate block",
+                    )
+                });
+            log::info!(
+                new_candidate = candidate_block,
+                "Moving to the next activation window",
+            );
         }
 
         // Write the genesis into the FS
