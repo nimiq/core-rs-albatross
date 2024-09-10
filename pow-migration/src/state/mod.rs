@@ -113,9 +113,8 @@ pub async fn setup_pow_rpc_server(client: &Client) -> Result<(), Error> {
     let _ = client
         .set_constant("Policy.NUM_SNAPSHOTS_MAX", POW_MAX_SNAPSHOTS)
         .await
-        .map_err(|e| {
-            log::error!("Could not set `Policy.NUM_SNAPSHOTS_MAX` constant. Check your client or try updating it.");
-            e
+        .inspect_err(|e| {
+            log::error!(error=%e,"Could not set `Policy.NUM_SNAPSHOTS_MAX` constant. Check your client or try updating it.");
         })?;
     Ok(())
 }

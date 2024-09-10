@@ -57,14 +57,13 @@ pub async fn get_pos_genesis(
     let start = Instant::now();
     let history_root = get_history_root(env, network_id)
         .await
-        .map(|history_root| {
+        .inspect(|history_root| {
             let duration = start.elapsed();
             log::info!(
                 duration = humantime::format_duration(duration).to_string(),
                 history_root = history_root.to_hex(),
                 "Finished building history tree"
             );
-            history_root
         })
         .unwrap_or_else(|error| exit_with_error(error, "Failed to build history root"));
 

@@ -579,11 +579,10 @@ impl Blockchain {
             if is_complete {
                 txn.start_recording();
             }
-            total_tx_size = self.commit_accounts(block, diff, &mut txn, block_logger).map_err(|e| {
-                warn!(%block, reason = "commit failed", error = &e as &dyn Error, "Rejecting block");
+            total_tx_size = self.commit_accounts(block, diff, &mut txn, block_logger).inspect_err(|e| {
+                warn!(%block, reason = "commit failed", error = e as &dyn Error, "Rejecting block");
                 #[cfg(feature = "metrics")]
                 self.metrics.note_invalid_block();
-                e
             })?;
             if is_complete {
                 let recorded_diff = txn.stop_recording().into_forward_diff();

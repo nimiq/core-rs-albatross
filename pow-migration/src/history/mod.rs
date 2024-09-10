@@ -231,13 +231,9 @@ pub async fn get_history_root(
 
 /// Get the current block height of the PoS history store
 pub async fn get_history_store_height(env: MdbxDatabase, network_id: NetworkId) -> u32 {
-    if let Some(block_height) =
-        HistoryStore::new(env.clone(), network_id).get_last_leaf_block_number(None)
-    {
-        block_height
-    } else {
-        1
-    }
+    HistoryStore::new(env.clone(), network_id)
+        .get_last_leaf_block_number(None)
+        .unwrap_or(1)
 }
 
 #[cfg(test)]
