@@ -871,10 +871,14 @@ async fn multiple_start_stop() {
     let (txn_stream_tx, txn_stream_rx) = mpsc::channel(64);
 
     // Create mempool and subscribe with a custom txn stream.
-    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let mut hub = MockHub::new();
-    let mock_id = MockId::new(hub.new_address().into());
     let mock_network = Arc::new(hub.new_network());
+    let mempool = Mempool::new(
+        Arc::clone(&blockchain),
+        MempoolConfig::default(),
+        Arc::clone(&mock_network),
+    );
+    let mock_id = MockId::new(hub.new_address().into());
 
     // Subscribe mempool with the mpsc stream created
     mempool
@@ -891,7 +895,7 @@ async fn multiple_start_stop() {
     tokio::task::spawn(async move {
         for txn in txns {
             txn_stream_tx1
-                .send((txn.clone(), mock_id1.clone()))
+                .send((txn.clone(), PubsubIdOrPeerId::PubsubId(mock_id1.clone())))
                 .await
                 .unwrap();
         }
@@ -915,7 +919,7 @@ async fn multiple_start_stop() {
     tokio::task::spawn(async move {
         for txn in txns {
             txn_stream_tx
-                .send((txn.clone(), mock_id.clone()))
+                .send((txn.clone(), PubsubIdOrPeerId::PubsubId(mock_id.clone())))
                 .await
                 .expect_err("Send should fail, executor is stopped");
         }
@@ -940,10 +944,14 @@ async fn multiple_start_stop() {
     let (txn_stream_tx, txn_stream_rx) = mpsc::channel(64);
 
     // Create mempool and subscribe with a custom txn stream.
-    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let mut hub = MockHub::new();
-    let mock_id = MockId::new(hub.new_address().into());
     let mock_network = Arc::new(hub.new_network());
+    let mempool = Mempool::new(
+        Arc::clone(&blockchain),
+        MempoolConfig::default(),
+        mock_network.clone(),
+    );
+    let mock_id = MockId::new(hub.new_address().into());
 
     // Subscribe mempool with the mpsc stream created
     mempool
@@ -958,7 +966,7 @@ async fn multiple_start_stop() {
     tokio::task::spawn(async move {
         for txn in txns {
             txn_stream_tx
-                .send((txn.clone(), mock_id.clone()))
+                .send((txn.clone(), PubsubIdOrPeerId::PubsubId(mock_id.clone())))
                 .await
                 .unwrap();
         }
@@ -1947,7 +1955,6 @@ async fn applies_total_tx_size_limits() {
         ..Default::default()
     };
     let mut hub = MockHub::new();
-    let mock_id = MockId::new(hub.new_address().into());
     let mock_network = Arc::new(hub.new_network());
     let mempool = Mempool::new(blockchain, mempool_config, Arc::clone(&mock_network));
 

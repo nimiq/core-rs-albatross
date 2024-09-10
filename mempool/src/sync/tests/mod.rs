@@ -163,8 +163,8 @@ mod tests {
 
         // Load known hashes into the mempool state
         let mut handle = state.write();
-        known_txns.iter().for_each(|txn| {
-            handle.regular_transactions.insert(&txn, TxPriority::Medium);
+        known_txns.into_iter().for_each(|txn| {
+            handle.regular_transactions.insert(txn, TxPriority::Medium);
         });
         assert_eq!(handle.regular_transactions.len(), known_hashes.len());
         drop(handle);
