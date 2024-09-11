@@ -32,7 +32,7 @@ jobs:
           devnet_args: -t .github/devnet_topologies/four_validators_spammer_3.toml -R
         - test: MacroBlockProduction
           pre: "sed -i 's/BLOCKS_PER_BATCH: u32 = 32;/BLOCKS_PER_BATCH: u32 = 2;/g' primitives/src/policy.rs"
-          devnet_args: -t .github/devnet_topologies/four_validators_spammer_2.toml -k 0 -R -sp spammer/src/spammer_profile.toml
+          devnet_args: -t .github/devnet_topologies/four_validators_spammer_2.toml -k 0 -R
         - test: Validators90sDownFullNodes
           devnet_args: -t .github/devnet_topologies/four_validators_spammer_3.toml -dt 90 -R
         - test: LowBlockProducerTimeout
