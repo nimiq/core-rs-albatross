@@ -927,6 +927,7 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
             };
 
             match swarm.behaviour_mut().dht.put_record(record, Quorum::One) {
+                // ITODO quorum number seems wrong
                 Ok(query_id) => {
                     // Remember put operation to resolve when we receive a `QueryResult::PutRecord`
                     state.dht_puts.insert(query_id, output);

@@ -43,8 +43,14 @@ impl<TPeerId: Clone> CacheState<TPeerId> {
     fn potentially_outdated_peer_id(&self) -> Option<TPeerId> {
         match self {
             CacheState::Resolved(peer_id) => Some(peer_id.clone()),
-            CacheState::Error(maybe_peer_id) => maybe_peer_id.clone(),
-            CacheState::InProgress(maybe_peer_id) => maybe_peer_id.clone(),
+            CacheState::Error(maybe_peer_id) => {
+                log::error!("==== Error outdated peer id");
+                maybe_peer_id.clone()
+            }
+            CacheState::InProgress(maybe_peer_id) => {
+                log::error!("==== Potentially in progress");
+                maybe_peer_id.clone()
+            }
             CacheState::Empty(peer_id) => Some(peer_id.clone()),
         }
     }
@@ -175,7 +181,9 @@ where
         {
             match *cache_state {
                 CacheState::Resolved(..) => return *cache_state,
-                CacheState::Error(..) => {}
+                CacheState::Error(..) => {
+                    log::trace!(validator_id, "==== ERROR cache state error");
+                }
                 CacheState::InProgress(..) => {
                     log::trace!(validator_id, "Record resolution is in progress");
                     return *cache_state;
@@ -407,7 +415,9 @@ where
                             .map(|pid| *pid != peer_id)
                             .unwrap_or(true)
                         {
-                            warn!(%peer_id, ?validator_peer_id, claimed_validator_id = message.validator_id, "dropping validator message");
+
+                            // The validator peer id might have changed and thus caused a connection failure.
+                            log::error!(%peer_id, ?validator_peer_id, claimed_validator_id = message.validator_id, "dropping validator message");
                             return None;
                         }
                         Some((message.inner, message.validator_id as usize))

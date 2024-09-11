@@ -329,7 +329,7 @@ impl ClientInner {
             config
                 .network
                 .dht_quorum
-                .unwrap_or(NonZeroU8::new(3).unwrap()),
+                .unwrap_or(NonZeroU8::new(1).unwrap()),
         );
 
         log::debug!(
