@@ -118,7 +118,7 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
                 let history_len = blockchain
                     .history_store
                     .prove_num_leaves(macro_block.block_number(), None)
-                    .expect("Failed to prove history size");
+                    .unwrap_or(0);
 
                 let batch_set = BatchSet {
                     macro_block: macro_block.unwrap_macro(),
