@@ -51,12 +51,21 @@ static TESTNET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     readiness_window: 1440,
 };
 
+// The PoW mainnet blocks are produced ~every minute.
+// So we have 60 blocks per hour, 1440 blocks per day
+// Note: Final block numbers are rounded up for practical purposes
 static MAINET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
-    registration_start: 2590000,
-    registration_end: 2660000,
-    pre_stake_start: 2660000,
-    pre_stake_end: 2663100,
-    election_candidate: 2664100,
+    // Registration starts at September 12th @ 00:00 UTC
+    registration_start: 3357600,
+    // Registration ends at October 6th @ 00:00 UTC (24*1440 =  34560 blocks later)
+    registration_end: 3392200,
+    // Pre stake starts at October 6th @ 00:00 UTC
+    pre_stake_start: 3392200,
+    // Pre stake ends at November 19th @ 07:00 UTC (44*1440 + 7*60 = 63780 blocks later)
+    pre_stake_end: 3456000,
+    // First activation window begins at November 19th @ 07:00 UTC
+    election_candidate: 3456000,
+    // Block confirmations that are needed in order to start the migration process after candidate.
     block_confirmations: 10,
     // This corresponds to ~24 hours.
     readiness_window: 1440,
