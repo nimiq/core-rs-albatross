@@ -532,11 +532,13 @@ where
             // nothing to do for any of the completed futures
         }
 
-        if shared.buffer.is_empty() {
-            shared.waker.store_waker(cx);
-        }
+        // The buffer was emptied by `ProposalBuffer::poll_proposal`.
+        //
+        // We need to register a waker that wakes us when something is added to
+        // the buffer.
+        assert!(shared.buffer.is_empty());
+        shared.waker.store_waker(cx);
 
-        // There is nothing to return.
         Poll::Pending
     }
 }
