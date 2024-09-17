@@ -23,7 +23,7 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-libmdbx = "0.5.0"
+libmdbx = "0.5.2"
 log = { workspace = true }
 tempfile = "3"
 thiserror = "1.0"
