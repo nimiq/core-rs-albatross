@@ -113,7 +113,7 @@ impl<N: Network> DiffRequestComponent<N> {
                         error!(%num_tries, %max_tries, ?backoff_delay, "couldn't fetch diff: maximum tries reached");
 
                         sleep(backoff_delay).await;
-                        backoff_delay = Duration::min(backoff_delay.mul_f32(2_f32), max_backoff);
+                        backoff_delay = Duration::min(backoff_delay * 2, max_backoff);
                         num_tries = 0;
                     }
                 }
