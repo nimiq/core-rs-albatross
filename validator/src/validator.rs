@@ -236,13 +236,16 @@ where
         self.init_block_producer(head_hash);
     }
 
+    /// Resets the reactivation state if we sent a reactivate transaction that expired.
+    /// This ensures that in future polls of the validator we continue trying to reactivate
+    /// ourselves if the previous tx didn't get included within the validity window.
     fn check_reactivate(&mut self, block_number: u32) {
         // Check if the reactivate/activate transaction was sent
         if let Some(validator_state) = &self.validator_state {
             // We check this in the last possible block of the validity window
             let tx_validity_window_start = validator_state.inactive_tx_validity_window_start;
             if block_number
-                == tx_validity_window_start + Policy::transaction_validity_window_blocks() - 1
+                >= tx_validity_window_start + Policy::transaction_validity_window_blocks() - 1
             {
                 let blockchain = self.blockchain.read();
                 let staking_state = self.get_staking_state(&blockchain);
