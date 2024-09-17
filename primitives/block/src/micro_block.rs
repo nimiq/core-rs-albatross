@@ -63,9 +63,13 @@ impl MicroBlock {
 
     /// Returns the available size, in bytes, in a micro block body for transactions.
     pub fn get_available_bytes(num_equivocation_proofs: usize) -> usize {
-        Policy::MAX_SIZE_MICRO_BODY
-            - (/*equivocation_proofs vector length*/2 + num_equivocation_proofs * EquivocationProof::MAX_SIZE
-            + /*transactions vector length*/ 2)
+        #[allow(clippy::identity_op)]
+        Policy::MAX_SIZE_MICRO_BODY.saturating_sub(
+            0
+            + /* equivocation_proofs vector length */ 2
+            + num_equivocation_proofs * EquivocationProof::MAX_SIZE
+            + /* transactions vector length */ 2,
+        )
     }
 
     pub(crate) fn verify_proposer(&self, signing_key: &Ed25519PublicKey) -> Result<(), BlockError> {
