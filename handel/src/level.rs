@@ -1,7 +1,6 @@
 use std::{cmp::min, sync::Arc};
 
 use parking_lot::RwLock;
-use rand::{seq::SliceRandom, thread_rng};
 
 use crate::partitioner::{Partitioner, PartitioningError};
 
@@ -57,16 +56,16 @@ impl Level {
     pub fn create_levels<P: Partitioner, TId: std::fmt::Debug>(
         partitioner: Arc<P>,
         id: TId,
+        node_id: usize,
     ) -> Vec<Level> {
         let mut levels: Vec<Level> = Vec::new();
-        let mut first_active = false;
-        let mut rng = thread_rng();
+        // Begin with an empty range, as this side of the tree begins without any node on it.
+        let mut tree_lhs = 0..0;
 
         for i in 0..partitioner.levels() {
             match partitioner.range(i) {
-                Ok(ids) => {
-                    let mut ids = ids.collect::<Vec<usize>>();
-                    ids.shuffle(&mut rng);
+                Ok(tree_rhs) => {
+                    let ids = tree_rhs.clone().collect::<Vec<usize>>();
 
                     trace!(
                         ?id,
@@ -76,9 +75,43 @@ impl Level {
                     );
                     let level = Level::new(i, ids);
 
-                    if !first_active {
-                        first_active = true;
+                    if i == 0 {
+                        // The first level is always started.
                         level.state.write().started = true;
+                        // The first level sets its own id as the range.
+                        tree_lhs = node_id..node_id + 1;
+                        // Add the level
+                        levels.push(level);
+                        // Move to the next level
+                        continue;
+                    }
+
+                    // Get start and end of our side to avoid having to clone the range
+                    let tree_lhs_start = tree_lhs.start;
+                    let tree_lhs_end = tree_lhs.end;
+
+                    // Find this nodes index on its side of the tree
+                    let index = tree_lhs
+                        .position(|id| id == node_id)
+                        .expect("The node must always be present on its side of the tree");
+
+                    // Index of the next peer is symmetric, so set it to where this nodes position would be
+                    // on its side of the sub tree. Levels may not be full, so it needs to be adjusted for that.
+                    level.state.write().next_peer_index = index % level.peer_ids.len();
+
+                    // All levels but the first must update their side of the tree
+                    if *tree_rhs.end() + 1 == tree_lhs_start {
+                        tree_lhs = *tree_rhs.start()..tree_lhs_end;
+                    } else if *tree_rhs.start() == tree_lhs_end {
+                        tree_lhs = tree_lhs_start..*tree_rhs.end() + 1;
+                    } else {
+                        log::info!(
+                            "{}: {:?} - {:?}",
+                            node_id,
+                            tree_lhs_start..tree_lhs_end,
+                            tree_rhs
+                        );
+                        panic!("ranges must be consecutive");
                     }
 
                     levels.push(level);
@@ -138,7 +171,7 @@ impl Level {
 mod test {
     use nimiq_collections::bitset::BitSet;
     use nimiq_test_log::test;
-    use rand::Rng;
+    use rand::{thread_rng, Rng};
     use serde::{Deserialize, Serialize};
 
     use super::*;

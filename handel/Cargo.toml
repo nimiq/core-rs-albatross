@@ -19,7 +19,6 @@ futures = { workspace = true }
 log = { workspace = true }
 instant = { version = "0.1", features = ["wasm-bindgen"] }
 parking_lot = "0.12"
-rand = "0.8"
 thiserror = "1.0"
 
 nimiq-bls = { workspace = true }
@@ -30,11 +29,11 @@ nimiq-time = { workspace = true }
 nimiq-utils = { workspace = true, features = ["futures"] }
 
 [dev-dependencies]
+rand = "0.8"
 serde = "1.0"
+tokio = { version = "1.40", features = ["rt", "time", "macros"] }
 
 nimiq-network-interface = { workspace = true }
 nimiq-network-mock = { workspace = true }
 nimiq-test-log = { workspace = true }
-
-tokio = { version = "1.40", features = ["rt", "time", "macros"] }
 nimiq-utils = { workspace = true, features = ["spawn"] }

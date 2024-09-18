@@ -97,6 +97,7 @@ where
         let levels = Arc::new(Level::create_levels(
             protocol.partitioner(),
             protocol.identify(),
+            protocol.node_id(),
         ));
 
         // Create an empty list which can later be polled for the best available pending contribution.
