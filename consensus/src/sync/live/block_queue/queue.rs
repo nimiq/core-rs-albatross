@@ -857,7 +857,8 @@ impl<N: Network> Stream for BlockQueue<N> {
                         blocks.remove(&block_hash);
                     }
                 }
-                Poll::Ready(None) => return Poll::Ready(None),
+                // The block request component never returns `None`.
+                Poll::Ready(None) => unreachable!(),
                 Poll::Pending => break,
             }
         }
