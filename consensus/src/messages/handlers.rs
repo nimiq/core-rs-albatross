@@ -34,11 +34,16 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMacroChain {
         _peer_id: N::PeerId,
         blockchain: &BlockchainProxy,
     ) -> Result<MacroChain, MacroChainError> {
+        let macro_chain_start = Instant::now();
+
+        let blockchain_read = Instant::now();
         let blockchain = blockchain.read();
+        log::debug!("Blockchain read took {:?}", blockchain_read.elapsed());
 
         // A peer has the macro chain. Check all block locator hashes in the given order and pick
         // the first hash that is found on our main chain, ignore the rest.
         let mut start_block_hash = None;
+        let locators_start = Instant::now();
         for locator in self.locators.iter() {
             let chain_info = blockchain.get_chain_info(locator, false);
             if let Ok(chain_info) = chain_info {
@@ -50,11 +55,17 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMacroChain {
                 }
             }
         }
+        log::debug!(
+            "For locators took {:?}, num locators {}",
+            locators_start.elapsed(),
+            self.locators.len()
+        );
         let Some(start_block_hash) = start_block_hash else {
             return Err(MacroChainError::UnknownLocators);
         };
         // Get up to `self.max_blocks` macro blocks from our chain starting at `start_block_hash`.
         // TODO We don't need the actual macro block headers here, the hash of each block would suffice.
+        let election_start = Instant::now();
         let election_blocks = blockchain
             .get_macro_blocks(
                 &start_block_hash,
@@ -65,6 +76,10 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMacroChain {
             )
             .unwrap(); // We made sure that start_block_hash is on our chain.
         let epochs: Vec<_> = election_blocks.iter().map(|block| block.hash()).collect();
+        log::debug!(
+            "Get macro blocks elections took {:?}",
+            election_start.elapsed(),
+        );
 
         // Add latest checkpoint block if all of the following conditions are met:
         // * the latest macro block is a checkpoint block.
@@ -86,7 +101,7 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMacroChain {
         } else {
             None
         };
-
+        log::debug!("Request macro chain took {:?}", macro_chain_start.elapsed());
         Ok(MacroChain { epochs, checkpoint })
     }
 }
