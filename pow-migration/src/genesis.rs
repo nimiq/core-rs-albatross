@@ -11,7 +11,7 @@ use rand::{rngs::StdRng, SeedableRng};
 use time::OffsetDateTime;
 
 use crate::{
-    exit_with_error,
+    async_retryer, exit_with_error,
     history::get_history_root,
     state::{get_accounts, get_stakers, get_validators, POW_BLOCK_TIME},
     types::{BlockWindows, GenesisError, PoSRegisteredAgents},
@@ -19,7 +19,7 @@ use crate::{
 
 /// Gets the genesis config file
 pub async fn get_pos_genesis(
-    client: &Client,
+    pow_client: &Client,
     pow_reg_window: &BlockWindows,
     network_id: NetworkId,
     env: MdbxDatabase,
@@ -35,17 +35,17 @@ pub async fn get_pos_genesis(
     }
 
     // Get block according to arguments and check if it exists
-    let final_block = client
-        .get_block_by_number(pow_reg_window.election_candidate, false)
-        .await
-        .map_err(|_| {
-            log::error!(
-                block_number = pow_reg_window.election_candidate,
-                "Could not find provided block"
-            );
-            GenesisError::UnknownBlock
-        })?;
-    let pow_genesis = client.get_block_by_number(1, false).await?;
+    let final_block =
+        async_retryer(|| pow_client.get_block_by_number(pow_reg_window.election_candidate, false))
+            .await
+            .map_err(|_| {
+                log::error!(
+                    block_number = pow_reg_window.election_candidate,
+                    "Could not find provided block"
+                );
+                GenesisError::UnknownBlock
+            })?;
+    let pow_genesis = async_retryer(|| pow_client.get_block_by_number(1, false)).await?;
 
     // Build history tree
     log::info!(
@@ -87,14 +87,14 @@ pub async fn get_pos_genesis(
         } else {
             log::info!("Getting registered validators in the PoW chain");
             let genesis_validators = get_validators(
-                client,
+                pow_client,
                 pow_reg_window.registration_start..pow_reg_window.registration_end,
             )
             .await?;
 
             log::info!("Getting registered stakers in the PoW chain");
             get_stakers(
-                client,
+                pow_client,
                 &genesis_validators,
                 pow_reg_window.pre_stake_start..pow_reg_window.pre_stake_end,
             )
@@ -107,7 +107,8 @@ pub async fn get_pos_genesis(
         .iter()
         .fold(Coin::ZERO, |acc, validator| acc + validator.total_stake);
 
-    let genesis_accounts = get_accounts(client, &final_block, burnt_registration_balance).await?;
+    let genesis_accounts =
+        get_accounts(pow_client, &final_block, burnt_registration_balance).await?;
 
     Ok(GenesisConfig {
         network: network_id,

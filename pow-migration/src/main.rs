@@ -6,7 +6,7 @@ use log::{info, level_filters::LevelFilter};
 use nimiq::config::{config::ClientConfig, config_file::ConfigFile};
 use nimiq_keys::Address;
 use nimiq_pow_migration::{
-    exit_with_error,
+    async_retryer, exit_with_error,
     genesis::write_pos_genesis,
     get_block_windows,
     history::{get_history_store_height, migrate_history},
@@ -132,14 +132,14 @@ async fn main() {
 
     // Check to see if the client already has consensus
     loop {
-        let status = pow_client.consensus().await.unwrap();
+        let status = async_retryer(|| pow_client.consensus()).await.unwrap();
         if status.eq("established") {
             info!("Consensus is established");
 
             break;
         }
         info!(
-            current_block_height = pow_client.block_number().await.unwrap(),
+            current_block_height = async_retryer(|| pow_client.block_number()).await.unwrap(),
             "Consensus has not been established yet.."
         );
         sleep(Duration::from_secs(10)).await;
@@ -162,7 +162,7 @@ async fn main() {
             println!("{}", validator.validator.validator_address);
         }
     } else if let Some(Commands::ListStakers { validator }) = args.command {
-        if pow_client.block_number().await.unwrap()
+        if async_retryer(|| pow_client.block_number()).await.unwrap()
             < block_windows.pre_stake_end + block_windows.block_confirmations
         {
             log::error!("The pre-staking window is not closed yet, generating the list is not possible at this time.");
@@ -282,7 +282,7 @@ async fn main() {
 
         // Continue the migration process once the pre-stake window is closed and confirmed
         loop {
-            let pow_block_number = pow_client.block_number().await.unwrap();
+            let pow_block_number = async_retryer(|| pow_client.block_number()).await.unwrap();
             let expected_block_number =
                 block_windows.pre_stake_end + block_windows.block_confirmations;
             if pow_block_number > expected_block_number {

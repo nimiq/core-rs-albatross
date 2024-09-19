@@ -6,6 +6,7 @@ pub mod types;
 
 use std::{
     fmt::Debug,
+    future::Future,
     path::PathBuf,
     process::{exit, Command, ExitStatus},
     time::Duration,
@@ -28,6 +29,8 @@ use crate::{
     state::{get_stakers, get_validators, setup_pow_rpc_server},
     types::{BlockWindows, Error, PoSRegisteredAgents},
 };
+
+const RETRYER_MAX_ATTEMPTS: u8 = 5;
 
 static TESTNET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     // The testnet blocks are produced ~every minute.
@@ -173,7 +176,7 @@ pub async fn migrate(
 
     // Wait for enough confirmations for the candidate block
     loop {
-        let current_height = pow_client.block_number().await.unwrap();
+        let current_height = async_retryer(|| pow_client.block_number()).await.unwrap();
 
         let next_candidate = candidate_block + block_windows.readiness_window;
 
@@ -250,7 +253,7 @@ pub async fn migrate(
     );
 
     loop {
-        let current_height = pow_client.block_number().await.unwrap();
+        let current_height = async_retryer(|| pow_client.block_number()).await.unwrap();
         log::info!(current_height);
 
         let next_candidate = candidate_block + block_windows.readiness_window;
@@ -375,4 +378,35 @@ pub fn launch_pos_client(
 pub fn exit_with_error<E: Debug>(error: E, message: &'static str) -> ! {
     log::error!(?error, "{}", message);
     exit(1);
+}
+
+/// Retries an asynchronous operation until it succeeds or errors after the maximum number of attempts (`RETRYER_MAX_ATTEMPTS`) is reached.
+pub async fn async_retryer<F, Fut, T, E>(f: F) -> Result<T, E>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = Result<T, E>>,
+    E: Debug,
+{
+    let mut attempts = 0;
+    loop {
+        attempts += 1;
+        match f().await {
+            Ok(val) => return Ok(val),
+            Err(err) => {
+                if attempts >= RETRYER_MAX_ATTEMPTS {
+                    log::error!(
+                        ?err,
+                        "Failed to retrieve data from PoW RPC server after multiple attempts"
+                    );
+                    return Err(err);
+                }
+                log::warn!(
+                    %attempts,
+                    ?err,
+                    "Request to RPC server failed. Retrying request..."
+                );
+                sleep(Duration::from_millis(300)).await;
+            }
+        }
+    }
 }

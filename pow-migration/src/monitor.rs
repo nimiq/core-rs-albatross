@@ -11,7 +11,7 @@ use nimiq_rpc::{
 use percentage::Percentage;
 use thiserror::Error;
 
-use crate::types::GenesisValidator;
+use crate::{async_retryer, types::GenesisValidator};
 
 /// Readiness state of all of the validators registered in the PoW chain
 pub enum ValidatorsReadiness {
@@ -58,22 +58,24 @@ pub fn generate_ready_tx(validator: String, hash: &Blake2bHash) -> OutgoingTrans
 
 /// Checks if we have seen a ready transaction from a validator in the specified range
 pub async fn get_ready_txns(
-    client: &Client,
+    pow_client: &Client,
     validator: String,
     block_window: Range<u32>,
     pos_genesis_config_hash: &Blake2bHash,
 ) -> Vec<TransactionDetails> {
-    if let Ok(transactions) = client.get_transactions_by_address(&validator, 10).await {
+    if let Ok(transactions) =
+        async_retryer(|| pow_client.get_transactions_by_address(&validator, 10)).await
+    {
         let genesis_config_hash_hex = pos_genesis_config_hash.to_hex();
 
         let filtered_txns: Vec<TransactionDetails> = transactions
             .into_iter()
             .filter(|txn| is_valid_ready_txn(txn, &block_window, &genesis_config_hash_hex))
             .collect();
-        filtered_txns
-    } else {
-        Vec::new()
+        return filtered_txns;
     }
+
+    Vec::new()
 }
 
 /// Checks if the provided transaction meets the criteria in order to be
@@ -115,7 +117,7 @@ pub async fn send_tx(client: &Client, transaction: OutgoingTransaction) -> Resul
 /// Checks if enough validators are ready.
 /// If thats the case, the number of slots which are ready are returned.
 pub async fn check_validators_ready(
-    client: &Client,
+    pow_client: &Client,
     validators: Vec<GenesisValidator>,
     activation_block_window: Range<u32>,
     pos_genesis_config_hash: &Blake2bHash,
@@ -139,7 +141,9 @@ pub async fn check_validators_ready(
             .validator
             .validator_address
             .to_user_friendly_address();
-        if let Ok(transactions) = client.get_transactions_by_address(&address, 10).await {
+        if let Ok(transactions) =
+            async_retryer(|| pow_client.get_transactions_by_address(&address, 10)).await
+        {
             info!(
                 num_transactions = transactions.len(),
                 from_address = address,

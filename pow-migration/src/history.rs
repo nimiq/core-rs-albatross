@@ -22,7 +22,7 @@ use tokio::{
     time::sleep,
 };
 
-use crate::types::HistoryError;
+use crate::{async_retryer, types::HistoryError};
 
 fn from_pow_network_id(pow_network_id: u8) -> Result<NetworkId, HistoryError> {
     match pow_network_id {
@@ -90,7 +90,7 @@ pub async fn migrate_history(
 ) {
     let mut history_store_height = get_history_store_height(env.clone(), network_id).await;
     let history_store = HistoryStore::new(env.clone(), network_id);
-    let mut pow_head_height = pow_client.block_number().await.unwrap();
+    let mut pow_head_height = async_retryer(|| pow_client.block_number()).await.unwrap();
 
     while let Some(candidate_block) = rx_candidate_block.recv().await {
         // Only migrate the part of the PoW history which we haven't processed yet
@@ -115,22 +115,21 @@ pub async fn migrate_history(
             // can safely add them to the PoS history store.
             if pow_head_height - block_height <= block_confirmations {
                 loop {
+                    log::info!(
+                        block = block_height,
+                        "Waiting for block to be confirmed before it can be migrated"
+                    );
+
+                    sleep(Duration::from_secs(60)).await;
+                    pow_head_height = async_retryer(|| pow_client.block_number()).await.unwrap();
                     // Check if the block has been confirmed.
                     if pow_head_height > block_height + block_confirmations {
                         break;
                     }
-
-                    pow_head_height = pow_client.block_number().await.unwrap();
-                    log::info!(
-                        block = block_height,
-                        "Waiting for block to be confirmed before we can migrate it"
-                    );
-                    sleep(Duration::from_secs(60)).await;
                 }
             }
 
-            let block = pow_client
-                .get_block_by_number(block_height, false)
+            let block = async_retryer(|| pow_client.get_block_by_number(block_height, false))
                 .await
                 .unwrap();
 
@@ -149,7 +148,9 @@ pub async fn migrate_history(
                     for hash in hashes {
                         log::trace!(hash, "Processing transaction");
                         let pow_transaction =
-                            pow_client.get_transaction_by_hash_2(&hash).await.unwrap();
+                            async_retryer(|| pow_client.get_transaction_by_hash_2(&hash))
+                                .await
+                                .unwrap();
                         let pos_transaction = from_pow_transaction(&pow_transaction).unwrap();
                         network_id = pos_transaction.network_id;
 

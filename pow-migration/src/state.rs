@@ -21,7 +21,10 @@ use nimiq_rpc::{
 use nimiq_serde::Deserialize;
 use nimiq_transaction::account::htlc_contract::{AnyHash, AnyHash32, AnyHash64};
 
-use crate::types::{GenesisAccounts, GenesisValidator, StateError};
+use crate::{
+    async_retryer,
+    types::{GenesisAccounts, GenesisValidator, StateError},
+};
 
 /// PoW target block time in seconds
 pub(crate) const POW_BLOCK_TIME: u64 = 60; // 1 min
@@ -122,7 +125,7 @@ pub async fn setup_pow_rpc_server(client: &Client) -> Result<(), StateError> {
 /// Gets the set of the Genesis Accounts by taking a snapshot of the accounts in
 /// a specific block number defined by `cutting_block`.
 pub async fn get_accounts(
-    client: &Client,
+    pow_client: &Client,
     cutting_block: &Block,
     burnt_registration_balance: Coin,
 ) -> Result<GenesisAccounts, StateError> {
@@ -134,7 +137,9 @@ pub async fn get_accounts(
     let mut start_prefix = "".to_string();
 
     // Check that the PoW client is already set up
-    if client.get_constant("Policy.NUM_SNAPSHOTS_MAX").await? != POW_MAX_SNAPSHOTS {
+    if async_retryer(|| pow_client.get_constant("Policy.NUM_SNAPSHOTS_MAX")).await?
+        != POW_MAX_SNAPSHOTS
+    {
         log::error!(
             "RPC client is not set up for accounts migration. Call `setup_pow_rpc_server` first"
         );
@@ -142,9 +147,10 @@ pub async fn get_accounts(
     }
 
     loop {
-        let chunk = client
-            .get_accounts_tree_chunk(&cutting_block.hash, &start_prefix)
-            .await?;
+        let chunk = async_retryer(|| {
+            pow_client.get_accounts_tree_chunk(&cutting_block.hash, &start_prefix)
+        })
+        .await?;
         if chunk.nodes.is_empty() || start_prefix == chunk.tail {
             break;
         }
@@ -182,13 +188,13 @@ pub async fn get_accounts(
 /// transactions within the validator registration window defined by the
 /// `block_window` range.
 pub async fn get_validators(
-    client: &Client,
+    pow_client: &Client,
     block_window: Range<u32>,
 ) -> Result<Vec<GenesisValidator>, StateError> {
     let mut txns_by_sender = HashMap::<String, Vec<TransactionDetails>>::new();
-    let mut transactions = client
-        .get_transactions_by_address(&Address::burn_address().to_string(), u16::MAX)
-        .await?;
+    let burn_address = Address::burn_address().to_string();
+    let mut transactions =
+        async_retryer(|| pow_client.get_transactions_by_address(&burn_address, u16::MAX)).await?;
     let mut possible_validators = HashMap::new();
     let mut validators = vec![];
 
@@ -322,14 +328,14 @@ pub async fn get_validators(
 /// function returns an updated `total_stake` (`GenesisValidator.total_slake`)
 /// which includes the validator deposit and the staker's delegated stake.
 pub async fn get_stakers(
-    client: &Client,
+    pow_client: &Client,
     registered_validators: &[GenesisValidator],
     block_window: Range<u32>,
 ) -> Result<(Vec<GenesisStaker>, Vec<GenesisValidator>), StateError> {
     let mut txns_by_sender = HashMap::<String, Vec<TransactionDetails>>::new();
-    let mut transactions = client
-        .get_transactions_by_address(&Address::burn_address().to_string(), u16::MAX)
-        .await?;
+    let burn_address = Address::burn_address().to_string();
+    let mut transactions =
+        async_retryer(|| pow_client.get_transactions_by_address(&burn_address, u16::MAX)).await?;
     let mut validators = HashMap::new();
     let mut stakers = HashMap::new();
 
