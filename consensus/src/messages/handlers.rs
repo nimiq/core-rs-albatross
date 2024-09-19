@@ -1,5 +1,6 @@
 #[cfg(feature = "full")]
 use std::sync::Arc;
+use std::time::Instant;
 use std::{cmp, collections::HashSet};
 
 use nimiq_block::Block;
@@ -97,6 +98,7 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
         _peer_id: N::PeerId,
         blockchain: &Arc<RwLock<Blockchain>>,
     ) -> Result<BatchSetInfo, BatchSetError> {
+        let batch_start = Instant::now();
         let blockchain = blockchain.read();
 
         let block = match blockchain.get_block(&self.hash, true, None) {
@@ -110,6 +112,8 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
             .get_epoch_chunks(block.block_number(), None)
         {
             let mut batch_sets = vec![];
+            let for_start = Instant::now();
+            log::debug!("Number of macro hashes {}", macro_hashes.len());
             for macro_hash in macro_hashes {
                 let macro_block = blockchain
                     .get_block(&macro_hash, true, None)
@@ -126,8 +130,10 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
                 };
                 batch_sets.push(batch_set);
             }
+            log::debug!("for macro hash took {:?}", for_start.elapsed());
             batch_sets
         } else {
+            let prove_num_leaves_start = Instant::now();
             let history_len = blockchain
                 .history_store
                 .prove_num_leaves(block.block_number(), None)
@@ -137,6 +143,10 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
                 macro_block: block.clone(),
                 history_len,
             };
+            log::debug!(
+                "Prove num leaves else {:?}",
+                prove_num_leaves_start.elapsed()
+            );
             vec![batch_set]
         };
 
@@ -146,6 +156,8 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
         } else {
             None
         };
+
+        log::debug!("Request batch set took {:?}", batch_start.elapsed());
 
         Ok(BatchSetInfo {
             election_macro_block,
@@ -161,6 +173,7 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
         _peer_id: N::PeerId,
         blockchain: &Arc<RwLock<Blockchain>>,
     ) -> Result<HistoryChunk, HistoryChunkError> {
+        let history_chunk_start = Instant::now();
         if let Some(chunk) = blockchain.read().history_store.prove_chunk(
             self.epoch_number,
             self.block_number,
@@ -168,8 +181,13 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
             self.chunk_index as usize,
             None,
         ) {
+            log::debug!("history chunk took {:?}", history_chunk_start.elapsed());
             Ok(HistoryChunk { chunk })
         } else {
+            log::debug!(
+                "history chunk error took {:?}",
+                history_chunk_start.elapsed()
+            );
             Err(HistoryChunkError::CouldntProduceProof)
         }
     }
