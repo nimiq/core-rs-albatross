@@ -17,7 +17,7 @@ use nimiq_primitives::{
         error::{IncompleteTrie, MerkleRadixTrieError},
         trie_chunk::{TrieChunk, TrieChunkPushResult, TrieItem},
         trie_diff::{RevertDiffValue, RevertTrieDiff, TrieDiff},
-        trie_node::{RootData, TrieNode, TrieNodeKind},
+        trie_node::{RootData, TrieNode, TrieNodeKind, BRANCHING_FACTOR},
         trie_proof::TrieProof,
         trie_proof_node::TrieProofNode,
     },
@@ -1493,7 +1493,7 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
             }
 
             // If we're already off the path to our key, we're done.
-            if child_index == 16 {
+            if child_index == BRANCHING_FACTOR {
                 break;
             }
             match &cur_node.children[child_index] {

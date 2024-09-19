@@ -13,6 +13,8 @@ use crate::{
     },
 };
 
+use super::trie_node::BRANCHING_FACTOR;
+
 /// A hashable [`TrieNode`] with less information.
 ///
 /// A `TrieProofNode` saves less information than a [`TrieNode`], only as much
@@ -31,7 +33,7 @@ use crate::{
 pub struct TrieProofNode {
     pub key: KeyNibbles,
     value: ProofValue,
-    pub children: [Option<TrieNodeChild>; 16],
+    pub children: [Option<TrieNodeChild>; BRANCHING_FACTOR],
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

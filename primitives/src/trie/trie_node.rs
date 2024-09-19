@@ -6,11 +6,16 @@ use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::{Blake2bHash, Hash, HashOutput, Hasher};
 use nimiq_serde::Serialize;
 
-use crate::{key_nibbles::KeyNibbles, trie::error::MerkleRadixTrieError};
+use crate::{
+    key_nibbles::{KeyNibbles, NIBBLE_BITS},
+    trie::error::MerkleRadixTrieError,
+};
+
+pub const BRANCHING_FACTOR: usize = 1 << NIBBLE_BITS;
 
 /// A struct representing a node in the Merkle Radix Trie. It can be either a branch node, which has
 /// only references to its children, a leaf node, which contains a value or a hybrid node, which has
-/// both children and a value. A branch/hybrid node can have up to 16 children, since we represent
+/// both children and a value. A branch/hybrid node can have up to `BRANCHING_FACTOR` children, since we represent
 /// the keys in hexadecimal form, each child represents a different hexadecimal character.
 #[derive(Clone, Debug, DbSerializable)]
 pub struct TrieNode {
@@ -19,7 +24,7 @@ pub struct TrieNode {
     // The root data is not included when the `TrieNode` is hashed.
     pub root_data: Option<RootData>,
     pub value: Option<Vec<u8>>,
-    pub children: [Option<TrieNodeChild>; 16],
+    pub children: [Option<TrieNodeChild>; BRANCHING_FACTOR],
 }
 
 #[derive(Clone, Debug)]
@@ -70,7 +75,8 @@ impl TrieNodeChild {
     }
 }
 
-pub const NO_CHILDREN: [Option<TrieNodeChild>; 16] = [
+pub const NO_CHILDREN: [Option<TrieNodeChild>; BRANCHING_FACTOR] = [
+    None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
     None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
 ];
 
@@ -289,7 +295,7 @@ pub struct Iter<'a> {
 }
 
 impl<'a> Iter<'a> {
-    pub fn from_children(children: &'a [Option<TrieNodeChild>; 16]) -> Iter<'a> {
+    pub fn from_children(children: &'a [Option<TrieNodeChild>; BRANCHING_FACTOR]) -> Iter<'a> {
         Iter {
             it: children.iter(),
         }
@@ -379,7 +385,7 @@ mod serde_derive {
     };
     use serde_bytes::ByteBuf;
 
-    use super::{KeyNibbles, RootData, TrieNode, TrieNodeChild};
+    use super::{KeyNibbles, RootData, TrieNode, TrieNodeChild, BRANCHING_FACTOR};
 
     struct TrieNodeVisitor;
     const FIELDS: &[&str] = &["flags", "root_data", "value", "child_count", "children"];
@@ -422,7 +428,7 @@ mod serde_derive {
             let exp_child_count: u8 = seq
                 .next_element()?
                 .ok_or_else(|| A::Error::invalid_length(3, &self))?;
-            let children: [Option<TrieNodeChild>; 16] = seq
+            let children: [Option<TrieNodeChild>; BRANCHING_FACTOR] = seq
                 .next_element()?
                 .ok_or_else(|| A::Error::invalid_length(4, &self))?;
             let child_count: u8 = children

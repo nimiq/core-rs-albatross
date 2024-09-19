@@ -1,6 +1,8 @@
 use std::{
     cmp::{self, Ordering},
-    fmt, io, ops, str,
+    fmt, io,
+    ops::{self, Range},
+    str,
 };
 
 use byteorder::WriteBytesExt;
@@ -10,14 +12,55 @@ use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::{HashOutput, SerializeContent};
 use nimiq_keys::Address;
 
+/// The nuber of bits in a nibble.
+/// The implementation only works for values between 1 and 8.
+pub const NIBBLE_BITS: u8 = 5;
+
 /// A compact representation of a node's key. It stores the key in big endian. Each byte
-/// stores up to 2 nibbles. Internally, we assume that a key is represented in hexadecimal form.
+/// stores up to 8/NIBBLE_BITS nibbles.
 #[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde-derive", derive(DbSerializable))]
 pub struct KeyNibbles {
     /// Invariant: Unused nibbles are always zeroed.
     bytes: [u8; KeyNibbles::MAX_BYTES],
+    /// The length in number of nibbles.
     length: u8,
+}
+
+trait BitpackingOps {
+    /// Returns a value containing just the bits in the given range and shifted to the right.
+    /// We count the bits from the most-significant position.
+    fn get(&self, range: Range<u8>) -> u8;
+    /// Sets the bits in the given range to the given value.
+    fn set(&mut self, range: Range<u8>, value: u8);
+    /// Concatenates two values.
+    fn concat(&self, other: Self, other_len: usize) -> Self;
+}
+
+impl BitpackingOps for u8 {
+    fn get(&self, range: Range<u8>) -> u8 {
+        if range.start >= 8 || range.end > 8 {
+            panic!("Invalid range: {:?}", range);
+        }
+        // We count the bits from the most-significant position.
+        (self >> (8 - range.end)) & ((1 << (range.end - range.start)) - 1)
+    }
+
+    fn set(&mut self, range: Range<u8>, value: u8) {
+        if range.start >= 8 || range.end > 8 {
+            panic!("Invalid range: {:?}", range);
+        }
+        let shift = 8 - range.end;
+        // Clear the bits in the range.
+        let mask = (1 << (range.end - range.start)) - 1;
+        *self &= !(mask << shift);
+        // Set the bits to the new value.
+        *self |= (value & mask) << shift;
+    }
+
+    fn concat(&self, other: Self, other_len: usize) -> Self {
+        (self << other_len) | (other & ((1 << other_len) - 1))
+    }
 }
 
 impl KeyNibbles {
@@ -37,7 +80,7 @@ impl KeyNibbles {
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ],
-        length: 9,
+        length: (9u8 * 4).div_ceil(NIBBLE_BITS),
     };
 
     /// Returns the length of the key in nibbles.
@@ -46,7 +89,7 @@ impl KeyNibbles {
     }
 
     fn bytes_len(&self) -> usize {
-        (self.len() + 1) / 2
+        (self.len() * NIBBLE_BITS as usize).div_ceil(8)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -68,16 +111,72 @@ impl KeyNibbles {
             return None;
         }
 
-        let byte = index / 2;
+        // The nibble can be part of up to two bytes.
+        // Calculate the starting byte.
+        let start_byte = (index * NIBBLE_BITS as usize) / 8;
+        // Calculate the position where the nibble starts in the first byte.
+        let byte_offset = (index * NIBBLE_BITS as usize) % 8;
+        // Calculate the number of bits in the first byte.
+        let bits_in_first_byte = cmp::min(NIBBLE_BITS as usize, 8 - byte_offset);
+        // Calculate the number of bits in the second byte.
+        let bits_in_second_byte = NIBBLE_BITS as usize - bits_in_first_byte;
 
-        let nibble = index % 2;
+        // The nibble is possibly split between two bytes.
+        let first_part =
+            self.bytes[start_byte].get(byte_offset as u8..(byte_offset + bits_in_first_byte) as u8);
+        // We get the remaining bits from the next byte.
+        let second_part = if bits_in_second_byte > 0 && start_byte + 1 < Self::MAX_BYTES {
+            self.bytes[start_byte + 1].get(0..bits_in_second_byte as u8)
+        } else {
+            // If we would overflow our bytes, the next part is always 0.
+            0
+        };
+        let nibble = first_part.concat(second_part, bits_in_second_byte);
 
-        Some(((self.bytes[byte] >> ((1 - nibble) * 4)) & 0xf) as usize)
+        Some(nibble as usize)
+    }
+
+    fn set(&mut self, index: usize, value: usize) {
+        if index > self.len() {
+            if index != 0 {
+                error!(
+                    "Index {} exceeds the length of KeyNibbles {}, which has length {}.",
+                    index,
+                    self,
+                    self.len()
+                );
+            }
+            return;
+        }
+        // If this is the last index, append.
+        else if index == self.len() {
+            self.length += 1;
+        }
+
+        // The nibble can be part of up to two bytes.
+        // Calculate the starting byte.
+        let start_byte = (index * NIBBLE_BITS as usize) / 8;
+        // Calculate the position where the nibble starts in the first byte.
+        let byte_offset = (index * NIBBLE_BITS as usize) % 8;
+        // Calculate the number of bits in the first byte.
+        let bits_in_first_byte = cmp::min(NIBBLE_BITS as usize, 8 - byte_offset);
+        // Calculate the number of bits in the second byte.
+        let bits_in_second_byte = NIBBLE_BITS as usize - bits_in_first_byte;
+
+        // The nibble is possibly split between two bytes.
+        self.bytes[start_byte].set(
+            byte_offset as u8..(byte_offset + bits_in_first_byte) as u8,
+            value as u8 >> bits_in_second_byte,
+        );
+        // We get the remaining bits from the next byte.
+        if bits_in_second_byte > 0 && start_byte + 1 < Self::MAX_BYTES {
+            self.bytes[start_byte + 1].set(0..bits_in_second_byte as u8, value as u8)
+        }
     }
 
     /// Returns the next possible `KeyNibbles` in the ordering relation.
     ///
-    /// This is always the same, but with a single `0` digit appended.
+    /// This is always the same, but with a single `0` nibble appended.
     pub fn successor(&self) -> Self {
         let mut result = self.clone();
         result.length += 1;
@@ -91,14 +190,13 @@ impl KeyNibbles {
             return false;
         }
 
-        // Get the last byte index and check if the key is an even number of nibbles.
-        let end_byte = self.len() / 2;
+        // Get the last byte index and check if the key is a full number of bytes.
+        let end_byte = (self.len() * NIBBLE_BITS as usize) / 8;
 
         // If key ends in the middle of a byte, compare that part.
-        if self.length % 2 == 1 {
-            let own_nibble = (self.bytes[end_byte] >> 4) & 0xf;
-
-            let other_nibble = (other.bytes[end_byte] >> 4) & 0xf;
+        if (self.len() * NIBBLE_BITS as usize) % 8 != 0 {
+            let own_nibble = self.get(self.len() - 1).unwrap();
+            let other_nibble = other.get(self.len() - 1).unwrap();
 
             if own_nibble != other_nibble {
                 return false;
@@ -116,17 +214,18 @@ impl KeyNibbles {
         let min_len = cmp::min(self.len(), other.len());
 
         // Calculate the minimum length (in bytes) rounded up.
-        let byte_len = min_len / 2 + (min_len % 2);
+        let byte_len = (min_len * NIBBLE_BITS as usize).div_ceil(8);
 
         // Find the nibble index where the two keys first differ.
         let mut first_difference_nibble = min_len;
 
         for j in 0..byte_len {
             if self.bytes[j] != other.bytes[j] {
-                if self.get(j * 2) != other.get(j * 2) {
-                    first_difference_nibble = j * 2
+                let first_nibble_in_byte = (j * 8) / NIBBLE_BITS as usize;
+                if self.get(first_nibble_in_byte) != other.get(first_nibble_in_byte) {
+                    first_difference_nibble = first_nibble_in_byte
                 } else {
-                    first_difference_nibble = j * 2 + 1
+                    first_difference_nibble = first_nibble_in_byte + 1
                 };
                 break;
             }
@@ -154,54 +253,15 @@ impl KeyNibbles {
         // Calculate the end nibble index (it can't exceed the key length).
         let end = cmp::min(end, self.len());
 
-        // Get the start and end in bytes (rounded down).
-        let byte_start = start / 2;
-        let byte_end = end / 2;
-
-        // Get the nibbles for the slice.
-        let mut new_bytes = [0; KeyNibbles::MAX_BYTES];
-        let mut new_bytes_length = 0;
-
-        // If the slice starts at the beginning of a byte, then it's an easy case.
-        if start % 2 == 0 {
-            new_bytes_length = byte_end - byte_start;
-            new_bytes[0..new_bytes_length].copy_from_slice(&self.bytes[byte_start..byte_end]);
-        }
-        // Otherwise we need to shift everything by one nibble.
-        else {
-            let mut current_byte = (self.bytes[byte_start] & 0xf) << 4; // Right nibble.
-
-            for (count, byte) in self.bytes[(byte_start + 1)..byte_end].iter().enumerate() {
-                let tmp_byte = byte;
-
-                let left_nibble = (tmp_byte >> 4) & 0xf;
-
-                new_bytes[count] = current_byte | left_nibble;
-                new_bytes_length += 1;
-
-                current_byte = (tmp_byte & 0xf) << 4;
-            }
-
-            new_bytes[new_bytes_length] = current_byte;
-            new_bytes_length += 1;
-        };
-
-        // If we have an odd number of nibbles we add the last nibble now.
-        if end % 2 == 1 {
-            let last_nibble = self.bytes[byte_end] & 0xf0;
-
-            if start % 2 == 0 {
-                new_bytes[new_bytes_length] = last_nibble;
-            } else {
-                new_bytes[new_bytes_length - 1] |= last_nibble >> 4;
-            }
+        // TODO: Optimizations.
+        let mut key = KeyNibbles::ROOT;
+        for (j, i) in (start..end).enumerate() {
+            let nibble = self.get(i).unwrap();
+            key.set(j, nibble);
         }
 
         // Return the slice as a new key.
-        KeyNibbles {
-            bytes: new_bytes,
-            length: (end - start) as u8,
-        }
+        key
     }
 
     /// Returns the suffix of the current key starting at the given nibble index.
@@ -325,34 +385,13 @@ impl ops::Add<&KeyNibbles> for &KeyNibbles {
     type Output = KeyNibbles;
 
     fn add(self, other: &KeyNibbles) -> KeyNibbles {
-        let mut bytes = self.bytes;
+        let mut new_key = self.clone();
 
-        if self.len() % 2 == 0 {
-            // Easy case: the lhs ends with a full byte.
-            bytes[self.bytes_len()..self.bytes_len() + other.bytes_len()]
-                .copy_from_slice(&other.bytes[..other.bytes_len()]);
-        } else {
-            // Complex case: the lhs ends in the middle of a byte.
-            let mut next_byte = bytes[self.bytes_len() - 1];
-            let mut bytes_length = self.bytes_len() - 1;
-
-            for (count, byte) in other.bytes[..other.bytes_len()].iter().enumerate() {
-                let left_nibble = byte >> 4;
-                bytes[(self.bytes_len() - 1) + count] = next_byte | left_nibble;
-                bytes_length += 1;
-                next_byte = (byte & 0xf) << 4;
-            }
-
-            if other.length % 2 == 0 {
-                // Push next_byte
-                bytes[bytes_length] = next_byte;
-            }
+        for i in 0..other.len() {
+            new_key.set(i + self.len(), other.get(i).unwrap());
         }
 
-        KeyNibbles {
-            bytes,
-            length: self.length + other.length,
-        }
+        new_key
     }
 }
 
@@ -365,6 +404,8 @@ mod serde_derive {
         ser::Serializer,
         Deserialize, Serialize,
     };
+
+    use super::NIBBLE_BITS;
 
     impl Serialize for super::KeyNibbles {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -388,27 +429,28 @@ mod serde_derive {
             D: Deserializer<'de>,
         {
             let result: KeyNibbles = Deserialize::deserialize(deserializer)?;
-            if result.len > super::KeyNibbles::MAX_BYTES as u8 * 2 {
+            if result.len > super::KeyNibbles::MAX_BYTES as u8 * 8 / NIBBLE_BITS {
                 // length too high
                 return Err(D::Error::invalid_length(
                     result.len as usize,
                     &"fewer nibbles",
                 ));
             }
-            if result.bytes.len != (result.len + 1) / 2 {
-                // bytes length incorrect
-                return Err(D::Error::invalid_length(
-                    result.bytes.len as usize,
-                    &"matching nibble/byte length",
-                ));
-            }
-            if result.len % 2 == 1 && result.bytes.bytes[result.bytes.len as usize - 1] & 0x0f != 0
-            {
-                return Err(D::Error::invalid_value(
-                    Unexpected::Other("Unused nibble not zeroed"),
-                    &"unused nibbles being zeroed",
-                ));
-            }
+            // TODO: Fix
+            // if result.bytes.len != (result.len + 1) / 2 {
+            //     // bytes length incorrect
+            //     return Err(D::Error::invalid_length(
+            //         result.bytes.len as usize,
+            //         &"matching nibble/byte length",
+            //     ));
+            // }
+            // if result.len % 2 == 1 && result.bytes.bytes[result.bytes.len as usize - 1] & 0x0f != 0
+            // {
+            //     return Err(D::Error::invalid_value(
+            //         Unexpected::Other("Unused nibble not zeroed"),
+            //         &"unused nibbles being zeroed",
+            //     ));
+            // }
             Ok(super::KeyNibbles {
                 length: result.len,
                 bytes: result.bytes.bytes,
