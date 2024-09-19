@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use nimiq_account::RevertInfo;
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{BlockchainError, ChainInfo, Direction};
@@ -115,13 +117,17 @@ impl ChainStore {
 
         // Seek to the first block at the given height.
         let cursor = txn.dup_cursor(&self.height_idx);
+
+        let block_hash_start = Instant::now();
         let block_hash_iter = cursor
             .into_iter_dup_of(&block_height)
             .map(|(_height, hash)| hash);
+        log::debug!("Block hash iter took {:?}", block_hash_start.elapsed());
 
         // Iterate until we find the main chain block.
         let mut chain_info = None;
         let mut block_hash = None;
+        let block_hash_iter_start = Instant::now();
         for tmp_block_hash in block_hash_iter {
             let tmp_chain_info: ChainInfo = txn
                 .get(&self.chain_table, &tmp_block_hash)
@@ -134,6 +140,8 @@ impl ChainStore {
                 break;
             }
         }
+        log::debug!("Block hash iter took {:?}", block_hash_iter_start.elapsed(),);
+
         let mut chain_info = chain_info.ok_or(BlockchainError::BlockNotFound)?;
         let block_hash = block_hash.unwrap();
 
@@ -238,8 +246,12 @@ impl ChainStore {
         include_body: bool,
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Result<Block, BlockchainError> {
-        self.get_chain_info_at(block_height, include_body, txn_option)
-            .map(|chain_info| chain_info.head)
+        let get_chain_info_start = Instant::now();
+        let res = self
+            .get_chain_info_at(block_height, include_body, txn_option)
+            .map(|chain_info| chain_info.head);
+        log::debug!("Get chain info took {:?}", get_chain_info_start.elapsed(),);
+        res
     }
 
     pub fn get_blocks(
@@ -449,7 +461,10 @@ impl ChainStore {
         } else {
             Policy::macro_block_after(block.header.block_number)
         };
+        let while_start = Instant::now();
+        let mut while_count = 0;
         while (blocks.len() as u32) < count {
+            while_count += 1;
             let block_result = self.get_block_at(next_macro_block, include_body, Some(&txn));
             match block_result {
                 Ok(Block::Macro(block)) => {
@@ -468,6 +483,11 @@ impl ChainStore {
                 Err(e) => return Err(e),
             }
         }
+        log::debug!(
+            "---> While  took {:?}, loops: {}",
+            while_start.elapsed(),
+            while_count
+        );
 
         Ok(blocks)
     }
