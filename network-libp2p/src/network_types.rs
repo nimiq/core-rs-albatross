@@ -125,18 +125,6 @@ impl<P: Clone> ValidateMessage<P> {
     }
 }
 
-/// DHT bootstrap state
-#[derive(Default, PartialEq)]
-pub(crate) enum DhtBootStrapState {
-    /// DHT bootstrap has been started
-    #[default]
-    NotStarted,
-    /// DHT bootstrap has been started
-    Started,
-    /// DHT bootstrap has been completed
-    Completed,
-}
-
 /// Enum over all of the possible DHT records values
 #[derive(Clone, PartialEq)]
 pub(crate) enum DhtRecord {
@@ -236,7 +224,7 @@ pub(crate) struct TaskState {
         ),
     >,
     /// DHT (kad) has been bootstrapped
-    pub(crate) dht_bootstrap_state: DhtBootStrapState,
+    pub(crate) dht_bootstrap_complete: bool,
     /// DHT (kad) is in server mode
     pub(crate) dht_server_mode: bool,
     /// Senders per `OutboundRequestId` for request-response

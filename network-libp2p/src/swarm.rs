@@ -45,9 +45,7 @@ use crate::network_metrics::NetworkMetrics;
 use crate::{
     behaviour,
     discovery::{behaviour::Event, peer_contacts::PeerContactBook},
-    network_types::{
-        DhtBootStrapState, DhtRecord, DhtResults, NetworkAction, TaskState, ValidateMessage,
-    },
+    network_types::{DhtRecord, DhtResults, NetworkAction, TaskState, ValidateMessage},
     rate_limiting::RateLimits,
     Config, NetworkError, TlsConfig,
 };
@@ -284,15 +282,6 @@ fn handle_event(
                     swarm
                         .behaviour_mut()
                         .add_peer_address(peer_id, listen_addr.clone());
-
-                    // Bootstrap Kademlia if we're performing our first connection
-                    if state.dht_bootstrap_state == DhtBootStrapState::NotStarted {
-                        debug!("Bootstrapping DHT");
-                        if swarm.behaviour_mut().dht.bootstrap().is_err() {
-                            error!("Bootstrapping DHT error: No known peers");
-                        }
-                        state.dht_bootstrap_state = DhtBootStrapState::Started;
-                    }
                 }
             }
         }
@@ -518,8 +507,7 @@ fn handle_event(
                                     Ok(result) => {
                                         if result.num_remaining == 0 {
                                             debug!(?result, "DHT bootstrap successful");
-                                            state.dht_bootstrap_state =
-                                                DhtBootStrapState::Completed;
+                                            state.dht_bootstrap_complete = true;
                                             if state.dht_server_mode {
                                                 let _ = events_tx.send(NetworkEvent::DhtReady);
                                             }
@@ -565,7 +553,7 @@ fn handle_event(
                             debug!(%new_mode, "DHT mode changed");
                             if new_mode == kad::Mode::Server {
                                 state.dht_server_mode = true;
-                                if state.dht_bootstrap_state == DhtBootStrapState::Completed {
+                                if state.dht_bootstrap_complete {
                                     let _ = events_tx.send(NetworkEvent::DhtReady);
                                 }
                             }
@@ -596,15 +584,6 @@ fn handle_event(
                                     swarm
                                         .behaviour_mut()
                                         .add_peer_address(peer_id, peer_address);
-
-                                    // Bootstrap Kademlia if we're adding our first address
-                                    if state.dht_bootstrap_state == DhtBootStrapState::NotStarted {
-                                        debug!("Bootstrapping DHT");
-                                        if swarm.behaviour_mut().dht.bootstrap().is_err() {
-                                            error!("Bootstrapping DHT error: No known peers");
-                                        }
-                                        state.dht_bootstrap_state = DhtBootStrapState::Started;
-                                    }
                                 }
                             } else {
                                 error!(%peer_id, "Peer joined but it already exists");
