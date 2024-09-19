@@ -243,12 +243,8 @@ impl ChainStore {
         include_body: bool,
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Result<Block, BlockchainError> {
-        let get_chain_info_start = Instant::now();
-        let res = self
-            .get_chain_info_at(block_height, include_body, txn_option)
-            .map(|chain_info| chain_info.head);
-        log::debug!("Get chain info took {:?}", get_chain_info_start.elapsed(),);
-        res
+        self.get_chain_info_at(block_height, include_body, txn_option)
+            .map(|chain_info| chain_info.head)
     }
 
     pub fn get_blocks(
@@ -444,7 +440,9 @@ impl ChainStore {
         include_body: bool,
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Result<Vec<Block>, BlockchainError> {
+        let txn_new = Instant::now();
         let txn = txn_option.or_new(&self.db);
+        log::debug!("---> Obtaining db txn took {:?}", txn_new.elapsed(),);
 
         let mut blocks = Vec::new();
         let start_block_start = Instant::now();
