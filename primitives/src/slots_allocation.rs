@@ -14,7 +14,7 @@
 //!                      |             SlotBand                      |    SlotBand       |
 //!                      +-------------------------------------------+-------------------+
 //! ```
-use std::{cmp::max, collections::BTreeMap, ops::Range, slice::Iter};
+use std::{cmp::max, collections::BTreeMap, ops::Range, slice::Iter, time::Instant};
 
 use ark_ec::CurveGroup;
 use ark_serialize::CanonicalSerialize;
@@ -216,6 +216,8 @@ impl Hash for Validators {
     /// This function is meant to calculate the public key tree "off-circuit". Generating the public key
     /// tree with this function guarantees that it is compatible with the ZK circuit.
     fn hash<H: HashOutput>(&self) -> H {
+        let validators_hash_start = Instant::now();
+
         let public_keys = self.voting_keys_g2();
 
         // Checking that the number of public keys is equal to the number of validator slots.
@@ -249,7 +251,9 @@ impl Hash for Validators {
         }
 
         // Calculate the merkle tree root.
-        merkle_tree_construct(inputs)
+        let res = merkle_tree_construct(inputs);
+        log::debug!("Election map took {:?}", validators_hash_start.elapsed());
+        res
     }
 }
 
