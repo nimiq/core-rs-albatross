@@ -80,8 +80,26 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMacroChain {
             election_start.elapsed(),
         );
         let election_map_start = Instant::now();
-        let epochs: Vec<_> = election_blocks.iter().map(|block| block.hash()).collect();
-        log::debug!("Election map took {:?}", election_map_start.elapsed(),);
+
+        //let epochs: Vec<_> = election_blocks.iter().map(|block| block.hash()).collect();
+
+        let mut epochs: Vec<Blake2bHash> = vec![];
+
+        for block in election_blocks {
+            let block_hash_start = Instant::now();
+
+            let block_hash = block.hash();
+
+            log::debug!(
+                "Hashing block {} took {:?}",
+                block.block_number(),
+                block_hash_start.elapsed()
+            );
+
+            epochs.push(block_hash);
+        }
+
+        log::debug!("Election map took {:?}", election_map_start.elapsed());
 
         // Add latest checkpoint block if all of the following conditions are met:
         // * the latest macro block is a checkpoint block.

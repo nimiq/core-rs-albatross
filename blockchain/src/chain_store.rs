@@ -440,32 +440,22 @@ impl ChainStore {
         include_body: bool,
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Result<Vec<Block>, BlockchainError> {
-        let txn_new = Instant::now();
         let txn = txn_option.or_new(&self.db);
-        log::debug!("---> Obtaining db txn took {:?}", txn_new.elapsed(),);
-
         let mut blocks = Vec::new();
-        let start_block_start = Instant::now();
+
         let block = match self.get_block(start_block_hash, false, Some(&txn)) {
             Ok(Block::Macro(block)) => block,
             Ok(_) => return Err(BlockchainError::BlockIsNotMacro),
             Err(e) => return Err(e),
         };
-        log::debug!(
-            "---> Obtaining start block hash took {:?}, bn: {}",
-            start_block_start.elapsed(),
-            block.block_number()
-        );
 
         let mut next_macro_block = if election_blocks_only {
             Policy::election_block_after(block.header.block_number)
         } else {
             Policy::macro_block_after(block.header.block_number)
         };
-        let while_start = Instant::now();
-        let mut while_count = 0;
+
         while (blocks.len() as u32) < count {
-            while_count += 1;
             let block_result = self.get_block_at(next_macro_block, include_body, Some(&txn));
             match block_result {
                 Ok(Block::Macro(block)) => {
@@ -484,11 +474,6 @@ impl ChainStore {
                 Err(e) => return Err(e),
             }
         }
-        log::debug!(
-            "---> While  took {:?}, loops: {}",
-            while_start.elapsed(),
-            while_count
-        );
 
         Ok(blocks)
     }
