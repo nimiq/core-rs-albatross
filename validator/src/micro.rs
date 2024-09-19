@@ -330,8 +330,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         );
 
         // First we try to fill the block with control transactions
-        let mut block_available_bytes =
-            MicroBlock::get_available_bytes(self.equivocation_proofs.len());
+        let mut block_available_bytes = MicroBlock::get_available_bytes(&self.equivocation_proofs);
 
         let (mut transactions, txn_size) = self
             .mempool
