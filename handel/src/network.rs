@@ -99,7 +99,6 @@ impl<TNetwork: Network> LevelUpdateSender<TNetwork> {
             let same_signers = last_update.signers == msg.aggregate.contributors();
             let recently_sent = last_update.sent_at.elapsed() < Self::ALLOW_RESEND_AFTER;
             if same_signers && recently_sent {
-                // FIXME Without this return, things are MUCH faster... why?
                 return;
             }
         }

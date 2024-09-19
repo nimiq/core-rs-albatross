@@ -131,46 +131,47 @@ where
         }
     }
 
-    /// Starts level `level`
-    fn start_level(
-        &mut self,
-        level: usize,
-        store: &<P as Protocol<TId>>::Store,
-        activated_by: &'static str,
-    ) {
-        // Try to start the level. `level.start()` returns false if the level was already started.
-        let level = &self.levels[level];
-        if !level.start() {
-            return;
-        }
-
-        debug!(
-            id = ?self.protocol.identify(),
-            level = level.id,
-            activated_by,
-            "Starting level"
-        );
-
-        // Reset the level timeout.
-        self.start_level_interval = interval(self.config.level_timeout);
-
-        // Nothing else to do for level 0 as it only contains this node.
-        if level.id == 0 {
-            return;
-        }
-
-        // Get the current best aggregate for the level.
-        let Some(best) = store.combined(level.id - 1) else {
+    /// Starts all levels up to `level`.
+    fn start_level(&mut self, level: usize, store: &P::Store, activated_by: &'static str) {
+        // Find the first level that has not been started yet.
+        // If all levels are already started, there is nothing to do.
+        let Some(to_start) = self.levels.iter().position(|level| !level.is_started()) else {
             return;
         };
 
-        // Send the best aggregate to the peers on the level.
-        self.send_update(
-            best,
-            level.id,
-            !level.is_complete(),
-            level.select_next_peers(self.config.peer_count),
-        );
+        // If we have already started a higher level, there is nothing to do.
+        if to_start > level {
+            return;
+        }
+
+        // Activate all levels between `to_start` (inclusive) and `level` (inclusive).
+        for lvl in to_start..=level {
+            // Start the level.
+            let level = &self.levels[lvl];
+            level.start();
+
+            debug!(
+                id = ?self.protocol.identify(),
+                level = level.id,
+                activated_by,
+                "Starting level"
+            );
+
+            // Nothing else to do for level 0 as it only contains this node.
+            if level.id == 0 {
+                continue;
+            }
+
+            // Send the best aggregate to the peers on the level.
+            self.send_update(
+                level.id,
+                level.select_next_peers(self.config.peer_count),
+                store,
+            );
+        }
+
+        // Reset the level timeout.
+        self.start_level_interval = interval(self.config.level_timeout);
     }
 
     fn num_contributors(&self, aggregate: &P::Contribution) -> usize {
@@ -185,7 +186,7 @@ where
     }
 
     /// Check if the given level was completed.
-    fn check_completed_level(&mut self, level_id: usize, store: &<P as Protocol<TId>>::Store) {
+    fn check_completed_level(&mut self, level_id: usize, store: &P::Store) {
         // Nothing to do if the level is already complete.
         let level = &self.levels[level_id];
         if level.is_complete() {
@@ -230,12 +231,11 @@ where
 
         if !next_level.is_started() {
             self.start_level(next_level_id, store, "LevelComplete");
-        } else if let Some(best_aggregate) = store.combined(next_level_id - 1) {
+        } else {
             self.send_update(
-                best_aggregate,
                 next_level_id,
-                true,
                 next_level.select_next_peers(self.config.peer_count),
+                store,
             );
         }
 
@@ -247,20 +247,33 @@ where
     ///
     /// If the `send_individual` flag is set, the contribution containing solely
     /// this node contribution is sent alongside the aggregate.
-    fn send_update(
-        &mut self,
-        contribution: P::Contribution,
-        level_id: usize,
-        send_individual: bool,
-        node_ids: Vec<usize>,
-    ) {
+    fn send_update(&mut self, mut level_id: usize, node_ids: Vec<usize>, store: &P::Store) {
         // Nothing to do if there are no recipients.
         if node_ids.is_empty() {
             return;
         }
 
-        // If the send_individual flag is set, the individual contribution is sent alongside the aggregate.
-        let individual = if send_individual {
+        // If we already have a final result for this aggregation, return it.
+        // Otherwise, return our current best aggregate for the peer's level.
+        let contribution = if let Some(final_result) = &self.final_result {
+            level_id = self.levels.len();
+            final_result.clone()
+        } else {
+            let Some(best_aggregate) = store.combined(level_id - 1) else {
+                return;
+            };
+            best_aggregate
+        };
+
+        // FIXME Comment
+        let expected_contributors = self
+            .protocol
+            .partitioner()
+            .cumulative_level_size(level_id - 1);
+
+        let num_contributors = self.num_contributors(&contribution);
+
+        let individual = if num_contributors < expected_contributors {
             Some(self.contribution.clone())
         } else {
             None
@@ -289,48 +302,27 @@ where
 
     /// Send updates for every level to every peer accordingly.
     fn automatic_update(&mut self) {
+        let store = self.protocol.store();
+        let store = store.read();
+
         // Skip level 0 since it only contains this node.
         for level_id in 1..self.levels.len() {
-            // Skip levels that are complete or that haven't started yet.
+            // Skip levels that aren't started yet.
             let level = &self.levels[level_id];
-            if level.is_complete() || !level.is_started() {
-                continue;
+            if !level.is_started() {
+                break;
             }
-
-            // Get the current best aggregate for this level from the store.
-            let aggregate = {
-                let store = self.protocol.store();
-                let store = store.read();
-                let Some(aggregate) = store.combined(level_id - 1) else {
-                    continue;
-                };
-                aggregate
-            };
 
             // Send the aggregate to the next peers on this level.
             let next_peers = level.select_next_peers(self.config.peer_count);
-            self.send_update(aggregate, level_id, true, next_peers);
+            self.send_update(level_id, next_peers, &store);
         }
     }
 
     /// Activate the next level that has not started yet.
     fn activate_next_level(&mut self) {
-        // Find the best completed level.
-        let best_complete = self
-            .levels
-            .iter()
-            .rposition(|level| level.is_complete())
-            .unwrap_or(0);
-
-        // If the best completed level is the last level, we're done.
-        if best_complete == self.levels.len() - 1 {
-            return;
-        }
-
-        // Now find the first level above the best completed level that has not been started yet.
-        let to_start = self.levels[best_complete + 1..]
-            .iter()
-            .position(|level| !level.is_started());
+        // Find the first level that has not been started yet.
+        let to_start = self.levels.iter().position(|level| !level.is_started());
 
         // If there are no levels to start, we're done.
         let Some(to_start) = to_start else {
@@ -357,7 +349,7 @@ where
         let store = self.protocol.store();
         let mut store = store.write();
 
-        // if the contribution is valid push it to the store, creating a new aggregate
+        // Put the contribution into the store, creating a new aggregate.
         store.put(
             contribution.contribution.clone(),
             contribution.level,
@@ -409,39 +401,18 @@ where
         None
     }
 
+    /// Responds to an update received from `node_id` with our own best aggregate for `level_id`.
+    /// If we already have a final result, we send that result instead.
     fn respond_to_update(&mut self, node_id: usize, level_id: usize) {
-        // TODO Only respond if our aggregate is better than the peer's or complements it.
-
-        // Don't access `self.levels[level_id]` directly as it could point to `num_levels`, which
-        // is the case for full aggregations. It's fine to just return, as the peer has already
-        // finished aggregating and doesn't need our response anymore.
-        let Some(level) = self.levels.get(level_id) else {
+        // If the peer already has a full aggregation, we don't need to respond.
+        if level_id == self.levels.len() {
             return;
-        };
+        }
 
-        // If we already have a final result for this aggregation, return it.
-        // Otherwise, return our current best aggregate for the peer's level.
-        if let Some(final_result) = &self.final_result {
-            self.send_update(
-                final_result.clone(),
-                self.levels.len(),
-                false,
-                vec![node_id],
-            );
-        } else {
-            let store = self.protocol.store();
-            let store = store.read();
-            let Some(best_aggregate) = store.combined(level_id - 1) else {
-                return;
-            };
-
-            self.send_update(
-                best_aggregate,
-                level_id,
-                !level.is_complete(),
-                vec![node_id],
-            );
-        };
+        // Respond with our current best aggregate.
+        let store = self.protocol.store();
+        let store = store.read();
+        self.send_update(level_id, vec![node_id], &store);
     }
 }
 
@@ -459,21 +430,22 @@ where
         // Poll the input stream for new level updates.
         let evaluator = self.protocol.evaluator();
         while let Poll::Ready(Some(update)) = self.input_stream.poll_next_unpin(cx) {
-            // Verify that the sender of this update is on the correct level.
+            // Verify the level update.
             if !evaluator.verify(&update) {
                 trace!(
                     id = ?self.protocol.identify(),
                     ?update,
                     "Rejecting invalid level update",
                 );
+                // TODO Ban peer?
                 continue;
             }
 
             // Respond with our own update.
-            self.respond_to_update(update.origin(), update.level());
+            let level = update.level();
+            self.respond_to_update(update.origin(), level);
 
             // Store the aggregate (and individual if present) contributions in `pending_contributions`.
-            let level = update.level();
             self.pending_contributions
                 .add_contribution(update.aggregate, level);
             if let Some(individual) = update.individual {
@@ -552,8 +524,8 @@ where
         let _ = self.sender.poll_unpin(cx);
 
         // If this aggregation has already produced a final result, we return Pending instead of
-        // None to allow this aggregation to keep running so that it can send full aggregations to
-        // other nodes. This also means that the aggregation stream will never terminate.
+        // Ready(None) to allow this aggregation to keep running so that it can send full aggregations
+        // to other nodes. This also means that the aggregation stream will never terminate.
         if self.final_result.is_some() {
             return Poll::Pending;
         }

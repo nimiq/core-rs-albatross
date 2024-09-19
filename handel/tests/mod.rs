@@ -3,7 +3,7 @@ use std::{fmt::Formatter, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use futures::{
     future::{BoxFuture, FutureExt},
-    stream::StreamExt,
+    StreamExt,
 };
 use nimiq_bls::PublicKey;
 use nimiq_collections::bitset::BitSet;
@@ -30,7 +30,10 @@ use nimiq_time::timeout;
 use nimiq_utils::spawn;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
+use tokio::sync::{
+    mpsc,
+    mpsc::{Receiver, Sender},
+};
 
 /// Dump Aggregate adding numbers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -102,7 +105,7 @@ pub struct Protocol {
 }
 
 impl Protocol {
-    pub fn new(node_id: usize, num_ids: usize, threshold: usize) -> Self {
+    pub fn new(node_id: usize, num_ids: usize) -> Self {
         let partitioner = Arc::new(BinomialPartitioner::new(node_id, num_ids));
         let registry = Arc::new(Registry {});
         let store = Arc::new(RwLock::new(ReplaceStore::<usize, Self>::new(
@@ -113,7 +116,6 @@ impl Protocol {
             store.clone(),
             Arc::clone(&registry),
             partitioner.clone(),
-            threshold,
         ));
 
         Protocol {
@@ -237,162 +239,253 @@ impl<N: NetworkInterface<PeerId = MockPeerId>> Network for NetworkWrapper<N> {
     }
 }
 
+fn create_handel_instance(
+    config: Config,
+    num_contributors: usize,
+    node_id: usize,
+    network: Arc<MockNetwork>,
+) -> Aggregation<usize, Protocol, NetworkWrapper<MockNetwork>> {
+    // Create a protocol with `num_contributors` peers and set its id to `node_id`.
+    let protocol = Protocol::new(node_id, num_contributors);
+
+    // The sole contributor is this node.
+    let mut contributors = BitSet::new();
+    contributors.insert(node_id);
+
+    // Create a contribution for this node with a value of `node_id + 1`.
+    // This is to ensure that no node has value 0 which doesn't show up in addition.
+    let contribution = Contribution {
+        value: node_id as u64 + 1,
+        contributors,
+    };
+
+    Aggregation::new(
+        protocol,
+        config.clone(),
+        contribution,
+        network
+            .receive_messages::<Update<Contribution>>()
+            .map(move |msg| msg.0 .0.into_level_update(msg.1 .0 as u16))
+            .boxed(),
+        NetworkWrapper(network),
+    )
+}
+
+fn spawn_handel_instance(
+    config: Config,
+    num_contributors: usize,
+    node_id: usize,
+    hub: &mut MockHub,
+    output: Sender<(usize, Contribution)>,
+) -> Arc<MockNetwork> {
+    let network = Arc::new(hub.new_network_with_address(node_id as u64));
+
+    let mut handel =
+        create_handel_instance(config, num_contributors, node_id, Arc::clone(&network));
+
+    spawn(async move {
+        loop {
+            // Use a timeout here to eventually terminate the future if the aggregation stream is
+            // not producing any more items.
+            let item = timeout(Duration::from_secs(10), handel.next()).await;
+            if let Ok(Some(contribution)) = item {
+                output
+                    .send((node_id, contribution))
+                    .await
+                    .expect("Send should not fail");
+            } else {
+                return;
+            }
+        }
+    });
+
+    network
+}
+
+async fn wait_for_contributions(
+    num_contributions: usize,
+    num_nodes: usize,
+    receiver: &mut Receiver<(usize, Contribution)>,
+) {
+    let mut count = 0;
+    while count < num_nodes {
+        let (_, contribution) = timeout(Duration::from_secs(3), receiver.recv())
+            .await
+            .ok()
+            .flatten()
+            .expect("Aggregation took too long");
+        if contribution.num_contributors() == num_contributions {
+            count += 1;
+        }
+    }
+}
+
 #[test(tokio::test)]
-async fn handel_aggregation() {
+async fn handel_happy_path() {
+    let num_contributors = 20;
     let config = Config {
         update_interval: Duration::from_millis(100),
         level_timeout: Duration::from_millis(500),
         peer_count: 1,
     };
 
-    let stopped = Arc::new(RwLock::new(false));
-
     let mut hub = MockHub::default();
-
-    let num_contributors: usize = 20;
-    log::info!(num_contributors, "Running with");
-
-    // The final value needs to be the sum of all contributions.
-    // For instance for `contributor_num = 7: 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 = 36`
-    let mut expected_aggregation_value = 0u64;
-    for i in 0..num_contributors {
-        expected_aggregation_value += i as u64 + 1u64;
-    }
-
-    let (sender, mut receiver) = mpsc::channel(num_contributors);
-
     let mut networks: Vec<Arc<MockNetwork>> = vec![];
-    // Initialize `num_contributors` networks and Handel Aggregations. Connect all the networks with
-    // each other.
-    for id in 0..num_contributors {
-        // Create a network with id = `id`
-        let net = Arc::new(hub.new_network_with_address(id as u64));
-        // Create a protocol with `num_contributors` peers and set its id to `id`. Require
-        // `num_contributors` contributions, meaning all contributions need to be aggregated.
-        let protocol = Protocol::new(id, num_contributors, num_contributors);
-        // The sole contributor is this node.
-        let mut contributors = BitSet::new();
-        contributors.insert(id);
+    let (tx, mut rx) = mpsc::channel(1024);
 
-        // Create a contribution for this node with a value of `id + 1`.
-        // This is to ensure that no node has value 0 which doesn't show up in addition.
-        let contribution = Contribution {
-            value: id as u64 + 1,
-            contributors,
-        };
-
-        // Connect the network to all already existing networks.
-        for network in &networks {
-            net.dial_mock(network);
-        }
-
-        // Remember the network so that subsequently created networks can connect to it.
-        networks.push(net.clone());
-
-        // Spawn a task for this Handel Aggregation and Network instance.
-        let mut aggregation = Aggregation::new(
-            protocol,
+    // Spawn `num_contributors` handel instances and connect them to each other.
+    for node_id in 0..num_contributors {
+        let network = spawn_handel_instance(
             config.clone(),
-            contribution,
-            net.receive_messages::<Update<Contribution>>()
-                .map(move |msg| msg.0.0.into_level_update(msg.1.0 as u16))
-                .boxed(),
-            NetworkWrapper(net),
+            num_contributors,
+            node_id,
+            &mut hub,
+            tx.clone(),
         );
 
-        let stopped = stopped.clone();
-        let sender = sender.clone();
-        spawn(async move {
-            loop {
-                // Use a timeout here to eventually check the `stopped` flag if the aggregation
-                // stream is not producing any more items.
-                let item = timeout(Duration::from_secs(1), aggregation.next()).await;
-                if let Ok(Some(contribution)) = item {
-                    if contribution.num_contributors() == num_contributors {
-                        assert_eq!(contribution.value, expected_aggregation_value);
-                        sender.send(()).await.expect("Send should never fail");
-                    }
-                }
-
-                if *stopped.read() {
-                    return;
-                }
-            }
-        });
+        // Connect the network to all already existing ones.
+        for net in &networks {
+            network.dial_mock(net);
+        }
+        networks.push(network);
     }
 
-    // Check that all aggregations completed.
-    let mut num_finished = 0usize;
-    loop {
-        let _ = timeout(Duration::from_secs(2), receiver.recv())
-            .await
-            .expect("An aggregation took too long to return");
-        num_finished += 1;
-        log::info!(num_finished, "Finished count");
-        if num_finished == num_contributors {
-            break;
+    // Wait for all aggregations to complete.
+    wait_for_contributions(num_contributors, num_contributors, &mut rx).await;
+}
+
+#[test(tokio::test)]
+async fn handel_one_node_late() {
+    let num_contributors = 17;
+    let config = Config {
+        update_interval: Duration::from_millis(100),
+        level_timeout: Duration::from_millis(500),
+        peer_count: 1,
+    };
+
+    let mut hub = MockHub::default();
+    let mut networks: Vec<Arc<MockNetwork>> = vec![];
+    let (tx, mut rx) = mpsc::channel(1024);
+
+    // Spawn `num_contributors - 1` handel instances and connect them to each other.
+    for node_id in 0..num_contributors - 1 {
+        let network = spawn_handel_instance(
+            config.clone(),
+            num_contributors,
+            node_id,
+            &mut hub,
+            tx.clone(),
+        );
+
+        // Connect the network to all already existing ones.
+        for net in &networks {
+            network.dial_mock(net);
+        }
+        networks.push(network);
+    }
+
+    // Wait for all aggregations to collect `num_contributors - 1` contributions.
+    wait_for_contributions(num_contributors - 1, num_contributors - 1, &mut rx).await;
+
+    // Spawn the late node.
+    let network = spawn_handel_instance(
+        config.clone(),
+        num_contributors,
+        num_contributors - 1,
+        &mut hub,
+        tx.clone(),
+    );
+
+    // Connect the network to all already existing ones.
+    for net in &networks {
+        network.dial_mock(net);
+    }
+
+    // Wait for all aggregations to complete.
+    wait_for_contributions(num_contributors, num_contributors, &mut rx).await;
+}
+
+#[test(tokio::test)]
+#[ignore]
+async fn handel_poor_connectivity() {
+    let num_contributors = 4;
+    let config = Config {
+        update_interval: Duration::from_millis(100),
+        level_timeout: Duration::from_millis(500),
+        peer_count: 1,
+    };
+
+    let mut hub = MockHub::default();
+    let mut prev_net: Option<Arc<MockNetwork>> = None;
+    let (tx, mut rx) = mpsc::channel(1024);
+
+    // Spawn `num_contributors` handel instances.
+    for node_id in 0..num_contributors {
+        let network = spawn_handel_instance(
+            config.clone(),
+            num_contributors,
+            node_id,
+            &mut hub,
+            tx.clone(),
+        );
+
+        // Connect each node only to the previous one.
+        if let Some(net) = prev_net {
+            network.dial_mock(&net);
+        }
+        prev_net = Some(network);
+    }
+
+    // Wait for all aggregations to complete.
+    wait_for_contributions(num_contributors, num_contributors, &mut rx).await;
+}
+
+#[test(tokio::test)]
+async fn handel_netsplit() {
+    let num_contributors = 18;
+    let config = Config {
+        update_interval: Duration::from_millis(100),
+        level_timeout: Duration::from_millis(300),
+        peer_count: 1,
+    };
+
+    let mut hub = MockHub::default();
+    let mut networks1: Vec<Arc<MockNetwork>> = vec![];
+    let mut networks2: Vec<Arc<MockNetwork>> = vec![];
+    let (tx, mut rx) = mpsc::channel(1024);
+
+    // Spawn `num_contributors` handel instances.
+    for node_id in 0..num_contributors {
+        let network = spawn_handel_instance(
+            config.clone(),
+            num_contributors,
+            node_id,
+            &mut hub,
+            tx.clone(),
+        );
+
+        // Split handel instances into two clusters.
+        let networks = if node_id % 2 == 0 {
+            &mut networks1
+        } else {
+            &mut networks2
+        };
+        for net in networks.iter() {
+            network.dial_mock(net);
+        }
+        networks.push(network);
+    }
+
+    // Wait for all aggregations to collect half of the contributions.
+    wait_for_contributions(num_contributors / 2, num_contributors, &mut rx).await;
+
+    // Now connect the two clusters.
+    for net1 in &networks1 {
+        for net2 in &networks2 {
+            net1.dial_mock(net2);
         }
     }
 
-    *stopped.write() = true;
-
-    return;
-
-    // // after we have the final aggregate create a new instance and have it (without any other instances)
-    // // return a fully aggregated contribution and terminate.
-    // // Same as before
-    // // let net = Arc::new(hub.new_network_with_address(contributor_num as u64));
-    // let protocol = Protocol::new(num_contributors, num_contributors + 1, num_contributors + 1);
-    // let mut contributors = BitSet::new();
-    // contributors.insert(num_contributors);
-    // let contribution = Contribution {
-    //     value: num_contributors as u64 + 1u64,
-    //     contributors,
-    // };
-    // for network in &networks {
-    //     net.dial_mock(network);
-    // }
-    //
-    // // instead of spawning the aggregation task await its result here.
-    // let mut aggregation = Aggregation::new(
-    //     protocol,
-    //     config.clone(),
-    //     contribution,
-    //     Box::pin(
-    //         net.receive_messages::<Update<Contribution>>()
-    //             .map(move |msg| msg.0 .0),
-    //     ),
-    //     NetworkWrapper(net),
-    // );
-    //
-    // // first poll will add the nodes individual contribution and send its LevelUpdate
-    // // which should be responded to with a full aggregation
-    // let _ = aggregation.next().await;
-    // // Second poll must return a full contribution
-    // let last_aggregate = aggregation.next().await;
-    //
-    // // An aggregation needs to be present
-    // assert!(last_aggregate.is_some(), "Nothing was aggregated!");
-    //
-    // let last_aggregate = last_aggregate.unwrap();
-    //
-    // // All nodes need to contribute
-    // assert_eq!(
-    //     last_aggregate.num_contributors(),
-    //     num_contributors + 1,
-    //     "Not all contributions are present: {:?}",
-    //     last_aggregate,
-    // );
-    //
-    // // the final value needs to be the sum of all contributions: `exp_agg_value`
-    // assert_eq!(
-    //     last_aggregate.value, expected_aggregation_value,
-    //     "Wrong aggregation result",
-    // );
-    //
-    // *stopped.write() = true;
+    // Wait for all aggregations to complete.
+    wait_for_contributions(num_contributors, num_contributors, &mut rx).await;
 }
-
-// additional tests:
-// it_sends_periodic_updates
-// it_activates_levels

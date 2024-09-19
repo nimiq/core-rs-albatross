@@ -114,7 +114,6 @@ impl SkipBlockAggregationProtocol {
     pub fn new(
         validators: Validators,
         node_id: usize,
-        threshold: usize,
         message_hash: Blake2sHash,
         block_height: u32,
     ) -> Self {
@@ -133,7 +132,6 @@ impl SkipBlockAggregationProtocol {
             Arc::clone(&store),
             Arc::clone(&registry),
             Arc::clone(&partitioner),
-            threshold,
         ));
 
         SkipBlockAggregationProtocol {
@@ -234,7 +232,6 @@ impl SkipBlockAggregation {
         let protocol = SkipBlockAggregationProtocol::new(
             active_validators.clone(),
             validator_id as usize,
-            policy::Policy::TWO_F_PLUS_ONE as usize,
             message_hash,
             skip_block_info.block_number,
         );

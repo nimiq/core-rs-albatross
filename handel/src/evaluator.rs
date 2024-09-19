@@ -44,9 +44,6 @@ where
 
     /// Partitioner that registers the handel levels and its IDs.
     partitioner: Arc<TProtocol::Partitioner>,
-
-    /// Threshold after which a signature could be considered final according to the weights of the signers.
-    pub threshold: usize,
 }
 
 impl<TId, TProtocol> WeightedVote<TId, TProtocol>
@@ -75,13 +72,11 @@ where
         store: Arc<RwLock<TProtocol::Store>>,
         weights: Arc<TProtocol::Registry>,
         partitioner: Arc<TProtocol::Partitioner>,
-        threshold: usize,
     ) -> Self {
         Self {
             store,
             weights,
             partitioner,
-            threshold,
         }
     }
 }
@@ -240,7 +235,7 @@ where
             return false;
         }
 
-        // Special case for full aggregations, which are sent at level `max_level + 1`.
+        // Special case for full aggregations, which are sent at level `num_levels`.
         // They are only valid if they contain all signers.
         if level == num_levels {
             let weight = self
@@ -263,7 +258,11 @@ where
 
         // Check that the signer of the individual contribution corresponds to the message origin.
         if let Some(individual) = &msg.individual {
-            if individual.num_contributors() != 1 || !individual.contributors().contains(origin) {
+            let num_contributors = self
+                .weights
+                .signers_identity(&individual.contributors())
+                .len();
+            if num_contributors != 1 || !individual.contributors().contains(origin) {
                 return false;
             }
         }

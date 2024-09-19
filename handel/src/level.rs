@@ -86,32 +86,29 @@ impl Level {
                         continue;
                     }
 
-                    // Get start and end of our side to avoid having to clone the range
-                    let tree_lhs_start = tree_lhs.start;
-                    let tree_lhs_end = tree_lhs.end;
+                    // Clone our side of the tree.
+                    let cur_tree_lhs = tree_lhs.clone();
 
-                    // Find this nodes index on its side of the tree
+                    // Find this node's index on its side of the tree.
                     let index = tree_lhs
                         .position(|id| id == node_id)
                         .expect("The node must always be present on its side of the tree");
 
-                    // Index of the next peer is symmetric, so set it to where this nodes position would be
-                    // on its side of the sub tree. Levels may not be full, so it needs to be adjusted for that.
+                    // Index of the next peer is symmetric, so set it to where this nodes position
+                    // would be on its side of the subtree. Levels may not be full, so it needs to
+                    // be adjusted for that.
                     level.state.write().next_peer_index = index % level.peer_ids.len();
 
-                    // All levels but the first must update their side of the tree
-                    if *tree_rhs.end() + 1 == tree_lhs_start {
-                        tree_lhs = *tree_rhs.start()..tree_lhs_end;
-                    } else if *tree_rhs.start() == tree_lhs_end {
-                        tree_lhs = tree_lhs_start..*tree_rhs.end() + 1;
+                    // All levels but the first must update their side of the tree.
+                    if *tree_rhs.end() + 1 == cur_tree_lhs.start {
+                        tree_lhs = *tree_rhs.start()..cur_tree_lhs.end;
+                    } else if *tree_rhs.start() == cur_tree_lhs.end {
+                        tree_lhs = cur_tree_lhs.start..*tree_rhs.end() + 1;
                     } else {
-                        log::info!(
-                            "{}: {:?} - {:?}",
-                            node_id,
-                            tree_lhs_start..tree_lhs_end,
-                            tree_rhs
+                        panic!(
+                            "Ranges must be consecutive: node_id={}, lhs={:?}, rhs={:?}",
+                            node_id, cur_tree_lhs, tree_rhs
                         );
-                        panic!("ranges must be consecutive");
                     }
 
                     levels.push(level);
@@ -120,7 +117,7 @@ impl Level {
                     let level = Level::new(i, vec![]);
                     levels.push(level);
                 }
-                Err(e) => panic!("{}", e),
+                Err(e) => panic!("Partitioning error: {}", e),
             }
         }
 

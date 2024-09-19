@@ -23,6 +23,9 @@ pub trait Partitioner: Send + Sync {
     /// Number of identities at `level`
     fn level_size(&self, level: usize) -> usize;
 
+    /// Total number of identities up to `level`
+    fn cumulative_level_size(&self, level: usize) -> usize;
+
     /// Range of identities that need to be contacted at `level`
     fn range(&self, level: usize) -> Result<RangeInclusive<usize>, PartitioningError>;
 
@@ -76,6 +79,14 @@ impl Partitioner for BinomialPartitioner {
         } else {
             0
         }
+    }
+
+    fn cumulative_level_size(&self, level: usize) -> usize {
+        let mut size = 0;
+        for lvl in 0..=level {
+            size += self.level_size(lvl);
+        }
+        size
     }
 
     fn range(&self, level: usize) -> Result<RangeInclusive<usize>, PartitioningError> {
