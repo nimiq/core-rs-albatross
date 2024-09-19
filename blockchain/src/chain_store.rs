@@ -118,16 +118,14 @@ impl ChainStore {
         // Seek to the first block at the given height.
         let cursor = txn.dup_cursor(&self.height_idx);
 
-        let block_hash_start = Instant::now();
         let block_hash_iter = cursor
             .into_iter_dup_of(&block_height)
             .map(|(_height, hash)| hash);
-        log::debug!("Block hash iter took {:?}", block_hash_start.elapsed());
 
         // Iterate until we find the main chain block.
         let mut chain_info = None;
         let mut block_hash = None;
-        let block_hash_iter_start = Instant::now();
+
         for tmp_block_hash in block_hash_iter {
             let tmp_chain_info: ChainInfo = txn
                 .get(&self.chain_table, &tmp_block_hash)
@@ -140,7 +138,6 @@ impl ChainStore {
                 break;
             }
         }
-        log::debug!("Block hash iter took {:?}", block_hash_iter_start.elapsed(),);
 
         let mut chain_info = chain_info.ok_or(BlockchainError::BlockNotFound)?;
         let block_hash = block_hash.unwrap();
@@ -450,11 +447,17 @@ impl ChainStore {
         let txn = txn_option.or_new(&self.db);
 
         let mut blocks = Vec::new();
+        let start_block_start = Instant::now();
         let block = match self.get_block(start_block_hash, false, Some(&txn)) {
             Ok(Block::Macro(block)) => block,
             Ok(_) => return Err(BlockchainError::BlockIsNotMacro),
             Err(e) => return Err(e),
         };
+        log::debug!(
+            "---> Obtaining start block hash took {:?}, bn: {}",
+            start_block_start.elapsed(),
+            block.block_number()
+        );
 
         let mut next_macro_block = if election_blocks_only {
             Policy::election_block_after(block.header.block_number)
