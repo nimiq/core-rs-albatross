@@ -5,7 +5,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    task::{Context, Poll},
+    task::{Context, Poll, Waker},
     time::Duration,
 };
 
@@ -19,7 +19,7 @@ use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::request_handler};
 use nimiq_time::{interval, Interval};
-use nimiq_utils::spawn;
+use nimiq_utils::{spawn, WakerExt};
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 use tokio::sync::{
     broadcast::{channel as broadcast, Sender as BroadcastSender},
@@ -158,6 +158,8 @@ pub struct Consensus<N: Network> {
     ),
 
     zkp_proxy: ZKPComponentProxy<N>,
+
+    waker: Option<Waker>,
 }
 
 impl<N: Network> Consensus<N> {
@@ -226,6 +228,7 @@ impl<N: Network> Consensus<N> {
             // Choose a small buffer as having a lot of items buffered here indicates a bigger problem.
             requests: mpsc_channel(10),
             zkp_proxy,
+            waker: None,
         }
     }
 
@@ -487,6 +490,9 @@ impl<N: Network> Consensus<N> {
 
         self.head_requests_time = Some(Instant::now());
         self.head_requests_interval = interval(Self::HEAD_REQUESTS_TIMEOUT);
+
+        // Wake up the task such that we start working on the head request immediately.
+        self.waker.wake();
     }
 
     fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
@@ -575,6 +581,7 @@ impl<N: Network> Future for Consensus<N> {
         // Advance consensus and catch-up through head requests.
         self.request_heads();
 
+        self.waker.store_waker(cx);
         Poll::Pending
     }
 }
