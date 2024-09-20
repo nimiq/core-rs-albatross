@@ -4,7 +4,7 @@
     "The Nimiq Core Development Team <info@nimiq.com>"
   ],
   "description": "Nimiq's Rust-to-WASM web client",
-  "version": "2.0.0-next.24.2",
+  "version": "2.0.0-next.24.3",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

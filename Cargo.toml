@@ -154,7 +154,7 @@ ark-ff = { git = "https://github.com/paberr/algebra", branch = "pb/0.4" }
 ark-r1cs-std = { git = "https://github.com/paberr/r1cs-std", branch = "pb/fix-pedersen" }
 
 [workspace.package]
-version = "0.24.2"
+version = "0.24.3"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2021"
 homepage = "https://nimiq.com"
