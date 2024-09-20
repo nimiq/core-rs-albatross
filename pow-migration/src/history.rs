@@ -133,6 +133,10 @@ pub async fn migrate_history(
                 .await
                 .unwrap();
 
+            if block_height % 100 == 0 {
+                log::info!(block_number = %block.number, target = %candidate_block, "Migrated new PoW history chunk");
+            }
+
             // Get all transactions for this block height
             let mut transactions = vec![];
             let mut network_id = NetworkId::Main;
