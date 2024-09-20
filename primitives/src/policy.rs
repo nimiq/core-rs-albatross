@@ -88,7 +88,7 @@ impl Policy {
     pub const F_PLUS_ONE: u16 = (Self::SLOTS + 3 - 1) / 3;
 
     /// The minimum timeout in milliseconds for a validator to produce a block (4s)
-    pub const MINIMUM_PRODUCER_TIMEOUT: u64 = 4 * 1000;
+    pub const MIN_PRODUCER_TIMEOUT: u64 = 4 * 1000;
 
     /// The optimal time in milliseconds between blocks (1s)
     pub const BLOCK_SEPARATION_TIME: u64 = 1000;
@@ -347,6 +347,7 @@ impl Policy {
     }
 
     /// Returns the block number (height) of the next macro block after a given block number (height).
+    /// If the given block number is a macro block, it returns the macro block after it.
     #[inline]
     #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = macroBlockAfter))]
     pub fn macro_block_after(block_number: u32) -> u32 {
@@ -577,9 +578,9 @@ impl Policy {
     }
 
     /// The minimum timeout in milliseconds for a validator to produce a block (4s)
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = MINIMUM_PRODUCER_TIMEOUT))]
-    pub fn wasm_minimum_block_producer_timeout() -> u64 {
-        Self::MINIMUM_PRODUCER_TIMEOUT
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = MIN_PRODUCER_TIMEOUT))]
+    pub fn wasm_min_block_producer_timeout() -> u64 {
+        Self::MIN_PRODUCER_TIMEOUT
     }
 
     /// The optimal time in milliseconds between blocks (1s)

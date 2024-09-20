@@ -492,7 +492,7 @@ impl Block {
         // Handle skip blocks.
         if self.is_skip() {
             // Check that skip block has the expected timestamp.
-            let expected_timestamp = predecessor.timestamp() + Policy::MINIMUM_PRODUCER_TIMEOUT;
+            let expected_timestamp = predecessor.timestamp() + Policy::MIN_PRODUCER_TIMEOUT;
             if self.timestamp() != expected_timestamp {
                 debug!(
                     block = %self,

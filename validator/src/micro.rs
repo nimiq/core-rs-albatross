@@ -253,7 +253,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             if !in_current_state(head) {
                 None
             } else {
-                let timestamp = head.timestamp() + Policy::MINIMUM_PRODUCER_TIMEOUT;
+                let timestamp = head.timestamp() + Policy::MIN_PRODUCER_TIMEOUT;
 
                 let skip_block = self.block_producer.next_micro_block(
                     &blockchain,

@@ -132,11 +132,15 @@ impl<TValidatorNetwork: ValidatorNetwork> Validator<TValidatorNetwork>
 where
     PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
 {
-    const MAXIMUM_PRODUCER_TIMEOUT: Duration = Duration::from_millis(16_000); // 16 seconds
-    const MINIMUM_PRODUCER_TIMEOUT: Duration =
-        Duration::from_millis(Policy::MINIMUM_PRODUCER_TIMEOUT); // 4 seconds
-    const NUM_BLOCKS_FOR_TIMEOUT_CALCULATION: u32 = 60;
+    /// The minimum time to wait for a micro block before starting a skip block.
+    const MIN_PRODUCER_TIMEOUT: Duration = Duration::from_millis(Policy::MIN_PRODUCER_TIMEOUT);
+    /// The maximum time to wait for a micro block before starting to skip block.
+    const MAX_PRODUCER_TIMEOUT: Duration = Duration::from_secs(16);
+    /// The number of blocks to consider when calculating the micro block producer timeout.
+    const PRODUCER_TIMEOUT_WINDOW_SIZE: u32 = 120;
+    /// The targeted block time.
     const BLOCK_SEPARATION_TIME: Duration = Duration::from_millis(Policy::BLOCK_SEPARATION_TIME);
+    /// The maximum number of bytes that equivocation proofs are allowed to take up in a block.
     const EQUIVOCATION_PROOFS_MAX_SIZE: usize = 1_000; // bytes
 
     pub fn new(
@@ -239,56 +243,52 @@ where
         self.init_block_producer(head_hash);
     }
 
-    /// Computes the micro block producer timeout based on historical block data.
-    ///
-    /// This method calculates the timeout duration for a micro block producer by computing the average block
-    /// time over a defined number of previous blocks (`Self::NUM_BLOCKS_FOR_TIMEOUT_CALCULATION`).
-    /// If sufficient block history is not available, it uses the genesis block as a fallback for the calculation.
-    ///
-    /// If the block window is equal or smaller than 1, `Self::MINIMUM_PRODUCER_TIMEOUT` is returned.
-    ///
-    /// The timeout is determined by multiplying the average block time by four. For example
-    /// an average block time of 2 seconds results in a 8 second timeout.
-    ///
-    /// Lastly, the timeout is clamped between `Self::MINIMUM_PRODUCER_TIMEOUT` and `Self::MAXIMUM_PRODUCER_TIMEOUT`.
+    /// Calculates the micro block producer timeout by averaging block times over a window ending at
+    /// `head_block`. The window size is dynamically adjusted if there are not enough blocks
+    /// available, i.e. at the beginning of the chain or if not all blocks are present in the
+    /// database.
     fn compute_micro_block_producer_timeout(
         head_block: &Block,
         blockchain: &Blockchain,
     ) -> Duration {
-        let lower_timestamp;
-        let lower_block_number;
+        let end_block_number = head_block.block_number();
+        let end_timestamp = head_block.timestamp();
 
-        if let Ok(window_block) = blockchain.get_block_at(
-            head_block
-                .block_number()
-                .saturating_sub(Self::NUM_BLOCKS_FOR_TIMEOUT_CALCULATION),
-            false,
-            None,
-        ) {
-            lower_timestamp = window_block.timestamp();
-            lower_block_number = window_block.block_number();
-        } else {
-            let genesis_block = blockchain
-                .get_block_at(Policy::genesis_block_number(), false, None)
-                .expect("genesis block must be present in the ChainStore");
+        // Calculate the block number at the start of the window.
+        // Make sure this never points before the genesis block.
+        let start_block_number =
+            end_block_number.saturating_sub(Self::PRODUCER_TIMEOUT_WINDOW_SIZE);
+        let mut start_block_number = u32::max(start_block_number, Policy::genesis_block_number());
 
-            lower_timestamp = genesis_block.timestamp();
-            lower_block_number = genesis_block.block_number();
+        // We might not have the block at `start_block_number` in our database. If it's missing,
+        // move up the chain to the next succeeding macro block(s), adjusting `start_block_number`
+        // in the process.
+        let start_timestamp = loop {
+            if let Ok(block) = blockchain.get_block_at(start_block_number, false, None) {
+                break block.timestamp();
+            }
+
+            // Try the next macro block.
+            start_block_number = Policy::macro_block_after(start_block_number);
+
+            // Bail if we didn't find a macro block. This shouldn't happen as we should always have
+            // at least the macro block at the beginning of our current batch.
+            if start_block_number >= end_block_number {
+                return Self::MIN_PRODUCER_TIMEOUT;
+            }
+        };
+
+        // Calculate the effective window size.
+        // If there are no blocks in the window, we return the default value.
+        let effective_window_size = end_block_number.saturating_sub(start_block_number) as u64;
+        if effective_window_size < 1 {
+            return Self::MIN_PRODUCER_TIMEOUT;
         }
 
-        let block_window = head_block.block_number().saturating_sub(lower_block_number) as u64;
-        if block_window <= 1 {
-            return Self::MINIMUM_PRODUCER_TIMEOUT;
-        }
-
-        let avg_block_time =
-            (head_block.timestamp().saturating_sub(lower_timestamp)) / (block_window - 1);
+        // Calculate the timeout and clamp it to the allowed range.
+        let avg_block_time = end_timestamp.saturating_sub(start_timestamp) / effective_window_size;
         let timeout = Duration::from_millis(avg_block_time * 4);
-
-        timeout.clamp(
-            Self::MINIMUM_PRODUCER_TIMEOUT,
-            Self::MAXIMUM_PRODUCER_TIMEOUT,
-        )
+        timeout.clamp(Self::MIN_PRODUCER_TIMEOUT, Self::MAX_PRODUCER_TIMEOUT)
     }
 
     /// Resets the reactivation state if we sent a reactivate transaction that expired.

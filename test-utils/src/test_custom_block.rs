@@ -198,7 +198,7 @@ pub fn next_skip_block(
     let timestamp = if config.timestamp_offset != 0 {
         (blockchain.timestamp() as i64 + config.timestamp_offset) as u64
     } else {
-        blockchain.timestamp() + Policy::MINIMUM_PRODUCER_TIMEOUT
+        blockchain.timestamp() + Policy::MIN_PRODUCER_TIMEOUT
     };
 
     let parent_hash = config

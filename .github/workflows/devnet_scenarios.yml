@@ -38,8 +38,8 @@ jobs:
         - test: Validators90sDown
           devnet_args: -t .github/devnet_topologies/four_validators_spammer_1.toml -dt 90 -ut 100
         - test: LowBlockProducerTimeout
-          pre: "grep 'MINIMUM_PRODUCER_TIMEOUT: u64 = 4 \\* 1000;' primitives/src/policy.rs &&
-                sed -i 's/MINIMUM_PRODUCER_TIMEOUT: u64 = 4 \\* 1000;/MINIMUM_PRODUCER_TIMEOUT: u64 = 1000;/g' primitives/src/policy.rs"
+          pre: "grep 'MIN_PRODUCER_TIMEOUT: u64 = 4 \\* 1000;' primitives/src/policy.rs &&
+                sed -i 's/MIN_PRODUCER_TIMEOUT: u64 = 4 \\* 1000;/MIN_PRODUCER_TIMEOUT: u64 = 1000;/g' primitives/src/policy.rs"
           devnet_args: -t .github/devnet_topologies/four_validators_spammer_1.toml -k 0 -ut 100
 
     runs-on: ubuntu-22.04
