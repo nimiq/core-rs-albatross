@@ -122,6 +122,7 @@ fn it_can_convert_macro_block_into_slots() {
             history_root: Blake2bHash::default(),
             validators: Some(validator_slots.clone()),
             next_batch_initial_punished_set: BitSet::new(),
+            ..Default::default()
         },
         justification: None,
         body: Some(MacroBody {

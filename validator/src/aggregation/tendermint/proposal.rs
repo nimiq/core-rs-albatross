@@ -34,7 +34,7 @@ pub struct Header<Id>(pub MacroHeader, pub Option<Id>);
 
 impl<Id> Proposal<Blake2sHash, Blake2sHash> for Header<Id> {
     fn hash(&self) -> Blake2sHash {
-        self.0.hash()
+        Hash::hash(&self.0)
     }
 
     fn inherent_hash(&self) -> Blake2sHash {

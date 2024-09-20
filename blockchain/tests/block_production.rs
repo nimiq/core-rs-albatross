@@ -6,7 +6,6 @@ use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::{mdbx::MdbxDatabase, traits::WriteTransaction};
 use nimiq_genesis::NetworkId;
-use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{
     Address, Ed25519PublicKey as SchnorrPublicKey, KeyPair as SchnorrKeyPair,
     PrivateKey as SchnorrPrivateKey, SecureGenerate,
@@ -87,7 +86,7 @@ fn it_can_produce_micro_blocks() {
         };
         let mut header2 = header1.clone();
         header2.timestamp += 1;
-        let hash2 = header2.hash::<Blake2bHash>();
+        let hash2 = header2.hash();
         let justification2 = signing_key().sign(hash2.as_slice());
         ForkProof::new(
             validator_address(),

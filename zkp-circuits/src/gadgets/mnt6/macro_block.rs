@@ -444,6 +444,7 @@ mod tests {
             history_root: Blake2bHash(rng.gen()),
             validators,
             next_batch_initial_punished_set: Default::default(),
+            ..Default::default()
         };
 
         MacroBlock {

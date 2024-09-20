@@ -5,13 +5,12 @@ use nimiq_block::{
 };
 use nimiq_bls::{AggregateSignature, G2Projective, PublicKey as BlsPublicKey};
 use nimiq_collections::BitSet;
-use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
+use nimiq_hash::Hash;
 use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey, Ed25519Signature, KeyPair};
 use nimiq_primitives::{networks::NetworkId, policy::Policy, slots_allocation::ValidatorsBuilder};
 use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{generate_transactions, validator_address};
 use nimiq_transaction::ExecutedTransaction;
-use nimiq_vrf::VrfSeed;
 
 #[test]
 fn test_verify_header_network() {
@@ -21,13 +20,7 @@ fn test_verify_header_network() {
             version: Policy::VERSION,
             block_number: 1,
             timestamp: 0,
-            parent_hash: Blake2bHash::default(),
-            seed: VrfSeed::default(),
-            extra_data: [].to_vec(),
-            state_root: Blake2bHash::default(),
-            body_root: Blake2sHash::default(),
-            diff_root: Blake2bHash::default(),
-            history_root: Blake2bHash::default(),
+            ..Default::default()
         },
         justification: None,
         body: None,
@@ -58,13 +51,7 @@ fn test_verify_header_version() {
             version: Policy::VERSION - 1,
             block_number: 1,
             timestamp: 0,
-            parent_hash: Blake2bHash::default(),
-            seed: VrfSeed::default(),
-            extra_data: [].to_vec(),
-            state_root: Blake2bHash::default(),
-            body_root: Blake2sHash::default(),
-            diff_root: Blake2bHash::default(),
-            history_root: Blake2bHash::default(),
+            ..Default::default()
         },
         justification: None,
         body: None,
@@ -95,13 +82,8 @@ fn test_verify_header_extra_data() {
             version: Policy::VERSION,
             block_number: 1,
             timestamp: 0,
-            parent_hash: Blake2bHash::default(),
-            seed: VrfSeed::default(),
             extra_data: vec![0; 33],
-            state_root: Blake2bHash::default(),
-            body_root: Blake2sHash::default(),
-            diff_root: Blake2bHash::default(),
-            history_root: Blake2bHash::default(),
+            ..Default::default()
         },
         justification: None,
         body: None,
@@ -145,13 +127,8 @@ fn test_verify_body_root() {
         version: Policy::VERSION,
         block_number: 1,
         timestamp: 0,
-        parent_hash: Blake2bHash::default(),
-        seed: VrfSeed::default(),
         extra_data: vec![0; 30],
-        state_root: Blake2bHash::default(),
-        body_root: Blake2sHash::default(),
-        diff_root: Blake2bHash::default(),
-        history_root: Blake2bHash::default(),
+        ..Default::default()
     };
 
     let micro_justification = MicroJustification::Micro(Ed25519Signature::default());
@@ -192,13 +169,7 @@ fn test_verify_skip_block() {
         version: Policy::VERSION,
         block_number: 1,
         timestamp: 0,
-        parent_hash: Blake2bHash::default(),
-        seed: VrfSeed::default(),
-        extra_data: vec![],
-        state_root: Blake2bHash::default(),
-        body_root: Blake2sHash::default(),
-        diff_root: Blake2bHash::default(),
-        history_root: Blake2bHash::default(),
+        ..Default::default()
     };
 
     let micro_justification = MicroJustification::Skip(SkipBlockProof {
@@ -252,13 +223,7 @@ fn test_verify_micro_block_body_txns() {
         version: Policy::VERSION,
         block_number: 1,
         timestamp: 0,
-        parent_hash: Blake2bHash::default(),
-        seed: VrfSeed::default(),
-        extra_data: vec![],
-        state_root: Blake2bHash::default(),
-        body_root: Blake2sHash::default(),
-        diff_root: Blake2bHash::default(),
-        history_root: Blake2bHash::default(),
+        ..Default::default()
     };
 
     let micro_justification = MicroJustification::Micro(Ed25519Signature::default());
@@ -344,13 +309,7 @@ fn test_verify_micro_block_body_fork_proofs() {
         version: Policy::VERSION,
         block_number: 1 + genesis_block_number,
         timestamp: 0,
-        parent_hash: Blake2bHash::default(),
-        seed: VrfSeed::default(),
-        extra_data: vec![],
-        state_root: Blake2bHash::default(),
-        body_root: Blake2sHash::default(),
-        diff_root: Blake2bHash::default(),
-        history_root: Blake2bHash::default(),
+        ..Default::default()
     };
 
     let mut micro_header_1 = micro_header.clone();
@@ -489,17 +448,9 @@ fn test_verify_election_macro_body() {
         block_number: Policy::genesis_block_number() + Policy::blocks_per_epoch(),
         round: 0,
         timestamp: 0,
-        parent_hash: Blake2bHash::default(),
-        parent_election_hash: Blake2bHash::default(),
         interlink: Some(vec![]),
-        seed: VrfSeed::default(),
         extra_data: vec![0; 30],
-        state_root: Blake2bHash::default(),
-        body_root: Blake2sHash::default(),
-        diff_root: Blake2bHash::default(),
-        history_root: Blake2bHash::default(),
-        validators: None,
-        next_batch_initial_punished_set: BitSet::default(),
+        ..Default::default()
     };
 
     let macro_body = MacroBody {

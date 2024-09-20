@@ -149,7 +149,7 @@ impl MicroJustification {
     }
 }
 /// The struct representing the header of a Micro block.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, SerializeContent)]
 pub struct MicroHeader {
     /// Network of the block.
     pub network: NetworkId,
@@ -174,8 +174,29 @@ pub struct MicroHeader {
     pub body_root: Blake2sHash,
     /// The root of the trie diff tree proof.
     pub diff_root: Blake2bHash,
-    /// A Merkle root over all of the transactions that happened in the current epoch.
+    /// A Merkle root over all the transactions that happened in the current epoch.
     pub history_root: Blake2bHash,
+    /// The cached hash of this header. This is NOT sent over the wire.
+    #[serde(skip)]
+    pub cached_hash: Option<Blake2bHash>,
+}
+
+impl MicroHeader {
+    /// Returns the Blake2b hash of this header.
+    pub fn hash(&self) -> Blake2bHash {
+        if let Some(hash) = &self.cached_hash {
+            return hash.clone();
+        }
+        Hash::hash(&self)
+    }
+
+    /// Returns the Blake2b hash of this header and caches the result internally.
+    pub fn hash_cached(&mut self) -> Blake2bHash {
+        if self.cached_hash.is_none() {
+            self.cached_hash = Some(Hash::hash(self));
+        }
+        self.cached_hash.as_ref().unwrap().clone()
+    }
 }
 
 impl SerializedMaxSize for MicroHeader {
@@ -196,13 +217,32 @@ impl SerializedMaxSize for MicroHeader {
         + /*history_root*/ Blake2bHash::SIZE;
 }
 
+// We can't derive this because we want to ignore the `cached_hash` field.
+impl PartialEq for MicroHeader {
+    fn eq(&self, other: &Self) -> bool {
+        self.network == other.network
+            && self.version == other.version
+            && self.block_number == other.block_number
+            && self.timestamp == other.timestamp
+            && self.parent_hash == other.parent_hash
+            && self.seed == other.seed
+            && self.extra_data == other.extra_data
+            && self.state_root == other.state_root
+            && self.body_root == other.body_root
+            && self.diff_root == other.diff_root
+            && self.history_root == other.history_root
+    }
+}
+
+impl Eq for MicroHeader {}
+
 impl fmt::Display for MicroHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(
             f,
             "#{}:MI:{}",
             self.block_number,
-            self.hash::<Blake2bHash>().to_short_str(),
+            self.hash().to_short_str(),
         )
     }
 }

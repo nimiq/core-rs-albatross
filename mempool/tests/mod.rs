@@ -260,6 +260,7 @@ fn create_dummy_micro_block(transactions: Option<Vec<Transaction>>) -> Block {
         body_root: Blake2sHash::default(),
         diff_root: Blake2bHash::default(),
         history_root: Blake2bHash::default(),
+        ..Default::default()
     };
     let mut executed_txns: Vec<ExecutedTransaction> = Vec::new();
 

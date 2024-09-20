@@ -43,7 +43,7 @@ impl MacroBlock {
 
     /// Returns the Blake2s hash of the block header.
     pub fn hash_blake2s(&self) -> Blake2sHash {
-        self.header.hash()
+        Hash::hash(&self.header)
     }
 
     /// Computes the next interlink from self.header.interlink
@@ -167,7 +167,7 @@ impl fmt::Display for MacroBlock {
 }
 
 /// The struct representing the header of a Macro block (can be either checkpoint or election).
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct MacroHeader {
     /// Network of the block.
     pub network: NetworkId,
@@ -201,7 +201,7 @@ pub struct MacroHeader {
     pub body_root: Blake2sHash,
     /// The root of the trie diff tree proof.
     pub diff_root: Blake2bHash,
-    /// A merkle root over all of the transactions that happened in the current epoch.
+    /// A merkle root over all the transactions that happened in the current epoch.
     pub history_root: Blake2bHash,
     /// Contains all the information regarding the next validator set, i.e. their validator
     /// public key, their reward address and their assigned validator slots.
@@ -212,9 +212,28 @@ pub struct MacroHeader {
     /// This set is needed for nodes that do not have the state as it is normally computed
     /// inside the staking contract.
     pub next_batch_initial_punished_set: BitSet,
+    /// The cached hash of this header. This is NOT sent over the wire.
+    #[serde(skip)]
+    pub cached_hash: Option<Blake2bHash>,
 }
 
 impl MacroHeader {
+    /// Returns the Blake2b hash of this header.
+    pub fn hash(&self) -> Blake2bHash {
+        if let Some(hash) = &self.cached_hash {
+            return hash.clone();
+        }
+        Hash::hash(&self)
+    }
+
+    /// Returns the Blake2b hash of this header and caches the result internally.
+    pub fn hash_cached(&mut self) -> Blake2bHash {
+        if self.cached_hash.is_none() {
+            self.cached_hash = Some(Hash::hash(self));
+        }
+        self.cached_hash.as_ref().unwrap().clone()
+    }
+
     /// Returns whether this macro block is an election block.
     pub fn is_election(&self) -> bool {
         Policy::is_election_block_at(self.block_number)
@@ -275,6 +294,30 @@ impl SerializedMaxSize for MacroHeader {
         + /*next_batch_punished_set*/ BitSet::max_size(Policy::SLOTS as usize);
 }
 
+// We can't derive this because we want to ignore the `cached_hash` field.
+impl PartialEq for MacroHeader {
+    fn eq(&self, other: &Self) -> bool {
+        self.network == other.network
+            && self.version == other.version
+            && self.block_number == other.block_number
+            && self.round == other.round
+            && self.timestamp == other.timestamp
+            && self.parent_hash == other.parent_hash
+            && self.parent_election_hash == other.parent_election_hash
+            && self.interlink == other.interlink
+            && self.seed == other.seed
+            && self.extra_data == other.extra_data
+            && self.state_root == other.state_root
+            && self.body_root == other.body_root
+            && self.diff_root == other.diff_root
+            && self.history_root == other.history_root
+            && self.validators == other.validators
+            && self.next_batch_initial_punished_set == other.next_batch_initial_punished_set
+    }
+}
+
+impl Eq for MacroHeader {}
+
 impl Message for MacroHeader {
     const PREFIX: u8 = PREFIX_TENDERMINT_PROPOSAL;
 }
@@ -285,7 +328,7 @@ impl fmt::Display for MacroHeader {
             f,
             "#{}:MA:{}",
             self.block_number,
-            self.hash::<Blake2bHash>().to_short_str(),
+            self.hash().to_short_str(),
         )
     }
 }

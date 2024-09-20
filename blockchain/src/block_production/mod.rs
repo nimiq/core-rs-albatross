@@ -218,13 +218,14 @@ impl BlockProducer {
             body_root: body.hash(),
             diff_root,
             history_root,
+            ..Default::default()
         };
 
         let justification = if let Some(skip_block_proof) = skip_block_proof {
             MicroJustification::Skip(skip_block_proof)
         } else {
             // Signs the block header using the signing key.
-            let hash = header.hash::<Blake2bHash>();
+            let hash = header.hash();
             let signature = self.signing_key.sign(hash.as_slice());
             MicroJustification::Micro(signature)
         };
@@ -343,6 +344,7 @@ impl BlockProducer {
             history_root: Blake2bHash::default(),
             validators,
             next_batch_initial_punished_set,
+            ..Default::default()
         };
 
         // Create the body for the macro block.

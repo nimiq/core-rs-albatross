@@ -170,6 +170,22 @@ impl Block {
         }
     }
 
+    /// Returns the Blake2b hash of the block header and caches the result internally.
+    pub fn hash_cached(&mut self) -> Blake2bHash {
+        match self {
+            Block::Macro(block) => block.header.hash_cached(),
+            Block::Micro(block) => block.header.hash_cached(),
+        }
+    }
+
+    /// Populates the internal hash cache with the given `hash`.
+    pub fn populate_cached_hash(&mut self, hash: Blake2bHash) {
+        match self {
+            Block::Macro(block) => block.header.cached_hash = Some(hash),
+            Block::Micro(block) => block.header.cached_hash = Some(hash),
+        }
+    }
+
     /// Returns a copy of the validators. Only returns Some if it is an election block.
     pub fn validators(&self) -> Option<Validators> {
         match self {

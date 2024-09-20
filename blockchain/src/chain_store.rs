@@ -197,25 +197,24 @@ impl ChainStore {
     ) -> Result<ChainInfo, BlockchainError> {
         let txn = txn_option.or_new(&self.db);
 
-        let mut chain_info: ChainInfo = match txn.get(&self.chain_table, hash) {
-            Some(data) => data,
-            None => return Err(BlockchainError::BlockNotFound),
-        };
+        let mut chain_info = txn
+            .get(&self.chain_table, hash)
+            .ok_or(BlockchainError::BlockNotFound)?;
 
         if include_body {
-            // Check tables according to the `chain_info.on_main_chain` flag
             if chain_info.on_main_chain {
-                if let Some(pushed_block) = txn.get(&self.pushed_block_table, hash) {
-                    pushed_block.populate_body(&mut chain_info.head, &self.history_store, &txn);
-                } else {
-                    warn!("Block body requested but not present");
-                }
-            } else if let Some(full_block) = txn.get(&self.stored_block_table, hash) {
-                chain_info.head = full_block
+                let pushed_block = txn
+                    .get(&self.pushed_block_table, hash)
+                    .ok_or(BlockchainError::BlockNotFound)?;
+                pushed_block.populate_body(&mut chain_info.head, &self.history_store, &txn);
             } else {
-                warn!("Block body requested but not present");
+                chain_info.head = txn
+                    .get(&self.stored_block_table, hash)
+                    .ok_or(BlockchainError::BlockNotFound)?;
             }
         }
+
+        chain_info.head.populate_cached_hash(hash.clone());
 
         Ok(chain_info)
     }
@@ -266,6 +265,8 @@ impl ChainStore {
                 warn!("Block body requested but not present");
             }
         }
+
+        chain_info.head.populate_cached_hash(block_hash);
 
         Ok(chain_info)
     }
@@ -354,28 +355,8 @@ impl ChainStore {
         include_body: bool,
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Result<Block, BlockchainError> {
-        let txn = txn_option.or_new(&self.db);
-
-        let mut chain_info = txn
-            .get(&self.chain_table, hash)
-            .ok_or(BlockchainError::BlockNotFound)?;
-
-        if include_body {
-            if chain_info.on_main_chain {
-                let pushed_block = txn
-                    .get(&self.pushed_block_table, hash)
-                    .ok_or(BlockchainError::BlockNotFound)?;
-                pushed_block.populate_body(&mut chain_info.head, &self.history_store, &txn);
-                Ok(chain_info.head)
-            } else {
-                let full_block = txn
-                    .get(&self.stored_block_table, hash)
-                    .ok_or(BlockchainError::BlockNotFound)?;
-                Ok(full_block)
-            }
-        } else {
-            Ok(chain_info.head)
-        }
+        self.get_chain_info(hash, include_body, txn_option)
+            .map(|chain_info| chain_info.head)
     }
 
     pub fn get_block_at(

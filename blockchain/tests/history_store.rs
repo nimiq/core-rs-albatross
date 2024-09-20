@@ -7,7 +7,7 @@ use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
 use nimiq_bls::AggregateSignature;
 use nimiq_database::traits::WriteTransaction;
 use nimiq_genesis::NetworkId;
-use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
+use nimiq_hash::{Blake2sHash, HashOutput};
 use nimiq_keys::{KeyPair, PrivateKey};
 use nimiq_primitives::{policy::Policy, TendermintIdentifier, TendermintStep, TendermintVote};
 use nimiq_serde::Deserialize;
@@ -99,8 +99,8 @@ fn do_fork(
 
     // Builds the equivocation proof.
     let signing_key = temp_producer1.producer.signing_key.clone();
-    let justification1 = signing_key.sign(MicroHeader::hash::<Blake2bHash>(&header_1a).as_bytes());
-    let justification2 = signing_key.sign(MicroHeader::hash::<Blake2bHash>(&header_2a).as_bytes());
+    let justification1 = signing_key.sign(MicroHeader::hash(&header_1a).as_bytes());
+    let justification2 = signing_key.sign(MicroHeader::hash(&header_2a).as_bytes());
 
     ForkProof::new(
         validator_address(),
@@ -135,8 +135,8 @@ fn do_double_proposal(
         .clone()
         .unwrap_macro()
         .header;
-    let justification1 = signing_key.sign(MacroHeader::hash::<Blake2bHash>(&header1).as_bytes());
-    let justification2 = signing_key.sign(MacroHeader::hash::<Blake2bHash>(&header2).as_bytes());
+    let justification1 = signing_key.sign(MacroHeader::hash(&header1).as_bytes());
+    let justification2 = signing_key.sign(MacroHeader::hash(&header2).as_bytes());
 
     // Produce the double proposal proof.
     EquivocationProof::DoubleProposal(DoubleProposalProof::new(

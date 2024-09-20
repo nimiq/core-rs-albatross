@@ -4,7 +4,7 @@ use nimiq_block::{Block, ForkProof, MacroHeader, MicroBlock};
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, ChainOrdering, ForkEvent, PushError, PushResult,
 };
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy::Policy;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
@@ -396,7 +396,7 @@ impl LightBlockchain {
             .ok_or(PushError::InvalidSuccessor)?;
 
         // Verify that the block is indeed the predecessor.
-        if header.hash::<Blake2bHash>() != prev_block.parent_election_hash {
+        if header.hash() != prev_block.parent_election_hash {
             return Err(PushError::InvalidPredecessor);
         }
 

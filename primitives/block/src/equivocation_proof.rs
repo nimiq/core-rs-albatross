@@ -628,6 +628,7 @@ mod test {
             body_root: Blake2sHash::default(),
             diff_root: Blake2bHash::default(),
             history_root: Blake2bHash::default(),
+            ..Default::default()
         };
         let header2 = MicroHeader {
             network: NetworkId::UnitAlbatross,
@@ -641,6 +642,7 @@ mod test {
             body_root: "".hash(),
             diff_root: "".hash(),
             history_root: "".hash(),
+            ..Default::default()
         };
         let header3 = MicroHeader {
             network: NetworkId::UnitAlbatross,
@@ -654,6 +656,7 @@ mod test {
             body_root: "1".hash(),
             diff_root: "1".hash(),
             history_root: "1".hash(),
+            ..Default::default()
         };
 
         // Headers from a different block height.
@@ -662,11 +665,11 @@ mod test {
         let mut header5 = header2.clone();
         header5.block_number += 1;
 
-        let justification1 = key.sign(header1.hash::<Blake2bHash>().as_bytes());
-        let justification2 = key.sign(header2.hash::<Blake2bHash>().as_bytes());
-        let justification3 = key.sign(header3.hash::<Blake2bHash>().as_bytes());
-        let justification4 = key.sign(header4.hash::<Blake2bHash>().as_bytes());
-        let justification5 = key.sign(header5.hash::<Blake2bHash>().as_bytes());
+        let justification1 = key.sign(header1.hash().as_bytes());
+        let justification2 = key.sign(header2.hash().as_bytes());
+        let justification3 = key.sign(header3.hash().as_bytes());
+        let justification4 = key.sign(header4.hash().as_bytes());
+        let justification5 = key.sign(header5.hash().as_bytes());
 
         let proof1: EquivocationProof = ForkProof::new(
             Address::burn_address(),
@@ -734,6 +737,7 @@ mod test {
             history_root: Blake2bHash::default(),
             validators: None,
             next_batch_initial_punished_set: BitSet::default(),
+            ..Default::default()
         };
         let header2 = MacroHeader {
             network: NetworkId::UnitAlbatross,
@@ -752,6 +756,7 @@ mod test {
             history_root: "".hash(),
             validators: None,
             next_batch_initial_punished_set: BitSet::default(),
+            ..Default::default()
         };
         let header3 = MacroHeader {
             network: NetworkId::UnitAlbatross,
@@ -770,6 +775,7 @@ mod test {
             history_root: "1".hash(),
             validators: None,
             next_batch_initial_punished_set: BitSet::default(),
+            ..Default::default()
         };
 
         // Headers from a different block height.
@@ -784,13 +790,13 @@ mod test {
         let mut header7 = header2.clone();
         header7.round += 1;
 
-        let justification1 = key.sign(header1.hash::<Blake2bHash>().as_bytes());
-        let justification2 = key.sign(header2.hash::<Blake2bHash>().as_bytes());
-        let justification3 = key.sign(header3.hash::<Blake2bHash>().as_bytes());
-        let justification4 = key.sign(header4.hash::<Blake2bHash>().as_bytes());
-        let justification5 = key.sign(header5.hash::<Blake2bHash>().as_bytes());
-        let justification6 = key.sign(header6.hash::<Blake2bHash>().as_bytes());
-        let justification7 = key.sign(header7.hash::<Blake2bHash>().as_bytes());
+        let justification1 = key.sign(header1.hash().as_bytes());
+        let justification2 = key.sign(header2.hash().as_bytes());
+        let justification3 = key.sign(header3.hash().as_bytes());
+        let justification4 = key.sign(header4.hash().as_bytes());
+        let justification5 = key.sign(header5.hash().as_bytes());
+        let justification6 = key.sign(header6.hash().as_bytes());
+        let justification7 = key.sign(header7.hash().as_bytes());
 
         let proof1: EquivocationProof = DoubleProposalProof::new(
             Address::burn_address(),

@@ -42,7 +42,7 @@ impl Blockchain {
     /// block can be trusted.
     fn do_push(
         this: RwLockUpgradableReadGuard<Self>,
-        block: Block,
+        mut block: Block,
         trusted: bool,
         diff: Option<TrieDiff>,
         chunks: Vec<TrieChunkWithStart>,
@@ -64,9 +64,10 @@ impl Blockchain {
         let read_txn = this.read_transaction();
 
         // Check if we already know this block.
+        let block_hash = block.hash_cached();
         if this
             .chain_store
-            .get_chain_info(&block.hash(), false, Some(&read_txn))
+            .get_chain_info(&block_hash, false, Some(&read_txn))
             .is_ok()
         {
             return Ok((PushResult::Known, Ok(ChunksPushResult::EmptyChunks)));
@@ -124,23 +125,10 @@ impl Blockchain {
         // Extend, rebranch or just store the block depending on the chain ordering.
         let result = match chain_order {
             ChainOrdering::Extend => {
-                return Blockchain::extend(
-                    this,
-                    chain_info.head.hash(),
-                    chain_info,
-                    prev_info,
-                    diff,
-                    chunks,
-                );
+                return Blockchain::extend(this, block_hash, chain_info, prev_info, diff, chunks);
             }
             ChainOrdering::Superior => {
-                return Blockchain::rebranch(
-                    this,
-                    chain_info.head.hash(),
-                    chain_info,
-                    diff,
-                    chunks,
-                );
+                return Blockchain::rebranch(this, block_hash, chain_info, diff, chunks);
             }
             ChainOrdering::Inferior => {
                 debug!(block = %chain_info.head, "Storing block - on inferior chain");
@@ -154,10 +142,10 @@ impl Blockchain {
 
         let mut txn = this.write_transaction();
         this.chain_store
-            .put_chain_info(&mut txn, &chain_info.head.hash(), &chain_info, true);
+            .put_chain_info(&mut txn, &block_hash, &chain_info, true);
         if let Some(diff) = &diff {
             this.chain_store
-                .put_accounts_diff(&mut txn, &chain_info.head.hash(), diff);
+                .put_accounts_diff(&mut txn, &block_hash, diff);
         }
         txn.commit();
 

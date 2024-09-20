@@ -379,6 +379,7 @@ mod tests {
                 body_root: Blake2sHash::default(),
                 diff_root: Blake2bHash::default(),
                 history_root: hash_1,
+                ..Default::default()
             },
             justification: Some(MicroJustification::Micro(Default::default())),
             body: None,
@@ -401,6 +402,7 @@ mod tests {
                 body_root: Blake2sHash::default(),
                 diff_root: Blake2bHash::default(),
                 history_root: hash_2,
+                ..Default::default()
             },
             justification: Some(MicroJustification::Micro(Default::default())),
             body: None,

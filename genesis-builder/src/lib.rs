@@ -413,7 +413,7 @@ impl GenesisBuilder {
         };
 
         // Genesis hash
-        let genesis_hash = header.hash::<Blake2bHash>();
+        let genesis_hash = header.hash();
 
         Ok(GenesisInfo {
             block: Block::Macro(MacroBlock {

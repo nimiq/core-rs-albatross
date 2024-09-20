@@ -149,7 +149,7 @@ impl<N: Network> BlockQueue<N> {
     /// Handles a block announcement.
     fn check_announced_block(
         &mut self,
-        block: Block,
+        mut block: Block,
         block_source: BlockSource<N>,
     ) -> Option<QueuedBlock<N>> {
         // Reject block if it includes a body when we didn't request one or vice versa.
@@ -160,11 +160,12 @@ impl<N: Network> BlockQueue<N> {
 
         let blockchain = self.blockchain.read();
 
+        let block_hash = block.hash_cached();
         let block_number = block.block_number();
         let head_height = blockchain.block_number();
 
         // Ignore blocks that we already know.
-        if let Ok(info) = blockchain.get_chain_info(&block.hash(), false) {
+        if let Ok(info) = blockchain.get_chain_info(&block_hash, false) {
             if info.on_main_chain {
                 block_source.accept_block(&self.network)
             } else {
@@ -200,7 +201,7 @@ impl<N: Network> BlockQueue<N> {
         } else if parent_known {
             // New head or fork block.
             // Add block to pending blocks and return queued block for the stream.
-            if self.blocks_pending_push.insert(block.hash()) {
+            if self.blocks_pending_push.insert(block_hash) {
                 return Some(QueuedBlock::Head((block, block_source)));
             }
         } else if block_number > head_height + self.config.window_ahead_max {

@@ -166,9 +166,10 @@ pub fn next_micro_block(
         body_root: config.body_hash.clone().unwrap_or_else(|| body.hash()),
         diff_root,
         history_root,
+        ..Default::default()
     };
 
-    let hash = header.hash::<Blake2bHash>();
+    let hash = header.hash();
     let signature = signing_key.sign(hash.as_slice());
 
     MicroBlock {
@@ -265,6 +266,7 @@ pub fn next_skip_block(
         body_root: config.body_hash.clone().unwrap_or_else(|| body.hash()),
         diff_root,
         history_root,
+        ..Default::default()
     };
 
     let skip_block_proof = create_skip_block_proof(voting_key, blockchain, config);
@@ -346,6 +348,7 @@ pub fn next_macro_block_proposal(
         history_root: Blake2bHash::default(),
         validators,
         next_batch_initial_punished_set,
+        ..Default::default()
     };
 
     let reward_transactions = blockchain.create_reward_transactions(&header, &staking_contract);

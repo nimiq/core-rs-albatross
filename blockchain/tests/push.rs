@@ -10,7 +10,7 @@ use nimiq_blockchain_interface::{
     PushResult,
 };
 use nimiq_bls::AggregateSignature;
-use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
+use nimiq_hash::{Blake2bHash, Blake2sHash, HashOutput};
 use nimiq_keys::KeyPair;
 use nimiq_primitives::{
     key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy, TendermintIdentifier,

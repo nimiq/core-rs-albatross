@@ -9,7 +9,7 @@ use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::AggregateSignature;
 use nimiq_database::{mdbx::MdbxDatabase, traits::WriteTransaction};
-use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
+use nimiq_hash::{Blake2bHash, Blake2sHash, HashOutput};
 use nimiq_keys::Address;
 use nimiq_primitives::{
     coin::Coin,
@@ -67,6 +67,7 @@ fn it_can_create_batch_finalization_inherents() {
         history_root: Blake2bHash::default(),
         validators: None,
         next_batch_initial_punished_set,
+        ..Default::default()
     };
 
     let reward_transactions =
@@ -256,6 +257,7 @@ fn it_can_penalize_delayed_batch() {
         history_root: Blake2bHash::default(),
         validators: None,
         next_batch_initial_punished_set,
+        ..Default::default()
     };
 
     let staking_contract = blockchain.get_staking_contract();
