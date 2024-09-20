@@ -356,13 +356,11 @@ fn handle_event(
         }
 
         SwarmEvent::Dialing {
-            peer_id,
+            peer_id: Some(peer_id),
             connection_id: _,
         } => {
             // This event is only triggered if the network behaviour performs the dial
-            if let Some(peer_id) = peer_id {
-                debug!(%peer_id, "Dialing peer");
-            }
+            debug!(%peer_id, "Dialing peer");
         }
 
         SwarmEvent::NewListenAddr {
@@ -809,9 +807,9 @@ fn handle_event(
                             if let Some(channel) = state.requests.remove(&request_id) {
                                 // We might get empty responses (None) because of the implementation of our codecs.
                                 let response = response
-                                    .ok_or_else(|| {
-                                        RequestError::OutboundRequest(OutboundRequestError::Timeout)
-                                    })
+                                    .ok_or(RequestError::OutboundRequest(
+                                        OutboundRequestError::Timeout,
+                                    ))
                                     .map(|data| data.into());
 
                                 // The initiator of the request might no longer exist, so we
