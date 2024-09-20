@@ -1,5 +1,8 @@
 use nimiq_keys::Address;
-use nimiq_primitives::{account::AccountType, coin::Coin};
+use nimiq_primitives::{
+    account::AccountType,
+    coin::{Coin, CoinBe},
+};
 use nimiq_serde::{Deserialize, Serialize, SerializedSize};
 
 use crate::{
@@ -77,9 +80,9 @@ pub struct CreationTransactionData {
     /// The frequency at which funds are released.
     pub time_step: u64,
     /// The amount released at each [`time_step`](Self::time_step).
-    pub step_amount: Coin,
+    pub step_amount: CoinBe,
     /// Initially locked balance.
-    pub total_amount: Coin,
+    pub total_amount: CoinBe,
 }
 
 #[derive(Deserialize, Serialize, SerializedSize)]
@@ -98,7 +101,7 @@ struct CreationTransactionData24 {
     #[serde(with = "nimiq_serde::fixint::be")]
     #[serialize_size(fixed_size)]
     pub time_step: u64,
-    pub step_amount: Coin,
+    pub step_amount: CoinBe,
 }
 #[derive(Deserialize, Serialize, SerializedSize)]
 struct CreationTransactionData32 {
@@ -109,8 +112,8 @@ struct CreationTransactionData32 {
     #[serde(with = "nimiq_serde::fixint::be")]
     #[serialize_size(fixed_size)]
     pub time_step: u64,
-    pub step_amount: Coin,
-    pub total_amount: Coin,
+    pub step_amount: CoinBe,
+    pub total_amount: CoinBe,
 }
 
 impl CreationTransactionData {
@@ -124,8 +127,8 @@ impl CreationTransactionData {
                     owner,
                     start_time: 0,
                     time_step,
-                    step_amount: tx_value,
-                    total_amount: tx_value,
+                    step_amount: tx_value.into(),
+                    total_amount: tx_value.into(),
                 }
             }
             CreationTransactionData24::SIZE => {
@@ -140,7 +143,7 @@ impl CreationTransactionData {
                     start_time,
                     time_step,
                     step_amount,
-                    total_amount: tx_value,
+                    total_amount: tx_value.into(),
                 }
             }
             CreationTransactionData32::SIZE => {

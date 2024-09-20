@@ -95,8 +95,8 @@ impl AccountTransactionInteraction for VestingContract {
             owner: data.owner.clone(),
             start_time: data.start_time,
             time_step: data.time_step,
-            step_amount: data.step_amount,
-            total_amount: data.total_amount,
+            step_amount: data.step_amount.into(),
+            total_amount: data.total_amount.into(),
         });
 
         Ok(Account::Vesting(VestingContract {
@@ -104,8 +104,8 @@ impl AccountTransactionInteraction for VestingContract {
             owner: data.owner,
             start_time: data.start_time,
             time_step: data.time_step,
-            step_amount: data.step_amount,
-            total_amount: data.total_amount,
+            step_amount: data.step_amount.into(),
+            total_amount: data.total_amount.into(),
         }))
     }
 

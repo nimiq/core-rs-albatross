@@ -1,7 +1,11 @@
 use std::convert::{TryFrom, TryInto};
 
 use nimiq_keys::{Address, KeyPair, PrivateKey};
-use nimiq_primitives::{account::AccountType, coin::Coin, networks::NetworkId};
+use nimiq_primitives::{
+    account::AccountType,
+    coin::{Coin, CoinBe},
+    networks::NetworkId,
+};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_transaction::{SignatureProof, Transaction};
@@ -51,7 +55,7 @@ fn it_can_create_creation_transaction() {
     Serialize::serialize_to_writer(&sender.address(), &mut data);
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
-    Serialize::serialize_to_writer(&Coin::try_from(100).unwrap(), &mut data);
+    Serialize::serialize_to_writer(&CoinBe::from(Coin::try_from(100).unwrap()), &mut data);
     transaction.recipient_data = data;
     transaction.recipient = transaction.contract_creation_address();
 
@@ -80,8 +84,8 @@ fn it_can_create_creation_transaction() {
     Serialize::serialize_to_writer(&sender.address(), &mut data);
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
-    Serialize::serialize_to_writer(&Coin::try_from(100).unwrap(), &mut data);
-    Serialize::serialize_to_writer(&Coin::try_from(101).unwrap(), &mut data);
+    Serialize::serialize_to_writer(&CoinBe::from(Coin::try_from(100).unwrap()), &mut data);
+    Serialize::serialize_to_writer(&CoinBe::from(Coin::try_from(101).unwrap()), &mut data);
     transaction.recipient_data = data;
     transaction.recipient = transaction.contract_creation_address();
 

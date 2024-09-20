@@ -1,6 +1,9 @@
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{
-    account::AccountType, coin::Coin, networks::NetworkId, transaction::TransactionError,
+    account::AccountType,
+    coin::{Coin, CoinBe},
+    networks::NetworkId,
+    transaction::TransactionError,
 };
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_transaction::{
@@ -69,7 +72,7 @@ fn it_can_verify_creation_transaction() {
     Serialize::serialize_to_writer(&sender, &mut data);
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
-    Serialize::serialize_to_writer(&Coin::try_from(100).unwrap(), &mut data);
+    Serialize::serialize_to_writer(&CoinBe::from(Coin::try_from(100).unwrap()), &mut data);
     transaction.recipient_data = data;
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
@@ -83,8 +86,8 @@ fn it_can_verify_creation_transaction() {
     Serialize::serialize_to_writer(&sender, &mut data);
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
     Serialize::serialize_to_writer(&100u64.to_be_bytes(), &mut data);
-    Serialize::serialize_to_writer(&Coin::try_from(100).unwrap(), &mut data);
-    Serialize::serialize_to_writer(&Coin::try_from(100).unwrap(), &mut data);
+    Serialize::serialize_to_writer(&CoinBe::from(Coin::try_from(100).unwrap()), &mut data);
+    Serialize::serialize_to_writer(&CoinBe::from(Coin::try_from(100).unwrap()), &mut data);
     transaction.recipient_data = data;
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
@@ -97,8 +100,8 @@ fn it_can_verify_creation_transaction() {
         owner: Address::from([0u8; 20]),
         start_time: 100,
         time_step: 0,
-        step_amount: Coin::try_from(1000).unwrap(),
-        total_amount: Coin::try_from(100).unwrap(),
+        step_amount: Coin::try_from(1000).unwrap().into(),
+        total_amount: Coin::try_from(100).unwrap().into(),
     };
     transaction.recipient_data = data.to_tx_data();
     transaction.recipient = transaction.contract_creation_address();

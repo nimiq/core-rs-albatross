@@ -894,8 +894,8 @@ async fn mempool_tps() {
     let mut prev_txn = txns.first().expect("Is vector empty?").clone();
     for txn in txns {
         assert!(
-            prev_txn.fee >= txn.fee,
-            "Transactions in mempool are not ordered by fee"
+            prev_txn.fee_per_byte() >= txn.fee_per_byte(),
+            "Transactions in mempool are not ordered by fee per byte"
         );
         prev_txn = txn.clone();
     }

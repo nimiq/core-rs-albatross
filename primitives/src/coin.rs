@@ -259,7 +259,7 @@ impl FromStr for Coin {
 
 #[cfg(feature = "serde-derive")]
 mod serialization {
-    use nimiq_serde::SerializedSize;
+    use nimiq_serde::SerializedMaxSize;
     use serde::{
         de::{Error as DeError, Unexpected},
         ser::Error as SerError,
@@ -268,8 +268,10 @@ mod serialization {
 
     use super::*;
 
-    impl SerializedSize for Coin {
-        const SIZE: usize = 8;
+    impl SerializedMaxSize for Coin {
+        // u64::MAX takes up 10 bytes, but Coin is limited to Javascript's Number.MAX_SAFE_INTEGER,
+        // which only takes up 8 bytes.
+        const MAX_SIZE: usize = 8;
     }
 
     impl Serialize for Coin {
@@ -278,11 +280,7 @@ mod serialization {
             S: Serializer,
         {
             if self.0 <= Coin::MAX_SAFE_VALUE {
-                if serializer.is_human_readable() {
-                    self.0.serialize(serializer)
-                } else {
-                    nimiq_serde::fixint::be::serialize(&self.0, serializer)
-                }
+                self.0.serialize(serializer)
             } else {
                 Err(S::Error::custom("Overflow detected for a Coin value"))
             }
@@ -294,11 +292,7 @@ mod serialization {
         where
             D: Deserializer<'de>,
         {
-            let value: u64 = if deserializer.is_human_readable() {
-                Deserialize::deserialize(deserializer)?
-            } else {
-                nimiq_serde::fixint::be::deserialize(deserializer)?
-            };
+            let value: u64 = Deserialize::deserialize(deserializer)?;
             Coin::try_from(value).map_err(|_| {
                 D::Error::invalid_value(
                     Unexpected::Unsigned(value),
@@ -318,5 +312,85 @@ mod serialization {
             Ok(_) => panic!("Didn't fail"),
             Err(err) => assert_eq!(err.kind(), std::io::ErrorKind::Other),
         }
+    }
+}
+
+/// A newtype around [`Coin`] that serializes as a fixed-size integer in big-endian order.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Default, Hash)]
+pub struct CoinBe(Coin);
+
+#[cfg(feature = "serde-derive")]
+mod serialization_fixint_be {
+    use nimiq_serde::SerializedSize;
+    use serde::{
+        de::{Error as DeError, Unexpected},
+        ser::Error as SerError,
+        Deserialize, Deserializer, Serialize, Serializer,
+    };
+
+    use super::*;
+
+    impl SerializedSize for CoinBe {
+        const SIZE: usize = 8;
+    }
+
+    impl Serialize for CoinBe {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            if serializer.is_human_readable() {
+                self.0.serialize(serializer)
+            } else if self.0 .0 <= Coin::MAX_SAFE_VALUE {
+                nimiq_serde::fixint::be::serialize(&self.0 .0, serializer)
+            } else {
+                Err(S::Error::custom("Overflow detected for a Coin value"))
+            }
+        }
+    }
+
+    impl<'de> Deserialize<'de> for CoinBe {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let coin: Coin = if deserializer.is_human_readable() {
+                Deserialize::deserialize(deserializer)?
+            } else {
+                let value: u64 = nimiq_serde::fixint::be::deserialize(deserializer)?;
+                Coin::try_from(value).map_err(|_| {
+                    D::Error::invalid_value(
+                        Unexpected::Unsigned(value),
+                        &"An u64 below the Coin maximum value",
+                    )
+                })?
+            };
+            Ok(CoinBe(coin))
+        }
+    }
+
+    // Test must live here as we cannot create an out-of-range `CoinBe` from the
+    // outside.
+    #[test]
+    fn test_serialize_out_of_bounds() {
+        let mut vec = Vec::with_capacity(8);
+        let res =
+            nimiq_serde::Serialize::serialize_to_writer(&CoinBe(Coin(9007199254740992)), &mut vec);
+        match res {
+            Ok(_) => panic!("Didn't fail"),
+            Err(err) => assert_eq!(err.kind(), std::io::ErrorKind::Other),
+        }
+    }
+}
+
+impl From<Coin> for CoinBe {
+    fn from(coin: Coin) -> Self {
+        CoinBe(coin)
+    }
+}
+
+impl From<CoinBe> for Coin {
+    fn from(coin_be: CoinBe) -> Self {
+        coin_be.0
     }
 }

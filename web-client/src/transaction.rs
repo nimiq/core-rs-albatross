@@ -586,7 +586,7 @@ impl Transaction {
                         raw: hex::encode(self.recipient_data()),
                         owner: data.owner.to_user_friendly_address(),
                         start_time: data.start_time,
-                        step_amount: data.step_amount.into(),
+                        step_amount: Into::<Coin>::into(data.step_amount).into(),
                         time_step: data.time_step,
                     })
                 } else if self.inner.recipient_type == AccountType::HTLC {
