@@ -146,11 +146,11 @@ pub trait RequestCommon:
         let name = std::any::type_name::<T>();
         let name = match name.rfind("::") {
             Some(index) => &name[index + 2..],
-            None => &name[..],
+            None => name,
         };
         match name.rfind(">") {
             Some(index) => &name[..index],
-            None => &name[..],
+            None => name,
         }
     }
 }
