@@ -113,7 +113,7 @@ pub async fn migrate_history(
             // If this is true, we may need to take some extra time in order to make sure
             // that blocks leading up to the head block are confirmed before we
             // can safely add them to the PoS history store.
-            if pow_head_height - block_height <= block_confirmations {
+            if pow_head_height - block_height < block_confirmations {
                 loop {
                     log::info!(
                         block = block_height,
@@ -123,7 +123,7 @@ pub async fn migrate_history(
                     sleep(Duration::from_secs(60)).await;
                     pow_head_height = async_retryer(|| pow_client.block_number()).await.unwrap();
                     // Check if the block has been confirmed.
-                    if pow_head_height > block_height + block_confirmations {
+                    if pow_head_height >= block_height + block_confirmations {
                         break;
                     }
                 }
