@@ -44,6 +44,22 @@ nimiq-genesis-builder = { workspace = true }
 nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }
 
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+pprof = { version = "0.13", features = [
+    "flamegraph",
+    "frame-pointer",
+    "criterion",
+] }
+
+[[bench]]
+name = "insert"
+harness = false
+
+[[bench]]
+name = "prove"
+harness = false
+
 [features]
 accounts = ["interaction-traits", "nimiq-database", "nimiq-trie"]
 default = ["accounts", "interaction-traits"]

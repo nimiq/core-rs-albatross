@@ -3557,6 +3557,7 @@ dependencies = [
 name = "nimiq-account"
 version = "0.24.2"
 dependencies = [
+ "criterion",
  "hex",
  "nimiq-bls",
  "nimiq-collections",
@@ -3576,6 +3577,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot",
+ "pprof",
  "rand",
  "serde",
  "tempfile",
