@@ -88,12 +88,13 @@ pub struct VrfSeed {
 impl VrfSeed {
     const SIZE: usize = 96;
 
-    /// Verifies the current VRF Seed given the previous VRF Seed (which is part of the message)
-    /// and the signer's public key.
+    /// Verifies the current VRF Seed given the previous VRF Seed (which is part of the message),
+    /// the signer's public key and the nonce.
     pub fn verify(
         &self,
         prev_seed: &VrfSeed,
         public_key: &Ed25519PublicKey,
+        nonce: u32,
     ) -> Result<(), VrfError> {
         // Deserialize signature.
         let V = CompressedEdwardsY::from_slice(&self.signature[..32])
@@ -119,9 +120,10 @@ impl VrfSeed {
             .decompress()
             .ok_or(VrfError::InvalidSignature)?;
 
-        // Concatenate use case prefix and previous entropy to form message. Note that we use the
-        // entropy here and not the signature, that's because we need the message to be unique.
+        // Concatenate use case prefix, nonce, and previous entropy to form message. Note that we use
+        // the entropy here and not the signature, that's because we need the message to be unique.
         let mut message = vec![VrfUseCase::Seed as u8];
+        message.extend(nonce.to_be_bytes());
         message.extend_from_slice(prev_seed.entropy().as_slice());
 
         // Follow the verification algorithm for VXEdDSA.
@@ -159,16 +161,17 @@ impl VrfSeed {
     /// Produces the next VRF Seed given the current VRF Seed (which is part of the message) and a
     /// key pair.
     #[must_use]
-    pub fn sign_next(&self, keypair: &KeyPair) -> Self {
-        self.sign_next_with_rng(keypair, &mut rand::thread_rng())
+    pub fn sign_next(&self, keypair: &KeyPair, nonce: u32) -> Self {
+        self.sign_next_with_rng(keypair, nonce, &mut rand::thread_rng())
     }
 
-    /// Produces the next VRF Seed given the current VRF Seed (which is part of the message) and a
-    /// key pair.
+    /// Produces the next VRF Seed given the current VRF Seed (which is part of the message), a
+    /// key pair and a nonce.
     #[must_use]
     pub fn sign_next_with_rng<R: RngCore + CryptoRng>(
         &self,
         keypair: &KeyPair,
+        nonce: u32,
         rng: &mut R,
     ) -> Self {
         // Get random bytes.
@@ -179,9 +182,10 @@ impl VrfSeed {
         let a = keypair.private.to_scalar();
         let A_bytes = keypair.public.as_bytes();
 
-        // Concatenate use case prefix and entropy to form message. Note that we use the entropy
-        // here and not the signature, that's because we need the message to be unique.
+        // Concatenate use case prefix, nonce, and entropy to form message. Note that we use the
+        // entropy here and not the signature, that's because we need the message to be unique.
         let mut message = vec![VrfUseCase::Seed as u8];
+        message.extend(nonce.to_be_bytes());
         message.extend_from_slice(self.entropy().as_slice());
 
         // Follow the signing algorithm for VXEdDSA.
@@ -326,9 +330,9 @@ mod tests {
         for _ in 0..1000 {
             let key_pair = KeyPair::generate(&mut rng);
 
-            let next_seed = prev_seed.sign_next(&key_pair);
+            let next_seed = prev_seed.sign_next(&key_pair, 0);
 
-            assert!(next_seed.verify(&prev_seed, &key_pair.public).is_ok());
+            assert!(next_seed.verify(&prev_seed, &key_pair.public, 0).is_ok());
 
             next_seed.entropy();
 
@@ -342,13 +346,13 @@ mod tests {
         let key_pair = KeyPair::generate(&mut rng);
         let prev_seed = VrfSeed::default();
 
-        let next_seed = prev_seed.sign_next(&key_pair);
+        let next_seed = prev_seed.sign_next(&key_pair, 0);
 
         for _ in 0..1000 {
             let fake_pk = KeyPair::generate(&mut rng).public;
 
             assert_eq!(
-                next_seed.verify(&prev_seed, &fake_pk),
+                next_seed.verify(&prev_seed, &fake_pk, 0),
                 Err(VrfError::Forged)
             );
         }
@@ -360,14 +364,14 @@ mod tests {
         let key_pair = KeyPair::generate(&mut rng);
         let prev_seed = VrfSeed::default();
 
-        let next_seed = prev_seed.sign_next(&key_pair);
+        let next_seed = prev_seed.sign_next(&key_pair, 0);
 
         for _ in 0..1000 {
             let fake_key_pair = KeyPair::generate(&mut rng);
-            let fake_seed = VrfSeed::default().sign_next(&fake_key_pair);
+            let fake_seed = VrfSeed::default().sign_next(&fake_key_pair, 0);
 
             assert_eq!(
-                next_seed.verify(&fake_seed, &key_pair.public),
+                next_seed.verify(&fake_seed, &key_pair.public, 0),
                 Err(VrfError::Forged)
             );
         }
@@ -384,7 +388,21 @@ mod tests {
             rng.fill_bytes(&mut bytes);
             let fake_seed = VrfSeed { signature: bytes };
 
-            assert!(fake_seed.verify(&prev_seed, &key_pair.public).is_err());
+            assert!(fake_seed.verify(&prev_seed, &key_pair.public, 0).is_err());
         }
+    }
+
+    #[test]
+    fn wrong_nonce() {
+        let mut rng = test_rng(false);
+        let key_pair = KeyPair::generate(&mut rng);
+        let prev_seed = VrfSeed::default();
+
+        let next_seed = prev_seed.sign_next(&key_pair, 0);
+
+        assert_eq!(
+            next_seed.verify(&prev_seed, &key_pair.public, 1),
+            Err(VrfError::Forged)
+        );
     }
 }

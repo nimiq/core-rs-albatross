@@ -636,7 +636,7 @@ mod test {
             block_number: Policy::genesis_block_number(),
             timestamp: 1,
             parent_hash: "".hash(),
-            seed: VrfSeed::default().sign_next(&key),
+            seed: VrfSeed::default().sign_next(&key, Policy::genesis_block_number()),
             extra_data: vec![1],
             state_root: "".hash(),
             body_root: "".hash(),
@@ -650,7 +650,9 @@ mod test {
             block_number: Policy::genesis_block_number(),
             timestamp: 2,
             parent_hash: "1".hash(),
-            seed: VrfSeed::default().sign_next(&key).sign_next(&key),
+            seed: VrfSeed::default()
+                .sign_next(&key, Policy::genesis_block_number())
+                .sign_next(&key, Policy::genesis_block_number()),
             extra_data: vec![2],
             state_root: "1".hash(),
             body_root: "1".hash(),
@@ -748,7 +750,7 @@ mod test {
             parent_hash: "".hash(),
             parent_election_hash: "".hash(),
             interlink: Some(vec![]),
-            seed: VrfSeed::default().sign_next(&key),
+            seed: VrfSeed::default().sign_next(&key, Policy::genesis_block_number()),
             extra_data: vec![1],
             state_root: "".hash(),
             body_root: "".hash(),
@@ -767,7 +769,9 @@ mod test {
             parent_hash: "1".hash(),
             parent_election_hash: "1".hash(),
             interlink: Some(vec![Blake2bHash::default()]),
-            seed: VrfSeed::default().sign_next(&key).sign_next(&key),
+            seed: VrfSeed::default()
+                .sign_next(&key, Policy::genesis_block_number())
+                .sign_next(&key, Policy::genesis_block_number()),
             extra_data: vec![2],
             state_root: "1".hash(),
             body_root: "1".hash(),

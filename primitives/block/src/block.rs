@@ -596,7 +596,7 @@ impl Block {
         // Verify VRF seed.
         if !self.is_skip() {
             self.seed()
-                .verify(prev_seed, signing_key)
+                .verify(prev_seed, signing_key, self.block_number())
                 .map_err(|_| BlockError::InvalidSeed)?;
         } else {
             // XXX This is also checked in `verify_immediate_successor`.

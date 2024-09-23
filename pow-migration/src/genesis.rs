@@ -77,7 +77,11 @@ pub async fn get_pos_genesis(
     let mut parent_hash_bytes = [0u8; 32];
     parent_hash_bytes.copy_from_slice(parent_hash.as_slice());
     let mut rng = StdRng::from_seed(parent_hash_bytes);
-    let vrf_seed = VrfSeed::default().sign_next_with_rng(&KeyPair::generate(&mut rng), &mut rng);
+    let vrf_seed = VrfSeed::default().sign_next_with_rng(
+        &KeyPair::generate(&mut rng),
+        final_block.number,
+        &mut rng,
+    );
 
     log::info!("Getting PoW account state");
 

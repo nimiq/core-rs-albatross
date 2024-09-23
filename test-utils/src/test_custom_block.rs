@@ -104,7 +104,7 @@ pub fn next_micro_block(
     let seed = config
         .seed
         .clone()
-        .unwrap_or_else(|| prev_seed.sign_next(signing_key));
+        .unwrap_or_else(|| prev_seed.sign_next(signing_key, block_number));
 
     let mut transactions = config.transactions.clone();
     transactions.sort_unstable();
@@ -313,10 +313,12 @@ pub fn next_macro_block_proposal(
         }
     });
 
-    let seed = config
-        .seed
-        .clone()
-        .unwrap_or_else(|| blockchain.head().seed().sign_next(signing_key));
+    let seed = config.seed.clone().unwrap_or_else(|| {
+        blockchain
+            .head()
+            .seed()
+            .sign_next(signing_key, block_number)
+    });
 
     let validators = if Policy::is_election_block_at(blockchain.block_number() + 1) {
         Some(blockchain.next_validators(&seed))

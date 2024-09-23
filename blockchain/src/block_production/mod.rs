@@ -147,7 +147,7 @@ impl BlockProducer {
             // leader.
             prev_seed
         } else {
-            prev_seed.sign_next_with_rng(&self.signing_key, rng)
+            prev_seed.sign_next_with_rng(&self.signing_key, block_number, rng)
         };
 
         // Create the inherents from the equivocation proofs or skip block info.
@@ -303,10 +303,11 @@ impl BlockProducer {
 
         // Calculate the seed for this block by signing the previous block seed with the validator
         // key.
-        let seed = blockchain
-            .head()
-            .seed()
-            .sign_next_with_rng(&self.signing_key, rng);
+        let seed =
+            blockchain
+                .head()
+                .seed()
+                .sign_next_with_rng(&self.signing_key, block_number, rng);
 
         // If this is an election block, calculate the validator set for the next epoch.
         let validators = match Policy::is_election_block_at(block_number) {
