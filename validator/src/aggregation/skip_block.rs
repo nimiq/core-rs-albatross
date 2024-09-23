@@ -1,10 +1,6 @@
-use std::{fmt, sync::Arc, time::Duration};
+use std::{fmt, future::Future, sync::Arc, time::Duration};
 
-use futures::{
-    future,
-    future::{BoxFuture, FutureExt},
-    stream::StreamExt,
-};
+use futures::{future, stream::StreamExt};
 use nimiq_block::{MultiSignature, SignedSkipBlockInfo, SkipBlockInfo, SkipBlockProof};
 use nimiq_bls::{AggregateSignature, KeyPair};
 use nimiq_collections::BitSet;
@@ -50,7 +46,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
         &self,
         node_id: u16,
         update: LevelUpdate<Self::Contribution>,
-    ) -> BoxFuture<'static, Result<(), Self::Error>> {
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send + 'static {
         // Create the update.
         let update_message = SkipBlockUpdate {
             level_update: update.into(),
@@ -61,7 +57,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
         let network = Arc::clone(&self.network);
 
         // Create the request future and return it.
-        async move { network.send_to(node_id, update_message).await }.boxed()
+        async move { network.send_to(node_id, update_message).await }
     }
 }
 

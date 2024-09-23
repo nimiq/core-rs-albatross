@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use futures::{
     future::{self, BoxFuture, FutureExt},
@@ -77,7 +77,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
         &self,
         node_id: u16,
         update: LevelUpdate<Self::Contribution>,
-    ) -> BoxFuture<'static, Result<(), Self::Error>> {
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send + 'static {
         // Tag the LevelUpdate, while also converting it to the serializable representation.
         // The origin gets lost here, but will get re-set by the ValidatorNetwork in its sent_to call.
         let tagged_aggregation_message = TaggedAggregationMessage {
@@ -94,7 +94,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
         let network = Arc::clone(&self.network);
 
         // Create the request future and return it.
-        async move { network.send_to(node_id, update_message).await }.boxed()
+        async move { network.send_to(node_id, update_message).await }
     }
 }
 
