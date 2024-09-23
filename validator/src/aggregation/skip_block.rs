@@ -289,7 +289,15 @@ impl SkipBlockAggregation {
         );
 
         let input_switch = InputStreamSwitch::new(
-            Box::pin(network.receive::<SkipBlockUpdate>().map(|item| item.0)),
+            Box::pin(
+                network
+                    .receive::<SkipBlockUpdate>()
+                    .filter_map(|(update, sender_id)| {
+                        futures::future::ready(
+                            (sender_id == update.level_update.origin()).then(|| update),
+                        )
+                    }),
+            ),
             skip_block_info.clone(),
         );
 
