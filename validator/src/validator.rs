@@ -580,23 +580,21 @@ where
                     let block_publisher = BlockPublisher {
                         network: Arc::clone(&self.network),
                     };
-                    let result = if cfg!(feature = "trusted_push") {
+                    if cfg!(feature = "trusted_push") {
                         Blockchain::trusted_push(
                             self.blockchain.upgradable_read(),
-                            Block::Macro(block),
+                            block,
                             &block_publisher,
                         )
-                        .map_err(|e| error!("Failed to push macro block onto the chain: {:?}", e))
-                        .ok()
                     } else {
                         Blockchain::push_with_hook(
                             self.blockchain.upgradable_read(),
-                            Block::Macro(block),
+                            block,
                             &block_publisher,
                         )
-                        .map_err(|e| error!("Failed to push macro block onto the chain: {:?}", e))
-                        .ok()
-                    };
+                    }
+                    .map_err(|e| error!("Failed to push macro block onto the chain: {:?}", e))
+                    .ok();
                 }
 
                 // In case of a new state update we need to store the new version of it disregarding

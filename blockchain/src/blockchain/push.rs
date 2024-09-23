@@ -298,8 +298,8 @@ impl Blockchain {
             match res {
                 // Extended and Rebranched are already handled pre-commit.
                 Ok((PushResult::Extended | PushResult::Rebranched, _)) => {}
-                Ok((ref res, _)) => post_validation_hook.post_validation(&block, &Ok(res.clone())),
-                Err(ref res) => post_validation_hook.post_validation(&block, &Err(res.clone())),
+                Ok((ref res, _)) => post_validation_hook.post_validation(&block, Ok(res)),
+                Err(ref res) => post_validation_hook.post_validation(&block, Err(res)),
             }
             res
         }
