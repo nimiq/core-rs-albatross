@@ -35,9 +35,15 @@ impl<'db, Kind> ReadTransaction<'db> for MdbxTransaction<'db, Kind>
 where
     Kind: TransactionKind,
 {
-    type Cursor<'txn, T: Table> = MdbxCursor<'txn, Kind, T> where 'db: 'txn;
+    type Cursor<'txn, T: Table>
+        = MdbxCursor<'txn, Kind, T>
+    where
+        'db: 'txn;
 
-    type DupCursor<'txn, T: DupTable> = MdbxCursor<'txn, Kind, T> where 'db: 'txn;
+    type DupCursor<'txn, T: DupTable>
+        = MdbxCursor<'txn, Kind, T>
+    where
+        'db: 'txn;
 
     fn get<T: Table>(&self, table: &T, key: &T::Key) -> Option<T::Value> {
         let table = self.open_table(table);
@@ -64,9 +70,15 @@ where
 }
 
 impl<'db> WriteTransaction<'db> for MdbxTransaction<'db, RW> {
-    type WriteCursor<'txn, T: Table> = MdbxWriteCursor<'txn, T> where 'db: 'txn;
+    type WriteCursor<'txn, T: Table>
+        = MdbxWriteCursor<'txn, T>
+    where
+        'db: 'txn;
 
-    type DupWriteCursor<'txn, T: DupTable> = MdbxWriteCursor<'txn, T> where 'db: 'txn;
+    type DupWriteCursor<'txn, T: DupTable>
+        = MdbxWriteCursor<'txn, T>
+    where
+        'db: 'txn;
 
     fn put_reserve<T: Table>(&mut self, table: &T, key: &T::Key, value: &T::Value)
     where

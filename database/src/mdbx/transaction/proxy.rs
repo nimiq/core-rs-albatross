@@ -20,9 +20,15 @@ impl<'db, 'inner> ReadTransaction<'db> for TransactionProxy<'db, 'inner>
 where
     'db: 'inner,
 {
-    type Cursor<'txn, T: Table> = CursorProxy<'txn, T> where 'inner: 'txn;
+    type Cursor<'txn, T: Table>
+        = CursorProxy<'txn, T>
+    where
+        'inner: 'txn;
 
-    type DupCursor<'txn, T: DupTable> = CursorProxy<'txn, T> where 'inner: 'txn;
+    type DupCursor<'txn, T: DupTable>
+        = CursorProxy<'txn, T>
+    where
+        'inner: 'txn;
 
     fn get<T: Table>(&self, table: &T, key: &T::Key) -> Option<T::Value> {
         match self {

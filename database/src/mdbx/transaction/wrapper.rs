@@ -29,9 +29,15 @@ impl<'db> MdbxReadTransaction<'db> {
 }
 
 impl<'db> ReadTransaction<'db> for MdbxReadTransaction<'db> {
-    type Cursor<'txn, T: Table> = CursorProxy<'txn, T> where Self: 'txn;
+    type Cursor<'txn, T: Table>
+        = CursorProxy<'txn, T>
+    where
+        Self: 'txn;
 
-    type DupCursor<'txn, T: DupTable> = CursorProxy<'txn, T> where  Self: 'txn;
+    type DupCursor<'txn, T: DupTable>
+        = CursorProxy<'txn, T>
+    where
+        Self: 'txn;
 
     fn get<T: Table>(&self, table: &T, key: &T::Key) -> Option<T::Value> {
         match self {
@@ -72,10 +78,15 @@ impl<'db> MdbxWriteTransaction<'db> {
 }
 
 impl<'db> ReadTransaction<'db> for MdbxWriteTransaction<'db> {
-    type Cursor<'txn, T: Table> = CursorProxy<'txn, T> where Self: 'txn;
+    type Cursor<'txn, T: Table>
+        = CursorProxy<'txn, T>
+    where
+        Self: 'txn;
 
-    type DupCursor<'txn, T: DupTable> = CursorProxy<'txn, T>
-    where Self: 'txn;
+    type DupCursor<'txn, T: DupTable>
+        = CursorProxy<'txn, T>
+    where
+        Self: 'txn;
 
     fn get<T: Table>(&self, table: &T, key: &T::Key) -> Option<T::Value> {
         self.txn.get(table, key)
@@ -91,9 +102,15 @@ impl<'db> ReadTransaction<'db> for MdbxWriteTransaction<'db> {
 }
 
 impl<'db> WriteTransaction<'db> for MdbxWriteTransaction<'db> {
-    type WriteCursor<'txn, T: Table> = MdbxCursor<'txn, RW, T>where Self: 'txn;
+    type WriteCursor<'txn, T: Table>
+        = MdbxCursor<'txn, RW, T>
+    where
+        Self: 'txn;
 
-    type DupWriteCursor<'txn, T: DupTable> = MdbxCursor<'txn, RW, T> where Self: 'txn;
+    type DupWriteCursor<'txn, T: DupTable>
+        = MdbxCursor<'txn, RW, T>
+    where
+        Self: 'txn;
 
     fn put_reserve<T: RegularTable>(&mut self, table: &T, key: &T::Key, value: &T::Value)
     where
