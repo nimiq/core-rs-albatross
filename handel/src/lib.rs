@@ -21,7 +21,7 @@ pub mod store;
 pub mod update;
 pub mod verifier;
 
-use std::fmt::Debug;
+use std::fmt::Display;
 
-pub trait Identifier: Debug + Clone + Send + Unpin + 'static {}
-impl<T: Debug + Clone + Send + Unpin + 'static> Identifier for T {}
+pub trait Identifier: Display + Clone + Send + Unpin + 'static {}
+impl<T: Display + Clone + Send + Unpin + 'static> Identifier for T {}

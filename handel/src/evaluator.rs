@@ -1,9 +1,13 @@
-use std::sync::Arc;
+use std::{ops::RangeInclusive, sync::Arc};
 
 use parking_lot::RwLock;
 
 use crate::{
     contribution::AggregatableContribution,
+    evaluator::VerificationError::{
+        InvalidContributor, InvalidFullAggregate, InvalidIndividualContribution, InvalidLevel,
+        InvalidOrigin, RangeNotFound,
+    },
     identity::{IdentityRegistry, WeightRegistry},
     partitioner::Partitioner,
     protocol::Protocol,
@@ -26,7 +30,7 @@ where
     fn evaluate(&self, signature: &TProtocol::Contribution, level: usize, id: TId) -> usize;
 
     /// Returns whether a level contains a specific peer ID.
-    fn verify(&self, msg: &LevelUpdate<TProtocol::Contribution>) -> bool;
+    fn verify(&self, msg: &LevelUpdate<TProtocol::Contribution>) -> Result<(), VerificationError>;
 }
 
 /// A signature counts as it was signed N times, where N is the signers weight
@@ -79,6 +83,33 @@ where
             partitioner,
         }
     }
+}
+
+#[derive(Debug)]
+pub enum VerificationError {
+    InvalidLevel {
+        level: usize,
+        num_levels: usize,
+    },
+    InvalidFullAggregate {
+        weight: usize,
+        expected_weight: usize,
+    },
+    RangeNotFound {
+        level: usize,
+    },
+    InvalidOrigin {
+        origin: usize,
+        range: RangeInclusive<usize>,
+    },
+    InvalidIndividualContribution {
+        num_contributors: usize,
+        contains_origin: bool,
+    },
+    InvalidContributor {
+        contributor: usize,
+        range: RangeInclusive<usize>,
+    },
 }
 
 impl<TId, TProtocol> Evaluator<TId, TProtocol> for WeightedVote<TId, TProtocol>
@@ -184,7 +215,7 @@ where
             // signatures for this level there should also be a best signature.
             if with_individuals.len() != identity.len() {
                 log::warn!(
-                    ?id,
+                    %id,
                     ?level,
                     ?identity,
                     individuals = ?store.individual_verified(level),
@@ -227,12 +258,12 @@ where
             - combined_sigs
     }
 
-    fn verify(&self, msg: &LevelUpdate<TProtocol::Contribution>) -> bool {
+    fn verify(&self, msg: &LevelUpdate<TProtocol::Contribution>) -> Result<(), VerificationError> {
         // Check that the level is within bounds.
         let level = msg.level as usize;
         let num_levels = self.partitioner.levels();
         if level > num_levels || level < 1 {
-            return false;
+            return Err(InvalidLevel { level, num_levels });
         }
 
         // Special case for full aggregations, which are sent at level `num_levels`.
@@ -242,18 +273,26 @@ where
                 .weights
                 .signers_identity(&msg.aggregate.contributors())
                 .len();
-            return weight == self.partitioner.size();
+            let expected_weight = self.partitioner.size();
+            if weight != expected_weight {
+                return Err(InvalidFullAggregate {
+                    weight,
+                    expected_weight,
+                });
+            }
+
+            return Ok(());
         }
 
         // Get the valid contributors for this level.
         let Ok(range) = self.partitioner.range(level) else {
-            return false;
+            return Err(RangeNotFound { level });
         };
 
         // Check that the message origin is a valid contributor.
         let origin = msg.origin as usize;
         if !range.contains(&origin) {
-            return false;
+            return Err(InvalidOrigin { origin, range });
         }
 
         // Check that the signer of the individual contribution corresponds to the message origin.
@@ -262,18 +301,22 @@ where
                 .weights
                 .signers_identity(&individual.contributors())
                 .len();
-            if num_contributors != 1 || !individual.contributors().contains(origin) {
-                return false;
+            let contains_origin = individual.contributors().contains(origin);
+            if num_contributors != 1 || !contains_origin {
+                return Err(InvalidIndividualContribution {
+                    num_contributors,
+                    contains_origin,
+                });
             }
         }
 
         // Check that all contributors to the aggregate contribution are allowed on this level.
         for contributor in msg.aggregate.contributors().iter() {
             if !range.contains(&contributor) {
-                return false;
+                return Err(InvalidContributor { contributor, range });
             }
         }
 
-        true
+        Ok(())
     }
 }

@@ -1,4 +1,7 @@
-use std::io;
+use std::{
+    fmt::{Display, Formatter},
+    io,
+};
 
 use nimiq_hash::{Blake2sHash, SerializeContent};
 use nimiq_serde::{Deserialize, Serialize, SerializedSize};
@@ -40,6 +43,16 @@ pub struct TendermintIdentifier {
 
 impl SerializedSize for TendermintIdentifier {
     const SIZE: usize = u8::SIZE + 2 * 4 + TendermintStep::SIZE;
+}
+
+impl Display for TendermintIdentifier {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}:{}:{:?}",
+            self.block_number, self.round_number, self.step
+        )
+    }
 }
 
 // Multiple things this needs to take care of when it comes to what needs signing here:

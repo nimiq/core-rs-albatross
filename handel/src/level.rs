@@ -53,7 +53,7 @@ impl Level {
     }
 
     /// Creates a set of levels given a partitioner
-    pub fn create_levels<P: Partitioner, TId: std::fmt::Debug>(
+    pub fn create_levels<P: Partitioner, TId: std::fmt::Display>(
         partitioner: Arc<P>,
         id: TId,
         node_id: usize,
@@ -68,7 +68,7 @@ impl Level {
                     let ids = tree_rhs.clone().collect::<Vec<usize>>();
 
                     trace!(
-                        ?id,
+                        %id,
                         level = i,
                         peers = ?ids,
                         "Peers on level",

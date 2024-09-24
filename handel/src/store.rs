@@ -113,7 +113,7 @@ where
         let Some((best_contribution, best_contributors)) = best_contribution else {
             // This is normal whenever the first signature for a level is processed.
             trace!(
-                id = ?identifier,
+                id = %identifier,
                 level,
                 contributors = %contribution.contributors(),
                 "Level was empty",
@@ -123,7 +123,7 @@ where
         };
 
         trace!(
-            id = ?identifier,
+            id = %identifier,
             level,
             ?best_contribution,
             "Current best for level"
@@ -141,7 +141,7 @@ where
             // Merging failed. Check if contribution is a superset of `best_contribution`.
             if contributors.is_superset_of(best_contributors) {
                 trace!(
-                    id = ?identifier,
+                    id = %identifier,
                     level,
                     ?contribution,
                     ?best_contribution,
@@ -150,7 +150,7 @@ where
                 return Some((contribution, contributors));
             } else {
                 trace!(
-                    id = ?identifier,
+                    id = %identifier,
                     level,
                     ?contribution,
                     ?best_contribution,
@@ -179,7 +179,7 @@ where
             // This should not be observed really as the evaluator should filter signatures which cannot provide
             // improvements out.
             trace!(
-                id = ?identifier,
+                id = %identifier,
                 "No improvement possible",
             );
             return None;
@@ -238,7 +238,7 @@ where
                 .insert(level, (best_contribution, best_identity));
             if level > self.best_level {
                 trace!(
-                    id = ?identifier,
+                    id = %identifier,
                     level,
                     "Best level is now",
                 );
@@ -330,20 +330,22 @@ mod tests {
 
     /// Dummy Protocol. Unused, except for Generic
     pub struct TestProtocol {
-        evaluator: Arc<<Self as Protocol<()>>::Evaluator>,
-        partitioner: Arc<<Self as Protocol<()>>::Partitioner>,
-        registry: Arc<<Self as Protocol<()>>::Registry>,
-        verifier: Arc<<Self as Protocol<()>>::Verifier>,
-        store: Arc<RwLock<<Self as Protocol<()>>::Store>>,
+        evaluator: Arc<<Self as Protocol<u8>>::Evaluator>,
+        partitioner: Arc<<Self as Protocol<u8>>::Partitioner>,
+        registry: Arc<<Self as Protocol<u8>>::Registry>,
+        verifier: Arc<<Self as Protocol<u8>>::Verifier>,
+        store: Arc<RwLock<<Self as Protocol<u8>>::Store>>,
     }
-    impl Protocol<()> for TestProtocol {
+    impl Protocol<u8> for TestProtocol {
         type Contribution = Contribution;
-        type Evaluator = WeightedVote<(), Self>;
+        type Evaluator = WeightedVote<u8, Self>;
         type Partitioner = BinomialPartitioner;
         type Registry = TestRegistry;
         type Verifier = TestVerifier;
-        type Store = ReplaceStore<(), Self>;
-        fn identify(&self) {}
+        type Store = ReplaceStore<u8, Self>;
+        fn identify(&self) -> u8 {
+            0
+        }
         fn node_id(&self) -> usize {
             0
         }
@@ -403,7 +405,7 @@ mod tests {
         // Create the partitions
         let partitioner = Arc::new(BinomialPartitioner::new(node_id, num_ids));
 
-        let store = Arc::new(RwLock::new(ReplaceStore::<(), TestProtocol>::new(
+        let store = Arc::new(RwLock::new(ReplaceStore::<u8, TestProtocol>::new(
             partitioner.clone(),
         )));
 
@@ -423,7 +425,7 @@ mod tests {
             first_contribution.clone(),
             level,
             Arc::new(TestRegistry {}),
-            (),
+            0,
         );
 
         {
@@ -449,7 +451,7 @@ mod tests {
             second_contribution.clone(),
             level,
             Arc::new(TestRegistry {}),
-            (),
+            0,
         );
 
         {
@@ -485,7 +487,7 @@ mod tests {
         // Create the partitions
         let partitioner = Arc::new(BinomialPartitioner::new(node_id, num_ids));
 
-        let store = Arc::new(RwLock::new(ReplaceStore::<(), TestProtocol>::new(
+        let store = Arc::new(RwLock::new(ReplaceStore::<u8, TestProtocol>::new(
             partitioner.clone(),
         )));
 
@@ -508,7 +510,7 @@ mod tests {
             first_contribution.clone(),
             level,
             Arc::new(TestRegistry {}),
-            (),
+            0,
         );
 
         {
@@ -536,7 +538,7 @@ mod tests {
             second_contribution.clone(),
             level,
             Arc::new(TestRegistry {}),
-            (),
+            0,
         );
 
         {
@@ -578,7 +580,7 @@ mod tests {
             third_contribution.clone(),
             level,
             Arc::new(TestRegistry {}),
-            (),
+            0,
         );
 
         {

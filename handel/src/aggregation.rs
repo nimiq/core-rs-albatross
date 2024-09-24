@@ -151,7 +151,7 @@ where
             level.start();
 
             debug!(
-                id = ?self.protocol.identify(),
+                id = %self.protocol.identify(),
                 level = level.id,
                 activated_by,
                 "Starting level"
@@ -210,7 +210,7 @@ where
         }
 
         trace!(
-            id = ?self.protocol.identify(),
+            id = %self.protocol.identify(),
             level_id,
             num_peers,
             "Level complete",
@@ -431,9 +431,10 @@ where
         let evaluator = self.protocol.evaluator();
         while let Poll::Ready(Some(update)) = self.input_stream.poll_next_unpin(cx) {
             // Verify the level update.
-            if !evaluator.verify(&update) {
-                trace!(
-                    id = ?self.protocol.identify(),
+            if let Err(error) = evaluator.verify(&update) {
+                warn!(
+                    id = %self.protocol.identify(),
+                    ?error,
                     ?update,
                     "Rejecting invalid level update",
                 );
@@ -538,7 +539,7 @@ where
         // If the best aggregate is a full aggregation, this aggregation is finished.
         if self.is_complete_aggregate(&best_aggregate) {
             debug!(
-                id = ?self.protocol.identify(),
+                id = %self.protocol.identify(),
                 "Aggregation complete"
             );
 
