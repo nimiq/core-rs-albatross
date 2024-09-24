@@ -415,6 +415,14 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                     }
                     {
                         log::warn!(%err, %peer_id, chunk_index=request.chunk_index,block_number=request.block_number,"The peer could not provide the requested history chunk, we emit it as outdated");
+
+                        // Remove the peer from the syncing process
+                        self.validity_queue.remove_peer(&peer_id);
+                        self.syncing_peers.remove(&peer_id);
+
+                        // Re add the request to the sync queue
+                        self.validity_queue.add_ids(vec![(request, None)]);
+
                         return Poll::Ready(Some(MacroSyncReturn::Outdated(peer_id)));
                     }
                 }
