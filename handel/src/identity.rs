@@ -28,6 +28,10 @@ impl Identity {
         self.signers.is_empty()
     }
 
+    pub fn contains(&self, value: usize) -> bool {
+        self.signers.contains(value)
+    }
+
     /// Returns whether this identity is a superset of another identity.
     pub fn is_superset_of(&self, other: &Self) -> bool {
         self.signers.is_superset(&other.signers)

@@ -1,14 +1,15 @@
 use std::{ops::RangeInclusive, sync::Arc};
 
+use nimiq_collections::BitSet;
 use parking_lot::RwLock;
 
 use crate::{
     contribution::AggregatableContribution,
     evaluator::VerificationError::{
-        InvalidContributor, InvalidFullAggregate, InvalidIndividualContribution, InvalidLevel,
-        InvalidOrigin, RangeNotFound,
+        InvalidContributors, InvalidFullAggregate, InvalidIndividualContribution, InvalidLevel,
+        OriginNotInContributors, OriginNotInRange,
     },
-    identity::{IdentityRegistry, WeightRegistry},
+    identity::{Identity, IdentityRegistry, WeightRegistry},
     partitioner::Partitioner,
     protocol::Protocol,
     store::ContributionStore,
@@ -95,20 +96,21 @@ pub enum VerificationError {
         weight: usize,
         expected_weight: usize,
     },
-    RangeNotFound {
-        level: usize,
-    },
-    InvalidOrigin {
+    OriginNotInRange {
         origin: usize,
         range: RangeInclusive<usize>,
+    },
+    OriginNotInContributors {
+        origin: usize,
+        contributors: Identity,
     },
     InvalidIndividualContribution {
         num_contributors: usize,
         contains_origin: bool,
     },
-    InvalidContributor {
-        contributor: usize,
-        range: RangeInclusive<usize>,
+    InvalidContributors {
+        contributors: Identity,
+        allowed_contributors: Identity,
     },
 }
 
@@ -268,11 +270,9 @@ where
 
         // Special case for full aggregations, which are sent at level `num_levels`.
         // They are only valid if they contain all signers.
+        let contributors = self.weights.signers_identity(&msg.aggregate.contributors());
         if level == num_levels {
-            let weight = self
-                .weights
-                .signers_identity(&msg.aggregate.contributors())
-                .len();
+            let weight = contributors.len();
             let expected_weight = self.partitioner.size();
             if weight != expected_weight {
                 return Err(InvalidFullAggregate {
@@ -285,23 +285,28 @@ where
         }
 
         // Get the valid contributors for this level.
-        let Ok(range) = self.partitioner.range(level) else {
-            return Err(RangeNotFound { level });
-        };
+        // We have validated the level, so we can expect a range here.
+        let range = self.partitioner.range(level).expect("Range should exist");
 
         // Check that the message origin is a valid contributor.
         let origin = msg.origin as usize;
         if !range.contains(&origin) {
-            return Err(InvalidOrigin { origin, range });
+            return Err(OriginNotInRange { origin, range });
+        }
+
+        // The origin must be part of the contributors.
+        if !contributors.contains(origin) {
+            return Err(OriginNotInContributors {
+                origin,
+                contributors,
+            });
         }
 
         // Check that the signer of the individual contribution corresponds to the message origin.
         if let Some(individual) = &msg.individual {
-            let num_contributors = self
-                .weights
-                .signers_identity(&individual.contributors())
-                .len();
-            let contains_origin = individual.contributors().contains(origin);
+            let individual_contributors = self.weights.signers_identity(&individual.contributors());
+            let num_contributors = individual_contributors.len();
+            let contains_origin = individual_contributors.contains(origin);
             if num_contributors != 1 || !contains_origin {
                 return Err(InvalidIndividualContribution {
                     num_contributors,
@@ -311,10 +316,12 @@ where
         }
 
         // Check that all contributors to the aggregate contribution are allowed on this level.
-        for contributor in msg.aggregate.contributors().iter() {
-            if !range.contains(&contributor) {
-                return Err(InvalidContributor { contributor, range });
-            }
+        let allowed_contributors = Identity::new(BitSet::from_iter(range));
+        if !allowed_contributors.is_superset_of(&contributors) {
+            return Err(InvalidContributors {
+                contributors,
+                allowed_contributors,
+            });
         }
 
         Ok(())
