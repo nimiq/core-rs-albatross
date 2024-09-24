@@ -17,6 +17,8 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::utils;
+
 #[derive(Debug, Error)]
 pub enum PeerContactError {
     #[error("Exceeded number of advertised addresses")]
@@ -382,7 +384,7 @@ impl PeerContactBook {
             let has_secure_ws_connections = peer_contact
                 .addresses
                 .iter()
-                .any(Self::is_address_ws_secure);
+                .any(utils::is_address_ws_secure);
             if !has_secure_ws_connections {
                 return;
             }
@@ -566,12 +568,6 @@ impl PeerContactBook {
                 self.peer_contacts.remove(&peer_id);
             }
         }
-    }
-
-    /// Returns true if an address is a secure websocket connection.
-    /// If address doesn't have the websocket protocol, it will return `false`.
-    fn is_address_ws_secure(address: &Multiaddr) -> bool {
-        address.into_iter().any(|p| matches!(p, Protocol::Wss(_)))
     }
 
     /// Returns true if an address is valid for dialing.

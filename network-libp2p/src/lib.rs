@@ -11,8 +11,10 @@ mod network;
 #[cfg(feature = "metrics")]
 mod network_metrics;
 mod network_types;
+mod only_secure_ws_transport;
 mod rate_limiting;
 mod swarm;
+mod utils;
 
 pub const DISCOVERY_PROTOCOL: &str = "/nimiq/discovery/0.0.1";
 pub const DHT_PROTOCOL: &str = "/nimiq/kad/0.0.1";

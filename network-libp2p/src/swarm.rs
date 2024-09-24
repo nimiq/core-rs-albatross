@@ -60,7 +60,13 @@ pub(crate) fn new_swarm(
     force_dht_server_mode: bool,
 ) -> Swarm<behaviour::Behaviour> {
     let keypair = config.keypair.clone();
-    let transport = new_transport(&keypair, config.memory_transport, config.tls.as_ref()).unwrap();
+    let transport = new_transport(
+        &keypair,
+        config.memory_transport,
+        config.only_secure_ws_connections,
+        config.tls.as_ref(),
+    )
+    .unwrap();
 
     let behaviour =
         behaviour::Behaviour::new(config, contacts, peer_score_params, force_dht_server_mode);
@@ -156,8 +162,11 @@ pub(crate) async fn swarm_task(
 fn new_transport(
     keypair: &Keypair,
     memory_transport: bool,
+    only_secure_ws_connections: bool,
     tls: Option<&TlsConfig>,
 ) -> std::io::Result<Boxed<(PeerId, StreamMuxerBox)>> {
+    let yamux = yamux::Config::default();
+
     if memory_transport {
         // Memory transport primary for testing
         // TODO: Use websocket over the memory transport
@@ -179,6 +188,7 @@ fn new_transport(
                 .collect();
             transport.set_tls_config(websocket::tls::Config::new(priv_key, certificates).unwrap());
         }
+
         #[cfg(not(feature = "tokio-websocket"))]
         let _ = tls; // silence unused variable warning
 
@@ -187,16 +197,22 @@ fn new_transport(
 
         #[cfg(not(feature = "tokio-websocket"))]
         let transport = MemoryTransport::default();
-        // Fixme: Handle wasm compatible transport
 
-        let yamux = yamux::Config::default();
-
-        Ok(transport
-            .upgrade(core::upgrade::Version::V1)
-            .authenticate(noise::Config::new(keypair).unwrap())
-            .multiplex(yamux)
-            .timeout(std::time::Duration::from_secs(20))
-            .boxed())
+        if only_secure_ws_connections {
+            Ok(crate::only_secure_ws_transport::Transport::new(transport)
+                .upgrade(core::upgrade::Version::V1)
+                .authenticate(noise::Config::new(keypair).unwrap())
+                .multiplex(yamux)
+                .timeout(std::time::Duration::from_secs(20))
+                .boxed())
+        } else {
+            Ok(transport
+                .upgrade(core::upgrade::Version::V1)
+                .authenticate(noise::Config::new(keypair).unwrap())
+                .multiplex(yamux)
+                .timeout(std::time::Duration::from_secs(20))
+                .boxed())
+        }
     } else {
         #[cfg(feature = "tokio-websocket")]
         let mut transport = websocket::WsConfig::new(dns::tokio::Transport::system(
@@ -217,19 +233,27 @@ fn new_transport(
         }
 
         #[cfg(all(target_family = "wasm", not(feature = "tokio-websocket")))]
-        let transport = websocket_websys::Transport::default();
+        let transport =
+            crate::only_secure_ws_transport::Transport::new(websocket_websys::Transport::default());
 
         #[cfg(all(not(feature = "tokio-websocket"), not(target_family = "wasm")))]
         let transport = MemoryTransport::default();
 
-        let yamux = yamux::Config::default();
-
-        Ok(transport
-            .upgrade(core::upgrade::Version::V1)
-            .authenticate(noise::Config::new(keypair).unwrap())
-            .multiplex(yamux)
-            .timeout(std::time::Duration::from_secs(20))
-            .boxed())
+        if only_secure_ws_connections {
+            Ok(crate::only_secure_ws_transport::Transport::new(transport)
+                .upgrade(core::upgrade::Version::V1)
+                .authenticate(noise::Config::new(keypair).unwrap())
+                .multiplex(yamux)
+                .timeout(std::time::Duration::from_secs(20))
+                .boxed())
+        } else {
+            Ok(transport
+                .upgrade(core::upgrade::Version::V1)
+                .authenticate(noise::Config::new(keypair).unwrap())
+                .multiplex(yamux)
+                .timeout(std::time::Duration::from_secs(20))
+                .boxed())
+        }
     }
 }
 
