@@ -502,4 +502,9 @@ where
     {
         self.network.validate_message::<TTopic>(id, acceptance);
     }
+
+    fn get_peer_id(&self, validator_id: u16) -> Option<<Self::NetworkType as Network>::PeerId> {
+        self.get_validator_cache(validator_id)
+            .potentially_outdated_peer_id()
+    }
 }

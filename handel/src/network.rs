@@ -29,6 +29,8 @@ pub trait Network: Unpin + Send + Sync + 'static {
         node_id: u16,
         update: LevelUpdate<Self::Contribution>,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send + 'static;
+
+    fn ban_node(&self, node_id: u16) -> impl Future<Output = ()> + Send + 'static;
 }
 
 #[derive(Clone)]
@@ -197,7 +199,7 @@ impl<TNetwork: Network + Unpin> Future for LevelUpdateSender<TNetwork> {
 
 #[cfg(test)]
 mod test {
-    use std::{future::Future, sync::Arc, task::Context, time::Duration};
+    use std::{future, future::Future, sync::Arc, task::Context, time::Duration};
 
     use futures::FutureExt;
     use nimiq_collections::BitSet;
@@ -243,6 +245,10 @@ mod test {
                 nimiq_time::sleep(Duration::from_millis(100)).await;
                 Ok(())
             }
+        }
+
+        fn ban_node(&self, _node_id: u16) -> impl Future<Output = ()> + Send + 'static {
+            future::ready(())
         }
     }
 

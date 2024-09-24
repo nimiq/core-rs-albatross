@@ -17,6 +17,7 @@ use nimiq_handel::{
 };
 use nimiq_hash::{Blake2sHash, Hash};
 use nimiq_keys::Ed25519Signature as SchnorrSignature;
+use nimiq_network_interface::network::CloseReason;
 use nimiq_primitives::{
     networks::NetworkId, policy::Policy, slots_allocation::Validators, TendermintIdentifier,
     TendermintStep, TendermintVote,
@@ -95,6 +96,19 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
 
         // Create the request future and return it.
         async move { network.send_to(node_id, update_message).await }
+    }
+
+    fn ban_node(&self, node_id: u16) -> impl Future<Output = ()> + Send + 'static {
+        let network = Arc::clone(&self.network);
+        async move {
+            let Some(peer_id) = network.get_peer_id(node_id) else {
+                return;
+            };
+
+            network
+                .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
+                .await
+        }
     }
 }
 

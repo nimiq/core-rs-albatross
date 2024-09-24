@@ -16,7 +16,10 @@ use nimiq_handel::{
     update::LevelUpdate,
 };
 use nimiq_hash::Blake2sHash;
-use nimiq_network_interface::request::{MessageMarker, RequestCommon};
+use nimiq_network_interface::{
+    network::CloseReason,
+    request::{MessageMarker, RequestCommon},
+};
 use nimiq_primitives::{policy, slots_allocation::Validators, Message};
 use nimiq_validator_network::ValidatorNetwork;
 use parking_lot::RwLock;
@@ -58,6 +61,19 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
 
         // Create the request future and return it.
         async move { network.send_to(node_id, update_message).await }
+    }
+
+    fn ban_node(&self, node_id: u16) -> impl Future<Output = ()> + Send + 'static {
+        let network = Arc::clone(&self.network);
+        async move {
+            let Some(peer_id) = network.get_peer_id(node_id) else {
+                return;
+            };
+
+            network
+                .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
+                .await
+        }
     }
 }
 

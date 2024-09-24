@@ -18,7 +18,7 @@ use nimiq_handel::{
     verifier::{VerificationResult, Verifier},
 };
 use nimiq_network_interface::{
-    network::Network as NetworkInterface,
+    network::{CloseReason, Network as NetworkInterface},
     request::{MessageMarker, OutboundRequestError, RequestCommon, RequestError},
 };
 use nimiq_network_mock::{MockHub, MockNetwork, MockPeerId};
@@ -231,6 +231,16 @@ impl<N: NetworkInterface<PeerId = MockPeerId>> Network for NetworkWrapper<N> {
                 log::error!(?this_id, node_id, ?update, "Peer does not exist",);
                 Err(OutboundRequestError::DialFailure.into())
             }
+        }
+    }
+
+    fn ban_node(&self, node_id: u16) -> impl Future<Output = ()> + Send + 'static {
+        let peer_id = MockPeerId(node_id as u64);
+        let network = Arc::clone(&self.0);
+        async move {
+            network
+                .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
+                .await
         }
     }
 }

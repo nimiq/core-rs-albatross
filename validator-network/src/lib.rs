@@ -94,4 +94,7 @@ pub trait ValidatorNetwork: Send + Sync {
     fn validate_message<TTopic>(&self, id: PubsubId<Self>, acceptance: MsgAcceptance)
     where
         TTopic: Topic + Sync;
+
+    /// Returns the network peer ID for the given `validator_id` if it is known.
+    fn get_peer_id(&self, validator_id: u16) -> Option<<Self::NetworkType as Network>::PeerId>;
 }
