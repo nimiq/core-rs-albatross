@@ -1,8 +1,6 @@
-use std::ops::RangeInclusive;
-
 use thiserror::Error;
 
-use crate::contribution::AggregatableContribution;
+use crate::{contribution::AggregatableContribution, identity::Identity};
 
 /// Errors that can happen during partitioning
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
@@ -26,8 +24,8 @@ pub trait Partitioner: Send + Sync {
     /// Total number of identities up to `level`
     fn cumulative_level_size(&self, level: usize) -> usize;
 
-    /// Range of identities that need to be contacted at `level`
-    fn range(&self, level: usize) -> Result<RangeInclusive<usize>, PartitioningError>;
+    /// Returns the identity composed of all participants of the given level.
+    fn identities_on(&self, level: usize) -> Result<Identity, PartitioningError>;
 
     /// Combine `AggregatableContributions` to a new `AggregatableContribution` for next level
     /// TODO: Return `Result<C, PartitioningError>` instead of option
@@ -74,8 +72,8 @@ impl Partitioner for BinomialPartitioner {
     }
 
     fn level_size(&self, level: usize) -> usize {
-        if let Ok(range) = self.range(level) {
-            (range.end() - range.start()) + 1
+        if let Ok(range) = self.identities_on(level) {
+            range.len()
         } else {
             0
         }
@@ -89,9 +87,9 @@ impl Partitioner for BinomialPartitioner {
         size
     }
 
-    fn range(&self, level: usize) -> Result<RangeInclusive<usize>, PartitioningError> {
+    fn identities_on(&self, level: usize) -> Result<Identity, PartitioningError> {
         if level == 0 {
-            Ok(self.node_id..=self.node_id)
+            Ok(Identity::single(self.node_id))
         } else if level >= self.num_levels {
             Err(PartitioningError::InvalidLevel { level })
         } else {
@@ -106,7 +104,7 @@ impl Partitioner for BinomialPartitioner {
             if min > max {
                 Err(PartitioningError::EmptyLevel { level })
             } else {
-                Ok(min..=max)
+                Ok((min..=max).into())
             }
         }
     }
@@ -172,44 +170,76 @@ mod tests {
 
         assert_eq!(partitioner.levels(), 4);
 
-        assert_eq!(partitioner.range(0), Ok(3..=3), "Level 0");
-        assert_eq!(second_partitioner.range(0), Ok(1..=1), "Level 0");
+        assert_eq!(
+            partitioner.identities_on(0),
+            Ok((3..=3usize).into()),
+            "Level 0"
+        );
+        assert_eq!(
+            second_partitioner.identities_on(0),
+            Ok((1..=1usize).into()),
+            "Level 0"
+        );
 
-        assert_eq!(partitioner.range(1), Ok(2..=2), "Level 1");
-        assert_eq!(second_partitioner.range(1), Ok(0..=0), "Level 1");
+        assert_eq!(
+            partitioner.identities_on(1),
+            Ok((2..=2usize).into()),
+            "Level 1"
+        );
+        assert_eq!(
+            second_partitioner.identities_on(1),
+            Ok((0..=0usize).into()),
+            "Level 1"
+        );
 
-        assert_eq!(partitioner.range(2), Ok(0..=1), "Level 2");
-        assert_eq!(second_partitioner.range(2), Ok(2..=3), "Level 2");
+        assert_eq!(
+            partitioner.identities_on(2),
+            Ok((0..=1usize).into()),
+            "Level 2"
+        );
+        assert_eq!(
+            second_partitioner.identities_on(2),
+            Ok((2..=3usize).into()),
+            "Level 2"
+        );
 
-        assert_eq!(partitioner.range(3), Ok(4..=7), "Level 3");
-        assert_eq!(second_partitioner.range(3), Ok(4..=7), "Level 3");
+        assert_eq!(
+            partitioner.identities_on(3),
+            Ok((4..=7usize).into()),
+            "Level 3"
+        );
+        assert_eq!(
+            second_partitioner.identities_on(3),
+            Ok((4..=7usize).into()),
+            "Level 3"
+        );
 
         // must be symmetrical
         for level in 2..partitioner.levels() {
             if partitioner
-                .range(level)
+                .identities_on(level)
                 .unwrap()
-                .contains(&second_partitioner.node_id)
+                .contains(second_partitioner.node_id)
             {
                 assert!(second_partitioner
-                    .range(level)
+                    .identities_on(level)
                     .unwrap()
-                    .contains(&partitioner.node_id));
+                    .contains(partitioner.node_id));
             }
             if partitioner
-                .range(level)
+                .identities_on(level)
                 .unwrap()
-                .contains(&third_partitioner.node_id)
+                .contains(third_partitioner.node_id)
             {
                 assert!(third_partitioner
-                    .range(level)
+                    .identities_on(level)
                     .unwrap()
-                    .contains(&partitioner.node_id));
+                    .contains(partitioner.node_id));
             }
         }
 
         assert_eq!(
-            partitioner.range(4),
+            partitioner.identities_on(4),
             Err(PartitioningError::InvalidLevel { level: 4 })
         );
     }
@@ -259,46 +289,78 @@ mod tests {
 
         assert_eq!(partitioner.levels(), 5);
 
-        assert_eq!(partitioner.range(0), Ok(5..=5), "Level 0");
-        assert_eq!(second_partitioner.range(0), Ok(9..=9), "Level 0");
+        assert_eq!(
+            partitioner.identities_on(0),
+            Ok((5..=5usize).into()),
+            "Level 0"
+        );
+        assert_eq!(
+            second_partitioner.identities_on(0),
+            Ok((9..=9usize).into()),
+            "Level 0"
+        );
 
-        assert_eq!(partitioner.range(1), Ok(4..=4), "Level 1");
-        assert_eq!(second_partitioner.range(1), Ok(8..=8), "Level 1");
+        assert_eq!(
+            partitioner.identities_on(1),
+            Ok((4..=4usize).into()),
+            "Level 1"
+        );
+        assert_eq!(
+            second_partitioner.identities_on(1),
+            Ok((8..=8usize).into()),
+            "Level 1"
+        );
 
         // Note that in some cases, we would get ranges that correspond to ids outside of the range of num_ids
         // I.e: we have some sparse subtrees
-        assert_eq!(partitioner.range(2), Ok(6..=7), "Level 2");
         assert_eq!(
-            second_partitioner.range(2),
+            partitioner.identities_on(2),
+            Ok((6..=7usize).into()),
+            "Level 2"
+        );
+        assert_eq!(
+            second_partitioner.identities_on(2),
             Err(PartitioningError::EmptyLevel { level: 2 }),
             "Level 2"
         );
 
-        assert_eq!(partitioner.range(3), Ok(0..=3), "Level 3");
         assert_eq!(
-            second_partitioner.range(3),
+            partitioner.identities_on(3),
+            Ok((0..=3usize).into()),
+            "Level 3"
+        );
+        assert_eq!(
+            second_partitioner.identities_on(3),
             Err(PartitioningError::EmptyLevel { level: 3 }),
             "Level 3"
         );
 
-        assert_eq!(partitioner.range(4), Ok(8..=9), "Level 4");
-        assert_eq!(second_partitioner.range(4), Ok(0..=7), "Level 4");
+        assert_eq!(
+            partitioner.identities_on(4),
+            Ok((8..=9usize).into()),
+            "Level 4"
+        );
+        assert_eq!(
+            second_partitioner.identities_on(4),
+            Ok((0..=7usize).into()),
+            "Level 4"
+        );
 
         for level in 2..partitioner.levels() {
             if partitioner
-                .range(level)
+                .identities_on(level)
                 .unwrap()
-                .contains(&second_partitioner.node_id)
+                .contains(second_partitioner.node_id)
             {
                 assert!(second_partitioner
-                    .range(level)
+                    .identities_on(level)
                     .unwrap()
-                    .contains(&partitioner.node_id));
+                    .contains(partitioner.node_id));
             }
         }
 
         assert_eq!(
-            partitioner.range(5),
+            partitioner.identities_on(5),
             Err(PartitioningError::InvalidLevel { level: 5 })
         );
     }
@@ -320,8 +382,8 @@ mod tests {
         let mut total_peers = 1; // In the for loop below we skip level 0 (that always have a peer)
 
         for level in 1..partitioner.levels() {
-            if let Ok(range) = partitioner.range(level) {
-                let range_len: usize = (range.end() - range.start()) + 1;
+            if let Ok(range) = partitioner.identities_on(level) {
+                let range_len = range.len();
 
                 // Some of the levels might be shorter than 2^(level-1) so we can't know the exact size unless
                 // we do the same bitwise ops
@@ -332,11 +394,11 @@ mod tests {
 
                 total_peers += range_len;
 
-                if range.contains(&second_partitioner.node_id) {
+                if range.contains(second_partitioner.node_id) {
                     assert!(second_partitioner
-                        .range(level)
+                        .identities_on(level)
                         .unwrap()
-                        .contains(&partitioner.node_id));
+                        .contains(partitioner.node_id));
                 }
             }
         }

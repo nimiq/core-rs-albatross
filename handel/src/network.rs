@@ -14,7 +14,7 @@ use instant::Instant;
 use nimiq_collections::BitSet;
 use nimiq_utils::{stream::FuturesUnordered, WakerExt as _};
 
-use crate::{contribution::AggregatableContribution, update::LevelUpdate};
+use crate::{contribution::AggregatableContribution, identity::Identity, update::LevelUpdate};
 
 /// Trait defining the interface to the network. The only requirement for handel is that the network is able to send
 /// a message to a specific validator.
@@ -90,7 +90,14 @@ impl<TNetwork: Network> NetworkHelper<TNetwork> {
         }
     }
 
-    pub fn send(&mut self, node_id: usize, msg: LevelUpdate<TNetwork::Contribution>) {
+    pub fn send(&mut self, node_id: Identity, msg: LevelUpdate<TNetwork::Contribution>) {
+        // Get the index of the node from the identity. This will fail for any
+        // identity which is empty or has more than one identity within it.
+        // Annoyingly the compiler cannot infer the usize here properly.
+        let Ok(node_id): Result<usize, _> = node_id.try_into() else {
+            return;
+        };
+
         // `message_buffer` and `last_messages` have the same length, so this check prevents
         // out-of-bounds access to both of these vectors.
         let len = self.message_buffer.len();
@@ -221,6 +228,7 @@ mod test {
 
     use crate::{
         contribution::{AggregatableContribution, ContributionError},
+        identity::Identity,
         network::{Network, NetworkHelper},
         update::LevelUpdate,
     };
@@ -272,7 +280,10 @@ mod test {
 
         fn send(sender: &mut NetworkHelper<Net>, i: u32) {
             // Actual values do not matter here.
-            sender.send(i as usize, LevelUpdate::new(Contribution(i), None, 0, 0));
+            sender.send(
+                Identity::single(i as usize),
+                LevelUpdate::new(Contribution(i), None, 0, 0),
+            );
         }
 
         fn poll(sender: &mut NetworkHelper<Net>) {

@@ -23,6 +23,12 @@ pub struct BitSet {
 }
 
 impl BitSet {
+    /// An empty BitSet.
+    pub const EMPTY: Self = Self {
+        store: vec![],
+        count: 0,
+    };
+
     pub fn new() -> Self {
         BitSet {
             store: Vec::new(),

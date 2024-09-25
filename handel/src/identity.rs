@@ -6,67 +6,107 @@ use nimiq_collections::bitset::BitSet;
 use crate::contribution::AggregatableContribution;
 
 /// Struct that defines an identity.
-/// An identity is composed of zero, one or more signers of a contribution.
+/// An identity is composed of zero, one or more identities.
 #[derive(Clone, std::fmt::Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Identity {
-    signers: BitSet,
+    identities: BitSet,
 }
 
 impl Identity {
-    /// Creates a new identity given a bitset of signers of a contribution.
-    pub fn new(signers: BitSet) -> Self {
-        Self { signers }
+    /// An Identity containing no one.
+    pub const NOBODY: Self = Identity {
+        identities: BitSet::EMPTY,
+    };
+
+    /// Creates a new identity given a bitset of identities, i.e signers of a contribution.
+    pub fn new(identities: BitSet) -> Self {
+        Self { identities }
     }
 
-    /// Returns the number of signers in this identity.
+    /// Creates an Identity containing solely the given identifier.
+    pub fn single<T: Into<usize>>(identifier: T) -> Self {
+        let mut identities = BitSet::EMPTY;
+        identities.insert(identifier.into());
+        Self { identities }
+    }
+
+    /// Returns the number of identities in this identity.
     pub fn len(&self) -> usize {
-        self.signers.len()
+        self.identities.len()
     }
 
     /// Returns whether this identity is empty.
     pub fn is_empty(&self) -> bool {
-        self.signers.is_empty()
+        self.identities.is_empty()
     }
 
+    /// Returns true if the given identifier `value` is contained in this identity.
     pub fn contains(&self, value: usize) -> bool {
-        self.signers.contains(value)
+        self.identities.contains(value)
     }
 
     /// Returns whether this identity is a superset of another identity.
     pub fn is_superset_of(&self, other: &Self) -> bool {
-        self.signers.is_superset(&other.signers)
+        self.identities.is_superset(&other.identities)
     }
 
-    /// Returns the complement signers from another identity.
+    /// Returns the complement identities from another identity.
     pub fn complement(&self, other: &Self) -> Self {
         Self {
-            signers: &(&self.signers & &other.signers) ^ &other.signers,
+            identities: &(&self.identities & &other.identities) ^ &other.identities,
         }
     }
 
-    /// Returns the identity as a vector of signers.
+    /// Returns the identity as a vector of individual identifiers.
     pub fn as_vec(&self) -> Vec<u16> {
-        self.signers.iter().map(|i| i.try_into().unwrap()).collect()
+        self.identities
+            .iter()
+            .map(|i| i.try_into().unwrap())
+            .collect()
     }
 
     /// Returns the intersection size with another identity.
     pub fn intersection_size(&self, other: &Self) -> usize {
-        self.signers.intersection_size(&other.signers)
+        self.identities.intersection_size(&other.identities)
     }
 
     /// Perform bitwise or. Panics if overlap exists when flag is set.
     pub fn combine(&mut self, other: &Self, allow_intersection: bool) {
-        if !allow_intersection && self.signers.intersection_size(&other.signers) > 0 {
+        if !allow_intersection && self.identities.intersection_size(&other.identities) > 0 {
             panic!("Identities overlap");
         }
-        self.signers = &self.signers | &other.signers;
+        self.identities = &self.identities | &other.identities;
     }
 
     /// Returns an iterator for this identity.
     pub fn iter(&self) -> impl Iterator<Item = Identity> + '_ {
-        self.signers.iter().map(|id| Identity {
-            signers: BitSet::from_iter([id]),
-        })
+        self.identities.iter().map(Identity::single)
+    }
+}
+
+impl<T, I> From<T> for Identity
+where
+    I: Into<usize>,
+    T: IntoIterator<Item = I>,
+{
+    fn from(value: T) -> Self {
+        Self::new(BitSet::from_iter(value.into_iter().map(|t| t.into())))
+    }
+}
+
+/// Used for Errors when handling Identity
+pub enum IdentityError {
+    /// The Identity given was required to be an individual,
+    /// but it is composed of multiple or none identities.
+    NotIndividual,
+}
+
+impl TryFrom<Identity> for usize {
+    type Error = IdentityError;
+    fn try_from(value: Identity) -> Result<Self, Self::Error> {
+        (value.identities.len() == 1)
+            .then(|| value.identities.iter().next().unwrap())
+            .ok_or(IdentityError::NotIndividual)
     }
 }
 
@@ -75,7 +115,7 @@ impl BitXor for Identity {
 
     fn bitxor(self, other: Self) -> Self::Output {
         Identity {
-            signers: self.signers ^ other.signers,
+            identities: self.identities ^ other.identities,
         }
     }
 }
@@ -85,14 +125,14 @@ impl BitXor for &Identity {
 
     fn bitxor(self, other: Self) -> Self::Output {
         Identity {
-            signers: &self.signers ^ &other.signers,
+            identities: &self.identities ^ &other.identities,
         }
     }
 }
 
 impl BitXorAssign for Identity {
     fn bitxor_assign(&mut self, other: Self) {
-        self.signers ^= other.signers;
+        self.identities ^= other.identities;
     }
 }
 
@@ -142,7 +182,7 @@ mod test {
 
     #[test]
     fn it_computes_superset() {
-        let empty_identity = Identity::new(BitSet::new());
+        let empty_identity = Identity::NOBODY;
 
         let mut bitset = BitSet::new();
         bitset.insert(2);
@@ -238,7 +278,7 @@ mod test {
 
     #[test]
     fn it_computes_intersection_size() {
-        let empty_identity = Identity::new(BitSet::new());
+        let empty_identity = Identity::NOBODY;
 
         let mut bitset = BitSet::new();
         bitset.insert(2);
@@ -294,14 +334,14 @@ mod test {
         let identity_3 = Identity::new(bitset);
 
         // Expected combined identity of identity 1 and 2
-        let mut bitset = identity_1.signers.clone();
+        let mut bitset = identity_1.identities.clone();
         bitset.insert(7);
         bitset.insert(43);
         bitset.insert(76);
         let exp_cmb_identity_1_2 = Identity::new(bitset);
 
         // Expected combined identity of identity 2 and 3
-        let mut bitset = identity_2.signers.clone();
+        let mut bitset = identity_2.identities.clone();
         bitset.insert(2);
         let exp_cmb_identity_2_3 = Identity::new(bitset);
 
@@ -375,7 +415,7 @@ mod test {
         let identity_3 = Identity::new(bitset);
 
         // Expected xor of identity 1 and 2
-        let mut bitset = identity_1.signers.clone();
+        let mut bitset = identity_1.identities.clone();
         bitset.insert(7);
         bitset.insert(43);
         bitset.insert(76);
@@ -383,13 +423,13 @@ mod test {
         let exp_xor_identity_1_2 = Identity::new(bitset);
 
         // Expected xor of identity 2 and 3
-        let mut bitset = identity_2.signers.clone();
+        let mut bitset = identity_2.identities.clone();
         bitset.insert(2);
         bitset.remove(10);
         let exp_xor_identity_2_3 = Identity::new(bitset);
 
         // Expected xor of identity 1 and 3
-        let mut bitset = identity_1.signers.clone();
+        let mut bitset = identity_1.identities.clone();
         bitset.remove(2);
         bitset.remove(10);
         let exp_xor_identity_1_3 = Identity::new(bitset);

@@ -14,7 +14,7 @@ use crate::{
     config::Config,
     contribution::AggregatableContribution,
     evaluator::Evaluator,
-    identity::IdentityRegistry,
+    identity::{Identity, IdentityRegistry},
     level::Level,
     network::{Network, NetworkHelper},
     partitioner::Partitioner,
@@ -247,7 +247,7 @@ where
     ///
     /// If the `send_individual` flag is set, the contribution containing solely
     /// this node contribution is sent alongside the aggregate.
-    fn send_update(&mut self, mut level_id: usize, node_ids: Vec<usize>, store: &P::Store) {
+    fn send_update(&mut self, mut level_id: usize, node_ids: Identity, store: &P::Store) {
         // Nothing to do if there are no recipients.
         if node_ids.is_empty() {
             return;
@@ -288,15 +288,15 @@ where
         );
 
         // Send the level update to every node_id in node_ids.
-        for node_id in node_ids {
-            self.network.send(node_id, update.clone());
+        for node_id in node_ids.iter() {
             debug!(
                 from = self.protocol.node_id(),
-                to = node_id,
+                to = ?node_id,
                 level = level_id,
                 signers = %update.aggregate.contributors(),
                 "Sending level update",
             );
+            self.network.send(node_id, update.clone());
         }
     }
 
@@ -412,7 +412,7 @@ where
         // Respond with our current best aggregate.
         let store = self.protocol.store();
         let store = store.read();
-        self.send_update(level_id, vec![node_id], &store);
+        self.send_update(level_id, Identity::single(node_id), &store);
     }
 }
 

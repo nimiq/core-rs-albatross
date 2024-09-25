@@ -1,6 +1,5 @@
-use std::{ops::RangeInclusive, sync::Arc};
+use std::sync::Arc;
 
-use nimiq_collections::BitSet;
 use parking_lot::RwLock;
 
 use crate::{
@@ -98,7 +97,7 @@ pub enum VerificationError {
     },
     InvalidOrigin {
         origin: usize,
-        range: RangeInclusive<usize>,
+        allowed_contributors: Identity,
     },
     InvalidIndividualContribution {
         num_contributors: usize,
@@ -282,12 +281,18 @@ where
 
         // Get the valid contributors for this level.
         // We have validated the level, so we can expect a range here.
-        let range = self.partitioner.range(level).expect("Range should exist");
+        let allowed_contributors = self
+            .partitioner
+            .identities_on(level)
+            .expect("Identities should exist");
 
         // Check that the message origin is a valid contributor.
         let origin = msg.origin as usize;
-        if !range.contains(&origin) {
-            return Err(InvalidOrigin { origin, range });
+        if !allowed_contributors.contains(origin) {
+            return Err(InvalidOrigin {
+                origin,
+                allowed_contributors,
+            });
         }
 
         // Check that the signer of the individual contribution corresponds to the message origin.
@@ -304,7 +309,6 @@ where
         }
 
         // Check that all contributors to the aggregate contribution are allowed on this level.
-        let allowed_contributors = Identity::new(BitSet::from_iter(range));
         if !allowed_contributors.is_superset_of(&contributors) {
             return Err(InvalidContributors {
                 contributors,

@@ -2,7 +2,10 @@ use std::{cmp::min, sync::Arc};
 
 use parking_lot::RwLock;
 
-use crate::partitioner::{Partitioner, PartitioningError};
+use crate::{
+    identity::Identity,
+    partitioner::{Partitioner, PartitioningError},
+};
 
 /// Struct that defines the state of a level
 #[derive(Clone, Debug)]
@@ -22,7 +25,7 @@ pub struct Level {
     /// The ID of this level
     pub id: usize,
     /// The Peer IDs on this level
-    pub peer_ids: Vec<usize>,
+    pub peer_ids: Identity,
     /// The state of this level
     pub state: RwLock<LevelState>,
 }
@@ -30,7 +33,7 @@ pub struct Level {
 impl Level {
     /// Creates a new level given its id, the set of peers and the expected
     /// number of peers to consider this level send complete
-    pub fn new(id: usize, peer_ids: Vec<usize>) -> Level {
+    pub fn new(id: usize, peer_ids: Identity) -> Level {
         Level {
             id,
             peer_ids,
@@ -49,7 +52,7 @@ impl Level {
 
     /// Returns whether this level is empty
     pub fn is_empty(&self) -> bool {
-        self.peer_ids.len() == 0
+        self.peer_ids.is_empty()
     }
 
     /// Creates a set of levels given a partitioner
@@ -60,38 +63,34 @@ impl Level {
     ) -> Vec<Level> {
         let mut levels: Vec<Level> = Vec::new();
         // Begin with an empty range, as this side of the tree begins without any node on it.
-        let mut tree_lhs = 0..0;
+        let mut tree_lhs = Identity::NOBODY;
 
         for i in 0..partitioner.levels() {
-            match partitioner.range(i) {
+            match partitioner.identities_on(i) {
                 Ok(tree_rhs) => {
-                    let ids = tree_rhs.clone().collect::<Vec<usize>>();
-
                     trace!(
                         %id,
                         level = i,
-                        peers = ?ids,
+                        peers = ?tree_rhs,
                         "Peers on level",
                     );
-                    let level = Level::new(i, ids);
+                    let level = Level::new(i, tree_rhs.clone());
 
                     if i == 0 {
                         // The first level is always started.
                         level.state.write().started = true;
                         // The first level sets its own id as the range.
-                        tree_lhs = node_id..node_id + 1;
+                        tree_lhs = Identity::single(node_id);
                         // Add the level
                         levels.push(level);
                         // Move to the next level
                         continue;
                     }
 
-                    // Clone our side of the tree.
-                    let cur_tree_lhs = tree_lhs.clone();
-
                     // Find this node's index on its side of the tree.
                     let index = tree_lhs
-                        .position(|id| id == node_id)
+                        .iter()
+                        .position(|id| id == Identity::single(node_id))
                         .expect("The node must always be present on its side of the tree");
 
                     // Index of the next peer is symmetric, so set it to where this nodes position
@@ -99,22 +98,13 @@ impl Level {
                     // be adjusted for that.
                     level.state.write().next_peer_index = index % level.peer_ids.len();
 
-                    // All levels but the first must update their side of the tree.
-                    if *tree_rhs.end() + 1 == cur_tree_lhs.start {
-                        tree_lhs = *tree_rhs.start()..cur_tree_lhs.end;
-                    } else if *tree_rhs.start() == cur_tree_lhs.end {
-                        tree_lhs = cur_tree_lhs.start..*tree_rhs.end() + 1;
-                    } else {
-                        panic!(
-                            "Ranges must be consecutive: node_id={}, lhs={:?}, rhs={:?}",
-                            node_id, cur_tree_lhs, tree_rhs
-                        );
-                    }
+                    // All levels must update their side of the tree.
+                    tree_lhs.combine(&tree_rhs, false);
 
                     levels.push(level);
                 }
                 Err(PartitioningError::EmptyLevel { .. }) => {
-                    let level = Level::new(i, vec![]);
+                    let level = Level::new(i, Identity::NOBODY);
                     levels.push(level);
                 }
                 Err(e) => panic!("Partitioning error: {}", e),
@@ -137,18 +127,22 @@ impl Level {
     }
 
     /// Selects the set of next peers to send an update to for this level given a count of them
-    pub fn select_next_peers(&self, count: usize) -> Vec<usize> {
+    pub fn select_next_peers(&self, count: usize) -> Identity {
         if self.id == 0 || self.is_empty() {
-            vec![]
+            Identity::NOBODY
         } else {
             let num_peers = min(count, self.peer_ids.len());
-            let mut selected: Vec<usize> = Vec::new();
+            let mut selected = Identity::NOBODY;
 
             let mut state = self.state.write();
-            for _ in 0..num_peers {
-                selected.push(self.peer_ids[state.next_peer_index]);
-                state.next_peer_index = (state.next_peer_index + 1) % self.peer_ids.len();
+
+            let mut identities: Vec<Identity> = self.peer_ids.iter().collect();
+            identities.rotate_left(state.next_peer_index);
+
+            for ident in identities.iter().take(num_peers) {
+                selected.combine(&ident, false);
             }
+            state.next_peer_index = (state.next_peer_index + num_peers) % self.peer_ids.len();
 
             selected
         }
@@ -194,7 +188,7 @@ mod test {
     fn it_can_handle_empty_level() {
         let mut rng = thread_rng();
         let id: usize = rng.gen_range(0..10);
-        let level = Level::new(id, [].to_vec());
+        let level = Level::new(id, Identity::NOBODY);
 
         // Check that the level is actually empty
         assert!(level.is_empty());
@@ -213,7 +207,7 @@ mod test {
         let mut rng = thread_rng();
         let id: usize = rng.gen_range(0..10);
         let num_ids = rng.gen_range(1..512);
-        let mut ids: Vec<usize> = (0..num_ids).map(|_| rng.gen_range(0..=10)).collect();
+        let mut ids: Identity = (0..num_ids).into();
         let level = Level::new(id, ids.clone());
 
         // Check that the level is not empty
@@ -228,7 +222,9 @@ mod test {
         let iterations = num_ids / select_size;
         if id != 0 {
             for _ in 0..iterations {
-                let exp_next_peers: Vec<usize> = ids.drain(0..select_size).collect();
+                let mut tmp_ids = ids.as_vec();
+                let exp_next_peers = tmp_ids.drain(0..select_size).into();
+                ids = tmp_ids.into();
                 let next_peers = level.select_next_peers(select_size);
                 log::debug!(select_size, ?exp_next_peers, ?next_peers);
                 assert_eq!(next_peers, exp_next_peers);
