@@ -134,10 +134,12 @@ where
 {
     /// The minimum time to wait for a micro block before starting a skip block.
     const MIN_PRODUCER_TIMEOUT: Duration = Duration::from_millis(Policy::MIN_PRODUCER_TIMEOUT);
-    /// The maximum time to wait for a micro block before starting to skip block.
+    /// The maximum time to wait for a micro block before starting a skip block.
     const MAX_PRODUCER_TIMEOUT: Duration = Duration::from_secs(16);
     /// The number of blocks to consider when calculating the micro block producer timeout.
     const PRODUCER_TIMEOUT_WINDOW_SIZE: u32 = 120;
+    /// Multiplier applied to the average block time when calculating the micro block producer timeout.
+    const PRODUCER_TIMEOUT_MULTIPLIER: u64 = 4;
     /// The targeted block time.
     const BLOCK_SEPARATION_TIME: Duration = Duration::from_millis(Policy::BLOCK_SEPARATION_TIME);
     /// The maximum number of bytes that equivocation proofs are allowed to take up in a block.
@@ -254,11 +256,12 @@ where
         let end_block_number = head_block.block_number();
         let end_timestamp = head_block.timestamp();
 
-        // Calculate the block number at the start of the window.
-        // Make sure this never points before the genesis block.
+        // Calculate the block number at the start of the window. Make sure this points to at least
+        // one block after the genesis block, as the genesis timestamp can be unreliable.
         let start_block_number =
             end_block_number.saturating_sub(Self::PRODUCER_TIMEOUT_WINDOW_SIZE);
-        let mut start_block_number = u32::max(start_block_number, Policy::genesis_block_number());
+        let mut start_block_number =
+            u32::max(start_block_number, Policy::genesis_block_number() + 1);
 
         // We might not have the block at `start_block_number` in our database. If it's missing,
         // move up the chain to the next succeeding macro block(s), adjusting `start_block_number`
@@ -287,7 +290,7 @@ where
 
         // Calculate the timeout and clamp it to the allowed range.
         let avg_block_time = end_timestamp.saturating_sub(start_timestamp) / effective_window_size;
-        let timeout = Duration::from_millis(avg_block_time * 4);
+        let timeout = Duration::from_millis(avg_block_time * Self::PRODUCER_TIMEOUT_MULTIPLIER);
         timeout.clamp(Self::MIN_PRODUCER_TIMEOUT, Self::MAX_PRODUCER_TIMEOUT)
     }
 
