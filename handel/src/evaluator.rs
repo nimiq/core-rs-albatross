@@ -7,7 +7,7 @@ use crate::{
     contribution::AggregatableContribution,
     evaluator::VerificationError::{
         InvalidContributors, InvalidFullAggregate, InvalidIndividualContribution, InvalidLevel,
-        OriginNotInContributors, OriginNotInRange,
+        InvalidOrigin,
     },
     identity::{Identity, IdentityRegistry, WeightRegistry},
     partitioner::Partitioner,
@@ -96,13 +96,9 @@ pub enum VerificationError {
         weight: usize,
         expected_weight: usize,
     },
-    OriginNotInRange {
+    InvalidOrigin {
         origin: usize,
         range: RangeInclusive<usize>,
-    },
-    OriginNotInContributors {
-        origin: usize,
-        contributors: Identity,
     },
     InvalidIndividualContribution {
         num_contributors: usize,
@@ -291,15 +287,7 @@ where
         // Check that the message origin is a valid contributor.
         let origin = msg.origin as usize;
         if !range.contains(&origin) {
-            return Err(OriginNotInRange { origin, range });
-        }
-
-        // The origin must be part of the contributors.
-        if !contributors.contains(origin) {
-            return Err(OriginNotInContributors {
-                origin,
-                contributors,
-            });
+            return Err(InvalidOrigin { origin, range });
         }
 
         // Check that the signer of the individual contribution corresponds to the message origin.
