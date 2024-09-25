@@ -16,7 +16,7 @@ use crate::{
     evaluator::Evaluator,
     identity::IdentityRegistry,
     level::Level,
-    network::{LevelUpdateSender, Network},
+    network::{Network, NetworkHelper},
     partitioner::Partitioner,
     pending_contributions::{PendingContribution, PendingContributionList},
     protocol::Protocol,
@@ -58,8 +58,8 @@ where
     /// Our contribution
     contribution: P::Contribution,
 
-    /// Sink used to relay messages
-    sender: LevelUpdateSender<N>,
+    /// Gateway to the network to send updates and ban nodes.
+    network: NetworkHelper<N>,
 
     /// Timeout for starting the next level regardless of previous level's completion.
     start_level_interval: Interval,
@@ -91,7 +91,7 @@ where
         network: N,
     ) -> Self {
         // Create the Sender, buffering a single message per recipient.
-        let sender = LevelUpdateSender::new(protocol.partitioner().size(), network);
+        let sender = NetworkHelper::new(protocol.partitioner().size(), network);
 
         // Invoke the partitioner to create the level structure of peers.
         let levels = Arc::new(Level::create_levels(
@@ -105,7 +105,7 @@ where
             PendingContributionList::new(protocol.identify(), protocol.evaluator());
 
         // Add our own contribution to the list.
-        pending_contributions.add_contribution(own_contribution.clone(), 0);
+        pending_contributions.add_contribution(own_contribution.clone(), 0, protocol.node_id());
 
         // Regardless of level completion consecutive levels need to be activated at some point.
         // Activate levels every time this interval ticks, if the level has not already been
@@ -123,7 +123,7 @@ where
             levels,
             input_stream,
             contribution: own_contribution,
-            sender,
+            network: sender,
             start_level_interval,
             periodic_update_interval,
             current_verification: None,
@@ -289,7 +289,7 @@ where
 
         // Send the level update to every node_id in node_ids.
         for node_id in node_ids {
-            self.sender.send(node_id, update.clone());
+            self.network.send(node_id, update.clone());
             debug!(
                 from = self.protocol.node_id(),
                 to = node_id,
@@ -443,36 +443,38 @@ where
             }
 
             // Respond with our own update.
+            let origin = update.origin();
             let level = update.level();
-            self.respond_to_update(update.origin(), level);
+            self.respond_to_update(origin, level);
 
             // Store the aggregate (and individual if present) contributions in `pending_contributions`.
             self.pending_contributions
-                .add_contribution(update.aggregate, level);
+                .add_contribution(update.aggregate, level, origin);
             if let Some(individual) = update.individual {
                 self.pending_contributions
-                    .add_contribution(individual, level);
+                    .add_contribution(individual, level, origin);
             }
         }
 
         // Poll the verification future if there is one.
         if let Some(future) = &mut self.current_verification {
-            if let Poll::Ready((result, pending_contribution)) = future.poll_unpin(cx) {
+            if let Poll::Ready((result, contribution)) = future.poll_unpin(cx) {
                 // If a result is produced, unset the future such that a new one can take its place.
                 self.current_verification = None;
 
                 if result.is_ok() {
                     // If the contribution was successfully verified, apply it and return the new
                     // best aggregate.
-                    best_aggregate = Some(self.apply_contribution(pending_contribution))
+                    best_aggregate = Some(self.apply_contribution(contribution))
                 } else {
-                    // TODO Ban peer who sent the failed contribution?
-                    //  Or penalize it when scoring contributions?
-                    debug!(
+                    // Verification failed, ban sender.
+                    warn!(
+                        id = %self.protocol.identify(),
                         ?result,
-                        ?pending_contribution,
-                        "Verification of PendingContribution failed"
+                        ?contribution,
+                        "Rejecting invalid contribution"
                     );
+                    self.network.ban_node(contribution.origin);
                 }
             }
         };
@@ -510,19 +512,20 @@ where
                     best_aggregate = Some(self.apply_contribution(contribution));
                     break;
                 } else {
-                    // TODO Ban peer who sent the failed contribution?
-                    //  Or penalize it when scoring contributions?
-                    debug!(
+                    // Verification failed, ban sender.
+                    warn!(
+                        id = %self.protocol.identify(),
                         ?result,
                         ?contribution,
-                        "Verification of PendingContribution failed."
+                        "Rejecting invalid contribution"
                     );
+                    self.network.ban_node(contribution.origin);
                 }
             }
         }
 
-        // Drive the level update sender future. It always returns Pending.
-        let _ = self.sender.poll_unpin(cx);
+        // Drive the network helper future. It always returns Pending.
+        let _ = self.network.poll_unpin(cx);
 
         // If this aggregation has already produced a final result, we return Pending instead of
         // Ready(None) to allow this aggregation to keep running so that it can send full aggregations
@@ -553,6 +556,6 @@ where
         }
 
         // Return the best aggregate.
-        return Poll::Ready(Some(best_aggregate));
+        Poll::Ready(Some(best_aggregate))
     }
 }

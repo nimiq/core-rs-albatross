@@ -19,6 +19,8 @@ pub(crate) struct PendingContribution<C: AggregatableContribution> {
     pub contribution: C,
     /// The level the contribution belongs to.
     pub level: usize,
+    /// The sender of this contribution.
+    pub origin: usize,
 }
 
 impl<C: AggregatableContribution> fmt::Debug for PendingContribution<C> {
@@ -96,11 +98,17 @@ where
         }
     }
 
-    pub fn add_contribution(&mut self, contribution: TProtocol::Contribution, level: usize) {
+    pub fn add_contribution(
+        &mut self,
+        contribution: TProtocol::Contribution,
+        level: usize,
+        origin: usize,
+    ) {
         // Add the item to the list.
         self.list.insert(PendingContribution {
             contribution,
             level,
+            origin,
         });
 
         // Wake the task to process this contribution.

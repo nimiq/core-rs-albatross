@@ -42,7 +42,7 @@ struct LastLevelUpdate {
 /// Struct to facilitate sending multiple messages.
 /// It will buffer up to one message per recipient, while maintaining the order of messages.
 /// Messages that do not fit the buffer will be dropped.
-pub struct LevelUpdateSender<TNetwork: Network> {
+pub struct NetworkHelper<TNetwork: Network> {
     /// Buffer for one message per recipient. Second value of the pair is the index of the next
     /// message which needs to be sent after this one. If there is no message buffered, it will
     /// point to `message_buffer.len()` which is the first OOB index.
@@ -60,8 +60,11 @@ pub struct LevelUpdateSender<TNetwork: Network> {
     /// the first OOB index.
     last: usize,
 
-    /// The collection of currently pending sender futures.
-    pending: FuturesUnordered<BoxFuture<'static, Result<(usize, BitSet), TNetwork::Error>>>,
+    /// The collection of currently pending send futures.
+    pending_sends: FuturesUnordered<BoxFuture<'static, Result<(usize, BitSet), TNetwork::Error>>>,
+
+    /// The collection of currently pending ban futures.
+    pending_bans: FuturesUnordered<BoxFuture<'static, ()>>,
 
     /// The network to send messages to other nodes.
     network: TNetwork,
@@ -70,17 +73,18 @@ pub struct LevelUpdateSender<TNetwork: Network> {
     waker: Option<Waker>,
 }
 
-impl<TNetwork: Network> LevelUpdateSender<TNetwork> {
+impl<TNetwork: Network> NetworkHelper<TNetwork> {
     const MAX_PARALLEL_SENDS: usize = 10;
     const ALLOW_RESEND_AFTER: Duration = Duration::from_secs(5);
 
-    pub fn new(len: usize, network: TNetwork) -> Self {
+    pub fn new(num_nodes: usize, network: TNetwork) -> Self {
         Self {
-            message_buffer: vec![None; len],
-            last_messages: vec![None; len],
-            first: len,
-            last: len,
-            pending: FuturesUnordered::new(),
+            message_buffer: vec![None; num_nodes],
+            last_messages: vec![None; num_nodes],
+            first: num_nodes,
+            last: num_nodes,
+            pending_sends: FuturesUnordered::new(),
+            pending_bans: FuturesUnordered::new(),
             network,
             waker: None,
         }
@@ -132,19 +136,27 @@ impl<TNetwork: Network> LevelUpdateSender<TNetwork> {
         // Wake as a new message was added.
         self.waker.wake();
     }
+
+    pub fn ban_node(&mut self, node_id: usize) {
+        let future = self.network.ban_node(node_id as u16).boxed();
+        self.pending_bans.push(future);
+    }
 }
 
-impl<TNetwork: Network + Unpin> Future for LevelUpdateSender<TNetwork> {
+impl<TNetwork: Network + Unpin> Future for NetworkHelper<TNetwork> {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        // Loop here such that after polling pending futures there is an opportunity to create new ones
-        // before returning.
+        // Drive pending ban futures.
+        while let Poll::Ready(Some(_)) = self.pending_bans.poll_next_unpin(cx) {}
+
+        // Loop here such that after polling pending futures there is an opportunity to create new
+        // ones before returning.
         loop {
             let len = self.message_buffer.len();
 
             // Create futures if there is free room and if there are messages to send.
-            while self.first < len && self.pending.len() < Self::MAX_PARALLEL_SENDS {
+            while self.first < len && self.pending_sends.len() < Self::MAX_PARALLEL_SENDS {
                 let node_id = self.first;
                 // Take the first message
                 let (update, next) = self.message_buffer[node_id]
@@ -155,7 +167,7 @@ impl<TNetwork: Network + Unpin> Future for LevelUpdateSender<TNetwork> {
                 let signers = update.aggregate.contributors();
                 let sender = self.network.send_update(node_id as u16, update);
                 let future = async move { sender.await.map(|_| (node_id, signers)) }.boxed();
-                self.pending.push(future);
+                self.pending_sends.push(future);
 
                 // Update indices.
                 // Note that `next` might be `== len` here in the case of `first == last`
@@ -166,7 +178,7 @@ impl<TNetwork: Network + Unpin> Future for LevelUpdateSender<TNetwork> {
             }
 
             // Poll the pending level update senders.
-            while let Poll::Ready(Some(result)) = self.pending.poll_next_unpin(cx) {
+            while let Poll::Ready(Some(result)) = self.pending_sends.poll_next_unpin(cx) {
                 match result {
                     Ok((node_id, signers)) => {
                         self.last_messages[node_id] = Some(LastLevelUpdate {
@@ -184,7 +196,7 @@ impl<TNetwork: Network + Unpin> Future for LevelUpdateSender<TNetwork> {
 
             // Once there is either the maximum amount of parallel sends or there is no more messages
             // in the buffer, break the loop returning poll pending.
-            if self.pending.len() == Self::MAX_PARALLEL_SENDS || self.first == len {
+            if self.pending_sends.len() == Self::MAX_PARALLEL_SENDS || self.first == len {
                 // Store a waker in case a message is added.
                 // This is necessary as this future will always return `Poll::Pending`, while the
                 // buffer might be empty and the pending futures might be empty as well.
@@ -209,7 +221,7 @@ mod test {
 
     use crate::{
         contribution::{AggregatableContribution, ContributionError},
-        network::{LevelUpdateSender, Network},
+        network::{Network, NetworkHelper},
         update::LevelUpdate,
     };
 
@@ -256,14 +268,14 @@ mod test {
     async fn it_buffers_messages() {
         let t = Arc::new(Mutex::new(vec![]));
         let nw = Net(Arc::clone(&t));
-        let mut sender = LevelUpdateSender::new(20, nw);
+        let mut sender = NetworkHelper::new(20, nw);
 
-        fn send(sender: &mut LevelUpdateSender<Net>, i: u32) {
+        fn send(sender: &mut NetworkHelper<Net>, i: u32) {
             // Actual values do not matter here.
             sender.send(i as usize, LevelUpdate::new(Contribution(i), None, 0, 0));
         }
 
-        fn poll(sender: &mut LevelUpdateSender<Net>) {
+        fn poll(sender: &mut NetworkHelper<Net>) {
             let waker = futures::task::noop_waker();
             let mut cx = Context::from_waker(&waker);
             assert!(sender.poll_unpin(&mut cx).is_pending());
