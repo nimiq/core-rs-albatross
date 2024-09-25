@@ -1,5 +1,6 @@
 use std::{
-    collections::HashMap, fmt::Debug, fs::read_to_string, num::NonZeroU8, path::Path, str::FromStr,
+    collections::HashMap, fmt::Debug, fs, io, io::Write as _, num::NonZeroU8, path::Path,
+    str::FromStr,
 };
 
 use log::level_filters::LevelFilter;
@@ -60,7 +61,35 @@ impl ConfigFile {
 
     /// Parse config file from file
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<ConfigFile, Error> {
-        Self::from_str(&read_to_string(path)?)
+        Self::from_str(&fs::read_to_string(path)?)
+    }
+
+    fn create_example(path: &Path) -> io::Result<()> {
+        if let Some(parent) = path.parent() {
+            if parent != Path::new("") {
+                if let Err(error) = fs::create_dir_all(parent) {
+                    log::warn!(
+                        %error,
+                        "Failed to create Nimiq home directory {}",
+                        parent.display(),
+                    );
+                }
+            }
+        }
+
+        log::info!("Creating example config at: {}", path.display());
+        let mut file = match fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(path)
+        {
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                return Ok(());
+            }
+            result => result?,
+        };
+
+        file.write_all(Self::EXAMPLE_CONFIG.as_bytes())
     }
 
     /// Find config file.
@@ -82,33 +111,38 @@ impl ConfigFile {
             }
         }
 
-        // If example doesn't exist, create it.
-        let path_example = paths::home().join("client.toml.example");
-        if !path_example.exists() {
-            log::info!("Creating example config at: {}", path_example.display());
-            if let Err(e) = std::fs::write(&path_example, Self::EXAMPLE_CONFIG) {
-                log::warn!(
-                    "Failed to create example config file: {}: {}",
-                    e,
-                    path_example.display()
-                );
-            }
-        }
-
-        // Check if config exists, otherwise tell user to create one.
-        let path = paths::home().join("client.toml");
-        if !path.exists() {
-            let msg = format!(
-                "Config file not found. Please create one at {} or specify a location using -c path/to/config.toml, see the example config file at {}",
-                path.display(),
-                path_example.display(),
-            );
-            log::warn!("{}", msg);
-            return Err(Error::config_error(&msg));
-        }
-
         // Load config.
-        Self::from_file(&path)
+        let path = paths::home().join("client.toml");
+        match Self::from_file(&path) {
+            Err(Error::Io(err)) if err.kind() == io::ErrorKind::NotFound => {
+                // Fall through.
+            }
+            result => return result,
+        }
+
+        // The config doesn't exist. Create an example config file and tell
+        // the user to create a config.
+        let example = paths::home().join("client.toml.example");
+        let example_message = Self::create_example(&example)
+            .map(|()| format!("see example config file at {}", example.display()))
+            .unwrap_or_else(|error| {
+                log::warn!(
+                    %error,
+                    "Failed to create example config file at {}",
+                    example.display(),
+                );
+                format!(
+                    "failed to create config file at {}: {}",
+                    example.display(),
+                    error,
+                )
+            });
+
+        Err(Error::config_error(format!(
+            "Config file not found. Please create one at {} or specify a location using -c path/to/config.toml ({})",
+            path.display(),
+            example_message,
+        )))
     }
 }
 
