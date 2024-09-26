@@ -352,10 +352,6 @@ impl Blockchain {
         // Unwrap the block.
         let macro_block = block.unwrap_macro_ref();
 
-        // Macro blocks are final and receipts for the previous batch are no longer necessary
-        // as rebranching across this block is not possible.
-        this.chain_store.clear_revert_infos(&mut txn);
-
         // Store the new historic transactions into the History tree.
         this.history_store.add_to_history(
             &mut txn,
@@ -411,6 +407,8 @@ impl Blockchain {
             this.metrics.note_invalid_block();
             return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
         }
+
+        this.chain_store.finalize_batch(&mut txn);
 
         // Give up database transactions and push lock before creating notifications.
         txn.commit();
