@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     sync::Arc,
     task::{Context, Poll},
 };
@@ -13,6 +14,7 @@ use nimiq_network_interface::{
     request::RequestError,
 };
 use nimiq_primitives::policy::Policy;
+use nimiq_transaction::historic_transaction::HistoricTransaction;
 
 use super::LightMacroSync;
 use crate::{
@@ -257,7 +259,24 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                             chunk=request.chunk_index,
                             verifier_block=request.block_number,
                             epoch=request.epoch_number,
+                            %expected_root,
                             "Banning peer because the history chunk didn't verify");
+
+                        // For debug purposes we print a summary of the chunk contents
+                        let mut txns_per_block: BTreeMap<u32, Vec<HistoricTransaction>> =
+                            BTreeMap::new();
+
+                        for txn in chunk.history {
+                            txns_per_block
+                                .entry(txn.block_number)
+                                .or_default()
+                                .push(txn.clone());
+                        }
+
+                        log::debug!("Invalid chunk contents: ");
+                        for (bn, hist_txs) in txns_per_block {
+                            debug!(block = bn, num_transactions = hist_txs.len());
+                        }
 
                         // Remove the peer from the syncing process
                         self.validity_queue.remove_peer(&peer_id);
