@@ -287,38 +287,24 @@ impl Blockchain {
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         #[cfg(not(feature = "metrics"))]
         {
-            let res = Self::do_push(
-                this,
-                block.clone(),
-                trust,
-                diff,
-                chunks,
-                post_validation_hook,
-            );
+            let res = Self::do_push(this, block, trust, diff, chunks, post_validation_hook);
             match res {
                 // Extended and Rebranched are already handled pre-commit.
                 Ok((PushResult::Extended | PushResult::Rebranched, _)) => {}
-                Ok((ref res, _)) => post_validation_hook.post_validation(&block, Ok(res)),
-                Err(ref res) => post_validation_hook.post_validation(&block, Err(res)),
+                Ok((ref res, _)) => post_validation_hook.post_validation(Ok(res)),
+                Err(ref res) => post_validation_hook.post_validation(Err(res)),
             }
             res
         }
         #[cfg(feature = "metrics")]
         {
             let metrics = this.metrics.clone();
-            let res = Self::do_push(
-                this,
-                block.clone(),
-                trust,
-                diff,
-                chunks,
-                post_validation_hook,
-            );
+            let res = Self::do_push(this, block, trust, diff, chunks, post_validation_hook);
             match res {
                 // Extended and Rebranched are already handled pre-commit.
                 Ok((PushResult::Extended | PushResult::Rebranched, _)) => {}
-                Ok((ref res, _)) => post_validation_hook.post_validation(&block, Ok(res)),
-                Err(ref res) => post_validation_hook.post_validation(&block, Err(res)),
+                Ok((ref res, _)) => post_validation_hook.post_validation(Ok(res)),
+                Err(ref res) => post_validation_hook.post_validation(Err(res)),
             }
             metrics.note_push_result(&res);
             res
@@ -386,7 +372,7 @@ impl Blockchain {
         }
 
         // Call the post-validation hook before commiting to the database.
-        post_validation_hook.post_validation(&chain_info.head, Ok(&PushResult::Extended));
+        post_validation_hook.post_validation(Ok(&PushResult::Extended));
 
         txn.commit();
 
@@ -508,7 +494,7 @@ impl Blockchain {
         this.chain_store.set_head(&mut write_txn, new_head_hash);
 
         // Call the post-validation hook before commiting to the database.
-        post_validation_hook.post_validation(&new_head_info.head, Ok(&PushResult::Rebranched));
+        post_validation_hook.post_validation(Ok(&PushResult::Rebranched));
 
         write_txn.commit();
 

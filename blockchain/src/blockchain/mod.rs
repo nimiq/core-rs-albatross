@@ -1,4 +1,3 @@
-use nimiq_block::Block;
 use nimiq_blockchain_interface::{PushError, PushResult};
 
 mod abstract_blockchain;
@@ -20,17 +19,17 @@ pub mod zkp_sync;
 pub trait PostValidationHook {
     /// Run the post-validation hook.
     /// For `extend` and `rebranch` this is called before a block is committed to the database.
-    fn post_validation(&self, block: &Block, push_result: Result<&PushResult, &PushError>);
+    fn post_validation(&self, push_result: Result<&PushResult, &PushError>);
 }
 
 /// A dummy post-validation hook that does nothing.
 impl PostValidationHook for () {
-    fn post_validation(&self, _block: &Block, _push_result: Result<&PushResult, &PushError>) {}
+    fn post_validation(&self, _push_result: Result<&PushResult, &PushError>) {}
 }
 
 impl<F: PostValidationHook> PostValidationHook for Option<F> {
-    fn post_validation(&self, block: &Block, push_result: Result<&PushResult, &PushError>) {
+    fn post_validation(&self, push_result: Result<&PushResult, &PushError>) {
         self.as_ref()
-            .inspect(|hook| hook.post_validation(block, push_result));
+            .inspect(|hook| hook.post_validation(push_result));
     }
 }
