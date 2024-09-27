@@ -83,7 +83,9 @@ pub enum BlockchainCommand {
     /// Returns the latests transactions or their hashes for a given address. All the transactions
     /// where the given address is listed as a recipient or as a sender are considered. Reward
     /// transactions are also returned. It has an option to specify the maximum number of transactions/hashes to
-    /// fetch, it defaults to 500.
+    /// fetch, it defaults to 500. It has also an option to retrieve transactions before a given
+    /// transaction hash. If this hash is not found or does not belong to this address, it will return an empty list.
+    /// The transactions are returned in descending order, meaning the latest transaction is the first.
     TransactionsByAddress {
         /// The address to query by.
         address: Address,
@@ -91,6 +93,10 @@ pub enum BlockchainCommand {
         /// Max number of transactions to fetch. If absent it defaults to 500.
         #[clap(long)]
         max: Option<u16>,
+
+        /// A transaction to start at.
+        #[clap(long)]
+        start_at: Option<Blake2bHash>,
 
         /// If set true only the hash of the transactions will be fetched. Otherwise the full transactions will be retrieved.
         #[clap(short = 'h')]
@@ -265,6 +271,7 @@ impl HandleSubcommand for BlockchainCommand {
             BlockchainCommand::TransactionsByAddress {
                 address,
                 max,
+                start_at,
                 just_hash,
             } => {
                 if just_hash {
@@ -272,7 +279,7 @@ impl HandleSubcommand for BlockchainCommand {
                         "{:#?}",
                         client
                             .blockchain
-                            .get_transaction_hashes_by_address(address, max)
+                            .get_transaction_hashes_by_address(address, max, start_at)
                             .await?
                     )
                 } else {
@@ -280,7 +287,7 @@ impl HandleSubcommand for BlockchainCommand {
                         "{:#?}",
                         client
                             .blockchain
-                            .get_transactions_by_address(address, max)
+                            .get_transactions_by_address(address, max, start_at)
                             .await?
                     )
                 }

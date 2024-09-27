@@ -195,11 +195,13 @@ pub trait HistoryIndexInterface {
 
     /// Returns a vector containing all transaction (and reward inherents) hashes corresponding to the given
     /// address. It fetches the transactions from most recent to least recent up to the maximum
-    /// number given.
+    /// number given. It allows to give a starting point to fetch the transactions from (exclusive). If this hash is given
+    /// but not found, the function will return an empty vector.
     fn get_tx_hashes_by_address(
         &self,
         address: &Address,
         max: u16,
+        start_at: Option<Blake2bHash>,
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Vec<Blake2bHash>;
 

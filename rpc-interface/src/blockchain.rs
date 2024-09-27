@@ -84,7 +84,7 @@ pub trait BlockchainInterface {
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error>;
 
     /// Returns all the inherents (including reward inherents) for the given batch number. Note
-    /// that this only considers blocks in the main chain.  
+    /// that this only considers blocks in the main chain.
     async fn get_inherents_by_batch_number(
         &mut self,
         batch_number: u32,
@@ -93,21 +93,27 @@ pub trait BlockchainInterface {
     /// Returns the hashes for the latest transactions for a given address. All the transactions
     /// where the given address is listed as a recipient or as a sender are considered. Reward
     /// transactions are also returned. It has an option to specify the maximum number of hashes to
-    /// fetch, it defaults to 500.
+    /// fetch, it defaults to 500. It has also an option to retrieve transactions before a given
+    /// transaction hash (exclusive). If this hash is not found or does not belong to this address, it will return an empty list.
+    /// The transaction hashes are returned in descending order, meaning the latest transaction is the first.
     async fn get_transaction_hashes_by_address(
         &mut self,
         address: Address,
         max: Option<u16>,
+        start_at: Option<Blake2bHash>,
     ) -> RPCResult<Vec<Blake2bHash>, (), Self::Error>;
 
     /// Returns the latest transactions for a given address. All the transactions
     /// where the given address is listed as a recipient or as a sender are considered. Reward
     /// transactions are also returned. It has an option to specify the maximum number of transactions
-    /// to fetch, it defaults to 500.
+    /// to fetch, it defaults to 500. It has also an option to retrieve transactions before a given
+    /// transaction hash (exclusive). If this hash is not found or does not belong to this address, it will return an empty list.
+    /// The transactions are returned in descending order, meaning the latest transaction is the first.
     async fn get_transactions_by_address(
         &mut self,
         address: Address,
         max: Option<u16>,
+        start_at: Option<Blake2bHash>,
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error>;
 
     /// Tries to fetch the account at the given address.

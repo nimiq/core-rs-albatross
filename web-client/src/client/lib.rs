@@ -662,12 +662,15 @@ impl Client {
     /// The obtained receipts are _not_ verified before being returned.
     ///
     /// Up to a `limit` number of transaction receipts are returned from newest to oldest.
+    /// It starts at the `start_at` transaction and goes backwards. If this hash does not exist
+    /// or does not belong to the address, an empty list is returned.
     /// If the network does not have at least `min_peers` to query, then an error is returned.
     #[wasm_bindgen(js_name = getTransactionReceiptsByAddress)]
     pub async fn get_transaction_receipts_by_address(
         &self,
         address: &AddressAnyType,
         limit: Option<u16>,
+        start_at: Option<String>,
         min_peers: Option<usize>,
     ) -> Result<PlainTransactionReceiptArrayType, JsError> {
         if let Some(max) = limit {
@@ -678,6 +681,12 @@ impl Client {
             }
         }
 
+        let start_at = if let Some(start_at) = start_at {
+            Some(Blake2bHash::from_str(&start_at)?)
+        } else {
+            None
+        };
+
         let receipts = self
             .inner
             .consensus_proxy()
@@ -685,6 +694,7 @@ impl Client {
                 Address::from_any(address)?.take_native(),
                 min_peers.unwrap_or(1),
                 limit,
+                start_at,
             )
             .await?;
 
@@ -709,6 +719,9 @@ impl Client {
     ///   from (e.g. the last known election or checkpoint block).
     /// - Provide a list of `known_transaction_details` to have them verified and/or broadcasted
     ///   again.
+    /// - Provide a `start_at` parameter to start the query at a specific transaction hash
+    ///   (which will not be included). This hash must exist and the corresponding transaction
+    ///   must involve this address for the query to work correctly.
     ///
     /// Up to a `limit` number of transactions are returned from newest to oldest.
     /// If the network does not have at least `min_peers` to query, an error is returned.
@@ -718,11 +731,18 @@ impl Client {
         address: &AddressAnyType,
         since_block_height: Option<u32>,
         known_transaction_details: Option<PlainTransactionDetailsArrayType>,
+        start_at: Option<String>,
         limit: Option<u16>,
         min_peers: Option<usize>,
     ) -> Result<PlainTransactionDetailsArrayType, JsError> {
         let since_block_height = since_block_height.unwrap_or(0);
         let min_peers = min_peers.unwrap_or(1);
+
+        let start_at = if let Some(start_at) = start_at {
+            Some(Blake2bHash::from_str(&start_at)?)
+        } else {
+            None
+        };
 
         if let Some(max) = limit {
             if max > MAX_TRANSACTIONS_BY_ADDRESS {
@@ -751,7 +771,7 @@ impl Client {
         let receipts: HashMap<_, _> = self
             .inner
             .consensus_proxy()
-            .request_transaction_receipts_by_address(address, min_peers, limit)
+            .request_transaction_receipts_by_address(address, min_peers, limit, start_at)
             .await?
             .into_iter()
             .collect();

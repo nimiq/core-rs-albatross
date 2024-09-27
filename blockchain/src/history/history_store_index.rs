@@ -550,11 +550,13 @@ impl HistoryIndexInterface for HistoryStoreIndex {
 
     /// Returns a vector containing all transaction (and reward inherents) hashes corresponding to the given
     /// address. It fetches the transactions from most recent to least recent up to the maximum
-    /// number given.
+    /// number given. It allows to give a starting point to fetch the transactions from (exclusive). If this hash is given
+    /// but not found or does not belong to this address, the function will return an empty vector.
     fn get_tx_hashes_by_address(
         &self,
         address: &Address,
         max: u16,
+        start_at: Option<Blake2bHash>,
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Vec<Blake2bHash> {
         if max == 0 {
@@ -568,13 +570,30 @@ impl HistoryIndexInterface for HistoryStoreIndex {
         // Seek to the first transaction hash at the given address. If there's none, stop here.
         let mut cursor = txn.dup_cursor(&self.address_table);
 
-        if cursor.set_key(address).is_none() {
-            return tx_hashes;
-        }
+        // Find start index.
+        if let Some(hash) = start_at {
+            let raw_tx_hash = RawTransactionHash::from(hash);
+            // A start hash is given, so we get the `EpochBasedIndex` first.
+            let Some(start_index) = txn.get(&self.tx_hash_table, &raw_tx_hash) else {
+                return tx_hashes;
+            };
 
-        // Then go to the last transaction hash at the given address and add it to the transaction
-        // hashes list.
-        tx_hashes.push(cursor.last_duplicate().expect("This shouldn't panic since we already verified before that there is at least one transactions at this address!").value);
+            // If no entry can be found, return an empty vector.
+            if cursor.set_subkey(address, &start_index).is_none() {
+                return tx_hashes;
+            }
+
+            // We don't add the current hash to the list.
+        } else {
+            // If no start hash is given, we start at the last transaction hash for this address.
+            if cursor.set_key(address).is_none() {
+                return tx_hashes;
+            }
+
+            // Then go to the last transaction hash at the given address and add it to the transaction
+            // hashes list.
+            tx_hashes.push(cursor.last_duplicate().expect("This shouldn't panic since we already verified before that there is at least one transactions at this address!").value);
+        }
 
         while tx_hashes.len() < max as usize {
             // Get previous transaction hash.
@@ -618,6 +637,8 @@ impl HistoryIndexInterface for HistoryStoreIndex {
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Deref;
+
     use nimiq_database::mdbx::MdbxDatabase;
     use nimiq_primitives::{coin::Coin, networks::NetworkId};
     use nimiq_test_log::test;
@@ -1196,6 +1217,7 @@ mod tests {
             &Address::from_user_friendly_address("NQ09 VF5Y 1PKV MRM4 5LE1 55KV P6R2 GXYJ XYQF")
                 .unwrap(),
             99,
+            None,
             Some(&txn),
         );
 
@@ -1209,7 +1231,7 @@ mod tests {
         assert_eq!(query_1[4], *hashes[0]);
 
         let query_2 =
-            history_store.get_tx_hashes_by_address(&Address::burn_address(), 2, Some(&txn));
+            history_store.get_tx_hashes_by_address(&Address::burn_address(), 2, None, Some(&txn));
 
         assert_eq!(query_2.len(), 2);
         assert_eq!(query_2[0], *hashes[6]);
@@ -1219,6 +1241,7 @@ mod tests {
             &Address::from_user_friendly_address("NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T")
                 .unwrap(),
             99,
+            None,
             Some(&txn),
         );
 
@@ -1231,10 +1254,23 @@ mod tests {
             &Address::from_user_friendly_address("NQ28 1U7R M38P GN5A 7J8R GE62 8QS7 PK2S 4S31")
                 .unwrap(),
             99,
+            None,
             Some(&txn),
         );
 
         assert_eq!(query_4.len(), 0);
+
+        let query_5 = history_store.get_tx_hashes_by_address(
+            &Address::from_user_friendly_address("NQ09 VF5Y 1PKV MRM4 5LE1 55KV P6R2 GXYJ XYQF")
+                .unwrap(),
+            2,
+            Some(hashes[5].deref().clone()),
+            Some(&txn),
+        );
+
+        assert_eq!(query_5.len(), 2);
+        assert_eq!(query_5[0], *hashes[3]);
+        assert_eq!(query_5[1], *hashes[1]);
     }
 
     #[test]

@@ -532,10 +532,17 @@ impl RequestCommon for RequestTransactionsProof {
     const MAX_REQUESTS: u32 = MAX_REQUEST_TRANSACTIONS_PROOF;
 }
 
+/// Returns the latest transactions for a given address. All the transactions
+/// where the given address is listed as a recipient or as a sender are considered. Reward
+/// transactions are also returned. It has an option to specify the maximum number of transactions
+/// to fetch. It has also an option to retrieve transactions before a given transaction hash.
+/// If this hash is not found or does not belong to this address, it will return an empty list.
+/// The transactions are returned in descending order, meaning the latest transaction is the first.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestTransactionReceiptsByAddress {
     pub address: Address,
     pub max: Option<u16>,
+    pub start_at: Option<Blake2bHash>,
 }
 
 impl RequestCommon for RequestTransactionReceiptsByAddress {

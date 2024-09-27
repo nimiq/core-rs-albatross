@@ -307,6 +307,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         &mut self,
         address: Address,
         max: Option<u16>,
+        start_at: Option<Blake2bHash>,
     ) -> RPCResult<Vec<Blake2bHash>, (), Self::Error> {
         if let BlockchainProxy::Full(blockchain) = &self.blockchain {
             Ok(blockchain
@@ -314,7 +315,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                 .history_store
                 .history_index()
                 .ok_or(Error::RequiresHistoryIndex)?
-                .get_tx_hashes_by_address(&address, max.unwrap_or(500), None)
+                .get_tx_hashes_by_address(&address, max.unwrap_or(500), start_at, None)
                 .into())
         } else {
             Err(Error::NotSupportedForLightBlockchain)
@@ -325,6 +326,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         &mut self,
         address: Address,
         max: Option<u16>,
+        start_at: Option<Blake2bHash>,
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
             // Get the transaction hashes for this address.
@@ -332,7 +334,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                 .history_store
                 .history_index()
                 .ok_or(Error::RequiresHistoryIndex)?
-                .get_tx_hashes_by_address(&address, max.unwrap_or(500), None);
+                .get_tx_hashes_by_address(&address, max.unwrap_or(500), start_at, None);
 
             let mut txs = vec![];
 

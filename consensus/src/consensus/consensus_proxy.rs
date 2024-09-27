@@ -107,6 +107,7 @@ impl<N: Network> ConsensusProxy<N> {
         address: Address,
         min_peers: usize,
         max: Option<u16>,
+        start_at: Option<Blake2bHash>,
     ) -> Result<Vec<(Blake2bHash, u32)>, RequestError> {
         let mut obtained_receipts = HashSet::new();
 
@@ -125,6 +126,7 @@ impl<N: Network> ConsensusProxy<N> {
                     RequestTransactionReceiptsByAddress {
                         address: address.clone(),
                         max,
+                        start_at: start_at.clone(),
                     },
                     peer_id,
                 )
