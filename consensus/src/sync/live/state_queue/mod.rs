@@ -23,6 +23,7 @@ use nimiq_primitives::{
     policy::Policy,
     trie::{trie_chunk::TrieChunk, trie_diff::TrieDiff},
 };
+use nimiq_serde::SerializedMaxSize;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
@@ -46,7 +47,7 @@ pub struct RequestChunk {
 
 /// The response for trie chunk requests.
 /// In addition to the chunk, we also return the block hash and number.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, SerializedMaxSize)]
 pub struct Chunk {
     pub block_number: u32,
     pub block_hash: Blake2bHash,
@@ -63,7 +64,7 @@ impl Display for Chunk {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, SerializedMaxSize)]
 #[repr(u8)]
 pub enum ResponseChunk {
     Chunk(Chunk),
@@ -87,7 +88,6 @@ impl RequestCommon for RequestChunk {
     type Response = ResponseChunk;
 
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_CHUNKS;
-    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 
 pub enum QueuedStateChunks<N: Network> {

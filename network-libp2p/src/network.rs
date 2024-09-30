@@ -24,7 +24,7 @@ use nimiq_network_interface::{
         RequestSerialize, RequestType,
     },
 };
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 use nimiq_time::{interval, timeout};
 use nimiq_utils::{
     spawn,
@@ -313,7 +313,7 @@ impl Network {
 
         let action_tx = self.action_tx.clone();
         ReceiveStream::WaitingForRegister(Box::pin(async move {
-            let (tx, rx) = mpsc::channel(Req::CHANNEL_RESPONSE_SIZE as usize);
+            let (tx, rx) = mpsc::channel(Req::Response::MAX_SIZE as usize);
 
             action_tx
                 .send(NetworkAction::ReceiveRequests {

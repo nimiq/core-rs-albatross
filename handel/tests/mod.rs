@@ -144,7 +144,6 @@ impl<C: AggregatableContribution + 'static> RequestCommon for Update<C> {
     const MAX_REQUESTS: u32 = 100;
     const TIME_WINDOW: Duration = Duration::from_millis(500);
     type Response = ();
-    const CHANNEL_RESPONSE_SIZE: u16 = 1;
 }
 
 impl protocol::Protocol<usize> for Protocol {

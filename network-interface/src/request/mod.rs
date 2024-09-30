@@ -1,7 +1,7 @@
 use std::{fmt, sync::Arc, time::Duration};
 
 use futures::{stream::BoxStream, Future, StreamExt};
-use nimiq_serde::{Deserialize, DeserializeError, Serialize};
+use nimiq_serde::{Deserialize, DeserializeError, Serialize, SerializedMaxSize};
 use thiserror::Error;
 
 /// The range to restrict the responses to the requests on the network layer.
@@ -133,10 +133,9 @@ pub trait RequestCommon:
 {
     type Kind: RequestKind;
     const TYPE_ID: u16;
-    type Response: Deserialize + Serialize + Send;
+    type Response: Deserialize + Serialize + SerializedMaxSize + Send;
     const MAX_REQUESTS: u32;
     const TIME_WINDOW: Duration = DEFAULT_MAX_REQUEST_RESPONSE_TIME_WINDOW;
-    const CHANNEL_RESPONSE_SIZE: u16;
 
     /// Returns the type name of the given request type `T`.
     /// This only works for

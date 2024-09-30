@@ -46,7 +46,7 @@ impl<Id> Proposal<Blake2sHash, Blake2sHash> for Header<Id> {
 /// Tendermint itself does expect a different kind of structure, which will also include
 /// Message identifier for GossipSub. That identifier is used to signal the validity of
 /// the message to the network. See [nimiq_tendermint::SignedProposalMessage]
-#[derive(Clone, std::fmt::Debug, Deserialize, Serialize)]
+#[derive(Clone, std::fmt::Debug, Deserialize, Serialize, SerializedMaxSize)]
 pub struct SignedProposal {
     pub(crate) proposal: MacroHeader,
     pub(crate) round: u32,
@@ -160,8 +160,6 @@ impl RequestCommon for RequestProposal {
     const TYPE_ID: u16 = 199;
     type Response = Option<SignedProposal>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_PROPOSAL;
-
-    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 
 impl<N: Network> Handle<N, Arc<RwLock<Option<MacroState>>>> for RequestProposal {

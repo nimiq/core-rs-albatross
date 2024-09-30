@@ -109,6 +109,8 @@ mod integer_impls {
     use super::SerializedSize;
     use std::mem;
 
+    impl SerializedSize for () { const SIZE: usize = 0; }
+
     impl SerializedSize for bool { const SIZE: usize = 1; }
 
     impl SerializedSize for i8 { const SIZE: usize = 1; }

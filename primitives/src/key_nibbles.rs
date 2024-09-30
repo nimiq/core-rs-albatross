@@ -9,10 +9,11 @@ use log::error;
 use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::{HashOutput, SerializeContent};
 use nimiq_keys::Address;
+use nimiq_serde::SerializedMaxSize;
 
 /// A compact representation of a node's key. It stores the key in big endian. Each byte
 /// stores up to 2 nibbles. Internally, we assume that a key is represented in hexadecimal form.
-#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd, SerializedMaxSize)]
 #[cfg_attr(feature = "serde-derive", derive(DbSerializable))]
 pub struct KeyNibbles {
     /// Invariant: Unused nibbles are always zeroed.

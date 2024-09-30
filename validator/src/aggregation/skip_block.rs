@@ -146,7 +146,6 @@ impl RequestCommon for SkipBlockUpdate {
     const MAX_REQUESTS: u32 = 500;
     const TIME_WINDOW: Duration = Duration::from_millis(500);
     type Response = ();
-    const CHANNEL_RESPONSE_SIZE: u16 = 1;
 }
 
 struct SkipBlockAggregationProtocol {

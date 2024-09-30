@@ -19,7 +19,7 @@ use nimiq_network_interface::{
     request::{RequestCommon, RequestMarker},
 };
 use nimiq_primitives::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
-use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
+use nimiq_serde::{option_max_size, Deserialize, Serialize, SerializedMaxSize};
 use nimiq_transaction::{
     historic_transaction::HistoricTransaction, history_proof::HistoryTreeProof,
 };
@@ -187,7 +187,7 @@ pub const MAX_ADDRESS_NOTIFICATIONS: u32 = 100;
 /// Part of [`MacroChain`].
 ///
 /// Metadata of the last checkpoint block in the response.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, SerializedMaxSize)]
 pub struct Checkpoint {
     /// Block height of the checkpoint block.
     pub block_number: u32,
@@ -202,6 +202,11 @@ pub struct MacroChain {
     pub epochs: Vec<Blake2bHash>,
     /// Under certain circumstances, the metadata about the last checkpoint block.
     pub checkpoint: Option<Checkpoint>,
+}
+
+impl SerializedMaxSize for MacroChain {
+    const MAX_SIZE: usize =
+        u16::MAX_SIZE * Blake2bHash::MAX_SIZE + option_max_size(Checkpoint::MAX_SIZE);
 }
 
 /// Error response to [`RequestMacroChain`]
@@ -237,7 +242,7 @@ pub struct RequestMacroChain {
     /// Blocks known by the requester.
     pub locators: Vec<Blake2bHash>,
     /// Limit of epochs to send in response.
-    pub max_epochs: u16,
+    pub max_epochs: u16, // Changing u16 requires the response type MaxSerialize impl to be changed accordingly size.
 }
 
 impl RequestCommon for RequestMacroChain {
@@ -245,7 +250,6 @@ impl RequestCommon for RequestMacroChain {
     const TYPE_ID: u16 = 200;
     type Response = Result<MacroChain, MacroChainError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_MACRO_CHAIN;
-    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -259,10 +263,9 @@ impl RequestCommon for RequestBatchSet {
     const TYPE_ID: u16 = 202;
     type Response = Result<BatchSetInfo, BatchSetError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_BATCH_SET;
-    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, SerializedMaxSize)]
 pub struct BatchSet {
     /// Verifying macro block
     pub macro_block: MacroBlock,
@@ -270,7 +273,7 @@ pub struct BatchSet {
     pub history_len: SizeProof<Blake2bHash, HistoricTransaction>,
 }
 
-#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+#[derive(Clone, Debug, Deserialize, Error, Serialize, SerializedMaxSize)]
 pub enum BatchSetError {
     #[error("target hash not found")]
     TargetHashNotFound,
@@ -283,7 +286,7 @@ pub enum BatchSetError {
 
 /// This message contains a macro block and the number of historic transactions (transitions)
 /// within this epoch.
-#[derive(Clone, Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize, SerializedMaxSize)]
 pub struct BatchSetInfo {
     pub election_macro_block: Option<MacroBlock>,
     pub batch_sets: Vec<BatchSet>,
@@ -337,18 +340,17 @@ impl RequestCommon for RequestHistoryChunk {
     const TYPE_ID: u16 = 204;
     type Response = Result<HistoryChunk, HistoryChunkError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_HISTORY_CHUNK;
-    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 
 #[cfg(feature = "full")]
 /// This message contains a chunk of the history.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, SerializedMaxSize)]
 pub struct HistoryChunk {
     pub chunk: HistoryTreeChunk,
 }
 
 #[cfg(feature = "full")]
-#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+#[derive(Clone, Debug, Deserialize, Error, Serialize, SerializedMaxSize)]
 pub enum HistoryChunkError {
     #[error("couldn't produce proof")]
     CouldntProduceProof,
@@ -385,7 +387,6 @@ impl RequestCommon for RequestBlock {
     const TYPE_ID: u16 = 207;
     type Response = Result<Block, BlockError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_BLOCK;
-    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 test_max_req_size!(
     RequestBlock,
@@ -394,14 +395,14 @@ test_max_req_size!(
 );
 
 /// Response to [`RequestMissingBlocks`].
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, SerializedMaxSize)]
 pub struct ResponseBlocks {
     // TODO: Set to sensible limit (2 * BATCH_SIZE for example).
     pub blocks: Vec<Block>,
 }
 
 /// Error response to [`RequestMissingBlocks`].
-#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+#[derive(Clone, Debug, Deserialize, Error, Serialize, SerializedMaxSize)]
 pub enum ResponseBlocksError {
     /// The target block is not on the responder's main chain, it cannot
     /// fulfill the request.
@@ -472,7 +473,6 @@ impl RequestCommon for RequestMissingBlocks {
     const TYPE_ID: u16 = 209;
     type Response = Result<ResponseBlocks, ResponseBlocksError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_MISSING_BLOCKS;
-    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 
 /// Request the current blockchain head block hash.
@@ -491,17 +491,16 @@ impl RequestCommon for RequestHead {
     const TYPE_ID: u16 = 210;
     type Response = ResponseHead;
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_HEAD;
-    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 test_max_req_size!(RequestHead, request_head_req_size, request_head_resp_size);
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, SerializedMaxSize)]
 pub struct ResponseTransactionsProof {
     pub proof: HistoryTreeProof,
     pub block: Block,
 }
 
-#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+#[derive(Clone, Debug, Deserialize, Error, Serialize, SerializedMaxSize)]
 pub enum ResponseTransactionProofError {
     #[error("empty list of transactions given")]
     NoTransactionsProvided,
@@ -533,13 +532,12 @@ impl RequestCommon for RequestTransactionsProof {
     const TYPE_ID: u16 = 213;
     type Response = Result<ResponseTransactionsProof, ResponseTransactionProofError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_TRANSACTIONS_PROOF;
-    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestTransactionReceiptsByAddress {
     pub address: Address,
-    pub max: Option<u16>,
+    pub max: Option<u16>, // Changing u16 requires the response type MaxSerialize impl to be changed accordingly size.
 }
 
 impl RequestCommon for RequestTransactionReceiptsByAddress {
@@ -547,13 +545,16 @@ impl RequestCommon for RequestTransactionReceiptsByAddress {
     const TYPE_ID: u16 = 214;
     type Response = ResponseTransactionReceiptsByAddress;
     const MAX_REQUESTS: u32 = MAX_REQUEST_TRANSACTIONS_BY_ADDRESS;
-    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ResponseTransactionReceiptsByAddress {
     /// Tuples of `(transaction_hash, block_number)`
     pub receipts: Vec<(Blake2bHash, u32)>,
+}
+
+impl SerializedMaxSize for ResponseTransactionReceiptsByAddress {
+    const MAX_SIZE: usize = u16::MAX_SIZE * (Blake2bHash::MAX_SIZE + u32::MAX_SIZE);
 }
 
 /// Request a proof for the values corresponding to some keys or their absence from the accounts trie.
@@ -568,11 +569,10 @@ impl RequestCommon for RequestTrieProof {
     const TYPE_ID: u16 = 215;
     type Response = Result<ResponseTrieProof, ResponseTrieProofError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_TRIE_PROOF;
-    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 
 /// Response to [`RequestTrieProof`].
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, SerializedMaxSize)]
 pub struct ResponseTrieProof {
     // The accounts proof
     pub proof: TrieProof,
@@ -580,7 +580,7 @@ pub struct ResponseTrieProof {
     pub block_hash: Blake2bHash,
 }
 
-#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+#[derive(Clone, Debug, Deserialize, Error, Serialize, SerializedMaxSize)]
 pub enum ResponseTrieProofError {
     #[error("incomplete trie")]
     IncompleteTrie,
@@ -595,12 +595,12 @@ pub struct RequestBlocksProof {
     pub blocks: Vec<u32>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, SerializedMaxSize)]
 pub struct ResponseBlocksProof {
     pub proof: BlockInclusionProof,
 }
 
-#[derive(Clone, Debug, Deserialize, Error, Serialize)]
+#[derive(Clone, Debug, Deserialize, Error, Serialize, SerializedMaxSize)]
 pub enum ResponseBlocksProofError {
     #[error("bad block number {0}")]
     BadBlockNumber(u32),
@@ -614,7 +614,6 @@ impl RequestCommon for RequestBlocksProof {
     const TYPE_ID: u16 = 216;
     type Response = Result<ResponseBlocksProof, ResponseBlocksProofError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_BLOCKS_PROOF;
-    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 
 /// Operations supported for the transaction address subscription
@@ -641,7 +640,6 @@ impl RequestCommon for RequestSubscribeToAddress {
     const TYPE_ID: u16 = 217;
     type Response = Result<(), SubscribeToAddressesError>;
     const MAX_REQUESTS: u32 = MAX_REQUEST_SUBSCRIBE_BY_ADDRESS;
-    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 
 /// Different kind of events that could generate notifications

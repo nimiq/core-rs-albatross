@@ -278,7 +278,6 @@ impl<M: RequestCommon> RequestCommon for ValidatorMessage<M> {
     const TYPE_ID: u16 = 10_000 + M::TYPE_ID;
     type Response = M::Response;
     const MAX_REQUESTS: u32 = M::MAX_REQUESTS;
-    const CHANNEL_RESPONSE_SIZE: u16 = M::CHANNEL_RESPONSE_SIZE;
 }
 
 // Proposal - gossip

@@ -13,7 +13,7 @@ use nimiq_network_interface::{
     request::{RequestCommon, RequestMarker},
 };
 use nimiq_primitives::trie::trie_diff::TrieDiff;
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 use nimiq_utils::stream::{FuturesOrdered, FuturesUnordered};
 use parking_lot::RwLock;
 
@@ -40,7 +40,7 @@ pub struct RequestTrieDiff {
 }
 
 /// The response for trie diff requests.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, SerializedMaxSize)]
 #[repr(u8)]
 pub enum ResponseTrieDiff {
     PartialDiff(TrieDiff),
@@ -54,7 +54,6 @@ impl RequestCommon for RequestTrieDiff {
     type Response = ResponseTrieDiff;
 
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_TRIE_DIFFS;
-    const CHANNEL_RESPONSE_SIZE: u16 = 100;
 }
 
 pub enum QueuedDiff<N: Network> {

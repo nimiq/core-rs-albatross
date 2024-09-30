@@ -1,6 +1,6 @@
 use std::fmt::{self, Display};
 
-use nimiq_serde::{Deserialize, Serialize};
+use nimiq_serde::{option_max_size, Deserialize, Serialize, SerializedMaxSize};
 
 use crate::{key_nibbles::KeyNibbles, trie::trie_proof::TrieProof};
 
@@ -40,6 +40,12 @@ pub struct TrieChunk {
     pub end_key: Option<KeyNibbles>,
     pub items: Vec<TrieItem>,
     pub proof: TrieProof,
+}
+
+impl SerializedMaxSize for TrieChunk {
+    const MAX_SIZE: usize = 0 
+    + /*Option end_key*/ option_max_size(KeyNibbles::MAX_SIZE)
+    + /*items*/ 1000;// ITODO
 }
 
 impl Display for TrieChunk {
