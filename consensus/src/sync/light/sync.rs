@@ -100,11 +100,11 @@ impl PeerMacroRequests {
     }
 
     // Returns true if the request was updated, false in case the request was not found
-    pub fn update_request(&mut self, block: Block) -> bool {
+    pub fn update_request(&mut self, mut block: Block) -> bool {
         let position = self
             .queued_requests
             .iter()
-            .position(|(hash, _)| *hash == block.hash());
+            .position(|(hash, _)| *hash == block.hash_cached());
 
         if let Some(position) = position {
             if self.queued_requests[position].1.is_none() {
@@ -113,7 +113,7 @@ impl PeerMacroRequests {
             }
             // We update our block request.
             // Note: If we receive a response more than once, we use the latest
-            let block_hash = block.hash();
+            let block_hash = block.hash_cached();
             log::trace!(%block_hash, "Updating block request");
             self.queued_requests[position] = (block_hash, Some(block));
 

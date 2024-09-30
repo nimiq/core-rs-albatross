@@ -12,8 +12,11 @@ use nimiq_block::Block;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::{network::Network, request::RequestError};
-use nimiq_utils::stream::FuturesUnordered;
+use nimiq_network_interface::{
+    network::{CloseReason, Network},
+    request::RequestError,
+};
+use nimiq_utils::{spawn, stream::FuturesUnordered};
 
 use crate::messages::{BlockError, RequestBlock, RequestHead, ResponseHead};
 
@@ -101,8 +104,23 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
         include_body: bool,
     ) -> Result<Result<Block, BlockError>, RequestError> {
         network
-            .request::<RequestBlock>(RequestBlock { hash, include_body }, peer_id)
+            .request::<RequestBlock>(
+                RequestBlock {
+                    hash: hash.clone(),
+                    include_body,
+                },
+                peer_id,
+            )
             .await
+            .map(|block_res| {
+                // Modify response if the block received does not correspond to the one requested.
+                Ok(block_res.and_then(|mut block| {
+                    if block.hash_cached() != hash {
+                        return Err(BlockError::ResponseHashMismatch);
+                    }
+                    Ok(block)
+                }))
+            })?
     }
 }
 
@@ -151,9 +169,24 @@ impl<TNetwork: Network + 'static> Future for HeadRequests<TNetwork> {
                 (Ok(Ok(block)), peer_id) => {
                     self.unknown_blocks.push((block, peer_id));
                 }
+                // We disconnect from the malicious peer in case of deliberate lying
+                (Ok(Err(BlockError::ResponseHashMismatch)), peer_id) => {
+                    warn!(%peer_id,
+                        "Banning peer due to wrong reply to requested block",
+                    );
+
+                    let network = Arc::clone(&self.network);
+                    spawn(Box::pin({
+                        async move {
+                            network
+                                .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
+                                .await;
+                        }
+                    }));
+                }
                 // We don't do anything with failed requests.
                 (Ok(Err(error)), peer_id) => {
-                    trace!(%error, %peer_id, "Block request failed on remote side");
+                    trace!(%error, %peer_id, "Block request failed on remote side")
                 }
                 (Err(error), peer_id) => {
                     trace!(%error, %peer_id, "Failed block request");

@@ -371,6 +371,9 @@ pub enum BlockError {
     /// Block hash unknown to the responder.
     #[error("target hash not found")]
     TargetHashNotFound,
+    /// Block hash response does not correspond to the requested hash.
+    #[error("target hash response hash mismatch")]
+    ResponseHashMismatch,
     /// Error not understood by the recipient, is never sent explicitly.
     #[error("unknown error")]
     #[serde(other)]

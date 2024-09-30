@@ -79,7 +79,7 @@ type RequestFn<TId, TNetwork, TOutput, TError> = fn(
     Arc<TNetwork>,
     <TNetwork as Network>::PeerId,
 ) -> BoxFuture<'static, Result<TOutput, TError>>;
-type VerifyFn<TId, TOutput, TVerifyState> = fn(&TId, &TOutput, &mut TVerifyState) -> bool;
+type VerifyFn<TId, TOutput, TVerifyState> = fn(&TId, &mut TOutput, &mut TVerifyState) -> bool;
 
 /// The SyncQueue will request a list of ids from a set of peers
 /// and implements an ordered stream over the resulting objects.
@@ -373,8 +373,8 @@ where
                 let request = self.queued_outputs.pop().unwrap();
 
                 match request.data {
-                    Some(data) => {
-                        if (self.verify_fn)(&request.id, &data, &mut self.verify_state) {
+                    Some(mut data) => {
+                        if (self.verify_fn)(&request.id, &mut data, &mut self.verify_state) {
                             self.next_outgoing_index += 1;
                             return Poll::Ready(Some(Ok(data)));
                         } else {
@@ -403,9 +403,10 @@ where
             match self.pending_futures.poll_next_unpin(cx) {
                 Poll::Ready(Some(result)) => {
                     match result.data {
-                        Some(Ok(output)) => {
+                        Some(Ok(mut output)) => {
                             if result.index == self.next_outgoing_index {
-                                if (self.verify_fn)(&result.id, &output, &mut self.verify_state) {
+                                if (self.verify_fn)(&result.id, &mut output, &mut self.verify_state)
+                                {
                                     self.next_outgoing_index += 1;
                                     return Poll::Ready(Some(Ok(output)));
                                 } else {

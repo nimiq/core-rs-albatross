@@ -170,7 +170,8 @@ impl<N: Network> BlockRequestComponent<N> {
                     // 3. Check that hash chain verifies
                     // We need to pass through the validators once we reach a new epoch
                     // to be able to verify macro blocks
-                    let blocks = &response.blocks;
+
+                    let blocks = &mut response.blocks;
 
                     // Size checks.
                     if blocks.is_empty() {
@@ -186,7 +187,7 @@ impl<N: Network> BlockRequestComponent<N> {
                         return false;
                     }
 
-                    for block in blocks {
+                    for block in blocks.iter() {
                         if block.body().is_some() != request.include_body {
                             log::error!(
                                 is_macro = block.is_macro(),
@@ -215,10 +216,9 @@ impl<N: Network> BlockRequestComponent<N> {
                     }
 
                     // Check that the last block is valid.
-                    let last_block = blocks.last().unwrap(); // cannot be empty
-                    let block_hash = last_block.hash();
-
                     // The last block must be the target block or a macro block.
+                    let last_block = blocks.last_mut().unwrap(); // cannot be empty
+                    let block_hash = last_block.hash_cached();
                     if !(last_block.is_macro()
                         || (last_block.block_number() == request.target_block_number
                             && block_hash == request.target_block_hash))
@@ -234,20 +234,20 @@ impl<N: Network> BlockRequestComponent<N> {
 
                     // Check that the hash chain of missing blocks is valid.
                     // Also checks block numbers.
-                    let mut previous = first_block;
-                    for block in blocks.iter().skip(1) {
-                        if block.block_number() == previous.block_number() + 1
-                            && block.block_number() <= request.target_block_number
-                            && block.parent_hash() == &previous.hash()
+                    for i in 1..blocks.len() {
+                        let previous_block_hash = blocks[i - 1].hash_cached();
+
+                        if blocks[i].block_number() != blocks[i - 1].block_number() + 1
+                            || blocks[i].block_number() > request.target_block_number
+                            || blocks[i].parent_hash() != &previous_block_hash
                         {
-                            previous = block;
-                        } else {
                             log::error!("Received invalid chain of missing blocks");
                             return false;
                         }
                     }
 
                     // If it is a macro block, also check the signatures.
+                    let last_block = response.blocks.last().unwrap(); // cannot be empty
                     if last_block.is_macro() {
                         if let Err(e) = last_block.verify_validators(&request.epoch_validators) {
                             log::error!(
