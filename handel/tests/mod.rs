@@ -134,9 +134,38 @@ impl std::fmt::Debug for Protocol {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(bound = "C: AggregatableContribution")]
-struct Update<C: AggregatableContribution>(pub LevelUpdate<C>);
+struct SerializableLevelUpdate<C: AggregatableContribution> {
+    aggregate: C,
+    individual: Option<C>,
+    level: u8,
+}
+
+impl<C: AggregatableContribution> SerializableLevelUpdate<C> {
+    pub fn into_level_update(self, origin: u16) -> LevelUpdate<C> {
+        LevelUpdate {
+            aggregate: self.aggregate,
+            individual: self.individual,
+            level: self.level,
+            origin,
+        }
+    }
+}
+
+impl<C: AggregatableContribution> From<LevelUpdate<C>> for SerializableLevelUpdate<C> {
+    fn from(value: LevelUpdate<C>) -> Self {
+        Self {
+            aggregate: value.aggregate,
+            individual: value.individual,
+            level: value.level,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(bound = "C: AggregatableContribution")]
+struct Update<C: AggregatableContribution>(pub SerializableLevelUpdate<C>);
 
 impl<C: AggregatableContribution + 'static> RequestCommon for Update<C> {
     type Kind = MessageMarker;
@@ -186,7 +215,7 @@ impl<N: NetworkInterface<PeerId = MockPeerId>> Network for NetworkWrapper<N> {
         &self,
         (msg, recipient): (LevelUpdate<Self::Contribution>, u16),
     ) -> BoxFuture<'static, ()> {
-        let update = Update(msg);
+        let update = Update(msg.into());
         let nw = Arc::clone(&self.0);
         async move {
             let peer_id = MockPeerId(recipient as u64);
@@ -254,7 +283,7 @@ async fn it_can_aggregate() {
             contribution,
             Box::pin(
                 net.receive_messages::<Update<Contribution>>()
-                    .map(move |msg| msg.0 .0),
+                    .map(move |msg| msg.0 .0.into_level_update(msg.1 .0 as u16)),
             ),
             NetworkWrapper(net),
         );
@@ -295,7 +324,7 @@ async fn it_can_aggregate() {
         contribution,
         Box::pin(
             net.receive_messages::<Update<Contribution>>()
-                .map(move |msg| msg.0 .0),
+                .map(move |msg| msg.0 .0.into_level_update(msg.1 .0 as u16)),
         ),
         NetworkWrapper(Arc::clone(&net)),
     );
@@ -369,7 +398,7 @@ async fn it_can_aggregate() {
         contribution,
         Box::pin(
             net.receive_messages::<Update<Contribution>>()
-                .map(move |msg| msg.0 .0),
+                .map(move |msg| msg.0 .0.into_level_update(msg.1 .0 as u16)),
         ),
         NetworkWrapper(net),
     );

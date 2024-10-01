@@ -20,7 +20,6 @@ log = { workspace = true }
 instant = { version = "0.1", features = ["wasm-bindgen"] }
 parking_lot = "0.12"
 rand = "0.8"
-serde = "1.0"
 thiserror = "1.0"
 
 nimiq-bls = { workspace = true }
@@ -31,6 +30,8 @@ nimiq-time = { workspace = true }
 nimiq-utils = { workspace = true, features = ["futures"] }
 
 [dev-dependencies]
+serde = "1.0"
+
 nimiq-network-interface = { workspace = true }
 nimiq-network-mock = { workspace = true }
 nimiq-test-log = { workspace = true }

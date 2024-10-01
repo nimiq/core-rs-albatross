@@ -1,27 +1,22 @@
 use std::fmt::Debug;
 
-use nimiq_serde::fixint;
-use serde::{Deserialize, Serialize};
-
 use crate::contribution::AggregatableContribution;
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(bound = "C: AggregatableContribution")]
+#[derive(Clone, Debug)]
 pub struct LevelUpdate<C: AggregatableContribution> {
     /// The updated multi-signature for this level
     pub aggregate: C,
 
     /// The individual signature of the sender, or `None`
-    pub(crate) individual: Option<C>,
+    pub individual: Option<C>,
 
     /// The level to which this multi-signature belongs to
-    pub(crate) level: u8,
+    pub level: u8,
 
     /// The validator ID of the sender (a.k.a. `pk_idx`)
     ///
     /// NOTE: It's safe to just send your own validator ID, since everything critical is authenticated
     /// by signatures anyway.
-    #[serde(with = "fixint::be")]
-    pub(crate) origin: u16,
+    pub origin: u16,
 }
 
 impl<C: AggregatableContribution> LevelUpdate<C> {
