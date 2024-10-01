@@ -410,7 +410,7 @@ where
                             warn!(%peer_id, ?validator_peer_id, claimed_validator_id = message.validator_id, "dropping validator message");
                             return None;
                         }
-                        Some((message.inner, message.validator_id as usize))
+                        Some((message.inner, message.validator_id))
                     }
                 }),
         )

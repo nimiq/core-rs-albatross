@@ -13,7 +13,7 @@ use nimiq_network_interface::{
 
 pub use crate::error::NetworkError;
 
-pub type MessageStream<TMessage> = BoxStream<'static, (TMessage, usize)>;
+pub type MessageStream<TMessage> = BoxStream<'static, (TMessage, u16)>;
 pub type PubsubId<TValidatorNetwork> =
     <<TValidatorNetwork as ValidatorNetwork>::NetworkType as Network>::PubsubId;
 

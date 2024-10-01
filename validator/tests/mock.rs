@@ -25,11 +25,13 @@ use nimiq_test_utils::{
 };
 use nimiq_time::{sleep, timeout};
 use nimiq_utils::spawn;
-use nimiq_validator::aggregation::skip_block::SignedSkipBlockMessage;
+use nimiq_validator::aggregation::{
+    skip_block::SignedSkipBlockMessage, update::SerializableLevelUpdate,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
-struct SkipBlockMessage(LevelUpdate<SignedSkipBlockMessage>);
+struct SkipBlockMessage(SerializableLevelUpdate<SignedSkipBlockMessage>);
 
 impl RequestCommon for SkipBlockMessage {
     type Kind = MessageMarker;
@@ -310,7 +312,7 @@ async fn validator_can_catch_up() {
     for network in &networks {
         for peer_id in network.get_peers() {
             network
-                .message::<SkipBlockMessage>(SkipBlockMessage(vc.clone()), peer_id)
+                .message::<SkipBlockMessage>(SkipBlockMessage(vc.clone().into()), peer_id)
                 .await
                 .unwrap();
         }

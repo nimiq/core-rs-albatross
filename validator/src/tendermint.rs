@@ -75,12 +75,11 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
         &self,
         (msg, recipient): (nimiq_handel::update::LevelUpdate<Self::Contribution>, u16),
     ) -> BoxFuture<'static, ()> {
-        // wrap the level update in the AggregateMessage
-        let aggregation = AggregateMessage(msg);
-        // tag it
+        // Tag the LevelUpdate, while also converting it to the serializable representation.
+        // The origin gets lost here, but will get re-set by the ValidatorNetwork in its sent_to call.
         let tagged_aggregation_message = TaggedAggregationMessage {
             tag: self.tag,
-            aggregation,
+            aggregation: msg.into(),
         };
         // and create the update.
         let update_message = TendermintUpdate {

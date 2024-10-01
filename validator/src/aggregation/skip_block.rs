@@ -32,7 +32,9 @@ use nimiq_validator_network::ValidatorNetwork;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
-use super::{registry::ValidatorRegistry, verifier::MultithreadedVerifier};
+use super::{
+    registry::ValidatorRegistry, update::SerializableLevelUpdate, verifier::MultithreadedVerifier,
+};
 
 enum SkipBlockResult {
     SkipBlock(SignedSkipBlockMessage),
@@ -42,12 +44,15 @@ enum SkipBlockResult {
 /// Keeps track of SkipBlockInfo for future Aggregations in order to be able to sync the state of this node with others
 /// in case it recognizes it is behind.
 struct InputStreamSwitch {
-    input: BoxStream<'static, SkipBlockUpdate>,
+    input: BoxStream<'static, (SkipBlockUpdate, u16)>,
     current_skip_block: SkipBlockInfo,
 }
 
 impl InputStreamSwitch {
-    fn new(input: BoxStream<'static, SkipBlockUpdate>, current_skip_block: SkipBlockInfo) -> Self {
+    fn new(
+        input: BoxStream<'static, (SkipBlockUpdate, u16)>,
+        current_skip_block: SkipBlockInfo,
+    ) -> Self {
         Self {
             input,
             current_skip_block,
@@ -58,7 +63,7 @@ impl InputStreamSwitch {
 impl Stream for InputStreamSwitch {
     type Item = LevelUpdate<SignedSkipBlockMessage>;
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        while let Some(message) = ready!(self.input.poll_next_unpin(cx)) {
+        while let Some((message, origin)) = ready!(self.input.poll_next_unpin(cx)) {
             if message.info.block_number != self.current_skip_block.block_number
                 || message.info.vrf_entropy != self.current_skip_block.vrf_entropy
             {
@@ -67,7 +72,7 @@ impl Stream for InputStreamSwitch {
                 continue;
             }
 
-            return Poll::Ready(Some(message.level_update));
+            return Poll::Ready(Some(message.level_update.into_level_update(origin)));
         }
 
         // We have exited the loop, so poll_next() must have returned Poll::Ready(None).
@@ -97,7 +102,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> nimiq_handel::network::Netwo
     ) -> futures::future::BoxFuture<'static, ()> {
         // Create the update.
         let update_message = SkipBlockUpdate {
-            level_update: msg,
+            level_update: msg.into(),
             info: self.tag.clone(),
         };
 
@@ -136,7 +141,7 @@ impl AggregatableContribution for SignedSkipBlockMessage {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct SkipBlockUpdate {
-    pub level_update: LevelUpdate<SignedSkipBlockMessage>,
+    pub level_update: SerializableLevelUpdate<SignedSkipBlockMessage>,
     pub info: SkipBlockInfo,
 }
 
@@ -289,7 +294,7 @@ impl SkipBlockAggregation {
         );
 
         let input_switch = InputStreamSwitch::new(
-            Box::pin(network.receive::<SkipBlockUpdate>().map(|item| item.0)),
+            Box::pin(network.receive::<SkipBlockUpdate>()),
             skip_block_info.clone(),
         );
 

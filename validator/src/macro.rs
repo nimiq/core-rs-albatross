@@ -14,12 +14,15 @@ use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_keys::Ed25519Signature as SchnorrSignature;
 use nimiq_network_interface::network::Topic;
 use nimiq_primitives::{networks::NetworkId, slots_allocation::Validators};
-use nimiq_tendermint::{Return as TendermintReturn, SignedProposalMessage, Tendermint};
+use nimiq_tendermint::{
+    Return as TendermintReturn, SignedProposalMessage, TaggedAggregationMessage, Tendermint,
+};
 use nimiq_validator_network::{PubsubId, ValidatorNetwork};
 use parking_lot::RwLock;
 
 use crate::{
     aggregation::tendermint::{
+        contribution::AggregateMessage,
         proposal::{Header, SignedProposal},
         state::MacroState,
         update_message::TendermintUpdate,
@@ -88,15 +91,13 @@ where
         let input = network
             .receive::<TendermintUpdate>()
             .filter_map(move |(item, validator_id)| {
-                #[allow(clippy::if_same_then_else)]
-                future::ready(if item.height != block_height {
-                    None
-                    // Check that the aggregation messages specify the correct sender.
-                } else if item.message.aggregation.0.origin() != validator_id {
-                    None
-                } else {
-                    Some(item.message)
-                })
+                future::ready((item.height == block_height).then(|| {
+                    let TaggedAggregationMessage { tag, aggregation } = item.message;
+                    TaggedAggregationMessage {
+                        tag,
+                        aggregation: AggregateMessage(aggregation.into_level_update(validator_id)),
+                    }
+                }))
             })
             .boxed();
 

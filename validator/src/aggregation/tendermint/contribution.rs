@@ -68,7 +68,7 @@ impl AggregatableContribution for TendermintContribution {
                     .entry(hash.clone())
                     // and update it
                     .and_modify(|sig|
-                        // by combining both Multisigs
+                        // by combining both Multisignatures
                         sig
                             .combine(other_sig)
                             .expect("Non Overlapping TendermintContribution encountered overlapping MultiSignatures"))
@@ -114,7 +114,8 @@ impl Aggregation<Blake2sHash> for TendermintContribution {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// Utility structure to implement traits for LevelUpdate.
+#[derive(Clone, Debug)]
 pub struct AggregateMessage(pub(crate) LevelUpdate<TendermintContribution>);
 
 impl Aggregation<Blake2sHash> for AggregateMessage {
@@ -131,6 +132,6 @@ impl Aggregation<Blake2sHash> for AggregateMessage {
 
 impl AggregationMessage<Blake2sHash> for AggregateMessage {
     fn sender(&self) -> u16 {
-        self.0.origin().try_into().expect("validator ID")
+        self.0.origin
     }
 }
