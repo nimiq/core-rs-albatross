@@ -3567,7 +3567,6 @@ dependencies = [
  "nimiq-collections",
  "nimiq-database-value",
  "nimiq-database-value-derive",
- "nimiq-handel",
  "nimiq-hash",
  "nimiq-hash_derive",
  "nimiq-keys",

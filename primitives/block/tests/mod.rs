@@ -1,36 +1,16 @@
 use std::str::FromStr;
 
-use nimiq_block::{MacroBlock, MacroBody, MacroHeader, MultiSignature};
-use nimiq_bls::{AggregateSignature, CompressedPublicKey, KeyPair};
+use nimiq_block::{MacroBlock, MacroBody, MacroHeader};
+use nimiq_bls::CompressedPublicKey;
 use nimiq_collections::bitset::BitSet;
-use nimiq_handel::{
-    contribution::{AggregatableContribution, ContributionError},
-    update::LevelUpdate,
-};
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Blake2sHash, Hasher};
 use nimiq_keys::{Address, Ed25519PublicKey};
 use nimiq_primitives::{networks::NetworkId, slots_allocation::ValidatorsBuilder};
-use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_vrf::VrfSeed;
 
 mod block_proof;
 mod macro_block;
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct WrappedMultiSignature(pub MultiSignature);
-
-impl AggregatableContribution for WrappedMultiSignature {
-    fn contributors(&self) -> BitSet {
-        self.0.contributors()
-    }
-
-    fn combine(&mut self, other_contribution: &Self) -> Result<(), ContributionError> {
-        self.0
-            .combine(&other_contribution.0)
-            .map_err(ContributionError::Overlapping)
-    }
-}
 
 #[test]
 fn it_can_convert_macro_block_into_slots() {
@@ -133,39 +113,4 @@ fn it_can_convert_macro_block_into_slots() {
     let validators_from_macro = macro_block.get_validators().unwrap();
 
     assert_eq!(validator_slots, validators_from_macro);
-}
-
-fn create_multisig() -> WrappedMultiSignature {
-    let raw_key = hex::decode(
-        "1b9e470e0deb06fe55774bb2cf499b411f55265c10d8d78742078381803451e058c88\
-        391431799462edde4c7872649964137d8e03cd618dd4a25690c56ffd7f42fb7ae8049d29f38d569598b38d4\
-        39f69107cc0b6f4ecd00a250c74409510100",
-    )
-    .unwrap();
-    let key_pair = KeyPair::deserialize_from_vec(&raw_key).unwrap();
-    let signature = key_pair.sign(&"foobar");
-    let signature = AggregateSignature::from_signatures(&[signature]);
-    let mut signers = BitSet::default();
-    signers.insert(1);
-    WrappedMultiSignature(MultiSignature { signature, signers })
-}
-
-#[test]
-fn test_serialize_deserialize_level_update() {
-    let update = LevelUpdate::new(create_multisig(), None, 2, 3);
-    let data = update.serialize_to_vec();
-    let update_2: LevelUpdate<WrappedMultiSignature> =
-        Deserialize::deserialize_from_vec(&data).unwrap();
-
-    assert_eq!(data.len(), update.serialized_size());
-    assert_eq!(update.serialized_size(), 101);
-    // assert!(update_2.individual.is_none()); // not publicly accessible
-    assert_eq!(update_2.level(), 2);
-    assert_eq!(update_2.origin(), 3);
-}
-
-#[test]
-fn test_serialize_deserialize_with_message() {
-    let update = LevelUpdate::new(create_multisig(), None, 2, 3);
-    assert_eq!(update.serialized_size(), 101);
 }
