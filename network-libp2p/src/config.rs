@@ -73,12 +73,12 @@ impl Config {
 
         let mut kademlia = kad::Config::new(StreamProtocol::new(DHT_PROTOCOL));
         kademlia.set_kbucket_inserts(kad::BucketInserts::OnConnected);
-        kademlia.set_record_ttl(Some(Duration::from_secs(2 * 60 * 60))); // 2h
-        kademlia.set_publication_interval(Some(Duration::from_secs(10 * 60))); // 10 min
-        kademlia.set_replication_interval(Some(Duration::from_secs(60))); // 1 min
-        kademlia.set_provider_record_ttl(Some(Duration::from_secs(60 * 60))); // 1h
-        kademlia.set_provider_publication_interval(Some(Duration::from_secs(5 * 60))); // 5 min
-        kademlia.set_query_timeout(Duration::from_secs(10));
+        kademlia.set_record_ttl(Some(Duration::from_secs(3 * 60 * 60))); // 3h
+        kademlia.set_publication_interval(Some(Duration::from_secs(2 * 60 * 60))); // 2 h should be somewhat smaller than ttl
+        kademlia.set_replication_interval(Some(Duration::from_secs(5 * 60))); // 5 min should be significantly shorted than publication
+        kademlia.set_provider_record_ttl(Some(Duration::from_secs(3 * 60 * 60))); // 3 h should be significantly larger than provider publication interval
+        kademlia.set_provider_publication_interval(Some(Duration::from_secs(45 * 60))); // 45 min should be significantly less than the provider record TTL.
+        kademlia.set_query_timeout(Duration::from_secs(30));
         kademlia.set_record_filtering(kad::StoreInserts::FilterBoth);
 
         Self {
