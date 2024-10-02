@@ -72,7 +72,6 @@ impl TestNetwork for Network {
             Services::all(),
             None,
             3,
-            true,
             false,
             true,
             NonZeroU8::new(1).unwrap(),

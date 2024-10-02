@@ -244,7 +244,6 @@ fn network_config(address: Multiaddr) -> Config {
         required_services: Services::all(),
         tls: None,
         desired_peer_count: 3,
-        autonat_allow_non_global_ips: true,
         only_secure_ws_connections: false,
         allow_loopback_addresses: true,
         dht_quorum: NonZeroU8::new(1).unwrap(),
