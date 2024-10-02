@@ -177,8 +177,6 @@ pub struct NetworkSettings {
     #[serde(default = "NetworkSettings::default_desired_peer_count")]
     pub desired_peer_count: usize,
     #[serde(default)]
-    pub autonat_allow_non_global_ips: bool,
-    #[serde(default)]
     pub allow_loopback_addresses: bool,
     #[serde(default)]
     pub dht_quorum: Option<NonZeroU8>,

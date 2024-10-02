@@ -47,10 +47,6 @@ seed_nodes = [
 # Default: Generated from version, operating system and processor architecture
 #user_agent = "core-rs-albatross/0.1.0 (native; linux x86_64)"
 
-# If the network should allow the autonat feature to use non-global IPs.
-# Default: false
-#autonat_allow_non_global_ips = false
-
 # If the node should try to connect to loopback addresses, which are usually not reachable
 # from the public internet. This setting is useful for testing inside a local (Docker) network.
 # Default: false

@@ -140,10 +140,6 @@ pub struct NetworkConfig {
     #[builder(default = "12")]
     pub desired_peer_count: usize,
 
-    /// Optional setting to allow network autonat to use non global IPs
-    #[builder(default)]
-    pub autonat_allow_non_global_ips: bool,
-
     /// Optional bool to only accept secure websocket connections
     #[builder(default)]
     pub only_secure_ws_connections: bool,
@@ -758,7 +754,6 @@ impl ClientConfigBuilder {
             desired_peer_count: config_file.network.desired_peer_count,
 
             tls: config_file.network.tls.as_ref().map(|s| s.clone().into()),
-            autonat_allow_non_global_ips: config_file.network.autonat_allow_non_global_ips,
             only_secure_ws_connections: false,
             allow_loopback_addresses: config_file.network.allow_loopback_addresses,
             dht_quorum: config_file.network.dht_quorum,
