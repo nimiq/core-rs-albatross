@@ -41,6 +41,8 @@ impl<T> DerefMut for Sensitive<T> {
 
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for Sensitive<T> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Sensitive<T>, D::Error> {
+        // No need to fuzz, it just trivially delegates the deserialization to
+        // the inner type.
         T::deserialize(deserializer).map(Sensitive)
     }
 }

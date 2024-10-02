@@ -13,6 +13,7 @@ members = [
   "database",
   "database/database-value",
   "database/database-value-derive",
+  "fuzz",
   "genesis",
   "genesis-builder",
   "handel",

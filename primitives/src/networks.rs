@@ -153,6 +153,8 @@ mod serde_derive {
                     D::Error::invalid_value(Unexpected::Str(&intermediate), &"a valid network name")
                 })
             } else {
+                // No need to fuzz, delegates to `u8` and `NetworkId::try_from`
+                // looks sane.
                 let intermediate = u8::deserialize(deserializer)?;
                 NetworkId::try_from(intermediate).map_err(|_| {
                     D::Error::invalid_value(

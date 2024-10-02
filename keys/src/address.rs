@@ -264,6 +264,7 @@ mod serde_derive {
                 let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
                 Address::from_any_str(&s).map_err(Error::custom)
             } else {
+                // No need to fuzz, it just delegates to `FixedSizeByteArray`.
                 let data: [u8; Self::SIZE] =
                     FixedSizeByteArray::deserialize(deserializer)?.into_inner();
                 Ok(Address(data))

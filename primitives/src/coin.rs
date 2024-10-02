@@ -297,6 +297,8 @@ mod serialization {
             let value: u64 = if deserializer.is_human_readable() {
                 Deserialize::deserialize(deserializer)?
             } else {
+                // No need to fuzz, it just delegates to
+                // `nimiq_serde::fixint::be` and `Coin::try_from` looks sane.
                 nimiq_serde::fixint::be::deserialize(deserializer)?
             };
             Coin::try_from(value).map_err(|_| {

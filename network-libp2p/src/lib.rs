@@ -54,10 +54,10 @@ impl<'de> Deserialize<'de> for Libp2pKeyPair {
     where
         D: Deserializer<'de>,
     {
-        let mut hex_encoded: [u8; 64] =
+        let mut bytes: [u8; 64] =
             nimiq_serde::FixedSizeByteArray::deserialize(deserializer)?.into_inner();
 
-        let keypair = libp2p::identity::ed25519::Keypair::try_from_bytes(&mut hex_encoded)
+        let keypair = libp2p::identity::ed25519::Keypair::try_from_bytes(&mut bytes)
             .map_err(|_| D::Error::custom("Invalid value"))?;
 
         Ok(Libp2pKeyPair(Keypair::from(keypair)))
