@@ -1,13 +1,15 @@
 use std::{iter, sync::Arc};
 
 use libp2p::{
-    autonat, connection_limits, gossipsub,
+    autonat::v2::{self as autonat, client::Config as AutonatConfig},
+    connection_limits, gossipsub,
     kad::{self, store::MemoryStore},
     ping, request_response,
     swarm::NetworkBehaviour,
     Multiaddr, PeerId, StreamProtocol,
 };
 use parking_lot::RwLock;
+use rand::rngs::OsRng;
 
 use crate::{
     connection_pool,
@@ -32,9 +34,10 @@ pub struct Behaviour {
     pub connection_limits: connection_limits::Behaviour,
     pub pool: connection_pool::Behaviour,
     pub discovery: discovery::Behaviour,
+    pub autonat_server: autonat::server::Behaviour,
+    pub autonat_client: autonat::client::Behaviour,
     pub dht: kad::Behaviour<MemoryStore>,
     pub gossipsub: gossipsub::Behaviour,
-    pub autonat: autonat::Behaviour,
     pub ping: ping::Behaviour,
     pub request_response: request_response::Behaviour<MessageCodec>,
 }
@@ -96,12 +99,11 @@ impl Behaviour {
             req_res_config,
         );
 
-        // Autonat behaviour
-        let mut autonat_config = autonat::Config::default();
-        if config.autonat_allow_non_global_ips {
-            autonat_config.only_global_ips = false;
-        }
-        let autonat = autonat::Behaviour::new(peer_id, autonat_config);
+        // AutoNAT server behaviour
+        let autonat_server = autonat::server::Behaviour::new(OsRng);
+
+        // AutoNAT client behaviour
+        let autonat_client = autonat::client::Behaviour::new(OsRng, AutonatConfig::default());
 
         // Connection limits behaviour
         let limits = connection_limits::ConnectionLimits::default()
@@ -119,7 +121,8 @@ impl Behaviour {
             ping,
             pool,
             request_response,
-            autonat,
+            autonat_client,
+            autonat_server,
             connection_limits,
         }
     }

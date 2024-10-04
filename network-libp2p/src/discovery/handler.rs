@@ -1,4 +1,5 @@
 use std::{
+    collections::{HashSet, VecDeque},
     pin::Pin,
     sync::Arc,
     task::{Context, Poll, Waker},
@@ -14,10 +15,11 @@ use libp2p::{
     swarm::{
         handler::{
             ConnectionEvent, DialUpgradeError, FullyNegotiatedInbound, FullyNegotiatedOutbound,
+            ProtocolSupport,
         },
         ConnectionHandler, ConnectionHandlerEvent, Stream, SubstreamProtocol,
     },
-    Multiaddr, PeerId,
+    Multiaddr, PeerId, StreamProtocol,
 };
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::peer_info::Services;
@@ -34,6 +36,7 @@ use super::{
     peer_contacts::{PeerContactBook, SignedPeerContact},
     protocol::{ChallengeNonce, DiscoveryMessage, DiscoveryProtocol},
 };
+use crate::{AUTONAT_DIAL_BACK_PROTOCOL, AUTONAT_DIAL_REQUEST_PROTOCOL};
 
 #[derive(Debug)]
 pub enum HandlerOutEvent {
@@ -163,6 +166,9 @@ pub struct Handler {
 
     /// Waker used when opening a substream.
     waker: Option<Waker>,
+
+    /// Events to inform its behaviour or all other ConnectionHandlers
+    events: VecDeque<ConnectionHandlerEvent<DiscoveryProtocol, (), HandlerOutEvent>>,
 }
 
 impl Handler {
@@ -196,6 +202,7 @@ impl Handler {
             inbound: None,
             outbound: None,
             waker: None,
+            events: VecDeque::new(),
         }
     }
 
@@ -249,6 +256,18 @@ impl Handler {
                 .wake();
         }
     }
+
+    /// Report to all the ConnectionHandlers that the remote peer supports the AutoNAT V2 client and server protocols
+    fn report_remote_autonat_support(&mut self) {
+        let mut stream_protocols = HashSet::new();
+        stream_protocols.insert(StreamProtocol::new(AUTONAT_DIAL_REQUEST_PROTOCOL));
+        stream_protocols.insert(StreamProtocol::new(AUTONAT_DIAL_BACK_PROTOCOL));
+
+        self.events
+            .push_back(ConnectionHandlerEvent::ReportRemoteProtocols(
+                ProtocolSupport::Added(stream_protocols),
+            ));
+    }
 }
 
 /// Extract the `/ip4/`,`/ip6/`, `/dns4/` or `/dns6/` protocol part from a `Multiaddr`
@@ -298,6 +317,7 @@ impl ConnectionHandler for Handler {
                 }
                 self.inbound = Some(protocol);
                 self.check_initialized();
+                self.report_remote_autonat_support();
             }
             ConnectionEvent::FullyNegotiatedOutbound(FullyNegotiatedOutbound {
                 protocol, ..
@@ -310,6 +330,7 @@ impl ConnectionHandler for Handler {
                 }
                 self.outbound = Some(protocol);
                 self.check_initialized();
+                self.report_remote_autonat_support();
             }
             ConnectionEvent::DialUpgradeError(DialUpgradeError { error, .. }) => {
                 error!(%error, "inject_dial_upgrade_error");
@@ -747,6 +768,10 @@ impl ConnectionHandler for Handler {
                     }
                 }
             }
+        }
+
+        if let Some(event) = self.events.pop_front() {
+            return Poll::Ready(event);
         }
 
         // If we've left the loop, we're waiting on something.

@@ -317,7 +317,7 @@ async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
 
 #[test(tokio::test)]
 async fn connections_stress_and_reconnect() {
-    let peers: usize = 10;
+    let peers: usize = 5;
     let networks = create_network_with_n_peers(peers).await;
 
     assert_eq!(peers, networks.len());

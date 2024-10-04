@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate log;
 
+mod autonat;
 mod behaviour;
 mod config;
 mod connection_pool;
@@ -18,6 +19,8 @@ mod utils;
 
 pub const DISCOVERY_PROTOCOL: &str = "/nimiq/discovery/0.0.1";
 pub const DHT_PROTOCOL: &str = "/nimiq/kad/0.0.1";
+pub const AUTONAT_DIAL_REQUEST_PROTOCOL: &str = "/libp2p/autonat/2/dial-request";
+pub const AUTONAT_DIAL_BACK_PROTOCOL: &str = "/libp2p/autonat/2/dial-back";
 
 pub use config::{Config, TlsConfig};
 pub use error::NetworkError;

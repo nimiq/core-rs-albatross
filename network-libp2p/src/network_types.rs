@@ -23,6 +23,7 @@ use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{
+    autonat::NatState,
     dispatch::codecs::{IncomingRequest, OutgoingResponse},
     rate_limiting::RequestRateLimitData,
     NetworkError,
@@ -238,6 +239,8 @@ pub(crate) struct TaskState {
     pub(crate) dht_bootstrap_state: DhtBootStrapState,
     /// DHT (kad) is in server mode
     pub(crate) dht_server_mode: bool,
+    /// The NAT status of the local peer
+    pub(crate) nat_status: NatState,
     /// Senders per `OutboundRequestId` for request-response
     pub(crate) requests: HashMap<OutboundRequestId, oneshot::Sender<Result<Bytes, RequestError>>>,
     /// Time spent per `OutboundRequestId` for request-response
