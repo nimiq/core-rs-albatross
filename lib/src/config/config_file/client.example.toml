@@ -34,8 +34,7 @@ seed_nodes = [
 # This can be used to advertise the public URL and port that peers should connect to, while
 # `listen_addresses` contains the loopback IP and port that this nodes listens on, which may
 # not be publicly reachable.
-# For validators it is strongly recommended to list a public reachable IPv4 IP. This IPv4
-# address must be the same as the node uses for outbound connections for autonat to work.
+# For validators it is a necessity to have a publicly reachable IP or hostname in order to be operative.
 # Default: []
 #advertised_addresses = [
 #  "/ip4/my.ip/tcp/8443/ws",

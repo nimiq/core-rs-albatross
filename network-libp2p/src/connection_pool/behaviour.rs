@@ -649,15 +649,16 @@ impl Behaviour {
             self.addresses.mark_failed(address.clone());
         }
 
-        // Ignore connection if another connection to this peer already exists.
+        // Ignore connection if too many other connections to this peer already exists.
+        // Multiple connections with a peer are necessary as AutoNAT probes run over them.
         // TODO Do we still want to subject it to the IP limit checks?
-        if other_established > 0 {
+        if other_established > 3 {
             debug!(
                 %peer_id,
                 connections = other_established,
-                "Already have connections established to this peer",
+                "Already have too many connections established to this peer",
             );
-            // We have more than one connection to the same peer. Deterministically
+            // We have more than three connections to the same peer. Deterministically
             // choose which connection to close: close the connection only if the
             // other peer ID is less than our own peer ID value.
             // Note: We don't track all of the connection IDs and if the latest

@@ -6,7 +6,7 @@ use instant::Instant;
 #[cfg(all(target_family = "wasm", not(feature = "tokio-websocket")))]
 use libp2p::websocket_websys;
 use libp2p::{
-    autonat::{self, OutboundFailure},
+    autonat::OutboundFailure,
     core::{
         self,
         muxing::StreamMuxerBox,
@@ -42,6 +42,7 @@ use tokio::sync::{broadcast, mpsc};
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;
 use crate::{
+    autonat::NatStatus,
     behaviour,
     discovery::{behaviour::Event, peer_contacts::PeerContactBook},
     network_types::{
@@ -395,26 +396,48 @@ fn handle_event(
             swarm
                 .behaviour_mut()
                 .discovery
-                .add_own_addresses([address].to_vec());
+                .add_own_addresses([address.clone()].to_vec());
+            if swarm.behaviour().is_address_dialable(&address) {
+                state.nat_status.add_address(address);
+            }
+        }
+
+        SwarmEvent::ListenerClosed {
+            listener_id: _,
+            addresses,
+            reason: _,
+        } => {
+            addresses.iter().for_each(|address| {
+                state.nat_status.remove_address(address);
+            });
+        }
+
+        SwarmEvent::ExternalAddrConfirmed { address } => {
+            log::trace!(%address, "Address is confirmed and externally reachable");
+            state.nat_status.add_confirmed_address(address);
+        }
+
+        SwarmEvent::ExternalAddrExpired { address } => {
+            log::trace!(%address, "External address is expired and no longer externally reachable");
+            state.nat_status.remove_confirmed_address(&address);
         }
 
         SwarmEvent::Behaviour(event) => {
             match event {
-                behaviour::BehaviourEvent::Autonat(event) => match event {
-                    autonat::Event::InboundProbe(event) => {
-                        log::trace!(?event, "Autonat inbound probe");
+                behaviour::BehaviourEvent::AutonatClient(event) => {
+                    log::trace!(?event, "AutoNAT outbound probe");
+                    match event.result {
+                        Ok(_) => state
+                            .nat_status
+                            .set_address_nat(event.tested_addr, NatStatus::Public),
+                        Err(_) => state
+                            .nat_status
+                            .set_address_nat(event.tested_addr, NatStatus::Private),
                     }
-                    autonat::Event::OutboundProbe(event) => {
-                        log::trace!(?event, "Autonat outbound probe");
-                    }
-                    autonat::Event::StatusChanged { old, new } => {
-                        log::debug!(?old, ?new, "Autonat status changed");
-                        if new == autonat::NatStatus::Private {
-                            log::warn!("Couldn't detect a public reachable address. Validator network operations won't be possible");
-                            log::warn!("You may need to find a relay to enable validator network operations");
-                        }
-                    }
-                },
+                }
+                behaviour::BehaviourEvent::AutonatServer(event) => {
+                    log::trace!(?event, "AutoNAT inbound probe");
+                }
                 behaviour::BehaviourEvent::ConnectionLimits(_) => {}
                 behaviour::BehaviourEvent::Dht(event) => {
                     match event {
