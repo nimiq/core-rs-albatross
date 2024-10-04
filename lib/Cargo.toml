@@ -27,6 +27,7 @@ console-subscriber = { version = "0.4", features = [
 derive_builder = "0.20"
 directories = "5.0"
 hex = "0.4"
+instant = { version = "0.1", features = ["wasm-bindgen"] }
 log = { workspace = true }
 log-panics = { version = "2.1", features = ["with-backtrace"], optional = true }
 parking_lot = "0.12"

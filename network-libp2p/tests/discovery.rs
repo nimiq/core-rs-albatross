@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use futures::StreamExt;
+use instant::SystemTime;
 use libp2p::{
     core::{
         multiaddr::{multiaddr, Multiaddr},
@@ -62,12 +63,16 @@ impl TestNode {
             only_secure_ws_connections: false,
         };
 
-        let peer_contact = PeerContact {
-            addresses: Some(address.clone()).into_iter().collect(),
-            public_key: keypair.public(),
-            services: config.required_services,
-            timestamp: None,
-        }
+        let peer_contact = PeerContact::new(
+            Some(address.clone()),
+            keypair.public(),
+            config.required_services,
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        )
+        .expect("PeerContact must be creatable")
         .sign(&keypair);
 
         let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(
@@ -120,14 +125,20 @@ impl TestNode {
 fn random_peer_contact(n: usize, services: Services) -> SignedPeerContact {
     let keypair = Keypair::generate_ed25519();
 
-    let mut peer_contact = PeerContact {
-        addresses: vec![format!("/dns/test{}.local/tcp/443/wss", n).parse().unwrap()],
-        public_key: keypair.public(),
+    let peer_contact = PeerContact::new(
+        Some(
+            format!("/dns/test{}.local/tcp/443/wss", n)
+                .parse()
+                .expect("Must be able to parse Mutltiaddr"),
+        ),
+        keypair.public(),
         services,
-        timestamp: None,
-    };
-
-    peer_contact.set_current_time();
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+    )
+    .expect("PeerContact must be creatable");
 
     peer_contact.sign(&keypair)
 }
@@ -254,18 +265,17 @@ fn test_housekeeping() {
     let old_contact = {
         let keypair = Keypair::generate_ed25519();
 
-        let mut peer_contact = PeerContact {
-            addresses: vec!["/dns/test_old.local/tcp/443/wss".parse().unwrap()],
-            public_key: keypair.public(),
-            services: Services::FULL_BLOCKS,
-            timestamp: None,
-        };
-
-        peer_contact.set_current_time();
-        peer_contact
-            .timestamp
-            .as_mut()
-            .map(|t| *t -= PeerContactBook::MAX_PEER_AGE * 2); // twice as older
+        let peer_contact = PeerContact::new(
+            Some("/dns/test_old.local/tcp/443/wss".parse().unwrap()),
+            keypair.public(),
+            Services::FULL_BLOCKS,
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                .saturating_sub(PeerContactBook::MAX_PEER_AGE * 2),
+        )
+        .expect("Peer contact must be creatable");
 
         peer_contact.sign(&keypair)
     };

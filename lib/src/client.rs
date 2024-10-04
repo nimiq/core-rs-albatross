@@ -1,5 +1,6 @@
 use std::{fs, num::NonZeroU8, sync::Arc};
 
+use instant::SystemTime;
 use nimiq_block::Block;
 #[cfg(feature = "full-consensus")]
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
@@ -260,14 +261,16 @@ impl ClientInner {
                 _ => true,
             }
         });
-        let mut peer_contact = PeerContact::new(
+        let peer_contact = PeerContact::new(
             peer_contact_addresses,
             identity_keypair.public(),
             provided_services,
-            None,
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
         )
         .map_err(|e| Error::Network(nimiq_network_libp2p::NetworkError::PeerContactError(e)))?;
-        peer_contact.set_current_time();
 
         let seeds: Vec<Multiaddr> = config
             .network

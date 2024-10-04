@@ -1,6 +1,7 @@
 use std::{num::NonZeroU8, time::Duration};
 
 use futures::{Stream, StreamExt};
+use instant::SystemTime;
 use libp2p::{
     gossipsub,
     identity::Keypair,
@@ -29,13 +30,16 @@ mod helper;
 fn network_config(address: Multiaddr) -> Config {
     let keypair = Keypair::generate_ed25519();
 
-    let mut peer_contact = PeerContact {
-        addresses: vec![address],
-        public_key: keypair.public(),
-        services: Services::all(),
-        timestamp: None,
-    };
-    peer_contact.set_current_time();
+    let peer_contact = PeerContact::new(
+        Some(address),
+        keypair.public(),
+        Services::all(),
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+    )
+    .expect("PeerContact must be creatable");
 
     let gossipsub = gossipsub::ConfigBuilder::default()
         .validation_mode(gossipsub::ValidationMode::Permissive)
