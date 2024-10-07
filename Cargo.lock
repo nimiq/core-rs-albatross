@@ -3527,7 +3527,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-account"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "hex",
  "nimiq-bls",
@@ -3557,7 +3557,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-block"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "ark-ec",
  "bitflags 2.6.0",
@@ -3588,7 +3588,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-blockchain"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "futures-util",
  "hex",
@@ -3630,7 +3630,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-blockchain-interface"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "futures-util",
  "nimiq-account",
@@ -3652,7 +3652,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-blockchain-proxy"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "futures-util",
  "nimiq-block",
@@ -3668,7 +3668,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-bls"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -3693,7 +3693,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-client"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "futures-util",
  "nimiq-lib",
@@ -3705,7 +3705,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-collections"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "hex",
  "nimiq-serde",
@@ -3717,7 +3717,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-consensus"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "async-trait",
  "futures-executor",
@@ -3763,7 +3763,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-database"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "criterion",
  "libmdbx",
@@ -3777,11 +3777,11 @@ dependencies = [
 
 [[package]]
 name = "nimiq-database-value"
-version = "0.24.3"
+version = "0.24.4"
 
 [[package]]
 name = "nimiq-database-value-derive"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3790,7 +3790,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-genesis"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "hex",
  "nimiq-block",
@@ -3813,7 +3813,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-genesis-builder"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "hex",
  "nimiq-account",
@@ -3837,7 +3837,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-handel"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -3861,7 +3861,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-hash"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "blake2-rfc",
  "byteorder",
@@ -3879,7 +3879,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-hash_derive"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3956,7 +3956,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-key-derivation"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "byteorder",
  "hex",
@@ -3970,7 +3970,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-keys"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "curve25519-dalek",
  "data-encoding",
@@ -3996,7 +3996,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-lib"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "clap",
  "console-subscriber",
@@ -4056,7 +4056,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-light-blockchain"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "futures-util",
  "nimiq-block",
@@ -4081,7 +4081,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-log"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "ansiterm",
  "time",
@@ -4092,7 +4092,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-macros"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "hex",
  "nimiq-serde",
@@ -4102,7 +4102,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-mempool"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "futures-util",
  "hex",
@@ -4142,7 +4142,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-mempool-task"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "futures-util",
  "nimiq-blockchain",
@@ -4159,7 +4159,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-metrics-server"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "bytes",
  "futures",
@@ -4183,7 +4183,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-mmr"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "nimiq-serde",
  "nimiq-test-log",
@@ -4192,7 +4192,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-mnemonic"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "bitvec",
  "hex",
@@ -4207,7 +4207,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-network-interface"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "async-trait",
  "bitflags 2.6.0",
@@ -4224,7 +4224,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-network-libp2p"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -4262,7 +4262,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-network-mock"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "async-trait",
  "derive_more",
@@ -4284,7 +4284,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-pedersen-generators"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "ark-crypto-primitives",
  "ark-ec",
@@ -4302,7 +4302,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-pow-migration"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "clap",
  "convert_case",
@@ -4338,7 +4338,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-primitives"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "ark-ec",
  "ark-mnt6-753",
@@ -4369,7 +4369,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-rpc-client"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4392,7 +4392,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-rpc-interface"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "ark-groth16",
  "ark-mnt6-753",
@@ -4426,7 +4426,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-rpc-server"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -4470,7 +4470,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-serde"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "hex",
  "nimiq-collections",
@@ -4482,7 +4482,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-serde-derive"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -4492,7 +4492,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-spammer"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "clap",
  "futures-util",
@@ -4516,7 +4516,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-subscription"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "hex",
  "nimiq-bls",
@@ -4533,7 +4533,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-tendermint"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "futures-util",
  "nimiq-collections",
@@ -4550,7 +4550,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-test-log"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "nimiq-genesis",
  "nimiq-log",
@@ -4563,7 +4563,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-test-log-proc-macro"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "darling",
  "nimiq-test-log",
@@ -4574,7 +4574,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-test-utils"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "ark-ff",
  "ark-groth16",
@@ -4629,7 +4629,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-time"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "futures",
  "gloo-timers 0.3.0",
@@ -4641,7 +4641,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-tools"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "anyhow",
  "clap",
@@ -4666,7 +4666,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-transaction"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "base64 0.22.1",
  "bitflags 2.6.0",
@@ -4696,7 +4696,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-transaction-builder"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "hex",
  "nimiq-bls",
@@ -4714,7 +4714,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-trie"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "hex",
  "nimiq-database",
@@ -4729,7 +4729,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-utils"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "clear_on_drop",
  "futures-util",
@@ -4755,7 +4755,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-validator"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -4809,7 +4809,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-validator-network"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -4827,7 +4827,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-vrf"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "byteorder",
  "curve25519-dalek",
@@ -4846,7 +4846,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-wallet"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "curve25519-dalek",
  "hex",
@@ -4867,7 +4867,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-web-client"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "futures-util",
  "gloo-timers 0.3.0",
@@ -4907,7 +4907,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-zkp"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "ark-crypto-primitives",
  "ark-ec",
@@ -4944,7 +4944,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-zkp-circuits"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "ark-crypto-primitives",
  "ark-ec",
@@ -4985,7 +4985,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-zkp-component"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "ark-groth16",
  "ark-mnt4-753",
@@ -5032,7 +5032,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-zkp-primitives"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "ark-crypto-primitives",
  "ark-ec",
@@ -5062,7 +5062,7 @@ dependencies = [
 
 [[package]]
 name = "nimiq-zkp-prove"
-version = "0.24.3"
+version = "0.24.4"
 dependencies = [
  "clap",
  "hex",
