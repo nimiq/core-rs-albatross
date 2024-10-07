@@ -1,46 +1,38 @@
 FROM ubuntu:22.04
 
-# Install dependencies.
-RUN apt-get update \
-    && apt-get --no-install-recommends -y install libssl3 tini \
-    && rm -rf /var/lib/apt/lists/*
+# Install dependencies in a single layer to reduce the number of image layers.
+RUN apt-get update && \
+    apt-get --no-install-recommends -y install libssl3 tini && \
+    rm -rf /var/lib/apt/lists/*
 
-# Run as unprivileged user.
-RUN groupadd --system --gid 1001 nimiq \
-    && adduser --system --home /home/nimiq --uid 1001 --gid 1001 nimiq
+# Run as an unprivileged user, combining commands to reduce layers.
+RUN groupadd --system --gid 1001 nimiq && \
+    adduser --system --home /home/nimiq --uid 1001 --gid 1001 nimiq
+
+# Switch to the unprivileged user and set working directory in one layer.
 USER nimiq
-
-# Change homedir to nimiq
 WORKDIR /home/nimiq
 
-# Create nimiq directory for configuration
+# Create the configuration directory
 RUN mkdir -p /home/nimiq/.nimiq
 
-# Set default config can be overwritten by mounting
+# Copy configuration file and binaries in one command to improve caching.
 COPY ./lib/src/config/config_file/client.example.toml /home/nimiq/.nimiq/client.toml
+COPY ./target/release/nimiq-client \
+     ./target/release/nimiq-bls \
+     ./target/release/nimiq-address \
+     ./target/release/nimiq-rpc /usr/local/bin/
 
-COPY ./target/release/nimiq-client /usr/local/bin/nimiq-client
-COPY ./target/release/nimiq-bls /usr/local/bin/nimiq-bls
-COPY ./target/release/nimiq-address /usr/local/bin/nimiq-address
-COPY ./target/release/nimiq-rpc /usr/local/bin/nimiq-rpc
+# Expose the necessary ports
+EXPOSE 8443 8648 9100
 
-# Expose the incoming connections port
-EXPOSE 8443
-
-# Expose RPC port
-EXPOSE 8648
-
-# Expose metrics port
-EXPOSE 9100
-
-# Run CMD so we can use other bin
+# Use CMD to run the nimiq-client with tini as an init system.
 CMD [ "/usr/bin/tini", "--", "nimiq-client" ]
 
-LABEL \
-    org.opencontainers.image.title="Nimiq core-rs-albatross" \
-    org.opencontainers.image.description="Rust implementation of the Nimiq Blockchain Core Albatross Branch (Ubuntu image)" \
-    org.opencontainers.image.url="https://github.com/nimiq/core-rs-albatross" \
-    org.opencontainers.image.vendor="Nimiq Foundation" \
-    org.opencontainers.image.licenses="Apache-2.0" \
-    org.opencontainers.image.source="https://github.com/nimiq/core-rs-albatross/"
-
+# Labels for image metadata.
+LABEL org.opencontainers.image.title="Nimiq core-rs-albatross" \
+      org.opencontainers.image.description="Rust implementation of the Nimiq Blockchain Core Albatross Branch (Ubuntu image)" \
+      org.opencontainers.image.url="https://github.com/nimiq/core-rs-albatross" \
+      org.opencontainers.image.vendor="Nimiq Foundation" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.source="https://github.com/nimiq/core-rs-albatross/"
