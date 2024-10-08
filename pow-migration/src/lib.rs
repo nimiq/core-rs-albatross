@@ -24,13 +24,20 @@ use tokio::time::sleep;
 use crate::{
     genesis::get_pos_genesis,
     monitor::{
-        check_validators_ready, generate_ready_tx, get_ready_txns, send_tx, ValidatorsReadiness,
+        check_validators_ready, generate_online_tx, generate_ready_tx, get_online_txns,
+        get_ready_txns, send_tx, ValidatorsReadiness,
     },
     state::{get_stakers, get_validators, setup_pow_rpc_server},
     types::{BlockWindows, Error, PoSRegisteredAgents},
 };
 
 const RETRYER_MAX_ATTEMPTS: u8 = 5;
+
+/// In PoW blocks are produced approximetely every minute
+const POW_BLOCKS_PER_HOUR: u32 = 60;
+
+/// Number of reporting windows in which we start reporting as online
+const NUMBER_ONLINE_REPORTING_WINDOWS: u32 = 3;
 
 static TESTNET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     // The testnet blocks are produced ~every minute.
@@ -78,6 +85,49 @@ pub fn get_block_windows(network_id: NetworkId) -> Result<&'static BlockWindows,
         NetworkId::MainAlbatross => Ok(MAINET_BLOCK_WINDOWS),
         _ => Err(Error::InvalidNetworkID(network_id)),
     }
+}
+
+/// Report as online (if necessary)
+/// Returns the last block number in which the online status was reported
+pub async fn report_online(
+    pow_client: &Client,
+    block_windows: &BlockWindows,
+    pow_block_number: u32,
+    validator_address: Address,
+) -> Result<u32, Error> {
+    // We calculate the range of the online transactions, which start one readiness window (1 day) before the election candidate.
+    let online_start = block_windows.election_candidate
+        - (NUMBER_ONLINE_REPORTING_WINDOWS * block_windows.readiness_window);
+    let online_range = online_start..block_windows.election_candidate;
+
+    // First we obtain the list of online txns that we have sent
+    let mut txns = get_online_txns(pow_client, validator_address.to_string(), online_range).await;
+
+    let transaction = generate_online_tx(validator_address.to_user_friendly_address());
+
+    // If we have not reported ready yet, we do so:
+    if txns.is_empty() {
+        log::info!("Reporting as online for the first time...");
+        send_tx(pow_client, transaction).await?;
+        return Ok(pow_block_number);
+    }
+    // Get the latest online transaction that was sent
+    txns.sort_by(|a, b| a.block_number.cmp(&b.block_number));
+
+    let latest_online_bn = txns.last().unwrap().block_number;
+
+    // We report as online every POW_BLOCKS_PER_HOUR.
+    if pow_block_number > latest_online_bn + POW_BLOCKS_PER_HOUR {
+        log::info!(
+            latest_reported_block_number = latest_online_bn,
+            "Reporting as online"
+        );
+
+        send_tx(pow_client, transaction).await?;
+        return Ok(pow_block_number);
+    }
+
+    Ok(latest_online_bn)
 }
 
 /// Performs the PoS migration from PoW by parsing transactions and state of the PoW

@@ -13,7 +13,7 @@ use nimiq_pow_migration::{
     genesis::write_pos_genesis,
     get_block_windows,
     history::{get_history_store_height, migrate_history},
-    launch_pos_client, migrate,
+    launch_pos_client, migrate, report_online,
     state::{get_stakers, get_validators},
 };
 use nimiq_primitives::networks::NetworkId;
@@ -24,6 +24,9 @@ use tokio::{
     time::sleep,
 };
 use url::Url;
+
+/// We check for online transactions every this amount of blocks
+const ONLINE_CHECK_BLOCKS: u32 = 10;
 
 /// Command line arguments for the binary
 #[derive(Parser, Debug)]
@@ -270,6 +273,8 @@ async fn main() {
                 )
             });
 
+        let mut latest_online_report = 0;
+
         // Continue the migration process once the pre-stake window is closed and confirmed
         loop {
             let pow_block_number = async_retryer(|| pow_client.block_number()).await.unwrap();
@@ -278,6 +283,22 @@ async fn main() {
             if pow_block_number > expected_block_number {
                 break;
             }
+
+            // If we are running as a validator, we report the tool is running to the blockchain
+            if let Some(ref validator_address) = validator_address {
+                // We check the latest online report every ONLINE_CHECK_BLOCKS blocks
+                if pow_block_number > latest_online_report + ONLINE_CHECK_BLOCKS {
+                    latest_online_report = report_online(
+                        &pow_client,
+                        block_windows,
+                        pow_block_number,
+                        validator_address.clone(),
+                    )
+                    .await
+                    .unwrap_or_else(|error| exit_with_error(error, "Could not report online"));
+                }
+            }
+
             log::info!(
                 pow_block_number,
                 waiting_for = expected_block_number,

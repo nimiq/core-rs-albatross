@@ -56,6 +56,44 @@ pub fn generate_ready_tx(validator: String, hash: &Blake2bHash) -> OutgoingTrans
     }
 }
 
+/// Sends a transaction to the Nimiq PoW chain to indicate that we are online
+/// The transaction format is defined as follows:
+/// - Sender: Validator address
+/// - Recipient: Burn address
+/// - Value: 1 Luna
+/// - Data: "online"
+pub fn generate_online_tx(validator: String) -> OutgoingTransaction {
+    log::debug!(
+        validator_address = validator,
+        "Generating online transaction"
+    );
+    OutgoingTransaction {
+        from: validator,
+        to: Address::burn_address().to_user_friendly_address(),
+        value: 1, //Lunas
+        fee: 0,
+        data: Some("online".to_string()),
+    }
+}
+
+/// Checks if we have seen an online transaction from a validator in the specified range
+pub async fn get_online_txns(
+    pow_client: &Client,
+    validator: String,
+    block_window: Range<u32>,
+) -> Vec<TransactionDetails> {
+    let Ok(transactions) =
+        async_retryer(|| pow_client.get_transactions_by_address(&validator, 10)).await
+    else {
+        return vec![];
+    };
+
+    transactions
+        .into_iter()
+        .filter(|txn| is_valid_online_txn(txn, &block_window))
+        .collect()
+}
+
 /// Checks if we have seen a ready transaction from a validator in the specified range
 pub async fn get_ready_txns(
     pow_client: &Client,
@@ -86,18 +124,17 @@ fn is_valid_ready_txn(
     genesis_config_hash: &String,
 ) -> bool {
     // Check if the txn contains extra data and matches our genesis config hash
-    if let Some(txn_data) = &txn.data {
-        if txn_data != genesis_config_hash {
-            return false;
-        }
-    } else {
-        return false;
-    }
-
-    // Check for the other readiness criteria
-    block_window.contains(&txn.block_number)
+    Some(genesis_config_hash) == txn.data.as_ref()
+        && block_window.contains(&txn.block_number)
         && txn.to_address == Address::burn_address().to_user_friendly_address()
-        && txn.value == 1
+}
+
+/// Checks if the provided transaction meets the criteria in order to be
+/// considered a valid online-transaction
+fn is_valid_online_txn(txn: &TransactionDetails, block_window: &Range<u32>) -> bool {
+    Some("online".to_string()) == txn.data
+        && block_window.contains(&txn.block_number)
+        && txn.to_address == Address::burn_address().to_user_friendly_address()
 }
 
 /// Sends a transaction into the Nimiq PoW chain
