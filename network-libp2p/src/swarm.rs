@@ -397,7 +397,9 @@ fn handle_event(
                 .behaviour_mut()
                 .discovery
                 .add_own_addresses([address.clone()].to_vec());
+            if swarm.behaviour().is_address_dialable (&address) {
             state.nat_status.add_address(address);
+            }
         }
 
         SwarmEvent::ListenerClosed {

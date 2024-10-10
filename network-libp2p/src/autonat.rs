@@ -73,6 +73,7 @@ impl NatState {
 
     /// Determine the general NAT state of the local peer
     fn update_state(&mut self) {
+        dbg!(&self.address_status, &self.confirmed_addresses, &self.status, "update_state");
         let old_nat_status = self.status;
 
         if !self.confirmed_addresses.is_empty() {
