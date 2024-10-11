@@ -181,6 +181,12 @@ impl<N: Network> BlockQueue<N> {
         // If so prune the block buffer as well as pending requests.
         let macro_height = Policy::last_macro_block(head_height);
         if macro_height > self.current_macro_height {
+            log::trace!(
+                block_number,
+                new_macro_height = macro_height,
+                old_macro_height = self.current_macro_height,
+                "New block announced pruning the crap out"
+            );
             self.current_macro_height = macro_height;
             self.prune_pending_requests();
             self.prune_buffer();
@@ -225,6 +231,10 @@ impl<N: Network> BlockQueue<N> {
             );
             block_source.ignore_block(&self.network);
         } else {
+            log::trace!(
+                block_number,
+                "New block announced buffering and requesting missing blocks soon"
+            );
             // Block is inside the buffer window, put it in the buffer.
             self.buffer_and_request_missing_blocks(block, block_source);
         }
@@ -247,6 +257,7 @@ impl<N: Network> BlockQueue<N> {
         if !self.insert_block_into_buffer(block, block_source.clone()) {
             log::trace!(
                 block_number,
+                %block_source,
                 "Not buffering block - already known or exceeded the per peer limit",
             );
             return;
@@ -281,6 +292,7 @@ impl<N: Network> BlockQueue<N> {
             Direction::Forward,
             None,
             Some(block_source.peer_id()),
+            "I come from buffer and request",
         );
     }
 
@@ -299,6 +311,11 @@ impl<N: Network> BlockQueue<N> {
         // Always buffer blocks that we requested.
         let block_hash = block.hash();
         if block_source.is_requested() {
+            log::trace!(
+                block_number = block.block_number(),
+                %block_source,
+                "Block already requested"
+            );
             let map = self.buffer.entry(block.block_number()).or_default();
             if map.contains_key(&block_hash) {
                 return false;
@@ -320,6 +337,10 @@ impl<N: Network> BlockQueue<N> {
 
         // If the block is already buffered, ignore it.
         if map.contains_key(&block_hash) {
+            log::trace!(
+                block_number = block.block_number(),
+                "Block already buffered"
+            );
             return false;
         }
 
@@ -376,6 +397,7 @@ impl<N: Network> BlockQueue<N> {
         direction: Direction,
         epoch_validators: Option<Validators>,
         first_peer_id: Option<N::PeerId>,
+        origin_log: &str,
     ) {
         let (head_hash, head_height, macro_height, blocks, epoch_validators) = {
             let blockchain = self.blockchain.read();
@@ -410,6 +432,7 @@ impl<N: Network> BlockQueue<N> {
 
         if let Ok(blocks) = blocks {
             log::debug!(
+                origin_log,
                 block_number,
                 %block_hash,
                 %head_hash,
@@ -440,7 +463,7 @@ impl<N: Network> BlockQueue<N> {
                 first_peer_id,
             );
         } else {
-            log::error!(start_block = %head_hash, count = head_height - macro_height, "Couldn't get blocks")
+            log::error!(origin_log,start_block = %head_hash, count = head_height - macro_height, "Couldn't get blocks")
         }
     }
 
@@ -472,6 +495,7 @@ impl<N: Network> BlockQueue<N> {
                 Direction::Forward,
                 Some(epoch_validators),
                 None,
+                "I come from handle missing blocks",
             );
         }
 
@@ -743,6 +767,7 @@ impl<N: Network> BlockQueue<N> {
             Direction::Backward,
             None,
             Some(first_peer_id),
+            "I come from resolve block",
         );
     }
 
@@ -801,6 +826,7 @@ impl<N: Network> Stream for BlockQueue<N> {
             }
         }
 
+        // ITODO Change order?
         // Get as many blocks from the gossipsub stream as possible.
         loop {
             match self.block_stream.poll_next_unpin(cx) {

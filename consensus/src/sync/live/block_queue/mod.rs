@@ -1,3 +1,5 @@
+use std::fmt::{self, Display};
+
 use futures::stream::BoxStream;
 use nimiq_block::Block;
 use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId};
@@ -86,6 +88,17 @@ impl<N: Network> BlockSource<N> {
                 }
             }
             BlockSource::Requested { .. } => {}
+        }
+    }
+}
+
+impl<N: Network> Display for BlockSource<N> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BlockSource::Announced { header_id, body_id } => {
+                write!(f, "Announced: {:?} {:?}", header_id, body_id)
+            }
+            BlockSource::Requested { id } => write!(f, "Request id: {}", id),
         }
     }
 }

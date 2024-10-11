@@ -284,8 +284,8 @@ pub async fn push_multiple_blocks_impl<N: Network>(
     let mut push_result = Err(PushError::Orphan);
     let mut push_chunk_result = Ok(ChunksPushResult::EmptyChunks);
     // Try to push blocks, until we encounter an invalid block.
-    for ((block, _), diff, mut chunks) in block_iter.by_ref() {
-        log::debug!("Pushing block {} from missing blocks response", block);
+    for ((block, source), diff, mut chunks) in block_iter.by_ref() {
+        log::debug!(%block, %source, "Pushing block from missing blocks response");
 
         let blockchain2 = blockchain.clone();
         let bls_cache2 = Arc::clone(&bls_cache);

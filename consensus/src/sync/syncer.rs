@@ -280,7 +280,10 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
         // We consider the peer as not in sync until we catch up and is sufficiently close (see below).
         let checkpoint = match blockchain.get_block(&head.r#macro, false) {
             Ok(block) => block,
-            Err(_) => return false,
+            Err(_) => {
+                debug!(%peer_id,"Incompatible peer is on a different checkpoint");
+                return false;
+            }
         };
 
         // We consider the peer synced if it's at most one batch behind us.
@@ -376,6 +379,7 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
                     self.incompatible_peers.insert(peer_id);
                 }
             } else {
+                debug!(%peer_id, "Incompatible peer is not synced.");
                 self.incompatible_peers.insert(peer_id);
             }
         }

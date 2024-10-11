@@ -324,6 +324,7 @@ impl<N: Network> BlockRequestComponent<N> {
 
     pub fn take_peer(&self, peer_id: &N::PeerId) -> Option<N::PeerId> {
         if self.peers.write().remove_peer(peer_id) {
+            log::trace!(%peer_id, "============= Removed peer");
             return Some(*peer_id);
         }
         None

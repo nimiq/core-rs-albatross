@@ -43,6 +43,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                     } else {
                         // We can't sync with this peer as it doesn't provide the services that we need.
                         // Emit the peer as incompatible.
+                        log::trace!(%peer_id,"Peer is incompatible because it does not provide the services that we need.");
                         return Poll::Ready(Some(MacroSyncReturn::Incompatible(peer_id)));
                     }
                 }
