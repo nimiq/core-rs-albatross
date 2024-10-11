@@ -402,14 +402,22 @@ pub async fn get_stakers(
                                     let stake = Coin::from_u64_unchecked(txn.value);
                                     match stakers.entry(staker_address.clone()) {
                                         Entry::Occupied(mut entry) => {
-                                            // If we have an entry for this staker, treat this as a switch to another
-                                            // validator or an increase of the stake (if the validator isn't changed)
+                                            // If we have an entry for this staker, check if this is an increase of the
+                                            // stake (if the validator isn't changed). Otherwise, ignore it
                                             let staker = entry.get_mut();
 
-                                            // Update the staker entry
-                                            staker.delegation =
-                                                validator.validator.validator_address.clone();
-                                            staker.balance += stake;
+                                            if staker.delegation
+                                                == validator.validator.validator_address
+                                            {
+                                                staker.balance += stake;
+                                            } else {
+                                                log::warn!(
+                                                    staker_address = txn.from_address,
+                                                    attempted_new_delegation = %validator.validator.validator_address,
+                                                    current_delegation = %staker.delegation,
+                                                    "Found pre-staking transaction for a validator different than the original delegation, ignoring transaction"
+                                                );
+                                            }
                                         }
                                         Entry::Vacant(entry) => {
                                             // If there wasn't a staker registered for this address, check minimum stake
