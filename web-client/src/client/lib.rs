@@ -876,6 +876,27 @@ impl Client {
         Ok(serde_wasm_bindgen::to_value(&txs)?.into())
     }
 
+    /// This function is used to tell the network to disconnect from every connected
+    /// peer and stop trying to connect to other peers.
+    ///
+    /// **Important**: this function returns when the signal to disconnect was sent,
+    /// before all peers actually disconnect. This means that in order to ensure the
+    /// network is disconnected, wait for all peers to disappear after calling.
+    #[wasm_bindgen(js_name = disconnectNetwork)]
+    pub async fn disconnect_network(&self) {
+        let network = self.inner.network();
+        network.disconnect(CloseReason::GoingOffline).await;
+    }
+
+    /// This function is used to tell the network to (re)start connecting to peers.
+    /// This is could be used to tell the network to restart connection operations after
+    /// disconnect network is called.
+    #[wasm_bindgen(js_name = connectNetwork)]
+    pub async fn connect_network(&self) {
+        let network = self.inner.network();
+        network.start_connecting().await;
+    }
+
     fn setup_offline_online_event_handlers(&self) {
         let network = self.inner.network();
 
