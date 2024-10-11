@@ -15,7 +15,7 @@ pub struct Identity {
 impl Identity {
     /// An Identity containing no one.
     pub const NOBODY: Self = Identity {
-        identities: BitSet::EMPTY,
+        identities: BitSet::new(),
     };
 
     /// Creates a new identity given a bitset of identities, i.e signers of a contribution.
@@ -25,7 +25,7 @@ impl Identity {
 
     /// Creates an Identity containing solely the given identifier.
     pub fn single<T: Into<usize>>(identifier: T) -> Self {
-        let mut identities = BitSet::EMPTY;
+        let mut identities = BitSet::new();
         identities.insert(identifier.into());
         Self { identities }
     }

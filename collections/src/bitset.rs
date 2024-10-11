@@ -23,13 +23,7 @@ pub struct BitSet {
 }
 
 impl BitSet {
-    /// An empty BitSet.
-    pub const EMPTY: Self = Self {
-        store: vec![],
-        count: 0,
-    };
-
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         BitSet {
             store: Vec::new(),
             count: 0,
