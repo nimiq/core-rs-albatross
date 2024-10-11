@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fmt::Debug,
     future::Future,
     pin::Pin,
@@ -11,6 +12,7 @@ use futures::{
     stream::StreamExt,
 };
 use instant::Instant;
+use linked_hash_map::{Entry, LinkedHashMap};
 use nimiq_collections::BitSet;
 use nimiq_utils::{stream::FuturesUnordered, WakerExt as _};
 
@@ -43,22 +45,17 @@ struct LastLevelUpdate {
 /// It will buffer up to one message per recipient, while maintaining the order of messages.
 /// Messages that do not fit the buffer will be dropped.
 pub struct NetworkHelper<TNetwork: Network> {
+    /// The count of nodes this NetworkHelper is going to interact with. Both the `message_buffer`
+    /// and `last_messages` are bound in their size by this value.
+    num_nodes: usize,
+
     /// Buffer for one message per recipient. Second value of the pair is the index of the next
     /// message which needs to be sent after this one. If there is no message buffered, it will
     /// point to `message_buffer.len()` which is the first OOB index.
-    message_buffer: Vec<Option<(LevelUpdate<TNetwork::Contribution>, usize)>>,
+    message_buffer: LinkedHashMap<usize, LevelUpdate<TNetwork::Contribution>>,
 
     /// Information about the last message sent to each recipient, used to deduplicate messages.
-    last_messages: Vec<Option<LastLevelUpdate>>,
-
-    /// Index of the first message in this buffer that should be sent. If there is no message
-    /// buffered it will point to `message_buffer.len()` which is the first OOB index.
-    first: usize,
-
-    /// Index of the last message in this buffer that should be sent. It is used to quickly append
-    /// messages. If there is no message buffered it will point to `message_buffer.len()` which is
-    /// the first OOB index.
-    last: usize,
+    last_messages: HashMap<usize, LastLevelUpdate>,
 
     /// The collection of currently pending send futures.
     pending_sends: FuturesUnordered<BoxFuture<'static, Result<(usize, BitSet), TNetwork::Error>>>,
@@ -79,10 +76,9 @@ impl<TNetwork: Network> NetworkHelper<TNetwork> {
 
     pub fn new(num_nodes: usize, network: TNetwork) -> Self {
         Self {
-            message_buffer: vec![None; num_nodes],
-            last_messages: vec![None; num_nodes],
-            first: num_nodes,
-            last: num_nodes,
+            num_nodes,
+            message_buffer: LinkedHashMap::with_capacity(num_nodes),
+            last_messages: HashMap::with_capacity(num_nodes),
             pending_sends: FuturesUnordered::new(),
             pending_bans: FuturesUnordered::new(),
             network,
@@ -100,15 +96,17 @@ impl<TNetwork: Network> NetworkHelper<TNetwork> {
 
         // `message_buffer` and `last_messages` have the same length, so this check prevents
         // out-of-bounds access to both of these vectors.
-        let len = self.message_buffer.len();
-        if node_id >= len {
-            error!(node_id, len, "Attempted to send to out-of-bounds node_id");
+        if node_id >= self.num_nodes {
+            error!(
+                node_id,
+                self.num_nodes, "Attempted to send to out-of-bounds node_id"
+            );
             return;
         }
 
         // If an update with the same signers was recently sent to node_id, we drop it to avoid
         // unnecessarily repeating the same updates.
-        if let Some(last_update) = &self.last_messages[node_id] {
+        if let Some(last_update) = self.last_messages.get(&node_id) {
             let same_signers = last_update.signers == msg.aggregate.contributors();
             let recently_sent = last_update.sent_at.elapsed() < Self::ALLOW_RESEND_AFTER;
             if same_signers && recently_sent {
@@ -117,28 +115,14 @@ impl<TNetwork: Network> NetworkHelper<TNetwork> {
         }
 
         // Insert the message into the message buffer for the recipient.
-        let recipient_buffer = &mut self.message_buffer[node_id];
-        if let Some(msg_and_recipient) = recipient_buffer {
-            // Preserve the previous ordering if there is one.
-            msg_and_recipient.0 = msg;
-        } else {
-            // Otherwise add to the end.
-            *recipient_buffer = Some((msg, len));
-            // If there was nothing buffered before, the added message is first and last.
-            if self.message_buffer.len() == self.first {
-                self.first = node_id;
-                self.last = node_id;
-                // wake
-            } else {
-                // Otherwise the previously last message must be updated to point to the now new last message
-                self.message_buffer[self.last]
-                    .as_mut()
-                    .expect("The last index must point to a set buffered message")
-                    .1 = node_id;
-                // And the last index also needs to be updated.
-                self.last = node_id;
+        match self.message_buffer.entry(node_id) {
+            Entry::Occupied(mut entry) => {
+                *entry.get_mut() = msg;
             }
-        }
+            Entry::Vacant(entry) => {
+                entry.insert(msg);
+            }
+        };
 
         // Wake as a new message was added.
         self.waker.wake();
@@ -160,38 +144,32 @@ impl<TNetwork: Network + Unpin> Future for NetworkHelper<TNetwork> {
         // Loop here such that after polling pending futures there is an opportunity to create new
         // ones before returning.
         loop {
-            let len = self.message_buffer.len();
-
             // Create futures if there is free room and if there are messages to send.
-            while self.first < len && self.pending_sends.len() < Self::MAX_PARALLEL_SENDS {
-                let node_id = self.first;
+            while self.pending_sends.len() < Self::MAX_PARALLEL_SENDS {
                 // Take the first message
-                let (update, next) = self.message_buffer[node_id]
-                    .take()
-                    .expect("First must point to a valid buffered message");
+                let Some((node_id, update)) = self.message_buffer.pop_front() else {
+                    // No more futures are ready to be created.
+                    break;
+                };
 
                 // Create the future to send the message and add it to the pending futures.
                 let signers = update.aggregate.contributors();
                 let sender = self.network.send_update(node_id as u16, update);
                 let future = async move { sender.await.map(|_| (node_id, signers)) }.boxed();
                 self.pending_sends.push(future);
-
-                // Update indices.
-                // Note that `next` might be `== len` here in the case of `first == last`
-                self.first = next;
-                if next == len {
-                    self.last = len;
-                }
             }
 
             // Poll the pending level update senders.
             while let Poll::Ready(Some(result)) = self.pending_sends.poll_next_unpin(cx) {
                 match result {
                     Ok((node_id, signers)) => {
-                        self.last_messages[node_id] = Some(LastLevelUpdate {
-                            signers,
-                            sent_at: Instant::now(),
-                        })
+                        self.last_messages.insert(
+                            node_id,
+                            LastLevelUpdate {
+                                signers,
+                                sent_at: Instant::now(),
+                            },
+                        );
                     }
                     Err(error) => {
                         // TODO When we fail to send a level update, we should immediately move on
@@ -203,7 +181,9 @@ impl<TNetwork: Network + Unpin> Future for NetworkHelper<TNetwork> {
 
             // Once there is either the maximum amount of parallel sends or there is no more messages
             // in the buffer, break the loop returning poll pending.
-            if self.pending_sends.len() == Self::MAX_PARALLEL_SENDS || self.first == len {
+            if self.pending_sends.len() == Self::MAX_PARALLEL_SENDS
+                || self.message_buffer.is_empty()
+            {
                 // Store a waker in case a message is added.
                 // This is necessary as this future will always return `Poll::Pending`, while the
                 // buffer might be empty and the pending futures might be empty as well.

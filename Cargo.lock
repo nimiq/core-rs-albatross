@@ -3872,6 +3872,7 @@ dependencies = [
  "async-trait",
  "futures-util",
  "instant",
+ "linked-hash-map",
  "nimiq-bls",
  "nimiq-collections",
  "nimiq-hash",
