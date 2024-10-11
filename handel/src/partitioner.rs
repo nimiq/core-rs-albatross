@@ -72,8 +72,8 @@ impl Partitioner for BinomialPartitioner {
     }
 
     fn level_size(&self, level: usize) -> usize {
-        if let Ok(range) = self.identities_on(level) {
-            range.len()
+        if let Ok(identities) = self.identities_on(level) {
+            identities.len()
         } else {
             0
         }

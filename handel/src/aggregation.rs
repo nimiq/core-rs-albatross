@@ -60,7 +60,7 @@ where
     /// Gateway to the network to send updates and ban nodes.
     network: NetworkHelper<N>,
 
-    /// Timeout for starting the next level regardless of previous level's completion.
+    /// Interval for starting the next level regardless of previous level's completion.
     start_level_interval: Interval,
 
     /// Interval for sending level updates to the corresponding peers regardless of progression.
@@ -72,7 +72,7 @@ where
         Option<BoxFuture<'static, (VerificationResult, PendingContribution<P::Contribution>)>>,
 
     /// The final result of the aggregation once it has been produced.
-    /// A Some(_) value here indicates that the aggregation has finished.
+    /// A `Some(_)` value here indicates that the aggregation has finished.
     final_result: Option<P::Contribution>,
 }
 
@@ -89,7 +89,7 @@ where
         input_stream: LevelUpdateStream<P::Contribution>,
         network: N,
     ) -> Self {
-        // Create the Sender, buffering a single message per recipient.
+        // Create the sender, buffering a single message per recipient.
         let sender = NetworkHelper::new(protocol.partitioner().size(), network);
 
         // Invoke the partitioner to create the level structure of peers.
@@ -184,7 +184,7 @@ where
         self.num_contributors(aggregate) == self.protocol.partitioner().size()
     }
 
-    /// Check if the given level was completed.
+    /// Check if the given level was completed. If so mark it as such.
     fn check_completed_level(&mut self, level_id: usize, store: &P::Store) {
         // Nothing to do if the level is already complete.
         let level = &self.levels[level_id];
@@ -264,14 +264,18 @@ where
             best_aggregate
         };
 
-        // FIXME Comment
+        // To determine if an individual contribution must be send alongside the aggregate retrieve the
+        // cumulative level size. Only if that size is reached can the individual signature be omitted.
+        // Basically there needs to be no information missing in order to not send the individual signature.
         let expected_contributors = self
             .protocol
             .partitioner()
             .cumulative_level_size(level_id - 1);
 
+        // Get the contributor count of the given contribution
         let num_contributors = self.num_contributors(&contribution);
 
+        // Send the individual signature alongside the aggregate if the aggregate is incomplete.
         let individual = if num_contributors < expected_contributors {
             Some(self.contribution.clone())
         } else {
@@ -402,7 +406,7 @@ where
 
     /// Responds to an update received from `node_id` with our own best aggregate for `level_id`.
     /// If we already have a final result, we send that result instead.
-    fn respond_to_update(&mut self, node_id: usize, level_id: usize) {
+    fn respond_to_update(&mut self, level_id: usize, node_id: usize) {
         // If the peer already has a full aggregation, we don't need to respond.
         if level_id == self.levels.len() {
             return;
@@ -444,7 +448,7 @@ where
             // Respond with our own update.
             let origin = update.origin();
             let level = update.level();
-            self.respond_to_update(origin, level);
+            self.respond_to_update(level, origin);
 
             // Store the aggregate (and individual if present) contributions in `pending_contributions`.
             self.pending_contributions
@@ -524,7 +528,7 @@ where
         }
 
         // Drive the network helper future. It always returns Pending.
-        let _ = self.network.poll_unpin(cx);
+        assert!(self.network.poll_unpin(cx).is_pending());
 
         // If this aggregation has already produced a final result, we return Pending instead of
         // Ready(None) to allow this aggregation to keep running so that it can send full aggregations

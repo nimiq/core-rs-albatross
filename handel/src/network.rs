@@ -97,11 +97,10 @@ impl<TNetwork: Network> NetworkHelper<TNetwork> {
         // `message_buffer` and `last_messages` have the same length, so this check prevents
         // out-of-bounds access to both of these vectors.
         if node_id >= self.num_nodes {
-            error!(
-                node_id,
-                self.num_nodes, "Attempted to send to out-of-bounds node_id"
+            panic!(
+                "Attempted to send to out-of-bounds node_id={}, num_nodes = {}",
+                node_id, self.num_nodes,
             );
-            return;
         }
 
         // If an update with the same signers was recently sent to node_id, we drop it to avoid
@@ -139,7 +138,7 @@ impl<TNetwork: Network + Unpin> Future for NetworkHelper<TNetwork> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // Drive pending ban futures.
-        while let Poll::Ready(Some(_)) = self.pending_bans.poll_next_unpin(cx) {}
+        while let Poll::Ready(Some(())) = self.pending_bans.poll_next_unpin(cx) {}
 
         // Loop here such that after polling pending futures there is an opportunity to create new
         // ones before returning.
