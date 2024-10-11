@@ -1,6 +1,5 @@
 use std::{
     pin::Pin,
-    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -44,7 +43,7 @@ where
     config: Config,
 
     /// Levels
-    levels: Arc<Vec<Level>>,
+    levels: Vec<Level>,
 
     /// Stream of level updates received from other peers.
     input_stream: LevelUpdateStream<P::Contribution>,
@@ -94,11 +93,11 @@ where
         let sender = NetworkHelper::new(protocol.partitioner().size(), network);
 
         // Invoke the partitioner to create the level structure of peers.
-        let levels = Arc::new(Level::create_levels(
+        let levels = Level::create_levels(
             protocol.partitioner(),
             protocol.identify(),
             protocol.node_id(),
-        ));
+        );
 
         // Create an empty list which can later be polled for the best available pending contribution.
         let mut pending_contributions =
