@@ -3,7 +3,9 @@ use std::{collections::BTreeMap, ops::Range};
 use nimiq_block::MicroBlock;
 use nimiq_database::{
     declare_table,
-    mdbx::{MdbxDatabase, MdbxReadTransaction, MdbxWriteTransaction, OptionalTransaction},
+    mdbx::{
+        CursorProxy, MdbxDatabase, MdbxReadTransaction, MdbxWriteTransaction, OptionalTransaction,
+    },
     traits::{Database, DupReadCursor, ReadCursor, ReadTransaction, WriteCursor, WriteTransaction},
 };
 use nimiq_genesis::NetworkId;
@@ -224,6 +226,47 @@ impl HistoryStoreIndex {
             }
         }
     }
+
+    /// Returns an iterator containing all transaction (and reward inherents) hashes corresponding to the given
+    /// address. It fetches the transactions from most recent to least recent.
+    /// It allows to give a starting point to fetch the transactions from (exclusive).
+    fn iterate_tx_hashes_by_address<'txn>(
+        &self,
+        address: &Address,
+        start_at: Option<Blake2bHash>,
+        txn: &'txn MdbxReadTransaction,
+    ) -> TxHashIterator<'txn> {
+        // Seek to the first transaction hash at the given address. If there's none, stop here.
+        let mut cursor = txn.dup_cursor(&self.address_table);
+
+        // Find start index.
+        let initial_item = if let Some(hash) = start_at {
+            let raw_tx_hash = RawTransactionHash::from(hash);
+            // A start hash is given, so we get the `EpochBasedIndex` first.
+            let Some(start_index) = txn.get(&self.tx_hash_table, &raw_tx_hash) else {
+                return TxHashIterator::empty();
+            };
+
+            // If no entry can be found, return an empty vector.
+            if cursor.set_subkey(address, &start_index).is_none() {
+                return TxHashIterator::empty();
+            }
+
+            // We don't add the current hash.
+            None
+        } else {
+            // If no start hash is given, we start at the last transaction hash for this address.
+            if cursor.set_key(address).is_none() {
+                return TxHashIterator::empty();
+            }
+
+            // Then go to the last transaction hash at the given address and
+            // use it as the initial item.
+            Some(cursor.last_duplicate().expect("This shouldn't panic since we already verified before that there is at least one transactions at this address!").value)
+        };
+
+        TxHashIterator::new(cursor, initial_item)
+    }
 }
 
 impl HistoryInterface for HistoryStoreIndex {
@@ -296,9 +339,9 @@ impl HistoryInterface for HistoryStoreIndex {
             .expect("Failed to remove partial history");
 
         // Remove the block from the validity store (and its corresponding txn hashes)
-        self.history_store
-            .validity_store
-            .delete_block_transactions(txn, block.block_number());
+        if let Some(ref validity_store) = self.history_store.validity_store {
+            validity_store.delete_block_transactions(txn, block.block_number());
+        }
 
         Some(total_size)
     }
@@ -532,6 +575,49 @@ impl HistoryInterface for HistoryStoreIndex {
     }
 }
 
+/// An iterator over the transaction hashes in the `AddressTable` table.
+/// It can optionally start from a specific value before iterating backwards.
+pub struct TxHashIterator<'txn> {
+    /// The cursor over the `AddressTable` table.
+    cursor: Option<CursorProxy<'txn, AddressTable>>,
+    /// A starting value to be emitted before iterating backwards.
+    initial_item: Option<Blake2bHash>,
+}
+
+impl<'txn> TxHashIterator<'txn> {
+    pub fn new(cursor: CursorProxy<'txn, AddressTable>, initial_item: Option<Blake2bHash>) -> Self {
+        Self {
+            cursor: Some(cursor),
+            initial_item,
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            cursor: None,
+            initial_item: None,
+        }
+    }
+}
+
+impl<'txn> Iterator for TxHashIterator<'txn> {
+    type Item = Blake2bHash;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // If there is an initial item, return it and clear it.
+        if let Some(initial_item) = self.initial_item.take() {
+            return Some(initial_item);
+        }
+
+        // Otherwise, return the next item.
+        if let Some(ref mut cursor) = self.cursor {
+            cursor.prev_duplicate().map(|(_address, hash)| hash.value)
+        } else {
+            None
+        }
+    }
+}
+
 impl HistoryIndexInterface for HistoryStoreIndex {
     /// Gets an historic transaction given its transaction hash.
     fn get_hist_tx_by_hash(
@@ -565,45 +651,9 @@ impl HistoryIndexInterface for HistoryStoreIndex {
 
         let txn = txn_option.or_new(&self.db);
 
-        let mut tx_hashes = vec![];
-
-        // Seek to the first transaction hash at the given address. If there's none, stop here.
-        let mut cursor = txn.dup_cursor(&self.address_table);
-
-        // Find start index.
-        if let Some(hash) = start_at {
-            let raw_tx_hash = RawTransactionHash::from(hash);
-            // A start hash is given, so we get the `EpochBasedIndex` first.
-            let Some(start_index) = txn.get(&self.tx_hash_table, &raw_tx_hash) else {
-                return tx_hashes;
-            };
-
-            // If no entry can be found, return an empty vector.
-            if cursor.set_subkey(address, &start_index).is_none() {
-                return tx_hashes;
-            }
-
-            // We don't add the current hash to the list.
-        } else {
-            // If no start hash is given, we start at the last transaction hash for this address.
-            if cursor.set_key(address).is_none() {
-                return tx_hashes;
-            }
-
-            // Then go to the last transaction hash at the given address and add it to the transaction
-            // hashes list.
-            tx_hashes.push(cursor.last_duplicate().expect("This shouldn't panic since we already verified before that there is at least one transactions at this address!").value);
-        }
-
-        while tx_hashes.len() < max as usize {
-            // Get previous transaction hash.
-            match cursor.prev_duplicate() {
-                Some((_, v)) => tx_hashes.push(v.value),
-                None => break,
-            };
-        }
-
-        tx_hashes
+        self.iterate_tx_hashes_by_address(address, start_at, &txn)
+            .take(max as usize)
+            .collect()
     }
 
     /// Returns a proof for transactions with the given hashes. The proof also includes the extended

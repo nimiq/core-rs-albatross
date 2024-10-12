@@ -344,6 +344,20 @@ impl ClientInner {
         // Start buffering network events as early as possible
         let network_events = network.subscribe_events();
 
+        // We update the services flags depending on the pre-genesis database file being present
+        #[cfg(feature = "database-storage")]
+        let pre_genesis_environment = if config.storage.has_pre_genesis_database(config.network_id)
+        {
+            provided_services |= Services::PRE_GENESIS_TRANSACTIONS;
+            Some(
+                config
+                    .storage
+                    .pre_genesis_database(config.network_id, config.database.clone())?,
+            )
+        } else {
+            None
+        };
+
         // Open database
         #[cfg(feature = "database-storage")]
         let environment = config.storage.database(
@@ -381,8 +395,9 @@ impl ClientInner {
             SyncMode::History => {
                 blockchain_config.keep_history = true;
                 blockchain_config.index_history = config.consensus.index_history;
-                let blockchain = match Blockchain::new(
+                let blockchain = match Blockchain::new_merged(
                     environment.clone(),
+                    pre_genesis_environment,
                     blockchain_config,
                     config.network_id,
                     time,
@@ -427,8 +442,9 @@ impl ClientInner {
                 blockchain_config.keep_history = false;
                 blockchain_config.index_history = false;
 
-                let blockchain = match Blockchain::new(
+                let blockchain = match Blockchain::new_merged(
                     environment.clone(),
+                    pre_genesis_environment,
                     blockchain_config,
                     config.network_id,
                     time,

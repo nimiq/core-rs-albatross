@@ -1,5 +1,6 @@
 use nimiq_block::{Block, MicroBlock};
-use nimiq_database::mdbx::{MdbxReadTransaction, MdbxWriteTransaction};
+use nimiq_database::mdbx::{MdbxDatabase, MdbxReadTransaction, MdbxWriteTransaction};
+use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
 use nimiq_mmr::{
     error::Error as MMRError,
@@ -11,16 +12,56 @@ use nimiq_transaction::{
     EquivocationLocator,
 };
 
-use super::history_store_index::HistoryStoreIndex;
-use crate::{interface::HistoryInterface, HistoryTreeChunk};
+use super::{HistoryStore, HistoryStoreIndex, HistoryStoreMerger};
+use crate::{
+    interface::{HistoryIndexInterface, HistoryInterface},
+    HistoryTreeChunk,
+};
 
 #[derive(Debug)]
-pub enum HistoryStoreProxy {
-    WithIndex(HistoryStoreIndex),
-    WithoutIndex(Box<dyn HistoryInterface + Send + Sync>),
+pub enum HistoryStoreProxy<S: HistoryInterface, I: HistoryIndexInterface> {
+    WithIndex(I),
+    WithoutIndex(S),
 }
 
-impl HistoryStoreProxy {
+pub type MergedHistoryStoreProxy =
+    HistoryStoreProxy<HistoryStoreMerger<HistoryStore>, HistoryStoreMerger<HistoryStoreIndex>>;
+pub type UnmergedHistoryStoreProxy = HistoryStoreProxy<HistoryStore, HistoryStoreIndex>;
+
+impl MergedHistoryStoreProxy {
+    pub fn new_merged(
+        env: MdbxDatabase,
+        pre_genesis_env: Option<MdbxDatabase>,
+        with_index: bool,
+        network_id: NetworkId,
+    ) -> Self {
+        if with_index {
+            let main = HistoryStoreIndex::new(env, network_id);
+            let pre_genesis = pre_genesis_env.map(|env| HistoryStoreIndex::new(env, network_id));
+
+            HistoryStoreProxy::WithIndex(HistoryStoreMerger::new(pre_genesis, main))
+        } else {
+            let main = HistoryStore::new(env, network_id);
+            let pre_genesis = pre_genesis_env.map(|env| HistoryStore::new(env, network_id));
+
+            HistoryStoreProxy::WithoutIndex(HistoryStoreMerger::new(pre_genesis, main))
+        }
+    }
+}
+
+impl UnmergedHistoryStoreProxy {
+    pub fn new(env: MdbxDatabase, with_index: bool, network_id: NetworkId) -> Self {
+        if with_index {
+            let main = HistoryStoreIndex::new(env, network_id);
+            HistoryStoreProxy::WithIndex(main)
+        } else {
+            let main = HistoryStore::new(env, network_id);
+            HistoryStoreProxy::WithoutIndex(main)
+        }
+    }
+}
+
+impl<S: HistoryInterface, I: HistoryIndexInterface> HistoryStoreProxy<S, I> {
     pub fn supports_index(&self) -> bool {
         match self {
             HistoryStoreProxy::WithIndex(_) => true,
@@ -28,7 +69,7 @@ impl HistoryStoreProxy {
         }
     }
 
-    pub fn history_index(&self) -> Option<&HistoryStoreIndex> {
+    pub fn history_index(&self) -> Option<&impl HistoryIndexInterface> {
         match self {
             HistoryStoreProxy::WithIndex(index) => Some(index),
             HistoryStoreProxy::WithoutIndex(_) => None,
@@ -36,7 +77,7 @@ impl HistoryStoreProxy {
     }
 }
 
-impl HistoryInterface for HistoryStoreProxy {
+impl<S: HistoryInterface, I: HistoryIndexInterface> HistoryInterface for HistoryStoreProxy<S, I> {
     // Adds all the transactions included in a given block into the history store.
     fn add_block(
         &self,

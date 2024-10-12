@@ -14,7 +14,7 @@ use nimiq_primitives::{policy::Policy, trie::trie_diff::TrieDiff};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{historic_transaction::HistoricTransactionData, reward::RewardTransaction};
 
-use crate::{history::interface::HistoryInterface, history_store_proxy::HistoryStoreProxy};
+use crate::{history_store_proxy::MergedHistoryStoreProxy, interface::HistoryInterface};
 
 declare_table!(HeadTable, "Head", () => Blake2bHash);
 declare_table!(ChainTable, "ChainData", Blake2bHash => ChainInfo);
@@ -61,7 +61,7 @@ impl PushedBlock {
     fn populate_body(
         self,
         block: &mut Block,
-        history_store: &Arc<HistoryStoreProxy>,
+        history_store: &Arc<MergedHistoryStoreProxy>,
         txn: &MdbxReadTransaction,
     ) {
         assert_eq!(self.ty(), block.ty());
@@ -133,11 +133,11 @@ pub struct ChainStore {
     /// A database of accounts trie diffs for a block.
     accounts_diff_table: AccountsDiffTable,
     /// A reference to the history store to recover micro block transactions.
-    history_store: Arc<HistoryStoreProxy>,
+    history_store: Arc<MergedHistoryStoreProxy>,
 }
 
 impl ChainStore {
-    pub fn new(db: MdbxDatabase, history_store: Arc<HistoryStoreProxy>) -> Self {
+    pub fn new(db: MdbxDatabase, history_store: Arc<MergedHistoryStoreProxy>) -> Self {
         let chain_store = ChainStore {
             db,
             head_table: HeadTable,
