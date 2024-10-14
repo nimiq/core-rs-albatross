@@ -21,6 +21,9 @@ pub(crate) struct PendingContribution<C: AggregatableContribution> {
     pub level: usize,
     /// The sender of this contribution.
     pub origin: usize,
+    /// Indicates if the LevelUpdates is added from a trusted source.
+    /// If so the signature does not need to be verified
+    trusted: bool,
 }
 
 impl<C: AggregatableContribution> fmt::Debug for PendingContribution<C> {
@@ -44,6 +47,13 @@ impl<C: AggregatableContribution> PendingContribution<C> {
         id: TId,
     ) -> usize {
         evaluator.evaluate(&self.contribution, self.level, id)
+    }
+
+    /// Returns true if the LevelUpdate was created by a trusted source.
+    /// One example would be the LevelUpdate was created locally.
+    /// Returns false otherwise.
+    pub fn trusted(&self) -> bool {
+        self.trusted
     }
 }
 
@@ -103,12 +113,14 @@ where
         contribution: TProtocol::Contribution,
         level: usize,
         origin: usize,
+        trusted: bool,
     ) {
         // Add the item to the list.
         self.list.insert(PendingContribution {
             contribution,
             level,
             origin,
+            trusted,
         });
 
         // Wake the task to process this contribution.

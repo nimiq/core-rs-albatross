@@ -104,7 +104,13 @@ where
             PendingContributionList::new(protocol.identify(), protocol.evaluator());
 
         // Add our own contribution to the list.
-        pending_contributions.add_contribution(own_contribution.clone(), 0, protocol.node_id());
+        // Set the trusted flag such that the signature will not get verified.
+        pending_contributions.add_contribution(
+            own_contribution.clone(),
+            0,
+            protocol.node_id(),
+            true,
+        );
 
         // Regardless of level completion consecutive levels need to be activated at some point.
         // Activate levels every time this interval ticks, if the level has not already been
@@ -452,10 +458,10 @@ where
 
             // Store the aggregate (and individual if present) contributions in `pending_contributions`.
             self.pending_contributions
-                .add_contribution(update.aggregate, level, origin);
+                .add_contribution(update.aggregate, level, origin, false);
             if let Some(individual) = update.individual {
                 self.pending_contributions
-                    .add_contribution(individual, level, origin);
+                    .add_contribution(individual, level, origin, false);
             }
         }
 
@@ -504,6 +510,13 @@ where
             while let Poll::Ready(Some(contribution)) =
                 self.pending_contributions.poll_next_unpin(cx)
             {
+                if !contribution.trusted() {
+                    // No need to verify the trusted contribution.
+                    // Apply it and return the new best aggregate.
+                    best_aggregate = Some(self.apply_contribution(contribution));
+                    break;
+                }
+
                 // Start the verification. This will also poll and thus may immediately return a result.
                 let Some((result, contribution)) = self.start_verification(contribution, cx) else {
                     break;
