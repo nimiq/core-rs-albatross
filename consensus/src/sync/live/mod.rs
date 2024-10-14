@@ -106,6 +106,10 @@ impl<N: Network, Q: LiveSyncQueue<N>> LiveSync<N> for LiveSyncer<N, Q> {
     fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
         self.queue.resolve_block(request)
     }
+
+    fn acceptance_window_size(&self) -> u32 {
+        self.queue.acceptance_window_size()
+    }
 }
 
 impl<N: Network, Q: LiveSyncQueue<N>> Stream for LiveSyncer<N, Q> {
