@@ -145,6 +145,10 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueueProxy<N> {
     fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
         self.queue.lock().resolve_block(request)
     }
+
+    fn acceptance_window_size(&self) -> u32 {
+        self.queue.lock().acceptance_window_size()
+    }
 }
 
 impl<N: Network> Stream for BlockQueueProxy<N> {

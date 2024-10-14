@@ -270,4 +270,8 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
     fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
         self.diff_queue.resolve_block(request)
     }
+
+    fn acceptance_window_size(&self) -> u32 {
+        self.diff_queue.acceptance_window_size()
+    }
 }

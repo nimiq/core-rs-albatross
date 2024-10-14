@@ -46,9 +46,9 @@ pub trait LiveSync<N: Network>: Stream<Item = LiveSyncEvent<N::PeerId>> + Unpin 
     fn push_block(&mut self, block: Block, block_source: BlockSource<N>);
     /// Adds a peer to receive or request blocks from it.
     fn add_peer(&mut self, peer_id: N::PeerId);
-    /// Returns the number of peers that are being sync'ed with
+    /// Returns the number of peers that are being synced with
     fn num_peers(&self) -> usize;
-    /// Returns the list of peers that are being sync'ed with
+    /// Returns the list of peers that are being synced with
     fn peers(&self) -> Vec<N::PeerId>;
     /// Returns whether the state sync has finished (or `true` if there is no state sync required)
     fn state_complete(&self) -> bool {
@@ -56,6 +56,8 @@ pub trait LiveSync<N: Network>: Stream<Item = LiveSyncEvent<N::PeerId>> + Unpin 
     }
     /// Initiates an attempt to resolve a ResolveBlockRequest.
     fn resolve_block(&mut self, request: ResolveBlockRequest<N>);
+    /// The maximum number of blocks a peer can be ahead before it is considered out-of-sync.
+    fn acceptance_window_size(&self) -> u32;
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -221,11 +223,13 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
     fn check_incompatible_peer(&mut self, peer_id: N::PeerId) {
         let blockchain = self.blockchain.clone();
         let network = Arc::clone(&self.network);
+        let acceptance_window_size = self.live_sync.acceptance_window_size();
 
         debug!(%peer_id, "Checking if incompatible peer is in sync");
 
         let future = async move {
-            let synced = Self::is_peer_synced(blockchain, network, peer_id).await;
+            let synced =
+                Self::is_peer_synced(blockchain, network, peer_id, acceptance_window_size).await;
             (peer_id, synced)
         }
         .boxed();
@@ -237,6 +241,7 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
         blockchain: BlockchainProxy,
         network: Arc<N>,
         peer_id: N::PeerId,
+        acceptance_window_size: u32,
     ) -> bool {
         // Request the peer's head state.
         // Disconnect the peer if the request fails.
@@ -251,14 +256,29 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
 
         // Check the peer's head block number. We consider the peer synced if the peer is
         // at most one batch behind us.
-        let peers_batch = Policy::batch_at(head.block_number);
-        let our_batch = blockchain.read().batch_number();
-        if peers_batch < our_batch.saturating_sub(1) {
+        let peer_block_number = head.block_number;
+        let peer_batch = Policy::batch_at(peer_block_number);
+        let our_block_number = blockchain.read().block_number();
+        let our_batch = Policy::batch_at(our_block_number);
+
+        if peer_batch < our_batch.saturating_sub(1) {
             debug!(
                 %peer_id,
-                peers_batch,
+                peer_batch,
                 our_batch,
                 "Incompatible peer is in a different batch"
+            );
+            return false;
+        }
+
+        // Check that the peer is not too far ahead.
+        if peer_block_number > our_block_number + acceptance_window_size {
+            debug!(
+                %peer_id,
+                peer_block_number,
+                our_block_number,
+                acceptance_window_size,
+                "Incompatible peer is too far ahead"
             );
             return false;
         }
