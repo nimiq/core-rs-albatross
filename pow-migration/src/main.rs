@@ -248,6 +248,7 @@ async fn main() {
             config.network_id,
             pow_client.clone(),
             block_windows.block_confirmations,
+            config.consensus.index_history,
         ));
 
         // Check that the `nimiq-client` exists
