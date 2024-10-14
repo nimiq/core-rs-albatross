@@ -97,6 +97,7 @@ pub fn initialize_logging(
     let mut filter = Targets::new()
         .with_default(DEFAULT_LEVEL)
         .with_nimiq_targets(settings.level.unwrap_or(DEFAULT_LEVEL))
+        .with_target("hyper", LevelFilter::WARN)
         .with_target("r1cs", LevelFilter::WARN);
     // Set logging level for specific selected modules
     filter = filter.with_targets(settings.tags);

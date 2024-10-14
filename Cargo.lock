@@ -4362,7 +4362,6 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
- "tracing-subscriber 0.3.18",
  "url",
 ]
 

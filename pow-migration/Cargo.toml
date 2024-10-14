@@ -64,7 +64,6 @@ tokio = { version = "1.40", features = [
     "tracing",
 ] }
 toml = "0.8"
-tracing-subscriber = { version = "0.3", features = ["registry"] }
 url = "2.5"
 
 [dev-dependencies]

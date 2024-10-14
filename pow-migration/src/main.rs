@@ -2,8 +2,11 @@ use std::{fs, process::exit, time::Duration};
 
 use clap::{Parser, Subcommand};
 use convert_case::{Case, Casing};
-use log::{info, level_filters::LevelFilter};
-use nimiq::config::{config::ClientConfig, config_file::ConfigFile};
+use log::info;
+use nimiq::{
+    config::{config::ClientConfig, config_file::ConfigFile},
+    extras::logging::initialize_logging,
+};
 use nimiq_keys::Address;
 use nimiq_pow_migration::{
     async_retryer, exit_with_error,
@@ -20,7 +23,6 @@ use tokio::{
     sync::{mpsc, watch},
     time::sleep,
 };
-use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 use url::Url;
 
 /// Command line arguments for the binary
@@ -56,20 +58,6 @@ enum Commands {
     ListValidators,
 }
 
-fn initialize_logging() {
-    let filter = Targets::new()
-        .with_default(LevelFilter::DEBUG)
-        .with_target("hyper", LevelFilter::WARN);
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_writer(std::io::stderr)
-                .with_ansi(true)
-                .with_filter(filter),
-        )
-        .init();
-}
-
 #[tokio::main]
 async fn main() {
     // 1. Migrate the PoW history up until the first candidate block (or up until
@@ -80,8 +68,6 @@ async fn main() {
     // 4. Wait for enough validators to signal readiness for the genesis candidate
     // 5. If enough validators signal readiness start the 2.0 client with the generated genesis block
     // 6. If not enough validators signal readiness after the activation window span, go to 2.
-
-    initialize_logging();
 
     let args = Args::parse();
 
@@ -104,6 +90,9 @@ async fn main() {
         log::error!(file = args.config);
         exit_with_error(error, "Unable to read configuration file");
     });
+
+    initialize_logging(None, Some(&config_file.log))
+        .unwrap_or_else(|error| exit_with_error(error, "Could not initialize logging"));
 
     let config = ClientConfig::builder()
         .config_file(&config_file)
