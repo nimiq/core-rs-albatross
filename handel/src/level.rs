@@ -140,7 +140,7 @@ impl Level {
             identities.rotate_left(state.next_peer_index);
 
             for ident in identities.iter().take(num_peers) {
-                selected.combine(&ident, false);
+                selected.combine(ident, false);
             }
             state.next_peer_index = (state.next_peer_index + num_peers) % self.peer_ids.len();
 
