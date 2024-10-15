@@ -27,16 +27,4 @@ export class NumberUtils {
         return NumberUtils.isInteger(val)
             && val >= 0 && val <= NumberUtils.UINT64_MAX;
     }
-
-    static randomUint32(): number {
-        return Math.floor(Math.random() * (NumberUtils.UINT32_MAX + 1));
-    }
-
-    static randomUint64(): number {
-        return Math.floor(Math.random() * (NumberUtils.UINT64_MAX + 1));
-    }
-
-    static fromBinary(bin: string): number {
-        return parseInt(bin, 2);
-    }
 }

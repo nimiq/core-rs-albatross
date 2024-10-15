@@ -23,26 +23,8 @@ class BufferUtils {
 
     static _BASE64_LOOKUP: string[] = [];
     private static _ISO_8859_15_DECODER?: TextDecoder | null;
+    private static _UTF8_DECODER?: TextDecoder | null;
     private static _UTF8_ENCODER?: TextEncoder | null;
-
-    static toAscii(buffer: Uint8Array): string {
-        const chunkSize = 0x2000;
-        const buf = BufferUtils._toUint8View(buffer);
-
-        let ascii = '';
-        for (let i = 0; i < buf.length; i += chunkSize) {
-            ascii += String.fromCharCode.apply(null, [...buf.subarray(i, i + chunkSize)]);
-        }
-        return ascii;
-    }
-
-    static fromAscii(string: string): Uint8Array {
-        const buf = new Uint8Array(string.length);
-        for (let i = 0; i < string.length; ++i) {
-            buf[i] = string.charCodeAt(i);
-        }
-        return buf;
-    }
 
     static _codePointTextDecoder(buffer: Uint8Array): string {
         if (typeof TextDecoder === 'undefined') throw new Error('TextDecoder not supported');
@@ -117,6 +99,10 @@ class BufferUtils {
     }
 
     static toBase64(buffer: Uint8Array): string {
+        if (typeof Buffer !== 'undefined') {
+            return Buffer.from(buffer).toString('base64');
+        }
+
         if (typeof TextDecoder !== 'undefined' && BufferUtils._ISO_8859_15_DECODER !== null) {
             try {
                 return btoa(BufferUtils._codePointTextDecoder(buffer));
@@ -129,7 +115,12 @@ class BufferUtils {
     }
 
     static fromBase64(base64: string, length?: number): SerialBuffer {
-        const arr = new Uint8Array(atob(base64).split('').map(c => c.charCodeAt(0)));
+        let arr: Uint8Array;
+        if (typeof Buffer !== 'undefined') {
+            arr = Buffer.from(base64, 'base64');
+        } else {
+            arr = new Uint8Array(atob(base64).split('').map(c => c.charCodeAt(0)));
+        }
         if (length !== undefined && arr.length !== length) {
             throw new Error('Decoded length does not match expected length');
         }
@@ -137,7 +128,7 @@ class BufferUtils {
     }
 
     static toBase64Url(buffer: Uint8Array): string {
-        return BufferUtils.toBase64(buffer).replace(/\//g, '_').replace(/\+/g, '-').replace(/=/g, '.');
+        return BufferUtils.toBase64(buffer).replace(/\//g, '_').replace(/\+/g, '-').replace(/=/g, '');
     }
 
     static fromBase64Url(base64: string, length?: number): SerialBuffer {
@@ -220,46 +211,8 @@ class BufferUtils {
 
     static fromHex(hex: string, length?: number): SerialBuffer {
         hex = hex.trim();
-        if (!StringUtils.isHexBytes(hex, length)) throw new Error('String is not an hex string (of matching length)');
+        if (!StringUtils.isHexBytes(hex, length)) throw new Error('String is not a hex string (of matching length)');
         return new SerialBuffer(new Uint8Array((hex.match(/.{2}/g) || []).map(byte => parseInt(byte, 16))));
-    }
-
-    static toBinary(buffer: ArrayLike<number>): string {
-        let bin = '';
-        for (let i = 0; i < buffer.length; i++) {
-            const code = buffer[i];
-            bin += StringUtils.lpad(code.toString(2), '0', 8);
-        }
-        return bin;
-    }
-
-    private static _strToUint8Array(str: string): Uint8Array {
-        const out: number[] = [];
-        let p = 0;
-        for (let i = 0; i < str.length; i++) {
-            let c = str.charCodeAt(i);
-            if (c < 128) {
-                out[p++] = c;
-            } else if (c < 2048) {
-                out[p++] = (c >> 6) | 192;
-                out[p++] = (c & 63) | 128;
-            } else if (
-                ((c & 0xFC00) === 0xD800) && (i + 1) < str.length
-                && ((str.charCodeAt(i + 1) & 0xFC00) === 0xDC00)
-            ) {
-                // Surrogate Pair
-                c = 0x10000 + ((c & 0x03FF) << 10) + (str.charCodeAt(++i) & 0x03FF);
-                out[p++] = (c >> 18) | 240;
-                out[p++] = ((c >> 12) & 63) | 128;
-                out[p++] = ((c >> 6) & 63) | 128;
-                out[p++] = (c & 63) | 128;
-            } else {
-                out[p++] = (c >> 12) | 224;
-                out[p++] = ((c >> 6) & 63) | 128;
-                out[p++] = (c & 63) | 128;
-            }
-        }
-        return new Uint8Array(out);
     }
 
     private static _utf8TextEncoder(str: string): Uint8Array {
@@ -277,14 +230,25 @@ class BufferUtils {
     }
 
     static fromUtf8(str: string): Uint8Array {
-        if (typeof TextEncoder !== 'undefined' && BufferUtils._UTF8_ENCODER !== null) {
+        return BufferUtils._utf8TextEncoder(str);
+    }
+
+    private static _utf8TextDecoder(buf: TypedArray, options?: TextDecoderOptions): string {
+        if (typeof TextDecoder === 'undefined') throw new Error('TextDecoder not supported');
+        if (BufferUtils._UTF8_DECODER === null) throw new Error('TextDecoder does not support utf8');
+        if (BufferUtils._UTF8_DECODER === undefined) {
             try {
-                return BufferUtils._utf8TextEncoder(str);
+                BufferUtils._UTF8_DECODER = new TextDecoder('utf-8', options);
             } catch (e) {
-                // Disabled itself
+                BufferUtils._UTF8_DECODER = null;
+                throw new Error('TextDecoder does not support utf8');
             }
         }
-        return BufferUtils._strToUint8Array(str);
+        return BufferUtils._UTF8_DECODER.decode(buf);
+    }
+
+    static toUtf8(buf: TypedArray): string {
+        return BufferUtils._utf8TextDecoder(buf);
     }
 
     static fromAny(o: Uint8Array | string, length?: number): SerialBuffer {
@@ -304,14 +268,6 @@ class BufferUtils {
         throw new Error('Invalid buffer format');
     }
 
-    static concatTypedArrays<T extends TypedArray>(a: T, b: T): T;
-    static concatTypedArrays(a: any, b: any): TypedArray {
-        const c = new (a.constructor)(a.length + b.length);
-        c.set(a, 0);
-        c.set(b, a.length);
-        return c;
-    }
-
     static equals(a: TypedArray, b: TypedArray): boolean {
         const viewA = BufferUtils._toUint8View(a);
         const viewB = BufferUtils._toUint8View(b);
@@ -324,6 +280,7 @@ class BufferUtils {
 
     /**
      * Returns -1 if a is smaller than b, 1 if a is larger than b, 0 if a equals b.
+     * Shorter arrays are always considered smaller than longer ones.
      */
     static compare(a: TypedArray, b: TypedArray): number {
         if (a.length < b.length) return -1;
