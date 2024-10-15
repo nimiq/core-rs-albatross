@@ -16,6 +16,7 @@ use nimiq_primitives::policy::Policy;
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 use parking_lot::Mutex;
 use pin_project::pin_project;
+use tokio::sync::broadcast::Sender as BroadcastSender;
 
 #[cfg(feature = "full")]
 use crate::sync::{
@@ -31,7 +32,7 @@ use crate::{
             queue::QueueConfig,
             BlockLiveSync,
         },
-        syncer::{LiveSyncPushEvent, Syncer},
+        syncer::{LiveSyncPushEvent, SyncEvent, Syncer},
     },
 };
 
@@ -225,6 +226,11 @@ impl<N: Network> SyncerProxy<N> {
     /// Returns the number of accepted block announcements seen
     pub fn accepted_block_announcements(&self) -> usize {
         gen_syncer_match!(self, accepted_block_announcements)
+    }
+
+    /// Returns a broadcast sender for sync events
+    pub fn broadcast_sender(&self) -> BroadcastSender<SyncEvent<<N as Network>::PeerId>> {
+        gen_syncer_match!(self, broadcast_sender)
     }
 
     /// Returns whether the state sync has finished (or `true` if there is no state sync required)

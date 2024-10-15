@@ -353,7 +353,7 @@ impl Client {
         let is_established = self
             .inner
             .consensus_proxy()
-            .subscribe_events()
+            .subscribe_consensus_events()
             .any(|event| async move {
                 if let Ok(state) = event {
                     matches!(state, ConsensusEvent::Established { .. })
@@ -924,7 +924,7 @@ impl Client {
         let consensus = self.inner.consensus_proxy();
         let network = self.inner.network();
 
-        let mut consensus_events = consensus.subscribe_events();
+        let mut consensus_events = consensus.subscribe_consensus_events();
 
         let consensus_listeners = Rc::clone(&self.consensus_changed_listeners);
 

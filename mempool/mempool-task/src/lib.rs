@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -8,9 +9,9 @@ use futures::{stream::BoxStream, Future, Stream, StreamExt};
 use log::{debug, warn};
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
-use nimiq_consensus::{Consensus, ConsensusEvent, ConsensusProxy};
+use nimiq_consensus::{sync::syncer::SyncEvent, Consensus, ConsensusEvent, ConsensusProxy};
 use nimiq_mempool::{config::MempoolConfig, mempool::Mempool};
-use nimiq_network_interface::network::Network;
+use nimiq_network_interface::network::{Network, NetworkEvent, SubscribeEvents};
 use nimiq_utils::spawn;
 use parking_lot::RwLock;
 #[cfg(feature = "metrics")]
@@ -34,6 +35,10 @@ pub struct MempoolTask<N: Network> {
 
     consensus_event_rx: BroadcastStream<ConsensusEvent>,
     blockchain_event_rx: BoxStream<'static, BlockchainEvent>,
+    network_event_rx: SubscribeEvents<N::PeerId>,
+    sync_event_rx: BroadcastStream<SyncEvent<<N as Network>::PeerId>>,
+
+    peers_in_live_sync: HashSet<N::PeerId>,
 
     pub mempool: Arc<Mempool>,
     mempool_active: bool,
@@ -50,17 +55,29 @@ impl<N: Network> MempoolTask<N> {
         mempool_config: MempoolConfig,
     ) -> Self {
         let consensus_event_rx = consensus.subscribe_events();
+        let network_event_rx = consensus.network.subscribe_events();
 
-        let mempool = Arc::new(Mempool::new(Arc::clone(&blockchain), mempool_config));
+        let mempool = Arc::new(Mempool::new(
+            Arc::clone(&blockchain),
+            mempool_config,
+            Arc::clone(&consensus.network),
+        ));
         let mempool_active = false;
 
         let blockchain_event_rx = blockchain.read().notifier_as_stream();
 
+        let proxy = consensus.proxy();
+        let sync_event_rx = proxy.subscribe_sync_events();
+        let peers_in_live_sync = HashSet::from_iter(consensus.sync.peers());
+
         Self {
-            consensus: consensus.proxy(),
+            consensus: proxy,
+            peers_in_live_sync,
 
             consensus_event_rx,
             blockchain_event_rx,
+            network_event_rx,
+            sync_event_rx,
 
             mempool: Arc::clone(&mempool),
             mempool_active,
@@ -92,26 +109,37 @@ impl<N: Network> MempoolTask<N> {
 
         let mempool = Arc::clone(&self.mempool);
         let network = Arc::clone(&self.consensus.network);
+        let peers = self.peers_in_live_sync.clone().into_iter().collect();
         #[cfg(not(feature = "metrics"))]
         spawn({
+            let consensus = self.consensus.clone();
             async move {
                 // The mempool is not updated while consensus is lost.
                 // Thus, we need to check all transactions if they are still valid.
                 mempool.cleanup();
-                mempool.start_executors(network, None, None).await;
+                mempool
+                    .start_executors(network, None, None, peers, consensus)
+                    .await;
             }
         });
         #[cfg(feature = "metrics")]
         spawn({
             let mempool_monitor = self.mempool_monitor.clone();
             let ctrl_mempool_monitor = self.control_mempool_monitor.clone();
+            let consensus = self.consensus.clone();
             async move {
                 // The mempool is not updated while consensus is lost.
                 // Thus, we need to check all transactions if they are still valid.
                 mempool.cleanup();
 
                 mempool
-                    .start_executors(network, Some(mempool_monitor), Some(ctrl_mempool_monitor))
+                    .start_executors(
+                        network,
+                        Some(mempool_monitor),
+                        Some(ctrl_mempool_monitor),
+                        peers,
+                        consensus,
+                    )
                     .await;
             }
         });
@@ -167,12 +195,39 @@ impl<N: Network> MempoolTask<N> {
             }
         }
     }
+
+    fn on_consensus_sync_event(&mut self, event: SyncEvent<N::PeerId>) {
+        match event {
+            SyncEvent::AddLiveSync(peer_id) => {
+                self.peers_in_live_sync.insert(peer_id);
+            }
+        }
+    }
+
+    fn on_network_event(&mut self, event: NetworkEvent<N::PeerId>) {
+        match event {
+            NetworkEvent::PeerLeft(peer_id) => {
+                self.peers_in_live_sync.remove(&peer_id);
+            }
+            NetworkEvent::PeerJoined(_, _) | NetworkEvent::DhtReady => (),
+        }
+    }
 }
 
 impl<N: Network> Stream for MempoolTask<N> {
     type Item = MempoolEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // Process consensus sync updates.
+        while let Poll::Ready(Some(Ok(event))) = self.sync_event_rx.poll_next_unpin(cx) {
+            self.on_consensus_sync_event(event)
+        }
+
+        // Process network updates.
+        while let Poll::Ready(Some(Ok(event))) = self.network_event_rx.poll_next_unpin(cx) {
+            self.on_network_event(event)
+        }
+
         // Process consensus updates.
         // Start mempool as soon as we have consensus and can enforce the validity window.
         // Stop the mempool if we lose consensus or cannot enforce the validity window.

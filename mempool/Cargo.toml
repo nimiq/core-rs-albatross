@@ -36,12 +36,14 @@ nimiq-account = { workspace = true }
 nimiq-block = { workspace = true }
 nimiq-blockchain = { workspace = true }
 nimiq-blockchain-interface = { workspace = true }
+nimiq-consensus = { workspace = true }
 nimiq-database = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true }
 nimiq-network-interface = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["coin", "networks"] }
 nimiq-serde = { workspace = true }
+nimiq-time = { workspace = true }
 nimiq-transaction = { workspace = true }
 nimiq-utils = { workspace = true, features = ["spawn", "time"] }
 
@@ -58,7 +60,6 @@ nimiq-genesis-builder = { workspace = true }
 nimiq-network-mock = { workspace = true }
 nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }
-nimiq-time = { workspace = true }
 nimiq-transaction-builder = { workspace = true }
 nimiq-vrf = { workspace = true }
 

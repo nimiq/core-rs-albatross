@@ -6,15 +6,19 @@ use std::{
 use futures::{
     future::{AbortHandle, Abortable},
     lock::{Mutex, MutexGuard},
-    stream::{BoxStream, StreamExt},
+    stream::{select, BoxStream, StreamExt},
 };
 use nimiq_account::ReservedBalance;
 use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, TransactionVerificationCache};
 use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_consensus::ConsensusProxy;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_network_interface::network::{Network, Topic};
+use nimiq_network_interface::{
+    network::{Network, Topic},
+    peer_info::Services,
+};
 use nimiq_serde::Serialize;
 use nimiq_transaction::{
     historic_transaction::RawTransactionHash, ControlTransactionTopic, Transaction,
@@ -28,10 +32,11 @@ use tokio_metrics::TaskMonitor;
 use crate::mempool_metrics::MempoolMetrics;
 use crate::{
     config::MempoolConfig,
-    executor::MempoolExecutor,
+    executor::{MempoolExecutor, PubsubIdOrPeerId},
     filter::{MempoolFilter, MempoolRules},
     mempool_state::{EvictionReason, MempoolState},
     mempool_transactions::{MempoolTransactions, TxPriority},
+    sync::{messages::MempoolTransactionType, MempoolSyncer},
     verify::{verify_tx, VerifyErr},
 };
 
@@ -64,11 +69,17 @@ impl Mempool {
     pub const DEFAULT_CONTROL_SIZE_LIMIT: usize = 6_000_000;
 
     /// Creates a new mempool
-    pub fn new(blockchain: Arc<RwLock<Blockchain>>, config: MempoolConfig) -> Self {
+    pub fn new<N: Network>(
+        blockchain: Arc<RwLock<Blockchain>>,
+        config: MempoolConfig,
+        network: Arc<N>,
+    ) -> Self {
         let state = Arc::new(RwLock::new(MempoolState::new(
             config.size_limit,
             config.control_size_limit,
         )));
+
+        MempoolSyncer::init_network_request_receivers(network, Arc::clone(&state));
 
         Self {
             blockchain,
@@ -90,7 +101,7 @@ impl Mempool {
         network: Arc<N>,
         monitor: Option<TaskMonitor>,
         mut handle: MutexGuard<'_, Option<AbortHandle>>,
-        txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
+        txn_stream: BoxStream<'static, (Transaction, PubsubIdOrPeerId<N>)>,
     ) {
         if handle.is_some() {
             // If we already have an executor running, don't do anything
@@ -135,6 +146,8 @@ impl Mempool {
         network: Arc<N>,
         monitor: Option<TaskMonitor>,
         control_monitor: Option<TaskMonitor>,
+        mut peers: Vec<N::PeerId>,
+        consensus: ConsensusProxy<N>,
     ) {
         let executor_handle = self.executor_handle.lock().await;
         let control_executor_handle = self.control_executor_handle.lock().await;
@@ -144,14 +157,39 @@ impl Mempool {
             return;
         }
 
+        info!("Initializing mempool syncers");
+        peers.retain(|peer_id| network.peer_provides_services(*peer_id, Services::MEMPOOL));
+        // Sync regular transactions with the mempool of other peers
+        let regular_transactions_syncer = MempoolSyncer::new(
+            peers.clone(),
+            MempoolTransactionType::Regular,
+            Arc::clone(&self.blockchain),
+            consensus.clone(),
+            Arc::clone(&self.state),
+        );
+
         // Subscribe to the network TX topic
-        let txn_stream = network.subscribe::<TransactionTopic>().await.unwrap();
+        let txn_stream = network
+            .subscribe::<TransactionTopic>()
+            .await
+            .unwrap()
+            .map(|(tx, pubsub_id)| (tx, PubsubIdOrPeerId::PubsubId(pubsub_id)))
+            .boxed();
 
         self.start_executor::<N, TransactionTopic>(
             Arc::clone(&network),
             monitor,
             executor_handle,
-            txn_stream,
+            select(regular_transactions_syncer, txn_stream).boxed(),
+        );
+
+        // Sync control transactions with the mempool of other peers
+        let control_transactions_syncer = MempoolSyncer::new(
+            peers,
+            MempoolTransactionType::Control,
+            Arc::clone(&self.blockchain),
+            consensus.clone(),
+            Arc::clone(&self.state),
         );
 
         // Subscribe to the control transaction topic
@@ -159,14 +197,14 @@ impl Mempool {
             .subscribe::<ControlTransactionTopic>()
             .await
             .unwrap()
-            .map(|(tx, pubsub_id)| (Transaction::from(tx), pubsub_id))
+            .map(|(tx, pubsub_id)| (Transaction::from(tx), PubsubIdOrPeerId::PubsubId(pubsub_id)))
             .boxed();
 
         self.start_executor::<N, ControlTransactionTopic>(
             network,
             control_monitor,
             control_executor_handle,
-            txn_stream,
+            select(control_transactions_syncer, txn_stream).boxed(),
         );
     }
 
@@ -177,7 +215,7 @@ impl Mempool {
     /// stream instead.
     pub async fn start_executor_with_txn_stream<N: Network>(
         &self,
-        txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
+        txn_stream: BoxStream<'static, (Transaction, PubsubIdOrPeerId<N>)>,
         network: Arc<N>,
     ) {
         self.start_executor::<N, TransactionTopic>(
@@ -195,7 +233,7 @@ impl Mempool {
     /// stream instead.
     pub async fn start_control_executor_with_txn_stream<N: Network>(
         &self,
-        txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
+        txn_stream: BoxStream<'static, (Transaction, PubsubIdOrPeerId<N>)>,
         network: Arc<N>,
     ) {
         self.start_executor::<N, ControlTransactionTopic>(

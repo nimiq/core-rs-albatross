@@ -63,10 +63,14 @@ impl Services {
                     | Services::FULL_BLOCKS
                     | Services::ACCOUNTS_PROOF
                     | Services::ACCOUNTS_CHUNKS
+                    | Services::MEMPOOL
             }
             NodeType::Light => Services::empty(),
             NodeType::Full => {
-                Services::ACCOUNTS_PROOF | Services::FULL_BLOCKS | Services::ACCOUNTS_CHUNKS
+                Services::ACCOUNTS_PROOF
+                    | Services::FULL_BLOCKS
+                    | Services::ACCOUNTS_CHUNKS
+                    | Services::MEMPOOL
             }
         }
     }
