@@ -3,9 +3,8 @@ use std::{borrow::Cow, sync::OnceLock};
 use byteorder::{BigEndian, WriteBytesExt};
 use nimiq_hash::{hmac::*, sha512::Sha512Hash};
 use nimiq_keys::{Address, Ed25519PublicKey, PrivateKey};
-use nimiq_serde::Serialize;
+use nimiq_serde::{Deserialize, Serialize};
 use regex::Regex;
-use serde::Deserialize;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ExtendedPrivateKey {

@@ -6,8 +6,6 @@ interface CryptoUtilsWorker {
 
 let remote: Remote<CryptoUtilsWorker> | undefined;
 
-// class CryptoUtilsProxy {}
-
 export function cryptoUtilsWorkerFactory(
     workerFactory: () => Worker,
     comlinkWrapper: (worker: Worker) => Remote<CryptoUtilsWorker>,

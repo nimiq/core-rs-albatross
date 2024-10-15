@@ -17,7 +17,7 @@ impl ES256Signature {
     /// Deserializes an ES256 signature from a byte array.
     ///
     /// Throws when the byte array contains less than 64 bytes.
-    pub fn unserialize(bytes: &[u8]) -> Result<ES256Signature, JsError> {
+    pub fn deserialize(bytes: &[u8]) -> Result<ES256Signature, JsError> {
         match nimiq_keys::ES256Signature::from_bytes(bytes) {
             Ok(sig) => Ok(ES256Signature::from(sig)),
             Err(err) => Err(JsError::from(err)),
@@ -32,7 +32,7 @@ impl ES256Signature {
     /// Parses an ES256 signature from its ASN.1 representation.
     #[wasm_bindgen(js_name = fromAsn1)]
     pub fn from_asn1(bytes: &[u8]) -> Result<ES256Signature, JsError> {
-        ES256Signature::unserialize(
+        ES256Signature::deserialize(
             crate::primitives::signature::Signature::asn1_to_raw(bytes)?.as_slice(),
         )
     }

@@ -132,7 +132,7 @@ if [ "$BUILD_LAUNCHER" = "true" ]; then
     ./scripts/build-launcher.sh
 fi
 
-# Build launcher
+# Build lib
 if [ "$BUILD_LIB" = "true" ]; then
     echo "Building lib..."
     ./scripts/build-lib.sh

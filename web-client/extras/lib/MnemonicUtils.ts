@@ -52,8 +52,8 @@ class MnemonicUtils {
     static mnemonicToSeed(mnemonic: string[] | string, password?: string): SerialBuffer {
         if (Array.isArray(mnemonic)) mnemonic = mnemonic.join(' ');
 
-        const mnemonicBuffer = BufferUtils.fromAscii(mnemonic);
-        const saltBuffer = BufferUtils.fromAscii(MnemonicUtils._salt(password));
+        const mnemonicBuffer = BufferUtils.fromUtf8(mnemonic);
+        const saltBuffer = BufferUtils.fromUtf8(MnemonicUtils._salt(password));
 
         return new SerialBuffer(CryptoUtils.computePBKDF2sha512(mnemonicBuffer, saltBuffer, 2048, 64));
     }
@@ -116,7 +116,7 @@ class MnemonicUtils {
         const CS = ENT / 32;
         const hash = CRC8.compute(entropy);
 
-        return BufferUtils.toBinary([hash]).slice(0, CS);
+        return MnemonicUtils._toBinary([hash]).slice(0, CS);
     }
 
     private static _sha256Checksum(entropy: Uint8Array): string {
@@ -124,7 +124,7 @@ class MnemonicUtils {
         const CS = ENT / 32;
         const hash = Hash.computeSha256(entropy);
 
-        return BufferUtils.toBinary(hash).slice(0, CS);
+        return MnemonicUtils._toBinary(hash).slice(0, CS);
     }
 
     private static _entropyToBits(entropy: Uint8Array): string {
@@ -133,7 +133,7 @@ class MnemonicUtils {
         if (entropy.length > 32) throw new Error('Invalid key, length > 32');
         if (entropy.length % 4 !== 0) throw new Error('Invalid key, length % 4 != 0');
 
-        return BufferUtils.toBinary(entropy);
+        return MnemonicUtils._toBinary(entropy);
     }
 
     private static _normalizeEntropy(entropy: string | ArrayBuffer | Uint8Array | Entropy): Uint8Array {
@@ -149,7 +149,7 @@ class MnemonicUtils {
         const chunks = bits.match(/(.{11})/g);
         if (!chunks) throw new Error('Invalid bits, less than 11 characters');
         const words = chunks.map(chunk => {
-            const index = NumberUtils.fromBinary(chunk);
+            const index = MnemonicUtils._fromBinary(chunk);
             return wordlist[index];
         });
 
@@ -167,7 +167,7 @@ class MnemonicUtils {
             const index = wordlist.indexOf(word.toLowerCase());
             if (index === -1) throw new Error(`Invalid mnemonic, word >${word}< is not in wordlist`);
 
-            return StringUtils.lpad(index.toString(2), '0', 11);
+            return index.toString(2).padStart(11, '0');
         }).join('');
 
         return bits;
@@ -182,7 +182,7 @@ class MnemonicUtils {
         // Calculate the checksum and compare
         const chunks = entropyBits.match(/(.{8})/g);
         if (!chunks) throw new Error('Invalid entropyBits, less than 8 characters');
-        const entropyBytes = chunks.map(NumberUtils.fromBinary);
+        const entropyBytes = chunks.map(MnemonicUtils._fromBinary);
 
         if (entropyBytes.length < 16) throw new Error('Invalid generated key, length < 16');
         if (entropyBytes.length > 32) throw new Error('Invalid generated key, length > 32');
@@ -197,6 +197,19 @@ class MnemonicUtils {
 
     private static _salt(password?: string): string {
         return `mnemonic${password || ''}`;
+    }
+
+    private static _fromBinary(bin: string): number {
+        return parseInt(bin, 2);
+    }
+
+    private static _toBinary(buffer: ArrayLike<number>): string {
+        let bin = '';
+        for (let i = 0; i < buffer.length; i++) {
+            const code = buffer[i];
+            bin += code.toString(2).padStart(8, '0');
+        }
+        return bin;
     }
 }
 

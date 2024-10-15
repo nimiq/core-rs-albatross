@@ -18,7 +18,7 @@ impl BLSPublicKey {
     }
 
     /// Deserializes a public key from a byte array.
-    pub fn unserialize(bytes: &[u8]) -> Result<BLSPublicKey, JsError> {
+    pub fn deserialize(bytes: &[u8]) -> Result<BLSPublicKey, JsError> {
         let key = nimiq_bls::PublicKey::deserialize_from_vec(bytes)?;
         Ok(BLSPublicKey::from(key))
     }
@@ -26,7 +26,7 @@ impl BLSPublicKey {
     /// Creates a new public key from a byte array.
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: &[u8]) -> Result<BLSPublicKey, JsError> {
-        Self::unserialize(bytes)
+        Self::deserialize(bytes)
     }
 
     /// Serializes the public key to a byte array.
@@ -39,7 +39,7 @@ impl BLSPublicKey {
     pub fn from_hex(hex: &str) -> Result<BLSPublicKey, JsError> {
         let raw = hex::decode(hex)?;
 
-        BLSPublicKey::unserialize(&raw)
+        BLSPublicKey::deserialize(&raw)
     }
 
     /// Formats the public key into a hex string.

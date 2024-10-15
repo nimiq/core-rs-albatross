@@ -28,7 +28,7 @@ export class ExtendedPrivateKey extends Serializable {
      * Generates the master ExtendedPrivateKey from a seed.
      */
     static generateMasterKey(seed: Uint8Array): ExtendedPrivateKey {
-        const bCurve = BufferUtils.fromAscii('ed25519 seed');
+        const bCurve = BufferUtils.fromUtf8('ed25519 seed');
         const hash = CryptoUtils.computeHmacSha512(bCurve, seed);
         return new ExtendedPrivateKey(new PrivateKey(hash.slice(0, 32)), hash.slice(32));
     }
@@ -90,8 +90,8 @@ export class ExtendedPrivateKey extends Serializable {
     /**
      * Deserializes an ExtendedPrivateKey from a byte array.
      */
-    static unserialize(buf: SerialBuffer): ExtendedPrivateKey {
-        const privateKey = PrivateKey.unserialize(buf);
+    static deserialize(buf: SerialBuffer): ExtendedPrivateKey {
+        const privateKey = PrivateKey.deserialize(buf);
         const chainCode = buf.read(ExtendedPrivateKey.CHAIN_CODE_SIZE);
         return new ExtendedPrivateKey(privateKey, chainCode);
     }
@@ -100,7 +100,7 @@ export class ExtendedPrivateKey extends Serializable {
      * Deserializes an ExtendedPrivateKey from a hex string.
      */
     static fromHex(hex: string): ExtendedPrivateKey {
-        return ExtendedPrivateKey.unserialize(BufferUtils.fromHex(hex));
+        return ExtendedPrivateKey.deserialize(BufferUtils.fromHex(hex));
     }
 
     /**

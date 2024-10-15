@@ -35,7 +35,7 @@ impl PrivateKey {
     /// Deserializes a private key from a byte array.
     ///
     /// Throws when the byte array contains less than 32 bytes.
-    pub fn unserialize(bytes: &[u8]) -> Result<PrivateKey, JsError> {
+    pub fn deserialize(bytes: &[u8]) -> Result<PrivateKey, JsError> {
         let key = nimiq_keys::PrivateKey::deserialize_from_vec(bytes)?;
         Ok(PrivateKey::from(key))
     }
@@ -48,7 +48,7 @@ impl PrivateKey {
         if bytes.len() != nimiq_keys::PrivateKey::SIZE {
             return Err(JsError::new("Private key primitive: Invalid length"));
         }
-        Self::unserialize(bytes)
+        Self::deserialize(bytes)
     }
 
     /// Serializes the private key to a byte array.

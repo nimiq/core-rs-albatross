@@ -46,7 +46,7 @@ export class Entropy extends Secret {
     /**
      * Deserializes an Entropy object from a byte array.
      */
-    static unserialize(buf: SerialBuffer): Entropy {
+    static deserialize(buf: SerialBuffer): Entropy {
         return new Entropy(buf.read(Entropy.SIZE));
     }
 
@@ -54,7 +54,7 @@ export class Entropy extends Secret {
      * Deserializes an Entropy object from a hex string.
      */
     static fromHex(hex: string): Entropy {
-        return Entropy.unserialize(BufferUtils.fromHex(hex));
+        return Entropy.deserialize(BufferUtils.fromHex(hex));
     }
 
     /**
