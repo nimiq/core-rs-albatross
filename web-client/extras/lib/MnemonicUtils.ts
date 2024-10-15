@@ -3,9 +3,7 @@ import { BufferUtils } from './BufferUtils';
 import { CRC8 } from './CRC8';
 import { Entropy } from './Entropy';
 import { ExtendedPrivateKey } from './ExtendedPrivateKey';
-import { NumberUtils } from './NumberUtils';
 import { SerialBuffer } from './SerialBuffer';
-import { StringUtils } from './StringUtils';
 
 class MnemonicUtils {
     // Adapted from https://github.com/bitcoinjs/bip39, see license below.

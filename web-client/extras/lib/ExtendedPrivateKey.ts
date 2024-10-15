@@ -135,6 +135,13 @@ export class ExtendedPrivateKey extends Serializable {
     }
 
     /**
+     * Returns the chain code of this ExtendedPrivateKey.
+     */
+    get chainCode(): Uint8Array {
+        return this._chainCode;
+    }
+
+    /**
      * Returns the address related to this ExtendedPrivateKey.
      */
     toAddress(): Address {

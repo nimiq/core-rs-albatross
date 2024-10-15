@@ -43,15 +43,18 @@ abstract class Secret extends Serializable {
         }
     }
 
-    /**
-     * Encrypts the Secret with a password.
-     */
-    async exportEncrypted(key: Uint8Array): Promise<SerialBuffer> {
+    static async exportEncrypted(secret: Secret | PrivateKey, key: Uint8Array): Promise<SerialBuffer> {
         const salt = CryptoUtils.getRandomValues(Secret.ENCRYPTION_SALT_SIZE);
 
         const data = new SerialBuffer(/*purposeId*/ 4 + Secret.SIZE);
-        data.writeUint32(this._purposeId);
-        data.write(this.serialize());
+        if (secret instanceof PrivateKey) {
+            data.writeUint32(PrivateKey.PURPOSE_ID);
+        } else if (secret instanceof Entropy) {
+            data.writeUint32(Entropy.PURPOSE_ID);
+        } else {
+            throw new Error('Unsupported secret type');
+        }
+        data.write(secret.serialize());
 
         const checksum = Hash.computeBlake2b(data).subarray(0, Secret.ENCRYPTION_CHECKSUM_SIZE_V3);
         const plaintext = new SerialBuffer(checksum.byteLength + data.byteLength);
@@ -69,6 +72,13 @@ abstract class Secret extends Serializable {
     }
 
     /**
+     * Encrypts the Secret with a password.
+     */
+    async exportEncrypted(key: Uint8Array): Promise<SerialBuffer> {
+        return Secret.exportEncrypted(this, key);
+    }
+
+    /**
      * Returns the serialized size of this object when encrypted.
      */
     get encryptedSize(): number {
@@ -78,16 +88,6 @@ abstract class Secret extends Serializable {
             + Secret.ENCRYPTION_CHECKSUM_SIZE_V3
             + /*purposeId*/ 4
             + Secret.SIZE;
-    }
-
-    /**
-     * Returns the type of this Secret.
-     *
-     * - `1: Type.PRIVATE_KEY`
-     * - `2: Type.ENTROPY`
-     */
-    get type(): Secret.Type {
-        return this._type;
     }
 
     // private static async _decryptV1(buf: SerialBuffer, key: Uint8Array, rounds: number): Promise<PrivateKey> {
