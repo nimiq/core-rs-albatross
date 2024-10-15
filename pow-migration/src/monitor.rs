@@ -151,11 +151,33 @@ pub async fn send_tx(client: &Client, transaction: OutgoingTransaction) -> Resul
     }
 }
 
+/// Returns true if the given validator was ready at the given activation block window
+pub async fn was_validator_ready(
+    pow_client: &Client,
+    validator_address: String,
+    activation_block_window: Range<u32>,
+    genesis_hash: String,
+) -> bool {
+    if let Ok(transactions) =
+        async_retryer(|| pow_client.get_transactions_by_address(&validator_address, 10)).await
+    {
+        // We only keep the ones past the activation window that met the activation criteria
+        let filtered_txns: Vec<TransactionDetails> = transactions
+            .into_iter()
+            .filter(|txn| is_valid_ready_txn(txn, &activation_block_window, &genesis_hash))
+            .collect();
+        if !filtered_txns.is_empty() {
+            return true;
+        }
+    }
+    false
+}
+
 /// Checks if enough validators are ready.
 /// If thats the case, the number of slots which are ready are returned.
 pub async fn check_validators_ready(
     pow_client: &Client,
-    validators: Vec<GenesisValidator>,
+    validators: &Vec<GenesisValidator>,
     activation_block_window: Range<u32>,
     pos_genesis_config_hash: &Blake2bHash,
 ) -> ValidatorsReadiness {

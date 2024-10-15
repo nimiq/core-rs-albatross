@@ -61,8 +61,10 @@ pub struct BlockWindows {
 /// PoS agents that were registered in the PoW chain that will take part of the
 /// PoS genesis block.
 pub struct PoSRegisteredAgents {
-    /// Registered PoS validators
-    pub validators: Vec<GenesisValidator>,
+    /// Registered & Active PoS validators
+    pub active_validators: Vec<GenesisValidator>,
+    /// Registered & Inactive PoS validators
+    pub inactive_validators: Vec<GenesisValidator>,
     /// Registered PoS stakers
     pub stakers: Vec<GenesisStaker>,
 }

@@ -13,7 +13,7 @@ use time::OffsetDateTime;
 use crate::{
     async_retryer, exit_with_error,
     history::get_history_root,
-    state::{get_accounts, get_stakers, get_validators, POW_BLOCK_TIME},
+    state::{get_accounts, POW_BLOCK_TIME},
     types::{BlockWindows, GenesisError, PoSRegisteredAgents},
 };
 
@@ -21,9 +21,10 @@ use crate::{
 pub async fn get_pos_genesis(
     pow_client: &Client,
     pow_reg_window: &BlockWindows,
+    candidate_block: u32,
     network_id: NetworkId,
     env: MdbxDatabase,
-    pos_registered_agents: Option<PoSRegisteredAgents>,
+    pos_registered_agents: PoSRegisteredAgents,
 ) -> Result<GenesisConfig, GenesisError> {
     match network_id {
         NetworkId::TestAlbatross => {}
@@ -35,16 +36,15 @@ pub async fn get_pos_genesis(
     }
 
     // Get block according to arguments and check if it exists
-    let final_block =
-        async_retryer(|| pow_client.get_block_by_number(pow_reg_window.election_candidate, false))
-            .await
-            .map_err(|_| {
-                log::error!(
-                    block_number = pow_reg_window.election_candidate,
-                    "Could not find provided block"
-                );
-                GenesisError::UnknownBlock
-            })?;
+    let final_block = async_retryer(|| pow_client.get_block_by_number(candidate_block, false))
+        .await
+        .map_err(|_| {
+            log::error!(
+                block_number = candidate_block,
+                "Could not find provided block"
+            );
+            GenesisError::UnknownBlock
+        })?;
     let pow_genesis = async_retryer(|| pow_client.get_block_by_number(1, false)).await?;
 
     // Build history tree
@@ -85,34 +85,35 @@ pub async fn get_pos_genesis(
 
     log::info!("Getting PoW account state");
 
-    let (genesis_stakers, genesis_validators) =
-        if let Some(registered_agents) = pos_registered_agents {
-            (registered_agents.stakers, registered_agents.validators)
-        } else {
-            log::info!("Getting registered validators in the PoW chain");
-            let genesis_validators = get_validators(
-                pow_client,
-                pow_reg_window.registration_start..pow_reg_window.registration_end,
-            )
-            .await?;
-
-            log::info!("Getting registered stakers in the PoW chain");
-            get_stakers(
-                pow_client,
-                &genesis_validators,
-                pow_reg_window.pre_stake_start..pow_reg_window.pre_stake_end,
-            )
-            .await?
-        };
+    let (genesis_stakers, active_validators, inactive_validators) = (
+        pos_registered_agents.stakers,
+        pos_registered_agents.active_validators,
+        pos_registered_agents.inactive_validators,
+    );
 
     // Calculate how much stake was burnt into registering validators and stakers
     // (the validator's `total_stake` here already includes its staker's delegated balance)
-    let burnt_registration_balance = genesis_validators
+    // We need to consider active + inactive validator
+    let burnt_registration_balance = active_validators
         .iter()
+        .chain(inactive_validators.iter())
         .fold(Coin::ZERO, |acc, validator| acc + validator.total_stake);
 
     let genesis_accounts =
         get_accounts(pow_client, &final_block, burnt_registration_balance).await?;
+
+    // Create the genesis validators vectors which include active + inactive.
+    // The only difference with the inactive ones, is that they have the inactive from flag set.
+    let mut genesis_validators = vec![];
+    for validator in inactive_validators {
+        let mut val = validator.validator;
+        val.inactive_from = Some(candidate_block);
+        genesis_validators.push(val);
+    }
+
+    for validator in active_validators {
+        genesis_validators.push(validator.validator)
+    }
 
     Ok(GenesisConfig {
         network: network_id,
@@ -124,10 +125,7 @@ pub async fn get_pos_genesis(
         timestamp: Some(OffsetDateTime::from_unix_timestamp(
             pos_genesis_ts_unix as i64,
         )?),
-        validators: genesis_validators
-            .into_iter()
-            .map(|validator| validator.validator)
-            .collect(),
+        validators: genesis_validators,
         stakers: genesis_stakers,
         basic_accounts: genesis_accounts.basic_accounts,
         vesting_accounts: genesis_accounts.vesting_accounts,
