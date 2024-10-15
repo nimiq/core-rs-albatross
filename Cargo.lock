@@ -4269,6 +4269,7 @@ dependencies = [
  "libp2p",
  "nimiq-bls",
  "nimiq-hash",
+ "nimiq-keys",
  "nimiq-macros",
  "nimiq-network-interface",
  "nimiq-serde",

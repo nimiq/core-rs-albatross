@@ -43,9 +43,10 @@ unsigned-varint = "0.8"
 void = "1.0"
 
 nimiq-bls = { workspace = true }
+nimiq-hash = { workspace = true }
+nimiq-keys = { workspace = true }
 nimiq-macros = { workspace = true }
 nimiq-network-interface = { workspace = true }
-nimiq-hash = { workspace = true }
 nimiq-serde = { workspace = true }
 nimiq-time = { workspace = true }
 nimiq-utils = { workspace = true, features = [

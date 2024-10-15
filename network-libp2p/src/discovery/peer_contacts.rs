@@ -11,6 +11,7 @@ use libp2p::{
     multiaddr::Protocol,
     Multiaddr, PeerId,
 };
+use nimiq_keys::{Address, Signature};
 use nimiq_network_interface::peer_info::{PeerInfo, Services};
 use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSignature};
 use parking_lot::RwLock;
@@ -23,6 +24,40 @@ use crate::utils;
 pub enum PeerContactError {
     #[error("Exceeded number of advertised addresses")]
     AdvertisedAddressesExceeded,
+    #[error("ValidatorInfoError({0:?})")]
+    ValidatorInfoError(ValidatorInfoError),
+    #[error("Outdated")]
+    Outdated,
+}
+
+#[derive(Debug, Error)]
+pub enum ValidatorInfoError {}
+
+/// Required additional data to be able to verify a Validator Record if given.
+/// ValidatorRecords are used by the ValidatorNetwork and they must be transferable from and into
+/// PeerContacts with the appropriate information.
+///
+/// The contained `validator_address` in conjunction with the peer_id of the PeerContactInfo and
+/// the timestamp of the PeerContact compose what the signature given within this struct is signing.
+///
+/// All of the above information is also given in `ValidatorRecord`.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ValidatorInfo {
+    validator_address: Address,
+    signature: Signature,
+}
+
+impl ValidatorInfo {
+    pub fn new(validator_address: Address, signature: Signature) -> Self {
+        Self {
+            validator_address,
+            signature,
+        }
+    }
+
+    pub fn verify(&self, timestamp: u64, peer_id: PeerId) -> Result<(), ValidatorInfoError> {
+        todo!()
+    }
 }
 
 /// A plain peer contact. This contains:
@@ -44,6 +79,9 @@ pub struct PeerContact {
 
     /// Services supported by this peer.
     pub services: Services,
+
+    /// Validator identification information.
+    validator_info: Option<ValidatorInfo>,
 
     /// Timestamp when this peer contact was created in *seconds* since unix epoch.
     timestamp: u64,
@@ -71,7 +109,36 @@ impl PeerContact {
             public_key,
             services,
             timestamp,
+            validator_info: None,
         })
+    }
+
+    /// Adds a given validator_info to the PeerContact. It will validate the given information
+    /// and only if it is valid will the change be made. Returns true if the record was updated
+    /// and thus valid. Returns false otherwise.
+    ///
+    /// The timestamp is required as it is part of the signature and thus must be updated alongside
+    /// the  validator_info.
+    pub fn set_validator_info(
+        &mut self,
+        validator_info: ValidatorInfo,
+        timestamp: u64,
+    ) -> Result<(), PeerContactError> {
+        if timestamp < self.timestamp {
+            return Err(PeerContactError::Outdated);
+        }
+        validator_info
+            .verify(timestamp, self.peer_id())
+            .map_err(PeerContactError::ValidatorInfoError)?;
+
+        self.timestamp = timestamp;
+        self.validator_info = Some(validator_info);
+        Ok(())
+    }
+
+    /// Removes the validator_info if it exist.
+    pub fn unset_validator_info(&mut self) {
+        self.validator_info = None;
     }
 
     /// Derives the peer ID from the public key
@@ -140,6 +207,13 @@ impl PeerContact {
         if self.addresses.len() > Self::MAX_ADDRESSES {
             return Err(PeerContactError::AdvertisedAddressesExceeded);
         }
+        // If a validator record exists it too must be verified.
+        if let Some(ref validator_info) = self.validator_info {
+            validator_info
+                .verify(self.timestamp, self.peer_id())
+                .map_err(PeerContactError::ValidatorInfoError)?;
+        }
+        // No more checks to do. Record is valid
         Ok(())
     }
 }
