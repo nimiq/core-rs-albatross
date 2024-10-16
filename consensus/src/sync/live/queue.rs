@@ -114,6 +114,9 @@ pub trait LiveSyncQueue<N: Network>: Stream<Item = Self::QueueResult> + Send + U
 
     /// Initiates an attempt to resolve a ResolveBlockRequest.
     fn resolve_block(&mut self, request: ResolveBlockRequest<N>);
+
+    /// The maximum number of blocks a peer can be ahead before it is considered out-of-sync.
+    fn acceptance_window_size(&self) -> u32;
 }
 
 #[derive(Clone, Debug)]

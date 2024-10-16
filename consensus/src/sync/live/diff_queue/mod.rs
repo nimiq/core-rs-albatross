@@ -216,6 +216,10 @@ impl<N: Network> DiffQueue<N> {
     pub(crate) fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
         self.block_queue.resolve_block(request)
     }
+
+    pub(crate) fn acceptance_window_size(&self) -> u32 {
+        self.block_queue.acceptance_window_size()
+    }
 }
 
 impl<N: Network> Stream for DiffQueue<N> {

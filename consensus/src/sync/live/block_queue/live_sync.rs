@@ -176,4 +176,8 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
     fn resolve_block(&mut self, request: crate::consensus::ResolveBlockRequest<N>) {
         BlockQueue::resolve_block(self, request)
     }
+
+    fn acceptance_window_size(&self) -> u32 {
+        self.config.window_ahead_max
+    }
 }
