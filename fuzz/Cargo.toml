@@ -14,7 +14,7 @@ keywords.workspace = true
 workspace = true
 
 [dependencies]
-afl = { version = "0.15.10", optional = true }
+afl = { version = "0.15.11", optional = true }
 
 nimiq-collections = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["key-nibbles", "serde-derive", "trie"] }
