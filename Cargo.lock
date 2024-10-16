@@ -54,9 +54,9 @@ dependencies = [
 
 [[package]]
 name = "afl"
-version = "0.15.10"
+version = "0.15.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c21e10b6947189c5ff61343b5354e9ad1c1722bd47b69cd0a6b49e5fa7f7ecf6"
+checksum = "80bb240a3b9ff18002142c1a736e98046461d51a694d687c3e7329b456ab0fe4"
 dependencies = [
  "home",
  "libc",
@@ -2278,9 +2278,9 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "1.4.1"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50dfd22e0e76d0f662d429a5f80fcaf3855009297eab6a0a9f8543834744ba05"
+checksum = "bbbff0a806a4728c99295b254c8838933b5b082d75e3cb70c8dab21fdfbcfa9a"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -2321,7 +2321,7 @@ checksum = "5ee4be2c948921a1a5320b629c4193916ed787a7f7f293fd3f7f5a6c9de74155"
 dependencies = [
  "futures-util",
  "http 1.1.0",
- "hyper 1.4.1",
+ "hyper 1.5.0",
  "hyper-util",
  "rustls 0.23.10",
  "rustls-pki-types",
@@ -2336,7 +2336,7 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3203a961e5c83b6f5498933e78b6b263e208c197b63e9c6c53cc82ffd3f63793"
 dependencies = [
- "hyper 1.4.1",
+ "hyper 1.5.0",
  "hyper-util",
  "pin-project-lite",
  "tokio",
@@ -2351,7 +2351,7 @@ checksum = "70206fc6890eaca9fde8a0bf71caa2ddfc9fe045ac9e5c70df101a7dbde866e0"
 dependencies = [
  "bytes",
  "http-body-util",
- "hyper 1.4.1",
+ "hyper 1.5.0",
  "hyper-util",
  "native-tls",
  "tokio",
@@ -2370,7 +2370,7 @@ dependencies = [
  "futures-util",
  "http 1.1.0",
  "http-body 1.0.0",
- "hyper 1.4.1",
+ "hyper 1.5.0",
  "pin-project-lite",
  "socket2",
  "tokio",
@@ -4195,7 +4195,7 @@ dependencies = [
  "bytes",
  "futures",
  "http-body-util",
- "hyper 1.4.1",
+ "hyper 1.5.0",
  "hyper-util",
  "nimiq-blockchain",
  "nimiq-blockchain-interface",
@@ -5998,7 +5998,7 @@ dependencies = [
  "http 1.1.0",
  "http-body 1.0.0",
  "http-body-util",
- "hyper 1.4.1",
+ "hyper 1.5.0",
  "hyper-rustls 0.27.2",
  "hyper-tls",
  "hyper-util",
@@ -7115,7 +7115,7 @@ dependencies = [
  "http 1.1.0",
  "http-body 1.0.0",
  "http-body-util",
- "hyper 1.4.1",
+ "hyper 1.5.0",
  "hyper-timeout",
  "hyper-util",
  "percent-encoding",
