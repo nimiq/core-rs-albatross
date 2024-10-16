@@ -61,4 +61,8 @@ impl WalletStore {
     ) {
         txn.put_reserve(&self.table, address, wallet);
     }
+
+    pub fn remove(&self, address: &Address, txn: &mut MdbxWriteTransaction) {
+        txn.remove(&self.table, address);
+    }
 }

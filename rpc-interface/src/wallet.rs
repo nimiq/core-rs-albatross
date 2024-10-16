@@ -40,6 +40,10 @@ pub trait WalletInterface {
         duration: Option<u64>,
     ) -> RPCResult<bool, (), Self::Error>;
 
+    /// Removes an imported account.
+    /// IMPORTANT: This action is irreversible, and the account can only be recovered with its private key.
+    async fn remove_account(&mut self, address: Address) -> RPCResult<bool, (), Self::Error>;
+
     /// Returns if the account currently is unlocked.
     // `nimiq_jsonrpc_derive::proxy` requires the receiver type to be a mutable reference.
     #[allow(clippy::wrong_self_convention)]

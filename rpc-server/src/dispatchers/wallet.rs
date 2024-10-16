@@ -128,6 +128,19 @@ impl WalletInterface for WalletDispatcher {
         Ok(is_unlocked.into())
     }
 
+    async fn remove_account(&mut self, address: Address) -> RPCResult<bool, (), Self::Error> {
+        let _account = self
+            .wallet_store
+            .get(&address, None)
+            .ok_or(Error::AccountNotFound(address.clone()))?;
+
+        let mut txn = self.wallet_store.create_write_transaction();
+        self.wallet_store.remove(&address, &mut txn);
+        txn.commit();
+
+        Ok(true.into())
+    }
+
     async fn sign(
         &mut self,
         message: String,
