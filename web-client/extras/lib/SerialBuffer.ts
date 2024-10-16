@@ -163,7 +163,7 @@ export class SerialBuffer extends Uint8Array {
     }
 
     writeString(value: string, length: number): void {
-        if (StringUtils.isMultibyte(value) || value.length !== length) throw new Error('Malformed value/length');
+        if (!StringUtils.isWellFormed(value) || value.length !== length) throw new Error('Malformed value/length');
         const bytes = BufferUtils.fromUtf8(value);
         this.write(bytes);
     }
@@ -177,7 +177,7 @@ export class SerialBuffer extends Uint8Array {
     }
 
     writePaddedString(value: string, length: number): void {
-        if (StringUtils.isMultibyte(value) || value.length > length) throw new Error('Malformed value/length');
+        if (!StringUtils.isWellFormed(value) || value.length > length) throw new Error('Malformed value/length');
         const bytes = BufferUtils.fromUtf8(value);
         this.write(bytes);
         const padding = length - bytes.byteLength;
@@ -192,14 +192,14 @@ export class SerialBuffer extends Uint8Array {
     }
 
     writeVarLengthString(value: string): void {
-        if (StringUtils.isMultibyte(value) || !NumberUtils.isUint8(value.length)) throw new Error('Malformed value');
+        if (!StringUtils.isWellFormed(value) || !NumberUtils.isUint8(value.length)) throw new Error('Malformed value');
         const bytes = BufferUtils.fromUtf8(value);
         this.writeUint8(bytes.byteLength);
         this.write(bytes);
     }
 
     static varLengthStringSize(value: string): number {
-        if (StringUtils.isMultibyte(value) || !NumberUtils.isUint8(value.length)) throw new Error('Malformed value');
+        if (!StringUtils.isWellFormed(value) || !NumberUtils.isUint8(value.length)) throw new Error('Malformed value');
         return /*length*/ 1 + value.length;
     }
 }
