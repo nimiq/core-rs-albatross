@@ -29,7 +29,7 @@ use crate::{
                 assembler::BlockAssembler, block_request_component::BlockRequestComponent,
                 BlockAndSource, BlockSource, BlockStream, GossipSubBlockStream, QueuedBlock,
             },
-            queue::QueueConfig,
+            queue::{LiveSyncQueue, QueueConfig},
         },
         peer_list::PeerList,
     },
@@ -187,15 +187,15 @@ impl<N: Network> BlockQueue<N> {
         }
 
         if block_number < head_height.saturating_sub(self.config.tolerate_past_max) {
-            log::warn!(
-                "Discarding block {} - too far behind (min {})",
-                block,
-                head_height - self.config.tolerate_past_max,
-            );
             block_source.ignore_block(&self.network);
 
             let peer_id = block_source.peer_id();
             if self.request_component.take_peer(&peer_id).is_some() {
+                log::warn!(
+                    "Discarding block {} - too far behind (min {})",
+                    block,
+                    head_height - self.config.tolerate_past_max,
+                );
                 return Some(QueuedBlock::TooFarBehind(peer_id));
             }
         } else if parent_known {
@@ -205,15 +205,15 @@ impl<N: Network> BlockQueue<N> {
                 return Some(QueuedBlock::Head((block, block_source)));
             }
         } else if block_number > head_height + self.config.window_ahead_max {
-            log::warn!(
-                "Discarding block {} - too far ahead (max {})",
-                block,
-                head_height + self.config.window_ahead_max,
-            );
             block_source.ignore_block(&self.network);
 
             let peer_id = block_source.peer_id();
             if self.request_component.take_peer(&peer_id).is_some() {
+                log::warn!(
+                    "Discarding block {} - too far ahead (max {})",
+                    block,
+                    head_height + self.config.window_ahead_max,
+                );
                 return Some(QueuedBlock::TooFarAhead(peer_id));
             }
         } else if block_number <= macro_height {
@@ -805,15 +805,11 @@ impl<N: Network> Stream for BlockQueue<N> {
         loop {
             match self.block_stream.poll_next_unpin(cx) {
                 Poll::Ready(Some((block, block_source))) => {
-                    // Only consider announcements from synced peers.
-                    let peer_id = block_source.peer_id();
-                    if self.peer_list().read().has_peer(&peer_id) {
-                        log::debug!(%block, %peer_id, "Received block via gossipsub");
+                    if self.num_peers() > 0 {
+                        log::debug!(%block, peer_id = %block_source.peer_id(), "Received block via gossipsub");
                         if let Some(block) = self.check_announced_block(block, block_source) {
                             return Poll::Ready(Some(block));
                         }
-                    } else {
-                        log::trace!(%block, %peer_id, "Ignoring block as it doesn't come from a synced peer");
                     }
                 }
                 // If the block_stream is exhausted, we quit as well.
