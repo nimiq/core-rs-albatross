@@ -231,8 +231,9 @@ impl<N: Network> BlockQueue<N> {
                 macro_height
             );
             block_source.ignore_block(&self.network);
-        } else {
-            // Block is inside the buffer window, put it in the buffer.
+        } else if self.request_component.has_no_pending_requests() {
+            // Block is inside the buffer window and there are no overlapping requests.
+            // Put it in the buffer.
             self.buffer_and_request_missing_blocks(block, block_source);
         }
 
