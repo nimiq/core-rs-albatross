@@ -5,6 +5,7 @@ pub mod state;
 pub mod types;
 
 use std::{
+    collections::HashMap,
     fmt::Debug,
     future::Future,
     path::PathBuf,
@@ -14,18 +15,19 @@ use std::{
 
 use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis_builder::config::GenesisConfig;
-use nimiq_hash::{Blake2bHasher, Hasher};
+use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_keys::Address;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_rpc::Client;
 use nimiq_serde::Serialize;
 use tokio::time::sleep;
+use types::GenesisValidator;
 
 use crate::{
     genesis::get_pos_genesis,
     monitor::{
         check_validators_ready, generate_online_tx, generate_ready_tx, get_online_txns,
-        get_ready_txns, send_tx, ValidatorsReadiness,
+        get_ready_txns, send_tx, was_validator_ready, ValidatorsReadiness,
     },
     state::{get_stakers, get_validators, setup_pow_rpc_server},
     types::{BlockWindows, Error, PoSRegisteredAgents},
@@ -38,6 +40,9 @@ const POW_BLOCKS_PER_HOUR: u32 = 60;
 
 /// Number of reporting windows in which we start reporting as online
 const NUMBER_ONLINE_REPORTING_WINDOWS: u32 = 3;
+
+/// Numbers of activation windows from which we start removing validators for not being ready
+pub const ACTIVATION_WINDOW_TRESHOLD: u32 = 5;
 
 static TESTNET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     // The testnet blocks are produced ~every minute.
@@ -77,6 +82,14 @@ static MAINET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     // This corresponds to ~24 hours.
     readiness_window: 1440,
 };
+
+/// This enum represents the result of the migration process in an activation window
+pub enum MigrateWindowResult {
+    /// Enough validators were ready so we were able to produce the final Genesis Config.
+    Ready(GenesisConfig),
+    /// Not enough validators were ready, we return the genesis hash that was computed.
+    NotReady(Blake2bHash),
+}
 
 /// Get the block windows according to the specified network ID.
 pub fn get_block_windows(network_id: NetworkId) -> Result<&'static BlockWindows, Error> {
@@ -130,16 +143,85 @@ pub async fn report_online(
     Ok(latest_online_bn)
 }
 
+/// Classify validators according to their ready status
+/// Returns a tuple of (active_validators, inactive_validators)
+pub async fn classify_validators(
+    pow_client: &Client,
+    block_windows: &BlockWindows,
+    genesis_hashes: Vec<Blake2bHash>,
+    current_activation_window: u32,
+    validators: &Vec<GenesisValidator>,
+) -> (Vec<GenesisValidator>, Vec<GenesisValidator>) {
+    log::info!(
+        current_activation_window,
+        "We have reached the treshold of activation windows, we will start determining inactive validators"
+    );
+
+    let mut active_validators = HashMap::new();
+    let mut inactive_validators = HashMap::new();
+
+    // This function should only be exeucted if we are past the ACTIVATION_WINDOW_TRESHOLD
+    // We should already have the previous genesis hashes of the preivous activation windows to this point.
+    assert_eq!(genesis_hashes.len(), ACTIVATION_WINDOW_TRESHOLD as usize);
+    assert!(current_activation_window > ACTIVATION_WINDOW_TRESHOLD);
+
+    for activation_window in ACTIVATION_WINDOW_TRESHOLD..current_activation_window {
+        let candidate_start =
+            block_windows.election_candidate + (activation_window * block_windows.readiness_window);
+        let next_candidate = candidate_start + block_windows.readiness_window;
+
+        for validator in validators {
+            let validator_address = validator
+                .validator
+                .validator_address
+                .to_user_friendly_address();
+
+            let ready = was_validator_ready(
+                pow_client,
+                validator_address.clone(),
+                candidate_start..next_candidate,
+                genesis_hashes[(activation_window - 1) as usize].to_hex(),
+            )
+            .await;
+
+            if !ready {
+                inactive_validators.insert(validator_address.clone(), validator.clone());
+                log::warn!(
+                    activation_window,
+                    address = validator_address,
+                    "Validator was not ready in the activation window"
+                );
+                // A validator cannot be ready and become not ready in subsequent activation windows
+                // So if it was ready before, we remove it from the active set
+                active_validators.remove(&validator_address);
+            } else {
+                active_validators.insert(validator_address, validator.clone());
+            }
+        }
+    }
+
+    log::info!("This is the final list of validators that are going to be considered active:");
+    for address in active_validators.keys() {
+        log::info!(validator_address = address);
+    }
+
+    (
+        active_validators.values().cloned().collect(),
+        inactive_validators.values().cloned().collect(),
+    )
+}
+
 /// Performs the PoS migration from PoW by parsing transactions and state of the PoW
 /// chain and returning a PoS genesis configuration.
 pub async fn migrate(
     pow_client: &Client,
     block_windows: &BlockWindows,
     candidate_block: u32,
+    genesis_hashes: Vec<Blake2bHash>,
     env: MdbxDatabase,
     validator_address: &Option<Address>,
     network_id: NetworkId,
-) -> Result<Option<GenesisConfig>, Error> {
+) -> Result<MigrateWindowResult, Error> {
     // First set up the PoW client for accounts migration
     setup_pow_rpc_server(pow_client).await?;
 
@@ -212,6 +294,36 @@ pub async fn migrate(
     )
     .await?;
 
+    // Check if we are pass the ACTIVATION_WINDOW_TRESHOLD
+    let activation_window =
+        (candidate_block - block_windows.election_candidate) / block_windows.readiness_window;
+
+    let (active_validators, inactive_validators) = if activation_window > ACTIVATION_WINDOW_TRESHOLD
+    {
+        // Note that this function is called with the validators set that was returned by the get_stakers function
+        // This means the validators in this set already have their stake distribution set.
+        classify_validators(
+            pow_client,
+            block_windows,
+            genesis_hashes,
+            activation_window,
+            &validators,
+        )
+        .await
+    } else {
+        // If we are not past the activation threshold, then we consider all validators as active.
+        (validators, vec![])
+    };
+
+    assert_eq!(
+        registered_validators.len(),
+        active_validators.len() + inactive_validators.len()
+    );
+
+    if active_validators.len() <= 1 {
+        panic!("We cannot migrate with just 1 active validator");
+    }
+
     log::debug!("This is the list of stakers:");
 
     for staker in &stakers {
@@ -237,19 +349,9 @@ pub async fn migrate(
             "Current status"
         );
 
-        if current_height > next_candidate {
-            log::info!(
-                previous_candidate = candidate_block,
-                next_candidate = next_candidate,
-                current_pow_height = current_height,
-                "The activation window already finished, moving to the next one"
-            );
-
-            return Ok(None);
-        }
-
         // We are past the candidate block, so we are now in one of the activation windows
         if current_height > candidate_block + block_windows.block_confirmations {
+            log::debug!("We have enough confirmations for the candidate",);
             break;
         }
 
@@ -276,12 +378,14 @@ pub async fn migrate(
     genesis_config = get_pos_genesis(
         pow_client,
         block_windows,
+        candidate_block,
         network_id,
         env.clone(),
-        Some(PoSRegisteredAgents {
-            validators: validators.clone(),
+        PoSRegisteredAgents {
+            active_validators: active_validators.clone(),
+            inactive_validators: inactive_validators.clone(),
             stakers: stakers.clone(),
-        }),
+        },
     )
     .await?;
 
@@ -316,7 +420,7 @@ pub async fn migrate(
                 "The activation window finished and we didn't find enough validators ready"
             );
 
-            return Ok(None);
+            return Ok(MigrateWindowResult::NotReady(genesis_config_hash));
         }
 
         if !reported_ready && registered_validator {
@@ -355,7 +459,7 @@ pub async fn migrate(
         // Check if we have enough validators ready at this point
         let validators_status = check_validators_ready(
             pow_client,
-            validators.clone(),
+            &active_validators,
             candidate_block..next_candidate,
             &genesis_config_hash,
         )
@@ -370,7 +474,7 @@ pub async fn migrate(
                     "Enough validators are ready to start the PoS chain",
                 );
                 log::info!("We are ready to start the Nimiq PoS Client..");
-                return Ok(Some(genesis_config));
+                return Ok(MigrateWindowResult::Ready(genesis_config));
             }
         }
 

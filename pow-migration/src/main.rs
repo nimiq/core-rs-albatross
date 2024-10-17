@@ -7,6 +7,7 @@ use nimiq::{
     config::{config::ClientConfig, config_file::ConfigFile},
     extras::logging::initialize_logging,
 };
+use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_pow_migration::{
     async_retryer, exit_with_error,
@@ -15,6 +16,7 @@ use nimiq_pow_migration::{
     history::{get_history_store_height, migrate_history},
     launch_pos_client, migrate, report_online,
     state::{get_stakers, get_validators},
+    MigrateWindowResult,
 };
 use nimiq_primitives::networks::NetworkId;
 use nimiq_rpc::Client;
@@ -308,6 +310,7 @@ async fn main() {
         }
 
         let genesis_config;
+        let mut genesis_hashes: Vec<Blake2bHash> = vec![];
 
         loop {
             let pos_history_store_height = rx_migration_completed.borrow();
@@ -325,10 +328,11 @@ async fn main() {
             }
 
             // Do the migration
-            let obtained_genesis_config = migrate(
+            let migrate_result = migrate(
                 &pow_client,
                 block_windows,
                 candidate_block,
+                genesis_hashes.clone(),
                 env.clone(),
                 &validator_address,
                 config.network_id,
@@ -336,10 +340,15 @@ async fn main() {
             .await
             .unwrap_or_else(|error| exit_with_error(error, "Could not migrate"));
 
-            if let Some(genesis_cfg) = obtained_genesis_config {
-                // We obtained the genesis configuration so we are done
-                genesis_config = genesis_cfg;
-                break;
+            match migrate_result {
+                MigrateWindowResult::Ready(genesis_cfg) => {
+                    // We obtained the genesis configuration so we are done
+                    genesis_config = genesis_cfg;
+                    break;
+                }
+                MigrateWindowResult::NotReady(genesis_hash) => {
+                    genesis_hashes.push(genesis_hash);
+                }
             }
 
             // We didn't obtain the genesis configuration: select the new candidate block
