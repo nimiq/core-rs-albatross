@@ -1,8 +1,7 @@
 use std::time::Duration;
 
 use nimiq_blockchain::{
-    history_store_proxy::HistoryStoreProxy, interface::HistoryInterface, HistoryStore,
-    HistoryStoreIndex,
+    history_store_proxy::UnmergedHistoryStoreProxy, interface::HistoryInterface, HistoryStore,
 };
 use nimiq_database::{
     mdbx::MdbxDatabase,
@@ -93,12 +92,7 @@ pub async fn migrate_history(
     index_history: bool,
 ) {
     let mut history_store_height = get_history_store_height(env.clone(), network_id).await;
-    let history_store = if index_history {
-        HistoryStoreProxy::WithIndex(HistoryStoreIndex::new(env.clone(), network_id))
-    } else {
-        HistoryStoreProxy::WithoutIndex(Box::new(HistoryStore::new(env.clone(), network_id))
-            as Box<dyn HistoryInterface + Sync + Send>)
-    };
+    let history_store = UnmergedHistoryStoreProxy::new(env.clone(), index_history, network_id);
     let mut pow_head_height = async_retryer(|| pow_client.block_number()).await.unwrap();
 
     while let Some(candidate_block) = rx_candidate_block.recv().await {

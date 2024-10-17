@@ -328,6 +328,7 @@ impl StorageConfig {
     ///
     /// * `network_id` - The network ID of the database
     /// * `consensus` - The consensus type
+    /// * `db_config` - The database configuration
     ///
     /// # Return Value
     ///
@@ -340,9 +341,57 @@ impl StorageConfig {
         sync_mode: SyncMode,
         db_config: DatabaseConfig,
     ) -> Result<MdbxDatabase, Error> {
+        let db_name = format!("{network_id}-{sync_mode}-consensus").to_lowercase();
+        self.open_database(db_config, db_name)
+    }
+
+    /// Returns the database environment for the pre-genesis database.
+    ///
+    /// # Arguments
+    ///
+    /// * `network_id` - The network ID of the database
+    /// * `db_config` - The database configuration
+    ///
+    /// # Return Value
+    ///
+    /// Returns a `Result` which is either a `Environment` or a `Error`.
+    ///
+    #[cfg(feature = "database-storage")]
+    pub fn pre_genesis_database(
+        &self,
+        network_id: NetworkId,
+        db_config: DatabaseConfig,
+    ) -> Result<MdbxDatabase, Error> {
+        assert!(
+            matches!(self, StorageConfig::Filesystem(_)),
+            "Pre-genesis database is only supported with filesystem storage"
+        );
+        let db_name = format!("{network_id}-pre-genesis").to_lowercase();
+        self.open_database(db_config, db_name)
+    }
+
+    /// Checks for the existence of the pre-genesis database.
+    #[cfg(feature = "database-storage")]
+    pub fn has_pre_genesis_database(&self, network_id: NetworkId) -> bool {
+        let db_name = format!("{network_id}-pre-genesis").to_lowercase();
+        match self {
+            StorageConfig::Volatile => false,
+            StorageConfig::Filesystem(file_storage) => {
+                let db_path = file_storage.database_parent.join(db_name);
+                db_path.exists()
+            }
+        }
+    }
+
+    /// Internal helper function to initiate a `MdbxDatabase` with the given `DatabaseConfig`.
+    #[cfg(feature = "database-storage")]
+    fn open_database(
+        &self,
+        db_config: DatabaseConfig,
+        db_name: String,
+    ) -> Result<MdbxDatabase, Error> {
         use nimiq_database::mdbx;
 
-        let db_name = format!("{network_id}-{sync_mode}-consensus").to_lowercase();
         log::info!("Opening database: {}", db_name);
 
         let config = mdbx::DatabaseConfig {

@@ -207,15 +207,13 @@ async fn main() {
             None
         };
 
-        // Create DB environment
-        let env = config
+        // Create DB environments
+        let pre_genesis_env = config
             .storage
-            .database(
-                config.network_id,
-                config.consensus.sync_mode,
-                config.database,
-            )
-            .unwrap_or_else(|error| exit_with_error(error, "Unable to create DB environment"));
+            .pre_genesis_database(config.network_id, config.database)
+            .unwrap_or_else(|error| {
+                exit_with_error(error, "Unable to create pre-genesis DB environment")
+            });
 
         // Check that we are doing the migration for a supported network ID and set the genesis environment variable name
         let genesis_env_var_name = match config.network_id {
@@ -229,14 +227,15 @@ async fn main() {
 
         // Create channels in order to communicate with the PoW-to-PoS history migrator
         let (tx_candidate_block, rx_candidate_block) = mpsc::channel(16);
-        let (tx_migration_completed, rx_migration_completed) =
-            watch::channel(get_history_store_height(env.clone(), config.network_id).await);
+        let (tx_migration_completed, rx_migration_completed) = watch::channel(
+            get_history_store_height(pre_genesis_env.clone(), config.network_id).await,
+        );
 
         // Spawn PoW-to-PoS migrator as separate task
         spawn(migrate_history(
             rx_candidate_block,
             tx_migration_completed,
-            env.clone(),
+            pre_genesis_env.clone(),
             config.network_id,
             pow_client.clone(),
             block_windows.block_confirmations,
@@ -329,7 +328,7 @@ async fn main() {
                 &pow_client,
                 block_windows,
                 candidate_block,
-                env.clone(),
+                pre_genesis_env.clone(),
                 &validator_address,
                 config.network_id,
             )
