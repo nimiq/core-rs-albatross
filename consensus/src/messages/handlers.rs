@@ -344,6 +344,8 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestHead {
         ResponseHead {
             block_number: blockchain.block_number(),
             block_hash: blockchain.head_hash(),
+            macro_hash: blockchain.macro_head_hash(),
+            election_hash: blockchain.election_head_hash(),
         }
     }
 }

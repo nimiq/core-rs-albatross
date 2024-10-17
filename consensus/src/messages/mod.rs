@@ -481,6 +481,8 @@ pub struct RequestHead {}
 pub struct ResponseHead {
     pub block_number: u32,
     pub block_hash: Blake2bHash,
+    pub macro_hash: Blake2bHash,
+    pub election_hash: Blake2bHash,
 }
 
 impl RequestCommon for RequestHead {
