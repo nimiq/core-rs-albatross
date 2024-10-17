@@ -6,7 +6,7 @@ use nimiq_blockchain_interface::{BlockchainError, ChainInfo, Direction};
 use nimiq_database::{
     declare_table,
     mdbx::{MdbxDatabase, MdbxReadTransaction, MdbxWriteTransaction, OptionalTransaction},
-    traits::{Database, DupReadCursor, ReadCursor, ReadTransaction, WriteTransaction},
+    traits::{Database, DupReadCursor, ReadCursor, ReadTransaction, WriteCursor, WriteTransaction},
 };
 use nimiq_database_value_derive::DbSerializable;
 use nimiq_hash::Blake2bHash;
@@ -620,7 +620,6 @@ impl ChainStore {
                 if chain_info.prunable {
                     txn.remove(&self.chain_table, &hash);
                     txn.remove(&self.pushed_block_table, &hash);
-                    txn.remove(&self.accounts_diff_table, &hash);
                     txn.remove_item(&self.height_idx, &height, &hash);
                 }
             }
@@ -642,9 +641,6 @@ impl ChainStore {
         }
         // Then clear the stored block table
         txn.clear_table(&self.stored_block_table);
-        // Macro blocks are final and receipts for the previous batch are no longer necessary
-        // as rebranching across this block is not possible.
-        txn.clear_table(&self.revert_table);
     }
 
     /// Puts a revert info for a block height
@@ -666,6 +662,16 @@ impl ChainStore {
         let txn = txn_option.or_new(&self.db);
 
         txn.get(&self.revert_table, &block_height)
+    }
+
+    pub fn clear_revert_infos(&self, txn: &mut MdbxWriteTransaction) {
+        let mut cursor = WriteTransaction::cursor(txn, &self.revert_table);
+        let mut pos: Option<(u32, RevertInfo)> = cursor.first();
+
+        while pos.is_some() {
+            cursor.remove();
+            pos = cursor.next();
+        }
     }
 
     pub fn put_accounts_diff(
