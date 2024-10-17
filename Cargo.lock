@@ -4232,6 +4232,7 @@ dependencies = [
  "nimiq-macros",
  "nimiq-test-log",
  "nimiq-utils",
+ "rand_core",
  "serde",
  "unicode-normalization",
 ]
@@ -4923,6 +4924,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-zkp-component",
  "parking_lot",
+ "rand_core",
  "serde",
  "serde-wasm-bindgen 0.6.5",
  "tokio",

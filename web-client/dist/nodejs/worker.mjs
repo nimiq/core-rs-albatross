@@ -5,7 +5,7 @@ import { parentPort } from 'node:worker_threads';
 import Comlink from 'comlink';
 import nodeEndpoint from 'comlink/dist/esm/node-adapter.mjs';
 import websocket from 'websocket';
-import wasm from './worker-wasm/index.js';
+import { Client } from './worker-wasm/index.js';
 
 // WebSocket was added to Node in v22. Polyfill it for older versions.
 if (!global.WebSocket) {
@@ -38,9 +38,9 @@ async function init(config) {
     if (initialized) throw new Error('Already initialized');
     initialized = true;
 
-    console.log('Initializing WASM worker');
+    console.log('Initializing client WASM worker');
 
-    const client = await wasm.Client.create(config);
+    const client = await Client.create(config);
     Comlink.expose(client, nodeEndpoint(parentPort));
 };
 
@@ -60,4 +60,4 @@ parentPort.addListener('message', async (event) => {
 });
 
 parentPort.postMessage('NIMIQ_ONLOAD');
-console.log('Launched WASM worker, ready for init');
+console.debug('Launched client WASM worker, ready for init');

@@ -27,7 +27,7 @@ impl BLSKeyPair {
     }
 
     /// Deserializes a keypair from a byte array.
-    pub fn unserialize(bytes: &[u8]) -> Result<BLSKeyPair, JsError> {
+    pub fn deserialize(bytes: &[u8]) -> Result<BLSKeyPair, JsError> {
         let key_pair = nimiq_bls::KeyPair::deserialize_from_vec(bytes)?;
         Ok(BLSKeyPair::from(key_pair))
     }

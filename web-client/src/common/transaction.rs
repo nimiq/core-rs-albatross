@@ -31,12 +31,12 @@ use wasm_bindgen::prelude::*;
 #[cfg(feature = "primitives")]
 use wasm_bindgen_derive::TryFromJsValue;
 
-#[cfg(feature = "primitives")]
-use crate::primitives::key_pair::KeyPair;
-use crate::{
+use crate::common::{
     address::Address,
     utils::{from_network_id, to_network_id},
 };
+#[cfg(feature = "primitives")]
+use crate::primitives::key_pair::KeyPair;
 
 /// Transactions describe a transfer of value, usually from the sender to the recipient.
 /// However, transactions can also have no value, when they are used to _signal_ a change in the staking contract.

@@ -3,10 +3,10 @@ use std::{borrow::Cow, sync::OnceLock};
 use byteorder::{BigEndian, WriteBytesExt};
 use nimiq_hash::{hmac::*, sha512::Sha512Hash};
 use nimiq_keys::{Address, Ed25519PublicKey, PrivateKey};
-use nimiq_serde::Serialize;
+use nimiq_serde::{Deserialize, Serialize};
 use regex::Regex;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ExtendedPrivateKey {
     key: PrivateKey,
     chain_code: [u8; ExtendedPrivateKey::CHAIN_CODE_SIZE],
@@ -22,6 +22,13 @@ impl ExtendedPrivateKey {
     pub fn from_seed(seed: Vec<u8>) -> Self {
         let hash = compute_hmac_sha512(&B_CURVE, seed.as_slice());
         ExtendedPrivateKey::from(hash)
+    }
+
+    pub fn new_unchecked(
+        key: PrivateKey,
+        chain_code: [u8; ExtendedPrivateKey::CHAIN_CODE_SIZE],
+    ) -> Self {
+        ExtendedPrivateKey { key, chain_code }
     }
 
     /// Checks whether a string is a valid derivation path.
@@ -80,6 +87,10 @@ impl ExtendedPrivateKey {
     /// Converts the ExtendedPrivateKey format into a normal PrivateKey, losing the ability for derivation.
     pub fn into_private_key(self) -> PrivateKey {
         self.key
+    }
+
+    pub fn to_private_key(&self) -> PrivateKey {
+        self.key.clone()
     }
 
     /// Returns the public key for this private key.

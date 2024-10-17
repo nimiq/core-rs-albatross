@@ -24,7 +24,7 @@ to build the WASM files. Then go into `example/node` and run
 yarn
 ```
 
-to install the dependencies. Other package managers will also work, but the `preinstall` script uses `yarn`.
+to install the dependencies. Other package managers will also work.
 
 Once installation finishes, run the CommonJS example with
 

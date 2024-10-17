@@ -6,10 +6,8 @@ use nimiq_transaction_builder::{Recipient, Sender};
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    address::Address,
+    common::{address::Address, transaction::Transaction, utils::to_network_id},
     primitives::{bls_key_pair::BLSKeyPair, public_key::PublicKey},
-    transaction::Transaction,
-    utils::to_network_id,
 };
 
 /// The TransactionBuilder class provides helper methods to easily create standard types of transactions.
