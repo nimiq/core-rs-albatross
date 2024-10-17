@@ -10,7 +10,7 @@ use nimiq_primitives::{
     networks::NetworkId,
     policy::Policy,
     slots_allocation::{Validator, Validators},
-    TendermintIdentifier, TendermintStep, TendermintVote,
+    TendermintIdentifier, TendermintProposal, TendermintStep, TendermintVote,
 };
 use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 use nimiq_transaction::{
@@ -317,6 +317,10 @@ pub struct DoubleProposalProof {
     header1: MacroHeader,
     /// Header number 2.
     header2: MacroHeader,
+    round1: u32,
+    round2: u32,
+    valid_round1: Option<u32>,
+    valid_round2: Option<u32>,
     /// Justification for header number 1.
     justification1: SchnorrSignature,
     /// Justification for header number 2.
@@ -327,8 +331,12 @@ impl DoubleProposalProof {
     pub fn new(
         validator_address: Address,
         mut header1: MacroHeader,
+        mut round1: u32,
+        mut valid_round1: Option<u32>,
         mut justification1: SchnorrSignature,
         mut header2: MacroHeader,
+        mut round2: u32,
+        mut valid_round2: Option<u32>,
         mut justification2: SchnorrSignature,
     ) -> DoubleProposalProof {
         let hash1: Blake2bHash = header1.hash();
@@ -336,11 +344,17 @@ impl DoubleProposalProof {
         if hash1 > hash2 {
             mem::swap(&mut header1, &mut header2);
             mem::swap(&mut justification1, &mut justification2);
+            mem::swap(&mut round1, &mut round2);
+            mem::swap(&mut valid_round1, &mut valid_round2);
         }
         DoubleProposalProof {
             validator_address,
             header1,
             header2,
+            round1,
+            round2,
+            valid_round1,
+            valid_round2,
             justification1,
             justification2,
         }
@@ -405,13 +419,27 @@ impl DoubleProposalProof {
 
         if self.header1.block_number != self.header2.block_number
             || self.header1.round != self.header2.round
+            || self.round1 != self.round2
         {
             return Err(EquivocationProofError::SlotMismatch);
         }
 
+        let signed_hash1: Blake2sHash = TendermintProposal {
+            proposal: &self.header1,
+            round: self.round1,
+            valid_round: self.valid_round1,
+        }
+        .hash();
+        let signed_hash2: Blake2sHash = TendermintProposal {
+            proposal: &self.header2,
+            round: self.round2,
+            valid_round: self.valid_round2,
+        }
+        .hash();
+
         // Check that the justifications are valid.
-        if !signing_key.verify(&self.justification1, hash1.as_slice())
-            || !signing_key.verify(&self.justification2, hash2.as_slice())
+        if !signing_key.verify(&self.justification1, signed_hash1.as_slice())
+            || !signing_key.verify(&self.justification2, signed_hash2.as_slice())
         {
             return Err(EquivocationProofError::InvalidJustification);
         }
@@ -596,7 +624,8 @@ mod test {
     use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
     use nimiq_keys::{Address, KeyPair, PrivateKey};
     use nimiq_primitives::{
-        networks::NetworkId, policy::Policy, TendermintIdentifier, TendermintStep, TendermintVote,
+        networks::NetworkId, policy::Policy, TendermintIdentifier, TendermintProposal,
+        TendermintStep, TendermintVote,
     };
     use nimiq_serde::Deserialize;
     use nimiq_vrf::VrfSeed;
@@ -794,35 +823,61 @@ mod test {
         let mut header7 = header2.clone();
         header7.round += 1;
 
-        let justification1 = key.sign(header1.hash().as_bytes());
-        let justification2 = key.sign(header2.hash().as_bytes());
-        let justification3 = key.sign(header3.hash().as_bytes());
-        let justification4 = key.sign(header4.hash().as_bytes());
-        let justification5 = key.sign(header5.hash().as_bytes());
-        let justification6 = key.sign(header6.hash().as_bytes());
-        let justification7 = key.sign(header7.hash().as_bytes());
+        let round = 0;
+        let valid_round = None;
+        let sign = |proposal: &MacroHeader| {
+            key.sign(
+                TendermintProposal {
+                    proposal,
+                    round,
+                    valid_round,
+                }
+                .hash()
+                .as_bytes(),
+            )
+        };
+
+        let justification1 = sign(&header1);
+        let justification2 = sign(&header2);
+        let justification3 = sign(&header3);
+        let justification4 = sign(&header4);
+        let justification5 = sign(&header5);
+        let justification6 = sign(&header6);
+        let justification7 = sign(&header7);
 
         let proof1: EquivocationProof = DoubleProposalProof::new(
             Address::burn_address(),
             header1.clone(),
+            round,
+            valid_round,
             justification1.clone(),
             header2.clone(),
+            round,
+            valid_round,
             justification2.clone(),
         )
         .into();
         let proof2: EquivocationProof = DoubleProposalProof::new(
             Address::burn_address(),
             header2.clone(),
+            round,
+            valid_round,
             justification2.clone(),
             header3.clone(),
+            round,
+            valid_round,
             justification3.clone(),
         )
         .into();
         let proof3: EquivocationProof = DoubleProposalProof::new(
             Address::burn_address(),
             header3.clone(),
+            round,
+            valid_round,
             justification3.clone(),
             header1.clone(),
+            round,
+            valid_round,
             justification1.clone(),
         )
         .into();
@@ -830,8 +885,12 @@ mod test {
         let proof4: EquivocationProof = DoubleProposalProof::new(
             Address::burn_address(),
             header4.clone(),
+            round,
+            valid_round,
             justification4.clone(),
             header5.clone(),
+            round,
+            valid_round,
             justification5.clone(),
         )
         .into();
@@ -839,8 +898,12 @@ mod test {
         let proof5: EquivocationProof = DoubleProposalProof::new(
             Address::burn_address(),
             header6.clone(),
+            round,
+            valid_round,
             justification6.clone(),
             header7.clone(),
+            round,
+            valid_round,
             justification7.clone(),
         )
         .into();

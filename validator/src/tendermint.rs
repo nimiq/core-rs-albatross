@@ -20,7 +20,7 @@ use nimiq_keys::Ed25519Signature as SchnorrSignature;
 use nimiq_network_interface::network::CloseReason;
 use nimiq_primitives::{
     networks::NetworkId, policy::Policy, slots_allocation::Validators, TendermintIdentifier,
-    TendermintStep, TendermintVote,
+    TendermintProposal, TendermintStep, TendermintVote,
 };
 use nimiq_serde::Serialize;
 use nimiq_tendermint::{
@@ -38,7 +38,7 @@ use crate::{
         registry::ValidatorRegistry,
         tendermint::{
             contribution::{AggregateMessage, TendermintContribution},
-            proposal::{Body, Header, RequestProposal, SignedProposal},
+            proposal::{Body, Header, RequestProposal},
             protocol::TendermintAggregationProtocol,
             update_message::TendermintUpdate,
         },
@@ -314,11 +314,12 @@ where
                         .validator
                         .signing_key;
 
-                    let data = SignedProposal::hash(
-                        &signed_proposal.proposal,
-                        signed_proposal.round,
-                        signed_proposal.valid_round,
-                    )
+                    let data = TendermintProposal {
+                        proposal: &signed_proposal.proposal,
+                        round: signed_proposal.round,
+                        valid_round: signed_proposal.valid_round,
+                    }
+                    .hash()
                     .serialize_to_vec();
 
                     if proposer.verify(&signed_proposal.signature, &data) {
@@ -365,11 +366,12 @@ where
         &self,
         proposal_message: &ProposalMessage<Self::Proposal>,
     ) -> Self::ProposalSignature {
-        let data = SignedProposal::hash(
-            &proposal_message.proposal.0,
-            proposal_message.round,
-            proposal_message.valid_round,
-        )
+        let data = TendermintProposal {
+            proposal: &proposal_message.proposal.0,
+            round: proposal_message.round,
+            valid_round: proposal_message.valid_round,
+        }
+        .hash()
         .serialize_to_vec();
         (
             self.block_producer.signing_key.sign(&data),
