@@ -30,18 +30,20 @@ pub enum PushOpResult<N: Network> {
     Head(
         Result<PushResult, PushError>,
         Result<ChunksPushResult, ChunksPushError>,
+        u32,
         Blake2bHash,
     ),
     HeadChunk(Result<ChunksPushResult, ChunksPushError>, Blake2bHash),
     Buffered(
         Result<PushResult, PushError>,
         Result<ChunksPushResult, ChunksPushError>,
+        u32,
         Blake2bHash,
     ),
     Missing(
         Result<PushResult, PushError>,
         Result<ChunksPushResult, ChunksPushError>,
-        Vec<Blake2bHash>,
+        Vec<(u32, Blake2bHash)>,
         HashSet<Blake2bHash>,
     ),
     PeerEvent(LiveSyncPeerEvent<N::PeerId>),
@@ -50,9 +52,9 @@ pub enum PushOpResult<N: Network> {
 impl<N: Network> PushOpResult<N> {
     pub fn get_push_chunk_error(&self) -> Option<&ChunksPushError> {
         match self {
-            PushOpResult::Head(_, Err(e), _)
+            PushOpResult::Head(_, Err(e), _, _)
             | PushOpResult::HeadChunk(Err(e), _)
-            | PushOpResult::Buffered(_, Err(e), _)
+            | PushOpResult::Buffered(_, Err(e), _, _)
             | PushOpResult::Missing(_, Err(e), _, _) => Some(e),
             _ => None,
         }
@@ -60,8 +62,8 @@ impl<N: Network> PushOpResult<N> {
 
     pub fn get_push_block_error(&self) -> Option<&PushError> {
         match self {
-            PushOpResult::Head(Err(push_error), _, _)
-            | PushOpResult::Buffered(Err(push_error), _, _)
+            PushOpResult::Head(Err(push_error), _, _, _)
+            | PushOpResult::Buffered(Err(push_error), _, _, _)
             | PushOpResult::Missing(Err(push_error), _, _, _) => Some(push_error),
             _ => None,
         }
@@ -69,9 +71,9 @@ impl<N: Network> PushOpResult<N> {
 
     pub fn ignored_all_chunks(&self) -> bool {
         match self {
-            PushOpResult::Head(_, Ok(ChunksPushResult::Chunks(committed, ignored)), _)
+            PushOpResult::Head(_, Ok(ChunksPushResult::Chunks(committed, ignored)), _, _)
             | PushOpResult::HeadChunk(Ok(ChunksPushResult::Chunks(committed, ignored)), _)
-            | PushOpResult::Buffered(_, Ok(ChunksPushResult::Chunks(committed, ignored)), _)
+            | PushOpResult::Buffered(_, Ok(ChunksPushResult::Chunks(committed, ignored)), _, _)
             | PushOpResult::Missing(_, Ok(ChunksPushResult::Chunks(committed, ignored)), _, _) => {
                 *committed == 0 && *ignored > 0
             }
@@ -81,13 +83,13 @@ impl<N: Network> PushOpResult<N> {
 
     fn into_block_push_result(self) -> Option<BlockPushOpResult<N>> {
         match self {
-            PushOpResult::Head(push_result, _, block_hash) => {
-                Some(BlockPushOpResult::Head(push_result, block_hash))
-            }
+            PushOpResult::Head(push_result, _, block_height, block_hash) => Some(
+                BlockPushOpResult::Head(push_result, block_height, block_hash),
+            ),
             PushOpResult::HeadChunk(_, _) => None,
-            PushOpResult::Buffered(push_result, _, block_hash) => {
-                Some(BlockPushOpResult::Buffered(push_result, block_hash))
-            }
+            PushOpResult::Buffered(push_result, _, block_height, block_hash) => Some(
+                BlockPushOpResult::Buffered(push_result, block_height, block_hash),
+            ),
             PushOpResult::Missing(push_result, _, adopted_blocks, invalid_blocks) => Some(
                 BlockPushOpResult::Missing(push_result, adopted_blocks, invalid_blocks),
             ),
@@ -120,8 +122,8 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
                         diff,
                         chunks,
                     )
-                    .map(|(push_result, push_chunk_error, hash)| {
-                        PushOpResult::Head(push_result, push_chunk_error, hash)
+                    .map(|(push_result, push_chunk_error, block_height, hash)| {
+                        PushOpResult::Head(push_result, push_chunk_error, block_height, hash)
                     })
                     .boxed(),
                 );
@@ -137,8 +139,8 @@ impl<N: Network> LiveSyncQueue<N> for StateQueue<N> {
                         diff,
                         chunks,
                     )
-                    .map(|(push_result, push_chunk_error, hash)| {
-                        PushOpResult::Buffered(push_result, push_chunk_error, hash)
+                    .map(|(push_result, push_chunk_error, block_height, hash)| {
+                        PushOpResult::Buffered(push_result, push_chunk_error, block_height, hash)
                     })
                     .boxed();
                     future_results.push_back(res);

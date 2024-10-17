@@ -226,8 +226,10 @@ pub async fn push_block_and_chunks<N: Network>(
 ) -> (
     Result<PushResult, PushError>,
     Result<ChunksPushResult, ChunksPushError>,
+    u32,
     Blake2bHash,
 ) {
+    let block_height = block.block_number();
     let push_results = spawn_blocking(move || {
         blockchain_push(
             blockchain,
@@ -248,6 +250,7 @@ pub async fn push_block_and_chunks<N: Network>(
     (
         push_results.block_push_result.unwrap(),
         push_results.push_chunks_result,
+        block_height,
         push_results.block_hash,
     )
 }
@@ -259,7 +262,8 @@ pub async fn push_block_only<N: Network>(
     bls_cache: Arc<Mutex<PublicKeyCache>>,
     block: Block,
     block_source: BlockSource<N>,
-) -> (Result<PushResult, PushError>, Blake2bHash) {
+) -> (Result<PushResult, PushError>, u32, Blake2bHash) {
+    let block_height = block.block_number();
     let push_results = spawn_blocking(move || {
         blockchain_push::<N>(
             blockchain,
@@ -277,6 +281,7 @@ pub async fn push_block_only<N: Network>(
 
     (
         push_results.block_push_result.unwrap(),
+        block_height,
         push_results.block_hash,
     )
 }
@@ -291,7 +296,7 @@ pub async fn push_multiple_blocks_impl<N: Network>(
 ) -> (
     Result<PushResult, PushError>,
     Result<ChunksPushResult, ChunksPushError>,
-    Vec<Blake2bHash>,
+    Vec<(u32, Blake2bHash)>,
     HashSet<Blake2bHash>,
 ) {
     let mut block_iter = blocks.into_iter();
@@ -309,6 +314,7 @@ pub async fn push_multiple_blocks_impl<N: Network>(
 
         let blockchain2 = blockchain.clone();
         let bls_cache2 = Arc::clone(&bls_cache);
+        let block_height = block.block_number();
 
         // If a previous chunk failed, we should discard all subsequent chunks.
         if push_chunk_result.is_err() {
@@ -345,7 +351,7 @@ pub async fn push_multiple_blocks_impl<N: Network>(
                 break;
             }
             Ok(_) => {
-                adopted_blocks.push(block_hash);
+                adopted_blocks.push((block_height, block_hash));
             }
         }
     }
@@ -371,7 +377,7 @@ pub async fn push_multiple_blocks_with_chunks<N: Network>(
 ) -> (
     Result<PushResult, PushError>,
     Result<ChunksPushResult, ChunksPushError>,
-    Vec<Blake2bHash>,
+    Vec<(u32, Blake2bHash)>,
     HashSet<Blake2bHash>,
 ) {
     push_multiple_blocks_impl(blockchain, bls_cache, blocks).await
@@ -386,7 +392,7 @@ pub async fn push_multiple_blocks<N: Network>(
     blocks: Vec<BlockAndSource<N>>,
 ) -> (
     Result<PushResult, PushError>,
-    Vec<Blake2bHash>,
+    Vec<(u32, Blake2bHash)>,
     HashSet<Blake2bHash>,
 ) {
     let blocks = blocks

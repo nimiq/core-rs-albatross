@@ -27,11 +27,11 @@ use crate::sync::{
 };
 
 pub enum PushOpResult<N: Network> {
-    Head(Result<PushResult, PushError>, Blake2bHash),
-    Buffered(Result<PushResult, PushError>, Blake2bHash),
+    Head(Result<PushResult, PushError>, u32, Blake2bHash),
+    Buffered(Result<PushResult, PushError>, u32, Blake2bHash),
     Missing(
         Result<PushResult, PushError>,
-        Vec<Blake2bHash>,
+        Vec<(u32, Blake2bHash)>,
         HashSet<Blake2bHash>,
     ),
     PeerEvent(LiveSyncPeerEvent<N::PeerId>),
@@ -53,7 +53,9 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
                 // Push block.
                 future_results.push_back(
                     queue::push_block_only(network, blockchain, bls_cache, block, block_source)
-                        .map(|(push_result, hash)| PushOpResult::Head(push_result, hash))
+                        .map(|(push_result, block_height, hash)| {
+                            PushOpResult::Head(push_result, block_height, hash)
+                        })
                         .boxed(),
                 );
             }
@@ -66,7 +68,9 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
                         block,
                         block_source,
                     )
-                    .map(|(push_result, hash)| PushOpResult::Buffered(push_result, hash))
+                    .map(|(push_result, block_height, hash)| {
+                        PushOpResult::Buffered(push_result, block_height, hash)
+                    })
                     .boxed();
                     future_results.push_back(res);
                 }
@@ -101,16 +105,16 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
 
     fn process_push_result(&mut self, item: Self::PushResult) -> Option<LiveSyncEvent<N::PeerId>> {
         match item {
-            PushOpResult::Head(Ok(result), hash) => {
-                self.on_block_processed(&hash);
+            PushOpResult::Head(Ok(result), block_height, hash) => {
+                self.on_block_processed(block_height, &hash, true);
                 if result == PushResult::Extended || result == PushResult::Rebranched {
                     return Some(LiveSyncEvent::PushEvent(
                         LiveSyncPushEvent::AcceptedAnnouncedBlock(hash),
                     ));
                 }
             }
-            PushOpResult::Buffered(Ok(result), hash) => {
-                self.on_block_processed(&hash);
+            PushOpResult::Buffered(Ok(result), block_height, hash) => {
+                self.on_block_processed(block_height, &hash, true);
                 if result == PushResult::Extended || result == PushResult::Rebranched {
                     return Some(LiveSyncEvent::PushEvent(
                         LiveSyncPushEvent::AcceptedBufferedBlock(hash, self.num_buffered_blocks()),
@@ -118,25 +122,31 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
                 }
             }
             PushOpResult::Missing(result, adopted_blocks, mut invalid_blocks) => {
-                for hash in &adopted_blocks {
-                    self.on_block_processed(hash);
+                for (block_height, hash) in &adopted_blocks {
+                    self.on_block_processed(*block_height, hash, true);
                 }
                 for hash in &invalid_blocks {
-                    self.on_block_processed(hash);
+                    self.on_block_processed(0, hash, false);
                 }
 
                 self.remove_invalid_blocks(&mut invalid_blocks);
 
                 if result.is_ok() && !adopted_blocks.is_empty() {
                     return Some(LiveSyncEvent::PushEvent(
-                        LiveSyncPushEvent::ReceivedMissingBlocks(adopted_blocks),
+                        LiveSyncPushEvent::ReceivedMissingBlocks(
+                            adopted_blocks
+                                .into_iter()
+                                .map(|(_, block_hash)| block_hash)
+                                .collect(),
+                        ),
                     ));
                 }
             }
-            PushOpResult::Head(Err(result), hash) | PushOpResult::Buffered(Err(result), hash) => {
+            PushOpResult::Head(Err(result), block_height, hash)
+            | PushOpResult::Buffered(Err(result), block_height, hash) => {
                 // If there was a blockchain push error, we remove the block from the pending blocks
                 log::trace!("Head push operation failed because of {}", result);
-                self.on_block_processed(&hash);
+                self.on_block_processed(block_height, &hash, false);
                 return Some(LiveSyncEvent::PushEvent(LiveSyncPushEvent::RejectedBlock(
                     hash,
                 )));

@@ -142,7 +142,22 @@ impl<N: Network> BlockQueue<N> {
         }
     }
 
-    pub fn on_block_processed(&mut self, block_hash: &Blake2bHash) {
+    pub fn on_block_processed(
+        &mut self,
+        block_height: u32,
+        block_hash: &Blake2bHash,
+        successful_push: bool,
+    ) {
+        if successful_push {
+            // Check if a macro block boundary was passed.
+            // If so prune the block buffer as well as pending requests.
+            if Policy::is_macro_block_at(block_height) {
+                self.current_macro_height = block_height;
+                self.prune_pending_requests();
+                self.prune_buffer();
+            }
+        }
+
         self.blocks_pending_push.remove(block_hash);
     }
 
@@ -176,15 +191,7 @@ impl<N: Network> BlockQueue<N> {
 
         let parent_known = blockchain.contains(block.parent_hash(), true);
         drop(blockchain);
-
-        // Check if a macro block boundary was passed.
-        // If so prune the block buffer as well as pending requests.
         let macro_height = Policy::last_macro_block(head_height);
-        if macro_height > self.current_macro_height {
-            self.current_macro_height = macro_height;
-            self.prune_pending_requests();
-            self.prune_buffer();
-        }
 
         if block_number < head_height.saturating_sub(self.config.tolerate_past_max) {
             block_source.ignore_block(&self.network);

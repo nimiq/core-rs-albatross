@@ -80,8 +80,15 @@ impl<N: Network> BlockQueueProxy<N> {
         Self { queue, receiver }
     }
 
-    pub fn on_block_processed(&mut self, block_hash: &Blake2bHash) {
-        self.queue.lock().on_block_processed(block_hash);
+    pub fn on_block_processed(
+        &mut self,
+        block_height: u32,
+        block_hash: &Blake2bHash,
+        successful_push: bool,
+    ) {
+        self.queue
+            .lock()
+            .on_block_processed(block_height, block_hash, successful_push);
     }
 
     pub fn remove_invalid_blocks(&mut self, invalid_blocks: &mut HashSet<Blake2bHash>) {
