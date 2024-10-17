@@ -318,6 +318,10 @@ impl<N: Network> BlockRequestComponent<N> {
         self.pending_requests.contains(target_block_hash)
     }
 
+    pub fn has_no_pending_requests(&self) -> bool {
+        self.pending_requests.is_empty()
+    }
+
     pub fn add_peer(&self, peer_id: N::PeerId) {
         self.peers.write().add_peer(peer_id);
     }
