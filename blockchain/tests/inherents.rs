@@ -16,7 +16,7 @@ use nimiq_primitives::{
     networks::NetworkId,
     policy::Policy,
     slots_allocation::{JailedValidator, PenalizedSlot},
-    TendermintIdentifier, TendermintStep, TendermintVote,
+    TendermintIdentifier, TendermintProposal, TendermintStep, TendermintVote,
 };
 use nimiq_test_log::test;
 use nimiq_test_utils::{
@@ -513,17 +513,37 @@ fn it_correctly_creates_inherents_from_double_proposal_proof() {
         .next_block(vec![], false)
         .unwrap_macro()
         .header;
-    let header1_hash: Blake2bHash = header1.hash();
-    let header2_hash: Blake2bHash = header2.hash();
-    let justification1 = signing_key.sign(header1_hash.as_bytes());
-    let justification2 = signing_key.sign(header2_hash.as_bytes());
+    let round = 0;
+    let valid_round = None;
+    let justification1 = signing_key.sign(
+        TendermintProposal {
+            proposal: &header1,
+            round,
+            valid_round,
+        }
+        .hash()
+        .as_bytes(),
+    );
+    let justification2 = signing_key.sign(
+        TendermintProposal {
+            proposal: &header2,
+            round,
+            valid_round,
+        }
+        .hash()
+        .as_bytes(),
+    );
 
     // Produce the double proposal proof.
     let double_proposal_proof = DoubleProposalProof::new(
         validator_address(),
         header1.clone(),
+        round,
+        valid_round,
         justification1,
         header2,
+        round,
+        valid_round,
         justification2,
     );
 
