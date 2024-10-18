@@ -136,37 +136,25 @@ fn do_double_proposal(
         .clone()
         .unwrap_macro()
         .header;
-    let round = 0;
-    let valid_round = None;
-    let justification1 = signing_key.sign(
-        TendermintProposal {
-            proposal: &header1,
-            round,
-            valid_round,
-        }
-        .hash()
-        .as_bytes(),
-    );
-    let justification2 = signing_key.sign(
-        TendermintProposal {
-            proposal: &header2,
-            round,
-            valid_round,
-        }
-        .hash()
-        .as_bytes(),
-    );
+    let proposal1 = TendermintProposal {
+        proposal: header1,
+        round: 0,
+        valid_round: None,
+    };
+    let proposal2 = TendermintProposal {
+        proposal: header2,
+        round: 0,
+        valid_round: None,
+    };
+    let justification1 = signing_key.sign(proposal1.hash().as_bytes());
+    let justification2 = signing_key.sign(proposal2.hash().as_bytes());
 
     // Produce the double proposal proof.
     EquivocationProof::DoubleProposal(DoubleProposalProof::new(
         validator_address(),
-        header1,
-        round,
-        valid_round,
+        proposal1,
         justification1,
-        header2,
-        round,
-        valid_round,
+        proposal2,
         justification2,
     ))
 }

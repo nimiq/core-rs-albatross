@@ -4,7 +4,7 @@ use std::{
 };
 
 use nimiq_hash::{Blake2sHash, Hash, HashOutput, SerializeContent};
-use nimiq_serde::{Deserialize, Serialize, SerializedSize};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize, SerializedSize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::{
@@ -55,7 +55,7 @@ impl Display for TendermintIdentifier {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
 pub struct TendermintProposal<T> {
     pub proposal: T,
     pub round: u32,

@@ -513,37 +513,29 @@ fn it_correctly_creates_inherents_from_double_proposal_proof() {
         .next_block(vec![], false)
         .unwrap_macro()
         .header;
-    let round = 0;
-    let valid_round = None;
-    let justification1 = signing_key.sign(
-        TendermintProposal {
-            proposal: &header1,
-            round,
-            valid_round,
-        }
-        .hash()
-        .as_bytes(),
-    );
-    let justification2 = signing_key.sign(
-        TendermintProposal {
-            proposal: &header2,
-            round,
-            valid_round,
-        }
-        .hash()
-        .as_bytes(),
-    );
+
+    let block_number = header1.block_number;
+    let round = header1.round;
+
+    let proposal1 = TendermintProposal {
+        proposal: header1,
+        round: 0,
+        valid_round: None,
+    };
+    let proposal2 = TendermintProposal {
+        proposal: header2,
+        round: 0,
+        valid_round: None,
+    };
+    let justification1 = signing_key.sign(proposal1.hash().as_bytes());
+    let justification2 = signing_key.sign(proposal2.hash().as_bytes());
 
     // Produce the double proposal proof.
     let double_proposal_proof = DoubleProposalProof::new(
         validator_address(),
-        header1.clone(),
-        round,
-        valid_round,
+        proposal1,
         justification1,
-        header2,
-        round,
-        valid_round,
+        proposal2,
         justification2,
     );
 
@@ -566,12 +558,12 @@ fn it_correctly_creates_inherents_from_double_proposal_proof() {
 
     let blockchain = temp_producer.blockchain.read();
     let slot = blockchain
-        .get_proposer_at(header1.block_number, header1.round, None)
+        .get_proposer_at(block_number, round, None)
         .unwrap();
 
     // Create the inherents from the double proposal proof.
     let inherents = blockchain.create_punishment_inherents(
-        header1.block_number + 1,
+        block_number + 1,
         &[double_proposal_proof.into()],
         None,
         None,
@@ -584,7 +576,7 @@ fn it_correctly_creates_inherents_from_double_proposal_proof() {
             jailed_validator: JailedValidator {
                 slots: slot.validator.slots,
                 validator_address: slot.validator.address,
-                offense_event_block: header1.block_number,
+                offense_event_block: block_number,
             },
             new_epoch_slot_range: None
         }]
