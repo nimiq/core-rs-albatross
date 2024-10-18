@@ -484,38 +484,26 @@ fn it_validates_double_proposal_proofs() {
         .header;
     let mut header2 = header1.clone();
     header2.timestamp += 1;
-    let round = 0;
-    let valid_round = None;
-    let justification1 = signing_key.sign(
-        TendermintProposal {
-            proposal: &header1,
-            round,
-            valid_round,
-        }
-        .hash()
-        .as_bytes(),
-    );
-    let justification2 = signing_key.sign(
-        TendermintProposal {
-            proposal: &header2,
-            round,
-            valid_round,
-        }
-        .hash()
-        .as_bytes(),
-    );
+    let proposal1 = TendermintProposal {
+        proposal: header1,
+        round: 0,
+        valid_round: None,
+    };
+    let proposal2 = TendermintProposal {
+        proposal: header2,
+        round: 0,
+        valid_round: None,
+    };
+    let justification1 = signing_key.sign(proposal1.hash().as_bytes());
+    let justification2 = signing_key.sign(proposal2.hash().as_bytes());
 
     expect_push_micro_block(
         BlockConfig {
             equivocation_proofs: vec![DoubleProposalProof::new(
                 validator_address(),
-                header1,
-                round,
-                valid_round,
+                proposal1,
                 justification1,
-                header2,
-                round,
-                valid_round,
+                proposal2,
                 justification2,
             )
             .into()],
