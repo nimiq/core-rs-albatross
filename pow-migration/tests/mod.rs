@@ -10,6 +10,7 @@ mod pow_migration_test {
     use nimiq_pow_migration::{
         migrate,
         types::{BlockWindows, Error},
+        MigrateWindowResult,
     };
     use nimiq_primitives::networks::NetworkId;
     use nimiq_rpc::Client;
@@ -27,7 +28,7 @@ mod pow_migration_test {
         validator_address: &str,
         network_id: NetworkId,
         candidate_block: u32,
-    ) -> Result<Option<GenesisConfig>, Error> {
+    ) -> Result<MigrateWindowResult, Error> {
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
         let client = setup_pow_client();
         let address = Address::from_user_friendly_address(&validator_address)
@@ -36,6 +37,7 @@ mod pow_migration_test {
             &client,
             block_windows,
             candidate_block,
+            vec![],
             env,
             &Some(address),
             network_id,
@@ -64,21 +66,28 @@ mod pow_migration_test {
             candidate_block,
         )
         .await
-        .unwrap()
         .unwrap();
-        assert_eq!(genesis.validators.len(), 2);
-        assert_eq!(genesis.stakers.len(), 2);
-        assert!(
-            genesis
-                .validators
-                .iter()
-                .find(
-                    |validator| validator.validator_address.to_user_friendly_address()
-                        == validator_address
+
+        match genesis {
+            MigrateWindowResult::Ready(genesis) => {
+                assert_eq!(genesis.validators.len(), 2);
+                assert_eq!(genesis.stakers.len(), 2);
+                assert!(
+                    genesis
+                        .validators
+                        .iter()
+                        .find(
+                            |validator| validator.validator_address.to_user_friendly_address()
+                                == validator_address
+                        )
+                        .is_some(),
+                    "Could not find expected validator ('{}') in the genesis validator set",
+                    validator_address
                 )
-                .is_some(),
-            "Could not find expected validator ('{}') in the genesis validator set",
-            validator_address
-        )
+            }
+            MigrateWindowResult::NotReady(_hash) => {
+                panic!("Could not migrate in the first activation window")
+            }
+        }
     }
 }
