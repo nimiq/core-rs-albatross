@@ -4,7 +4,7 @@ use darling::{
 };
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Expr, Generics, Ident, Type, TypeArray};
+use syn::{parse_macro_input, parse_quote, Expr, GenericParam, Generics, Ident, Type, TypeArray};
 
 #[derive(FromDeriveInput)]
 #[darling(attributes(serialize_size))]
@@ -91,9 +91,19 @@ fn max_size_variants(variants: &[Variant]) -> TokenStream {
 pub fn derive_serialize_size(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let Input {
         ident,
-        generics,
+        mut generics,
         data,
     } = Input::from_derive_input(&parse_macro_input!(input)).unwrap();
+
+    // Add `: SerializedSize` to every type parameter.
+    for generic in &mut generics.params {
+        if let GenericParam::Type(type_param) = generic {
+            type_param
+                .bounds
+                .push(parse_quote!(::nimiq_serde::SerializedSize));
+        }
+    }
+
     let (impl_generics, ty_generics, _) = generics.split_for_impl();
 
     let size = match data {
@@ -113,9 +123,19 @@ pub fn derive_serialize_size(input: proc_macro::TokenStream) -> proc_macro::Toke
 pub fn derive_serialize_max_size(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let Input {
         ident,
-        generics,
+        mut generics,
         data,
     } = Input::from_derive_input(&parse_macro_input!(input)).unwrap();
+
+    // Add `: SerializedMaxSize` to every type parameter.
+    for generic in &mut generics.params {
+        if let GenericParam::Type(type_param) = generic {
+            type_param
+                .bounds
+                .push(parse_quote!(::nimiq_serde::SerializedMaxSize));
+        }
+    }
+
     let (impl_generics, ty_generics, _) = generics.split_for_impl();
 
     let size = match data {
