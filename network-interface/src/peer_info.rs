@@ -41,6 +41,9 @@ bitflags! {
 
         /// This node is configured as a validator, so it is interested for other validator nodes.
         const VALIDATOR = 1 << 7;
+
+        /// This node provides pre-genesis information.
+        const PRE_GENESIS_TRANSACTIONS = 1 << 8;
     }
 }
 

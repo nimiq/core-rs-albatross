@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use nimiq_block::{Block, MicroBlock};
 use nimiq_database::mdbx::{MdbxReadTransaction, MdbxWriteTransaction};
 use nimiq_hash::Blake2bHash;
@@ -16,7 +18,7 @@ use nimiq_transaction::{
 use crate::HistoryTreeChunk;
 
 /// Defines several methods to interact with a history store.
-pub trait HistoryInterface: std::fmt::Debug {
+pub trait HistoryInterface: Debug {
     /// Adds all the transactions included in a given block into the history store.
     fn add_block(
         &self,
@@ -185,7 +187,7 @@ pub trait HistoryInterface: std::fmt::Debug {
 }
 
 /// Defines several methods to interact with a history store.
-pub trait HistoryIndexInterface {
+pub trait HistoryIndexInterface: HistoryInterface {
     /// Gets an historic transaction given its transaction hash.
     fn get_hist_tx_by_hash(
         &self,
