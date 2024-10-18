@@ -231,10 +231,15 @@ impl<N: Network> BlockQueue<N> {
                 macro_height
             );
             block_source.ignore_block(&self.network);
-        } else if self.request_component.has_no_pending_requests() {
-            // Block is inside the buffer window and there are no overlapping requests.
-            // Put it in the buffer.
+        } else if self.request_component.has_no_pending_requests()
+            || macro_height == Policy::last_macro_block(block.block_number())
+        {
+            // Block is inside the buffer window. We avoid overlapping requests unless
+            // we are on the same batch as the new blocks.
             self.buffer_and_request_missing_blocks(block, block_source);
+        } else if block.is_macro() && self.current_macro_height < block.block_number() {
+            // New macro block, then we buffer it and request the missing batch.
+            self.buffer_and_request_missing_batch(block, block_source);
         }
 
         None
@@ -286,6 +291,66 @@ impl<N: Network> BlockQueue<N> {
             parent_block_number,
             parent_hash,
             None,
+            Direction::Forward,
+            None,
+            Some(block_source.peer_id()),
+        );
+    }
+
+    /// Buffers the current block and requests any missing blocks in-between.
+    fn buffer_and_request_missing_batch(&mut self, block: Block, block_source: BlockSource<N>) {
+        // Make sure that block_number is positive as we subtract from it later on.
+        let block_number = block.block_number();
+        if block_number == 0 {
+            return;
+        }
+
+        let target_hash = block.parent_hash().clone();
+        let target_block_number = block_number - 1;
+        let mut parent_macro_block_number = Policy::macro_block_before(block.block_number());
+
+        // Insert block into buffer. If we already know the block, we're done.
+        if !self.insert_block_into_buffer(block, block_source.clone()) {
+            log::trace!(
+                block_number,
+                "Not buffering block - already known or exceeded the per peer limit",
+            );
+            return;
+        }
+        log::trace!(block_number, "Buffering macro block");
+
+        let mut parent_macro_hash = self.blockchain.read().head_hash();
+        // Fetch the parent macro block in the buffer.
+        while parent_macro_block_number > self.current_macro_height {
+            if let Some(hash) = self
+                .buffer
+                .get(&parent_macro_block_number)
+                .and_then(|blocks| blocks.keys().next())
+            {
+                parent_macro_hash = hash.clone();
+                break;
+            }
+            parent_macro_block_number = Policy::macro_block_before(parent_macro_block_number);
+        }
+
+        // If the macro block parent is already being pushed or we already requested missing blocks for it, we're done.
+        // This will request missing blocks if the parent macro block is `self.current_macro_height`.
+        let parent_pending = self.blocks_pending_push.contains(&parent_macro_hash)
+            || self.request_component.is_pending(&parent_macro_hash);
+        log::trace!(
+            "Macro Parent of block #{} pending={}",
+            block_number,
+            parent_pending
+        );
+        if parent_pending {
+            return;
+        }
+
+        // We don't know the predecessor of this block, request it.
+        self.request_missing_blocks(
+            target_block_number,
+            target_hash,
+            Some(parent_macro_hash),
             Direction::Forward,
             None,
             Some(block_source.peer_id()),
