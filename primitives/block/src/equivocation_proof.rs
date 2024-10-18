@@ -404,7 +404,6 @@ impl DoubleProposalProof {
         }
 
         if self.proposal1.proposal.block_number != self.proposal2.proposal.block_number
-            || self.proposal1.proposal.round != self.proposal2.proposal.round
             || self.proposal1.round != self.proposal2.round
         {
             return Err(EquivocationProofError::SlotMismatch);
