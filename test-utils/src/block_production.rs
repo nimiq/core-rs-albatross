@@ -61,18 +61,38 @@ impl TemporaryBlockProducer {
         producer
     }
 
+    pub fn new_merged() -> Self {
+        let time = Arc::new(OffsetTime::new());
+        let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let pre_genesis_env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let blockchain = Blockchain::new_merged(
+            env,
+            Some(pre_genesis_env),
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap();
+
+        Self::with_blockchain(blockchain)
+    }
+
     pub fn new() -> Self {
         let time = Arc::new(OffsetTime::new());
         let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
-        let blockchain = Arc::new(RwLock::new(
-            Blockchain::new(
-                env,
-                BlockchainConfig::default(),
-                NetworkId::UnitAlbatross,
-                time,
-            )
-            .unwrap(),
-        ));
+        let blockchain = Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap();
+
+        Self::with_blockchain(blockchain)
+    }
+
+    fn with_blockchain(blockchain: Blockchain) -> Self {
+        let blockchain = Arc::new(RwLock::new(blockchain));
 
         let signing_key = SchnorrKeyPair::from(
             SchnorrPrivateKey::deserialize_from_vec(&hex::decode(SIGNING_KEY).unwrap()).unwrap(),

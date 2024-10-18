@@ -38,7 +38,7 @@ declare_table!(AddressTable, "TxHashesByAddress", Address => EpochBasedIndex => 
 /// A struct that contains databases to store history indices.
 pub struct HistoryStoreIndex {
     /// Database handle.
-    db: MdbxDatabase,
+    pub(crate) db: MdbxDatabase,
     /// A database of all epoch numbers and leaf indices indexed by the hash of the (raw) transaction. This way we
     /// can start with a raw transaction hash and find it in the MMR.
     /// Mapping of raw tx hash to epoch number and leaf index.

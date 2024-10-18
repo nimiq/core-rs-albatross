@@ -73,11 +73,13 @@ impl<S: HistoryInterface> HistoryInterface for HistoryStoreMerger<S> {
         block_number: u32,
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Option<Blake2bHash> {
-        if Policy::epoch_at(block_number) == 0 {
+        // The regular history store always returns a hash – even if no data is present.
+        if Policy::epoch_at(block_number) == 0 && self.pre_genesis.is_some() {
             // The pre-genesis database has separate transactions.
             // Since it is read-only, we can pass None as the transaction.
             self.pre_genesis
-                .as_ref()?
+                .as_ref()
+                .unwrap()
                 .get_history_tree_root(block_number, None)
         } else {
             self.main.get_history_tree_root(block_number, txn_option)
@@ -383,15 +385,369 @@ impl<S: HistoryInterface + HistoryIndexInterface> HistoryIndexInterface for Hist
         verifier_state: Option<usize>,
         txn_option: Option<&MdbxReadTransaction>,
     ) -> Option<HistoryTreeProof> {
-        if epoch_number == 0 {
+        // The regular store always provides a proof.
+        if epoch_number == 0 && self.pre_genesis.is_some() {
             // The pre-genesis database has separate transactions.
             // Since it is read-only, we can pass None as the transaction.
             self.pre_genesis
-                .as_ref()?
+                .as_ref()
+                .unwrap()
                 .prove(epoch_number, hashes, verifier_state, None)
         } else {
             self.main
                 .prove(epoch_number, hashes, verifier_state, txn_option)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ops::Deref;
+
+    use nimiq_database::{
+        mdbx::MdbxDatabase,
+        traits::{Database, WriteTransaction},
+    };
+    use nimiq_primitives::{coin::Coin, networks::NetworkId};
+    use nimiq_test_log::test;
+    use nimiq_transaction::{
+        historic_transaction::{
+            EquivocationEvent, HistoricTransactionData, JailEvent, PenalizeEvent, RewardEvent,
+        },
+        ExecutedTransaction, ForkLocator, Transaction as BlockchainTransaction,
+    };
+
+    use super::*;
+    use crate::HistoryStoreIndex;
+
+    #[test]
+    fn history_tree_root_works() {
+        let start_block_number = Policy::genesis_block_number();
+        test_history_fn(|history_store| {
+            history_store.get_history_tree_root(start_block_number, None)
+        });
+        test_history_fn(|history_store| {
+            history_store.get_history_tree_root(start_block_number + 1, None)
+        });
+        test_history_fn(|history_store| {
+            history_store.get_history_tree_root(start_block_number + 2, None)
+        });
+    }
+
+    #[test]
+    fn length_at_works() {
+        let start_block_number = Policy::genesis_block_number();
+        test_history_fn(|history_store| history_store.length_at(start_block_number, None));
+        test_history_fn(|history_store| history_store.length_at(start_block_number + 1, None));
+        test_history_fn(|history_store| history_store.length_at(start_block_number + 2, None));
+    }
+
+    #[test]
+    fn transaction_in_validity_window_works() {
+        let hist_txs = gen_hist_txs();
+        test_history_fn(|history_store| {
+            history_store.tx_in_validity_window(&hist_txs[4].tx_hash(), None)
+        });
+    }
+
+    #[test]
+    fn get_hist_tx_by_hash_works() {
+        let hist_txs = gen_hist_txs();
+
+        for tx in hist_txs.iter() {
+            test_history_fn(|history_store| history_store.get_hist_tx_by_hash(&tx.tx_hash(), None));
+        }
+    }
+
+    #[test]
+    fn get_block_transactions_works() {
+        let start_block_number = Policy::genesis_block_number();
+        test_history_fn(|history_store| {
+            history_store.get_block_transactions(start_block_number, None)
+        });
+        test_history_fn(|history_store| {
+            history_store.get_block_transactions(start_block_number + 1, None)
+        });
+        test_history_fn(|history_store| {
+            history_store.get_block_transactions(start_block_number + 2, None)
+        });
+    }
+
+    #[test]
+    fn get_epoch_transactions_works() {
+        test_history_fn(|history_store| history_store.get_epoch_transactions(0, None));
+        test_history_fn(|history_store| history_store.get_epoch_transactions(1, None));
+    }
+
+    #[test]
+    fn get_num_historic_transactions_works() {
+        test_history_fn(|history_store| history_store.num_epoch_transactions(0, None));
+        test_history_fn(|history_store| history_store.num_epoch_transactions(1, None));
+    }
+
+    #[test]
+    fn get_tx_hashes_by_address_works() {
+        test_history_fn(|history_store| {
+            history_store.get_tx_hashes_by_address(
+                &Address::from_user_friendly_address(
+                    "NQ09 VF5Y 1PKV MRM4 5LE1 55KV P6R2 GXYJ XYQF",
+                )
+                .unwrap(),
+                99,
+                None,
+                None,
+            )
+        });
+        test_history_fn(|history_store| {
+            history_store.get_tx_hashes_by_address(&Address::burn_address(), 2, None, None)
+        });
+        test_history_fn(|history_store| {
+            history_store.get_tx_hashes_by_address(
+                &Address::from_user_friendly_address(
+                    "NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T",
+                )
+                .unwrap(),
+                99,
+                None,
+                None,
+            )
+        });
+        test_history_fn(|history_store| {
+            history_store.get_tx_hashes_by_address(
+                &Address::from_user_friendly_address(
+                    "NQ28 1U7R M38P GN5A 7J8R GE62 8QS7 PK2S 4S31",
+                )
+                .unwrap(),
+                99,
+                None,
+                None,
+            )
+        });
+        // Create historic transactions.
+        let hist_txs = gen_hist_txs();
+        let hashes: Vec<_> = hist_txs.iter().map(|hist_tx| hist_tx.tx_hash()).collect();
+        test_history_fn(|history_store| {
+            history_store.get_tx_hashes_by_address(
+                &Address::from_user_friendly_address(
+                    "NQ09 VF5Y 1PKV MRM4 5LE1 55KV P6R2 GXYJ XYQF",
+                )
+                .unwrap(),
+                2,
+                Some(hashes[5].deref().clone()),
+                None,
+            )
+        });
+    }
+
+    #[test]
+    fn prove_works() {
+        // Create historic transactions.
+        let hist_txs = gen_hist_txs();
+        let hashes: Vec<_> = hist_txs.iter().map(|hist_tx| hist_tx.tx_hash()).collect();
+
+        test_history_fn(|history_store| {
+            history_store
+                .prove(0, vec![&hashes[0], &hashes[2]], None, None)
+                .map(|proof| proof.proof.nodes)
+        });
+        test_history_fn(|history_store| {
+            history_store
+                .prove(1, vec![&hashes[3], &hashes[4], &hashes[6]], None, None)
+                .unwrap()
+                .proof
+                .nodes
+        });
+    }
+
+    fn create_reward_inherent(block: u32, value: u64) -> HistoricTransaction {
+        let reward_address =
+            Address::from_user_friendly_address("NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T")
+                .unwrap();
+        HistoricTransaction {
+            network_id: NetworkId::UnitAlbatross,
+            block_number: block,
+            block_time: 0,
+            data: HistoricTransactionData::Reward(RewardEvent {
+                validator_address: Address::burn_address(),
+                reward_address,
+                value: Coin::from_u64_unchecked(value),
+            }),
+        }
+    }
+
+    fn create_jail_inherent(block: u32) -> HistoricTransaction {
+        let jail_address =
+            Address::from_user_friendly_address("NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T")
+                .unwrap();
+        HistoricTransaction {
+            network_id: NetworkId::UnitAlbatross,
+            block_number: block,
+            block_time: 0,
+            data: HistoricTransactionData::Jail(JailEvent {
+                validator_address: jail_address,
+                slots: 1..3,
+                offense_event_block: block,
+                new_epoch_slot_range: None,
+            }),
+        }
+    }
+
+    fn create_penalize_inherent(block: u32) -> HistoricTransaction {
+        let jail_address =
+            Address::from_user_friendly_address("NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T")
+                .unwrap();
+        HistoricTransaction {
+            network_id: NetworkId::UnitAlbatross,
+            block_number: block,
+            block_time: 0,
+            data: HistoricTransactionData::Penalize(PenalizeEvent {
+                validator_address: jail_address,
+                offense_event_block: block,
+                slot: 0,
+            }),
+        }
+    }
+
+    fn create_equivocation_inherent(block: u32) -> HistoricTransaction {
+        let address =
+            Address::from_user_friendly_address("NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T")
+                .unwrap();
+        HistoricTransaction {
+            network_id: NetworkId::UnitAlbatross,
+            block_number: block,
+            block_time: 0,
+            data: HistoricTransactionData::Equivocation(EquivocationEvent {
+                locator: EquivocationLocator::Fork(ForkLocator {
+                    validator_address: address,
+                    block_number: block,
+                }),
+            }),
+        }
+    }
+
+    fn create_transaction(block: u32, value: u64) -> HistoricTransaction {
+        HistoricTransaction {
+            network_id: NetworkId::UnitAlbatross,
+            block_number: block,
+            block_time: 0,
+            data: HistoricTransactionData::Basic(ExecutedTransaction::Ok(
+                BlockchainTransaction::new_basic(
+                    Address::from_user_friendly_address(
+                        "NQ09 VF5Y 1PKV MRM4 5LE1 55KV P6R2 GXYJ XYQF",
+                    )
+                    .unwrap(),
+                    Address::burn_address(),
+                    Coin::from_u64_unchecked(value),
+                    Coin::from_u64_unchecked(0),
+                    0,
+                    NetworkId::UnitAlbatross,
+                ),
+            )),
+        }
+    }
+
+    fn test_history_fn<R, F>(func: F)
+    where
+        F: Fn(&dyn HistoryIndexInterface) -> R,
+        R: Eq + std::fmt::Debug,
+    {
+        let (merged, plain) = create_history_store(true);
+        assert_eq!(
+            func(&merged),
+            func(&plain),
+            "Mismatch with pre-genesis data"
+        );
+
+        let (merged, plain) = create_history_store(false);
+        assert_eq!(
+            func(&merged),
+            func(&plain),
+            "Mismatch without pre-genesis data"
+        );
+    }
+
+    fn create_history_store(
+        with_pre_genesis: bool,
+    ) -> (HistoryStoreMerger<HistoryStoreIndex>, HistoryStoreIndex) {
+        // Generate the reference store.
+        let env_plain = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store_plain =
+            HistoryStoreIndex::new(env_plain.clone(), NetworkId::UnitAlbatross);
+
+        // Generate the merged store.
+        let env_main = MdbxDatabase::new_volatile(Default::default()).unwrap();
+        let history_store_main = HistoryStoreIndex::new(env_main.clone(), NetworkId::UnitAlbatross);
+
+        let history_store_pre = if with_pre_genesis {
+            let env_pre = MdbxDatabase::new_volatile(Default::default()).unwrap();
+            Some(HistoryStoreIndex::new(
+                env_pre.clone(),
+                NetworkId::UnitAlbatross,
+            ))
+        } else {
+            None
+        };
+
+        // Generate transactions and fill stores.
+        let txns = gen_hist_txs();
+
+        let mut txn_plain = env_plain.write_transaction();
+        if with_pre_genesis {
+            // Plain store
+            history_store_plain.add_to_history(
+                &mut txn_plain,
+                Policy::genesis_block_number(),
+                &txns[..3],
+            );
+
+            let pre_genesis_store = history_store_pre.as_ref().unwrap();
+            let mut txn_pre = pre_genesis_store.db.write_transaction();
+            pre_genesis_store.add_to_history(
+                &mut txn_pre,
+                Policy::genesis_block_number(),
+                &txns[..3],
+            );
+            txn_pre.commit();
+        }
+
+        let mut txn_main = env_main.write_transaction();
+        history_store_plain.add_to_history(
+            &mut txn_plain,
+            Policy::genesis_block_number() + 2,
+            &txns[3..],
+        );
+        history_store_main.add_to_history(
+            &mut txn_main,
+            Policy::genesis_block_number() + 2,
+            &txns[3..],
+        );
+        txn_plain.commit();
+        txn_main.commit();
+
+        (
+            HistoryStoreMerger::new(history_store_pre, history_store_main),
+            history_store_plain,
+        )
+    }
+
+    fn gen_hist_txs() -> Vec<HistoricTransaction> {
+        let start_block_number = Policy::genesis_block_number() + 0;
+        let ext_0 = create_transaction(start_block_number + 0, 0);
+        let ext_1 = create_transaction(start_block_number + 0, 1);
+        let ext_2 = create_reward_inherent(start_block_number + 0, 2);
+
+        let ext_3 = create_transaction(start_block_number + 1, 3);
+        let ext_4 = create_reward_inherent(start_block_number + 1, 4);
+
+        let ext_5 = create_transaction(start_block_number + 2, 5);
+        let ext_6 = create_transaction(start_block_number + 2, 6);
+        let ext_7 = create_reward_inherent(start_block_number + 2, 7);
+        let ext_8 = create_jail_inherent(start_block_number + 2);
+        let ext_9 = create_penalize_inherent(start_block_number + 2);
+        let ext_10 = create_equivocation_inherent(start_block_number + 2);
+
+        vec![
+            ext_0, ext_1, ext_2, ext_3, ext_4, ext_5, ext_6, ext_7, ext_8, ext_9, ext_10,
+        ]
     }
 }
