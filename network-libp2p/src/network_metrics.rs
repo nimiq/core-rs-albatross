@@ -50,7 +50,17 @@ impl NetworkMetrics {
     }
 
     pub(crate) fn note_received_pubsub_message(&self, topic: &TopicHash) {
-        if ["blocks", "transactions", "tendermint-proposal"].contains(&&*topic.to_string()) {
+        if [
+            "address-subscription",
+            "block-body",
+            "block-header",
+            "control-transaction",
+            "regular-transaction",
+            "tendermint-proposal",
+            "zk-proof",
+        ]
+        .contains(&&*topic.to_string())
+        {
             self.gossipsub_messages_received
                 .get_or_create(&TopicLabels {
                     topic: topic.to_string(),
