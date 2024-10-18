@@ -113,9 +113,6 @@ jobs:
     - uses: Swatinem/rust-cache@v2
     - name: Install wasm-pack
       run: cargo install wasm-pack
-    - name: Compile to wasm and generate bindings
-      working-directory: ./web-client
-      run: wasm-pack build --target web
     - name: Execute wasm unittests
       working-directory: ./web-client
       run: wasm-pack test --chrome --headless
