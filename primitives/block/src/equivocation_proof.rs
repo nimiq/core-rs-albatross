@@ -372,7 +372,7 @@ impl DoubleProposalProof {
     }
     /// Round of the proposals.
     pub fn round(&self) -> u32 {
-        self.proposal1.proposal.round
+        self.proposal1.round
     }
     /// Hash of header number 1.
     pub fn header1_hash(&self) -> Blake2bHash {
@@ -404,7 +404,6 @@ impl DoubleProposalProof {
         }
 
         if self.proposal1.proposal.block_number != self.proposal2.proposal.block_number
-            || self.proposal1.proposal.round != self.proposal2.proposal.round
             || self.proposal1.round != self.proposal2.round
         {
             return Err(EquivocationProofError::SlotMismatch);
@@ -810,8 +809,8 @@ mod test {
         let proposals: Vec<_> = headers
             .into_iter()
             .map(|header| TendermintProposal {
+                round: header.round,
                 proposal: header,
-                round: 0,
                 valid_round: None,
             })
             .collect();
