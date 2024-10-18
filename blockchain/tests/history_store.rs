@@ -1,6 +1,5 @@
 use nimiq_block::{
-    Block, DoubleProposalProof, DoubleVoteProof, EquivocationProof, ForkProof, MacroHeader,
-    MicroHeader,
+    Block, DoubleProposalProof, DoubleVoteProof, EquivocationProof, ForkProof, MicroHeader,
 };
 use nimiq_blockchain::interface::HistoryInterface;
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
@@ -9,7 +8,9 @@ use nimiq_database::traits::WriteTransaction;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2sHash, HashOutput};
 use nimiq_keys::{KeyPair, PrivateKey};
-use nimiq_primitives::{policy::Policy, TendermintIdentifier, TendermintStep, TendermintVote};
+use nimiq_primitives::{
+    policy::Policy, TendermintIdentifier, TendermintProposal, TendermintStep, TendermintVote,
+};
 use nimiq_serde::Deserialize;
 use nimiq_test_log::test;
 use nimiq_test_utils::{
@@ -135,15 +136,25 @@ fn do_double_proposal(
         .clone()
         .unwrap_macro()
         .header;
-    let justification1 = signing_key.sign(MacroHeader::hash(&header1).as_bytes());
-    let justification2 = signing_key.sign(MacroHeader::hash(&header2).as_bytes());
+    let proposal1 = TendermintProposal {
+        proposal: header1,
+        round: 0,
+        valid_round: None,
+    };
+    let proposal2 = TendermintProposal {
+        proposal: header2,
+        round: 0,
+        valid_round: None,
+    };
+    let justification1 = signing_key.sign(proposal1.hash().as_bytes());
+    let justification2 = signing_key.sign(proposal2.hash().as_bytes());
 
     // Produce the double proposal proof.
     EquivocationProof::DoubleProposal(DoubleProposalProof::new(
         validator_address(),
-        header1.clone(),
+        proposal1,
         justification1,
-        header2,
+        proposal2,
         justification2,
     ))
 }
