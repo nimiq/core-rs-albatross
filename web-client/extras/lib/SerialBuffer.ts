@@ -104,46 +104,54 @@ export class SerialBuffer extends Uint8Array {
         this._writePos += 8;
     }
 
+    // Copied from: https://github.com/chrisdickinson/varint/blob/master/decode.js
     readVarUint(): number {
-        const value = this.readUint8();
-        if (value < 0xFD) {
-            return value;
-        } else if (value === 0xFD) {
-            return this.readUint16();
-        } else if (value === 0xFE) {
-            return this.readUint32();
-        } /*if (value === 0xFF)*/ else {
-            return this.readUint64();
-        }
+        let res = 0;
+        let shift = 0;
+        let b: number;
+
+        do {
+            if (shift > 49) {
+                throw new RangeError('Could not decode varint');
+            }
+            b = this.readUint8();
+            res += shift < 28
+                ? (b & VARINT_REST) << shift
+                : (b & VARINT_REST) * Math.pow(2, shift);
+            shift += 7;
+        } while (b >= VARINT_MSB);
+
+        return res;
     }
 
+    // Copied from: https://github.com/chrisdickinson/varint/blob/master/encode.js
     writeVarUint(value: number): void {
-        if (!NumberUtils.isUint64(value)) throw new Error('Malformed value');
-        if (value < 0xFD) {
-            this.writeUint8(value);
-        } else if (value <= 0xFFFF) {
-            this.writeUint8(0xFD);
-            this.writeUint16(value);
-        } else if (value <= 0xFFFFFFFF) {
-            this.writeUint8(0xFE);
-            this.writeUint32(value);
-        } else {
-            this.writeUint8(0xFF);
-            this.writeUint64(value);
+        if (Number.MAX_SAFE_INTEGER && value > Number.MAX_SAFE_INTEGER) {
+            throw new RangeError('Could not encode varint');
         }
+        while (value >= VARINT_INT) {
+            this.writeUint8((value & 0xFF) | VARINT_MSB);
+            value /= 128;
+        }
+        while (value & VARINT_MSBALL) {
+            this.writeUint8((value & 0xFF) | VARINT_MSB);
+            value >>>= 7;
+        }
+        this.writeUint8(value | 0);
     }
 
+    // Copied from: https://github.com/chrisdickinson/varint/blob/master/length.js
     static varUintSize(value: number): number {
-        if (!NumberUtils.isUint64(value)) throw new Error('Malformed value');
-        if (value < 0xFD) {
-            return 1;
-        } else if (value <= 0xFFFF) {
-            return 3;
-        } else if (value <= 0xFFFFFFFF) {
-            return 5;
-        } else {
-            return 9;
-        }
+        if (value < Math.pow(2, 7)) return 1;
+        if (value < Math.pow(2, 14)) return 2;
+        if (value < Math.pow(2, 21)) return 3;
+        if (value < Math.pow(2, 28)) return 4;
+        if (value < Math.pow(2, 35)) return 5;
+        if (value < Math.pow(2, 42)) return 6;
+        if (value < Math.pow(2, 49)) return 7;
+        if (value < Math.pow(2, 56)) return 8;
+        if (value < Math.pow(2, 93)) return 9;
+        return 10;
     }
 
     readFloat64(): number {
@@ -163,7 +171,7 @@ export class SerialBuffer extends Uint8Array {
     }
 
     writeString(value: string, length: number): void {
-        if (StringUtils.isMultibyte(value) || value.length !== length) throw new Error('Malformed value/length');
+        if (!StringUtils.isWellFormed(value) || value.length !== length) throw new Error('Malformed value/length');
         const bytes = BufferUtils.fromUtf8(value);
         this.write(bytes);
     }
@@ -177,7 +185,7 @@ export class SerialBuffer extends Uint8Array {
     }
 
     writePaddedString(value: string, length: number): void {
-        if (StringUtils.isMultibyte(value) || value.length > length) throw new Error('Malformed value/length');
+        if (!StringUtils.isWellFormed(value) || value.length > length) throw new Error('Malformed value/length');
         const bytes = BufferUtils.fromUtf8(value);
         this.write(bytes);
         const padding = length - bytes.byteLength;
@@ -185,21 +193,29 @@ export class SerialBuffer extends Uint8Array {
     }
 
     readVarLengthString(): string {
-        const length = this.readUint8();
+        const length = this.readVarUint();
         if (this._readPos + length > this.length) throw new Error('Malformed length');
         const bytes = this.read(length);
         return BufferUtils.toUtf8(bytes);
     }
 
     writeVarLengthString(value: string): void {
-        if (StringUtils.isMultibyte(value) || !NumberUtils.isUint8(value.length)) throw new Error('Malformed value');
+        if (!StringUtils.isWellFormed(value)) throw new Error('Malformed value');
         const bytes = BufferUtils.fromUtf8(value);
-        this.writeUint8(bytes.byteLength);
+        this.writeVarUint(bytes.byteLength);
         this.write(bytes);
     }
 
     static varLengthStringSize(value: string): number {
-        if (StringUtils.isMultibyte(value) || !NumberUtils.isUint8(value.length)) throw new Error('Malformed value');
-        return /*length*/ 1 + value.length;
+        if (!StringUtils.isWellFormed(value)) throw new Error('Malformed value');
+        const bytes = BufferUtils.fromUtf8(value);
+        return SerialBuffer.varUintSize(bytes.byteLength) + bytes.byteLength;
     }
 }
+
+// VarUint constants
+// Copied from: https://github.com/chrisdickinson/varint/blob/master/encode.js
+const VARINT_MSB = 0x80;
+const VARINT_REST = 0x7F;
+const VARINT_MSBALL = ~VARINT_REST;
+const VARINT_INT = Math.pow(2, 31);

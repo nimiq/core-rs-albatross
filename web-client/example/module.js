@@ -21,7 +21,7 @@ init().then(async () => {
         const block = await client.getBlock(hash);
         const rebranchLength = revertedBlocks.length;
 
-        console.log([
+        console.debug([
             'Blockchain:',
             reason,
             ...(rebranchLength ? [rebranchLength] : []),

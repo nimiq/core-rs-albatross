@@ -5,7 +5,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_derive::TryFromJsValue;
 
 use crate::{
-    address::Address,
+    common::address::Address,
     primitives::{private_key::PrivateKey, signature::Signature},
 };
 
@@ -37,7 +37,7 @@ impl PublicKey {
     /// Deserializes a public key from a byte array.
     ///
     /// Throws when the byte array contains less than 32 bytes.
-    pub fn unserialize(bytes: &[u8]) -> Result<PublicKey, JsError> {
+    pub fn deserialize(bytes: &[u8]) -> Result<PublicKey, JsError> {
         let key = nimiq_keys::Ed25519PublicKey::deserialize_from_vec(bytes)?;
         Ok(PublicKey::from(key))
     }
@@ -59,7 +59,7 @@ impl PublicKey {
         if raw_bytes.len() != Self::RAW_SIZE {
             return Err(JsError::new("Public key primitive: Invalid raw length"));
         }
-        Self::unserialize(raw_bytes)
+        Self::deserialize(raw_bytes)
     }
 
     /// Creates a new public key from a byte array.
@@ -73,7 +73,7 @@ impl PublicKey {
         if bytes.len() == Self::RAW_SIZE {
             return Self::from_raw(bytes);
         }
-        Self::unserialize(bytes)
+        Self::deserialize(bytes)
     }
 
     /// Serializes the public key to a byte array.

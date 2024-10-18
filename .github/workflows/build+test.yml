@@ -120,6 +120,30 @@ jobs:
       working-directory: ./web-client
       run: wasm-pack test --chrome --headless
 
+  web-client-lib:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Free Disk Space (Ubuntu)
+      uses: jlumbroso/free-disk-space@main
+      with:
+        tool-cache: true
+        large-packages: false
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-unknown-unknown
+    - uses: Swatinem/rust-cache@v2
+    - name: Compile to wasm and generate bindings
+      working-directory: ./web-client
+      run: ./scripts/build.sh --only nodejs
+    - name: Install dependencies in the web-client/dist folder
+      working-directory: ./web-client/dist
+      run: yarn install
+    - name: Execute unittests
+      working-directory: ./web-client/extras
+      run: yarn test
+
   reconnect-test:
     runs-on: ubuntu-22.04
 

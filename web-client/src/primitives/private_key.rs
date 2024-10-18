@@ -12,6 +12,21 @@ pub struct PrivateKey {
 
 #[wasm_bindgen]
 impl PrivateKey {
+    #[wasm_bindgen(getter = PURPOSE_ID)]
+    pub fn purpose_id() -> u32 {
+        0x42000001
+    }
+
+    #[wasm_bindgen(getter = SIZE)]
+    pub fn size() -> usize {
+        nimiq_keys::PrivateKey::SIZE
+    }
+
+    #[wasm_bindgen(getter = serializedSize)]
+    pub fn serialized_size(&self) -> usize {
+        PrivateKey::size()
+    }
+
     /// Generates a new private key from secure randomness.
     pub fn generate() -> PrivateKey {
         PrivateKey::from(nimiq_keys::PrivateKey::generate_default_csprng())
@@ -20,7 +35,7 @@ impl PrivateKey {
     /// Deserializes a private key from a byte array.
     ///
     /// Throws when the byte array contains less than 32 bytes.
-    pub fn unserialize(bytes: &[u8]) -> Result<PrivateKey, JsError> {
+    pub fn deserialize(bytes: &[u8]) -> Result<PrivateKey, JsError> {
         let key = nimiq_keys::PrivateKey::deserialize_from_vec(bytes)?;
         Ok(PrivateKey::from(key))
     }
@@ -33,7 +48,7 @@ impl PrivateKey {
         if bytes.len() != nimiq_keys::PrivateKey::SIZE {
             return Err(JsError::new("Private key primitive: Invalid length"));
         }
-        Self::unserialize(bytes)
+        Self::deserialize(bytes)
     }
 
     /// Serializes the private key to a byte array.
