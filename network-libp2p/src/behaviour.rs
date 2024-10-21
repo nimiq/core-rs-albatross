@@ -19,7 +19,7 @@ use crate::{
 };
 
 /// Maximum simultaneous libp2p connections per peer
-const MAX_CONNECTIONS_PER_PEER: u32 = 2;
+const MAX_CONNECTIONS_PER_PEER: u32 = 3;
 
 /// Network behaviour.
 /// This is composed of several other behaviours that build a tree of behaviours using
