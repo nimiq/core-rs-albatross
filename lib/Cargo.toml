@@ -39,7 +39,7 @@ signal-hook = { version = "0.3", optional = true }
 subtle = "2.6"
 thiserror = "1.0"
 time = { version = "0.3", optional = true }
-tokio = { version = "1.40", features = ["rt"], optional = true }
+tokio = { version = "1.41", features = ["rt"], optional = true }
 toml = "0.8"
 tracing-loki = { version = "0.2.5", optional = true }
 tracing-subscriber = { version = "0.3", optional = true, features = [
