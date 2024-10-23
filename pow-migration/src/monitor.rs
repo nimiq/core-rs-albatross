@@ -61,7 +61,7 @@ pub fn generate_ready_tx(validator: String, hash: &Blake2bHash) -> OutgoingTrans
 /// - Sender: Validator address
 /// - Recipient: Burn address
 /// - Value: 1 Luna
-/// - Data: "online"
+/// - Data: "online" as hex representation
 pub fn generate_online_tx(validator: String) -> OutgoingTransaction {
     log::debug!(
         validator_address = validator,
@@ -72,7 +72,7 @@ pub fn generate_online_tx(validator: String) -> OutgoingTransaction {
         to: Address::burn_address().to_user_friendly_address(),
         value: 1, //Lunas
         fee: 0,
-        data: Some("online".to_string()),
+        data: Some(hex::encode(String::from("online"))),
     }
 }
 
@@ -132,7 +132,7 @@ fn is_valid_ready_txn(
 /// Checks if the provided transaction meets the criteria in order to be
 /// considered a valid online-transaction
 fn is_valid_online_txn(txn: &TransactionDetails, block_window: &Range<u32>) -> bool {
-    Some("online".to_string()) == txn.data
+    Some(hex::encode(String::from("online"))) == txn.data
         && block_window.contains(&txn.block_number)
         && txn.to_address == Address::burn_address().to_user_friendly_address()
 }
