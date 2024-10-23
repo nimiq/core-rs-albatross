@@ -18,9 +18,8 @@ use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
 use crate::{
-    blockchain_state::BlockchainState, chain_store::ChainStore, history::HistoryStore,
-    history_store_proxy::HistoryStoreProxy, interface::HistoryInterface,
-    reward::genesis_parameters, HistoryStoreIndex,
+    blockchain_state::BlockchainState, chain_store::ChainStore,
+    history_store_proxy::MergedHistoryStoreProxy, reward::genesis_parameters,
 };
 
 const BROADCAST_MAX_CAPACITY: usize = 256;
@@ -45,7 +44,7 @@ pub struct Blockchain {
     /// The chain store is a database containing all of the chain infos, blocks and receipts.
     pub chain_store: ChainStore,
     /// The history store is a database containing all of the history trees and transactions.
-    pub history_store: Arc<HistoryStoreProxy>,
+    pub history_store: Arc<MergedHistoryStoreProxy>,
     /// The current state of the blockchain.
     pub state: BlockchainState,
     /// A reference to a "function" to test whether a given transaction is known and valid.
@@ -87,8 +86,10 @@ impl Default for BlockchainConfig {
 /// Implements methods to start a Blockchain.
 impl Blockchain {
     /// Creates a new blockchain from a given environment and network ID.
-    pub fn new(
+    /// This method allows to pass a separate database for pre-genesis history.
+    pub fn new_merged(
         env: MdbxDatabase,
+        pre_genesis_env: Option<MdbxDatabase>,
         config: BlockchainConfig,
         network_id: NetworkId,
         time: Arc<OffsetTime>,
@@ -97,8 +98,39 @@ impl Blockchain {
         let genesis_block = network_info.genesis_block();
         let genesis_accounts = network_info.genesis_accounts();
 
-        Self::with_genesis(
+        Self::with_genesis_merged(
             env,
+            pre_genesis_env,
+            config,
+            time,
+            network_id,
+            genesis_block,
+            genesis_accounts,
+        )
+    }
+
+    /// Creates a new blockchain from a given environment and network ID.
+    pub fn new(
+        env: MdbxDatabase,
+        config: BlockchainConfig,
+        network_id: NetworkId,
+        time: Arc<OffsetTime>,
+    ) -> Result<Self, BlockchainError> {
+        Self::new_merged(env, None, config, network_id, time)
+    }
+
+    /// Creates a new blockchain with the given genesis block.
+    pub fn with_genesis(
+        env: MdbxDatabase,
+        config: BlockchainConfig,
+        time: Arc<OffsetTime>,
+        network_id: NetworkId,
+        genesis_block: Block,
+        genesis_accounts: Vec<TrieItem>,
+    ) -> Result<Self, BlockchainError> {
+        Self::with_genesis_merged(
+            env,
+            None,
             config,
             time,
             network_id,
@@ -108,8 +140,10 @@ impl Blockchain {
     }
 
     /// Creates a new blockchain with the given genesis block.
-    pub fn with_genesis(
+    /// This method also allows to pass a separate database for pre-genesis history.
+    pub fn with_genesis_merged(
         env: MdbxDatabase,
+        pre_genesis_env: Option<MdbxDatabase>,
         config: BlockchainConfig,
         time: Arc<OffsetTime>,
         network_id: NetworkId,
@@ -136,18 +170,12 @@ impl Blockchain {
             return Err(BlockchainError::InvalidGenesisBlock);
         }
 
-        let history_store = if config.index_history {
-            Arc::new(HistoryStoreProxy::WithIndex(HistoryStoreIndex::new(
-                env.clone(),
-                network_id,
-            )))
-        } else {
-            Arc::new(HistoryStoreProxy::WithoutIndex(Box::new(HistoryStore::new(
-                env.clone(),
-                network_id,
-            ))
-                as Box<dyn HistoryInterface + Sync + Send>))
-        };
+        let history_store = Arc::new(MergedHistoryStoreProxy::new_merged(
+            env.clone(),
+            pre_genesis_env,
+            config.index_history,
+            network_id,
+        ));
 
         let chain_store = ChainStore::new(env.clone(), Arc::clone(&history_store));
 
@@ -180,7 +208,7 @@ impl Blockchain {
         env: MdbxDatabase,
         config: BlockchainConfig,
         chain_store: ChainStore,
-        history_store: Arc<HistoryStoreProxy>,
+        history_store: Arc<MergedHistoryStoreProxy>,
         time: Arc<OffsetTime>,
         network_id: NetworkId,
         genesis_block: Block,
@@ -317,7 +345,7 @@ impl Blockchain {
         env: MdbxDatabase,
         config: BlockchainConfig,
         chain_store: ChainStore,
-        history_store: Arc<HistoryStoreProxy>,
+        history_store: Arc<MergedHistoryStoreProxy>,
         time: Arc<OffsetTime>,
         network_id: NetworkId,
         genesis_block: Block,

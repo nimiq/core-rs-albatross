@@ -136,7 +136,7 @@ pub async fn migrate(
     pow_client: &Client,
     block_windows: &BlockWindows,
     candidate_block: u32,
-    env: MdbxDatabase,
+    pre_genesis_env: MdbxDatabase,
     validator_address: &Option<Address>,
     network_id: NetworkId,
 ) -> Result<Option<GenesisConfig>, Error> {
@@ -277,7 +277,7 @@ pub async fn migrate(
         pow_client,
         block_windows,
         network_id,
-        env.clone(),
+        pre_genesis_env.clone(),
         Some(PoSRegisteredAgents {
             validators: validators.clone(),
             stakers: stakers.clone(),

@@ -61,7 +61,7 @@ pub struct HistoryStore {
 
     /// The validity store is used by nodes to keep track of which
     /// transactions have occurred within the validity window.
-    pub(crate) validity_store: ValidityStore,
+    pub(crate) validity_store: Option<ValidityStore>,
 
     /// The network ID. It determines if this is the mainnet or one of the testnets.
     pub(crate) network_id: NetworkId,
@@ -71,7 +71,7 @@ impl HistoryStore {
     /// Creates a new HistoryStore.
     pub fn new(db: MdbxDatabase, network_id: NetworkId) -> Self {
         let store = HistoryStore {
-            validity_store: ValidityStore::new(db.clone()),
+            validity_store: Some(ValidityStore::new(db.clone())),
             db,
             network_id,
             hist_tree_table: HistoryTreeTable,
@@ -79,11 +79,32 @@ impl HistoryStore {
             last_leaf_table: LastLeafTable,
         };
 
-        store.db.create_dup_table(&store.hist_tree_table);
-        store.db.create_dup_table(&store.hist_tx_table);
-        store.db.create_regular_table(&store.last_leaf_table);
+        store.create_tables();
 
         store
+    }
+
+    /// Creates a new HistoryStore.
+    pub fn new_pre_genesis(db: MdbxDatabase, network_id: NetworkId) -> Self {
+        let store = HistoryStore {
+            validity_store: None,
+            db,
+            network_id,
+            hist_tree_table: HistoryTreeTable,
+            hist_tx_table: HistoricTransactionTable,
+            last_leaf_table: LastLeafTable,
+        };
+
+        store.create_tables();
+
+        store
+    }
+
+    /// Creates the tables for the history store.
+    fn create_tables(&self) {
+        self.db.create_dup_table(&self.hist_tree_table);
+        self.db.create_dup_table(&self.hist_tx_table);
+        self.db.create_regular_table(&self.last_leaf_table);
     }
 
     /// Gets an historic transaction by its hash. Note that this hash is the leaf hash (see MMRHash)
@@ -382,15 +403,18 @@ impl HistoryStore {
             };
             cursor.append_dup(&epoch_number, &value);
 
-            self.validity_store
-                .add_transaction(txn, hist_tx.block_number, hist_tx.tx_hash());
+            if let Some(ref validity_store) = self.validity_store {
+                validity_store.add_transaction(txn, hist_tx.block_number, hist_tx.tx_hash());
+            }
 
             txn.put(&self.last_leaf_table, &hist_tx.block_number, &leaf_index);
 
             txns_size += hist_tx.serialized_size() as u64;
         }
 
-        self.validity_store.update_validity_store(txn, block_number);
+        if let Some(ref validity_store) = self.validity_store {
+            validity_store.update_validity_store(txn, block_number);
+        }
 
         // Return the history root.
         Some((root, txns_size, leaf_idx))
@@ -537,7 +561,11 @@ impl HistoryInterface for HistoryStore {
         raw_tx_hash: &RawTransactionHash,
         txn_opt: Option<&MdbxReadTransaction>,
     ) -> bool {
-        self.validity_store.has_transaction(txn_opt, raw_tx_hash)
+        if let Some(ref validity_store) = self.validity_store {
+            validity_store.has_transaction(txn_opt, raw_tx_hash)
+        } else {
+            false
+        }
     }
 
     /// Gets all historic transactions for a given block number.
@@ -736,8 +764,9 @@ impl HistoryInterface for HistoryStore {
             };
             cursor.append(&epoch_number, &value);
 
-            self.validity_store
-                .add_transaction(txn, hist_tx.block_number, hist_tx.tx_hash());
+            if let Some(ref validity_store) = self.validity_store {
+                validity_store.add_transaction(txn, hist_tx.block_number, hist_tx.tx_hash());
+            }
 
             txn.put(
                 &self.last_leaf_table,
@@ -768,7 +797,11 @@ impl HistoryInterface for HistoryStore {
         let hash = HistoricTransactionData::Equivocation(EquivocationEvent { locator })
             .hash::<Blake2bHash>()
             .into();
-        self.validity_store.has_transaction(txn_option, &hash)
+        if let Some(ref validity_store) = self.validity_store {
+            validity_store.has_transaction(txn_option, &hash)
+        } else {
+            false
+        }
     }
 
     fn prove_num_leaves(
@@ -867,8 +900,9 @@ impl HistoryInterface for HistoryStore {
             .remove_partial_history(txn, block.epoch_number(), num_txs)
             .expect("Failed to remove partial history");
 
-        self.validity_store
-            .delete_block_transactions(txn, block.block_number());
+        if let Some(ref validity_store) = self.validity_store {
+            validity_store.delete_block_transactions(txn, block.block_number());
+        }
 
         Some(total_size)
     }
