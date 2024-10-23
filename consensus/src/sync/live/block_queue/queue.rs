@@ -14,9 +14,9 @@ use nimiq_block::Block;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, Direction, ForkEvent};
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::network::Network;
+use nimiq_network_interface::network::{CloseReason, Network};
 use nimiq_primitives::{policy::Policy, slots_allocation::Validators};
-use nimiq_utils::WakerExt;
+use nimiq_utils::{spawn, WakerExt};
 use parking_lot::RwLock;
 use tokio::sync::oneshot::Sender as OneshotSender;
 
@@ -67,6 +67,9 @@ pub struct BlockQueue<N: Network> {
 
     /// The block number of the latest macro block. We prune the block buffer when it changes.
     current_macro_height: u32,
+
+    /// Most recent macro block height we have requested.
+    most_recent_req_macro_height: u32,
 
     /// A list of all pending missing block requests which have someplace waiting for it to resolve.
     ///
@@ -121,6 +124,7 @@ impl<N: Network> BlockQueue<N> {
         config: QueueConfig,
     ) -> Self {
         let current_macro_height = Policy::last_macro_block(blockchain.read().block_number());
+        let most_recent_macro_height = current_macro_height;
         let blockchain_rx = blockchain.read().notifier_as_stream();
         let fork_rx = blockchain.read().fork_notifier_as_stream();
         let request_component =
@@ -137,6 +141,7 @@ impl<N: Network> BlockQueue<N> {
             buffer: BTreeMap::new(),
             blocks_pending_push: BTreeSet::new(),
             current_macro_height,
+            most_recent_req_macro_height: most_recent_macro_height,
             pending_requests: BTreeMap::default(),
             waker: None,
         }
@@ -178,6 +183,10 @@ impl<N: Network> BlockQueue<N> {
         let block_hash = block.hash_cached();
         let block_number = block.block_number();
         let head_height = blockchain.block_number();
+        let validators = blockchain
+            .current_validators()
+            .expect("we must have validators.")
+            .clone();
 
         // Ignore blocks that we already know.
         if let Ok(info) = blockchain.get_chain_info(&block_hash, false) {
@@ -223,23 +232,52 @@ impl<N: Network> BlockQueue<N> {
                 );
                 return Some(QueuedBlock::TooFarAhead(peer_id));
             }
-        } else if block_number <= macro_height {
+        } else if block_number <= self.current_macro_height {
             // Block is from a previous batch/epoch, discard it.
             log::warn!(
                 "Discarding block {} - we're already at macro block #{}",
                 block,
-                macro_height
+                self.current_macro_height
             );
             block_source.ignore_block(&self.network);
         } else if self.request_component.has_no_pending_requests()
-            || macro_height == Policy::last_macro_block(block.block_number())
+            || self.current_macro_height == Policy::last_macro_block(block.block_number())
         {
+            if self.request_component.has_no_pending_requests() {
+                log::error!("Why no pending requests??? ");
+            } else {
+                log::error!("Induced by same batch");
+            }
+            log::error!( %block, no_pending_requests= self.request_component.has_no_pending_requests(), same_macro_height = (macro_height == Policy::last_macro_block(block.block_number())),"We are potentially overlapping reqs");
             // Block is inside the buffer window. We avoid overlapping requests unless
             // we are on the same batch as the new blocks.
             self.buffer_and_request_missing_blocks(block, block_source);
-        } else if block.is_macro() && self.current_macro_height < block.block_number() {
-            // New macro block, then we buffer it and request the missing batch.
-            self.buffer_and_request_missing_batch(block, block_source);
+        } else if block.is_macro()
+            && Policy::macro_block_after(self.most_recent_req_macro_height) == block.block_number()
+        {
+            log::error!( %block, "New macro block announced!");
+
+            if let Err(e) = block.verify_validators(&validators) {
+                log::trace!(
+                    block = block.block_number(),
+                    error = %e,
+
+                    "Banning peer because received invalid macro block from gossip sub (macro block does not verify)"
+                );
+                block_source.reject_block(&self.network);
+
+                let network = Arc::clone(&self.network);
+                spawn(Box::pin({
+                    async move {
+                        network
+                            .disconnect_peer(block_source.peer_id(), CloseReason::MaliciousPeer)
+                            .await;
+                    }
+                }));
+            } else {
+                // New macro block, then we buffer it and request the missing batch.
+                self.buffer_and_request_missing_batches(block, block_source);
+            }
         }
 
         None
@@ -273,6 +311,16 @@ impl<N: Network> BlockQueue<N> {
             parent_hash = parent_block_hash;
             parent_block_number = parent_block_number.saturating_sub(1);
         }
+        // ITODO I was here, we can optimize locators so that we request also form the macro block parent.
+        let mut locators = vec![];
+        while !Policy::is_macro_block_at(parent_block_number) {
+            parent_block_number = parent_block_number.saturating_sub(1);
+            if let Some(entry) = self.buffer.get(&(parent_block_number)) {
+                entry.keys().for_each(|hash| locators.push(hash.clone()));
+            } else {
+                break;
+            }
+        }
 
         // If the parent of this block is already being pushed or we already requested missing blocks for it, we're done.
         let parent_pending = self.blocks_pending_push.contains(&parent_hash)
@@ -298,7 +346,7 @@ impl<N: Network> BlockQueue<N> {
     }
 
     /// Buffers the current block and requests any missing blocks in-between.
-    fn buffer_and_request_missing_batch(&mut self, block: Block, block_source: BlockSource<N>) {
+    fn buffer_and_request_missing_batches(&mut self, block: Block, block_source: BlockSource<N>) {
         // Make sure that block_number is positive as we subtract from it later on.
         let block_number = block.block_number();
         if block_number == 0 {
@@ -307,7 +355,8 @@ impl<N: Network> BlockQueue<N> {
 
         let target_hash = block.parent_hash().clone();
         let target_block_number = block_number - 1;
-        let mut parent_macro_block_number = Policy::macro_block_before(block.block_number());
+        let parent_macro_block_number = Policy::macro_block_before(block.block_number());
+        let old_req_macro_height = self.most_recent_req_macro_height;
 
         // Insert block into buffer. If we already know the block, we're done.
         if !self.insert_block_into_buffer(block, block_source.clone()) {
@@ -319,18 +368,16 @@ impl<N: Network> BlockQueue<N> {
         }
         log::trace!(block_number, "Buffering macro block");
 
-        let mut parent_macro_hash = self.blockchain.read().head_hash();
         // Fetch the parent macro block in the buffer.
-        while parent_macro_block_number > self.current_macro_height {
-            if let Some(hash) = self
-                .buffer
-                .get(&parent_macro_block_number)
-                .and_then(|blocks| blocks.keys().next())
-            {
-                parent_macro_hash = hash.clone();
+        let (parent_macro_hash, parent_macro_block_number, validators) =
+            self.get_micro_macro_parents(old_req_macro_height, parent_macro_block_number);
+        let mut locators = vec![parent_macro_hash.clone()];
+        for i in 0..Policy::blocks_per_batch() {
+            if let Some(entry) = self.buffer.get(&(parent_macro_block_number + i)) {
+                entry.keys().for_each(|hash| locators.push(hash.clone()));
+            } else {
                 break;
             }
-            parent_macro_block_number = Policy::macro_block_before(parent_macro_block_number);
         }
 
         // If the macro block parent is already being pushed or we already requested missing blocks for it, we're done.
@@ -347,12 +394,13 @@ impl<N: Network> BlockQueue<N> {
         }
 
         // We don't know the predecessor of this block, request it.
-        self.request_missing_blocks(
+        // ITODO the handle missing blocks will try to get the blocks before the parent hash. Problematic?
+        self.request_component.request_missing_blocks(
             target_block_number,
             target_hash,
-            Some(parent_macro_hash),
+            locators,
             Direction::Forward,
-            None,
+            validators,
             Some(block_source.peer_id()),
         );
     }
@@ -422,6 +470,10 @@ impl<N: Network> BlockQueue<N> {
             }
         }
 
+        self.most_recent_req_macro_height = u32::max(
+            self.most_recent_req_macro_height,
+            Policy::last_macro_block(block.block_number()),
+        );
         map.insert(block.hash(), (block, block_source));
         true
     }
@@ -432,6 +484,29 @@ impl<N: Network> BlockQueue<N> {
                 .get(hash)
                 .map(|(block, _)| block.parent_hash().clone())
         })
+    }
+
+    fn get_micro_macro_parents(
+        &self,
+        old_req_macro_height: u32,
+        mut parent_macro_block_number: u32,
+    ) -> (Blake2bHash, u32, Validators) {
+        // Fetch the parent macro block in the buffer.
+        while old_req_macro_height <= parent_macro_block_number {
+            if let Some((block, _)) = self
+                .buffer
+                .get(&parent_macro_block_number)
+                .and_then(|blocks| blocks.values().next())
+            {
+                let validators = block
+                    .validators()
+                    .expect("macro block must have validators");
+                return (block.hash().clone(), block.block_number(), validators);
+            }
+            parent_macro_block_number = Policy::macro_block_before(parent_macro_block_number);
+        }
+
+        unreachable!()
     }
 
     /// Requests missing blocks.
@@ -533,6 +608,12 @@ impl<N: Network> BlockQueue<N> {
 
         let last_block = blocks.last()?;
         let block_hash = last_block.hash();
+        log::trace!(
+            target_block_number,
+            last_block = blocks.last().unwrap().block_number(),
+            reached_target = (block_hash != target_hash),
+            "Received missing blocks response"
+        );
         if block_hash != target_hash {
             // Check if we got a new validator set, otherwise reuse the previous one.
             if last_block.is_election() {
@@ -559,6 +640,14 @@ impl<N: Network> BlockQueue<N> {
             }
         };
 
+        if self.request_component.has_no_pending_requests() {
+            log::error!(
+                target_block_number,
+                last_block = blocks.last().unwrap().block_number(),
+                "b, no missing requests atm!!"
+            );
+        }
+
         if !parent_known {
             // The blockchain cannot process the blocks right away, put them in the buffer.
             // Recursively request missing blocks for the first block we received.
@@ -572,6 +661,14 @@ impl<N: Network> BlockQueue<N> {
             }
 
             return None;
+        }
+
+        if self.request_component.has_no_pending_requests() {
+            log::error!(
+                target_block_number,
+                last_block = blocks.last().unwrap().block_number(),
+                "Handling missing requests, no missing requests atm!! 2"
+            );
         }
 
         // Return missing blocks so they can be pushed to the chain.
@@ -874,23 +971,6 @@ impl<N: Network> Stream for BlockQueue<N> {
             }
         }
 
-        // Get as many blocks from the gossipsub stream as possible.
-        loop {
-            match self.block_stream.poll_next_unpin(cx) {
-                Poll::Ready(Some((block, block_source))) => {
-                    if self.num_peers() > 0 {
-                        log::debug!(%block, peer_id = %block_source.peer_id(), "Received block via gossipsub");
-                        if let Some(block) = self.check_announced_block(block, block_source) {
-                            return Poll::Ready(Some(block));
-                        }
-                    }
-                }
-                // If the block_stream is exhausted, we quit as well.
-                Poll::Ready(None) => return Poll::Ready(None),
-                Poll::Pending => break,
-            }
-        }
-
         // Read all the responses we got for our missing blocks requests.
         loop {
             let poll_res = self.request_component.poll_next_unpin(cx);
@@ -928,6 +1008,23 @@ impl<N: Network> Stream for BlockQueue<N> {
                 }
                 // The block request component never returns `None`.
                 Poll::Ready(None) => unreachable!(),
+                Poll::Pending => break,
+            }
+        }
+
+        // Get as many blocks from the gossipsub stream as possible.
+        loop {
+            match self.block_stream.poll_next_unpin(cx) {
+                Poll::Ready(Some((block, block_source))) => {
+                    if self.num_peers() > 0 {
+                        log::debug!(%block, peer_id = %block_source.peer_id(), "Received block via gossipsub");
+                        if let Some(block) = self.check_announced_block(block, block_source) {
+                            return Poll::Ready(Some(block));
+                        }
+                    }
+                }
+                // If the block_stream is exhausted, we quit as well.
+                Poll::Ready(None) => return Poll::Ready(None),
                 Poll::Pending => break,
             }
         }
