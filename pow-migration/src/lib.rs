@@ -42,7 +42,7 @@ const POW_BLOCKS_PER_HOUR: u32 = 60;
 const NUMBER_ONLINE_REPORTING_WINDOWS: u32 = 3;
 
 /// Numbers of activation windows from which we start removing validators for not being ready
-pub const ACTIVATION_WINDOW_TRESHOLD: u32 = 5;
+pub const ACTIVATION_WINDOW_TRESHOLD: u32 = 3;
 
 static TESTNET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     // The testnet blocks are produced ~every minute.
@@ -67,16 +67,16 @@ static TESTNET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
 // So we have 60 blocks per hour, 1440 blocks per day
 // Note: Final block numbers are rounded up for practical purposes
 static MAINET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
-    // Registration starts at September 12th @ 00:00 UTC
-    registration_start: 3357600,
-    // Registration ends at October 6th @ 00:00 UTC (24*1440 =  34560 blocks later)
-    registration_end: 3392200,
-    // Pre stake starts at October 6th @ 00:00 UTC
-    pre_stake_start: 3392200,
-    // Pre stake ends at November 19th @ 07:00 UTC (44*1440 + 7*60 = 63780 blocks later)
-    pre_stake_end: 3456000,
-    // First activation window begins at November 19th @ 07:00 UTC
-    election_candidate: 3456000,
+    // Registration starts at October 22nd
+    registration_start: 3416190,
+    // Registration ends at October 22nd
+    registration_end: 3416300,
+    // Pre stake starts at October 22nd
+    pre_stake_start: 3416300,
+    // Pre stake ends at October 27th
+    pre_stake_end: 3423000,
+    // First activation window begins at October 27th
+    election_candidate: 3423000,
     // Block confirmations that are needed in order to start the migration process after candidate.
     block_confirmations: 10,
     // This corresponds to ~24 hours.
