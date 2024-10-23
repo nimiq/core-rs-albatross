@@ -288,6 +288,7 @@ async fn validator_can_catch_up() {
         .collect();
 
     let skip_block_info = SkipBlockInfo {
+        network_id: blockchain.read().network_id,
         block_number: 1,
         vrf_entropy: blockchain.read().head().seed().entropy(),
     };
