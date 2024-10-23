@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     net::IpAddr,
     pin::Pin,
     sync::Arc,
@@ -16,7 +16,7 @@ use libp2p::{
         behaviour::{ConnectionClosed, ConnectionEstablished, DialFailure},
         dial_opts::{DialOpts, PeerCondition},
         dummy, CloseConnection, ConnectionDenied, ConnectionId, DialError, FromSwarm,
-        NetworkBehaviour, THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
+        ListenFailure, NetworkBehaviour, THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
     },
     Multiaddr, PeerId, TransportError,
 };
@@ -676,21 +676,6 @@ impl Behaviour {
             return;
         }
 
-        // Get IP from multiaddress if it exists.
-        let ip_info = self.get_ip_info_from_multiaddr(address);
-        if let Some(ip_info) = ip_info {
-            // Increment peer counts per IP
-            if let Some(subnet_ip) = ip_info.subnet_ip {
-                let value = self.limits.ip_subnet_count.entry(subnet_ip).or_insert(0);
-                *value = value.saturating_add(1);
-            }
-
-            let value = self.limits.ip_count.entry(ip_info.ip).or_insert(0);
-            *value = value.saturating_add(1);
-
-            self.limits.peer_count = self.limits.peer_count.saturating_add(1);
-        }
-
         // Peer is connected, mark it as such.
         let peer_services = self
             .contacts
@@ -712,11 +697,6 @@ impl Behaviour {
         endpoint: &ConnectedPoint,
         remaining_established: usize,
     ) {
-        // Check there are no more remaining connections to this peer
-        if remaining_established > 0 {
-            return;
-        }
-
         let address = endpoint.get_remote_address();
 
         // Get IP from multiaddress if it exists.
@@ -724,22 +704,14 @@ impl Behaviour {
 
         // Decrement IP counters if needed
         if let Some(ip_info) = ip_info {
-            let value = self.limits.ip_count.entry(ip_info.ip).or_insert(1);
-            *value = value.saturating_sub(1);
-            if *self.limits.ip_count.get(&ip_info.ip).unwrap() == 0 {
-                self.limits.ip_count.remove(&ip_info.ip);
-            }
-
-            if let Some(subnet_ip) = ip_info.subnet_ip {
-                let value = self.limits.ip_subnet_count.entry(subnet_ip).or_insert(1);
-                *value = value.saturating_sub(1);
-                if *self.limits.ip_subnet_count.get(&subnet_ip).unwrap() == 0 {
-                    self.limits.ip_subnet_count.remove(&subnet_ip);
-                }
-            }
+            self.decrement_ip_counters(&ip_info);
         }
 
         self.limits.peer_count = self.limits.peer_count.saturating_sub(1);
+        // Check there are no more remaining connections to this peer
+        if remaining_established > 0 {
+            return;
+        }
 
         self.addresses.mark_closed(address.clone());
         self.peer_ids.mark_closed(*peer_id);
@@ -821,6 +793,89 @@ impl Behaviour {
             }
         }
     }
+
+    fn on_listen_failure(&mut self, send_back_addr: &Multiaddr) {
+        // Get IP from multiaddress if it exists.
+        let ip_info = self.get_ip_info_from_multiaddr(send_back_addr);
+
+        // Decrement IP counters if needed
+        if let Some(ip_info) = ip_info {
+            self.decrement_ip_counters(&ip_info);
+        }
+        self.limits.peer_count = self.limits.peer_count.saturating_sub(1);
+    }
+
+    fn reached_peer_limit(&mut self) -> Result<(), ConnectionDenied> {
+        self.limits.peer_count = self.limits.peer_count.saturating_add(1);
+
+        // Check for the maximum peer count limit
+        if self.limits.peer_count > self.config.peer_count_max {
+            debug!(
+                connections = self.limits.peer_count,
+                "Max peer connections limit reached"
+            );
+            return Err(ConnectionDenied::new(Error::MaxPeerConnectionsReached));
+        }
+
+        Ok(())
+    }
+
+    fn reached_ip_limit(&mut self, ip_info: &IpInfo) -> Result<(), ConnectionDenied> {
+        // Increment peer IP counter
+        let ip_count = self.limits.ip_count.entry(ip_info.ip).or_insert(0);
+        *ip_count = ip_count.saturating_add(1);
+
+        // Increment peer subnet IP counter
+        if let Some(subnet_ip) = ip_info.subnet_ip {
+            let subnet_count = self.limits.ip_subnet_count.entry(subnet_ip).or_insert(0);
+            *subnet_count = subnet_count.saturating_add(1);
+        }
+
+        // Check if peer IP limit is reached
+        if *ip_count > self.config.peer_count_per_ip_max {
+            // IP address
+            debug!(ip=%ip_info.ip, limit=self.config.peer_count_per_ip_max, "Max peer connections per IP limit reached");
+            return Err(ConnectionDenied::new(Error::MaxPeerPerIPConnectionsReached));
+        }
+
+        // Check if peer subnet IP limit is reached
+        if let Some(subnet_ip) = ip_info.subnet_ip {
+            if *self
+                .limits
+                .ip_subnet_count
+                .get(&subnet_ip)
+                .expect("must have subnet_ip entry")
+                > self.config.peer_count_per_subnet_max
+            {
+                // Subnet mask
+                debug!(%subnet_ip, limit=self.config.peer_count_per_subnet_max, "Max peer connections per IP subnet limit reached");
+                return Err(ConnectionDenied::new(Error::MaxSubnetConnectionsReached));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn decrement_ip_counters(&mut self, ip_info: &IpInfo) {
+        // Decrement peer IP counter
+        if let Entry::Occupied(mut ip_count) = self.limits.ip_count.entry(ip_info.ip) {
+            *ip_count.get_mut() = ip_count.get().saturating_sub(1);
+            if *ip_count.get() == 0 {
+                self.limits.ip_count.remove(&ip_info.ip);
+            }
+        }
+
+        // Decrement peer subnet IP counter
+        if let Some(subnet_ip) = ip_info.subnet_ip {
+            if let Entry::Occupied(mut subnet_count) = self.limits.ip_subnet_count.entry(subnet_ip)
+            {
+                *subnet_count.get_mut() = subnet_count.get().saturating_sub(1);
+                if *subnet_count.get() == 0 {
+                    self.limits.ip_subnet_count.remove(&subnet_ip);
+                }
+            }
+        }
+    }
 }
 
 impl NetworkBehaviour for Behaviour {
@@ -854,6 +909,9 @@ impl NetworkBehaviour for Behaviour {
             }
             FromSwarm::DialFailure(DialFailure { peer_id, error, .. }) => {
                 self.on_dial_failure(peer_id, error)
+            }
+            FromSwarm::ListenFailure(ListenFailure { send_back_addr, .. }) => {
+                self.on_listen_failure(send_back_addr)
             }
             _ => {}
         }
@@ -901,47 +959,8 @@ impl NetworkBehaviour for Behaviour {
         }
 
         // Get IP from multiaddress if it exists.
-        let ip_info = self.get_ip_info_from_multiaddr(remote_addr);
-
-        // If we have an IP, check connection limits per IP.
-        if let Some(ip_info) = ip_info.clone() {
-            if self.config.peer_count_per_ip_max
-                < self
-                    .limits
-                    .ip_count
-                    .get(&ip_info.ip)
-                    .unwrap_or(&0)
-                    .saturating_add(1)
-            {
-                // Subnet mask
-                debug!(ip=%ip_info.ip, limit=self.config.peer_count_per_ip_max, "Max peer connections per IP limit reached");
-                return Err(ConnectionDenied::new(Error::MaxPeerPerIPConnectionsReached));
-            }
-
-            // If we have the subnet IP, check connection limits per subnet
-            if let Some(subnet_ip) = ip_info.subnet_ip {
-                if self.config.peer_count_per_subnet_max
-                    < self
-                        .limits
-                        .ip_subnet_count
-                        .get(&subnet_ip)
-                        .unwrap_or(&0)
-                        .saturating_add(1)
-                {
-                    // Subnet mask
-                    debug!(%subnet_ip, limit=self.config.peer_count_per_subnet_max, "Max peer connections per IP subnet limit reached");
-                    return Err(ConnectionDenied::new(Error::MaxSubnetConnectionsReached));
-                }
-            }
-        }
-
-        // Check for the maximum peer count limit
-        if self.config.peer_count_max < self.limits.peer_count.saturating_add(1) {
-            debug!(
-                connections = self.limits.peer_count,
-                "Max peer connections limit reached"
-            );
-            return Err(ConnectionDenied::new(Error::MaxPeerConnectionsReached));
+        if let Some(ip_info) = self.get_ip_info_from_multiaddr(remote_addr) {
+            self.reached_ip_limit(&ip_info)?;
         }
 
         Ok(())
@@ -960,6 +979,7 @@ impl NetworkBehaviour for Behaviour {
             debug!(peer_id=%peer, "Peer is banned");
             return Err(ConnectionDenied::new(Error::BannedPeer));
         }
+        self.reached_peer_limit()?;
 
         Ok(dummy::ConnectionHandler)
     }
@@ -968,10 +988,15 @@ impl NetworkBehaviour for Behaviour {
         &mut self,
         _connection_id: ConnectionId,
         _peer: PeerId,
-        _addr: &Multiaddr,
+        addr: &Multiaddr,
         _role_override: Endpoint,
         _port_use: PortUse,
     ) -> Result<THandler<Self>, ConnectionDenied> {
+        if let Some(ip_info) = self.get_ip_info_from_multiaddr(addr) {
+            self.reached_ip_limit(&ip_info)?;
+        }
+        self.reached_peer_limit()?;
+
         Ok(dummy::ConnectionHandler)
     }
 
