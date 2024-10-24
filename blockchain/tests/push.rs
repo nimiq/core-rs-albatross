@@ -14,7 +14,7 @@ use nimiq_hash::{Blake2bHash, Blake2sHash, HashOutput};
 use nimiq_keys::KeyPair;
 use nimiq_primitives::{
     key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy, TendermintIdentifier,
-    TendermintStep,
+    TendermintProposal, TendermintStep,
 };
 use nimiq_test_log::test;
 use nimiq_test_utils::{
@@ -484,18 +484,26 @@ fn it_validates_double_proposal_proofs() {
         .header;
     let mut header2 = header1.clone();
     header2.timestamp += 1;
-    let header1_hash: Blake2bHash = header1.hash();
-    let header2_hash: Blake2bHash = header2.hash();
-    let justification1 = signing_key.sign(header1_hash.as_bytes());
-    let justification2 = signing_key.sign(header2_hash.as_bytes());
+    let proposal1 = TendermintProposal {
+        proposal: header1,
+        round: 0,
+        valid_round: None,
+    };
+    let proposal2 = TendermintProposal {
+        proposal: header2,
+        round: 0,
+        valid_round: None,
+    };
+    let justification1 = signing_key.sign(proposal1.hash().as_bytes());
+    let justification2 = signing_key.sign(proposal2.hash().as_bytes());
 
     expect_push_micro_block(
         BlockConfig {
             equivocation_proofs: vec![DoubleProposalProof::new(
                 validator_address(),
-                header1,
+                proposal1,
                 justification1,
-                header2,
+                proposal2,
                 justification2,
             )
             .into()],

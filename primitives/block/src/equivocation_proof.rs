@@ -10,7 +10,7 @@ use nimiq_primitives::{
     networks::NetworkId,
     policy::Policy,
     slots_allocation::{Validator, Validators},
-    TendermintIdentifier, TendermintStep, TendermintVote,
+    TendermintIdentifier, TendermintProposal, TendermintStep, TendermintVote,
 };
 use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 use nimiq_transaction::{
@@ -314,9 +314,9 @@ pub struct DoubleProposalProof {
     /// Address of the offending validator.
     validator_address: Address,
     /// Header number 1.
-    header1: MacroHeader,
+    proposal1: TendermintProposal<MacroHeader>,
     /// Header number 2.
-    header2: MacroHeader,
+    proposal2: TendermintProposal<MacroHeader>,
     /// Justification for header number 1.
     justification1: SchnorrSignature,
     /// Justification for header number 2.
@@ -326,21 +326,21 @@ pub struct DoubleProposalProof {
 impl DoubleProposalProof {
     pub fn new(
         validator_address: Address,
-        mut header1: MacroHeader,
+        mut proposal1: TendermintProposal<MacroHeader>,
         mut justification1: SchnorrSignature,
-        mut header2: MacroHeader,
+        mut proposal2: TendermintProposal<MacroHeader>,
         mut justification2: SchnorrSignature,
     ) -> DoubleProposalProof {
-        let hash1: Blake2bHash = header1.hash();
-        let hash2: Blake2bHash = header2.hash();
+        let hash1: Blake2bHash = proposal1.proposal.hash();
+        let hash2: Blake2bHash = proposal2.proposal.hash();
         if hash1 > hash2 {
-            mem::swap(&mut header1, &mut header2);
+            mem::swap(&mut proposal1, &mut proposal2);
             mem::swap(&mut justification1, &mut justification2);
         }
         DoubleProposalProof {
             validator_address,
-            header1,
-            header2,
+            proposal1,
+            proposal2,
             justification1,
             justification2,
         }
@@ -360,7 +360,7 @@ impl DoubleProposalProof {
 
     /// Network ID this equivocation happened on.
     pub fn network(&self) -> NetworkId {
-        self.header1.network
+        self.proposal1.proposal.network
     }
     /// Address of the offending validator.
     pub fn validator_address(&self) -> &Address {
@@ -368,19 +368,19 @@ impl DoubleProposalProof {
     }
     /// Block number at which the offense occurred.
     pub fn block_number(&self) -> u32 {
-        self.header1.block_number
+        self.proposal1.proposal.block_number
     }
     /// Round of the proposals.
     pub fn round(&self) -> u32 {
-        self.header1.round
+        self.proposal1.round
     }
     /// Hash of header number 1.
     pub fn header1_hash(&self) -> Blake2bHash {
-        self.header1.hash()
+        self.proposal1.proposal.hash()
     }
     /// Hash of header number 2.
     pub fn header2_hash(&self) -> Blake2bHash {
-        self.header2.hash()
+        self.proposal2.proposal.hash()
     }
 
     /// Verify the validity of a double proposal proof.
@@ -388,8 +388,8 @@ impl DoubleProposalProof {
         &self,
         signing_key: &SchnorrPublicKey,
     ) -> Result<(), EquivocationProofError> {
-        let hash1: Blake2bHash = self.header1.hash();
-        let hash2: Blake2bHash = self.header2.hash();
+        let hash1: Blake2bHash = self.proposal1.proposal.hash();
+        let hash2: Blake2bHash = self.proposal2.proposal.hash();
 
         // Check that the headers are not equal and in the right order:
         match hash1.cmp(&hash2) {
@@ -399,19 +399,19 @@ impl DoubleProposalProof {
         }
 
         // Check that the headers have equal network IDs.
-        if self.header1.network != self.header2.network {
+        if self.proposal1.proposal.network != self.proposal2.proposal.network {
             return Err(EquivocationProofError::NetworkMismatch);
         }
 
-        if self.header1.block_number != self.header2.block_number
-            || self.header1.round != self.header2.round
+        if self.proposal1.proposal.block_number != self.proposal2.proposal.block_number
+            || self.proposal1.round != self.proposal2.round
         {
             return Err(EquivocationProofError::SlotMismatch);
         }
 
         // Check that the justifications are valid.
-        if !signing_key.verify(&self.justification1, hash1.as_slice())
-            || !signing_key.verify(&self.justification2, hash2.as_slice())
+        if !signing_key.verify(&self.justification1, self.proposal1.hash().as_slice())
+            || !signing_key.verify(&self.justification2, self.proposal2.hash().as_slice())
         {
             return Err(EquivocationProofError::InvalidJustification);
         }
@@ -596,7 +596,8 @@ mod test {
     use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput};
     use nimiq_keys::{Address, KeyPair, PrivateKey};
     use nimiq_primitives::{
-        networks::NetworkId, policy::Policy, TendermintIdentifier, TendermintStep, TendermintVote,
+        networks::NetworkId, policy::Policy, TendermintIdentifier, TendermintProposal,
+        TendermintStep, TendermintVote,
     };
     use nimiq_serde::Deserialize;
     use nimiq_vrf::VrfSeed;
@@ -794,54 +795,71 @@ mod test {
         let mut header7 = header2.clone();
         header7.round += 1;
 
-        let justification1 = key.sign(header1.hash().as_bytes());
-        let justification2 = key.sign(header2.hash().as_bytes());
-        let justification3 = key.sign(header3.hash().as_bytes());
-        let justification4 = key.sign(header4.hash().as_bytes());
-        let justification5 = key.sign(header5.hash().as_bytes());
-        let justification6 = key.sign(header6.hash().as_bytes());
-        let justification7 = key.sign(header7.hash().as_bytes());
+        let headers = vec![
+            Default::default(), // keep indices
+            header1,
+            header2,
+            header3,
+            header4,
+            header5,
+            header6,
+            header7,
+        ];
+
+        let proposals: Vec<_> = headers
+            .into_iter()
+            .map(|header| TendermintProposal {
+                round: header.round,
+                proposal: header,
+                valid_round: None,
+            })
+            .collect();
+
+        let justifications: Vec<_> = proposals
+            .iter()
+            .map(|proposal| key.sign(proposal.hash().as_bytes()))
+            .collect();
 
         let proof1: EquivocationProof = DoubleProposalProof::new(
             Address::burn_address(),
-            header1.clone(),
-            justification1.clone(),
-            header2.clone(),
-            justification2.clone(),
+            proposals[1].clone(),
+            justifications[1].clone(),
+            proposals[2].clone(),
+            justifications[2].clone(),
         )
         .into();
         let proof2: EquivocationProof = DoubleProposalProof::new(
             Address::burn_address(),
-            header2.clone(),
-            justification2.clone(),
-            header3.clone(),
-            justification3.clone(),
+            proposals[2].clone(),
+            justifications[2].clone(),
+            proposals[3].clone(),
+            justifications[3].clone(),
         )
         .into();
         let proof3: EquivocationProof = DoubleProposalProof::new(
             Address::burn_address(),
-            header3.clone(),
-            justification3.clone(),
-            header1.clone(),
-            justification1.clone(),
+            proposals[3].clone(),
+            justifications[3].clone(),
+            proposals[1].clone(),
+            justifications[1].clone(),
         )
         .into();
         // Different block height.
         let proof4: EquivocationProof = DoubleProposalProof::new(
             Address::burn_address(),
-            header4.clone(),
-            justification4.clone(),
-            header5.clone(),
-            justification5.clone(),
+            proposals[4].clone(),
+            justifications[4].clone(),
+            proposals[5].clone(),
+            justifications[5].clone(),
         )
         .into();
         // Different round.
         let proof5: EquivocationProof = DoubleProposalProof::new(
             Address::burn_address(),
-            header6.clone(),
-            justification6.clone(),
-            header7.clone(),
-            justification7.clone(),
+            proposals[6].clone(),
+            justifications[6].clone(),
+            proposals[7].clone(),
+            justifications[7].clone(),
         )
         .into();
 

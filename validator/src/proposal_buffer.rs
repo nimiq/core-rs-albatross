@@ -18,7 +18,7 @@ use nimiq_consensus::consensus::{
 };
 use nimiq_keys::Ed25519Signature as SchnorrSignature;
 use nimiq_network_interface::network::{CloseReason, MsgAcceptance, Network, PubsubId as _, Topic};
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{policy::Policy, TendermintProposal};
 use nimiq_serde::Serialize;
 use nimiq_tendermint::SignedProposalMessage;
 use nimiq_utils::{stream::FuturesUnordered, WakerExt as _};
@@ -414,11 +414,12 @@ where
         let stated_proposer = validators.get_validator_by_slot_band(proposal.0.signer);
 
         // Calculate the hash which had been signed.
-        let data = SignedProposal::hash(
-            &proposal.0.proposal,
-            proposal.0.round,
-            proposal.0.valid_round,
-        )
+        let data = TendermintProposal {
+            proposal: &proposal.0.proposal,
+            round: proposal.0.round,
+            valid_round: proposal.0.valid_round,
+        }
+        .hash()
         .serialize_to_vec();
 
         // Verify the stated signer did in fact sign this proposal.
@@ -571,7 +572,7 @@ mod test {
     use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
     use nimiq_network_interface::network::Network as NetworkInterface;
     use nimiq_network_mock::{MockHub, MockNetwork};
-    use nimiq_primitives::policy::Policy;
+    use nimiq_primitives::{policy::Policy, TendermintProposal};
     use nimiq_serde::{Deserialize, Serialize};
     use nimiq_tendermint::{ProposalMessage, SignedProposalMessage};
     use nimiq_test_log::test;
@@ -587,10 +588,7 @@ mod test {
     use tokio::select;
 
     use super::{ProposalAndPubsubId, ProposalBuffer};
-    use crate::{
-        aggregation::tendermint::proposal::{Header, SignedProposal},
-        r#macro::ProposalTopic,
-    };
+    use crate::{aggregation::tendermint::proposal::Header, r#macro::ProposalTopic};
 
     /// Given a blockchain and a network creates an instance of Consensus.
     async fn consensus<N: NetworkInterface + TestNetwork>(
@@ -703,11 +701,12 @@ mod test {
             valid_round: None,
         };
 
-        let data = SignedProposal::hash(
-            &proposal_message.proposal.0,
-            proposal_message.round,
-            proposal_message.valid_round,
-        )
+        let data = TendermintProposal {
+            proposal: &proposal_message.proposal.0,
+            round: proposal_message.round,
+            valid_round: proposal_message.valid_round,
+        }
+        .hash()
         .serialize_to_vec();
 
         let signed_message = SignedProposalMessage {

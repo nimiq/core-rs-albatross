@@ -3,8 +3,8 @@ use std::{
     io,
 };
 
-use nimiq_hash::{Blake2sHash, SerializeContent};
-use nimiq_serde::{Deserialize, Serialize, SerializedSize};
+use nimiq_hash::{Blake2sHash, Hash, HashOutput, SerializeContent};
+use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize, SerializedSize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::{
@@ -52,6 +52,31 @@ impl Display for TendermintIdentifier {
             "{}:{}:{:?}",
             self.block_number, self.round_number, self.step
         )
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SerializedMaxSize)]
+pub struct TendermintProposal<T> {
+    pub proposal: T,
+    pub round: u32,
+    pub valid_round: Option<u32>,
+}
+
+impl<T: SerializeContent> SerializeContent for TendermintProposal<T> {
+    fn serialize_content<W: io::Write, H: HashOutput>(&self, writer: &mut W) -> io::Result<()> {
+        // First of all serialize that this is a proposal, this serves as the
+        // unique prefix for this message type.
+        TendermintStep::Propose.serialize_to_writer(writer)?;
+        self.proposal.serialize_content::<_, H>(writer)?;
+        self.round.serialize_to_writer(writer)?;
+        self.valid_round.serialize_to_writer(writer)?;
+        Ok(())
+    }
+}
+
+impl<T: SerializeContent> TendermintProposal<T> {
+    pub fn hash(&self) -> Blake2sHash {
+        Hash::hash(self)
     }
 }
 
