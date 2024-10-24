@@ -64,6 +64,18 @@ seed_nodes = [
 # Default: randomly generated
 #peer_key = ""
 
+# The max number of peer connections the network allows.
+# Default: 4000
+#peer_count_max = 4000
+
+# The max number of peer connections per IP address the network allows.
+# Default: 20
+#peer_count_per_ip_max = 20
+
+# The max number of peer connections per subnet IP address the network allows.
+# Default: 20
+#peer_count_per_subnet_max = 20
+
 ##############################################################################
 #
 # TLS network configuration:

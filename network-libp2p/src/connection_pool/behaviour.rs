@@ -43,25 +43,25 @@ struct Limits {
 
 /// Connection pool behaviour configuration
 #[derive(Clone, Debug)]
-struct Config {
+pub(crate) struct Config {
     /// Desired count of peers
-    desired_peer_count: usize,
+    pub desired_peer_count: usize,
     /// Maximum count of peers
-    peer_count_max: usize,
+    pub peer_count_max: usize,
     /// Maximum peer count per IP
-    peer_count_per_ip_max: usize,
+    pub peer_count_per_ip_max: usize,
     /// Maximum peer count per subnet
-    peer_count_per_subnet_max: usize,
+    pub peer_count_per_subnet_max: usize,
     /// IPv4 subnet prefix length to apply to detect same connections for the same subnet
-    ipv4_subnet_prefix_len: u8,
+    pub ipv4_subnet_prefix_len: u8,
     /// IPv6 subnet prefix length to apply to detect same connections for the same subnet
-    ipv6_subnet_prefix_len: u8,
+    pub ipv6_subnet_prefix_len: u8,
     /// Maximum number of peer dialings that can be in progress
-    dialing_count_max: usize,
+    pub dialing_count_max: usize,
     /// Duration after which a peer will be re-dialed after it has been marked as down
-    retry_down_after: Duration,
+    pub retry_down_after: Duration,
     /// Interval duration for peer connections housekeeping
-    housekeeping_interval: Duration,
+    pub housekeeping_interval: Duration,
 }
 
 /// Connection Peer information
@@ -381,16 +381,12 @@ impl Behaviour {
         own_peer_id: PeerId,
         seeds: Vec<Multiaddr>,
         required_services: Services,
-        desired_peer_count: usize,
+        config: Config,
     ) -> Self {
         let limits = Limits {
             ip_count: HashMap::new(),
             ip_subnet_count: HashMap::new(),
             peer_count: 0,
-        };
-        let config = Config {
-            desired_peer_count,
-            ..Default::default()
         };
         let housekeeping_timer = interval(config.housekeeping_interval);
 
@@ -402,14 +398,14 @@ impl Behaviour {
             peer_ids: ConnectionState::new(
                 2,
                 config.retry_down_after,
-                desired_peer_count,
+                config.desired_peer_count,
                 required_services,
                 Duration::from_secs(60 * 10), // 10 minutes
             ),
             addresses: ConnectionState::new(
                 4,
                 config.retry_down_after,
-                desired_peer_count,
+                config.desired_peer_count,
                 required_services,
                 Duration::from_secs(60 * 10), // 10 minutes
             ),
