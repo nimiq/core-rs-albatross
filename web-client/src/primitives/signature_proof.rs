@@ -5,7 +5,7 @@ use nimiq_serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    address::Address,
+    common::address::Address,
     primitives::{
         es256_public_key::ES256PublicKey, es256_signature::ES256Signature, public_key::PublicKey,
         signature::Signature,

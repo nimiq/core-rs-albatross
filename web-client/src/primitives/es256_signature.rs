@@ -17,7 +17,6 @@ impl ES256Signature {
     /// Deserializes an ES256 signature from a byte array.
     ///
     /// Throws when the byte array contains less than 64 bytes.
-    #[wasm_bindgen(js_name = fromBytes)]
     pub fn deserialize(bytes: &[u8]) -> Result<ES256Signature, JsError> {
         match nimiq_keys::ES256Signature::from_bytes(bytes) {
             Ok(sig) => Ok(ES256Signature::from(sig)),
@@ -26,7 +25,6 @@ impl ES256Signature {
     }
 
     /// Serializes the signature to a byte array.
-    #[wasm_bindgen(js_name = toBytes)]
     pub fn serialize(&self) -> Vec<u8> {
         self.inner.to_bytes().to_vec()
     }

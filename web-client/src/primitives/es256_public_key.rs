@@ -4,7 +4,7 @@ use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_derive::TryFromJsValue;
 
-use crate::{address::Address, primitives::es256_signature::ES256Signature};
+use crate::{common::address::Address, primitives::es256_signature::ES256Signature};
 
 /// The non-secret (public) part of an ES256 asymmetric key pair that is typically used to digitally verify or encrypt data.
 #[derive(TryFromJsValue)]
@@ -29,7 +29,7 @@ impl ES256PublicKey {
     /// Deserializes a public key from a byte array.
     ///
     /// Throws when the byte array contains less than 33 bytes.
-    pub fn unserialize(bytes: &[u8]) -> Result<ES256PublicKey, JsError> {
+    pub fn deserialize(bytes: &[u8]) -> Result<ES256PublicKey, JsError> {
         if bytes.len() != nimiq_keys::ES256PublicKey::SIZE {
             return Err(JsError::new("Public key primitive: Invalid length"));
         }
@@ -58,7 +58,7 @@ impl ES256PublicKey {
         let mut compressed = raw_bytes[0..33].to_vec();
         // Adjust the parity byte according to the Y coordinate
         compressed[0] = 0x02 | (raw_bytes[raw_bytes.len() - 1] & 0x01);
-        Self::unserialize(&compressed)
+        Self::deserialize(&compressed)
     }
 
     /// Creates a new public key from a byte array.
@@ -90,7 +90,7 @@ impl ES256PublicKey {
         if bytes.len() == Self::RAW_SIZE {
             return Self::from_raw(bytes);
         }
-        Self::unserialize(bytes)
+        Self::deserialize(bytes)
     }
 
     /// Serializes the public key to a byte array.

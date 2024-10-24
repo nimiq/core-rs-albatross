@@ -27,6 +27,7 @@ gloo-timers = { version = "0.3", features = ["futures"] }
 hex = "0.4"
 js-sys = "0.3"
 log = { workspace = true }
+rand_core = "0.6.4"
 serde = "1.0"
 serde-wasm-bindgen = "0.6"
 tokio = { version = "1.41", features = ["sync"] }
@@ -49,7 +50,7 @@ nimiq-primitives = { workspace = true, features = ["coin", "networks", "ts-types
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true, features = ["ts-types"] }
 nimiq-transaction-builder = { workspace = true }
-nimiq-utils = { workspace = true, features = ["merkle"] }
+nimiq-utils = { workspace = true, features = ["merkle", "otp"] }
 
 [dependencies.nimiq]
 workspace = true
@@ -74,5 +75,6 @@ nimiq-zkp-component = { workspace = true, default-features = false }
 
 [features]
 client = []
-default = ["client", "primitives"]
+crypto = []
+default = ["client", "crypto", "primitives"]
 primitives = ["wasm-bindgen-derive"]

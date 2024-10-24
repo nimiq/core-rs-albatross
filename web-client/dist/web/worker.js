@@ -29,7 +29,7 @@ async function init(config) {
     if (initialized) throw new Error('Already initialized');
     initialized = true;
 
-    console.log('Initializing WASM worker');
+    console.log('Initializing client WASM worker');
 
     // Load the wasm file by awaiting the Promise returned by `wasm_bindgen`.
     await wasm_bindgen('./worker-wasm/index_bg.wasm');
@@ -54,4 +54,4 @@ self.addEventListener('message', async (event) => {
 });
 
 self.postMessage('NIMIQ_ONLOAD');
-console.log('Launched WASM worker, ready for init');
+console.debug('Launched client WASM worker, ready for init');

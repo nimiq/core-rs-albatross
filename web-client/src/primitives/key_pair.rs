@@ -5,9 +5,8 @@ use nimiq_serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    address::Address,
+    common::{address::Address, transaction::Transaction},
     primitives::{private_key::PrivateKey, public_key::PublicKey, signature::Signature},
-    transaction::Transaction,
 };
 
 /// A keypair represents a private key and its respective public key.
@@ -46,7 +45,7 @@ impl KeyPair {
     /// Deserializes a keypair from a byte array.
     ///
     /// Throws when the byte array contains less than 64 bytes.
-    pub fn unserialize(bytes: &[u8]) -> Result<KeyPair, JsError> {
+    pub fn deserialize(bytes: &[u8]) -> Result<KeyPair, JsError> {
         let key_pair = nimiq_keys::KeyPair::deserialize_from_vec(bytes)?;
         // TODO: Deserialize locked state if bytes remaining
         Ok(KeyPair::from(key_pair))

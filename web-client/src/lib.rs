@@ -1,13 +1,13 @@
 extern crate alloc; // Required for wasm-bindgen-derive
 
-mod address;
 #[cfg(feature = "client")]
 mod client;
-mod client_configuration;
+#[cfg(any(feature = "client", feature = "primitives"))]
+mod common;
+#[cfg(any(feature = "crypto", feature = "primitives"))]
+mod crypto_utils;
 #[cfg(feature = "primitives")]
 mod primitives;
-mod transaction;
-mod utils;
 
 #[cfg(test)]
 mod tests {
@@ -15,7 +15,7 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     use crate::{
-        address::Address,
+        common::address::Address,
         primitives::{
             bls_key_pair::BLSKeyPair, key_pair::KeyPair, transaction_builder::TransactionBuilder,
         },

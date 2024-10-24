@@ -2,11 +2,9 @@
 # yarn lockfile v1
 
 
-"@nimiq/core@../../dist":
-  version "2"
-  dependencies:
-    comlink "^4.4.1"
-    websocket "^1.0.34"
+"@nimiq/core@link:../../dist":
+  version "0.0.0"
+  uid ""
 
 bufferutil@^4.0.1:
   version "4.0.7"

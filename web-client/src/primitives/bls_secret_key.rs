@@ -17,7 +17,7 @@ impl BLSSecretKey {
     }
 
     /// Deserializes a private key from a byte array.
-    pub fn unserialize(bytes: &[u8]) -> Result<BLSSecretKey, JsError> {
+    pub fn deserialize(bytes: &[u8]) -> Result<BLSSecretKey, JsError> {
         let key = nimiq_bls::SecretKey::deserialize_from_vec(bytes)?;
         Ok(BLSSecretKey::from(key))
     }
@@ -28,7 +28,7 @@ impl BLSSecretKey {
         if bytes.len() != nimiq_bls::SecretKey::SIZE {
             return Err(JsError::new("BLS Secret key primitive: Invalid length"));
         }
-        Self::unserialize(bytes)
+        Self::deserialize(bytes)
     }
 
     /// Serializes the private key to a byte array.
@@ -47,7 +47,7 @@ impl BLSSecretKey {
             ));
         }
 
-        BLSSecretKey::unserialize(&raw)
+        BLSSecretKey::deserialize(&raw)
     }
 
     /// Formats the private key into a hex string.
