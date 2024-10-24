@@ -167,6 +167,13 @@ pub struct NetworkSettings {
     #[serde(default)]
     pub advertised_addresses: Option<Vec<String>>,
 
+    #[serde(default = "NetworkSettings::default_peer_count_max")]
+    pub peer_count_max: usize,
+    #[serde(default = "NetworkSettings::peer_count_per_ip_max")]
+    pub peer_count_per_ip_max: usize,
+    #[serde(default = "NetworkSettings::peer_count_per_ip_max")]
+    pub peer_count_per_subnet_max: usize,
+
     #[serde(default)]
     pub seed_nodes: Vec<Seed>,
     #[serde(default)]
@@ -185,6 +192,14 @@ pub struct NetworkSettings {
 impl NetworkSettings {
     pub fn default_desired_peer_count() -> usize {
         12
+    }
+
+    pub fn default_peer_count_max() -> usize {
+        4000
+    }
+
+    pub fn peer_count_per_ip_max() -> usize {
+        20
     }
 }
 

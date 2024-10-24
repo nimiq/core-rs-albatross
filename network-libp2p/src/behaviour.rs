@@ -13,6 +13,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     connection_pool,
+    connection_pool::behaviour::Config as PoolConfig,
     discovery::{self, peer_contacts::PeerContactBook},
     dispatch::codecs::MessageCodec,
     Config,
@@ -82,13 +83,22 @@ impl Behaviour {
         // - The ping behaviour will close the connection if a ping timeouts.
         let ping = ping::Behaviour::new(ping::Config::new());
 
+        // Connection pool config
+        let pool_config = PoolConfig {
+            desired_peer_count: config.desired_peer_count,
+            peer_count_max: config.peer_count_max,
+            peer_count_per_ip_max: config.peer_count_per_ip_max,
+            peer_count_per_subnet_max: config.peer_count_per_subnet_max,
+            ..Default::default()
+        };
+
         // Connection pool behaviour
         let pool = connection_pool::Behaviour::new(
             Arc::clone(&contacts),
             peer_id,
             config.seeds,
             config.discovery.required_services,
-            config.desired_peer_count,
+            pool_config,
         );
 
         // Request Response behaviour

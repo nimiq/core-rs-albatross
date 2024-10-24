@@ -120,35 +120,47 @@ pub struct NetworkConfig {
     /// The user agent is a custom string that is sent during the handshake. Usually it contains
     /// the kind of node, Nimiq version, processor architecture and operating system. This enables
     /// gathering information on which Nimiq versions are being run on the network. A typical
-    /// user agent string looks like `core-rs-albatross/0.1.0 (native; linux x86_64)`
+    /// user agent string looks like `core-rs-albatross/0.1.0 (native; linux x86_64)`.
     ///
     /// Default will generate a value from system information, this is recommended.
     ///
     #[builder(default)]
     pub user_agent: UserAgent,
 
-    /// List of seeds addresses
+    /// List of seeds addresses.
     #[builder(default)]
     pub seeds: Vec<Seed>,
 
-    /// Optional TLS configuration for secure WebSocket
+    /// Optional, TLS configuration for secure WebSocket.
     #[builder(default)]
     pub tls: Option<TlsConfig>,
 
-    /// Optional desired number of peers for the network to connect to.
+    /// Optional, desired number of peers for the network to connect to.
     /// The network will always try to maintain this number of connections.
     #[builder(default = "12")]
     pub desired_peer_count: usize,
 
-    /// Optional bool to only accept secure websocket connections
+    /// Optional, max number of peer connections.
+    #[builder(default = "4000")]
+    pub peer_count_max: usize,
+
+    /// Optional, max number of peer connections per IP address.
+    #[builder(default = "20")]
+    pub peer_count_per_ip_max: usize,
+
+    /// Optional, max number of peer connections per subnet IP address.
+    #[builder(default = "20")]
+    pub peer_count_per_subnet_max: usize,
+
+    /// Optional, bool to only accept secure websocket connections.
     #[builder(default)]
     pub only_secure_ws_connections: bool,
 
-    /// Optional bool to allow connections to loopback addresses
+    /// Optional, bool to allow connections to loopback addresses.
     #[builder(default)]
     pub allow_loopback_addresses: bool,
 
-    /// Optional quorum value for the network DHT
+    /// Optional, quorum value for the network DHT.
     #[builder(default)]
     pub dht_quorum: Option<NonZeroU8>,
 }
@@ -752,6 +764,10 @@ impl ClientConfigBuilder {
             seeds: config_file.network.seed_nodes.clone(),
 
             desired_peer_count: config_file.network.desired_peer_count,
+
+            peer_count_max: config_file.network.peer_count_max,
+            peer_count_per_ip_max: config_file.network.peer_count_per_ip_max,
+            peer_count_per_subnet_max: config_file.network.peer_count_per_subnet_max,
 
             tls: config_file.network.tls.as_ref().map(|s| s.clone().into()),
             only_secure_ws_connections: false,
