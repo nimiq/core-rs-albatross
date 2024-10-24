@@ -31,7 +31,7 @@ ip_network = "0.4"
 log = { workspace = true }
 parking_lot = "0.12"
 pin-project = "1.1"
-pin-project-lite = "0.2.14"
+pin-project-lite = "0.2.15"
 prometheus-client = { version = "0.22.3", optional = true }
 rand = "0.8"
 serde = "1.0"
