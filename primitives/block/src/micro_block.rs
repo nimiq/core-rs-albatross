@@ -101,6 +101,7 @@ impl MicroBlock {
         match justification {
             MicroJustification::Skip(proof) => {
                 let skip_block = SkipBlockInfo {
+                    network_id: self.header.network,
                     block_number: self.header.block_number,
                     vrf_entropy: self.header.seed.entropy(),
                 };

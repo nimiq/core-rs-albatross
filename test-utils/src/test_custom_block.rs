@@ -209,6 +209,7 @@ pub fn next_skip_block(
     let prev_seed = blockchain.head().seed().clone();
 
     let skip_block_info = SkipBlockInfo {
+        network_id: blockchain.network_id,
         block_number,
         vrf_entropy: prev_seed.entropy(),
     };
@@ -490,6 +491,7 @@ fn create_skip_block_proof(
         .unwrap_or_else(|| blockchain.head().seed().clone());
 
     let skip_block_info = SkipBlockInfo {
+        network_id: blockchain.network_id,
         block_number: (blockchain.block_number() as i32 + 1 + config.block_number_offset) as u32,
         vrf_entropy: seed.entropy(),
     };

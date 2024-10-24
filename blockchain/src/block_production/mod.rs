@@ -135,6 +135,7 @@ impl BlockProducer {
 
         let skip_block_info = if skip_block_proof.is_some() {
             Some(SkipBlockInfo {
+                network_id: blockchain.network_id,
                 block_number,
                 vrf_entropy: prev_seed.entropy(),
             })

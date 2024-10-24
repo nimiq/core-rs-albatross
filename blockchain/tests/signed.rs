@@ -30,6 +30,7 @@ fn test_skip_block_single_signature() {
 
     // create skip block data
     let skip_block_info = SkipBlockInfo {
+        network_id: NetworkId::UnitAlbatross,
         block_number: 1234,
         vrf_entropy: VrfEntropy::default(),
     };

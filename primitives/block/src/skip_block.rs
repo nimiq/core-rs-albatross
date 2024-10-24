@@ -3,7 +3,8 @@ use std::fmt::Debug;
 use nimiq_bls::AggregatePublicKey;
 use nimiq_hash_derive::SerializeContent;
 use nimiq_primitives::{
-    policy::Policy, slots_allocation::Validators, Message, SignedMessage, PREFIX_SKIP_BLOCK_INFO,
+    networks::NetworkId, policy::Policy, slots_allocation::Validators, Message, SignedMessage,
+    PREFIX_SKIP_BLOCK_INFO,
 };
 use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 use nimiq_vrf::VrfEntropy;
@@ -17,6 +18,9 @@ pub type SignedSkipBlockInfo = SignedMessage<SkipBlockInfo>;
     Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize, SerializeContent,
 )]
 pub struct SkipBlockInfo {
+    /// The network of this skip block.
+    pub network_id: NetworkId,
+
     /// The number of the block for which the skip block is constructed.
     pub block_number: u32,
 
@@ -31,6 +35,7 @@ impl SkipBlockInfo {
     pub fn from_micro_block(block: &MicroBlock) -> Option<Self> {
         if block.is_skip_block() {
             Some(SkipBlockInfo {
+                network_id: block.header.network,
                 block_number: block.header.block_number,
                 vrf_entropy: block.header.seed.entropy(),
             })

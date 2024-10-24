@@ -286,6 +286,7 @@ impl TemporaryBlockProducer {
         let skip_block_info = {
             let blockchain = self.blockchain.read();
             SkipBlockInfo {
+                network_id: blockchain.network_id,
                 block_number: blockchain.block_number() + 1,
                 vrf_entropy: blockchain.head().seed().entropy(),
             }

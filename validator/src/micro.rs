@@ -239,6 +239,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         }
 
         let skip_block_info = SkipBlockInfo {
+            network_id: self.blockchain.read().network_id,
             block_number: self.block_number,
             vrf_entropy: self.prev_seed.entropy(),
         };
