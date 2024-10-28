@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use log::{error, info};
+use log::{debug, error, info, trace};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
@@ -192,7 +192,7 @@ pub async fn check_validators_ready(
     let mut ready_validators = Vec::new();
     let genesis_config_hash_hex = pos_genesis_config_hash.to_hex();
 
-    log::info!("Starting to collect transactions from validators...");
+    trace!("Starting to collect transactions from validators...");
 
     // Now we need to collect all the transactions for each validator
     for validator in validators {
@@ -203,7 +203,7 @@ pub async fn check_validators_ready(
         if let Ok(transactions) =
             async_retryer(|| pow_client.get_transactions_by_address(&address, 10)).await
         {
-            info!(
+            trace!(
                 num_transactions = transactions.len(),
                 from_address = address,
                 "Transactions found for validator"
@@ -215,7 +215,7 @@ pub async fn check_validators_ready(
                     is_valid_ready_txn(txn, &activation_block_window, &genesis_config_hash_hex)
                 })
                 .collect();
-            info!(
+            trace!(
                 num_transactions = filtered_txns.len(),
                 "Transactions that met the readiness criteria",
             );
@@ -245,16 +245,16 @@ pub async fn check_validators_ready(
     let needed_stake = percent.apply_to(u64::from(total_stake));
 
     info!(
-        needed_stake,
-        stake_ready = u64::from(ready_stake),
-        "Stake needed vs ready"
+        needed = %Coin::from_u64_unchecked(needed_stake),
+        ready = %ready_stake,
+        "Stake needed vs Stake ready"
     );
 
     if u64::from(ready_stake) >= needed_stake {
-        info!("Enough validators are ready to start the PoS Chain!");
+        debug!("Enough validators are ready to start the PoS Chain!");
         ValidatorsReadiness::Ready(ready_stake)
     } else {
-        info!(needed_stake, "Not enough validators are ready");
+        debug!(needed_stake, "Not enough validators are ready");
         ValidatorsReadiness::NotReady(ready_stake)
     }
 }

@@ -324,10 +324,10 @@ pub async fn migrate(
         panic!("We cannot migrate with just 1 active validator");
     }
 
-    log::debug!("This is the list of stakers:");
+    log::trace!("This is the list of stakers:");
 
     for staker in &stakers {
-        log::debug!(
+        log::trace!(
             staker_address = %staker.staker_address,
             balance = %staker.balance
         );
@@ -402,15 +402,19 @@ pub async fn migrate(
         .unwrap_or_else(|error| exit_with_error(error, "Failed to serialize genesis config"));
     let genesis_config_hash = hasher.finish();
     log::info!(
-        genesis_config_hash = %genesis_config_hash,
+        genesis_hash = %genesis_config_hash,
         "PoS Genesis generation is completed"
     );
 
     loop {
         let current_height = async_retryer(|| pow_client.block_number()).await.unwrap();
-        log::info!(current_height);
-
         let next_candidate = candidate_block + block_windows.readiness_window;
+        log::info!(
+            activation_window,
+            candidate_block,
+            current_height,
+            next_candidate
+        );
 
         if current_height > next_candidate {
             log::info!(

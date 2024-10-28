@@ -155,7 +155,7 @@ pub async fn get_accounts(
             break;
         }
         start_prefix = chunk.tail;
-        log::debug!(size = chunk.nodes.len(), "Processing accounts tree chunk");
+        log::trace!(size = chunk.nodes.len(), "Processing accounts tree chunk");
         for node in chunk.nodes {
             match node.account {
                 nimiq_rpc::primitives::Account::Basic(pow_account) => {
