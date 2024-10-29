@@ -62,10 +62,7 @@ enum ResolveBlockError<TValidatorNetwork: ValidatorNetwork> {
 /// the assumed proposer may be punished (as he produced faulty data, proven by the signature and the predecessor vrf).
 /// If the predecessor is unavailable (even after requesting it from the peer who originated the proposal or relayed
 /// the proposal) they both could be banned as they failed to produce proper data upon being asked to do so.
-pub(crate) struct ProposalBuffer<TValidatorNetwork: ValidatorNetwork + 'static>
-where
-    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
-{
+pub(crate) struct ProposalBuffer<TValidatorNetwork: ValidatorNetwork + 'static> {
     /// The network used to validate messages and disconnect peers if necessary.
     network: Arc<TValidatorNetwork>,
 
@@ -103,10 +100,7 @@ where
     waker: Option<Waker>,
 }
 
-impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalBuffer<TValidatorNetwork>
-where
-    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
-{
+impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalBuffer<TValidatorNetwork> {
     /// Creates a new ProposalBuffer, returning the [ProposalSender] and [ProposalReceiver] that share the buffer.
     /// Blockchain, Consensus and Network are necessary to do basic verification and punishments as well as to resolve blocks.
     // Ignoring clippy warning: this return type is on purpose
@@ -337,10 +331,7 @@ where
 /// identity in the message.
 /// Checking for a known predecessor and it having been signed by the correct proposer, happens on the receiver
 /// side as chances are higher to already have received the blocks predecessor later in the process.
-pub(crate) struct ProposalSender<TValidatorNetwork: ValidatorNetwork + 'static>
-where
-    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
-{
+pub(crate) struct ProposalSender<TValidatorNetwork: ValidatorNetwork + 'static> {
     /// The buffer holding all buffered proposals shared with the [ProposalReceiver]
     shared: Arc<Mutex<ProposalBuffer<TValidatorNetwork>>>,
 
@@ -354,10 +345,7 @@ where
     network: Arc<TValidatorNetwork>,
 }
 
-impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalSender<TValidatorNetwork>
-where
-    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
-{
+impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalSender<TValidatorNetwork> {
     /// Sends the proposal and PubsubId into the buffer.
     ///
     /// This function may lead to the proposal not actually being admitted into the buffer as the signature may not verify.
@@ -488,10 +476,7 @@ where
     }
 }
 
-pub(crate) struct ProposalReceiver<TValidatorNetwork: ValidatorNetwork + 'static>
-where
-    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
-{
+pub(crate) struct ProposalReceiver<TValidatorNetwork: ValidatorNetwork + 'static> {
     /// The buffer holding all buffered proposals shared with the [ProposalSender]
     shared: Arc<Mutex<ProposalBuffer<TValidatorNetwork>>>,
 
@@ -504,10 +489,7 @@ where
     network: Arc<TValidatorNetwork>,
 }
 
-impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProposalReceiver<TValidatorNetwork>
-where
-    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
-{
+impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProposalReceiver<TValidatorNetwork> {
     type Item = SignedProposalMessage<Header<PubsubId<TValidatorNetwork>>, (SchnorrSignature, u16)>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -544,10 +526,7 @@ where
     }
 }
 
-impl<TValidatorNetwork: ValidatorNetwork + 'static> Clone for ProposalReceiver<TValidatorNetwork>
-where
-    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
-{
+impl<TValidatorNetwork: ValidatorNetwork + 'static> Clone for ProposalReceiver<TValidatorNetwork> {
     fn clone(&self) -> Self {
         Self {
             shared: Arc::clone(&self.shared),
