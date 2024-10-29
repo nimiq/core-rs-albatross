@@ -6,16 +6,16 @@ use std::{
 };
 
 use futures::stream::{BoxStream, Stream, StreamExt};
-use nimiq_block::MacroBlock;
+use nimiq_block::{DoubleProposalProof, MacroBlock, MacroHeader};
 use nimiq_blockchain::{BlockProducer, Blockchain};
-use nimiq_keys::Ed25519Signature as SchnorrSignature;
+use nimiq_keys::{Address, Ed25519Signature as SchnorrSignature};
 use nimiq_network_interface::network::Topic;
-use nimiq_primitives::{networks::NetworkId, slots_allocation::Validators};
+use nimiq_primitives::{networks::NetworkId, slots_allocation::Validators, TendermintProposal};
 use nimiq_tendermint::{
     Return as TendermintReturn, SignedProposalMessage, TaggedAggregationMessage, Tendermint,
 };
 use nimiq_validator_network::{PubsubId, ValidatorNetwork};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 
 use crate::{
     aggregation::tendermint::{
@@ -24,6 +24,7 @@ use crate::{
         state::MacroState,
         update_message::TendermintUpdate,
     },
+    double_proposal::DoubleProposalDetector,
     tendermint::TendermintProtocol,
 };
 
@@ -34,13 +35,22 @@ where
     Update(MacroState),
     Decision(MacroBlock),
     ProposalAccepted(
-        SignedProposalMessage<Header<PubsubId<TValidatorNetwork>>, (SchnorrSignature, u16)>,
+        SignedProposalMessage<
+            Header<PubsubId<TValidatorNetwork>>,
+            (SchnorrSignature, Address, u16),
+        >,
     ),
     ProposalIgnored(
-        SignedProposalMessage<Header<PubsubId<TValidatorNetwork>>, (SchnorrSignature, u16)>,
+        SignedProposalMessage<
+            Header<PubsubId<TValidatorNetwork>>,
+            (SchnorrSignature, Address, u16),
+        >,
     ),
     ProposalRejected(
-        SignedProposalMessage<Header<PubsubId<TValidatorNetwork>>, (SchnorrSignature, u16)>,
+        SignedProposalMessage<
+            Header<PubsubId<TValidatorNetwork>>,
+            (SchnorrSignature, Address, u16),
+        >,
     ),
 }
 
@@ -83,8 +93,12 @@ where
         state_opt: Option<MacroState>,
         proposal_stream: BoxStream<
             'static,
-            SignedProposalMessage<Header<PubsubId<TValidatorNetwork>>, (SchnorrSignature, u16)>,
+            SignedProposalMessage<
+                Header<PubsubId<TValidatorNetwork>>,
+                (SchnorrSignature, Address, u16),
+            >,
         >,
+        on_double_proposal: Arc<dyn Fn(DoubleProposalProof) + Send + Sync>,
     ) -> Self {
         let input = network
             .receive::<TendermintUpdate>()
@@ -100,6 +114,38 @@ where
             })
             .boxed();
 
+        let observe_valid_requested_proposal = {
+            let double_proposal_detector =
+                Arc::new(Mutex::new(DoubleProposalDetector::new(block_height)));
+            Arc::new(
+                move |address: Address,
+                      proposal: TendermintProposal<MacroHeader>,
+                      signature: SchnorrSignature| {
+                    if let Some(proof) = double_proposal_detector
+                        .lock()
+                        .observe_valid_proposal(address, proposal, signature)
+                    {
+                        on_double_proposal(proof);
+                    }
+                },
+            )
+        };
+
+        let observe = Arc::clone(&observe_valid_requested_proposal);
+        let proposal_stream = proposal_stream
+            .inspect(move |proposal| {
+                observe(
+                    proposal.signature.1.clone(),
+                    TendermintProposal {
+                        proposal: proposal.message.proposal.0.clone(),
+                        round: proposal.message.round,
+                        valid_round: proposal.message.valid_round,
+                    },
+                    proposal.signature.0.clone(),
+                )
+            })
+            .boxed();
+
         let dependencies = TendermintProtocol::new(
             blockchain,
             network,
@@ -108,6 +154,7 @@ where
             validator_slot_band,
             network_id,
             block_height,
+            observe_valid_requested_proposal,
         );
 
         // create the Tendermint instance, which implements Stream

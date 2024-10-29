@@ -4,7 +4,7 @@ use nimiq_block::{MacroBody, MacroHeader, MicroBlock};
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_hash::{Blake2sHash, Hash};
-use nimiq_keys::Ed25519Signature as SchnorrSignature;
+use nimiq_keys::{Address, Ed25519Signature as SchnorrSignature};
 use nimiq_network_interface::{
     network::Network,
     request::{Handle, RequestCommon, RequestMarker},
@@ -59,10 +59,11 @@ impl SignedProposal {
     /// via GossipSub, i.e. produced by this node itself.
     pub fn into_tendermint_signed_message<Id>(
         self,
+        address: Address,
         id: Option<Id>,
-    ) -> SignedProposalMessage<Header<Id>, (SchnorrSignature, u16)> {
+    ) -> SignedProposalMessage<Header<Id>, (SchnorrSignature, Address, u16)> {
         SignedProposalMessage {
-            signature: (self.signature, self.signer),
+            signature: (self.signature, address, self.signer),
             message: ProposalMessage {
                 proposal: Header(self.proposal, id),
                 round: self.round,
@@ -78,15 +79,15 @@ impl SignedProposal {
         &self,
         predecessor: MicroBlock,
         blockchain: &Blockchain,
-    ) -> bool {
+    ) -> Result<Address, ()> {
         // Make sure the proposal references the predecessor as its parent hash
         if predecessor.hash() != self.proposal.parent_hash {
-            return false;
+            return Err(());
         }
 
         // Make sure the height of the predecessor fits
         if predecessor.block_number() + 1 != self.proposal.block_number {
-            return false;
+            return Err(());
         }
         // Get the active validators.
         let validators = blockchain.current_validators().unwrap();
@@ -106,18 +107,24 @@ impl SignedProposal {
             .validator;
 
         // Compare the expected and the actual validator
-        *assumed_validator == actual_validator
+        if *assumed_validator != actual_validator {
+            return Err(());
+        }
+
+        Ok(actual_validator.address)
     }
 }
 
-impl<Id> From<SignedProposalMessage<Header<Id>, (SchnorrSignature, u16)>> for SignedProposal {
-    fn from(value: SignedProposalMessage<Header<Id>, (SchnorrSignature, u16)>) -> Self {
+impl<Id> From<SignedProposalMessage<Header<Id>, (SchnorrSignature, Address, u16)>>
+    for SignedProposal
+{
+    fn from(value: SignedProposalMessage<Header<Id>, (SchnorrSignature, Address, u16)>) -> Self {
         Self {
             proposal: value.message.proposal.0,
             valid_round: value.message.valid_round,
             round: value.message.round,
             signature: value.signature.0,
-            signer: value.signature.1,
+            signer: value.signature.2,
         }
     }
 }

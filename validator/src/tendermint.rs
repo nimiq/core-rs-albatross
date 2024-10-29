@@ -4,7 +4,7 @@ use futures::{
     future::{self, BoxFuture, FutureExt},
     stream::{BoxStream, StreamExt},
 };
-use nimiq_block::{Block, MacroBlock, TendermintProof};
+use nimiq_block::{Block, MacroBlock, MacroHeader, TendermintProof};
 use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_collections::BitSet;
@@ -16,7 +16,7 @@ use nimiq_handel::{
     verifier::{VerificationResult, Verifier},
 };
 use nimiq_hash::{Blake2sHash, Hash};
-use nimiq_keys::Ed25519Signature as SchnorrSignature;
+use nimiq_keys::{Address, Ed25519Signature as SchnorrSignature};
 use nimiq_network_interface::network::CloseReason;
 use nimiq_primitives::{
     networks::NetworkId, policy::Policy, slots_allocation::Validators, TendermintIdentifier,
@@ -129,6 +129,8 @@ pub struct TendermintProtocol<TValidatorNetwork: ValidatorNetwork> {
     blockchain: Arc<RwLock<Blockchain>>,
     // Validator registry on the heap for easy cloning into handel protocol.
     validator_registry: Arc<ValidatorRegistry>,
+    observe_valid_requested_proposal:
+        Arc<dyn Fn(Address, TendermintProposal<MacroHeader>, SchnorrSignature) + Send + Sync>,
 }
 
 impl<TValidatorNetwork: ValidatorNetwork> Clone for TendermintProtocol<TValidatorNetwork> {
@@ -142,6 +144,7 @@ impl<TValidatorNetwork: ValidatorNetwork> Clone for TendermintProtocol<TValidato
             current_validators: self.current_validators.clone(),
             blockchain: Arc::clone(&self.blockchain),
             validator_registry: Arc::clone(&self.validator_registry),
+            observe_valid_requested_proposal: Arc::clone(&self.observe_valid_requested_proposal),
         }
     }
 }
@@ -158,6 +161,9 @@ where
         validator_slot_band: u16,
         network_id: NetworkId,
         block_height: u32,
+        observe_valid_requested_proposal: Arc<
+            dyn Fn(Address, TendermintProposal<MacroHeader>, SchnorrSignature) + Send + Sync,
+        >,
     ) -> Self {
         Self {
             block_producer,
@@ -168,6 +174,7 @@ where
             validator_registry: Arc::new(ValidatorRegistry::new(current_validators.clone())),
             current_validators,
             network,
+            observe_valid_requested_proposal,
         }
     }
 }
@@ -184,7 +191,7 @@ where
     type InherentHash = Blake2sHash;
     type Aggregation = TendermintContribution;
     type AggregationMessage = AggregateMessage;
-    type ProposalSignature = (SchnorrSignature, u16);
+    type ProposalSignature = (SchnorrSignature, Address, u16);
 
     const F_PLUS_ONE: usize = Policy::F_PLUS_ONE as usize;
     const TWO_F_PLUS_ONE: usize = Policy::TWO_F_PLUS_ONE as usize;
@@ -285,6 +292,7 @@ where
         SingleResponseRequester::new(Arc::clone(&self.network), candidate_peers, request, 3, {
             let blockchain = Arc::clone(&self.blockchain);
             let block_height = self.block_height;
+            let observe = Arc::clone(&self.observe_valid_requested_proposal);
             Box::new(move |response| {
                 if let Some(signed_proposal) = response {
                     let blockchain = blockchain.read();
@@ -308,8 +316,7 @@ where
                             None,
                         )
                         .expect("Couldn't find slot owner!")
-                        .validator
-                        .signing_key;
+                        .validator;
 
                     let data = TendermintProposal {
                         proposal: &signed_proposal.proposal,
@@ -319,8 +326,22 @@ where
                     .hash()
                     .serialize_to_vec();
 
-                    if proposer.verify(&signed_proposal.signature, &data) {
-                        return Some(signed_proposal.into_tendermint_signed_message(None));
+                    if proposer
+                        .signing_key
+                        .verify(&signed_proposal.signature, &data)
+                    {
+                        observe(
+                            proposer.address.clone(),
+                            TendermintProposal {
+                                proposal: signed_proposal.proposal.clone(),
+                                round: signed_proposal.round,
+                                valid_round: signed_proposal.valid_round,
+                            },
+                            signed_proposal.signature.clone(),
+                        );
+                        return Some(
+                            signed_proposal.into_tendermint_signed_message(proposer.address, None),
+                        );
                     }
                 }
                 None
@@ -372,6 +393,9 @@ where
         .serialize_to_vec();
         (
             self.block_producer.signing_key.sign(&data),
+            self.current_validators.validators[usize::from(self.validator_slot_band)]
+                .address
+                .clone(),
             self.validator_slot_band,
         )
     }
