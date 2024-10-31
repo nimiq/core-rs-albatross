@@ -27,9 +27,9 @@ path = "src/performance/blockchain-push/main.rs"
 
 [dependencies]
 ark-ff = "0.4"
-ark-groth16 = { version = "0.4", default-features = false }
-ark-mnt6-753 = "0.4"
-ark-serialize = "0.4"
+ark-groth16 = { version = "0.5", default-features = false }
+ark-mnt6-753 = "0.5"
+ark-serialize = "0.5"
 async-trait = "0.1"
 clap = { version = "4.5", features = ["derive"] }
 futures = { workspace = true }
