@@ -161,14 +161,21 @@ pub async fn classify_validators(
     let mut inactive_validators = HashMap::new();
 
     // This function should only be exeucted if we are past the ACTIVATION_WINDOW_TRESHOLD
-    // We should already have the previous genesis hashes of the preivous activation windows to this point.
-    assert_eq!(genesis_hashes.len(), ACTIVATION_WINDOW_TRESHOLD as usize);
+    // We should already have the previous genesis hashes of the previous activation windows to this point.
     assert!(current_activation_window > ACTIVATION_WINDOW_TRESHOLD);
 
-    for activation_window in ACTIVATION_WINDOW_TRESHOLD..(current_activation_window + 1) {
-        let candidate_start =
-            block_windows.election_candidate + (activation_window * block_windows.readiness_window);
+    for activation_window in ACTIVATION_WINDOW_TRESHOLD..current_activation_window {
+        let candidate_start = block_windows.election_candidate
+            + ((activation_window - 1) * block_windows.readiness_window);
         let next_candidate = candidate_start + block_windows.readiness_window;
+
+        log::debug!(
+            activation_window,
+            start = candidate_start,
+            end = next_candidate,
+            genesis_hash = genesis_hashes[(activation_window - 1) as usize].to_hex(),
+            "Scanning for validator readiness in activation window"
+        );
 
         for validator in validators {
             let validator_address = validator
@@ -321,10 +328,6 @@ pub async fn migrate(
         active_validators.len() + inactive_validators.len()
     );
 
-    if active_validators.len() <= 1 {
-        panic!("We cannot migrate with just 1 active validator");
-    }
-
     log::trace!("This is the list of stakers:");
 
     for staker in &stakers {
@@ -347,7 +350,7 @@ pub async fn migrate(
             current_pow_height = current_height,
             current_candidate = candidate_block,
             next_candidate = next_candidate,
-            "Current status"
+            "Status"
         );
 
         // We are past the candidate block, so we are now in one of the activation windows

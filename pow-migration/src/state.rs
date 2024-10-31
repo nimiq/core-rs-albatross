@@ -34,7 +34,7 @@ pub(crate) const POW_BLOCK_TIME_MS: u64 = POW_BLOCK_TIME * 1000; // 1 min
 
 // PoW maximum amount of snapshots. This is a constant that needs to be set in the PoW client
 // such that we can get accounts snapshots of blocks within [head - `POW_MAX_SNAPSHOTS`, head].
-const POW_MAX_SNAPSHOTS: u64 = 2000;
+const POW_MAX_SNAPSHOTS: u64 = 10000;
 
 fn pos_basic_account_from_account(
     pow_account: &PoWBasicAccount,

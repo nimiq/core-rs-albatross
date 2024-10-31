@@ -159,7 +159,7 @@ pub async fn was_validator_ready(
     genesis_hash: String,
 ) -> bool {
     if let Ok(transactions) =
-        async_retryer(|| pow_client.get_transactions_by_address(&validator_address, 10)).await
+        async_retryer(|| pow_client.get_transactions_by_address(&validator_address, 100)).await
     {
         // We only keep the ones past the activation window that met the activation criteria
         let filtered_txns: Vec<TransactionDetails> = transactions
