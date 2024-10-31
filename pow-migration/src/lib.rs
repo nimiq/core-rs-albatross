@@ -163,7 +163,7 @@ pub async fn classify_validators(
     // This function should only be exeucted if we are past the ACTIVATION_WINDOW_TRESHOLD
     // We should already have the previous genesis hashes of the preivous activation windows to this point.
     assert_eq!(genesis_hashes.len(), ACTIVATION_WINDOW_TRESHOLD as usize);
-    assert!(current_activation_window >= ACTIVATION_WINDOW_TRESHOLD);
+    assert!(current_activation_window > ACTIVATION_WINDOW_TRESHOLD);
 
     for activation_window in ACTIVATION_WINDOW_TRESHOLD..(current_activation_window + 1) {
         let candidate_start =
@@ -295,25 +295,26 @@ pub async fn migrate(
     .await?;
 
     // Check if we are pass the ACTIVATION_WINDOW_TRESHOLD
+    // We start counting in 1.
     let activation_window =
-        (candidate_block - block_windows.election_candidate) / block_windows.readiness_window;
+        ((candidate_block - block_windows.election_candidate) / block_windows.readiness_window) + 1;
 
-    let (active_validators, inactive_validators) =
-        if activation_window >= ACTIVATION_WINDOW_TRESHOLD {
-            // Note that this function is called with the validators set that was returned by the get_stakers function
-            // This means the validators in this set already have their stake distribution set.
-            classify_validators(
-                pow_client,
-                block_windows,
-                genesis_hashes,
-                activation_window,
-                &validators,
-            )
-            .await
-        } else {
-            // If we are not past the activation threshold, then we consider all validators as active.
-            (validators, vec![])
-        };
+    let (active_validators, inactive_validators) = if activation_window > ACTIVATION_WINDOW_TRESHOLD
+    {
+        // Note that this function is called with the validators set that was returned by the get_stakers function
+        // This means the validators in this set already have their stake distribution set.
+        classify_validators(
+            pow_client,
+            block_windows,
+            genesis_hashes,
+            activation_window,
+            &validators,
+        )
+        .await
+    } else {
+        // If we are not past the activation threshold, then we consider all validators as active.
+        (validators, vec![])
+    };
 
     assert_eq!(
         registered_validators.len(),
