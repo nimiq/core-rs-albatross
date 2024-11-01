@@ -14,16 +14,16 @@ keywords.workspace = true
 workspace = true
 
 [dependencies]
-ark-crypto-primitives = { version = "0.4", features = ["crh"] }
+ark-crypto-primitives = { version = "0.5", features = ["crh"] }
 ark-ec = "0.4"
 ark-ff = "0.4"
-ark-groth16 = { version = "0.4", default-features = false }
-ark-mnt4-753 = "0.4"
-ark-mnt6-753 = "0.4"
-ark-relations = "0.4"
+ark-groth16 = { version = "0.5", default-features = false }
+ark-mnt4-753 = "0.5"
+ark-mnt6-753 = "0.5"
+ark-relations = "0.5"
 ark-r1cs-std = "0.4"
-ark-serialize = "0.4"
-ark-std = "0.4"
+ark-serialize = "0.5"
+ark-std = "0.5"
 hex = "0.4"
 log = { workspace = true }
 rand = { version = "0.8", features = ["small_rng"] }
