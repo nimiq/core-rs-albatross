@@ -13,7 +13,7 @@ use nimiq_pow_migration::{
     async_retryer, exit_with_error,
     genesis::write_pos_genesis,
     get_block_windows,
-    history::{get_history_store_height, migrate_history},
+    history::{get_history_root, get_history_store_height, migrate_history},
     launch_pos_client, migrate, report_online,
     state::{get_stakers, get_validators},
     MigrateWindowResult,
@@ -316,9 +316,14 @@ async fn main() {
             let pos_history_store_height = rx_migration_completed.borrow();
             // Wait for the PoW to PoS history migration to be caught up with the candidate block
             if *pos_history_store_height != candidate_block {
+                let history_root = get_history_root(env.clone(), config.network_id)
+                    .await
+                    .unwrap();
+
                 log::info!(
                     candidate_block,
                     current_migrated_block = *pos_history_store_height,
+                    %history_root,
                     "Waiting for the PoW history to be migrated up until candidate block",
                 );
 
