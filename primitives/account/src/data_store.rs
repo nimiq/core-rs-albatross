@@ -94,6 +94,25 @@ impl DataStoreWrite<'_, '_, '_, '_, '_> {
     pub fn remove(&mut self, key: &KeyNibbles) {
         self.store.remove(self.txn, key)
     }
+
+    /// Expensive iteration operation that a Data Store can implement
+    /// for the Accounts Trie.
+    pub fn filter_map<T: Deserialize, F: FnMut(T) -> Option<B>, B>(
+        &self,
+        start_key: &KeyNibbles,
+        end_key: &KeyNibbles,
+        f: F,
+    ) -> Vec<B> {
+        self.store
+            .tree
+            .iter_nodes(
+                &self.txn,
+                &(&self.store.prefix + start_key),
+                &(&self.store.prefix + end_key),
+            )
+            .filter_map(f)
+            .collect()
+    }
 }
 
 #[cfg(test)]

@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 
+use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::{
+    account::AccountError,
     coin::Coin,
     policy::Policy,
     slots_allocation::{Validators, ValidatorsBuilder},
@@ -21,6 +23,7 @@ use crate::{
         store::{StakingContractStoreRead, StakingContractStoreReadOps},
     },
     data_store_ops::{DataStoreIterOps, DataStoreReadOps},
+    TransactionLog,
 };
 
 pub mod punished_slots;
@@ -176,5 +179,83 @@ impl StakingContract {
         }
 
         slots_builder.build()
+    }
+
+    /// Returns the total amount of coins that are supporting the upgrade and are active.
+    /// The support is determined by a function over the signal data.
+    /// IMPORTANT: This is a fairly expensive function, iterating over all validators.
+    pub fn get_supporting_stake<
+        T: DataStoreReadOps + DataStoreIterOps,
+        F: Fn(Option<Blake2bHash>) -> bool,
+    >(
+        &self,
+        data_store: &T,
+        support_check: F,
+    ) -> Coin {
+        StakingContractStoreRead::new(data_store)
+            .iter_validators()
+            .filter_map(|validator| {
+                if validator.is_active() && support_check(validator.signal_data) {
+                    Some(validator.total_stake)
+                } else {
+                    None
+                }
+            })
+            .sum()
+    }
+
+    /// Returns the total amount of slots that are supporting the upgrade.
+    /// The support is determined by a function over the signal data.
+    pub fn get_supporting_slots<T: DataStoreReadOps, F: Fn(Option<Blake2bHash>) -> bool>(
+        &self,
+        data_store: &T,
+        validators: &Validators,
+        support_check: F,
+    ) -> u16 {
+        let staking_contract = StakingContractStoreRead::new(data_store);
+        validators
+            .iter()
+            .map(|validator| {
+                // If the validator cannot be found (e.g., because it has been deleted during the epoch),
+                // it counts as non-supportive.
+                let supports_upgrade = staking_contract
+                    .get_validator(&validator.address)
+                    .map(|validator| support_check(validator.signal_data))
+                    .unwrap_or(false);
+
+                if supports_upgrade {
+                    validator.num_slots()
+                } else {
+                    0
+                }
+            })
+            .sum()
+    }
+
+    /// Deactivates validators that did not support the upgrade.
+    /// The support is determined by a function over the signal data.
+    /// IMPORTANT: This is a fairly expensive function, iterating over all validators.
+    pub fn deactivate_unsupporting_validators<F: Fn(Option<Blake2bHash>) -> bool>(
+        &mut self,
+        store: &mut StakingContractStoreWrite,
+        support_check: F,
+        block_number: u32,
+        tx_logger: &mut TransactionLog,
+    ) -> Result<(), AccountError> {
+        // Retrieve unsupporting validators.
+        let unsupporting_validators = store.filter_map_validators(|validator| {
+            if validator.is_active() && !support_check(validator.signal_data) {
+                Some((validator.address, Address::from(&validator.signing_key)))
+            } else {
+                None
+            }
+        });
+
+        // Deactivate those validators.
+        for (validator_address, signer) in unsupporting_validators {
+            self.deactivate_validator(store, &validator_address, &signer, block_number, tx_logger)?;
+        }
+
+        Ok(())
     }
 }
