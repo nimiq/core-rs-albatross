@@ -187,7 +187,7 @@ pub async fn check_validators_ready(
         .map(|validator| validator.total_stake)
         .sum();
 
-    log::debug!(registered_stake = %total_stake);
+    log::debug!(active_stake = %total_stake);
 
     let mut ready_validators = Vec::new();
     let genesis_config_hash_hex = pos_genesis_config_hash.to_hex();
@@ -228,6 +228,11 @@ pub async fn check_validators_ready(
     // Now we need to see if we have enough stake ready
     let mut ready_stake = Coin::ZERO;
 
+    log::info!(
+        ?activation_block_window,
+        "Validators who are ready in the current activation window: "
+    );
+
     for ready_validator in ready_validators {
         ready_stake += ready_validator.total_stake;
 
@@ -254,7 +259,7 @@ pub async fn check_validators_ready(
         debug!("Enough validators are ready to start the PoS Chain!");
         ValidatorsReadiness::Ready(ready_stake)
     } else {
-        debug!(needed_stake, "Not enough validators are ready");
+        debug!(needed = %Coin::from_u64_unchecked(needed_stake), "Not enough validators are ready");
         ValidatorsReadiness::NotReady(ready_stake)
     }
 }
