@@ -22,6 +22,7 @@ use nimiq_consensus::{sync::syncer::SyncEvent, ConsensusProxy};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_network_interface::{
     network::Network,
+    peer_info::Services,
     request::{request_handler, RequestError},
 };
 use nimiq_time::sleep_until;
@@ -193,7 +194,11 @@ impl<N: Network> MempoolSyncer<N> {
 
     /// Add peer to discover its mempool
     fn add_peer(&mut self, peer_id: N::PeerId) {
-        if self.peers.contains(&peer_id) {
+        if self.peers.contains(&peer_id)
+            || !self
+                .network
+                .peer_provides_services(peer_id, Services::MEMPOOL)
+        {
             return;
         }
 
