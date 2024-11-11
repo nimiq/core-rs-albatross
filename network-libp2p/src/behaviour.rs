@@ -61,6 +61,10 @@ impl Behaviour {
         #[cfg(feature = "kad")]
         if force_dht_server_mode {
             dht.set_mode(Some(kad::Mode::Server));
+        } else {
+            // Force the DHT mode to Client initially, as we only want to allow Server mode once
+            // consensus is established.
+            dht.set_mode(Some(kad::Mode::Client));
         }
 
         // Discovery behaviour

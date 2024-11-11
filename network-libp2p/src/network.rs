@@ -15,8 +15,8 @@ use libp2p::{
 };
 use nimiq_network_interface::{
     network::{
-        CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, SubscribeEvents,
-        Topic,
+        CloseReason, DhtMode, MsgAcceptance, Network as NetworkInterface, NetworkEvent,
+        SubscribeEvents, Topic,
     },
     peer_info::{PeerInfo, Services},
     request::{
@@ -623,6 +623,17 @@ impl NetworkInterface for Network {
         self.validate_tx
             .send(ValidateMessage::new::<T>(pubsub_id, acceptance))
             .expect("Failed to send reported message validation result: receiver hung up");
+    }
+
+    async fn dht_set_mode(&self, mode: DhtMode) {
+        if let Err(error) = self
+            .action_tx
+            .clone()
+            .send(NetworkAction::DhtSetMode { mode })
+            .await
+        {
+            error!(?mode, %error, "could not send dht_set_mode action to channel");
+        };
     }
 
     async fn dht_get<K, V, T>(&self, k: &K) -> Result<Option<V>, Self::Error>

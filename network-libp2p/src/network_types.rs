@@ -12,7 +12,7 @@ use libp2p::{
 };
 use nimiq_keys::KeyPair;
 use nimiq_network_interface::{
-    network::{CloseReason, MsgAcceptance, PubsubId, Topic},
+    network::{CloseReason, DhtMode, MsgAcceptance, PubsubId, Topic},
     peer_info::Services,
     request::{RequestError, RequestType},
 };
@@ -38,6 +38,9 @@ pub(crate) enum NetworkAction {
     DialAddress {
         address: Multiaddr,
         output: oneshot::Sender<Result<(), NetworkError>>,
+    },
+    DhtSetMode {
+        mode: DhtMode,
     },
     DhtGet {
         key: Vec<u8>,

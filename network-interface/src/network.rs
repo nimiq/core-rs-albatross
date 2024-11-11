@@ -90,6 +90,12 @@ pub trait RequestResponse {
     type Response: Serialize + Deserialize + Sync;
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum DhtMode {
+    Client,
+    Server,
+}
+
 #[async_trait]
 pub trait Network: Send + Sync + Unpin + 'static {
     type PeerId: Copy + Debug + Display + Ord + Hash + Send + Sync + Unpin + 'static;
@@ -169,6 +175,9 @@ pub trait Network: Send + Sync + Unpin + 'static {
     fn validate_message<T>(&self, id: Self::PubsubId, acceptance: MsgAcceptance)
     where
         T: Topic + Sync;
+
+    /// Sets the current operation mode (client/server) for the DHT protocol
+    async fn dht_set_mode(&self, mode: DhtMode);
 
     /// Gets a value from the distributed hash table
     async fn dht_get<K, V, T>(&self, k: &K) -> Result<Option<V>, Self::Error>
