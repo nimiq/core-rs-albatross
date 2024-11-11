@@ -27,9 +27,9 @@ path = "src/performance/blockchain-push/main.rs"
 
 [dependencies]
 ark-ff = "0.4"
-ark-groth16 = { version = "0.4", default-features = false }
-ark-mnt6-753 = "0.4"
-ark-serialize = "0.4"
+ark-groth16 = { version = "0.5", default-features = false }
+ark-mnt6-753 = "0.5"
+ark-serialize = "0.5"
 async-trait = "0.1"
 clap = { version = "4.5", features = ["derive"] }
 futures = { workspace = true }
@@ -41,7 +41,7 @@ paste = "1.0"
 rand = "0.8"
 rand_chacha = "0.3.1"
 serde = "1.0"
-tempfile = "3.13"
+tempfile = "3.14"
 tokio = { version = "1.41", features = ["rt", "time", "tracing"] }
 tokio-stream = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

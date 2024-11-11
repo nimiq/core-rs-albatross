@@ -51,7 +51,7 @@ nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
 nimiq-utils = { workspace = true, features = ["spawn"] }
 nimiq-vrf = { workspace = true }
-nimiq_rpc = "0.4.0"
+nimiq_rpc = "0.5.0"
 percentage = "0.1"
 rand = "0.8"
 serde = "1.0"
