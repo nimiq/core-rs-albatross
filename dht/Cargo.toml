@@ -26,6 +26,7 @@ nimiq-blockchain-interface = { workspace = true }
 nimiq-blockchain-proxy = { workspace = true, features = ["full"] }
 nimiq-keys = { workspace = true }
 nimiq-log = { workspace = true, optional = true }
+nimiq-network-interface = { workspace = true }
 nimiq-network-libp2p = { workspace = true }
 nimiq-serde = { workspace = true }
 nimiq-utils = { workspace = true }

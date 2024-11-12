@@ -11,7 +11,7 @@ use libp2p::{
     identity::Keypair,
     swarm::{
         behaviour::{ConnectionClosed, ConnectionEstablished},
-        CloseConnection, ConnectionDenied, ConnectionId, FromSwarm, NetworkBehaviour, ToSwarm,
+        ConnectionDenied, ConnectionId, FromSwarm, NetworkBehaviour, ToSwarm,
     },
     Multiaddr, PeerId,
 };
@@ -22,7 +22,7 @@ use parking_lot::RwLock;
 
 use super::{
     handler::{Handler, HandlerOutEvent},
-    peer_contacts::{PeerContact, PeerContactBook},
+    peer_contacts::{PeerContact, PeerContactBook, ValidatorRecordVerifier},
 };
 
 #[derive(Clone, Debug)]
@@ -115,6 +115,10 @@ pub struct Behaviour {
 
     /// Timer to do house-keeping in the peer address book.
     house_keeping_timer: Interval,
+
+    /// dht verifier TODO
+    #[cfg(feature = "kad")]
+    verifier: Arc<dyn ValidatorRecordVerifier>,
 }
 
 impl Behaviour {
@@ -122,6 +126,7 @@ impl Behaviour {
         config: Config,
         keypair: Keypair,
         peer_contact_book: Arc<RwLock<PeerContactBook>>,
+        #[cfg(feature = "kad")] verifier: Arc<dyn ValidatorRecordVerifier>,
     ) -> Self {
         let house_keeping_timer = interval(config.house_keeping_interval);
         peer_contact_book.write().update_own_contact(&keypair);
@@ -139,6 +144,8 @@ impl Behaviour {
             peer_contact_book,
             events,
             house_keeping_timer,
+            #[cfg(feature = "kad")]
+            verifier,
         }
     }
 
@@ -177,6 +184,8 @@ impl NetworkBehaviour for Behaviour {
             self.keypair.clone(),
             self.peer_contact_book(),
             remote_addr.clone(),
+            #[cfg(feature = "kad")]
+            Arc::clone(&self.verifier),
         ))
     }
 
@@ -194,6 +203,8 @@ impl NetworkBehaviour for Behaviour {
             self.keypair.clone(),
             self.peer_contact_book(),
             addr.clone(),
+            #[cfg(feature = "kad")]
+            Arc::clone(&self.verifier),
         ))
     }
 
@@ -288,10 +299,8 @@ impl NetworkBehaviour for Behaviour {
                     .push_back(ToSwarm::NewExternalAddrCandidate(observed_address));
             }
             HandlerOutEvent::Update => self.events.push_back(ToSwarm::GenerateEvent(Event::Update)),
-            HandlerOutEvent::Error(_) => self.events.push_back(ToSwarm::CloseConnection {
-                peer_id,
-                connection: CloseConnection::All,
-            }),
+            // Errors must not result in a closed connection as light clients are unable to verify ValidatorRecord.
+            HandlerOutEvent::Error(error) => log::trace!(?error, "Received invalid contact"),
         }
     }
 }

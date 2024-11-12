@@ -4007,6 +4007,7 @@ dependencies = [
  "nimiq-blockchain-proxy",
  "nimiq-keys",
  "nimiq-log",
+ "nimiq-network-interface",
  "nimiq-network-libp2p",
  "nimiq-serde",
  "nimiq-utils",
