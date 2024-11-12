@@ -45,7 +45,10 @@ use crate::network_metrics::NetworkMetrics;
 use crate::{
     autonat::NatStatus,
     behaviour, dht,
-    discovery::{self, peer_contacts::PeerContactBook},
+    discovery::{
+        self,
+        peer_contacts::{PeerContactBook, ValidatorRecordVerifier},
+    },
     network_types::{
         DhtBootStrapState, DhtRecord, DhtResults, GossipsubTopicInfo, NetworkAction, TaskState,
         ValidateMessage,
@@ -63,7 +66,7 @@ struct EventInfo<'a> {
     connected_peers: &'a RwLock<HashMap<PeerId, PeerInfo>>,
     rate_limiting: &'a mut RateLimits,
     #[cfg(feature = "kad")]
-    dht_verifier: &'a dyn dht::Verifier,
+    dht_verifier: Arc<dyn dht::Verifier>,
     #[cfg(feature = "metrics")]
     metrics: &'a Arc<NetworkMetrics>,
 }
@@ -73,6 +76,7 @@ pub(crate) fn new_swarm(
     contacts: Arc<RwLock<PeerContactBook>>,
     peer_score_params: gossipsub::PeerScoreParams,
     force_dht_server_mode: bool,
+    #[cfg(feature = "kad")] verifier: Arc<dyn ValidatorRecordVerifier>,
 ) -> Swarm<behaviour::Behaviour> {
     let keypair = config.keypair.clone();
     let transport = new_transport(
@@ -83,8 +87,14 @@ pub(crate) fn new_swarm(
     )
     .unwrap();
 
-    let behaviour =
-        behaviour::Behaviour::new(config, contacts, peer_score_params, force_dht_server_mode);
+    let behaviour = behaviour::Behaviour::new(
+        config,
+        contacts,
+        peer_score_params,
+        force_dht_server_mode,
+        #[cfg(feature = "kad")]
+        verifier,
+    );
 
     // TODO add proper config
     #[cfg(not(target_family = "wasm"))]
@@ -114,7 +124,7 @@ pub(crate) async fn swarm_task(
     connected_peers: Arc<RwLock<HashMap<PeerId, PeerInfo>>>,
     mut update_scores: Interval,
     contacts: Arc<RwLock<PeerContactBook>>,
-    #[cfg(feature = "kad")] dht_verifier: impl dht::Verifier,
+    #[cfg(feature = "kad")] dht_verifier: Arc<dyn dht::Verifier>,
     force_dht_server_mode: bool,
     dht_quorum: NonZeroU8,
     #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
@@ -162,7 +172,7 @@ pub(crate) async fn swarm_task(
                                 connected_peers: &connected_peers,
                                 rate_limiting: &mut rate_limiting,
                                 #[cfg(feature = "kad")]
-                                dht_verifier: &dht_verifier,
+                                dht_verifier: Arc::clone(&dht_verifier),
                                 #[cfg( feature = "metrics")] metrics: &metrics,
                             },
                         );

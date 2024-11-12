@@ -33,7 +33,10 @@ use thiserror::Error;
 use super::{
     behaviour::Config,
     message_codec::{MessageReader, MessageWriter},
-    peer_contacts::{PeerContactBook, SignedPeerContact},
+    peer_contacts::{
+        PeerContactBook, PeerContactError, SignedPeerContact, ValidatorInfoError,
+        ValidatorRecordVerifier,
+    },
     protocol::{ChallengeNonce, DiscoveryMessage, DiscoveryProtocol},
 };
 use crate::{AUTONAT_DIAL_BACK_PROTOCOL, AUTONAT_DIAL_REQUEST_PROTOCOL};
@@ -134,6 +137,11 @@ pub struct Handler {
     /// The peer contact book
     peer_contact_book: Arc<RwLock<PeerContactBook>>,
 
+    /// Used to verify PeerContacts.
+    /// Required as contacts could contain a ValidatorInfo, for which a current verification key is required.
+    #[cfg(feature = "kad")]
+    verifier: Arc<dyn ValidatorRecordVerifier>,
+
     /// The peer address we're connected to (address that got us connected).
     peer_address: Multiaddr,
 
@@ -179,6 +187,7 @@ impl Handler {
         keypair: Keypair,
         peer_contact_book: Arc<RwLock<PeerContactBook>>,
         peer_address: Multiaddr,
+        #[cfg(feature = "kad")] verifier: Arc<dyn ValidatorRecordVerifier>,
     ) -> Self {
         if let Some(peer_contact) = peer_contact_book.write().get(&peer_id) {
             if let Some(outer_protocol_address) = outer_protocol_address(&peer_address) {
@@ -202,6 +211,8 @@ impl Handler {
             inbound: None,
             outbound: None,
             waker: None,
+            #[cfg(feature = "kad")]
+            verifier,
             events: VecDeque::new(),
         }
     }
@@ -232,7 +243,7 @@ impl Handler {
         let mut rng = thread_rng();
 
         peer_contact_book
-            .query(self.services_filter)
+            .query(self.services_filter, false)
             .choose_multiple(&mut rng, limit)
             .into_iter()
             .map(|c| c.signed().clone())
@@ -285,6 +296,44 @@ pub(crate) fn outer_protocol_address(addr: &Multiaddr) -> Option<Multiaddr> {
         })
         .map(|p| Some(p.into()))
         .unwrap_or(None)
+}
+
+fn filter_contact(
+    timestamp: u64,
+    #[cfg(feature = "kad")] verifier: Arc<dyn ValidatorRecordVerifier>,
+) -> Box<dyn Fn(SignedPeerContact) -> Option<SignedPeerContact>> {
+    Box::new(move |mut peer_contact: SignedPeerContact| {
+        match peer_contact.verify(
+            #[cfg(feature = "kad")]
+            Arc::clone(&verifier),
+        ) {
+            // Contacts with too many addresses or an invalid peer signature are rejected
+            // and removed from the collection
+            Err(PeerContactError::AdvertisedAddressesExceeded)
+            | Err(PeerContactError::InvalidSignature) => None,
+            // If there is a validator record, but the state is incomplete,
+            // then it cannot be verified and must be checked again at a later time.
+            Err(PeerContactError::ValidatorRecord(ValidatorInfoError::StateIncomplete)) => {
+                peer_contact.local_only = true;
+                Some(peer_contact)
+            }
+            // If there is a validator record but either the signature is invalid, or the validator is unknown,
+            // the head timestamp of the blockchain and the creation timestamp must be compared.
+            Err(PeerContactError::ValidatorRecord(ValidatorInfoError::InvalidSignature))
+            | Err(PeerContactError::ValidatorRecord(ValidatorInfoError::UnknownValidator(_))) => {
+                // Set it to local only. Some contacts will be discarded by the next condition still.
+                peer_contact.local_only = true;
+
+                // Retain only contacts which are in the future, as they may still verify then.
+                if timestamp < peer_contact.inner.timestamp() {
+                    Some(peer_contact)
+                } else {
+                    None
+                }
+            }
+            Ok(_) => Some(peer_contact),
+        }
+    })
 }
 
 impl ConnectionHandler for Handler {
@@ -526,7 +575,13 @@ impl ConnectionHandler for Handler {
                                     peer_contacts,
                                 } => {
                                     // Check the peer contact for a valid signature.
-                                    if !peer_contact.verify() {
+                                    let Some(peer_contact) = filter_contact(
+                                        0,
+                                        #[cfg(feature = "kad")]
+                                        Arc::clone(&self.verifier),
+                                    )(
+                                        peer_contact.clone()
+                                    ) else {
                                         return Poll::Ready(
                                             ConnectionHandlerEvent::NotifyBehaviour(
                                                 HandlerOutEvent::Error(
@@ -536,7 +591,7 @@ impl ConnectionHandler for Handler {
                                                 ),
                                             ),
                                         );
-                                    }
+                                    };
 
                                     if self.peer_id != peer_contact.peer_id() {
                                         return Poll::Ready(
@@ -574,19 +629,14 @@ impl ConnectionHandler for Handler {
                                             ),
                                         );
                                     }
-                                    for peer_contact in &peer_contacts {
-                                        if !peer_contact.verify() {
-                                            return Poll::Ready(
-                                                ConnectionHandlerEvent::NotifyBehaviour(
-                                                    HandlerOutEvent::Error(
-                                                        Error::InvalidPeerContactSignature {
-                                                            peer_contact: peer_contact.clone(),
-                                                        },
-                                                    ),
-                                                ),
-                                            );
-                                        }
-                                    }
+                                    let peer_contacts: Vec<SignedPeerContact> = peer_contacts
+                                        .into_iter()
+                                        .filter_map(filter_contact(
+                                            0,
+                                            #[cfg(feature = "kad")]
+                                            Arc::clone(&self.verifier),
+                                        ))
+                                        .collect();
 
                                     let mut peer_contact_book = self.peer_contact_book.write();
 
@@ -685,19 +735,15 @@ impl ConnectionHandler for Handler {
                                             ),
                                         );
                                     }
-                                    for peer_contact in &peer_contacts {
-                                        if !peer_contact.verify() {
-                                            return Poll::Ready(
-                                                ConnectionHandlerEvent::NotifyBehaviour(
-                                                    HandlerOutEvent::Error(
-                                                        Error::InvalidPeerContactSignature {
-                                                            peer_contact: peer_contact.clone(),
-                                                        },
-                                                    ),
-                                                ),
-                                            );
-                                        }
-                                    }
+
+                                    let peer_contacts: Vec<SignedPeerContact> = peer_contacts
+                                        .into_iter()
+                                        .filter_map(filter_contact(
+                                            0,
+                                            #[cfg(feature = "kad")]
+                                            Arc::clone(&self.verifier),
+                                        ))
+                                        .collect();
 
                                     // Insert the new peer contacts into the peer contact book.
                                     self.peer_contact_book.write().insert_all_filtered(

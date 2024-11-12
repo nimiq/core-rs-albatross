@@ -534,7 +534,7 @@ impl Behaviour {
         let own_peer_id = own_contact.peer_id();
 
         contacts
-            .query(self.required_services)
+            .query(self.required_services, true)
             .filter_map(|contact| {
                 let peer_id = contact.peer_id();
                 if peer_id != own_peer_id
@@ -562,7 +562,7 @@ impl Behaviour {
         let own_peer_id = own_contact.peer_id();
 
         contacts
-            .query(services)
+            .query(services, true)
             .filter_map(|contact| {
                 let peer_id = contact.peer_id();
                 if peer_id != own_peer_id

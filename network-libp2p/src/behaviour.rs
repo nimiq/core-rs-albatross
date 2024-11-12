@@ -12,9 +12,11 @@ use parking_lot::RwLock;
 use rand::rngs::OsRng;
 
 use crate::{
-    connection_pool,
-    connection_pool::behaviour::Config as PoolConfig,
-    discovery::{self, peer_contacts::PeerContactBook},
+    connection_pool::{self, behaviour::Config as PoolConfig},
+    discovery::{
+        self,
+        peer_contacts::{PeerContactBook, ValidatorRecordVerifier},
+    },
     dispatch::codecs::MessageCodec,
     Config,
 };
@@ -50,6 +52,7 @@ impl Behaviour {
         contacts: Arc<RwLock<PeerContactBook>>,
         peer_score_params: gossipsub::PeerScoreParams,
         force_dht_server_mode: bool,
+        #[cfg(feature = "kad")] verifier: Arc<dyn ValidatorRecordVerifier>,
     ) -> Self {
         let public_key = config.keypair.public();
         let peer_id = public_key.to_peer_id();
@@ -68,6 +71,8 @@ impl Behaviour {
             config.discovery.clone(),
             config.keypair.clone(),
             Arc::clone(&contacts),
+            #[cfg(feature = "kad")]
+            verifier,
         );
 
         // Gossipsub behaviour
