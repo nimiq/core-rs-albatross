@@ -174,10 +174,12 @@ impl VestingRecipientBuilder {
                     .ok_or(VestingRecipientBuilderError::NoTimeStep)?,
                 step_amount: self
                     .step_amount
-                    .ok_or(VestingRecipientBuilderError::NoStepAmount)?,
+                    .ok_or(VestingRecipientBuilderError::NoStepAmount)?
+                    .into(),
                 total_amount: self
                     .total_amount
-                    .ok_or(VestingRecipientBuilderError::NoTotalAmount)?,
+                    .ok_or(VestingRecipientBuilderError::NoTotalAmount)?
+                    .into(),
             },
         })
     }
