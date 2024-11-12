@@ -16,7 +16,7 @@ use nimiq_network_interface::{
     network::Network as NetworkInterface,
     peer_info::{PeerInfo, Services},
 };
-use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSignature};
+use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSignature, TaggedSigned};
 use nimiq_validator_network::validator_record::ValidatorRecord;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -28,6 +28,10 @@ use crate::{utils, Network};
 pub enum PeerContactError {
     #[error("Exceeded number of advertised addresses")]
     AdvertisedAddressesExceeded,
+    #[error("Validator Record failed to verify")]
+    ValidatorRecord(ValidatorInfoError),
+    #[error("Contact signature is invalid")]
+    InvalidSignature,
 }
 
 /// The validator info contains all information which is not present in a [PeerContact]
@@ -43,10 +47,75 @@ pub struct ValidatorInfo {
     signature: TaggedSignature<ValidatorRecord<<Network as NetworkInterface>::PeerId>, KeyPair>,
 }
 
+#[derive(Debug)]
+pub enum ValidatorInfoError {
+    StateIncomplete,
+    InvalidSignature,
+    UnknownValidator(Address),
+}
+
+impl ValidatorInfo {
+    pub fn new(
+        validator_address: Address,
+        signature: TaggedSignature<ValidatorRecord<<Network as NetworkInterface>::PeerId>, KeyPair>,
+    ) -> Self {
+        Self {
+            validator_address,
+            signature,
+        }
+    }
+
+    pub fn verify(
+        &self,
+        timestamp: u64,
+        peer_id: PeerId,
+        verification_key: &<KeyPair as TaggedKeyPair>::PublicKey,
+    ) -> Result<(), ValidatorInfoError> {
+        // Reconstruct the record
+        let record = ValidatorRecord {
+            validator_address: self.validator_address.clone(),
+            timestamp,
+            peer_id,
+        };
+
+        // Reconstruct the signed record.
+        let signed_record = TaggedSigned::new(record, self.signature.clone());
+
+        // Verify the record and return the result.
+        signed_record
+            .verify(verification_key)
+            .then_some(())
+            .ok_or(ValidatorInfoError::InvalidSignature)
+    }
+}
+
+pub trait ValidatorRecordVerifier: Send + Sync {
+    fn verify_validator_record(
+        &self,
+        signed_record: &TaggedSigned<
+            ValidatorRecord<<Network as NetworkInterface>::PeerId>,
+            KeyPair,
+        >,
+    ) -> Result<(), ValidatorInfoError>;
+}
+
+impl ValidatorRecordVerifier for () {
+    fn verify_validator_record(
+        &self,
+        _signed_record: &TaggedSigned<
+            ValidatorRecord<<Network as NetworkInterface>::PeerId>,
+            KeyPair,
+        >,
+    ) -> Result<(), ValidatorInfoError> {
+        Ok(())
+    }
+}
+
 /// A plain peer contact. This contains:
 ///
 ///  - A set of multi-addresses for the peer.
 ///  - The peer's public key.
+///  - An optional [ValidatorInfo] in case this peer is a running a validator.
 ///  - A bitmask of the services supported by this peer.
 ///  - A timestamp when this contact information was generated.
 ///
@@ -59,6 +128,9 @@ pub struct PeerContact {
     /// Public key of this peer.
     #[serde(with = "self::serde_public_key")]
     pub public_key: PublicKey,
+
+    /// Optional validator info in case the node is a validator.
+    pub validator_info: Option<ValidatorInfo>,
 
     /// Services supported by this peer.
     pub services: Services,
@@ -91,6 +163,7 @@ impl PeerContact {
         Ok(Self {
             addresses,
             public_key,
+            validator_info: None,
             services,
             validator_info: None,
             timestamp,
@@ -99,7 +172,7 @@ impl PeerContact {
 
     /// Derives the peer ID from the public key
     pub fn peer_id(&self) -> PeerId {
-        self.public_key.clone().to_peer_id()
+        self.public_key.to_peer_id()
     }
 
     /// Returns the timestamp of the contact. It is generally set to the time the contact was created.
@@ -123,6 +196,7 @@ impl PeerContact {
         SignedPeerContact {
             inner: self,
             signature,
+            local_only: false,
         }
     }
 
@@ -160,10 +234,35 @@ impl PeerContact {
 
     /// Verifies whether the lengths of the advertised addresses are within
     /// the expected limits. This is helpful to verify a received peer contact.
-    pub fn verify(&self) -> Result<(), PeerContactError> {
+    pub fn verify(
+        &self,
+        #[cfg(feature = "kad")] verifier: Arc<dyn ValidatorRecordVerifier>,
+    ) -> Result<(), PeerContactError> {
         if self.addresses.len() > Self::MAX_ADDRESSES {
             return Err(PeerContactError::AdvertisedAddressesExceeded);
         }
+
+        // In case the Contact includes a ValidatorInfo it also needs to be verified.
+        #[cfg(feature = "kad")]
+        if let Some(ValidatorInfo {
+            validator_address,
+            signature,
+        }) = self.validator_info.clone()
+        {
+            // Reconstruct the record
+            let record = ValidatorRecord {
+                validator_address,
+                timestamp: self.timestamp,
+                peer_id: self.peer_id(),
+            };
+
+            let signed_record = TaggedSigned::new(record, signature);
+
+            verifier
+                .verify_validator_record(&signed_record)
+                .map_err(PeerContactError::ValidatorRecord)?;
+        }
+
         Ok(())
     }
 }
@@ -180,17 +279,30 @@ pub struct SignedPeerContact {
 
     /// The signature over the serialized peer contact.
     pub signature: TaggedSignature<PeerContact, Keypair>,
+
+    #[serde(skip)]
+    pub local_only: bool,
 }
 
 impl SignedPeerContact {
     /// Verifies that the signature is valid for this peer contact and also does
     /// intrinsic verification on the inner PeerContact.
-    pub fn verify(&self) -> bool {
-        if self.inner.verify().is_err() {
-            return false;
-        };
-        self.signature
+    pub fn verify(
+        &self,
+        #[cfg(feature = "kad")] verifier: Arc<dyn ValidatorRecordVerifier>,
+    ) -> Result<(), PeerContactError> {
+        // The record signature must be verifid first.
+        if !self
+            .signature
             .tagged_verify(&self.inner, &self.inner.public_key)
+        {
+            return Err(PeerContactError::InvalidSignature);
+        }
+
+        self.inner.verify(
+            #[cfg(feature = "kad")]
+            verifier,
+        )
     }
 
     /// Gets the public key of this peer contact.
@@ -509,11 +621,15 @@ impl PeerContactBook {
 
     /// Gets a set of peer contacts given a services filter.
     /// Every peer contact that matches such services will be returned.
-    pub fn query(&self, services: Services) -> impl Iterator<Item = Arc<PeerContactInfo>> + '_ {
+    pub fn query(
+        &self,
+        services: Services,
+        include_local_only: bool,
+    ) -> impl Iterator<Item = Arc<PeerContactInfo>> + '_ {
         // TODO: This is a naive implementation
         // TODO: Sort by score?
         self.peer_contacts.iter().filter_map(move |(_, contact)| {
-            if contact.matches(services) {
+            if !contact.contact.local_only || include_local_only && contact.matches(services) {
                 Some(Arc::clone(contact))
             } else {
                 None

@@ -38,7 +38,7 @@ use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 use crate::network_metrics::NetworkMetrics;
 use crate::{
     dht,
-    discovery::peer_contacts::PeerContactBook,
+    discovery::peer_contacts::{PeerContactBook, ValidatorRecordVerifier},
     network_types::{GossipsubId, NetworkAction, ValidateMessage},
     rate_limiting::RateLimitConfig,
     swarm::{new_swarm, swarm_task},
@@ -79,7 +79,7 @@ impl Network {
     ///
     pub async fn new(
         config: Config,
-        #[cfg(feature = "kad")] dht_verifier: impl dht::Verifier + 'static,
+        #[cfg(feature = "kad")] verifier: impl dht::Verifier + ValidatorRecordVerifier + 'static,
     ) -> Self {
         let required_services = config.required_services;
         // TODO: persist to disk
@@ -100,11 +100,17 @@ impl Network {
         // In memory transport we don't have a mechanism that sets the DHT in server mode such as confirming an address
         // with Autonat. This is because Autonat v1 only works with IP addresses.
         let force_dht_server_mode = config.memory_transport;
+
+        #[cfg(feature = "kad")]
+        let verifier = Arc::new(verifier);
+
         let swarm = new_swarm(
             config,
             Arc::clone(&contacts),
             params.clone(),
             force_dht_server_mode,
+            #[cfg(feature = "kad")]
+            (Arc::clone(&verifier) as Arc<dyn ValidatorRecordVerifier>),
         );
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
@@ -128,7 +134,7 @@ impl Network {
             update_scores,
             Arc::clone(&contacts),
             #[cfg(feature = "kad")]
-            dht_verifier,
+            (Arc::clone(&verifier) as Arc<dyn dht::Verifier>),
             force_dht_server_mode,
             dht_quorum,
             #[cfg(feature = "metrics")]
