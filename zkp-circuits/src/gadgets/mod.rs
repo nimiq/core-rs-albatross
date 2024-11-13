@@ -4,7 +4,6 @@
 pub mod mnt4;
 pub mod mnt6;
 
-pub mod be_bytes;
 pub mod bits;
 pub mod compressed_affine;
 pub mod compressed_vk;

@@ -38,9 +38,9 @@ impl YToBitGadget<MNT4Fq> for AffineVar<<Config as MNT4Config>::G2Config, Fq2Var
         // (y_c1 > half) || (y_c1 == 0 && y_c0 > half)
         let cond0 = y_c1_bit;
 
-        let cond1 = Boolean::and(&y_c1_eq_bit, &y_c0_bit)?;
+        let cond1 = y_c1_eq_bit & y_c0_bit;
 
-        let y_bit = Boolean::or(&cond0, &cond1)?;
+        let y_bit = cond0 | cond1;
 
         Ok(y_bit)
     }

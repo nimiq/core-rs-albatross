@@ -5,15 +5,16 @@ pub mod mnt4;
 pub mod mnt6;
 pub mod vk_commitments;
 
-use ark_ec::{pairing::Pairing, CurveGroup};
+use ark_ec::pairing::Pairing;
 use ark_ff::{Field, PrimeField};
+use nimiq_zkp_primitives::FixedPairing;
 
 pub trait CircuitInput {
     const NUM_INPUTS: usize;
 }
 
-type BasePrimeField<E> = <<<E as Pairing>::G1 as CurveGroup>::BaseField as Field>::BasePrimeField;
-pub const fn num_inputs<P: Pairing>(num_bytes: &[usize]) -> usize {
+type BasePrimeField<E> = <<E as Pairing>::BaseField as Field>::BasePrimeField;
+pub const fn num_inputs<P: FixedPairing>(num_bytes: &[usize]) -> usize {
     let capacity = BasePrimeField::<P>::MODULUS_BIT_SIZE as usize - 1;
 
     let mut num_inputs = 0;

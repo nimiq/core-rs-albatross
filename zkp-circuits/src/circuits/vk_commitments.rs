@@ -5,14 +5,18 @@ use ark_groth16::{constraints::VerifyingKeyVar, VerifyingKey};
 use ark_mnt4_753::MNT4_753;
 use ark_mnt6_753::MNT6_753;
 use ark_r1cs_std::{
-    alloc::AllocVar, eq::EqGadget, groups::GroupOpsBounds, pairing::PairingVar, uint8::UInt8,
+    alloc::AllocVar,
+    eq::EqGadget,
+    groups::{CurveVar, GroupOpsBounds},
+    pairing::PairingVar,
+    uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_std::{rand::Rng, UniformRand};
 use log::error;
 use nimiq_zkp_primitives::{
     ext_traits::CompressedComposite, non_native_vk_commitment,
-    pedersen::DefaultPedersenParameters95, vk_commitment, vks_commitment,
+    pedersen::DefaultPedersenParameters95, vk_commitment, vks_commitment, FixedPairing,
 };
 
 use super::{
@@ -33,9 +37,10 @@ use crate::gadgets::{
     vks_commitment::VksCommitmentGadget,
 };
 
-type BasePrimeField<E> = <<<E as Pairing>::G1 as CurveGroup>::BaseField as Field>::BasePrimeField;
+type BasePrimeField<E> = <<E as Pairing>::BaseField as Field>::BasePrimeField;
+type ConstraintF<C> = <<C as CurveGroup>::BaseField as Field>::BasePrimeField;
 
-fn dummy_vk<E: Pairing>(num_public_inputs: usize) -> VerifyingKey<E> {
+fn dummy_vk<E: FixedPairing>(num_public_inputs: usize) -> VerifyingKey<E> {
     let mut vk = VerifyingKey::<E>::default();
     for _ in 0..num_public_inputs + 1 {
         vk.gamma_abc_g1.push(Default::default());
@@ -53,7 +58,7 @@ pub struct VerifyingKeys {
     pk_tree_mnt4: Vec<VerifyingKey<MNT4_753>>,
 }
 
-fn randomize_vk<E: Pairing, R: Rng + ?Sized>(vk: &mut VerifyingKey<E>, rng: &mut R) {
+fn randomize_vk<E: FixedPairing, R: Rng + ?Sized>(vk: &mut VerifyingKey<E>, rng: &mut R) {
     vk.alpha_g1 = UniformRand::rand(rng);
     vk.beta_g2 = UniformRand::rand(rng);
     vk.gamma_g2 = UniformRand::rand(rng);
@@ -164,7 +169,7 @@ impl VerifyingKeys {
 }
 
 #[allow(clippy::len_without_is_empty)]
-pub trait PairingRelatedKeys<E: Pairing> {
+pub trait PairingRelatedKeys<E: FixedPairing> {
     fn get_keys(&self) -> Vec<&VerifyingKey<E>>;
     fn get_key(&self, circuit_id: CircuitId) -> Option<&VerifyingKey<E>>;
     fn len(&self) -> usize;
@@ -258,16 +263,16 @@ impl VkCommitmentIndex for MNT4_753 {
     const VK_COMMITMENT_INDEX: usize = 1;
 }
 
-pub struct VerifyingKeyHelper<P: Pairing + VkCommitmentIndex + DefaultPedersenParameters95> {
+pub struct VerifyingKeyHelper<P: FixedPairing + VkCommitmentIndex + DefaultPedersenParameters95> {
     keys: VerifyingKeys,
     vks_commitment_gadget: VksCommitmentGadget<P>,
 }
 
-impl<P: Pairing + VkCommitmentIndex + DefaultPedersenParameters95> VerifyingKeyHelper<P>
+impl<P: FixedPairing + VkCommitmentIndex + DefaultPedersenParameters95> VerifyingKeyHelper<P>
 where
     VerifyingKeys: PairingRelatedKeys<P>,
 {
-    pub fn new_and_verify<PV: PairingVar<P, BasePrimeField<P>>>(
+    pub fn new_and_verify<PV: PairingVar<P>>(
         cs: ConstraintSystemRef<BasePrimeField<P>>,
         keys: VerifyingKeys,
         commitment: &[UInt8<BasePrimeField<P>>],
@@ -275,6 +280,7 @@ where
     ) -> Result<Self, SynthesisError>
     where
         PV::G1Var: SerializeGadget<BasePrimeField<P>>,
+        PV::G1Var: CurveVar<P::G1, ConstraintF<P::G1>>,
         for<'a> &'a PV::G1Var: GroupOpsBounds<'a, P::G1, PV::G1Var>,
     {
         let sub_commitment =
@@ -301,13 +307,14 @@ where
         })
     }
 
-    pub fn get_and_verify_vk<PV: PairingVar<P, BasePrimeField<P>>, W: Window>(
+    pub fn get_and_verify_vk<PV: PairingVar<P>, W: Window>(
         &self,
         cs: ConstraintSystemRef<BasePrimeField<P>>,
         circuit_id: CircuitId,
         pedersen_generators: &PedersenParametersVar<P::G1, PV::G1Var>,
     ) -> Result<VerifyingKeyVar<P, PV>, SynthesisError>
     where
+        PV::G1Var: CurveVar<P::G1, ConstraintF<P::G1>>,
         for<'a> &'a PV::G1Var: GroupOpsBounds<'a, P::G1, PV::G1Var>,
         PV::G1Var: SerializeGadget<BasePrimeField<P>>,
         PV::G2Var: SerializeGadget<BasePrimeField<P>>,
@@ -328,7 +335,7 @@ where
         Ok(vk_commitment_gadget.vk)
     }
 
-    pub fn get_and_verify_nonnative_vk<PV: PairingVar<P, BasePrimeField<P>>, W: Window>(
+    pub fn get_and_verify_nonnative_vk<PV: PairingVar<P>, W: Window>(
         &self,
         cs: ConstraintSystemRef<BasePrimeField<P>>,
         circuit_id: CircuitId,
@@ -341,9 +348,9 @@ where
         SynthesisError,
     >
     where
+        PV::G1Var: CurveVar<P::G1, ConstraintF<P::G1>>,
         for<'a> &'a PV::G1Var: GroupOpsBounds<'a, P::G1, PV::G1Var>,
         PV::G1Var: SerializeGadget<BasePrimeField<P>>,
-        PV::G2Var: SerializeGadget<BasePrimeField<P>>,
     {
         let (c_index, _) = circuit_id.index();
         // Check preconditions for this function:
@@ -408,7 +415,7 @@ mod tests {
         vk_commitment::VkCommitmentWindow,
     };
 
-    fn assert_eq_vk<E: Pairing, P: PairingVar<E, BasePrimeField<E>>>(
+    fn assert_eq_vk<E: FixedPairing, P: PairingVar<E>>(
         vk: &VerifyingKey<E>,
         vk_var: &VerifyingKeyVar<E, P>,
     ) {

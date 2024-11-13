@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, fmt, ops::MulAssign};
 
-use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup, Group};
+use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup, PrimeGroup};
 use ark_ff::Zero;
 pub use ark_mnt6_753::G2Projective;
 use ark_mnt6_753::{G1Projective, MNT6_753};

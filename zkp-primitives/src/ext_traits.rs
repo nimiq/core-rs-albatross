@@ -1,10 +1,11 @@
 use ark_ec::{
-    pairing::Pairing,
     short_weierstrass::{Affine, SWCurveConfig, SWFlags},
     AffineRepr,
 };
 use ark_ff::{Field, ToConstraintField};
 use ark_groth16::VerifyingKey;
+
+use crate::FixedPairing;
 
 pub trait CompressedAffine<F: Field> {
     /// Returns the y-is-negative bit and the x coordinate.
@@ -41,7 +42,7 @@ where
     }
 }
 
-impl<ConstraintF: Field, P: Pairing> CompressedComposite<ConstraintF> for VerifyingKey<P>
+impl<ConstraintF: Field, P: FixedPairing> CompressedComposite<ConstraintF> for VerifyingKey<P>
 where
     P::G1Affine: CompressedAffine<ConstraintF>,
     P::G2Affine: CompressedAffine<ConstraintF>,

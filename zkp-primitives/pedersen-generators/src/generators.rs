@@ -1,5 +1,5 @@
 use ark_crypto_primitives::crh::pedersen::{Parameters, Window};
-use ark_ec::{pairing::Pairing, CurveGroup, Group};
+use ark_ec::{pairing::Pairing, AdditiveGroup, CurveGroup};
 use ark_ff::PrimeField;
 use ark_mnt6_753::Fq;
 use ark_std::UniformRand;

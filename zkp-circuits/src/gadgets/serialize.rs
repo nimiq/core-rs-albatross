@@ -1,20 +1,21 @@
-use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig, CurveGroup};
+use ark_ec::{pairing::Pairing, short_weierstrass::SWCurveConfig};
 use ark_ff::{Field, PrimeField};
 use ark_groth16::constraints::VerifyingKeyVar;
 use ark_r1cs_std::{
+    convert::{ToBitsGadget, ToBytesGadget},
     groups::curves::short_weierstrass::{AffineVar, ProjectiveVar},
     pairing::PairingVar,
-    prelude::{FieldOpsBounds, FieldVar, ToBitsGadget},
+    prelude::{FieldOpsBounds, FieldVar},
     uint64::UInt64,
     uint8::UInt8,
-    ToBytesGadget,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_serialize::buffer_byte_size;
+use nimiq_zkp_primitives::FixedPairing;
 
 use super::y_to_bit::YToBitGadget;
 
-type BasePrimeField<E> = <<<E as Pairing>::G1 as CurveGroup>::BaseField as Field>::BasePrimeField;
+type BasePrimeField<E> = <<E as Pairing>::BaseField as Field>::BasePrimeField;
 /// A gadget that takes as input a G1 or G2 point and serializes it into a vector of Booleans.
 pub trait SerializeGadget<F: Field> {
     fn serialize_compressed(
@@ -28,7 +29,7 @@ impl<F: Field> SerializeGadget<F> for UInt64<F> {
         &self,
         _cs: ConstraintSystemRef<F>,
     ) -> Result<Vec<UInt8<F>>, SynthesisError> {
-        self.to_bytes()
+        self.to_bytes_le()
     }
 }
 
@@ -43,7 +44,7 @@ where
         cs: ConstraintSystemRef<<P::BaseField as Field>::BasePrimeField>,
     ) -> Result<Vec<UInt8<<P::BaseField as Field>::BasePrimeField>>, SynthesisError> {
         // Get bits from the x coordinate.
-        let x_bytes = self.x.to_bytes()?;
+        let x_bytes = self.x.to_bytes_le()?;
 
         // Truncate unnecessary bytes for each extension degree of x.
         let extension_degree = P::BaseField::extension_degree() as usize;
@@ -86,8 +87,7 @@ where
     }
 }
 
-impl<E: Pairing, P: PairingVar<E, BasePrimeField<E>>> SerializeGadget<BasePrimeField<E>>
-    for VerifyingKeyVar<E, P>
+impl<E: FixedPairing, P: PairingVar<E>> SerializeGadget<BasePrimeField<E>> for VerifyingKeyVar<E, P>
 where
     P::G1Var: SerializeGadget<BasePrimeField<E>>,
     P::G2Var: SerializeGadget<BasePrimeField<E>>,
@@ -125,6 +125,7 @@ where
 
 #[cfg(test)]
 mod tests_mnt4 {
+    use ark_ec::CurveGroup as _;
     use ark_groth16::VerifyingKey;
     use ark_mnt4_753::{
         constraints::{G1Var, G2Var, PairingVar},
@@ -239,6 +240,7 @@ mod tests_mnt4 {
 
 #[cfg(test)]
 mod tests_mnt6 {
+    use ark_ec::CurveGroup as _;
     use ark_groth16::VerifyingKey;
     use ark_mnt6_753::{
         constraints::{G1Var, G2Var, PairingVar},

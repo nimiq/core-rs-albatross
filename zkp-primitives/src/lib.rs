@@ -7,9 +7,12 @@ pub use pedersen::pedersen_parameters_mnt6;
 pub use serialize::*;
 pub use vk_commitment::*;
 
+pub use self::traits::FixedPairing;
+
 pub mod ext_traits;
 pub mod pedersen;
 mod serialize;
+mod traits;
 mod vk_commitment;
 
 use std::io;

@@ -1,4 +1,4 @@
-use ark_ec::Group;
+use ark_ec::PrimeGroup;
 use ark_mnt6_753::{
     constraints::{G1Var, G2Var, PairingVar},
     Fq as MNT6Fq, G2Projective,

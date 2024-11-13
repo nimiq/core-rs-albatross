@@ -20,7 +20,6 @@ use nimiq_primitives::{policy::Policy, TendermintStep};
 use crate::{
     blake2s::evaluate_blake2s,
     gadgets::{
-        be_bytes::ToBeBytesGadget,
         bits::BitVec,
         mnt6::{CheckSigGadget, HashToCurve},
     },
@@ -74,7 +73,7 @@ impl MacroBlockGadget {
         let valid_sig = CheckSigGadget::check_signature(cs, agg_pk, &hash, &self.signature)?;
 
         // Only return true if we have enough signers and a valid signature.
-        enough_signers.and(&valid_sig)
+        Ok(enough_signers & valid_sig)
     }
 
     /// Calculates the header hash of the block.

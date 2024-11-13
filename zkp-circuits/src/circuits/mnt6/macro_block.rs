@@ -191,7 +191,7 @@ impl ConstraintSynthesizer<MNT6Fq> for MacroBlockCircuit {
 
         // Check that the previous block and the final block are exactly one epoch length apart.
         let calculated_block_number =
-            UInt32::addmany(&[prev_block_var.block_number.clone(), epoch_length_var])?;
+            UInt32::wrapping_add_many(&[prev_block_var.block_number.clone(), epoch_length_var])?;
 
         calculated_block_number.enforce_equal(&final_block_var.block_number)?;
 

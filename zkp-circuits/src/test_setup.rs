@@ -1,6 +1,6 @@
 use std::{fs::File, path::Path};
 
-use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, CurveGroup, Group};
+use ark_ec::{scalar_mul::BatchMulPreprocessing, CurveGroup, PrimeGroup};
 use ark_ff::{Field, PrimeField, UniformRand, Zero};
 use ark_groth16::{
     r1cs_to_qap::{LibsnarkReduction, R1CSToQAP},
@@ -14,7 +14,7 @@ use ark_relations::r1cs::{
 };
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{cfg_into_iter, cfg_iter, rand::Rng};
-use nimiq_zkp_primitives::NanoZKPError;
+use nimiq_zkp_primitives::{FixedPairing, NanoZKPError};
 #[cfg(feature = "parallel")]
 use rayon::iter::{
     IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
@@ -29,7 +29,7 @@ pub const UNIT_TOXIC_WASTE_SEED: [u8; 32] = [
 ];
 
 #[derive(CanonicalSerialize, CanonicalDeserialize)]
-pub struct ToxicWaste<E: Pairing> {
+pub struct ToxicWaste<E: FixedPairing> {
     alpha: E::ScalarField,
     beta: E::ScalarField,
     gamma: E::ScalarField,
@@ -41,7 +41,7 @@ pub struct ToxicWaste<E: Pairing> {
     abc: Vec<E::ScalarField>,
 }
 
-impl<E: Pairing> UniformRand for ToxicWaste<E> {
+impl<E: FixedPairing> UniformRand for ToxicWaste<E> {
     fn rand<R: Rng + ?Sized>(rng: &mut R) -> Self {
         Self {
             alpha: E::ScalarField::rand(rng),
@@ -55,7 +55,7 @@ impl<E: Pairing> UniformRand for ToxicWaste<E> {
     }
 }
 
-impl<E: Pairing> ToxicWaste<E> {
+impl<E: FixedPairing> ToxicWaste<E> {
     pub fn setup_groth16<C>(circuit: C, rng: &mut impl Rng) -> R1CSResult<(Self, ProvingKey<E>)>
     where
         C: ConstraintSynthesizer<E::ScalarField>,
@@ -114,8 +114,6 @@ impl<E: Pairing> ToxicWaste<E> {
             .map(|i| usize::from(!b[i].is_zero()))
             .sum();
 
-        let scalar_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
-
         let gamma_inverse = self
             .gamma
             .inverse()
@@ -146,51 +144,42 @@ impl<E: Pairing> ToxicWaste<E> {
         drop(c);
 
         // Compute B window table
-        let g2_window = FixedBase::get_mul_window_size(non_zero_b);
-        let g2_table =
-            FixedBase::get_window_table::<E::G2>(scalar_bits, g2_window, self.g2_generator);
+        let g2_table = BatchMulPreprocessing::new(self.g2_generator, non_zero_b);
 
         // Compute the B-query in G2
-        let b_g2_query = FixedBase::msm::<E::G2>(scalar_bits, g2_window, &g2_table, &b);
-        drop(g2_table);
+        let b_g2_query = g2_table.batch_mul(&b);
 
         // Compute G window table
-        let g1_window =
-            FixedBase::get_mul_window_size(non_zero_a + non_zero_b + qap_num_variables + m_raw + 1);
-        let g1_table =
-            FixedBase::get_window_table::<E::G1>(scalar_bits, g1_window, self.g1_generator);
+        let num_scalars = non_zero_a + non_zero_b + qap_num_variables + m_raw + 1;
+        let g1_table = BatchMulPreprocessing::new(self.g1_generator, num_scalars);
 
         // Generate the R1CS proving key
-        let alpha_g1 = self.g1_generator.mul_bigint(&self.alpha.into_bigint());
-        let beta_g1 = self.g1_generator.mul_bigint(&self.beta.into_bigint());
-        let beta_g2 = self.g2_generator.mul_bigint(&self.beta.into_bigint());
-        let delta_g1 = self.g1_generator.mul_bigint(&self.delta.into_bigint());
-        let delta_g2 = self.g2_generator.mul_bigint(&self.delta.into_bigint());
+        let alpha_g1 = self.g1_generator * self.alpha;
+        let beta_g1 = self.g1_generator * self.beta;
+        let beta_g2 = self.g2_generator * self.beta;
+        let delta_g1 = self.g1_generator * self.delta;
+        let delta_g2 = self.g2_generator * self.delta;
 
         // Compute the A-query
-        let a_query = FixedBase::msm::<E::G1>(scalar_bits, g1_window, &g1_table, &a);
+        let a_query = g1_table.batch_mul(&a);
         drop(a);
 
         // Compute the B-query in G1
-        let b_g1_query = FixedBase::msm::<E::G1>(scalar_bits, g1_window, &g1_table, &b);
+        let b_g1_query = g1_table.batch_mul(&b);
         drop(b);
 
         // Compute the H-query
-        let h_query = FixedBase::msm::<E::G1>(
-            scalar_bits,
-            g1_window,
-            &g1_table,
-            &QAP::h_query_scalars::<_, D<E::ScalarField>>(m_raw - 1, t, zt, delta_inverse)?,
-        );
+        let h_scalars =
+            QAP::h_query_scalars::<_, D<E::ScalarField>>(m_raw - 1, t, zt, delta_inverse)?;
+        let h_query = g1_table.batch_mul(&h_scalars);
 
         // Compute the L-query
-        let l_query = FixedBase::msm::<E::G1>(scalar_bits, g1_window, &g1_table, &l);
+        let l_query = g1_table.batch_mul(&l);
         drop(l);
 
         // Generate R1CS verification key
-        let gamma_g2 = self.g2_generator.mul_bigint(&self.gamma.into_bigint());
-        let gamma_abc_g1 = FixedBase::msm::<E::G1>(scalar_bits, g1_window, &g1_table, &gamma_abc);
-
+        let gamma_g2 = self.g2_generator * self.gamma;
+        let gamma_abc_g1 = g1_table.batch_mul(&gamma_abc);
         drop(g1_table);
 
         let vk = VerifyingKey::<E> {
@@ -198,14 +187,8 @@ impl<E: Pairing> ToxicWaste<E> {
             beta_g2: beta_g2.into_affine(),
             gamma_g2: gamma_g2.into_affine(),
             delta_g2: delta_g2.into_affine(),
-            gamma_abc_g1: E::G1::normalize_batch(&gamma_abc_g1),
+            gamma_abc_g1,
         };
-
-        let a_query = E::G1::normalize_batch(&a_query);
-        let b_g1_query = E::G1::normalize_batch(&b_g1_query);
-        let b_g2_query = E::G2::normalize_batch(&b_g2_query);
-        let h_query = E::G1::normalize_batch(&h_query);
-        let l_query = E::G1::normalize_batch(&l_query);
 
         Ok(ProvingKey {
             vk,

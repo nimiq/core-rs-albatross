@@ -4,11 +4,13 @@ use ark_crypto_primitives::crh::{
     pedersen::{Window, CRH},
     CRHScheme,
 };
-use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
+use ark_ec::{AffineRepr, CurveGroup};
 use ark_mnt4_753::{G1Projective as MNT4_G1Projective, MNT4_753};
 use ark_mnt6_753::{G1Projective as MNT6_G1Projective, MNT6_753};
 use ark_serialize::CanonicalSerialize;
 use nimiq_pedersen_generators::{default_mnt4, default_mnt6, DefaultWindow, PedersenParameters};
+
+use crate::FixedPairing;
 
 pub fn pedersen_parameters_mnt6() -> &'static PedersenParameters<MNT6_G1Projective> {
     static CACHE: OnceLock<PedersenParameters<MNT6_G1Projective>> = OnceLock::new();
@@ -20,7 +22,7 @@ pub fn pedersen_parameters_mnt4() -> &'static PedersenParameters<MNT4_G1Projecti
     CACHE.get_or_init(default_mnt4)
 }
 
-pub trait DefaultPedersenParameters95: Pairing {
+pub trait DefaultPedersenParameters95: FixedPairing {
     fn pedersen_parameters() -> &'static PedersenParameters<Self::G1>;
     fn g1_to_bytes(g1: &Self::G1) -> [u8; 95];
 }
@@ -55,7 +57,7 @@ impl DefaultPedersenParameters95 for MNT6_753 {
 /// We then calculate the commitment like so:
 /// H = G_0 + s_1 * G_1 + ... + s_n * G_n
 /// where G_0 is a generator that is used as a blinding factor.
-pub fn default_pedersen_hash<P: Pairing + DefaultPedersenParameters95>(input: &[u8]) -> P::G1 {
+pub fn default_pedersen_hash<P: FixedPairing + DefaultPedersenParameters95>(input: &[u8]) -> P::G1 {
     pedersen_hash::<_, DefaultWindow>(input, P::pedersen_parameters())
 }
 

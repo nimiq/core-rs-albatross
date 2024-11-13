@@ -2,7 +2,7 @@ use std::{cmp::min, marker::PhantomData};
 
 use ark_crypto_primitives::snark::BooleanInputVar;
 use ark_ff::PrimeField;
-use ark_r1cs_std::{prelude::Boolean, ToBitsGadget};
+use ark_r1cs_std::{convert::ToBitsGadget, prelude::Boolean};
 use ark_relations::r1cs::SynthesisError;
 
 #[derive(Debug, Clone)]

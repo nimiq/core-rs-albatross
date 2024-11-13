@@ -42,7 +42,7 @@ impl YToBitGadget<MNT6Fq> for AffineVar<<Config as MNT6Config>::G2Config, Fq3Var
         // (y_c2 > half) || (y_c2 == 0 && y_c1 > half) || (y_c2 == 0 && y_c1 == 0 && y_c0 > half)
         let cond0 = y_c2_bit;
 
-        let cond1 = Boolean::and(&y_c2_eq_bit, &y_c1_bit)?;
+        let cond1 = &y_c2_eq_bit & y_c1_bit;
 
         let cond2 = Boolean::kary_and(vec![y_c2_eq_bit, y_c1_eq_bit, y_c0_bit].as_ref())?;
 

@@ -1,9 +1,10 @@
 use ark_ff::PrimeField;
 use ark_r1cs_std::{
     boolean::Boolean,
+    convert::ToBitsGadget,
     fields::fp::FpVar,
     prelude::{AllocVar, EqGadget, FieldVar},
-    R1CSVar, ToBitsGadget,
+    R1CSVar,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 

@@ -1,6 +1,6 @@
 use std::{fmt, io};
 
-use ark_ec::Group;
+use ark_ec::PrimeGroup;
 use nimiq_bls::{G2Projective, PublicKey as BlsPublicKey};
 use nimiq_collections::bitset::BitSet;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, HashOutput, Hasher, SerializeContent};

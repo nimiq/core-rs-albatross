@@ -1,10 +1,11 @@
 use ark_ff::{One, PrimeField, ToConstraintField};
 use ark_mnt6_753::{constraints::G1Var, Fq as MNT6Fq, G1Affine};
 use ark_r1cs_std::{
+    convert::{ToBitsGadget, ToConstraintFieldGadget},
     fields::{fp::FpVar, FieldVar},
     prelude::{AllocVar, EqGadget},
     uint8::UInt8,
-    R1CSVar, ToBitsGadget, ToConstraintFieldGadget,
+    R1CSVar,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_std::Zero;

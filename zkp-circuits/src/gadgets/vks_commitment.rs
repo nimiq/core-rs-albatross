@@ -1,8 +1,13 @@
 use ark_ec::{pairing::Pairing, CurveGroup};
 use ark_ff::Field;
-use ark_r1cs_std::{eq::EqGadget, groups::GroupOpsBounds, pairing::PairingVar, uint8::UInt8};
+use ark_r1cs_std::{
+    eq::EqGadget,
+    groups::{CurveVar, GroupOpsBounds},
+    pairing::PairingVar,
+    uint8::UInt8,
+};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
-use nimiq_zkp_primitives::pedersen::DefaultPedersenParameters95;
+use nimiq_zkp_primitives::{pedersen::DefaultPedersenParameters95, FixedPairing};
 
 use super::vk_commitment::VkCommitmentWindow;
 use crate::gadgets::{
@@ -10,10 +15,11 @@ use crate::gadgets::{
     serialize::SerializeGadget,
 };
 
-type BasePrimeField<E> = <<<E as Pairing>::G1 as CurveGroup>::BaseField as Field>::BasePrimeField;
+type BasePrimeField<E> = <<E as Pairing>::BaseField as Field>::BasePrimeField;
+type ConstraintF<C> = <<C as CurveGroup>::BaseField as Field>::BasePrimeField;
 
 /// This gadget is meant to calculate a commitment in-circuit over a list of other commitments.
-pub struct VksCommitmentGadget<E: Pairing + DefaultPedersenParameters95> {
+pub struct VksCommitmentGadget<E: FixedPairing + DefaultPedersenParameters95> {
     // Public input: commitment over all vk commitments
     pub main_commitment: Vec<UInt8<BasePrimeField<E>>>,
 
@@ -21,9 +27,9 @@ pub struct VksCommitmentGadget<E: Pairing + DefaultPedersenParameters95> {
     pub vk_commitments: Vec<Vec<UInt8<BasePrimeField<E>>>>,
 }
 
-impl<E: Pairing + DefaultPedersenParameters95> VksCommitmentGadget<E> {
+impl<E: FixedPairing + DefaultPedersenParameters95> VksCommitmentGadget<E> {
     /// Allocate gadget and verify
-    pub fn new_and_verify<P: PairingVar<E, BasePrimeField<E>>>(
+    pub fn new_and_verify<P: PairingVar<E>>(
         cs: ConstraintSystemRef<BasePrimeField<E>>,
         vk_commitments: Vec<Option<[u8; 95]>>,
         main_commitment: Vec<UInt8<BasePrimeField<E>>>,
@@ -31,6 +37,7 @@ impl<E: Pairing + DefaultPedersenParameters95> VksCommitmentGadget<E> {
     ) -> Result<Self, SynthesisError>
     where
         P::G1Var: SerializeGadget<BasePrimeField<E>>,
+        P::G1Var: CurveVar<E::G1, ConstraintF<E::G1>>,
         for<'a> &'a P::G1Var: GroupOpsBounds<'a, E::G1, P::G1Var>,
     {
         let gadget = Self::new(cs.clone(), vk_commitments, main_commitment)?;
@@ -58,13 +65,14 @@ impl<E: Pairing + DefaultPedersenParameters95> VksCommitmentGadget<E> {
     }
 
     /// Calculates the verifying key commitment.
-    pub fn verify<P: PairingVar<E, BasePrimeField<E>>>(
+    pub fn verify<P: PairingVar<E>>(
         &self,
         cs: ConstraintSystemRef<BasePrimeField<E>>,
         pedersen_generators: &PedersenParametersVar<E::G1, P::G1Var>,
     ) -> Result<(), SynthesisError>
     where
         P::G1Var: SerializeGadget<BasePrimeField<E>>,
+        P::G1Var: CurveVar<E::G1, ConstraintF<E::G1>>,
         for<'a> &'a P::G1Var: GroupOpsBounds<'a, E::G1, P::G1Var>,
     {
         // Initialize Boolean vector.

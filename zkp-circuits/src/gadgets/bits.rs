@@ -1,8 +1,8 @@
 use ark_ff::{Field, PrimeField};
 use ark_r1cs_std::{
+    convert::ToBitsGadget,
     prelude::{AllocVar, Boolean},
     uint8::UInt8,
-    ToBitsGadget,
 };
 use ark_relations::r1cs::{Namespace, SynthesisError};
 

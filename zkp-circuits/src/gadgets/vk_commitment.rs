@@ -5,17 +5,23 @@ use ark_ec::{pairing::Pairing, CurveGroup};
 use ark_ff::Field;
 use ark_groth16::{constraints::VerifyingKeyVar, VerifyingKey};
 use ark_r1cs_std::{
-    alloc::AllocVar, eq::EqGadget, groups::GroupOpsBounds, pairing::PairingVar, uint8::UInt8,
+    alloc::AllocVar,
+    eq::EqGadget,
+    groups::{CurveVar, GroupOpsBounds},
+    pairing::PairingVar,
+    uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use nimiq_pedersen_generators::DefaultWindow;
+use nimiq_zkp_primitives::FixedPairing;
 
 use crate::gadgets::{
     pedersen::{PedersenHashGadget, PedersenParametersVar},
     serialize::SerializeGadget,
 };
 
-type BasePrimeField<E> = <<<E as Pairing>::G1 as CurveGroup>::BaseField as Field>::BasePrimeField;
+type BasePrimeField<E> = <<E as Pairing>::BaseField as Field>::BasePrimeField;
+type ConstraintF<C> = <<C as CurveGroup>::BaseField as Field>::BasePrimeField;
 
 pub type VkCommitmentWindow = DefaultWindow;
 
@@ -23,7 +29,7 @@ pub type VkCommitmentWindow = DefaultWindow;
 /// Since the verifying key might not be compatible with the current curve, it supports opening
 /// the commitment to the serialization only. Then, on a recursive circuit, the verifying key can
 /// be matched to its corresponding serialization.
-pub struct VkCommitmentGadget<E: Pairing, P: PairingVar<E, BasePrimeField<E>>, W: Window> {
+pub struct VkCommitmentGadget<E: FixedPairing, P: PairingVar<E>, W: Window> {
     // Public input: vk commitment
     pub vk_commitment: Vec<UInt8<BasePrimeField<E>>>,
 
@@ -33,7 +39,7 @@ pub struct VkCommitmentGadget<E: Pairing, P: PairingVar<E, BasePrimeField<E>>, W
     _window: PhantomData<W>,
 }
 
-impl<E: Pairing, P: PairingVar<E, BasePrimeField<E>>, W: Window> VkCommitmentGadget<E, P, W>
+impl<E: FixedPairing, P: PairingVar<E>, W: Window> VkCommitmentGadget<E, P, W>
 where
     P::G1Var: SerializeGadget<BasePrimeField<E>>,
     P::G2Var: SerializeGadget<BasePrimeField<E>>,
@@ -46,6 +52,7 @@ where
         pedersen_generators: &PedersenParametersVar<E::G1, P::G1Var>,
     ) -> Result<Self, SynthesisError>
     where
+        P::G1Var: CurveVar<E::G1, ConstraintF<E::G1>>,
         for<'a> &'a P::G1Var: GroupOpsBounds<'a, E::G1, P::G1Var>,
     {
         let gadget = Self::new(cs.clone(), vk, commitment)?;
@@ -61,7 +68,7 @@ where
     ) -> Result<Self, SynthesisError> {
         Ok(Self {
             vk_commitment: commitment,
-            vk: VerifyingKeyVar::new_witness(cs, || Ok(vk))?,
+            vk: VerifyingKeyVar::<E, P>::new_witness::<&VerifyingKey<E>>(cs, || Ok(vk))?,
             _window: PhantomData,
         })
     }
@@ -73,6 +80,7 @@ where
         pedersen_generators: &PedersenParametersVar<E::G1, P::G1Var>,
     ) -> Result<(), SynthesisError>
     where
+        P::G1Var: CurveVar<E::G1, ConstraintF<E::G1>>,
         for<'a> &'a P::G1Var: GroupOpsBounds<'a, E::G1, P::G1Var>,
     {
         // Initialize Boolean vector.

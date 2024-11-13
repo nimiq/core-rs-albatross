@@ -4,7 +4,6 @@ use std::{
 };
 
 use ark_crypto_primitives::snark::CircuitSpecificSetupSNARK;
-use ark_ec::pairing::Pairing;
 use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
 use ark_mnt4_753::MNT4_753;
 use ark_mnt6_753::MNT6_753;
@@ -13,7 +12,7 @@ use ark_std::rand::{CryptoRng, Rng};
 use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_serde::Deserialize;
-use nimiq_zkp_primitives::{NanoZKPError, VerifyingData};
+use nimiq_zkp_primitives::{FixedPairing, NanoZKPError, VerifyingData};
 
 use crate::{
     circuits::{
@@ -75,7 +74,10 @@ pub fn load_verifying_data(path: &Path) -> Result<VerifyingData, NanoZKPError> {
     })
 }
 
-fn load_key<E: Pairing>(dir_path: &Path, file_name: &str) -> Result<VerifyingKey<E>, NanoZKPError> {
+fn load_key<E: FixedPairing>(
+    dir_path: &Path,
+    file_name: &str,
+) -> Result<VerifyingKey<E>, NanoZKPError> {
     let mut file = File::open(dir_path.join(format!("{file_name}.bin")))?;
     Ok(VerifyingKey::deserialize_uncompressed_unchecked(&mut file)?)
 }
@@ -271,7 +273,7 @@ pub(crate) fn keys_exist(name: &str, path: &Path) -> bool {
     proving_key.exists() && verifying_key.exists()
 }
 
-pub(crate) fn keys_to_file<T: Pairing>(
+pub(crate) fn keys_to_file<T: FixedPairing>(
     pk: &ProvingKey<T>,
     vk: &VerifyingKey<T>,
     name: &str,

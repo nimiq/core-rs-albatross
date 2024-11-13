@@ -5,7 +5,7 @@ use std::{
 };
 
 use ark_crypto_primitives::snark::SNARK;
-use ark_ec::{pairing::Pairing, CurveGroup};
+use ark_ec::CurveGroup;
 use ark_ff::{ToConstraintField, Zero};
 use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey};
 use ark_mnt4_753::{Fq as MNT4Fq, MNT4_753};
@@ -34,7 +34,7 @@ use nimiq_zkp_circuits::{
 };
 use nimiq_zkp_primitives::{
     ext_traits::CompressedComposite, pedersen::default_pedersen_hash, serialize_g1_mnt6,
-    serialize_g2_mnt6, NanoZKPError,
+    serialize_g2_mnt6, FixedPairing, NanoZKPError,
 };
 
 /// Checks whether cached proofs are compatible with the current proof.
@@ -950,7 +950,7 @@ fn prove_merger_wrapper<R: CryptoRng + Rng>(
 }
 
 // Cache proof to file.
-fn proof_to_file<T: Pairing>(
+fn proof_to_file<T: FixedPairing>(
     pk: Proof<T>,
     name: &str,
     number: Option<usize>,

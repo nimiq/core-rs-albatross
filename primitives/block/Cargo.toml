@@ -18,7 +18,7 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-ark-ec = "0.4"
+ark-ec = "0.5"
 bitflags = { version = "2.9", features = ["serde"] }
 byteorder = "1.5"
 hex = "0.4"

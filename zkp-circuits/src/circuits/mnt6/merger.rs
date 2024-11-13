@@ -201,7 +201,7 @@ impl ConstraintSynthesizer<MNT6Fq> for MergerCircuit {
             &proof_inputs.into(),
             &proof_merger_wrapper_var,
         )?
-        .enforce_equal(&genesis_flag_var.not())?;
+        .enforce_equal(&!genesis_flag_var)?;
 
         // Verify the ZK proof for the Macro Block Wrapper circuit.
         let mut proof_inputs = RecursiveInputVar::new();

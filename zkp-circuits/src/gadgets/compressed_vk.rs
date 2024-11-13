@@ -1,17 +1,17 @@
 use std::borrow::Borrow;
 
-use ark_ec::{pairing::Pairing, CurveGroup};
+use ark_ec::pairing::Pairing;
 use ark_ff::Field;
 use ark_groth16::{constraints::VerifyingKeyVar, VerifyingKey};
 use ark_mnt4_753::{constraints::PairingVar as MNT4PairingVar, MNT4_753};
 use ark_mnt6_753::{constraints::PairingVar as MNT6PairingVar, MNT6_753};
-use ark_r1cs_std::{uint8::UInt8, ToBitsGadget};
+use ark_r1cs_std::{convert::ToBitsGadget, uint8::UInt8};
 use ark_relations::r1cs::{Namespace, SynthesisError};
 use nimiq_zkp_primitives::ext_traits::CompressedComposite;
 
 use super::compressed_affine::CompressedAffineVar;
 
-type BasePrimeField<E> = <<<E as Pairing>::G1 as CurveGroup>::BaseField as Field>::BasePrimeField;
+type BasePrimeField<E> = <<E as Pairing>::BaseField as Field>::BasePrimeField;
 
 pub trait CompressedInput<V, F: Field>
 where
