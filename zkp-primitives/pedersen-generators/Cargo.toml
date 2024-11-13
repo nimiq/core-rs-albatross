@@ -18,12 +18,12 @@ name = "generate"
 harness = false
 
 [dependencies]
-ark-crypto-primitives = { version = "0.4", features = ["crh"] }
+ark-crypto-primitives = { version = "0.5", features = ["crh"] }
 ark-ec = "0.4"
 ark-ff = "0.4"
-ark-std = "0.4"
-ark-mnt4-753 = "0.4"
-ark-mnt6-753 = "0.4"
+ark-std = "0.5"
+ark-mnt4-753 = "0.5"
+ark-mnt6-753 = "0.5"
 hex = "0.4"
 
 rand = "0.8"
