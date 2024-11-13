@@ -74,13 +74,13 @@ static MAINET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     // Pre stake starts at October 6th @ 00:00 UTC
     pre_stake_start: 3392200,
     // Pre stake ends at November 19th @ 07:00 UTC (44*1440 + 7*60 = 63780 blocks later)
-    pre_stake_end: 3456000,
+    pre_stake_end: 3448700,
     // First activation window begins at November 19th @ 07:00 UTC
-    election_candidate: 3456000,
+    election_candidate: 3450500,
     // Block confirmations that are needed in order to start the migration process after candidate.
     block_confirmations: 10,
     // This corresponds to ~24 hours.
-    readiness_window: 1440,
+    readiness_window: 60,
 };
 
 /// This enum represents the result of the migration process in an activation window
