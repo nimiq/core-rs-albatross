@@ -19,13 +19,14 @@ use crate::recipient::Recipient;
 ///         * Create
 ///         * Stake
 ///         * Update (signaling)
+///         * SetActiveStake (signaling)
+///         * RetireStake (signaling)
 ///
 /// Signaling transactions have a special status as they require a zero value
 /// as well as an additional step during the proof generation.
 /// Also see [`StakingDataBuilder`].
 ///
 /// [`StakingDataBuilder`]: ../../proof/staking_contract/struct.StakingDataBuilder.html
-#[derive(Clone, Debug, Default)]
 pub struct StakingRecipientBuilder {
     data: Option<IncomingStakingTransactionData>,
 }
