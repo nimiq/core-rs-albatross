@@ -308,7 +308,7 @@ fn it_works_with_valid_blocks() {
 fn it_validates_version() {
     expect_push_micro_block(
         BlockConfig {
-            version: Some(Policy::VERSION - 1),
+            version: Some(Policy::MAX_SUPPORTED_VERSION - 1),
             ..Default::default()
         },
         Err(InvalidBlock(BlockError::UnsupportedVersion)),

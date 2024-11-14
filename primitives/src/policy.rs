@@ -65,8 +65,8 @@ impl Policy {
     /// Maximum size for the total web auth fields.
     pub const MAX_SUPPORTED_WEB_AUTH_SIZE: usize = 512;
 
-    /// The current version number of the protocol. Changing this always results in a hard fork.
-    pub const VERSION: u16 = 1;
+    /// The maximum supported version number of the protocol.
+    pub const MAX_SUPPORTED_VERSION: u16 = 1;
 
     /// Number of available validator slots. Note that a single validator may own several validator slots.
     pub const SLOTS: u16 = 512;
@@ -543,10 +543,10 @@ impl Policy {
         Self::MAX_SIZE_MICRO_BODY
     }
 
-    /// The current version number of the protocol. Changing this always results in a hard fork.
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = VERSION))]
+    /// The maximum supported version number of the protocol. Changing this always results in a hard fork.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = MAX_SUPPORTED_VERSION))]
     pub fn wasm_version() -> u16 {
-        Self::VERSION
+        Self::MAX_SUPPORTED_VERSION
     }
 
     /// Number of available validator slots. Note that a single validator may own several validator slots.

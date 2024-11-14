@@ -26,3 +26,10 @@ pub struct BlockchainState {
     /// The validator slots for the previous epoch.
     pub previous_slots: Option<Validators>,
 }
+
+impl BlockchainState {
+    /// The current protocol version.
+    pub fn current_version(&self) -> u16 {
+        self.main_chain.head.version()
+    }
+}

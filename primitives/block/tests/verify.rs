@@ -17,7 +17,7 @@ fn test_verify_header_network() {
     let mut block = Block::Micro(MicroBlock {
         header: MicroHeader {
             network: NetworkId::DevAlbatross,
-            version: Policy::VERSION,
+            version: Policy::MAX_SUPPORTED_VERSION,
             block_number: 1,
             timestamp: 0,
             ..Default::default()
@@ -48,7 +48,7 @@ fn test_verify_header_version() {
     let mut block = Block::Micro(MicroBlock {
         header: MicroHeader {
             network: NetworkId::UnitAlbatross,
-            version: Policy::VERSION - 1,
+            version: Policy::MAX_SUPPORTED_VERSION - 1,
             block_number: 1,
             timestamp: 0,
             ..Default::default()
@@ -70,7 +70,7 @@ fn test_verify_header_version() {
     );
 
     // Fix the version and check that it passes
-    block.unwrap_micro_ref_mut().header.version = Policy::VERSION;
+    block.unwrap_micro_ref_mut().header.version = Policy::MAX_SUPPORTED_VERSION;
     assert_eq!(block.verify_header(NetworkId::UnitAlbatross, false), Ok(()));
 }
 
@@ -79,7 +79,7 @@ fn test_verify_header_extra_data() {
     let mut block = Block::Micro(MicroBlock {
         header: MicroHeader {
             network: NetworkId::UnitAlbatross,
-            version: Policy::VERSION,
+            version: Policy::MAX_SUPPORTED_VERSION,
             block_number: 1,
             timestamp: 0,
             extra_data: vec![0; 33],
@@ -124,7 +124,7 @@ fn test_verify_header_extra_data() {
 fn test_verify_body_root() {
     let mut micro_header = MicroHeader {
         network: NetworkId::UnitAlbatross,
-        version: Policy::VERSION,
+        version: Policy::MAX_SUPPORTED_VERSION,
         block_number: 1,
         timestamp: 0,
         extra_data: vec![0; 30],
@@ -166,7 +166,7 @@ fn test_verify_body_root() {
 fn test_verify_skip_block() {
     let mut micro_header = MicroHeader {
         network: NetworkId::UnitAlbatross,
-        version: Policy::VERSION,
+        version: Policy::MAX_SUPPORTED_VERSION,
         block_number: 1,
         timestamp: 0,
         ..Default::default()
@@ -220,7 +220,7 @@ fn test_verify_skip_block() {
 fn test_verify_micro_block_body_txns() {
     let mut micro_header = MicroHeader {
         network: NetworkId::UnitAlbatross,
-        version: Policy::VERSION,
+        version: Policy::MAX_SUPPORTED_VERSION,
         block_number: 1,
         timestamp: 0,
         ..Default::default()
@@ -306,7 +306,7 @@ fn test_verify_micro_block_body_fork_proofs() {
     let genesis_block_number = Policy::genesis_block_number();
     let mut micro_header = MicroHeader {
         network: NetworkId::UnitAlbatross,
-        version: Policy::VERSION,
+        version: Policy::MAX_SUPPORTED_VERSION,
         block_number: 1 + genesis_block_number,
         timestamp: 0,
         ..Default::default()
@@ -444,7 +444,7 @@ fn test_verify_micro_block_body_fork_proofs() {
 fn test_verify_election_macro_body() {
     let mut macro_header = MacroHeader {
         network: NetworkId::UnitAlbatross,
-        version: Policy::VERSION,
+        version: Policy::MAX_SUPPORTED_VERSION,
         block_number: Policy::genesis_block_number() + Policy::blocks_per_epoch(),
         round: 0,
         timestamp: 0,

@@ -20,7 +20,7 @@ impl PolicyInterface for PolicyDispatcher {
             coinbase_address: Policy::COINBASE_ADDRESS.to_string(),
             transaction_validity_window: Policy::transaction_validity_window_blocks(),
             max_size_micro_body: Policy::MAX_SIZE_MICRO_BODY,
-            version: Policy::VERSION,
+            version: Policy::MAX_SUPPORTED_VERSION,
             slots: Policy::SLOTS,
             blocks_per_batch: Policy::blocks_per_batch(),
             batches_per_epoch: Policy::batches_per_epoch(),

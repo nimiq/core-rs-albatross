@@ -156,7 +156,7 @@ pub fn next_micro_block(
 
     let header = MicroHeader {
         network,
-        version: config.version.unwrap_or(Policy::VERSION),
+        version: config.version.unwrap_or(Policy::MAX_SUPPORTED_VERSION),
         block_number,
         timestamp,
         parent_hash,
@@ -257,7 +257,7 @@ pub fn next_skip_block(
 
     let header = MicroHeader {
         network,
-        version: config.version.unwrap_or(Policy::VERSION),
+        version: config.version.unwrap_or(Policy::MAX_SUPPORTED_VERSION),
         block_number,
         timestamp,
         parent_hash,
@@ -336,7 +336,7 @@ pub fn next_macro_block_proposal(
 
     let mut header = MacroHeader {
         network,
-        version: config.version.unwrap_or(Policy::VERSION),
+        version: config.version.unwrap_or(Policy::MAX_SUPPORTED_VERSION),
         block_number,
         round: 0,
         timestamp,

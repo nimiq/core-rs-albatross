@@ -384,13 +384,14 @@ impl Block {
             return Err(BlockError::NetworkMismatch);
         }
 
-        // Check the version
-        if self.version() != Policy::VERSION {
+        // Check that the version is supported.
+        // The blockchain should then make sure that the version is never decreased.
+        if self.version() <= Policy::MAX_SUPPORTED_VERSION {
             warn!(
                 header = %self,
                 obtained_version = self.version(),
-                expected_version = Policy::VERSION,
-                reason = "wrong version",
+                maximum_version = Policy::MAX_SUPPORTED_VERSION,
+                reason = "invalid version",
                 "Invalid block header"
             );
 
@@ -452,6 +453,21 @@ impl Block {
                 "Rejecting block",
             );
             return Err(BlockError::InvalidParentHash);
+        }
+
+        // Check version.
+        // It can only increase in election blocks (and there only by one).
+        if self.version() != predecessor.version()
+            && (!self.is_election() || self.version() != predecessor.version() + 1)
+        {
+            debug!(
+                block = %self,
+                reason = "invalid version",
+                version = self.version(),
+                previous_version = %predecessor.version(),
+                "Rejecting block",
+            );
+            return Err(BlockError::UnsupportedVersion);
         }
 
         // Handle skip blocks.
@@ -534,6 +550,21 @@ impl Block {
         let next_election_block = Policy::election_block_after(predecessor_block);
         if self.block_number() <= predecessor_block || self.block_number() > next_election_block {
             return Err(BlockError::InvalidBlockNumber);
+        }
+
+        // Check version (in cases the immediate predecessor is not known, e.g., macro sync).
+        // It can only increase in election blocks and only by one.
+        if self.version() != predecessor.header.version
+            && (!self.is_election() || self.version() != predecessor.header.version + 1)
+        {
+            debug!(
+                block = %self,
+                reason = "invalid version",
+                version = self.version(),
+                previous_version = %predecessor.header.version,
+                "Rejecting block",
+            );
+            return Err(BlockError::UnsupportedVersion);
         }
 
         // Check that the timestamp is non-decreasing.
