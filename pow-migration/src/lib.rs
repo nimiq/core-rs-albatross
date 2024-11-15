@@ -74,7 +74,7 @@ static MAINET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     // Pre stake starts at October 6th @ 00:00 UTC
     pre_stake_start: 3392200,
     // Pre stake ends at November 19th @ 07:00 UTC (44*1440 + 7*60 = 63780 blocks later)
-    pre_stake_end: 3448700,
+    pre_stake_end: 3450500,
     // First activation window begins at November 19th @ 07:00 UTC
     election_candidate: 3450500,
     // Block confirmations that are needed in order to start the migration process after candidate.
