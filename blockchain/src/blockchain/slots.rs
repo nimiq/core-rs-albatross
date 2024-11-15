@@ -1,5 +1,5 @@
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainError};
-use nimiq_database::mdbx::MdbxReadTransaction;
+use nimiq_database::mdbx::{MdbxReadTransaction, OptionalTransaction};
 use nimiq_primitives::{
     policy::Policy,
     slots_allocation::{Slot, Validators},
@@ -44,10 +44,12 @@ impl Blockchain {
     }
 
     /// Calculates the next validators from a given seed.
-    pub fn next_validators(&self, seed: &VrfSeed) -> Validators {
-        let staking_contract = self.get_staking_contract();
+    pub fn next_validators(&self, seed: &VrfSeed, txn: Option<&MdbxReadTransaction>) -> Validators {
+        let txn = txn.or_new(&self.db);
+        let staking_contract = self
+            .get_staking_contract_if_complete(Some(&txn))
+            .expect("We should always have the staking contract.");
         let data_store = self.get_staking_contract_store();
-        let txn = self.read_transaction();
         staking_contract.select_validators(&data_store.read(&txn), seed)
     }
 

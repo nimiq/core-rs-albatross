@@ -144,6 +144,22 @@ impl Blockchain {
         if let Block::Macro(macro_block) = block {
             // If we don't have the staking contract, there is nothing we can check.
             if let Some(staking_contract) = self.get_staking_contract_if_complete(Some(txn)) {
+                // Verify validators.
+                let validators = match macro_block.is_election() {
+                    true => Some(self.next_validators(&macro_block.header.seed, Some(txn))),
+                    false => None,
+                };
+                if macro_block.header.validators != validators {
+                    warn!(
+                        %macro_block,
+                        given_validators = ?macro_block.header.validators,
+                        expected_validators = ?validators,
+                        reason = "Invalid validators",
+                        "Rejecting block"
+                    );
+                    return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+                }
+
                 if macro_block.header.next_batch_initial_punished_set
                     != staking_contract
                         .punished_slots
@@ -247,22 +263,6 @@ impl Blockchain {
             Some(staking_contract) => staking_contract,
             None => return Ok(()),
         };
-
-        // Verify validators.
-        let validators = match macro_block.is_election() {
-            true => Some(self.next_validators(&macro_block.header.seed)),
-            false => None,
-        };
-        if macro_block.header.validators != validators {
-            warn!(
-                %macro_block,
-                given_validators = ?macro_block.header.validators,
-                expected_validators = ?validators,
-                reason = "Invalid validators",
-                "Rejecting block"
-            );
-            return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
-        }
 
         // Verify reward transactions only if we have the complete accounts state as
         // `create_reward_transactions` expects the full state to be present.

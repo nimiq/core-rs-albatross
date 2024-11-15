@@ -1,7 +1,7 @@
 use nimiq_database::{
     declare_table,
-    mdbx::{MdbxDatabase, MdbxReadTransaction as DBTransaction},
-    traits::{Database, WriteTransaction},
+    mdbx::{MdbxDatabase, MdbxReadTransaction as DBTransaction, MdbxWriteTransaction},
+    traits::Database,
 };
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
@@ -270,14 +270,22 @@ impl Accounts {
         missing
     }
 
-    pub fn exercise_transactions(
-        &self,
+    pub fn exercise_transactions<'env>(
+        &'env self,
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_state: &BlockState,
+        txn: Option<&mut MdbxWriteTransaction<'env>>,
     ) -> Result<(Blake2bHash, Blake2bHash, Vec<ExecutedTransaction>), AccountsError> {
-        let mut raw_txn = self.env.write_transaction();
-        let mut txn: WriteTransactionProxy = (&mut raw_txn).into();
+        let mut raw_txn;
+        let raw_txn_ptr = match txn {
+            Some(txn) => txn,
+            None => {
+                raw_txn = self.env.write_transaction();
+                &mut raw_txn
+            }
+        };
+        let mut txn: WriteTransactionProxy = raw_txn_ptr.into();
         assert!(self.is_complete(Some(&txn)), "Tree must be complete");
 
         txn.start_recording();
@@ -303,8 +311,6 @@ impl Accounts {
             .collect();
 
         let state_hash = self.get_root_hash_assert(Some(&txn));
-
-        raw_txn.abort();
 
         Ok((state_hash, diff_hash, executed_txns))
     }

@@ -48,7 +48,7 @@ fn test_verify_header_version() {
     let mut block = Block::Micro(MicroBlock {
         header: MicroHeader {
             network: NetworkId::UnitAlbatross,
-            version: Policy::MAX_SUPPORTED_VERSION - 1,
+            version: Policy::MAX_SUPPORTED_VERSION + 1,
             block_number: 1,
             timestamp: 0,
             ..Default::default()

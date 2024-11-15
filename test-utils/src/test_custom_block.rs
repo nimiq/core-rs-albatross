@@ -121,7 +121,7 @@ pub fn next_micro_block(
     let (state_root, diff_root, executed_txns) = blockchain
         .state
         .accounts
-        .exercise_transactions(&transactions, &inherents, &block_state)
+        .exercise_transactions(&transactions, &inherents, &block_state, None)
         .expect("Failed to compute accounts hash during block production");
 
     let hist_txs = HistoricTransaction::from(
@@ -156,7 +156,9 @@ pub fn next_micro_block(
 
     let header = MicroHeader {
         network,
-        version: config.version.unwrap_or(Policy::MAX_SUPPORTED_VERSION),
+        version: config
+            .version
+            .unwrap_or(blockchain.state().current_version()),
         block_number,
         timestamp,
         parent_hash,
@@ -223,7 +225,7 @@ pub fn next_skip_block(
     let (real_state_root, real_diff_root, _) = blockchain
         .state
         .accounts
-        .exercise_transactions(&[], &inherents, &block_state)
+        .exercise_transactions(&[], &inherents, &block_state, None)
         .expect("Failed to compute accounts hash during block production");
 
     let state_root = config.state_root.clone().unwrap_or(real_state_root);
@@ -257,7 +259,9 @@ pub fn next_skip_block(
 
     let header = MicroHeader {
         network,
-        version: config.version.unwrap_or(Policy::MAX_SUPPORTED_VERSION),
+        version: config
+            .version
+            .unwrap_or(blockchain.state().current_version()),
         block_number,
         timestamp,
         parent_hash,
@@ -321,12 +325,6 @@ pub fn next_macro_block_proposal(
             .sign_next(signing_key, block_number)
     });
 
-    let validators = if Policy::is_election_block_at(blockchain.block_number() + 1) {
-        Some(blockchain.next_validators(&seed))
-    } else {
-        None
-    };
-
     // Get the staking contract PRIOR to any state changes.
     let staking_contract = blockchain.get_staking_contract();
 
@@ -336,20 +334,22 @@ pub fn next_macro_block_proposal(
 
     let mut header = MacroHeader {
         network,
-        version: config.version.unwrap_or(Policy::MAX_SUPPORTED_VERSION),
+        version: config
+            .version
+            .unwrap_or(blockchain.state().current_version()),
         block_number,
         round: 0,
         timestamp,
         parent_hash,
         parent_election_hash,
         interlink,
-        seed,
+        seed: seed.clone(),
         extra_data: config.extra_data.clone(),
         state_root: Blake2bHash::default(),
         body_root: Blake2sHash::default(),
         diff_root: Blake2bHash::default(),
         history_root: Blake2bHash::default(),
-        validators,
+        validators: None,
         next_batch_initial_punished_set,
         ..Default::default()
     };
@@ -372,11 +372,17 @@ pub fn next_macro_block_proposal(
 
     let block_state = BlockState::new(block_number, timestamp);
 
+    let mut txn = blockchain.write_transaction();
+
     let (state_root, diff_root, _) = blockchain
         .state
         .accounts
-        .exercise_transactions(&[], &inherents, &block_state)
+        .exercise_transactions(&[], &inherents, &block_state, Some(&mut txn))
         .expect("Failed to compute accounts hash during block production.");
+
+    if Policy::is_election_block_at(blockchain.block_number() + 1) {
+        macro_block.header.validators = Some(blockchain.next_validators(&seed, Some(&txn)));
+    };
 
     macro_block.header.state_root = state_root;
     macro_block.header.diff_root = diff_root;
@@ -389,8 +395,6 @@ pub fn next_macro_block_proposal(
         inherents,
         vec![],
     );
-
-    let mut txn = blockchain.write_transaction();
 
     macro_block.header.history_root = blockchain
         .history_store

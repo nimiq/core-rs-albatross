@@ -386,7 +386,7 @@ impl Block {
 
         // Check that the version is supported.
         // The blockchain should then make sure that the version is never decreased.
-        if self.version() <= Policy::MAX_SUPPORTED_VERSION {
+        if self.version() > Policy::MAX_SUPPORTED_VERSION {
             warn!(
                 header = %self,
                 obtained_version = self.version(),

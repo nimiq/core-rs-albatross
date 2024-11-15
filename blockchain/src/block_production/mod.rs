@@ -166,7 +166,7 @@ impl BlockProducer {
         let (state_root, diff_root, executed_txns) = blockchain
             .state
             .accounts
-            .exercise_transactions(&transactions, &inherents, &block_state)
+            .exercise_transactions(&transactions, &inherents, &block_state, None)
             .map_err(|error| {
                 BlockProducerError::accounts_error(
                     blockchain,
@@ -211,7 +211,7 @@ impl BlockProducer {
         // Create the micro block header.
         let header = MicroHeader {
             network,
-            version: Policy::MAX_SUPPORTED_VERSION,
+            version: blockchain.state().current_version(),
             block_number,
             timestamp,
             parent_hash,
@@ -324,12 +324,6 @@ impl BlockProducer {
                 .seed()
                 .sign_next_with_rng(&self.signing_key, block_number, rng);
 
-        // If this is an election block, calculate the validator set for the next epoch.
-        let validators = match Policy::is_election_block_at(block_number) {
-            true => Some(blockchain.next_validators(&seed)),
-            false => None,
-        };
-
         // Get the staking contract PRIOR to any state changes.
         let staking_contract = blockchain
             .get_staking_contract_if_complete(None)
@@ -345,20 +339,20 @@ impl BlockProducer {
         // state.
         let mut header = MacroHeader {
             network,
-            version: Policy::MAX_SUPPORTED_VERSION,
+            version: blockchain.state().current_version(),
             block_number,
             round,
             timestamp,
             parent_hash,
             parent_election_hash,
             interlink,
-            seed,
+            seed: seed.clone(),
             extra_data,
             state_root: Blake2bHash::default(),
             body_root: Blake2sHash::default(),
             diff_root: Blake2bHash::default(),
             history_root: Blake2bHash::default(),
-            validators,
+            validators: None,
             next_batch_initial_punished_set,
             ..Default::default()
         };
@@ -379,14 +373,21 @@ impl BlockProducer {
         let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(&macro_block);
 
         // Update the state and add the state root to the header.
+        let mut txn = blockchain.write_transaction();
+
         let block_state = BlockState::new(block_number, timestamp);
         let (state_root, diff_root, _) = blockchain
             .state
             .accounts
-            .exercise_transactions(&[], &inherents, &block_state)
+            .exercise_transactions(&[], &inherents, &block_state, Some(&mut txn))
             .map_err(|error| {
                 BlockProducerError::accounts_error(blockchain, error, vec![], inherents.clone())
             })?;
+
+        // If this is an election block, calculate the validator set for the next epoch.
+        if Policy::is_election_block_at(block_number) {
+            macro_block.header.validators = Some(blockchain.next_validators(&seed, Some(&txn)));
+        }
 
         macro_block.header.state_root = state_root;
         macro_block.header.diff_root = diff_root;
@@ -402,8 +403,6 @@ impl BlockProducer {
         );
 
         // Store the historic transactions into the history tree and calculate the history root.
-        let mut txn = blockchain.write_transaction();
-
         macro_block.header.history_root = blockchain
             .history_store
             .add_to_history(&mut txn, block_number, &hist_txs)
