@@ -42,7 +42,7 @@ const POW_BLOCKS_PER_HOUR: u32 = 60;
 const NUMBER_ONLINE_REPORTING_WINDOWS: u32 = 3;
 
 /// Numbers of activation windows from which we start removing validators for not being ready
-pub const ACTIVATION_WINDOW_TRESHOLD: u32 = 5;
+pub const ACTIVATION_WINDOW_TRESHOLD: u32 = 3;
 
 static TESTNET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     // The testnet blocks are produced ~every minute.
@@ -74,13 +74,13 @@ static MAINET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     // Pre stake starts at October 6th @ 00:00 UTC
     pre_stake_start: 3392200,
     // Pre stake ends at November 19th @ 07:00 UTC (44*1440 + 7*60 = 63780 blocks later)
-    pre_stake_end: 3450400,
+    pre_stake_end: 3450600,
     // First activation window begins at November 19th @ 07:00 UTC
-    election_candidate: 3450400,
+    election_candidate: 3450600,
     // Block confirmations that are needed in order to start the migration process after candidate.
-    block_confirmations: 3,
+    block_confirmations: 1,
     // This corresponds to ~24 hours.
-    readiness_window: 10,
+    readiness_window: 20,
 };
 
 /// This enum represents the result of the migration process in an activation window
