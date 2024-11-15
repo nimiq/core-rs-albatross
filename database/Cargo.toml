@@ -32,7 +32,7 @@ nimiq-database-value = { workspace = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
-pprof = { version = "0.13", features = [
+pprof = { version = "0.14", features = [
     "flamegraph",
     "frame-pointer",
     "criterion",
