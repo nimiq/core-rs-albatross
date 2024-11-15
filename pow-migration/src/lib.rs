@@ -137,7 +137,7 @@ pub async fn report_online(
     );
 
     // We report as online every POW_BLOCKS_PER_HOUR.
-    if pow_block_number > latest_online_bn + POW_BLOCKS_PER_HOUR {
+    if pow_block_number > latest_online_bn + 5 {
         log::info!(
             latest_reported_block_number = latest_online_bn,
             "Reporting as online"
