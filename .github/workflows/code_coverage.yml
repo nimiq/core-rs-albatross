@@ -101,7 +101,7 @@ jobs:
     - name: Generate coverage report
       run: cargo llvm-cov report --lcov --output-path coverage.lcov
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v5
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       with:
