@@ -2041,6 +2041,79 @@ async fn assert_rebase_invalidates_mempool_tx(tx1: Transaction, tx2: Transaction
 }
 
 #[test(tokio::test)]
+// Check that txs are removed from the mempool if they become invalid due to a rebranch.
+// If the timestamp of the chain gets lower due to a rebranch, this can invalidate redeem txs for
+// HTLCs and Vesting contracts, which already released a balance on the former chain.
+async fn mempool_update_rebase_earlier_time() {
+    let temp_producer1 = TemporaryBlockProducer::new();
+
+    // Create mempool and subscribe with a custom txn stream.
+    let mempool = Mempool::new(
+        Arc::clone(&temp_producer1.blockchain),
+        MempoolConfig::default(),
+    );
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
+
+    // Create vesting and redeeming txs
+    let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
+
+    let create_vesting_tx = TransactionBuilder::new_create_vesting(
+        &key_pair,
+        Address::from(&key_pair.public),
+        temp_producer1.blockchain.read().timestamp(),
+        8 * Policy::BLOCK_SEPARATION_TIME,
+        1,
+        Coin::from_u64_unchecked(1000),
+        Coin::from_u64_unchecked(100),
+        1 + Policy::genesis_block_number(),
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+    let vesting_address = create_vesting_tx.contract_creation_address();
+
+    let redeem_tx = TransactionBuilder::new_redeem_vesting(
+        &key_pair,
+        vesting_address.clone(),
+        Address::default(),
+        Coin::from_u64_unchecked(99),
+        Coin::from_u64_unchecked(100),
+        1 + Policy::genesis_block_number(),
+        NetworkId::UnitAlbatross,
+    )
+    .unwrap();
+
+    // Produce a chain with a high-enough head timestamp such that the vesting contract cen be redeemed
+    let block = temp_producer1.next_block_with_txs(vec![], false, vec![create_vesting_tx]);
+    let temp_producer2 = TemporaryBlockProducer::new();
+    assert_eq!(temp_producer2.push(block), Ok(PushResult::Extended));
+
+    let mut reverted_blocks = Vec::new();
+    for _ in 0..7 {
+        let block = temp_producer1.next_block(vec![], false);
+        reverted_blocks.push((Blake2bHash::default(), block));
+    }
+
+    // Send redeem tx to mempool
+    send_txn_to_mempool(&mempool, mock_network, mock_id, vec![redeem_tx.clone()]).await;
+    assert_eq!(mempool.get_transactions(), vec![redeem_tx.clone()]);
+
+    // Rebranch to a chain with a lower head timestamp, where the vesting contract can't be redeemed yet
+    let fork1 = temp_producer2.next_block(vec![], true);
+    assert_eq!(
+        temp_producer1.push(fork1.clone()),
+        Ok(PushResult::Rebranched)
+    );
+    mempool.update(&[(Blake2bHash::default(), fork1)], &reverted_blocks);
+
+    // Expect the redeem tx to be removed from mempool, as it's no longer valid
+    assert_eq!(mempool.num_transactions(), 0);
+
+    temp_producer1.next_block_with_txs(vec![], false, mempool.get_transactions_for_block(10_000).0);
+}
+
+#[test(tokio::test)]
 async fn it_can_reject_invalid_vesting_contract_transaction() {
     let time = Arc::new(OffsetTime::new());
     let env = MdbxDatabase::new_volatile(Default::default()).unwrap();

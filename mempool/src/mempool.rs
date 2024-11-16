@@ -368,15 +368,21 @@ impl Mempool {
                     mempool_state
                         .put(&blockchain, tx.clone(), TxPriority::Medium)
                         .ok();
-
-                    // Check if we know the recipient of this transaction.
-                    if mempool_state.state_by_sender.contains_key(&tx.recipient) {
-                        // Reverting the transaction has changed the balance (and potentially account type) of the
-                        // recipient, which means that transactions might have become invalid.
-                        affected_senders.insert(tx.recipient.clone());
-                    }
                 }
             }
+        }
+
+        if !adopted_blocks.is_empty() {
+            // If there was a rebranch, this might have affected the validity of various transactions:
+            // - The recipients of tx from reverted blocks might not have the needed balance anymore
+            // - Rebasing to a chain with less blocks might mean that a validator is still jailed, thus invalidating some txs
+            // - Rebasing to a chain with a lower timestamp might invalidate redeem txs for HTLCs and Vesting contracts
+            // - Equivocation proofs in the adopted chain might jail a validator and thus invalidate txs from the mempool
+            affected_senders = mempool_state
+                .state_by_sender
+                .keys()
+                .cloned()
+                .collect::<HashSet<Address>>();
         }
 
         // Update all sender balances that were affected by the adopted blocks.
