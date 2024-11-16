@@ -275,27 +275,27 @@ pub async fn migrate(
             // If the validator was registered we need to check if the RPC server we are connected to
             // has the account of the validator address in the PoW client wallet.
             // This is necessary to send validator readiness transactions.
-            let wallet_addresses = pow_client
-                .accounts()
-                .await
-                .expect("Failed obtaining the list of accounts owned by the RPC server");
+            if let Ok(wallet_addresses) = async_retryer(|| pow_client.accounts()).await {
+                let mut imported_address = false;
 
-            let mut imported_address = false;
-
-            for account in wallet_addresses {
-                if let nimiq_rpc::primitives::Account::Basic(basic_account) = account {
-                    if basic_account.address == validator_address.to_user_friendly_address() {
-                        imported_address = true;
-                        break;
+                for account in wallet_addresses {
+                    if let nimiq_rpc::primitives::Account::Basic(basic_account) = account {
+                        if basic_account.address == validator_address.to_user_friendly_address() {
+                            imported_address = true;
+                            break;
+                        }
                     }
                 }
-            }
 
-            if !imported_address {
-                log::error!(
-                "The validator was registered but its account was not imported into the PoW client"
-            );
-                return Err(Error::ValidatorKey(validator_address.clone()));
+                if !imported_address {
+                    log::error!(
+                    "The validator was registered but its account was not imported into the PoW client"
+                );
+                    return Err(Error::ValidatorKey(validator_address.clone()));
+                }
+            } else {
+                log::error!("Failed obtaining the list of accounts owned by the RPC server");
+                exit(1);
             }
         }
     }
@@ -373,8 +373,7 @@ pub async fn migrate(
     // We have enough confirmations for the candidate block, start the PoS genesis generation process
 
     // Obtain the genesis candidate block
-    let block = pow_client
-        .get_block_by_number(candidate_block, false)
+    let block = async_retryer(|| pow_client.get_block_by_number(candidate_block, false))
         .await
         .unwrap();
 
