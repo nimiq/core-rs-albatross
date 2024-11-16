@@ -26,7 +26,7 @@ pub struct VestingContract {
     pub balance: Coin,
     /// The owner of the contract, the only address that can interact with it.
     pub owner: Address,
-    /// The block height at which the release schedule starts.
+    /// The time at which the release schedule starts.
     #[serde(with = "nimiq_serde::fixint::be")]
     pub start_time: u64,
     /// The frequency at which funds are released.

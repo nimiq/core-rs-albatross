@@ -18,6 +18,8 @@ pub enum ForkEvent {
 pub enum BlockchainEvent {
     Extended(Blake2bHash),
     HistoryAdopted(Blake2bHash),
+    /// The first and second vector are the adopted and reverted chain, respectively.
+    /// Both vectors are ordered by block height, ascending.
     Rebranched(Vec<(Blake2bHash, Block)>, Vec<(Blake2bHash, Block)>),
     /// Given Block was stored in the chain store but was not adopted as new head block.
     /// I.e. forked blocks and inferior chain blocks.
