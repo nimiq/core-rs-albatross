@@ -242,6 +242,10 @@ impl Blockchain {
         if let Some(accounts_hash) = accounts.get_root_hash(None) {
             if main_chain.head.state_root() != &accounts_hash {
                 log::error!(
+                    "Main_chain block number: {}",
+                    main_chain.head.block_number()
+                );
+                log::error!(
                     "Main chain's head state root: {:?}, Account state root: {:?}",
                     main_chain.head.state_root(),
                     &accounts_hash

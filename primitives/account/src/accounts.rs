@@ -217,7 +217,7 @@ impl Accounts {
         }
     }
 
-    fn prune(&self, txn: &mut WriteTransactionProxy, address: &Address) {
+    pub fn prune(&self, txn: &mut WriteTransactionProxy, address: &Address) {
         // TODO Remove subtree
         self.tree.remove(txn, &KeyNibbles::from(address));
     }

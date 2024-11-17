@@ -347,6 +347,7 @@ impl ChainStore {
         txn.remove(&self.chain_table, hash);
         txn.remove(&self.pushed_block_table, hash);
         txn.remove(&self.stored_block_table, hash);
+        txn.remove(&self.accounts_diff_table, hash);
         txn.remove_item(&self.height_idx, &height, hash);
     }
 

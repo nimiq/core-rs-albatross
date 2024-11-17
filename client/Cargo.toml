@@ -20,14 +20,31 @@ maintenance = { status = "experimental" }
 [lints]
 workspace = true
 
+[[bin]]
+name = "nimiq-node-recovery"
+path = "node-recovery/main.rs"
+
 [dependencies]
 futures = { workspace = true }
 log = { workspace = true }
-tokio = { version = "1.44", features = ["macros", "rt-multi-thread", "time", "tracing"] }
+thiserror = "2.0"
+tokio = { version = "1.43", features = [
+    "macros",
+    "rt-multi-thread",
+    "time",
+    "tracing",
+] }
 tokio-metrics = "0.4"
 
 nimiq-time = { workspace = true }
 nimiq-utils = { workspace = true, features = ["spawn"] }
+nimiq-blockchain = { workspace = true }
+nimiq-blockchain-interface = { workspace = true }
+nimiq-blockchain-proxy = { workspace = true, default-features = false }
+nimiq-database = { workspace = true }
+nimiq-primitives = { workspace = true, features = ["networks"] }
+nimiq-zkp-component = { workspace = true }
+nimiq-genesis = { workspace = true, default-features = false }
 
 [dependencies.nimiq]
 workspace = true

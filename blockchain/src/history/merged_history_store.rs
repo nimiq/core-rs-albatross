@@ -1,6 +1,6 @@
 use std::cmp;
 
-use nimiq_block::{Block, MicroBlock};
+use nimiq_block::{Block, MacroBlock, MicroBlock};
 use nimiq_database::mdbx::{MdbxReadTransaction, MdbxWriteTransaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
@@ -61,6 +61,20 @@ impl<S: HistoryInterface> HistoryInterface for HistoryStoreMerger<S> {
             "Epoch 0 is pre-genesis"
         );
         self.main.remove_block(txn, block, inherents)
+    }
+
+    fn remove_macro_block(
+        &self,
+        txn: &mut MdbxWriteTransaction,
+        block: &MacroBlock,
+        inherents: Vec<Inherent>,
+    ) -> Option<u64> {
+        assert_ne!(
+            Policy::epoch_at(block.block_number()),
+            0,
+            "Epoch 0 is pre-genesis"
+        );
+        self.main.remove_macro_block(txn, block, inherents)
     }
 
     fn remove_history(&self, txn: &mut MdbxWriteTransaction, epoch_number: u32) -> Option<()> {

@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, ops::Range};
 
-use nimiq_block::MicroBlock;
+use nimiq_block::{MacroBlock, MicroBlock};
 use nimiq_database::{
     declare_table,
     mdbx::{
@@ -333,6 +333,30 @@ impl HistoryInterface for HistoryStoreIndex {
                 .map(|proof| proof.locator())
                 .collect(),
         );
+
+        let (_, total_size) = self
+            .remove_partial_history(txn, block.epoch_number(), num_txs)
+            .expect("Failed to remove partial history");
+
+        // Remove the block from the validity store (and its corresponding txn hashes)
+        if let Some(ref validity_store) = self.history_store.validity_store {
+            validity_store.delete_block_transactions(txn, block.block_number());
+        }
+
+        Some(total_size)
+    }
+
+    fn remove_macro_block(
+        &self,
+        txn: &mut MdbxWriteTransaction,
+        block: &MacroBlock,
+        inherents: Vec<Inherent>,
+    ) -> Option<u64> {
+        let body = block.body.as_ref().unwrap();
+
+        // Remove the transactions from the History tree. For this you only need to calculate the
+        // number of transactions that you want to remove.
+        let num_txs = HistoricTransaction::count(body.transactions.len(), &inherents, vec![]);
 
         let (_, total_size) = self
             .remove_partial_history(txn, block.epoch_number(), num_txs)

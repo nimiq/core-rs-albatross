@@ -683,6 +683,109 @@ impl ClientInner {
             zkp_component: Some(zkp_component),
         })
     }
+
+    fn from_config_dry(
+        config: ClientConfig,
+    ) -> Result<(BlockchainProxy, Option<Box<dyn ProofStore>>), Error> {
+        // Get network info (i.e. which specific blockchain we're on)
+        if !config.network_id.is_albatross() {
+            return Err(Error::config_error(format!(
+                "{} is not compatible with Albatross",
+                config.network_id
+            )));
+        }
+        let network_info = NetworkInfo::from_network_id(config.network_id);
+
+        let policy_config = Policy {
+            genesis_block_number: network_info.genesis_block().block_number(),
+            ..Default::default()
+        };
+        let _ = Policy::get_or_init(policy_config);
+
+        // Verify Policy is configured with the genesis block number we expect
+        if network_info.genesis_block().block_number() != Policy::genesis_block_number() {
+            log::error!("The genesis block number must be configured before using any other Policy function");
+            return Err(Error::config_error(
+                "There is a genesis block number configuration mismatch",
+            ));
+        }
+
+        let (mut provided_services, _required_services) =
+            generate_service_flags(config.consensus.sync_mode, config.consensus.index_history);
+
+        // We update the services flags depending on our validator configuration
+        #[cfg(feature = "validator")]
+        if config.validator.is_some() {
+            provided_services |= Services::VALIDATOR;
+        }
+
+        // We update the services flags depending on the pre-genesis database file being present
+        #[cfg(feature = "database-storage")]
+        let pre_genesis_environment = if config.storage.has_pre_genesis_database(config.network_id)
+        {
+            provided_services |= Services::PRE_GENESIS_TRANSACTIONS;
+            Some(
+                config
+                    .storage
+                    .pre_genesis_database(config.network_id, config.database.clone())?,
+            )
+        } else {
+            None
+        };
+
+        // Open database
+        #[cfg(feature = "database-storage")]
+        let environment = config.storage.database(
+            config.network_id,
+            config.consensus.sync_mode,
+            config.database,
+        )?;
+
+        #[cfg(feature = "full-consensus")]
+        let mut blockchain_config = BlockchainConfig {
+            max_epochs_stored: config.consensus.max_epochs_stored,
+            ..Default::default()
+        };
+
+        #[cfg(feature = "database-storage")]
+        let zkp_storage: Option<Box<dyn ProofStore>> =
+            Some(Box::new(DBProofStore::new(environment.clone())));
+        #[cfg(not(feature = "database-storage"))]
+        let zkp_storage = None;
+
+        let blockchain_proxy = match config.consensus.sync_mode {
+            #[cfg(not(feature = "full-consensus"))]
+            SyncMode::History => {
+                panic!("Can't build a history node without the full-consensus feature enabled")
+            }
+            #[cfg(not(feature = "full-consensus"))]
+            SyncMode::Full => {
+                panic!("Can't build a full node without the full-consensus feature enabled")
+            }
+            #[cfg(feature = "full-consensus")]
+            SyncMode::History | SyncMode::Full => {
+                blockchain_config.keep_history = config.consensus.sync_mode == SyncMode::History;
+                blockchain_config.index_history = config.consensus.index_history;
+                let blockchain = match Blockchain::new_merged(
+                    environment.clone(),
+                    pre_genesis_environment,
+                    blockchain_config,
+                    config.network_id,
+                    Arc::new(OffsetTime::new()),
+                ) {
+                    Ok(blockchain) => Arc::new(RwLock::new(blockchain)),
+                    Err(err) => {
+                        return Err(Error::Consensus(BlockchainError(err)));
+                    }
+                };
+                BlockchainProxy::from(&blockchain)
+            }
+            SyncMode::Light | SyncMode::Pico => BlockchainProxy::from(&Arc::new(RwLock::new(
+                LightBlockchain::new(config.network_id),
+            ))),
+        };
+        Ok((blockchain_proxy, zkp_storage))
+    }
 }
 
 /// Entry point for the Nimiq client API.
@@ -714,6 +817,12 @@ pub struct Client {
 impl Client {
     pub async fn from_config(config: ClientConfig) -> Result<Self, Error> {
         ClientInner::from_config(config).await
+    }
+
+    pub async fn from_config_dry(
+        config: ClientConfig,
+    ) -> Result<(BlockchainProxy, Option<Box<dyn ProofStore>>), Error> {
+        ClientInner::from_config_dry(config)
     }
 
     pub fn take_consensus(&mut self) -> Option<Consensus> {

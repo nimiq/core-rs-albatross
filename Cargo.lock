@@ -3995,9 +3995,17 @@ name = "nimiq-client"
 version = "1.0.8"
 dependencies = [
  "futures-util",
+ "nimiq-blockchain",
+ "nimiq-blockchain-interface",
+ "nimiq-blockchain-proxy",
+ "nimiq-database",
+ "nimiq-genesis",
  "nimiq-lib",
+ "nimiq-primitives",
  "nimiq-time",
  "nimiq-utils",
+ "nimiq-zkp-component",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-metrics",
  "tracing",

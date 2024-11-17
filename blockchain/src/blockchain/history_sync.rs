@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, error::Error};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    error::Error,
+};
 
 use nimiq_account::{BlockLogger, BlockState};
 use nimiq_block::{Block, BlockError};
@@ -570,9 +573,60 @@ impl Blockchain {
                 &mut BlockLogger::empty(),
             )?;
 
+            // Move on to the next block.
+            current_info = prev_info;
+        }
+
+        Ok(())
+    }
+
+    /// Reverts a given number of micro or skip blocks from the blockchain.
+    pub fn revert_blocks_macro(
+        this: RwLockUpgradableReadGuard<Self>,
+        num_blocks: u32,
+    ) -> Result<(), PushError> {
+        debug!(
+            num_blocks,
+            "Need to revert micro blocks from the current epoch",
+        );
+
+        // Get the chain info for the head of the chain.
+        let start_info = this
+            .get_chain_info(&this.head_hash(), true, None)
+            .expect("Couldn't fetch chain info for the head of the chain");
+        let mut current_info = start_info.clone();
+        let mut chain_infos = VecDeque::with_capacity((num_blocks - 1) as usize);
+        for _ in 0..num_blocks {
+            let chain_info = this
+                .get_chain_info(current_info.head.parent_hash(), true, None)
+                .expect("Failed to find main chain predecessor while reverting blocks");
+            chain_infos.push_back(chain_info.clone());
+            current_info = chain_info;
+        }
+
+        current_info = start_info;
+        // Revert each block individually.
+        let mut this: RwLockWriteGuard<_> = RwLockUpgradableReadGuard::upgrade(this);
+        while !chain_infos.is_empty() {
+            // Get the chain info for the parent of the current head of the chain.
+            let prev_info = chain_infos.pop_front().unwrap();
+            {
+                let mut a = this.write_transaction();
+                // Revert the accounts tree. This also reverts the history store.
+                this.revert_accounts_macro(
+                    &this.state.accounts,
+                    &mut (&mut a).into(),
+                    &current_info.head,
+                    &mut BlockLogger::empty(),
+                )?;
+                a.commit();
+            }
+            Self::revert_state(&mut this, &current_info, &prev_info);
+
+            log::trace!("Block= {} reverted", current_info.head.block_number());
             // Check that the block reverted cleanly.
             // Since we are doing history sync, the accounts tree should always be complete.
-            let accounts_hash = self.state.accounts.get_root_hash_assert(Some(write_txn));
+            let accounts_hash = this.state.accounts.get_root_hash_assert(None);
             assert_eq!(
                 *prev_info.head.state_root(),
                 accounts_hash,
@@ -580,11 +634,94 @@ impl Blockchain {
                 &current_info.head,
                 &current_info.head,
             );
-
             // Move on to the next block.
             current_info = prev_info;
         }
 
         Ok(())
+    }
+
+    fn revert_state(
+        this: &mut RwLockWriteGuard<Self>,
+        current_info: &ChainInfo,
+        prev_info: &ChainInfo,
+    ) {
+        // Get the chain info for the target block.
+        let target_macro_block = this
+            .get_block_at(
+                Policy::last_macro_block(prev_info.head.block_number()),
+                true,
+                None,
+            )
+            .unwrap()
+            .unwrap_macro();
+        let target_election_block = this
+            .get_block_at(
+                Policy::last_election_block(prev_info.head.block_number()),
+                true,
+                None,
+            )
+            .unwrap()
+            .unwrap_macro();
+
+        let target_block_hash = prev_info.head.hash();
+
+        let target_chain_info = this
+            .get_chain_info(&target_block_hash, true, None)
+            .expect("Couldn't fetch chain info for the head of the chain");
+        let macro_chain_info = this
+            .get_chain_info(&target_macro_block.hash(), true, None)
+            .expect("Couldn't fetch chain info for the head of the chain");
+
+        this.state.main_chain = target_chain_info;
+        this.state.head_hash = target_block_hash.clone();
+
+        // Revert the slots.
+        if current_info.head.is_macro() {
+            log::trace!("Reverting the macro block related state");
+            this.state.macro_info = macro_chain_info;
+            this.state.macro_head_hash = target_macro_block.hash().clone();
+        }
+        // Revert the election head state.
+        if current_info.head.is_election() {
+            let target_previous_epoch_election = this
+                .get_block_at(
+                    Policy::election_block_before(target_election_block.block_number()),
+                    true,
+                    None,
+                )
+                .unwrap()
+                .unwrap_macro();
+            log::trace!("Reverting the election block related state");
+            this.state.election_head_hash = target_election_block.hash();
+            this.state.current_slots = target_macro_block.get_validators(); // ITODO, this is wrong if there are punishments on the epoch
+            this.state.previous_slots = target_previous_epoch_election.get_validators(); // ITODO, this is wrong if there are punishments on the epoch
+            this.state.election_head = target_election_block;
+        }
+
+        Self::revert_chain_store(this, current_info, prev_info);
+    }
+
+    pub fn revert_chain_store(
+        this: &mut RwLockWriteGuard<Self>,
+        current_info: &ChainInfo,
+        prev_info: &ChainInfo,
+    ) {
+        // Get the chain info for the target block.
+        let old_head_height = current_info.head.block_number();
+
+        let mut txn = this.write_transaction();
+
+        for height in prev_info.head.block_number() + 1..old_head_height + 1 {
+            let hashes = this.chain_store.get_block_hashes_at(height, Some(&txn));
+            for hash in hashes {
+                log::trace!("Reverting chain_store #{}:{}", height, hash);
+                this.chain_store.remove_chain_info(&mut txn, &hash, height);
+            }
+        }
+
+        this.chain_store.set_head(&mut txn, &prev_info.head.hash());
+
+        txn.commit();
     }
 }

@@ -1,4 +1,4 @@
-use nimiq_block::{Block, MicroBlock};
+use nimiq_block::{Block, MacroBlock, MicroBlock};
 use nimiq_database::mdbx::{MdbxDatabase, MdbxReadTransaction, MdbxWriteTransaction};
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
@@ -101,6 +101,21 @@ impl<S: HistoryInterface, I: HistoryIndexInterface> HistoryInterface for History
         match self {
             HistoryStoreProxy::WithIndex(index) => index.remove_block(txn, block, inherents),
             HistoryStoreProxy::WithoutIndex(store) => store.remove_block(txn, block, inherents),
+        }
+    }
+
+    /// Removes all transactions, from a given block number, from the history store.
+    fn remove_macro_block(
+        &self,
+        txn: &mut MdbxWriteTransaction,
+        block: &MacroBlock,
+        inherents: Vec<Inherent>,
+    ) -> Option<u64> {
+        match self {
+            HistoryStoreProxy::WithIndex(index) => index.remove_macro_block(txn, block, inherents),
+            HistoryStoreProxy::WithoutIndex(store) => {
+                store.remove_macro_block(txn, block, inherents)
+            }
         }
     }
 

@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use nimiq_block::{Block, MicroBlock};
+use nimiq_block::{Block, MacroBlock, MicroBlock};
 use nimiq_database::mdbx::{MdbxReadTransaction, MdbxWriteTransaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
@@ -32,6 +32,14 @@ pub trait HistoryInterface: Debug {
         &self,
         txn: &mut MdbxWriteTransaction,
         block: &MicroBlock,
+        inherents: Vec<Inherent>,
+    ) -> Option<u64>;
+
+    /// Removes all transactions, from a given block number, from the history store.
+    fn remove_macro_block(
+        &self,
+        txn: &mut MdbxWriteTransaction,
+        block: &MacroBlock,
         inherents: Vec<Inherent>,
     ) -> Option<u64>;
 
