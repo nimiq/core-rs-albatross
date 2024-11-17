@@ -78,7 +78,7 @@ static MAINET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     // First activation window begins at November 19th @ 07:00 UTC
     election_candidate: 3456000,
     // Block confirmations that are needed in order to start the migration process after candidate.
-    block_confirmations: 10,
+    block_confirmations: 5,
     // This corresponds to ~24 hours.
     readiness_window: 1440,
 };
