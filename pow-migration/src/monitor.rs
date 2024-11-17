@@ -49,7 +49,9 @@ pub fn generate_ready_tx(validator: String, hash: &Blake2bHash) -> OutgoingTrans
     );
     OutgoingTransaction {
         from: validator,
-        to: Address::burn_address().to_user_friendly_address(),
+        to: Address::from_user_friendly_address("NQ15 R8PM UAEV MEVN YRUY GX38 RGYX A74P MNHY")
+            .unwrap()
+            .to_string(),
         value: 1, //Lunas
         fee: 0,
         data: Some(hash.to_hex()),
@@ -69,7 +71,9 @@ pub fn generate_online_tx(validator: String) -> OutgoingTransaction {
     );
     OutgoingTransaction {
         from: validator,
-        to: Address::burn_address().to_user_friendly_address(),
+        to: Address::from_user_friendly_address("NQ15 R8PM UAEV MEVN YRUY GX38 RGYX A74P MNHY")
+            .unwrap()
+            .to_string(),
         value: 1, //Lunas
         fee: 0,
         data: Some(hex::encode("online")),
@@ -129,7 +133,10 @@ fn is_valid_ready_txn(
     };
     Some(genesis_config_hash) == txn.data.as_ref()
         && block_window.contains(&block_number)
-        && txn.to_address == Address::burn_address().to_user_friendly_address()
+        && txn.to_address
+            == Address::from_user_friendly_address("NQ15 R8PM UAEV MEVN YRUY GX38 RGYX A74P MNHY")
+                .unwrap()
+                .to_string()
 }
 
 /// Checks if the provided transaction meets the criteria in order to be
@@ -140,7 +147,10 @@ fn is_valid_online_txn(txn: &TransactionDetails, block_window: &Range<u32>) -> b
     };
     Some(hex::encode("online")) == txn.data
         && block_window.contains(&block_number)
-        && txn.to_address == Address::burn_address().to_user_friendly_address()
+        && txn.to_address
+            == Address::from_user_friendly_address("NQ15 R8PM UAEV MEVN YRUY GX38 RGYX A74P MNHY")
+                .unwrap()
+                .to_string()
 }
 
 /// Sends a transaction into the Nimiq PoW chain
