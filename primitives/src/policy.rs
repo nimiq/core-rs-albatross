@@ -1,5 +1,6 @@
 use std::cmp;
 
+use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_utils::math::powi;
 use once_cell::sync::OnceCell;
@@ -156,6 +157,24 @@ impl Policy {
     /// Maximum size of history chunks.
     /// 25 MB.
     pub const HISTORY_CHUNKS_MAX_SIZE: u64 = 25 * 1024 * 1024;
+
+    /// Percentage of minimum supporting stake to perform upgrade.
+    /// A value of `80` means 80% of the stake needs to support the upgrade.
+    pub const UPGRADE_MIN_SUPPORT: u8 = 80;
+
+    /// This function is used to determine if a validator signalled for a specific upgrade.
+    /// For now, this is checking the first two bytes of the signal data.
+    /// However, the check could also be version specific in the future.
+    pub fn supports_upgrade(signal_data: Option<Blake2bHash>, version: u16) -> bool {
+        signal_data
+            .map(|data| {
+                // Check if the first two bytes in big-endian match the requested version.
+                let supported_version =
+                    u16::from_be_bytes(data.as_slice()[..2].try_into().unwrap());
+                supported_version == version
+            })
+            .unwrap_or(false)
+    }
 
     #[inline]
     fn get_blocks_per_epoch(&self) -> u32 {

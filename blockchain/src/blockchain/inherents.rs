@@ -26,7 +26,7 @@ impl Blockchain {
         if Policy::is_election_block_at(macro_block.block_number()) {
             // On election the previous epoch needs to be finalized.
             // We can rely on `state` here, since we cannot revert macro blocks.
-            inherents.push(self.finalize_previous_epoch());
+            inherents.append(&mut self.finalize_previous_epoch(macro_block.header.version));
         }
 
         inherents
@@ -324,8 +324,20 @@ impl Blockchain {
     }
 
     /// Creates the inherent to finalize an epoch. The inherent is for updating the StakingContract.
-    pub fn finalize_previous_epoch(&self) -> Inherent {
+    pub fn finalize_previous_epoch(&self, version: u16) -> Vec<Inherent> {
         // Create the FinalizeEpoch inherent.
-        Inherent::FinalizeEpoch
+        let mut inherents = vec![Inherent::FinalizeEpoch];
+        // Add version upgrade inherent if needed.
+        if version != self.state.current_version() {
+            assert_eq!(
+                version,
+                self.state.current_version(),
+                "Version should only be upgraded in steps of one."
+            );
+            inherents.push(Inherent::VersionUpgrade {
+                new_version: version,
+            })
+        }
+        inherents
     }
 }

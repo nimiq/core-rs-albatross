@@ -28,6 +28,7 @@ pub fn produce_macro_blocks_with_rng<R: Rng + CryptoRng>(
                 blockchain.timestamp() + next_block_height * 1000,
                 0u32,
                 vec![],
+                None,
                 rng,
             )
             .unwrap();

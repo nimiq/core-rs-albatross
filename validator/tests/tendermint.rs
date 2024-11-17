@@ -44,7 +44,13 @@ async fn it_verifies_inferior_chain_proposals() {
         let b = blockchain1.read();
         temp_producer1
             .producer
-            .next_macro_block_proposal(&b, b.timestamp() + Policy::BLOCK_SEPARATION_TIME, 0, vec![])
+            .next_macro_block_proposal(
+                &b,
+                b.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+                0,
+                vec![],
+                None,
+            )
             .unwrap()
     };
     // Use the skip block to rebranch the micro blocks away, effectively leaving the proposal on an inferior chain.
@@ -74,7 +80,13 @@ async fn it_verifies_inferior_chain_proposals() {
         let b = blockchain1.read();
         temp_producer1
             .producer
-            .next_macro_block_proposal(&b, b.timestamp() + Policy::BLOCK_SEPARATION_TIME, 0, vec![])
+            .next_macro_block_proposal(
+                &b,
+                b.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+                0,
+                vec![],
+                None,
+            )
             .unwrap()
     };
 
@@ -100,7 +112,13 @@ async fn it_verifies_inferior_chain_proposals() {
         let b = blockchain1.read();
         temp_producer1
             .producer
-            .next_macro_block_proposal(&b, b.timestamp() + Policy::BLOCK_SEPARATION_TIME, 0, vec![])
+            .next_macro_block_proposal(
+                &b,
+                b.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+                0,
+                vec![],
+                None,
+            )
             .unwrap()
     };
 

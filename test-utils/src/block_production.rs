@@ -183,6 +183,7 @@ impl TemporaryBlockProducer {
                     blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
                     0,
                     extra_data,
+                    None,
                 )
                 .unwrap();
 

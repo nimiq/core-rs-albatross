@@ -39,6 +39,8 @@ pub enum Inherent {
     FinalizeBatch,
     /// Emitted only on epoch finalization.
     FinalizeEpoch,
+    /// Emitted on version upgrades.
+    VersionUpgrade { new_version: u16 },
 }
 
 impl Inherent {
@@ -48,7 +50,8 @@ impl Inherent {
             Inherent::Penalize { .. }
             | Inherent::Jail { .. }
             | Inherent::FinalizeBatch
-            | Inherent::FinalizeEpoch => &Policy::STAKING_CONTRACT_ADDRESS,
+            | Inherent::FinalizeEpoch
+            | Inherent::VersionUpgrade { .. } => &Policy::STAKING_CONTRACT_ADDRESS,
         }
     }
 }

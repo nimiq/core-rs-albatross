@@ -228,11 +228,52 @@ where
             return Err(ProtocolError::Abort);
         }
 
+        // Check if we want to upgrade the version.
+        // This assumes we only ever upgrade to the latest version
+        // and don't queue multiple upgrades.
+        let version = if blockchain.state().current_version() + 1 == Policy::MAX_SUPPORTED_VERSION {
+            let staking_contract = blockchain
+                .get_staking_contract_if_complete(None)
+                .expect("Staking Contract must be complete to create a macro proposal");
+            let data_store = blockchain.get_staking_contract_store();
+            let txn = blockchain.read_transaction();
+            let data_store_read = &data_store.read(&txn);
+
+            // Calculate support for upgrade.
+            let support_check =
+                |data| Policy::supports_upgrade(data, Policy::MAX_SUPPORTED_VERSION);
+            let supporting_stake =
+                staking_contract.get_supporting_stake(data_store_read, support_check);
+            let total_stake = staking_contract.balance;
+            let supporting_slots = staking_contract.get_supporting_slots(
+                data_store_read,
+                &blockchain
+                    .current_validators()
+                    .expect("There need to be validators present"),
+                support_check,
+            );
+
+            // We propose an upgraded block version only if:
+            // - `Policy::UPGRADE_MIN_SUPPORT` of the stake supports the upgrade.
+            // - `Policy::TWO_F_PLUS_ONE` slots support the upgrade.
+            if supporting_slots >= Policy::TWO_F_PLUS_ONE
+                && u64::from(supporting_stake) * 100 / u64::from(total_stake)
+                    >= Policy::UPGRADE_MIN_SUPPORT as u64
+            {
+                Some(Policy::MAX_SUPPORTED_VERSION)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         // Create the proposal.
+        // TODO: Version
         let time = blockchain.time.now();
         let block = self
             .block_producer
-            .next_macro_block_proposal(&blockchain, time, round, vec![])
+            .next_macro_block_proposal(&blockchain, time, round, vec![], version)
             .map_err(|_| ProtocolError::Abort)?;
 
         // Always `Some(…)` because the above function always sets it to `Some(…)`.

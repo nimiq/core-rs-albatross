@@ -267,12 +267,15 @@ impl BlockProducer {
         round: u32,
         // Extra data for this block.
         extra_data: Vec<u8>,
+        // Version for this block.
+        version: Option<u16>,
     ) -> Result<MacroBlock, BlockProducerError> {
         self.next_macro_block_proposal_with_rng(
             blockchain,
             timestamp,
             round,
             extra_data,
+            version,
             &mut rand::rng(),
         )
     }
@@ -291,6 +294,8 @@ impl BlockProducer {
         round: u32,
         // Extra data for this block.
         extra_data: Vec<u8>,
+        // Version for this block (or current default).
+        version: Option<u16>,
         // The rng seed. We need this parameterized in order to have determinism when running unit tests.
         rng: &mut R,
     ) -> Result<MacroBlock, BlockProducerError> {
@@ -339,7 +344,7 @@ impl BlockProducer {
         // state.
         let mut header = MacroHeader {
             network,
-            version: blockchain.state().current_version(),
+            version: version.unwrap_or_else(|| blockchain.state().current_version()),
             block_number,
             round,
             timestamp,

@@ -267,6 +267,7 @@ fn it_can_produce_macro_blocks() {
             bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0u32,
             vec![],
+            None,
         )
         .unwrap();
 
@@ -295,6 +296,7 @@ fn it_can_produce_macro_block_after_punishment() {
             bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0u32,
             vec![],
+            None,
         )
         .unwrap();
 
@@ -345,6 +347,7 @@ fn it_can_produce_macro_block_after_punishment() {
             bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
             0u32,
             vec![],
+            None,
         )
         .unwrap();
 
@@ -399,6 +402,7 @@ fn it_can_produce_election_blocks() {
                 bc.timestamp() + Policy::BLOCK_SEPARATION_TIME,
                 0u32,
                 vec![0x42],
+                None,
             )
             .unwrap();
 
@@ -445,6 +449,7 @@ fn it_can_produce_a_chain_with_txns() {
                 blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
                 0u32,
                 vec![],
+                None,
             )
             .unwrap();
 

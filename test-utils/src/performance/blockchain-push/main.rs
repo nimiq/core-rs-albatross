@@ -89,6 +89,7 @@ fn main() {
                 blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
                 0u32,
                 vec![],
+                None,
             )
             .unwrap();
 

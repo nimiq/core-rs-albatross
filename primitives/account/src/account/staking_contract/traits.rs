@@ -2,6 +2,7 @@ use nimiq_keys::Address;
 use nimiq_primitives::{
     account::{AccountError, AccountType},
     coin::Coin,
+    policy::Policy,
 };
 use nimiq_serde::Deserialize;
 use nimiq_transaction::{
@@ -798,6 +799,20 @@ impl AccountInherentInteraction for StakingContract {
                 Ok(None)
             }
             Inherent::Reward { .. } => Err(AccountError::InvalidForTarget),
+            Inherent::VersionUpgrade { new_version } => {
+                // Deactivate unsupporting validators.
+                let mut tx_logger = TransactionLog::empty();
+                let mut store = StakingContractStoreWrite::new(&mut data_store);
+                self.deactivate_unsupporting_validators(
+                    &mut store,
+                    |data| Policy::supports_upgrade(data, *new_version),
+                    block_state.number,
+                    &mut tx_logger,
+                )?;
+                inherent_logger.push_tx_logger(tx_logger);
+
+                Ok(None)
+            }
         }
     }
 
@@ -864,7 +879,7 @@ impl AccountInherentInteraction for StakingContract {
 
                 Ok(())
             }
-            Inherent::FinalizeBatch | Inherent::FinalizeEpoch => {
+            Inherent::FinalizeBatch | Inherent::FinalizeEpoch | Inherent::VersionUpgrade { .. } => {
                 // We should not be able to revert finalized epochs or batches!
                 Err(AccountError::InvalidForTarget)
             }

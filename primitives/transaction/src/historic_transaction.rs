@@ -197,8 +197,9 @@ impl HistoricTransaction {
                         new_epoch_slot_range,
                     }),
                 }),
-                Inherent::FinalizeBatch => {}
-                Inherent::FinalizeEpoch => {}
+                Inherent::FinalizeBatch
+                | Inherent::FinalizeEpoch
+                | Inherent::VersionUpgrade { .. } => {}
             }
         }
 
@@ -219,6 +220,7 @@ impl HistoricTransaction {
                     Inherent::Jail { .. } => Some(()),
                     Inherent::FinalizeBatch => None,
                     Inherent::FinalizeEpoch => None,
+                    Inherent::VersionUpgrade { .. } => None,
                 })
                 .count()
             + equivocation_locator.len()

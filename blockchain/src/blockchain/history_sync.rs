@@ -287,7 +287,7 @@ impl Blockchain {
                 "Inserting final macro block"
             );
             block_numbers.push(block.block_number());
-            block_timestamps.push(0); // FIXME
+            block_timestamps.push(block.timestamp());
             block_transactions.push(vec![]);
             block_inherents.push(vec![]);
         }
@@ -303,10 +303,25 @@ impl Blockchain {
                     .push(Inherent::FinalizeBatch);
 
                 if Policy::is_election_block_at(*block_number) {
+                    assert_eq!(
+                        *block_number,
+                        block.block_number(),
+                        "Only the last block can be an election block"
+                    );
                     block_inherents
                         .get_mut(i)
                         .unwrap()
                         .push(Inherent::FinalizeEpoch);
+
+                    // If the version changed, add the upgrade inherent.
+                    if this.state.current_version() < block.version() {
+                        block_inherents
+                            .get_mut(i)
+                            .unwrap()
+                            .push(Inherent::VersionUpgrade {
+                                new_version: block.version(),
+                            });
+                    }
                 }
             }
         }
