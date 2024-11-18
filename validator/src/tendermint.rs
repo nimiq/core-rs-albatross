@@ -460,6 +460,25 @@ where
             self.validator_registry.get_slots(self.validator_slot_band),
         );
 
+        for (vote, signature) in &own_contribution.contributions {
+            (self.observe_valid_vote)(
+                &TendermintVote {
+                    proposal_hash: vote.clone(),
+                    id,
+                },
+                signature,
+            );
+        }
+        for (vote, signature) in &own_contribution2.contributions {
+            (self.observe_valid_vote)(
+                &TendermintVote {
+                    proposal_hash: vote.clone(),
+                    id,
+                },
+                signature,
+            );
+        }
+
         let protocol = TendermintAggregationProtocol::new(
             Arc::clone(&self.validator_registry),
             self.validator_slot_band as usize,
