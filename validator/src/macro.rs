@@ -145,6 +145,7 @@ where
                       signature: SchnorrSignature| {
                     if let Some(proof) = double_proposal_detector
                         .lock()
+                        // TODO: are these already verified here?
                         .observe_valid_proposal(address, proposal, signature)
                     {
                         on_double_proposal(proof);

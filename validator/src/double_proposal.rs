@@ -35,6 +35,8 @@ pub struct DoubleProposalDetector {
 }
 
 impl DoubleProposalDetector {
+    // TODO: add network_id
+    // TODO: record one proposal per validator per height
     pub fn new(block_number: u32) -> DoubleProposalDetector {
         DoubleProposalDetector {
             block_number,
