@@ -10,7 +10,7 @@ use nimiq_primitives::{
     account::AccountError,
     coin::Coin,
     policy::Policy,
-    slots_allocation::{JailedValidator, PenalizedSlot},
+    slots_allocation::{JailedValidator, PenalizedSlot, Validators, ValidatorsBuilder},
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
@@ -3282,5 +3282,134 @@ fn commit_failed_delete_validator_does_not_work_if_jailed() {
     assert_eq!(
         jailed_retired_setup.staking_contract.balance,
         Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT) - tx.fee
+    );
+}
+
+#[test]
+fn version_upgrade_works() {
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let accounts = Accounts::new(env.clone());
+    let data_store = accounts.data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let block_state = BlockState::new(
+        Policy::blocks_per_epoch() + Policy::genesis_block_number(),
+        1000,
+    );
+    let mut db_txn = env.write_transaction();
+    let mut db_txn = (&mut db_txn).into();
+
+    // Start with one validator and add a second one.
+    let (validator_address1, _, mut staking_contract) =
+        make_sample_contract(data_store.write(&mut db_txn), None);
+    let mut data_store_write = data_store.write(&mut db_txn);
+    let mut store = StakingContractStoreWrite::new(&mut data_store_write);
+    let validator_address2 = Address::default();
+    // Create a second validator with support for version 2.
+    let mut support = [0; 32];
+    support[..2].copy_from_slice(&2u16.to_be_bytes());
+    let support = Blake2bHash(support);
+    staking_contract
+        .create_validator(
+            &mut store,
+            &validator_address2,
+            Ed25519PublicKey::default(),
+            Default::default(),
+            Address::default(),
+            Some(support),
+            Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
+            None,
+            None,
+            false,
+            &mut TransactionLog::empty(),
+        )
+        .unwrap();
+
+    // Check supporting stake.
+    let data_store_read = data_store.read(&db_txn);
+    assert_eq!(
+        staking_contract.get_active_stake(),
+        staking_contract.balance,
+        "The full stake is active"
+    );
+    assert_eq!(
+        staking_contract.get_supporting_stake(&data_store_read, |_| true),
+        staking_contract.balance,
+        "Always true support check returns full stake"
+    );
+    assert_eq!(
+        staking_contract
+            .get_supporting_stake(&data_store_read, |data| Policy::supports_upgrade(data, 2)),
+        Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT),
+        "Supporting stake for version 2 is one validator deposit"
+    );
+    assert_eq!(
+        staking_contract
+            .get_supporting_stake(&data_store_read, |data| Policy::supports_upgrade(data, 3)),
+        Coin::ZERO,
+        "Supporting stake for version 3 is zero"
+    );
+
+    // Check supporting slots.
+    let mut validators = ValidatorsBuilder::new();
+    for i in 0..Policy::SLOTS {
+        if i >= Policy::TWO_F_PLUS_ONE {
+            validators.push(
+                validator_address1.clone(),
+                BlsPublicKey::default(),
+                Ed25519PublicKey::default(),
+            );
+        } else {
+            validators.push(
+                validator_address2.clone(),
+                BlsPublicKey::default(),
+                Ed25519PublicKey::default(),
+            );
+        }
+    }
+    let validators = validators.build();
+    let supporting_slots =
+        staking_contract.get_supporting_slots(&data_store_read, &validators, |data| {
+            Policy::supports_upgrade(data, 2)
+        });
+    assert_eq!(
+        supporting_slots,
+        Policy::TWO_F_PLUS_ONE,
+        "Supporting slots are counted correctly"
+    );
+
+    // Check that the inherent correctly deactivates unsupporting validators.
+    let inherent = Inherent::VersionUpgrade { new_version: 2 };
+    let mut logs = vec![];
+    let mut inherent_logger = InherentLogger::new(&mut logs);
+    let receipt = staking_contract
+        .commit_inherent(
+            &inherent,
+            &block_state,
+            data_store.write(&mut db_txn),
+            &mut inherent_logger,
+        )
+        .expect("Failed to commit inherent");
+    assert_eq!(receipt, None);
+    assert_eq!(
+        logs,
+        vec![Log::DeactivateValidator {
+            validator_address: validator_address1.clone(),
+            inactive_from: block_state.number
+        }]
+    );
+
+    assert!(!staking_contract
+        .active_validators
+        .contains_key(&validator_address1));
+
+    // Cannot revert the inherent.
+    assert_eq!(
+        staking_contract.revert_inherent(
+            &inherent,
+            &block_state,
+            None,
+            data_store.write(&mut db_txn),
+            &mut InherentLogger::empty()
+        ),
+        Err(AccountError::InvalidForTarget)
     );
 }

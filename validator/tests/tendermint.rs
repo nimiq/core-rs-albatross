@@ -1,12 +1,19 @@
 use std::sync::Arc;
 
+use nimiq_account::{Account, StakingContractStoreWrite, TransactionLog};
 use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_bls::KeyPair as BlsKeyPair;
+use nimiq_database::traits::WriteTransaction;
+use nimiq_hash::Blake2bHash;
+use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::MockHub;
-use nimiq_primitives::{networks::NetworkId, policy::Policy};
+use nimiq_primitives::{coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy};
 use nimiq_tendermint::{ProposalMessage, Protocol, SignedProposalMessage};
 use nimiq_test_log::test;
-use nimiq_test_utils::{block_production::TemporaryBlockProducer, test_network::TestNetwork};
+use nimiq_test_utils::{
+    block_production::TemporaryBlockProducer, test_network::TestNetwork, test_rng::test_rng,
+};
 use nimiq_validator::{aggregation::tendermint::proposal::Header, tendermint::TendermintProtocol};
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 
@@ -204,4 +211,199 @@ async fn it_verifies_inferior_chain_proposals() {
         .verify_proposal(&message, None)
         .expect("Verification must succeed.");
     assert_eq!(inf_proposal1.body.clone().expect(""), body.0);
+}
+
+/// Creates a second validator with the same stake as the first in UnitAlbatross.
+fn create_validator(temp_producer: &TemporaryBlockProducer) -> Address {
+    let blockchain = Arc::clone(&temp_producer.blockchain);
+
+    let blockchain_rg = blockchain.read();
+    let mut staking_contract = blockchain_rg.get_staking_contract();
+    let total_stake = staking_contract.balance;
+    let current_stake =
+        staking_contract.balance - Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
+
+    // We create a new account with that balance.
+    let mut rng = test_rng(true);
+    let validator_key_pair = KeyPair::generate(&mut rng);
+    let validator_voting_key_pair = BlsKeyPair::generate(&mut rng);
+    let staker_key_pair = KeyPair::generate(&mut rng);
+
+    // Get the deposit value.
+    let deposit = Coin::from_u64_unchecked(Policy::VALIDATOR_DEPOSIT);
+
+    let mut raw_txn = blockchain_rg.write_transaction();
+    let data_store = blockchain_rg
+        .state()
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut txn = (&mut raw_txn).into();
+    let mut data_store_write = data_store.write(&mut txn);
+    let mut store = StakingContractStoreWrite::new(&mut data_store_write);
+
+    staking_contract
+        .create_validator(
+            &mut store,
+            &Address::from(&validator_key_pair),
+            validator_key_pair.public,
+            validator_voting_key_pair.public_key.compress(),
+            Address::from(&validator_key_pair),
+            None,
+            deposit,
+            None,
+            None,
+            false,
+            &mut TransactionLog::empty(),
+        )
+        .expect("Failed to create validator");
+
+    staking_contract
+        .create_staker(
+            &mut store,
+            &Address::from(&staker_key_pair),
+            current_stake,
+            Some(Address::from(&validator_key_pair)),
+            Coin::ZERO,
+            None,
+            &mut TransactionLog::empty(),
+        )
+        .expect("Failed to create staker");
+
+    assert_eq!(
+        staking_contract.balance,
+        total_stake.checked_mul(2).unwrap()
+    );
+
+    blockchain_rg
+        .state()
+        .accounts
+        .tree
+        .put(
+            &mut txn,
+            &KeyNibbles::from(&Policy::STAKING_CONTRACT_ADDRESS),
+            Account::Staking(staking_contract),
+        )
+        .expect("Failed to put account into tree");
+
+    raw_txn.commit();
+
+    Address::from(&validator_key_pair)
+}
+
+/// Signals support for a specific version for a given validator.
+fn signal_support(
+    temp_producer: &TemporaryBlockProducer,
+    validator_address: &Address,
+    version: Option<u16>,
+) {
+    let blockchain = Arc::clone(&temp_producer.blockchain);
+
+    let blockchain_rg = blockchain.read();
+    let mut staking_contract = blockchain_rg.get_staking_contract();
+
+    let mut raw_txn = blockchain_rg.write_transaction();
+    let data_store = blockchain_rg
+        .state()
+        .accounts
+        .data_store(&Policy::STAKING_CONTRACT_ADDRESS);
+    let mut txn = (&mut raw_txn).into();
+    let mut data_store_write = data_store.write(&mut txn);
+    let mut store = StakingContractStoreWrite::new(&mut data_store_write);
+
+    staking_contract
+        .update_validator(
+            &mut store,
+            validator_address,
+            None,
+            None,
+            None,
+            Some(version.map(|v| {
+                let version_bytes = v.to_be_bytes();
+                let mut signal_data = [0; 32];
+                signal_data[..2].copy_from_slice(&version_bytes);
+                Blake2bHash(signal_data)
+            })),
+            &mut TransactionLog::empty(),
+        )
+        .expect("Failed to update validator");
+
+    blockchain_rg
+        .state()
+        .accounts
+        .tree
+        .put(
+            &mut txn,
+            &KeyNibbles::from(&Policy::STAKING_CONTRACT_ADDRESS),
+            Account::Staking(staking_contract),
+        )
+        .expect("Failed to put account into tree");
+
+    raw_txn.commit();
+}
+
+#[test(tokio::test)]
+async fn it_triggers_version_upgrades() {
+    // Move to before the next election block.
+    let temp_producer = TemporaryBlockProducer::default();
+    for _ in 0..Policy::blocks_per_epoch() - 1 {
+        let block = temp_producer.next_block(vec![], false);
+        temp_producer
+            .push(block)
+            .expect("Should be able to push block");
+    }
+
+    // Initialize a TendermintProtocol.
+    let blockchain = Arc::clone(&temp_producer.blockchain);
+    let current_validators = blockchain.read().current_validators().unwrap().clone();
+    assert_eq!(
+        current_validators.num_validators(),
+        1,
+        "Test setup assumes one validator"
+    );
+    assert_eq!(
+        blockchain.read().state().current_version(),
+        1,
+        "Test assumes current version"
+    );
+    assert_eq!(
+        Policy::max_supported_version(NetworkId::UnitAlbatross),
+        2,
+        "Test assumes max supported version"
+    );
+    let validator1 = current_validators.validators[0].address.clone();
+    let hub = MockHub::default();
+    let nw: Arc<Network> = TestNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
+    let val_net = Arc::new(ValidatorNetworkImpl::new(nw));
+    let interface = TendermintProtocol::new(
+        Arc::clone(&blockchain),
+        val_net,
+        temp_producer.producer.clone(),
+        current_validators,
+        0,
+        NetworkId::UnitAlbatross,
+        blockchain.read().head().block_number() + 1,
+    );
+
+    // Setup second validator with same stake.
+    let validator2 = create_validator(&temp_producer);
+
+    // Case 1: No support.
+    let proposal = interface
+        .create_proposal(0)
+        .expect("Should have created proposal");
+    assert_eq!(proposal.0.proposal.0.version, 1);
+
+    // Case 2: Elected validator threshold reached, but stake threshold not.
+    signal_support(&temp_producer, &validator1, Some(2));
+    let proposal = interface
+        .create_proposal(0)
+        .expect("Should have created proposal");
+    assert_eq!(proposal.0.proposal.0.version, 1);
+
+    // Case 3: Both thresholds reached.
+    signal_support(&temp_producer, &validator2, Some(2));
+    let proposal = interface
+        .create_proposal(0)
+        .expect("Should have created proposal");
+    assert_eq!(proposal.0.proposal.0.version, 2);
 }

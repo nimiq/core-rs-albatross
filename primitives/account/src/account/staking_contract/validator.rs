@@ -1,9 +1,7 @@
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, Ed25519PublicKey as SchnorrPublicKey};
-use nimiq_primitives::coin::Coin;
-#[cfg(feature = "interaction-traits")]
-use nimiq_primitives::{account::AccountError, policy::Policy};
+use nimiq_primitives::{account::AccountError, coin::Coin, policy::Policy};
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "interaction-traits")]
@@ -86,7 +84,7 @@ pub struct Validator {
     /// A flag indicating if the validator is retired.
     pub retired: bool,
 }
-#[cfg(feature = "interaction-traits")]
+
 impl Validator {
     pub fn is_active(&self) -> bool {
         self.inactive_from.is_none()

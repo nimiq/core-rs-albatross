@@ -231,7 +231,9 @@ where
         // Check if we want to upgrade the version.
         // This assumes we only ever upgrade to the latest version
         // and don't queue multiple upgrades.
-        let version = if blockchain.state().current_version() + 1 == Policy::MAX_SUPPORTED_VERSION {
+        let version = if blockchain.state().current_version() + 1
+            == Policy::max_supported_version(blockchain.network_id)
+        {
             let staking_contract = blockchain
                 .get_staking_contract_if_complete(None)
                 .expect("Staking Contract must be complete to create a macro proposal");
@@ -241,13 +243,13 @@ where
 
             // Calculate support for upgrade.
             let support_check =
-                |data| Policy::supports_upgrade(data, Policy::MAX_SUPPORTED_VERSION);
+                |data| Policy::supports_upgrade(data, blockchain.state().current_version() + 1);
             let supporting_stake =
                 staking_contract.get_supporting_stake(data_store_read, support_check);
-            let total_stake = staking_contract.balance;
+            let total_active_stake = staking_contract.get_active_stake();
             let supporting_slots = staking_contract.get_supporting_slots(
                 data_store_read,
-                &blockchain
+                blockchain
                     .current_validators()
                     .expect("There need to be validators present"),
                 support_check,
@@ -257,11 +259,19 @@ where
             // - `Policy::UPGRADE_MIN_SUPPORT` of the stake supports the upgrade.
             // - `Policy::TWO_F_PLUS_ONE` slots support the upgrade.
             if supporting_slots >= Policy::TWO_F_PLUS_ONE
-                && u64::from(supporting_stake) * 100 / u64::from(total_stake)
+                && u64::from(supporting_stake) * 100 / u64::from(total_active_stake)
                     >= Policy::UPGRADE_MIN_SUPPORT as u64
             {
-                Some(Policy::MAX_SUPPORTED_VERSION)
+                info!(
+                    supporting_slots,
+                    %supporting_stake, %total_active_stake, "Triggering version upgrade"
+                );
+                Some(blockchain.state().current_version() + 1)
             } else {
+                info!(
+                    supporting_slots,
+                    %supporting_stake, %total_active_stake, "Version upgrade does not have enough support"
+                );
                 None
             }
         } else {

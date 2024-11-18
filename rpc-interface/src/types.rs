@@ -362,7 +362,6 @@ pub struct PolicyConstants {
     pub coinbase_address: String,
     pub transaction_validity_window: u32,
     pub max_size_micro_body: usize,
-    pub version: u16,
     pub slots: u16,
     pub blocks_per_batch: u32,
     pub batches_per_epoch: u16,

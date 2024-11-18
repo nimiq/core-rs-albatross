@@ -106,7 +106,7 @@ impl DataStoreWrite<'_, '_, '_, '_, '_> {
         self.store
             .tree
             .iter_nodes(
-                &self.txn,
+                self.txn,
                 &(&self.store.prefix + start_key),
                 &(&self.store.prefix + end_key),
             )

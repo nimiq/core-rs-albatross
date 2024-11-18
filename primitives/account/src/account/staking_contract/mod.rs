@@ -2,8 +2,9 @@ use std::collections::BTreeMap;
 
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
+#[cfg(feature = "interaction-traits")]
+use nimiq_primitives::account::AccountError;
 use nimiq_primitives::{
-    account::AccountError,
     coin::Coin,
     policy::Policy,
     slots_allocation::{Validators, ValidatorsBuilder},
@@ -17,13 +18,14 @@ pub use store::StakingContractStore;
 pub use store::StakingContractStoreWrite;
 pub use validator::{Tombstone, Validator};
 
+#[cfg(feature = "interaction-traits")]
+use crate::TransactionLog;
 use crate::{
     account::staking_contract::{
         punished_slots::PunishedSlots,
         store::{StakingContractStoreRead, StakingContractStoreReadOps},
     },
     data_store_ops::{DataStoreIterOps, DataStoreReadOps},
-    TransactionLog,
 };
 
 pub mod punished_slots;
@@ -181,6 +183,11 @@ impl StakingContract {
         slots_builder.build()
     }
 
+    /// Returns the amount of active stake (i.e., total stake of active validators).
+    pub fn get_active_stake(&self) -> Coin {
+        self.active_validators.values().copied().sum()
+    }
+
     /// Returns the total amount of coins that are supporting the upgrade and are active.
     /// The support is determined by a function over the signal data.
     /// IMPORTANT: This is a fairly expensive function, iterating over all validators.
@@ -235,7 +242,8 @@ impl StakingContract {
     /// Deactivates validators that did not support the upgrade.
     /// The support is determined by a function over the signal data.
     /// IMPORTANT: This is a fairly expensive function, iterating over all validators.
-    pub fn deactivate_unsupporting_validators<F: Fn(Option<Blake2bHash>) -> bool>(
+    #[cfg(feature = "interaction-traits")]
+    pub(crate) fn deactivate_unsupporting_validators<F: Fn(Option<Blake2bHash>) -> bool>(
         &mut self,
         store: &mut StakingContractStoreWrite,
         support_check: F,
@@ -253,7 +261,16 @@ impl StakingContract {
 
         // Deactivate those validators.
         for (validator_address, signer) in unsupporting_validators {
-            self.deactivate_validator(store, &validator_address, &signer, block_number, tx_logger)?;
+            // Since this function will deactivate the validator from the following election block,
+            // we will pass `block_number - 1` as the block number. This ensures the validator is
+            // inactive from this election block already.
+            self.deactivate_validator(
+                store,
+                &validator_address,
+                &signer,
+                block_number - 1,
+                tx_logger,
+            )?;
         }
 
         Ok(())

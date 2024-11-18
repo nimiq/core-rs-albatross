@@ -699,3 +699,119 @@ async fn create_fork_proof() {
     // Verify that the fork proof was generated
     assert!(fork_rx.next().await.is_some());
 }
+
+#[test]
+fn it_can_create_version_upgrade_inherents() {
+    let time = Arc::new(OffsetTime::new());
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain = Arc::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    );
+
+    let block_number = Policy::election_block_after(Policy::genesis_block_number());
+
+    let staking_contract = blockchain.get_staking_contract();
+    let active_validators = staking_contract.active_validators.clone();
+    let next_batch_initial_punished_set = staking_contract
+        .punished_slots
+        .next_batch_initial_punished_set(block_number, &active_validators);
+
+    let mut macro_header = MacroHeader {
+        network: NetworkId::UnitAlbatross,
+        version: 2,
+        block_number,
+        round: 0,
+        timestamp: blockchain.state.election_head.header.timestamp + 20000,
+        parent_hash: Blake2bHash::default(),
+        parent_election_hash: Blake2bHash::default(),
+        interlink: None,
+        seed: VrfSeed::default(),
+        extra_data: vec![],
+        state_root: Blake2bHash::default(),
+        body_root: Blake2sHash::default(),
+        diff_root: Blake2bHash::default(),
+        history_root: Blake2bHash::default(),
+        validators: None,
+        next_batch_initial_punished_set,
+        ..Default::default()
+    };
+
+    let reward_transactions =
+        blockchain.create_reward_transactions(&macro_header, &staking_contract);
+
+    let body = MacroBody {
+        transactions: reward_transactions,
+    };
+
+    let macro_block = MacroBlock {
+        header: macro_header.clone(),
+        body: Some(body.clone()),
+        justification: None,
+    };
+
+    // Simple case. Expect 1x FinalizeBatch, 1x FinalizeEpoch, 1x Reward to validator, 2x Version Upgrade
+    let inherents = blockchain.create_macro_block_inherents(&macro_block);
+    assert_eq!(inherents.len(), 4);
+
+    let mut got_reward = false;
+    let mut got_finalize_batch = false;
+    let mut got_finalize_epoch = false;
+    let mut got_version_upgrade = false;
+    for inherent in &inherents {
+        match inherent {
+            Inherent::Reward { value, .. } => {
+                got_reward = true;
+            }
+            Inherent::FinalizeBatch => {
+                got_finalize_batch = true;
+            }
+            Inherent::FinalizeEpoch => {
+                got_finalize_epoch = true;
+            }
+            Inherent::VersionUpgrade { new_version } => {
+                got_version_upgrade = true;
+                assert_eq!(*new_version, 2);
+            }
+            _ => panic!(),
+        }
+    }
+    assert!(got_reward && got_finalize_batch && got_finalize_epoch && got_version_upgrade);
+
+    // Downgrading version will remove version upgrade.
+    macro_header.version = 1;
+
+    let macro_block = MacroBlock {
+        header: macro_header.clone(),
+        body: Some(body),
+        justification: None,
+    };
+
+    // Simple case. Expect 1x FinalizeBatch, 1x FinalizeEpoch, 1x Reward to validator, 2x Version Upgrade
+    let inherents = blockchain.create_macro_block_inherents(&macro_block);
+    assert_eq!(inherents.len(), 3);
+
+    let mut got_reward = false;
+    let mut got_finalize_batch = false;
+    let mut got_finalize_epoch = false;
+    for inherent in &inherents {
+        match inherent {
+            Inherent::Reward { value, .. } => {
+                got_reward = true;
+            }
+            Inherent::FinalizeBatch => {
+                got_finalize_batch = true;
+            }
+            Inherent::FinalizeEpoch => {
+                got_finalize_epoch = true;
+            }
+            _ => panic!(),
+        }
+    }
+    assert!(got_reward && got_finalize_batch && got_finalize_epoch);
+}

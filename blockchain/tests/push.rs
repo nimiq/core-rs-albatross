@@ -283,7 +283,9 @@ fn it_validates_network() {
 fn it_validates_version() {
     expect_push_micro_block(
         BlockConfig {
-            version: Some(Policy::MAX_SUPPORTED_VERSION - 1),
+            version: Some(Policy::max_supported_version(NetworkId::UnitAlbatross) + 1),
+            // We exclude election blocks here, because they might try to perform an upgrade.
+            test_election: false,
             ..Default::default()
         },
         Err(InvalidBlock(BlockError::UnsupportedVersion)),

@@ -1,4 +1,3 @@
-#[cfg(feature = "accounts")]
 #[macro_use]
 extern crate log;
 

@@ -7,6 +7,8 @@ use once_cell::sync::OnceCell;
 #[cfg(feature = "ts-types")]
 use wasm_bindgen::prelude::*;
 
+use crate::networks::NetworkId;
+
 /// Global policy
 static GLOBAL_POLICY: OnceCell<Policy> = OnceCell::new();
 
@@ -65,9 +67,6 @@ impl Policy {
     pub const MAX_MERKLE_PATH_SIZE: usize = 1029;
     /// Maximum size for the total web auth fields.
     pub const MAX_SUPPORTED_WEB_AUTH_SIZE: usize = 512;
-
-    /// The maximum supported version number of the protocol.
-    pub const MAX_SUPPORTED_VERSION: u16 = 1;
 
     /// Number of available validator slots. Note that a single validator may own several validator slots.
     pub const SLOTS: u16 = 512;
@@ -174,6 +173,19 @@ impl Policy {
                 supported_version == version
             })
             .unwrap_or(false)
+    }
+
+    /// The maximum supported version number of the protocol per network id.
+    pub const fn max_supported_version(network_id: NetworkId) -> u16 {
+        match network_id {
+            NetworkId::TestAlbatross => 1,
+            NetworkId::DevAlbatross => 1,
+            NetworkId::MainAlbatross => 1,
+
+            NetworkId::UnitAlbatross => 2,
+
+            _ => 1,
+        }
     }
 
     #[inline]
@@ -562,12 +574,6 @@ impl Policy {
         Self::MAX_SIZE_MICRO_BODY
     }
 
-    /// The maximum supported version number of the protocol. Changing this always results in a hard fork.
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = MAX_SUPPORTED_VERSION))]
-    pub fn wasm_version() -> u16 {
-        Self::MAX_SUPPORTED_VERSION
-    }
-
     /// Number of available validator slots. Note that a single validator may own several validator slots.
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = SLOTS))]
     pub fn wasm_slots() -> u16 {
@@ -659,6 +665,12 @@ impl Policy {
     #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = HISTORY_CHUNKS_MAX_SIZE))]
     pub fn wasm_history_chunks_max_size() -> u64 {
         Self::HISTORY_CHUNKS_MAX_SIZE
+    }
+
+    /// Get the maximum supported version for a network.
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = maxSupportedVersion))]
+    pub fn wasm_max_supported_version(network: u8) -> Result<u16, JsError> {
+        Ok(Self::max_supported_version(NetworkId::try_from(network)?))
     }
 }
 
