@@ -6,11 +6,14 @@ use std::{
 };
 
 use futures::stream::{BoxStream, Stream, StreamExt};
-use nimiq_block::{DoubleProposalProof, MacroBlock, MacroHeader};
+use nimiq_block::{DoubleProposalProof, DoubleVoteProof, MacroBlock, MacroHeader, MultiSignature};
 use nimiq_blockchain::{BlockProducer, Blockchain};
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_keys::{Address, Ed25519Signature as SchnorrSignature};
 use nimiq_network_interface::network::Topic;
-use nimiq_primitives::{networks::NetworkId, slots_allocation::Validators, TendermintProposal};
+use nimiq_primitives::{
+    networks::NetworkId, slots_allocation::Validators, TendermintProposal, TendermintVote,
+};
 use nimiq_tendermint::{
     Return as TendermintReturn, SignedProposalMessage, TaggedAggregationMessage, Tendermint,
 };
@@ -25,6 +28,7 @@ use crate::{
         update_message::TendermintUpdate,
     },
     double_proposal::DoubleProposalDetector,
+    double_vote::DoubleVoteDetector,
     tendermint::TendermintProtocol,
 };
 
@@ -98,9 +102,11 @@ where
                 (SchnorrSignature, Address, u16),
             >,
         >,
+        // TODO: make this just one parameter for equivocation proofs
         on_double_proposal: Arc<dyn Fn(DoubleProposalProof) + Send + Sync>,
+        on_double_vote: Arc<dyn Fn(DoubleVoteProof) + Send + Sync>,
     ) -> Self {
-        let input = network
+        let level_update_stream = network
             .receive::<TendermintUpdate>()
             .filter_map(move |(item, validator_id)| async move {
                 // Check that the update is for the correct block.
@@ -113,6 +119,22 @@ where
                 })
             })
             .boxed();
+
+        let observe_valid_vote = {
+            let double_vote_detector = Arc::new(Mutex::new(DoubleVoteDetector::new(
+                network_id,
+                block_height,
+                blockchain.read().current_validators().unwrap().clone(),
+            )));
+            Arc::new(move |vote: &TendermintVote, signature: &MultiSignature| {
+                for proof in double_vote_detector
+                    .lock()
+                    .observe_valid_vote(vote, signature)
+                {
+                    on_double_vote(proof);
+                }
+            })
+        };
 
         let observe_valid_requested_proposal = {
             let double_proposal_detector =
@@ -155,6 +177,7 @@ where
             network_id,
             block_height,
             observe_valid_requested_proposal,
+            observe_valid_vote,
         );
 
         // create the Tendermint instance, which implements Stream
@@ -162,7 +185,7 @@ where
             dependencies,
             state_opt.and_then(|s| s.into_tendermint_state(block_height)),
             proposal_stream,
-            input,
+            level_update_stream,
         )
         // and map the return value such that a state update can be persisted.
         .map(move |item| match item {

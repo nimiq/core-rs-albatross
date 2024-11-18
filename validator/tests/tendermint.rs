@@ -120,6 +120,7 @@ async fn it_verifies_inferior_chain_proposals() {
         NetworkId::UnitAlbatross,
         blockchain2.read().head().block_number() + 1,
         Arc::new(|_, _, _| {}),
+        Arc::new(|_, _| {}),
     );
 
     // Make sure the main chain proposal is acceptable.

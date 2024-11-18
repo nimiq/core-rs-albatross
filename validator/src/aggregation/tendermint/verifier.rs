@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use nimiq_block::MultiSignature;
 use nimiq_bls::AggregatePublicKey;
 use nimiq_handel::{
     identity::IdentityRegistry,
@@ -13,17 +14,22 @@ use tokio::task;
 
 use super::contribution::TendermintContribution;
 
-#[derive(Debug)]
 pub(crate) struct TendermintVerifier<I: IdentityRegistry> {
     identity_registry: Arc<I>,
     id: TendermintIdentifier,
+    observe_valid_vote: Arc<dyn Fn(&TendermintVote, &MultiSignature) + Send + Sync>,
 }
 
 impl<I: IdentityRegistry> TendermintVerifier<I> {
-    pub(crate) fn new(identity_registry: Arc<I>, id: TendermintIdentifier) -> Self {
+    pub(crate) fn new(
+        identity_registry: Arc<I>,
+        id: TendermintIdentifier,
+        observe_valid_vote: Arc<dyn Fn(&TendermintVote, &MultiSignature) + Send + Sync>,
+    ) -> Self {
         Self {
             identity_registry,
             id,
+            observe_valid_vote,
         }
     }
 }
@@ -58,11 +64,13 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for TendermintVerifie
 
             params.push((aggregated_public_key, vote, multi_sig.clone()));
         }
+        let observe_valid_vote = Arc::clone(&self.observe_valid_vote);
         let result = task::spawn_blocking(move || {
             params
                 .into_par_iter()
                 .map(|(aggregated_public_key, vote, contribution)| {
                     if aggregated_public_key.verify_hash(vote.hash(), &contribution.signature) {
+                        observe_valid_vote(&vote, &contribution);
                         Ok(())
                     } else {
                         Err(())

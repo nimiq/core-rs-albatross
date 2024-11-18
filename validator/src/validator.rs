@@ -441,6 +441,17 @@ where
                             )
                         })
                     },
+                    {
+                        let blockchain = Arc::clone(&self.blockchain);
+                        let state = Arc::clone(&self.state);
+                        Arc::new(move |double_vote_proof| {
+                            Self::on_equivocation_proof_impl(
+                                &blockchain,
+                                &state,
+                                double_vote_proof.into(),
+                            )
+                        })
+                    },
                 ));
             }
             BlockType::Micro => {

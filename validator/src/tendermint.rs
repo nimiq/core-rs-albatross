@@ -4,7 +4,7 @@ use futures::{
     future::{self, BoxFuture, FutureExt},
     stream::{BoxStream, StreamExt},
 };
-use nimiq_block::{Block, MacroBlock, MacroHeader, TendermintProof};
+use nimiq_block::{Block, MacroBlock, MacroHeader, MultiSignature, TendermintProof};
 use nimiq_blockchain::{BlockProducer, Blockchain};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_collections::BitSet;
@@ -131,6 +131,7 @@ pub struct TendermintProtocol<TValidatorNetwork: ValidatorNetwork> {
     validator_registry: Arc<ValidatorRegistry>,
     observe_valid_requested_proposal:
         Arc<dyn Fn(Address, TendermintProposal<MacroHeader>, SchnorrSignature) + Send + Sync>,
+    observe_valid_vote: Arc<dyn Fn(&TendermintVote, &MultiSignature) + Send + Sync>,
 }
 
 impl<TValidatorNetwork: ValidatorNetwork> Clone for TendermintProtocol<TValidatorNetwork> {
@@ -145,6 +146,7 @@ impl<TValidatorNetwork: ValidatorNetwork> Clone for TendermintProtocol<TValidato
             blockchain: Arc::clone(&self.blockchain),
             validator_registry: Arc::clone(&self.validator_registry),
             observe_valid_requested_proposal: Arc::clone(&self.observe_valid_requested_proposal),
+            observe_valid_vote: Arc::clone(&self.observe_valid_vote),
         }
     }
 }
@@ -164,6 +166,7 @@ where
         observe_valid_requested_proposal: Arc<
             dyn Fn(Address, TendermintProposal<MacroHeader>, SchnorrSignature) + Send + Sync,
         >,
+        observe_valid_vote: Arc<dyn Fn(&TendermintVote, &MultiSignature) + Send + Sync>,
     ) -> Self {
         Self {
             block_producer,
@@ -175,6 +178,7 @@ where
             current_validators,
             network,
             observe_valid_requested_proposal,
+            observe_valid_vote,
         }
     }
 }
@@ -451,6 +455,7 @@ where
             Arc::clone(&self.validator_registry),
             self.validator_slot_band as usize,
             id,
+            Arc::clone(&self.observe_valid_vote),
         );
 
         Aggregation::new(
@@ -486,6 +491,7 @@ where
             Arc::clone(&self.validator_registry),
             self.validator_slot_band as usize,
             id,
+            Arc::clone(&self.observe_valid_vote),
         );
 
         async move {
