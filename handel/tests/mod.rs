@@ -272,6 +272,7 @@ fn create_handel_instance(
         protocol,
         config.clone(),
         contribution,
+        None,
         network
             .receive_messages::<Update<Contribution>>()
             .map(move |msg| msg.0 .0.into_level_update(msg.1 .0 as u16))
