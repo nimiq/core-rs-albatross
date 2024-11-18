@@ -28,7 +28,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             .or_default();
 
         // At least one proposal exists. Broadcast it.
-        for (proposal_hash, (vr, signature)) in &*proposals {
+        if let Some((proposal_hash, (vr, signature))) = proposals.iter().next() {
             // A proposal exist. Broadcast it and progress to prevote step.
             log::debug!(
                 current_round = self.state.current_round,
@@ -59,9 +59,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
 
             // Broadcast the signed proposal message.
             self.protocol.broadcast_proposal(signed_proposal_message);
-        }
 
-        if let Some((proposal_hash, (vr, signature))) = proposals.iter().next() {
             // advance step to prevote aggregation
             self.state.current_step = Step::Prevote;
 
@@ -128,37 +126,34 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             // Yield the state as it has changed.
             Ok(Return::Update(self.state.clone()))
         } else {
-            for _ in 0..2 {
-                // No valid proposal is known.
-                log::debug!(
-                    current_round = self.state.current_round,
-                    "Our turn, setting fresh proposal",
-                );
+            // No valid proposal is known.
+            log::debug!(
+                current_round = self.state.current_round,
+                "Our turn, setting fresh proposal",
+            );
 
-                // Create a new proposal.
-                let (message, inherent) =
-                    self.protocol.create_proposal(self.state.current_round)?;
+            // Create a new proposal.
+            let (message, inherent) = self.protocol.create_proposal(self.state.current_round)?;
 
-                // Sign the proposal message
-                let signature = self.protocol.sign_proposal(&message);
+            // Sign the proposal message
+            let signature = self.protocol.sign_proposal(&message);
 
-                // Hash it for identification and voting.
-                let proposal_hash = message.proposal.hash();
+            // Hash it for identification and voting.
+            let proposal_hash = message.proposal.hash();
 
-                // Cache the inherents created for the proposal. If they already exist overwrite them, as they must be identical.
-                if let Some(_inherent) = self.state.inherents.insert(inherent.hash(), inherent) {
-                    // Log in case of duplicates. There might be optimization potential.
-                    log::trace!("Created new proposal whose inherent existed previously.");
-                }
-
-                // Store the new proposal.
-                self.state
-                    .known_proposals
-                    .insert(proposal_hash.clone(), message.proposal);
-
-                // Store the proposal for the current round.
-                proposals.insert(proposal_hash, (None, signature));
+            // Cache the inherents created for the proposal. If they already exist overwrite them, as they must be identical.
+            if let Some(_inherent) = self.state.inherents.insert(inherent.hash(), inherent) {
+                // Log in case of duplicates. There might be optimization potential.
+                log::trace!("Created new proposal whose inherent existed previously.");
             }
+
+            // Store the new proposal.
+            self.state
+                .known_proposals
+                .insert(proposal_hash.clone(), message.proposal);
+
+            // Store the proposal for the current round.
+            proposals.insert(proposal_hash, (None, signature));
 
             // Yield the state as it has changed.
             Ok(Return::Update(self.state.clone()))
