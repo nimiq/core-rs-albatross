@@ -24,7 +24,7 @@ use tokio::time::sleep;
 use types::GenesisValidator;
 
 use crate::{
-    genesis::get_pos_genesis,
+    genesis::{get_pos_genesis, write_pos_genesis},
     monitor::{
         check_validators_ready, generate_online_tx, generate_ready_tx, get_online_txns,
         get_ready_txns, send_tx, was_validator_ready, ValidatorsReadiness,
@@ -414,6 +414,28 @@ pub async fn migrate(
     log::info!(
         genesis_hash = %genesis_config_hash,
         "PoS Genesis generation is completed"
+    );
+
+    let current_exe_dir = std::env::current_exe()
+        .map(|mut path| {
+            path.pop();
+            path
+        })
+        .unwrap_or_else(|error| {
+            exit_with_error(
+                error,
+                "Could not find full filesystem path of the current running executable",
+            )
+        });
+
+    let genesis_dir = current_exe_dir.join("genesis");
+    let genesis_file = genesis_dir.join("genesis".to_owned() + ".toml");
+    // Write the genesis into the FS
+    write_pos_genesis(&genesis_file, genesis_config.clone())
+        .unwrap_or_else(|error| exit_with_error(error, "Could not write genesis config file"));
+    log::info!(
+        filename = ?genesis_file,
+        "Finished writing PoS genesis to file"
     );
 
     loop {
