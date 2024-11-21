@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use nimiq_block::Block;
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
@@ -22,6 +24,7 @@ impl LightBlockchain {
         proof: NanoProof,
         trusted_proof: bool,
     ) -> Result<PushResult, PushError> {
+        let start = Instant::now();
         // Must be an election block.
         assert!(block.is_election());
 
@@ -102,6 +105,8 @@ impl LightBlockchain {
             .send(BlockchainEvent::EpochFinalized(block_hash_blake2b))
             .ok();
 
+        let duration = start.elapsed();
+        log::debug!(?duration, "Pushed ZKP proof to the light blockchain");
         Ok(PushResult::Extended)
     }
 

@@ -115,8 +115,8 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 
                         match result {
                             Ok(result) => {
-                                log::debug!(result = ?result, "Applied ZKP proof to the blockchain");
                                 // Request epoch ids with our updated state from this peer
+                                log::debug!(result = ?result, "Applied ZKP proof, requesting epoch ids");
                                 let future = Self::request_epoch_ids(
                                     self.blockchain.clone(),
                                     Arc::clone(&self.network),
