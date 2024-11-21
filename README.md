@@ -1,4 +1,4 @@
-  <a href="https://github.com/nimiq/core-rs-albatross">
+  <a id="README" href="#README" href="https://github.com/nimiq/core-rs-albatross/blob/albatross/README.md">
     <img src="https://raw.githubusercontent.com/nimiq/developer-center/refs/heads/main/assets/images/logos/albatross-repo-logo.svg" alt="Nimiq PoS Albatross Repository" width="600" />
   </a>
 <br/>
@@ -20,6 +20,7 @@ For the Testnet use and more detailed information on how to connect and use the 
 - [Hardware Requirements](#hardware-requirements-per-node-type)
 - [Installation](#installation)
 - [Configuration](#configuration)
+- [History Nodes](#history-nodes)
 - [Service Nodes Guides](#service-nodes-guides)
 - [Docker](#docker)
 - [Testnet](#testnet)
@@ -41,7 +42,7 @@ For the Testnet use and more detailed information on how to connect and use the 
 
 | PoS Node Type | Memory | CPU | Storage | Network | Syncing Time |
 | --- | --- | --- | --- | --- | --- |
-| **History** | Minimum 16GB RAM (higher recommended) | Minimum 4 vCPUs, 8 recommended | Minimum 1TB of storage (2TB when enabling indexing); storage usage starts at a few gigabytes and grows linearly with blockchain size over time | High-speed, reliable internet connection; Good I/O performance (SSDs required) | Sync time increases over the life of the blockchain |
+| **History** (check additional [instructions](#history-nodes)) | Minimum 16GB RAM (higher recommended) | Minimum 4 vCPUs, 8 recommended | Minimum 1TB of storage (2TB when enabling indexing); storage usage starts at a few gigabytes and grows linearly with blockchain size over time | High-speed, reliable internet connection; Good I/O performance (SSDs required) | Sync time increases over the life of the blockchain |
 | **Full** | Minimum 16GB RAM | 4 vCPUs recommended | Minimum Minimum 60GB of storage | High-speed, reliable internet connection; Good I/O performance (SSDs recommended) | Sync time grows linearly but slowly |
 | **Light** | Minimum 4GB RAM | 64-bit recommended | Works with minimal storage | Moderate-speed internet connection (1 Mbps or higher) | Syncs in a few seconds |
 
@@ -104,7 +105,7 @@ This generates a sample file and places it in a folder `./nimiq`.
 ```bash
 cp $HOME/.nimiq/client.example.toml $HOME/.nimiq/client.toml 
 ```
-3. Edit your configuration file following the explanations inside. Check some [important settings](#configuration) to take into account below.
+3. Edit your configuration file following the explanations inside. Refer to the [configuration settings](https://github.com/nimiq/core-rs-albatross/blob/albatross/lib/src/config/config_file/client.example.toml) for guidance.
 4. Run the client:
 ```bash
 cargo run --release --bin nimiq-client
@@ -114,11 +115,31 @@ By default, the client will look for the config file in `$HOME/.nimiq/client.tom
 **Option B**
 Download the example file and manually place it.
 1. Copy this [sample configuration file](https://github.com/nimiq/core-rs-albatross/blob/albatross/lib/src/config/config_file/client.example.toml) to your preferred location.
-2. Edit the configuration file and adjust settings as needed. Refer to the [configuration settings](#configuration) for guidance.
+2. Edit the configuration file and adjust settings as needed. Refer to the **sample configuration file** for guidance.
 3. Run the client with the specified file:
 ```bash
 cargo run --release --bin nimiq-client -- -c path/to/client.toml
 ```
+
+Now your client is launched and running.
+
+**Port Configuration**
+Ensure that your system allows network traffic through port **8443/tcp**. Open this port in your firewall to allow the node to connect to the network.
+
+### History Nodes
+For the first start of your history node, you must set the environment variable `NIMIQ_OVERRIDE_MAINNET_CONFIG` to point to a configuration file. This file can be downloaded from one of the following sources:
+
+- **Nimiq IPFS gateway link**: https://ipfs.nimiq.io/ipfs/QmWcRRRw4FaKRrznMFt6KemAM35uo9QknMkDaeBzTod33R
+- **Via torrent**:
+    
+    ```
+    magnet:?xt=urn:btih:566cec0c350fca917cf5abb00c7dbe8c70884306&dn=nimiq-genesis-main-albatross.toml&tr=https%3A%2F%2Ftorrents.nimiq.io%2Fannounce
+    ```
+    
+
+After downloading the file, run `NIMIQ_OVERRIDE_MAINNET_CONFIG=/path/to/nimiq-genesis-main-albatross.toml cargo run --release --bin nimiq-client` with the actual path to the file.
+
+This process is required **only for the first start** of the history node. For later restarts, neither the environment variable nor the file are needed. You can even delete the file after the initial setup.
 
 ### Service Nodes Guides
 You can also choose to run a validator or a prover node. Check our guides with the full step-by-step description:
@@ -135,7 +156,7 @@ You can also choose to run a validator or a prover node. Check our guides with t
 5. Run the client via Docker:
 `docker run -v $(pwd)/data:/home/nimiq/.nimiq -p 8443:8443 -p 8648:8648 -p 9100:9100 --name nimiq-rpc --rm ghcr.io/nimiq/core-rs-albatross:latest`.
 
-**Overview of Exposed Ports:**
+**Overview of Exposed Ports**
 
 | Port | Description |
 | --- | --- |
@@ -159,7 +180,7 @@ There are two ways of getting funds:
 curl -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "address=NQXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX" https://faucet.pos.nimiq-testnet.com/tapit
 ```
 
-### Software Integrity and Authenticity
+## Software Integrity and Authenticity
 To ensure the software you are running is authentic and has not been tampered with, refer to the [documentation](https://github.com/nimiq/core-rs-albatross/blob/albatross/build/README.md). It provides details on reproducing Nimiq software and verifying software signatures.
 
 ## Contributing
