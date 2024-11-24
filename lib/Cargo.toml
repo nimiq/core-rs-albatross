@@ -125,6 +125,7 @@ full-consensus = [
     "nimiq-blockchain",
     "nimiq-consensus/full",
     "nimiq-dht",
+    "nimiq-network-libp2p/autonat",
     "nimiq-network-libp2p/kad",
 ]
 logging = ["nimiq-log", "serde_json", "tokio", "tracing-subscriber"]

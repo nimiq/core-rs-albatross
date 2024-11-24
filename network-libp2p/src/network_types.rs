@@ -22,8 +22,9 @@ use nimiq_validator_network::validator_record::ValidatorRecord;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 
+#[cfg(feature = "autonat")]
+use crate::autonat::NatState;
 use crate::{
-    autonat::NatState,
     dispatch::codecs::{IncomingRequest, OutgoingResponse},
     rate_limiting::RateLimitConfig,
     NetworkError,
@@ -241,6 +242,7 @@ pub(crate) struct TaskState {
     /// DHT (kad) is in server mode
     pub(crate) dht_server_mode: bool,
     /// The NAT status of the local peer
+    #[cfg(feature = "autonat")]
     pub(crate) nat_status: NatState,
     /// Senders per `OutboundRequestId` for request-response
     pub(crate) requests: HashMap<OutboundRequestId, oneshot::Sender<Result<Bytes, RequestError>>>,
