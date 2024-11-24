@@ -810,6 +810,8 @@ impl<N: Network> Stream for BlockQueue<N> {
                         if let Some(block) = self.check_announced_block(block, block_source) {
                             return Poll::Ready(Some(block));
                         }
+                    } else {
+                        log::debug!("Discarding blocks from gossip sub because we have no peers.");
                     }
                 }
                 // If the block_stream is exhausted, we quit as well.
