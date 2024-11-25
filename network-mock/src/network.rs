@@ -655,7 +655,7 @@ impl Network for MockNetwork {
         Ok(self.get_peers())
     }
 
-    fn get_peers_by_validator(&self, _validator_address: Address) -> Vec<Self::PeerId> {
+    fn get_peers_by_validator(&self, _validator_address: &Address) -> Vec<Self::PeerId> {
         // TODO
         vec![]
     }
