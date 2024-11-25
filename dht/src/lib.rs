@@ -136,7 +136,7 @@ impl DhtVerifier for Verifier {
                 }
 
                 self.verify_validator_record(&validator_record)
-                    .map_err(DhtVerifierError::ValidatorInfoError)
+                    .map_err(|_| DhtVerifierError::ValidatorInfoError)
                     .and_then(|_| {
                         Ok(DhtRecord::Validator(
                             validator_record.record.peer_id,

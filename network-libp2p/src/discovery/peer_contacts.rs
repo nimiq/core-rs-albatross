@@ -129,9 +129,6 @@ pub struct PeerContact {
     #[serde(with = "self::serde_public_key")]
     pub public_key: PublicKey,
 
-    /// Optional validator info in case the node is a validator.
-    pub validator_info: Option<ValidatorInfo>,
-
     /// Services supported by this peer.
     pub services: Services,
 
@@ -165,7 +162,6 @@ impl PeerContact {
             public_key,
             validator_info: None,
             services,
-            validator_info: None,
             timestamp,
         })
     }
@@ -291,7 +287,7 @@ impl SignedPeerContact {
         &self,
         #[cfg(feature = "kad")] verifier: Arc<dyn ValidatorRecordVerifier>,
     ) -> Result<(), PeerContactError> {
-        // The record signature must be verifid first.
+        // The record signature must be verified first.
         if !self
             .signature
             .tagged_verify(&self.inner, &self.inner.public_key)

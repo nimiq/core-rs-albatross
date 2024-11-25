@@ -5,7 +5,7 @@ use nimiq_serde::DeserializeError;
 use nimiq_validator_network::validator_record::ValidatorRecord;
 
 pub use crate::network_types::DhtRecord;
-use crate::{discovery::peer_contacts::ValidatorInfoError, Network};
+use crate::Network;
 
 #[derive(Debug)]
 pub enum DhtVerifierError {
@@ -22,6 +22,8 @@ pub enum DhtVerifierError {
     ),
     StateIncomplete,
     InvalidSignature,
+    ValidatorInfoError,
+    MissingPublisher,
 }
 
 pub trait Verifier: Send + Sync {

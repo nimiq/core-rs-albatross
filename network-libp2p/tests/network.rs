@@ -259,7 +259,7 @@ impl dht::Verifier for Verifier {
                     record.clone(),
                 )
             })
-            .map_err(dht::DhtVerifierError::ValidatorInfoError)
+            .map_err(|_| dht::DhtVerifierError::ValidatorInfoError)
     }
 }
 
