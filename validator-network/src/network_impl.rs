@@ -370,23 +370,19 @@ where
         }
 
         // Try all validator peer_ids from our peer contact book.
-        let our_address = {
-            let own_validator_id = self.own_validator_id.read();
-            let Some(own_validator_id) = *own_validator_id else {
-                return Err(UnknownValidator(validator_id));
-            };
+        let validator_address = {
             let validators = self.validators.read();
             let Some(validators) = validators.as_ref() else {
                 return Err(UnknownValidator(validator_id));
             };
             validators
-                .get_validator_by_slot_band(own_validator_id)
+                .get_validator_by_slot_band(validator_id)
                 .address
                 .clone()
         };
 
         let mut futures = FuturesUnordered::new();
-        for peer_id in self.network.get_peers_by_validator(&our_address) {
+        for peer_id in self.network.get_peers_by_validator(&validator_address) {
             let network = Arc::clone(&self.network);
             let msg = msg.clone();
             futures.push(async move { network.message(msg, peer_id).await });
