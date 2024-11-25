@@ -16,6 +16,12 @@ use crate::{
     Identifier,
 };
 
+type IsCompleteFn<TId, TProtocol> = fn(
+    &<TProtocol as Protocol<TId>>::Contribution,
+    &<TProtocol as Protocol<TId>>::Registry,
+    &<TProtocol as Protocol<TId>>::Partitioner,
+) -> bool;
+
 /// Trait for scoring or evaluating a contribution or signature.
 pub trait Evaluator<TId, TProtocol>
 where
@@ -31,6 +37,9 @@ where
 
     /// Returns whether a level contains a specific peer ID.
     fn verify(&self, msg: &LevelUpdate<TProtocol::Contribution>) -> Result<(), VerificationError>;
+
+    /// Returns whether the given aggregate is considered complete.
+    fn is_complete(&self, aggregate: &TProtocol::Contribution) -> bool;
 }
 
 /// A signature counts as it was signed N times, where N is the signers weight
@@ -48,6 +57,9 @@ where
 
     /// Partitioner that registers the handel levels and its IDs.
     partitioner: Arc<TProtocol::Partitioner>,
+
+    /// Function to test if the given aggregate is complete.
+    is_complete_fn: IsCompleteFn<TId, TProtocol>,
 }
 
 impl<TId, TProtocol> WeightedVote<TId, TProtocol>
@@ -76,11 +88,13 @@ where
         store: Arc<RwLock<TProtocol::Store>>,
         weights: Arc<TProtocol::Registry>,
         partitioner: Arc<TProtocol::Partitioner>,
+        is_complete_fn: IsCompleteFn<TId, TProtocol>,
     ) -> Self {
         Self {
             store,
             weights,
             partitioner,
+            is_complete_fn,
         }
     }
 }
@@ -91,10 +105,7 @@ pub enum VerificationError {
         level: usize,
         num_levels: usize,
     },
-    InvalidFullAggregate {
-        weight: usize,
-        expected_weight: usize,
-    },
+    InvalidFullAggregate,
     InvalidOrigin {
         origin: usize,
         allowed_contributors: Identity,
@@ -264,18 +275,12 @@ where
         }
 
         // Special case for full aggregations, which are sent at level `num_levels`.
-        // They are only valid if they contain all signers.
+        // They are only valid if they are complete.
         let contributors = self.weights.signers_identity(&msg.aggregate.contributors());
         if level == num_levels {
-            let weight = contributors.len();
-            let expected_weight = self.partitioner.size();
-            if weight != expected_weight {
-                return Err(InvalidFullAggregate {
-                    weight,
-                    expected_weight,
-                });
+            if !self.is_complete(&msg.aggregate) {
+                return Err(InvalidFullAggregate);
             }
-
             return Ok(());
         }
 
@@ -317,5 +322,9 @@ where
         }
 
         Ok(())
+    }
+
+    fn is_complete(&self, aggregate: &TProtocol::Contribution) -> bool {
+        (self.is_complete_fn)(aggregate, &self.weights, &self.partitioner)
     }
 }

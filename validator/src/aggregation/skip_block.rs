@@ -20,7 +20,7 @@ use nimiq_network_interface::{
     network::CloseReason,
     request::{MessageMarker, RequestCommon},
 };
-use nimiq_primitives::{policy, slots_allocation::Validators, Message};
+use nimiq_primitives::{policy::Policy, slots_allocation::Validators, Message};
 use nimiq_validator_network::ValidatorNetwork;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -144,6 +144,9 @@ impl SkipBlockAggregationProtocol {
             Arc::clone(&store),
             Arc::clone(&registry),
             Arc::clone(&partitioner),
+            |aggregate: &SignedSkipBlockMessage, registry: &ValidatorRegistry, _| {
+                registry.signature_weight(aggregate).unwrap_or(0) >= Policy::TWO_F_PLUS_ONE as usize
+            },
         ));
 
         SkipBlockAggregationProtocol {
@@ -286,12 +289,12 @@ impl SkipBlockAggregation {
                 block_number = skip_block_info.block_number,
                 "New skip block aggregate weight {}/{} with signers {}",
                 aggregate_weight,
-                policy::Policy::TWO_F_PLUS_ONE,
+                Policy::TWO_F_PLUS_ONE,
                 &msg.contributors(),
             );
 
             // Check if the combined weight of the aggregation is at least 2f+1.
-            if aggregate_weight >= policy::Policy::TWO_F_PLUS_ONE as usize {
+            if aggregate_weight >= Policy::TWO_F_PLUS_ONE as usize {
                 // Create SkipBlockProof from the aggregate.
                 let skip_block_proof = SkipBlockProof { sig: msg.proof };
 
