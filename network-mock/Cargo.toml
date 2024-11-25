@@ -33,6 +33,7 @@ tokio = { version = "1.43", features = [
 ] }
 tokio-stream = "0.1"
 
+nimiq-keys = { workspace = true }
 nimiq-network-interface = { workspace = true }
 nimiq-serde = { workspace = true }
 nimiq-time = { workspace = true }
