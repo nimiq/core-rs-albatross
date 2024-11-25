@@ -11,7 +11,7 @@ use nimiq_handel::{
     evaluator::WeightedVote,
     identity::{Identity, IdentityRegistry, WeightRegistry},
     network::Network,
-    partitioner::BinomialPartitioner,
+    partitioner::{BinomialPartitioner, Partitioner},
     protocol,
     store::ReplaceStore,
     update::LevelUpdate,
@@ -113,6 +113,9 @@ impl Protocol {
             store.clone(),
             Arc::clone(&registry),
             partitioner.clone(),
+            |aggregate: &Contribution, registry: &Registry, partitioner: &BinomialPartitioner| {
+                registry.signers_identity(&aggregate.contributors()).len() == partitioner.size()
+            },
         ));
 
         Protocol {

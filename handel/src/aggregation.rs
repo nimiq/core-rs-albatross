@@ -187,7 +187,7 @@ where
     }
 
     fn is_complete_aggregate(&self, aggregate: &P::Contribution) -> bool {
-        self.num_contributors(aggregate) == self.protocol.partitioner().size()
+        self.protocol.evaluator().is_complete(aggregate)
     }
 
     /// Check if the given level was completed. If so mark it as such.
