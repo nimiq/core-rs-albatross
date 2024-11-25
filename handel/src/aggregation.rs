@@ -8,6 +8,7 @@ use futures::{
     stream::{BoxStream, Stream, StreamExt},
 };
 use nimiq_time::{interval, Interval};
+use tokio::task;
 
 use crate::{
     config::Config,
@@ -438,7 +439,18 @@ where
 
         // Poll the input stream for new level updates.
         let evaluator = self.protocol.evaluator();
-        while let Poll::Ready(Some(update)) = self.input_stream.poll_next_unpin(cx) {
+        while let Poll::Ready(Some(update)) =
+            // Our caller assumes that calling `poll_next` on this stream
+            // clears the queue.
+            //
+            // The tokio runtime would usually insert spurious `Poll::Pending`s
+            // for cooperative scheduling, it could happen that we poll and get
+            // nothing even though there are items in the channel.
+            //
+            // Use `task::unconstrained` to make sure that tokio does not
+            // cooperate from this particular future.
+            task::unconstrained(self.input_stream.next()).poll_unpin(cx)
+        {
             // Verify the level update.
             if let Err(error) = evaluator.verify(&update) {
                 warn!(
