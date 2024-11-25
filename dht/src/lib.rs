@@ -30,36 +30,6 @@ impl ValidatorRecordVerifier for Verifier {
             KeyPair,
         >,
     ) -> Result<(), ValidatorInfoError> {
-        // // Deserialize the value of the record, which is a ValidatorRecord. If it fails return an error.
-        // let validator_record =
-        //     TaggedSigned::<ValidatorRecord<PeerId>, KeyPair>::deserialize_from_vec(&record.record.value)
-        //         .map_err(DhtVerifierError::MalformedValue)?;
-
-        // // Make sure the peer who signed the record is also the one presented in the record.
-        // if let Some(publisher) = record.publisher {
-        //     if validator_record.record.peer_id != publisher {
-        //         return Err(DhtVerifierError::PublisherMismatch(
-        //             publisher,
-        //             validator_record.record.peer_id,
-        //         ));
-        //     }
-        // } else {
-        //     log::warn!("Validating a dht record without a publisher");
-        //     return Err(DhtVerifierError::PublisherMissing);
-        // }
-
-        // // Deserialize the key of the record which is an Address. If it fails return an error.
-        // let validator_address = Address::deserialize_from_vec(record.key.as_ref())
-        //     .map_err(DhtVerifierError::MalformedKey)?;
-
-        // Make sure the validator address used as key is identical to the one in the record.
-        // if signed_record.record.validator_address != validator_address {
-        //     return Err(DhtVerifierError::AddressMismatch(
-        //         validator_address,
-        //         validator_record.record.validator_address,
-        //     ));
-        // }
-
         // Acquire blockchain read access. For now exclude Light clients.
         let blockchain = match self.blockchain {
             BlockchainProxy::Light(ref _light_blockchain) => {
