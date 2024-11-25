@@ -15,9 +15,9 @@ use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
     network::Network as NetworkInterface,
     peer_info::{PeerInfo, Services},
+    validator_record::ValidatorRecord,
 };
 use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSignature, TaggedSigned};
-use nimiq_validator_network::validator_record::ValidatorRecord;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

@@ -13,6 +13,7 @@ use futures::{future::BoxFuture, ready, stream::BoxStream, Stream, StreamExt};
 use libp2p::{
     gossipsub, request_response::InboundRequestId, swarm::NetworkInfo, Multiaddr, PeerId, Swarm,
 };
+use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
     network::{
         CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, SubscribeEvents,
@@ -23,6 +24,7 @@ use nimiq_network_interface::{
         InboundRequestError, Message, OutboundRequestError, Request, RequestCommon, RequestError,
         RequestSerialize, RequestType,
     },
+    validator_record::ValidatorRecord,
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_time::{interval, timeout};
@@ -528,6 +530,10 @@ impl NetworkInterface for Network {
         Ok(filtered_peers)
     }
 
+    fn get_peers_by_validator(&self, validator_address: Address) -> Vec<Self::PeerId> {
+        todo!()
+    }
+
     fn peer_provides_required_services(&self, peer_id: PeerId) -> bool {
         if let Some(peer_info) = self.connected_peers.read().get(&peer_id) {
             peer_info.get_services().contains(self.required_services)
@@ -748,5 +754,12 @@ impl NetworkInterface for Network {
             .await?;
 
         output_rx.await?
+    }
+
+    fn register_validator_signing_callback(
+        &self,
+        callback: impl Fn(Self::PeerId, u64) -> TaggedSigned<ValidatorRecord<Self::PeerId>, KeyPair>,
+    ) {
+        todo!()
     }
 }
