@@ -4,7 +4,8 @@ use nimiq_handel::{
     evaluator::WeightedVote, partitioner::BinomialPartitioner, protocol::Protocol,
     store::ReplaceStore,
 };
-use nimiq_primitives::TendermintIdentifier;
+use nimiq_primitives::{policy::Policy, TendermintIdentifier};
+use nimiq_tendermint::Aggregation;
 use parking_lot::RwLock;
 
 use super::{
@@ -26,11 +27,11 @@ pub(crate) struct TendermintAggregationProtocol {
 
 impl TendermintAggregationProtocol {
     pub(crate) fn new(
-        validators: Arc<ValidatorRegistry>,
+        registry: Arc<ValidatorRegistry>,
         node_id: usize,
         id: TendermintIdentifier,
     ) -> Self {
-        let partitioner = Arc::new(BinomialPartitioner::new(node_id, validators.len()));
+        let partitioner = Arc::new(BinomialPartitioner::new(node_id, registry.len()));
 
         let store = Arc::new(RwLock::new(
             ReplaceStore::<TendermintIdentifier, Self>::new(Arc::clone(&partitioner)),
@@ -38,18 +39,23 @@ impl TendermintAggregationProtocol {
 
         let evaluator = Arc::new(WeightedVote::new(
             Arc::clone(&store),
-            validators.clone(),
+            Arc::clone(&registry),
             Arc::clone(&partitioner),
+            |aggregate: &TendermintContribution, _, _| {
+                aggregate.proposals().iter().any(|(_, contributor_count)| {
+                    *contributor_count >= Policy::TWO_F_PLUS_ONE as usize
+                })
+            },
         ));
 
-        let verifier = Arc::new(TendermintVerifier::new(validators.clone(), id.clone()));
+        let verifier = Arc::new(TendermintVerifier::new(registry.clone(), id.clone()));
 
         Self {
             verifier,
             partitioner,
             evaluator,
             store,
-            registry: validators,
+            registry,
             node_id,
             id,
         }
