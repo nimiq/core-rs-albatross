@@ -499,6 +499,7 @@ pub struct ValidatorSettings {
     pub voting_key: Option<Sensitive<String>>,
     pub fee_key_file: Option<String>,
     pub fee_key: Option<Sensitive<String>>,
+    pub dht_fallback_url: Option<Url>,
     #[serde(default)]
     pub automatic_reactivate: bool,
 }

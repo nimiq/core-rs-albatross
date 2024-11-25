@@ -2355,6 +2355,7 @@ dependencies = [
  "hyper-util",
  "log",
  "rustls",
+ "rustls-native-certs",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls",
@@ -5054,6 +5055,7 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-subscriber 0.3.18",
+ "url",
 ]
 
 [[package]]
@@ -5062,17 +5064,25 @@ version = "1.0.3"
 dependencies = [
  "async-trait",
  "futures-util",
+ "http 1.1.0",
+ "http-body-util",
+ "hyper 1.5.1",
+ "hyper-rustls",
+ "hyper-util",
  "nimiq-keys",
  "nimiq-network-interface",
  "nimiq-primitives",
  "nimiq-serde",
  "nimiq-utils",
  "parking_lot",
+ "rustls",
  "serde",
+ "serde_json",
  "thiserror 2.0.3",
  "time",
  "tokio",
  "tracing",
+ "url",
 ]
 
 [[package]]

@@ -556,6 +556,8 @@ impl ClientInner {
                     // Load validator address
                     let automatic_reactivate = validator_config.automatic_reactivate;
 
+                    let dht_fallback_url = validator_config.dht_fallback_url;
+
                     // Load signing key (before we give away ownership of the storage config)
                     let signing_key = config.storage.signing_keypair()?;
 
@@ -565,8 +567,10 @@ impl ClientInner {
                     // Load fee key (before we give away ownership of the storage config)
                     let fee_key = config.storage.fee_keypair()?;
 
-                    let validator_network =
-                        Arc::new(ValidatorNetworkImpl::new(Arc::clone(&network)));
+                    let validator_network = Arc::new(ValidatorNetworkImpl::new(
+                        Arc::clone(&network),
+                        dht_fallback_url,
+                    ));
 
                     let validator = Validator::new(
                         environment.clone(),

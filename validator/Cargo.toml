@@ -57,6 +57,7 @@ nimiq-transaction-builder = { workspace = true }
 nimiq-utils = { workspace = true, features = ["futures", "time"] }
 nimiq-validator-network = { workspace = true }
 nimiq-vrf = { workspace = true }
+url = "2.5.3"
 
 [dev-dependencies]
 hex = "0.4"

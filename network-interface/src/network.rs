@@ -1,6 +1,7 @@
 use std::{
     fmt::{Debug, Display},
     hash::Hash,
+    str::FromStr,
     time::Duration,
 };
 
@@ -92,7 +93,18 @@ pub trait RequestResponse {
 
 #[async_trait]
 pub trait Network: Send + Sync + Unpin + 'static {
-    type PeerId: Copy + Debug + Display + Ord + Hash + Send + Sync + Unpin + 'static;
+    type PeerId: Copy
+        + Debug
+        + Display
+        + FromStr
+        + Ord
+        + Hash
+        + Send
+        + Sync
+        + Unpin
+        + Serialize
+        + Deserialize
+        + 'static;
     type AddressType: Debug + Display + 'static;
     type Error: std::error::Error;
     type PubsubId: PubsubId<Self::PeerId> + Send + Sync + Unpin;

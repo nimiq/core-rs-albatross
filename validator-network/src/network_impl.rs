@@ -13,9 +13,11 @@ use nimiq_serde::{Deserialize, Serialize};
 use nimiq_utils::spawn;
 use parking_lot::RwLock;
 use time::OffsetDateTime;
+use url::Url;
 
 use super::{MessageStream, NetworkError, PubsubId, ValidatorNetwork};
-use crate::validator_record::ValidatorRecord;
+use crate::NetworkError::UnknownValidator;
+use crate::{dht_fallback::DhtFallback, validator_record::ValidatorRecord};
 
 /// Validator `PeerId` cache state
 #[derive(Clone, Copy)]
@@ -65,6 +67,7 @@ where
     validators: Arc<RwLock<Option<Validators>>>,
     /// Cache for mapping validator public keys to peer IDs
     validator_peer_id_cache: Arc<RwLock<BTreeMap<Address, CacheState<N::PeerId>>>>,
+    dht_fallback: Arc<Option<DhtFallback>>,
 }
 
 impl<N> ValidatorNetworkImpl<N>
@@ -73,12 +76,13 @@ where
     N::PeerId: Serialize + Deserialize,
     N::Error: Sync + Send,
 {
-    pub fn new(network: Arc<N>) -> Self {
+    pub fn new(network: Arc<N>, dht_fallback_url: Option<Url>) -> Self {
         Self {
             network,
             own_validator_id: Arc::new(RwLock::new(None)),
             validators: Arc::new(RwLock::new(None)),
             validator_peer_id_cache: Arc::new(RwLock::new(BTreeMap::new())),
+            dht_fallback: Arc::new(dht_fallback_url.and_then(|url| DhtFallback::new(url))),
         }
     }
 
@@ -89,6 +93,7 @@ where
             own_validator_id: Arc::clone(&self.own_validator_id),
             validators: Arc::clone(&self.validators),
             validator_peer_id_cache: Arc::clone(&self.validator_peer_id_cache),
+            dht_fallback: Arc::clone(&self.dht_fallback),
         }
     }
 
@@ -111,6 +116,22 @@ where
     async fn resolve_peer_id(
         network: &N,
         validator_address: &Address,
+        fallback: Arc<Option<DhtFallback>>,
+    ) -> Result<Option<N::PeerId>, NetworkError<N::Error>> {
+        let result = Self::resolve_peer_id_dht(network, validator_address).await;
+        if !matches!(result, Ok(Some(_))) {
+            if let Some(fallback) = &*fallback {
+                if let Some(peer_id) = fallback.resolve(validator_address.clone()).await {
+                    return Ok(Some(peer_id));
+                }
+            }
+        }
+        result
+    }
+
+    async fn resolve_peer_id_dht(
+        network: &N,
+        validator_address: &Address,
     ) -> Result<Option<N::PeerId>, NetworkError<N::Error>> {
         if let Some(record) = network
             .dht_get::<_, ValidatorRecord<N::PeerId>, KeyPair>(validator_address)
@@ -130,7 +151,13 @@ where
     ///
     /// The given `validator_id` is used for logging purposes only.
     async fn update_peer_id_cache(&self, validator_id: u16, validator_address: &Address) {
-        let cache_value = match Self::resolve_peer_id(&self.network, validator_address).await {
+        let cache_value = match Self::resolve_peer_id(
+            &self.network,
+            validator_address,
+            Arc::clone(&self.dht_fallback),
+        )
+        .await
+        {
             Ok(Some(peer_id)) => {
                 log::trace!(
                     %peer_id,

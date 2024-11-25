@@ -28,6 +28,7 @@ use nimiq_utils::key_rng::SecureGenerate;
 use nimiq_utils::{file_store::FileStore, Sensitive};
 use nimiq_zkp_circuits::DEFAULT_PROVER_KEYS_PATH;
 use subtle::ConstantTimeEq;
+use url::Url;
 
 #[cfg(feature = "database-storage")]
 use crate::config::config_file::DatabaseSettings;
@@ -603,6 +604,8 @@ pub struct ValidatorConfig {
     /// The validator address.
     pub validator_address: Address,
 
+    pub dht_fallback_url: Option<Url>,
+
     /// Config if the validator automatically reactivates itself.
     pub automatic_reactivate: bool,
 }
@@ -900,6 +903,7 @@ impl ClientConfigBuilder {
         if let Some(validator_config) = config_file.validator.as_ref() {
             self.validator(ValidatorConfig {
                 validator_address: Address::from_any_str(&validator_config.validator_address)?,
+                dht_fallback_url: validator_config.dht_fallback_url.clone(),
                 automatic_reactivate: validator_config.automatic_reactivate,
             });
 
