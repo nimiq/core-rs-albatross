@@ -674,7 +674,7 @@ impl PeerContactBook {
         // TODO: This is a naive implementation
         // TODO: Sort by score?
         self.peer_contacts.iter().filter_map(move |(_, contact)| {
-            if !contact.contact.local_only || include_local_only && contact.matches(services) {
+            if contact.matches(services) && (!contact.contact.local_only || include_local_only) {
                 Some(Arc::clone(contact))
             } else {
                 None
