@@ -252,25 +252,30 @@ where
     ///
     /// If the `send_individual` flag is set, the contribution containing solely
     /// this node contribution is sent alongside the aggregate.
-    fn send_update(&mut self, mut level_id: usize, node_ids: Identity, store: &P::Store) {
+    fn send_update(&mut self, level_id: usize, node_ids: Identity, store: &P::Store) {
         // Nothing to do if there are no recipients.
         if node_ids.is_empty() {
             return;
         }
 
-        // If we already have a final result for this aggregation, return it.
-        // Otherwise, return our current best aggregate for the peer's level.
-        let contribution = if let Some(final_result) = &self.final_result {
-            level_id = self.levels.len();
-            final_result.clone()
-        } else {
-            let Some(best_aggregate) = store.combined(level_id - 1) else {
-                return;
-            };
-            best_aggregate
-        };
+        // If we already have a final result for this aggregation, send it.
+        if let Some(final_result) = &self.final_result {
+            self.send_contribution(final_result.clone(), self.levels.len(), node_ids.clone());
+        }
 
-        // To determine if an individual contribution must be send alongside the aggregate retrieve the
+        // Send our current best aggregate for the peer's level.
+        if let Some(best_aggregate) = store.combined(level_id - 1) {
+            self.send_contribution(best_aggregate, level_id, node_ids);
+        };
+    }
+
+    fn send_contribution(
+        &mut self,
+        contribution: P::Contribution,
+        level_id: usize,
+        node_ids: Identity,
+    ) {
+        // To determine if an individual contribution must be sent alongside the aggregate retrieve the
         // cumulative level size. Only if that size is reached can the individual signature be omitted.
         // Basically there needs to be no information missing in order to not send the individual signature.
         let expected_contributors = self
