@@ -567,119 +567,125 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
         cx: &mut Context<'_>,
         should_export_state: &mut bool,
     ) -> Option<TProtocol::Decision> {
-        // Poll all aggregations until none of them returns an update
-        while let Poll::Ready(Some((round_and_step, aggregate))) =
-            self.aggregations.poll_next_unpin(cx)
-        {
-            // For every update received, first update the best_vote for that aggregation.
-            // If the updated value is better (more votes) make sure, that a state update will be required.
-            // If this is the first update for the aggregation, create the entry.
-            let best_vote = self
-                .state
-                .best_votes
-                .entry(round_and_step)
-                .and_modify(|agg| {
-                    if agg.all_contributors().len() < aggregate.all_contributors().len() {
-                        *agg = aggregate.clone();
+        // TODO: don't poll as aggressively
+        for aggregation in self.aggregations.iter_mut() {
+            // Poll all aggregations until none of them returns an update
+            while let Poll::Ready(Some((round_and_step, aggregate))) =
+                aggregation.poll_next_unpin(cx)
+            {
+                // For every update received, first update the best_vote for that aggregation.
+                // If the updated value is better (more votes) make sure, that a state update will be required.
+                // If this is the first update for the aggregation, create the entry.
+                let best_vote = self
+                    .state
+                    .best_votes
+                    .entry(round_and_step)
+                    .and_modify(|agg| {
+                        if agg.all_contributors().len() < aggregate.all_contributors().len() {
+                            *agg = aggregate.clone();
+                            *should_export_state = true;
+                        }
+                    })
+                    .or_insert_with(|| {
                         *should_export_state = true;
-                    }
-                })
-                .or_insert_with(|| {
-                    *should_export_state = true;
-                    aggregate
-                });
+                        aggregate
+                    });
 
-            // Get the total weight for the aggregate. It will be used for more comparisons later.
-            let total_contributor_count = best_vote.all_contributors().len();
+                // Get the total weight for the aggregate. It will be used for more comparisons later.
+                let total_contributor_count = best_vote.all_contributors().len();
 
-            for (proposal_hash, contributor_count) in best_vote.proposals() {
-                // First check for the aggregate yielding a result like a decision, or a precommit block vote.
-                if contributor_count >= TProtocol::TWO_F_PLUS_ONE {
-                    if let Some(proposal) = self.state.known_proposals.get(&proposal_hash) {
-                        match round_and_step.1 {
-                            Step::Prevote => {
-                                // The proposal exists and is valid. 2f+1 prevotes have been seen.
-                                // If it is an improvement over `valid`, replace it.
-                                // Note that this might happen for any given round. This instance might have already voted None.
-                                // Thus setting `valid` and setting `locked` happens in different places.
-                                if self.state.valid.is_none()
-                                    || self.state.valid.as_ref().unwrap().0 < round_and_step.0
-                                {
-                                    self.state.valid =
-                                        Some((round_and_step.0, proposal_hash.clone()));
+                for (proposal_hash, contributor_count) in best_vote.proposals() {
+                    // First check for the aggregate yielding a result like a decision, or a precommit block vote.
+                    if contributor_count >= TProtocol::TWO_F_PLUS_ONE {
+                        if let Some(proposal) = self.state.known_proposals.get(&proposal_hash) {
+                            match round_and_step.1 {
+                                Step::Prevote => {
+                                    // The proposal exists and is valid. 2f+1 prevotes have been seen.
+                                    // If it is an improvement over `valid`, replace it.
+                                    // Note that this might happen for any given round. This instance might have already voted None.
+                                    // Thus setting `valid` and setting `locked` happens in different places.
+                                    if self.state.valid.is_none()
+                                        || self.state.valid.as_ref().unwrap().0 < round_and_step.0
+                                    {
+                                        self.state.valid =
+                                            Some((round_and_step.0, proposal_hash.clone()));
+                                    }
                                 }
-                            }
-                            Step::Precommit => {
-                                // The proposal exists and is valid. 2f+1 precommits have been seen.
-                                log::debug!(?round_and_step, "Aggregation produced decision value",);
+                                Step::Precommit => {
+                                    // The proposal exists and is valid. 2f+1 precommits have been seen.
+                                    log::debug!(
+                                        ?round_and_step,
+                                        "Aggregation produced decision value",
+                                    );
 
-                                // Get the inherent
-                                let inherent = self
-                                    .state
-                                    .inherents
-                                    .get(&proposal.inherent_hash())
-                                    .expect("");
+                                    // Get the inherent
+                                    let inherent = self
+                                        .state
+                                        .inherents
+                                        .get(&proposal.inherent_hash())
+                                        .expect("");
 
-                                // Produce a decision
-                                let decision = self.protocol.create_decision(
-                                    proposal.clone(),
-                                    inherent.clone(),
-                                    best_vote.clone(),
-                                    round_and_step.0,
+                                    // Produce a decision
+                                    let decision = self.protocol.create_decision(
+                                        proposal.clone(),
+                                        inherent.clone(),
+                                        best_vote.clone(),
+                                        round_and_step.0,
+                                    );
+
+                                    return Some(decision);
+                                }
+                                _ => panic!("Aggregations must not have Step::Propose"),
+                            };
+                        } else {
+                            // // Request proposal, as it is not known.
+                            if !self
+                                .pending_proposal_requests
+                                .contains(&(proposal_hash.clone(), round_and_step.0))
+                            {
+                                log::debug!(
+                                    ?round_and_step,
+                                    ?best_vote,
+                                    "Unknown Proposal exceeds 2f+1 votes, without being requested.",
                                 );
-
-                                return Some(decision);
                             }
-                            _ => panic!("Aggregations must not have Step::Propose"),
-                        };
-                    } else {
-                        // // Request proposal, as it is not known.
-                        if !self
-                            .pending_proposal_requests
-                            .contains(&(proposal_hash.clone(), round_and_step.0))
-                        {
-                            log::debug!(
-                                ?round_and_step,
-                                ?best_vote,
-                                "Unknown Proposal exceeds 2f+1 votes, without being requested.",
-                            );
                         }
                     }
-                }
 
-                if contributor_count >= TProtocol::F_PLUS_ONE
-                    && total_contributor_count - contributor_count < TProtocol::F_PLUS_ONE
-                    && !self.state.known_proposals.contains_key(&proposal_hash)
-                {
-                    // Second check if the proposal has potential.
-                    // Outside of the first proposal received via gossip that is valid, other proposals with potential would be
-                    // if it has more than f votes while everything else has at most f votes.
-                    // Reasoning is that once any valid proposal reaches 2f+1 prevotes this node needs to be able to vote on it.
-                    // If that succeeds in time it will lock and valid round the proposal. If the request is not answered in
-                    // time but received later it will only set the valid round if applicable.
-                    // By making sure everything else has at most f votes there is enough voting power left for the proposal to reach 2f+1
-                    log::debug!(
-                        ?round_and_step,
-                        ?best_vote,
-                        "Aggregate contains proposal with potential. Requesting proposal",
-                    );
+                    if contributor_count >= TProtocol::F_PLUS_ONE
+                        && total_contributor_count - contributor_count < TProtocol::F_PLUS_ONE
+                        && !self.state.known_proposals.contains_key(&proposal_hash)
+                    {
+                        // Second check if the proposal has potential.
+                        // Outside of the first proposal received via gossip that is valid, other proposals with potential would be
+                        // if it has more than f votes while everything else has at most f votes.
+                        // Reasoning is that once any valid proposal reaches 2f+1 prevotes this node needs to be able to vote on it.
+                        // If that succeeds in time it will lock and valid round the proposal. If the request is not answered in
+                        // time but received later it will only set the valid round if applicable.
+                        // By making sure everything else has at most f votes there is enough voting power left for the proposal to reach 2f+1
+                        log::debug!(
+                            ?round_and_step,
+                            ?best_vote,
+                            "Aggregate contains proposal with potential. Requesting proposal",
+                        );
 
-                    let id = (proposal_hash.clone(), round_and_step.0);
-                    if !self.pending_proposal_requests.contains(&id) {
-                        self.pending_proposal_requests.insert(id.clone());
-                        // Request the proposal, as it might be needed.
-                        let response = self
-                            .protocol
-                            .request_proposal(
-                                proposal_hash.clone(),
-                                round_and_step.0,
-                                best_vote.contributors_for(Some(&proposal_hash)),
-                            )
-                            .map(|response| (response, id))
-                            .boxed();
+                        let id = (proposal_hash.clone(), round_and_step.0);
+                        if !self.pending_proposal_requests.contains(&id) {
+                            self.pending_proposal_requests.insert(id.clone());
+                            // Request the proposal, as it might be needed.
+                            let response = self
+                                .protocol
+                                .request_proposal(
+                                    proposal_hash.clone(),
+                                    round_and_step.0,
+                                    best_vote.contributors_for(Some(&proposal_hash)),
+                                )
+                                .map(|response| (response, id))
+                                .boxed();
 
-                        // Add it to the list of pending responses
-                        self.requested_proposals.push(response);
+                            // Add it to the list of pending responses
+                            self.requested_proposals.push(response);
+                        }
                     }
                 }
             }
