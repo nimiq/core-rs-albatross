@@ -731,31 +731,6 @@ fn handle_discovery_event(event: discovery::Event, event_info: EventInfo) {
             let _ = event_info
                 .events_tx
                 .send(NetworkEvent::PeerJoined(peer_id, peer_info));
-
-            // Make sure the address is dialable before adding it.
-            if !event_info
-                .swarm
-                .behaviour()
-                .is_address_dialable(&peer_address)
-            {
-                return;
-            }
-
-            // Add the address for the peer.
-            event_info
-                .swarm
-                .behaviour_mut()
-                .add_peer_address(peer_id, peer_address);
-
-            // Bootstrap Kademlia if we're adding our first address
-            #[cfg(feature = "kad")]
-            if event_info.state.dht_bootstrap_state == DhtBootStrapState::NotStarted {
-                debug!("Bootstrapping DHT");
-                if event_info.swarm.behaviour_mut().dht.bootstrap().is_err() {
-                    error!("Bootstrapping DHT error: No known peers");
-                }
-                event_info.state.dht_bootstrap_state = DhtBootStrapState::Started;
-            }
         }
         discovery::Event::Update => {}
     }
