@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet},
     sync::Arc,
     time::Duration,
 };
@@ -429,6 +429,8 @@ pub struct PeerContactBook {
     /// Contact information for other peers in the network indexed by their
     /// peer ID.
     peer_contacts: HashMap<PeerId, Arc<PeerContactInfo>>,
+    /// Reverse map when we
+    validator_peer_ids: HashMap<Address, HashSet<PeerId>>,
     /// Only return secure websocket addresses.
     /// With this flag non secure websocket addresses will be stored (to still have a valid signature of the peer contact)
     /// but won't be returned when calling `get_addresses`
@@ -458,7 +460,17 @@ impl PeerContactBook {
             only_secure_addresses,
             allow_loopback_addresses,
             memory_transport,
+            validator_peer_ids: HashMap::new(),
         }
+    }
+
+    /// Obtain a list of peer ids associated to the given validator address
+    pub fn get_validator_peer_ids(&self, validator_address: &Address) -> Vec<PeerId> {
+        let Some(peer_ids) = self.validator_peer_ids.get(validator_address) else {
+            return vec![];
+        };
+
+        peer_ids.iter().cloned().collect()
     }
 
     /// Insert a peer contact or update an existing one
@@ -468,17 +480,25 @@ impl PeerContactBook {
             return;
         }
 
+        let peer_id = contact.peer_id();
+
         log::debug!(peer_id = %contact.peer_id(), addresses = ?contact.inner.addresses, "Adding peer contact");
         let current_ts = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs();
 
+        if let Some(validator) = &contact.inner.validator_info {
+            self.validator_peer_ids
+                .entry(validator.validator_address.clone())
+                .or_insert(HashSet::new())
+                .insert(peer_id);
+        }
+
         let info = PeerContactInfo::from(contact);
-        let peer_id = info.peer_id;
 
         match self.peer_contacts.entry(peer_id) {
-            std::collections::hash_map::Entry::Occupied(mut entry) => {
+            Entry::Occupied(mut entry) => {
                 let entry_value = entry.get_mut();
                 // Only update the contact if the timestamp is greater than the entry we have for this peer
                 // and if the timestamp of the peer contact is not in the future
@@ -488,7 +508,7 @@ impl PeerContactBook {
                     *entry_value = Arc::new(info);
                 }
             }
-            std::collections::hash_map::Entry::Vacant(entry) => {
+            Entry::Vacant(entry) => {
                 entry.insert(Arc::new(info));
             }
         }
@@ -539,6 +559,13 @@ impl PeerContactBook {
             .peer_contacts
             .insert(info.peer_id, Arc::clone(&info))
             .is_none();
+        if let Some(validator_info) = &info.contact.inner.validator_info {
+            self.validator_peer_ids
+                .entry(validator_info.validator_address.clone())
+                .or_insert(HashSet::new())
+                .insert(info.peer_id);
+        }
+
         if is_new {
             log::trace!(
                 peer_id = %info.peer_id,
@@ -701,16 +728,33 @@ impl PeerContactBook {
                         unix_time,
                     ) {
                         debug!(%peer_id, "Removing peer contact because of old age");
-                        Some(peer_id)
+                        Some((
+                            peer_id.clone(),
+                            peer_contact.contact.inner.validator_info.clone(),
+                        ))
                     } else {
                         None
                     }
                 })
-                .cloned()
-                .collect::<Vec<PeerId>>();
+                .collect::<Vec<(PeerId, Option<ValidatorInfo>)>>();
 
-            for peer_id in delete_peers {
+            for (peer_id, validator_info) in delete_peers {
                 self.peer_contacts.remove(&peer_id);
+                if let Some(validator_info) = validator_info {
+                    match self
+                        .validator_peer_ids
+                        .entry(validator_info.validator_address.clone())
+                    {
+                        Entry::Occupied(mut entry) => {
+                            entry.get_mut().remove(&peer_id);
+
+                            if entry.get_mut().is_empty() {
+                                entry.remove();
+                            }
+                        }
+                        Entry::Vacant(_) => {}
+                    }
+                }
             }
         }
     }
