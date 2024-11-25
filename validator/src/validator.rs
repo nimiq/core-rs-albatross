@@ -32,10 +32,14 @@ use nimiq_mempool_task::MempoolTask;
 use nimiq_network_interface::{
     network::{MsgAcceptance, Network, NetworkEvent, SubscribeEvents},
     request::request_handler,
+    validator_record::ValidatorRecord,
 };
 use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_transaction_builder::TransactionBuilder;
-use nimiq_utils::spawn;
+use nimiq_utils::{
+    spawn,
+    tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned},
+};
 use nimiq_validator_network::{PubsubId, ValidatorNetwork};
 use parking_lot::RwLock;
 #[cfg(feature = "metrics")]
@@ -365,6 +369,22 @@ where
 
         // Inform the network about the current validator ID.
         self.network.set_validator_id(*self.slot_band.read());
+
+        let key = self.signing_key();
+        let validator_address = self.validator_address();
+
+        self.network
+            .register_validator_signing_callback(move |peer_id, timestamp| {
+                let record = ValidatorRecord {
+                    timestamp,
+                    peer_id,
+                    validator_address: validator_address.clone(),
+                };
+
+                let signature = key.tagged_sign(&record);
+
+                TaggedSigned::new(record, signature)
+            });
 
         // Set the elected validators of the current epoch in the network as well.
         self.network.set_validators(validators);

@@ -8,8 +8,10 @@ use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, Network, SubscribeEvents, Topic},
     request::{Message, Request, RequestCommon},
+    validator_record::ValidatorRecord,
 };
 use nimiq_primitives::slots_allocation::Validators;
+use nimiq_utils::tagged_signing::TaggedSigned;
 
 pub use crate::error::NetworkError;
 
@@ -97,4 +99,17 @@ pub trait ValidatorNetwork: Send + Sync {
 
     /// Returns the network peer ID for the given `validator_id` if it is known.
     fn get_peer_id(&self, validator_id: u16) -> Option<<Self::NetworkType as Network>::PeerId>;
+
+    /// Registers a callback to produce a signed ValidatorRecord from a given peer_id and timestamp.
+    fn register_validator_signing_callback(
+        &self,
+        callback: impl Fn(
+                <Self::NetworkType as Network>::PeerId,
+                u64,
+            )
+                -> TaggedSigned<ValidatorRecord<<Self::NetworkType as Network>::PeerId>, KeyPair>
+            + Send
+            + Sync
+            + 'static,
+    );
 }
