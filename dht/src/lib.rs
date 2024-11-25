@@ -60,7 +60,7 @@ impl ValidatorRecordVerifier for Verifier {
         // Verify the record.
         signed_record
             .verify(&public_key)
-            .then(|| ())
+            .then_some(())
             .ok_or(ValidatorInfoError::InvalidSignature)
     }
 }
@@ -108,12 +108,12 @@ impl DhtVerifier for Verifier {
 
                 self.verify_validator_record(&validator_record)
                     .map_err(|_| DhtVerifierError::ValidatorInfoError)
-                    .and_then(|_| {
-                        Ok(DhtRecord::Validator(
+                    .map(|_| {
+                        DhtRecord::Validator(
                             validator_record.record.peer_id,
                             validator_record.record,
                             record.clone(),
-                        ))
+                        )
                     })
             }
             _ => {
