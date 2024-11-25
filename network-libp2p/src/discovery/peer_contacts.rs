@@ -513,7 +513,7 @@ impl PeerContactBook {
         if let Some(validator) = &contact.inner.validator_info {
             self.validator_peer_ids
                 .entry(validator.validator_address.clone())
-                .or_insert(HashSet::new())
+                .or_default()
                 .insert(peer_id);
         }
 
@@ -584,7 +584,7 @@ impl PeerContactBook {
         if let Some(validator_info) = &info.contact.inner.validator_info {
             self.validator_peer_ids
                 .entry(validator_info.validator_address.clone())
-                .or_insert(HashSet::new())
+                .or_default()
                 .insert(info.peer_id);
         }
 
@@ -757,10 +757,7 @@ impl PeerContactBook {
                         unix_time,
                     ) {
                         debug!(%peer_id, "Removing peer contact because of old age");
-                        Some((
-                            peer_id.clone(),
-                            peer_contact.contact.inner.validator_info.clone(),
-                        ))
+                        Some((*peer_id, peer_contact.contact.inner.validator_info.clone()))
                     } else {
                         None
                     }

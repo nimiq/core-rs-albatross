@@ -38,7 +38,7 @@ use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::{
     spawn,
-    tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned},
+    tagged_signing::{TaggedKeyPair, TaggedSigned},
 };
 use nimiq_validator_network::{PubsubId, ValidatorNetwork};
 use parking_lot::RwLock;
