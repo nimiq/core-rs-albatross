@@ -1,7 +1,6 @@
 pub mod error;
 pub mod network_impl;
 pub mod single_response_requester;
-pub mod validator_record;
 
 use async_trait::async_trait;
 use futures::stream::BoxStream;

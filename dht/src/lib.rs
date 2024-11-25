@@ -1,6 +1,8 @@
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_keys::{Address, KeyPair};
-use nimiq_network_interface::network::Network as NetworkInterface;
+use nimiq_network_interface::{
+    network::Network as NetworkInterface, validator_record::ValidatorRecord,
+};
 use nimiq_network_libp2p::{
     dht::{DhtRecord, DhtVerifierError, Verifier as DhtVerifier},
     discovery::peer_contacts::{ValidatorInfoError, ValidatorRecordVerifier},
@@ -9,7 +11,6 @@ use nimiq_network_libp2p::{
 };
 use nimiq_serde::Deserialize;
 use nimiq_utils::tagged_signing::{TaggedSignable, TaggedSigned};
-use nimiq_validator_network::validator_record::ValidatorRecord;
 
 pub struct Verifier {
     blockchain: BlockchainProxy,

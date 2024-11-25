@@ -12,6 +12,7 @@ use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, Topic},
     peer_info::Services,
+    validator_record::ValidatorRecord,
 };
 use nimiq_network_libp2p::{
     dht,
@@ -30,7 +31,6 @@ use nimiq_utils::{
     spawn,
     tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned},
 };
-use nimiq_validator_network::validator_record::ValidatorRecord;
 use parking_lot::RwLock;
 use rand::{thread_rng, Rng};
 

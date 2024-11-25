@@ -7,6 +7,7 @@ use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, Network, SubscribeEvents, Topic},
     request::{InboundRequestError, Message, Request, RequestCommon, RequestError},
+    validator_record::ValidatorRecord,
 };
 use nimiq_primitives::slots_allocation::{Validator, Validators};
 use nimiq_serde::{Deserialize, Serialize};
@@ -15,7 +16,6 @@ use parking_lot::RwLock;
 use time::OffsetDateTime;
 
 use super::{MessageStream, NetworkError, PubsubId, ValidatorNetwork};
-use crate::validator_record::ValidatorRecord;
 
 /// Validator `PeerId` cache state
 #[derive(Clone, Copy)]
