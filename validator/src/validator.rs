@@ -653,15 +653,15 @@ where
 
     /// Publish our own validator record to the DHT.
     fn publish_dht(&self) {
-        let key_pair = self.signing_key();
-        let validator_address = self.validator_address();
-        let network = Arc::clone(&self.network);
-
-        spawn(async move {
-            if let Err(err) = network.set_public_key(&validator_address, &key_pair).await {
-                error!("could not set up DHT record: {:?}", err);
-            }
-        });
+        // let key_pair = self.signing_key();
+        // let validator_address = self.validator_address();
+        // let network = Arc::clone(&self.network);
+        //
+        // spawn(async move {
+        //     if let Err(err) = network.set_public_key(&validator_address, &key_pair).await {
+        //         error!("could not set up DHT record: {:?}", err);
+        //     }
+        // });
     }
 
     /// Checks whether we are an elected validator in the current epoch.
