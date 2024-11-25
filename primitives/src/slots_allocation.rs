@@ -199,7 +199,7 @@ impl Validators {
         let mut pks = vec![];
 
         for validator in self.iter() {
-            let pk = *validator.voting_key.uncompress().unwrap();
+            let pk = *validator.voting_key.uncompressed().unwrap();
             pks.append(&mut vec![pk; validator.num_slots() as usize]);
         }
 

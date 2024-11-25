@@ -1,11 +1,25 @@
 use std::{cmp::Ordering, fmt};
 
+use log::{error, warn};
 use nimiq_hash::Hash;
 use parking_lot::{
     MappedRwLockReadGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
 
 use crate::{CompressedPublicKey, PublicKey, SigHash, Signature};
+
+/// Spawn blocking if tokio is available.
+async fn spawn_blocking<R: Send + 'static, F: FnOnce() -> R + Send + 'static>(f: F) -> R {
+    #[cfg(not(target_family = "wasm"))]
+    {
+        tokio::task::spawn_blocking(f).await.unwrap()
+    }
+
+    #[cfg(target_family = "wasm")]
+    {
+        f()
+    }
+}
 
 pub struct LazyPublicKey {
     pub(crate) compressed: CompressedPublicKey,
@@ -67,7 +81,19 @@ impl LazyPublicKey {
         }
     }
 
-    pub fn uncompress(&self) -> Option<MappedRwLockReadGuard<PublicKey>> {
+    pub fn uncompressed(&self) -> Option<MappedRwLockReadGuard<PublicKey>> {
+        let uncompressed: RwLockReadGuard<Option<PublicKey>> = self.cache.read();
+        if uncompressed.is_none() {
+            error!(compressed = %self.compressed, "Missing uncompressed public key");
+            return None;
+        }
+        Some(RwLockReadGuard::map(uncompressed, |opt| {
+            opt.as_ref().unwrap()
+        }))
+    }
+
+    #[deprecated(note = "Use uncompress(ed) instead")]
+    pub fn uncompress_sync(&self) -> Option<MappedRwLockReadGuard<PublicKey>> {
         let read_guard: RwLockReadGuard<Option<PublicKey>>;
 
         let upgradable = self.cache.upgradable_read();
@@ -76,6 +102,7 @@ impl LazyPublicKey {
             read_guard = RwLockUpgradableReadGuard::downgrade(upgradable);
         } else {
             // Slow path, upgrade, write, downgrade and return
+            warn!(compressed = %self.compressed, "Uncompressing public key in sync context");
             let mut upgraded = RwLockUpgradableReadGuard::upgrade(upgradable);
             *upgraded = Some(match self.compressed.uncompress() {
                 Ok(p) => p,
@@ -89,8 +116,10 @@ impl LazyPublicKey {
         }))
     }
 
-    pub fn uncompress_unchecked(&self) -> MappedRwLockReadGuard<PublicKey> {
-        self.uncompress().expect("Invalid public key")
+    pub async fn uncompress(&self) -> Option<MappedRwLockReadGuard<PublicKey>> {
+        let compressed = self.compressed.clone();
+        let _uncompressed = spawn_blocking(move || compressed.uncompress()).await;
+        None
     }
 
     pub fn compressed(&self) -> &CompressedPublicKey {
@@ -99,22 +128,6 @@ impl LazyPublicKey {
 
     pub fn has_uncompressed(&self) -> bool {
         self.cache.read().is_some()
-    }
-
-    pub fn verify<M: Hash>(&self, msg: &M, signature: &Signature) -> bool {
-        let cached = self.uncompress();
-        if let Some(public_key) = cached.as_ref() {
-            return public_key.verify(msg, signature);
-        }
-        false
-    }
-
-    pub fn verify_hash(&self, hash: SigHash, signature: &Signature) -> bool {
-        let cached = self.uncompress();
-        if let Some(public_key) = cached.as_ref() {
-            return public_key.verify_hash(hash, signature);
-        }
-        false
     }
 }
 

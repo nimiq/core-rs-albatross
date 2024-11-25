@@ -33,7 +33,7 @@ impl IdentityRegistry for ValidatorRegistry {
             // Get the public key for this validator
             .voting_key
             // and uncompress it
-            .uncompress()
+            .uncompress_sync()
             .map(|c| *c) // necessary?
     }
 

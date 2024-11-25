@@ -77,7 +77,7 @@ impl SkipBlockProof {
                     let pk = validators
                         .get_validator_by_slot_number(slot as u16)
                         .voting_key
-                        .uncompress()
+                        .uncompress_sync()
                         .expect("Failed to uncompress CompressedPublicKey");
                     aggregate.aggregate(&pk);
                     aggregate

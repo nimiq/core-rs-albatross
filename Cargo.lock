@@ -3899,6 +3899,7 @@ dependencies = [
  "rand",
  "serde",
  "thiserror 2.0.3",
+ "tokio",
  "tracing",
 ]
 
