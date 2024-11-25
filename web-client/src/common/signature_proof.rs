@@ -316,6 +316,7 @@ mod tests {
 
     /// Tests a signature generated with Desktop Chrome, which follows the Webauthn standard.
     #[wasm_bindgen_test]
+    #[allow(dead_code)]
     fn it_can_create_a_standard_webauthn_signature_proof() {
         let public_key = ES256PublicKey::new(
             &hex::decode("02af70ae2e8232eb5ca2f8a4c47a71d9cd6ea62f552467f0d3c56428be47d63808")
@@ -346,6 +347,7 @@ mod tests {
     /// Tests a signature generated with Android Chrome, which has no crossOrigin field in the client data JSON
     /// and has escaped forward slashes in the origin. It also has extra fields in the client data JSON.
     #[wasm_bindgen_test]
+    #[allow(dead_code)]
     fn it_can_create_a_nonstandard_webauthn_signature_proof() {
         let public_key = ES256PublicKey::new(
             &hex::decode("0327e1f7995bde5df8a22bd9c27833b532d79c2350e61fc9a85621d1438eabeb7c")

@@ -28,6 +28,7 @@ mod tests {
     use crate::primitives::merkle_tree::MerkleTree;
 
     #[wasm_bindgen_test]
+    #[allow(dead_code)]
     pub fn it_computes_the_same_root_for_any_array_order() {
         let value1 = Uint8Array::new_with_length(8);
         value1.copy_from(&[1, 2, 3, 4, 5, 6, 7, 8]);

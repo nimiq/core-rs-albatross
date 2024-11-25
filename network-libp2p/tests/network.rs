@@ -248,7 +248,7 @@ impl dht::Verifier for Verifier {
                 .map_err(dht::DhtVerifierError::MalformedValue)?;
 
         // Deserialize the key of the record which is an Address. If it fails return an error.
-        let validator_address = Address::deserialize_from_vec(record.key.as_ref())
+        Address::deserialize_from_vec(record.key.as_ref())
             .map_err(dht::DhtVerifierError::MalformedKey)?;
 
         self.verify_validator_record(&validator_record)

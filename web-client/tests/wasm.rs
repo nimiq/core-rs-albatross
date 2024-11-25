@@ -17,6 +17,7 @@ use wasm_bindgen_test::wasm_bindgen_test;
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
 #[wasm_bindgen_test]
+#[allow(dead_code)]
 pub async fn it_can_initialize_with_mock_network() {
     let mut hub = MockHub::new();
 
@@ -78,6 +79,7 @@ fn consume_stream<T: std::fmt::Debug>(mut stream: impl Stream<Item = T> + Unpin 
 }
 
 #[wasm_bindgen_test]
+#[allow(dead_code)]
 async fn gossipsub_web_env() {
     let mut hub = MockHub::new();
     let net1 = hub.new_network();

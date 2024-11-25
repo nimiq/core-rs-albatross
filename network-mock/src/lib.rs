@@ -152,7 +152,6 @@ pub mod tests {
     }
 
     #[test(tokio::test)]
-    #[cfg(feature = "kad")]
     async fn dht_put_and_get() {
         let mut hub = MockHub::new();
         let mut rng = test_rng(false);

@@ -24,6 +24,7 @@ mod tests {
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
+    #[allow(dead_code)]
     pub fn it_can_create_and_sign_basic_transactions() {
         let keypair = KeyPair::generate();
 
@@ -45,6 +46,7 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[allow(dead_code)]
     pub fn it_can_create_and_sign_validator_transactions() {
         let keypair = KeyPair::generate();
 
