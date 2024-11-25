@@ -11,11 +11,12 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::slots_allocation::{Validator, Validators};
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_utils::spawn;
+use nimiq_utils::{spawn, stream::FuturesUnordered};
 use parking_lot::RwLock;
 use time::OffsetDateTime;
 
 use super::{MessageStream, NetworkError, PubsubId, ValidatorNetwork};
+use crate::NetworkError::UnknownValidator;
 
 /// Validator `PeerId` cache state
 #[derive(Clone, Copy)]
@@ -275,7 +276,7 @@ where
 ///
 /// This makes it easier for the recipient to check that the sender is indeed a
 /// currently elected validator.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct ValidatorMessage<M> {
     validator_id: u16,
     inner: M,
@@ -350,25 +351,53 @@ where
             validator_id: self.local_validator_id()?,
             inner: msg,
         };
+
         // Use the last known peer ID, knowing that it might be already outdated.
-        // The network doesn't have a way to know if a record is outdated but we mark
+        // The network doesn't have a way to know if a record is outdated, but we mark
         // them as potentially outdated when a request/response error happens.
         // If the cache has a potentially outdated value, it will be updated soon
         // and then available to use by future calls to this function.
-        let peer_id = self
+        let cached_peer_id = self
             .get_validator_cache(validator_id)
-            .potentially_outdated_peer_id()
-            .ok_or_else(|| NetworkError::UnknownValidator(validator_id))?;
-
-        self.network
-            .message(msg, peer_id)
-            .map_err(|e| {
+            .potentially_outdated_peer_id();
+        if let Some(peer_id) = cached_peer_id {
+            if let Err(e) = self.network.message(msg.clone(), peer_id).await {
                 // The validator peer id might have changed and thus caused a connection failure.
                 self.clear_validator_peer_id_cache_on_error(validator_id, &e, &peer_id);
+            } else {
+                return Ok(());
+            }
+        }
 
-                NetworkError::Request(e)
-            })
-            .await
+        // Try all validator peer_ids from our peer contact book.
+        let our_address = {
+            let own_validator_id = self.own_validator_id.read();
+            let Some(own_validator_id) = *own_validator_id else {
+                return Err(UnknownValidator(validator_id));
+            };
+            let validators = self.validators.read();
+            let Some(validators) = validators.as_ref() else {
+                return Err(UnknownValidator(validator_id));
+            };
+            validators
+                .get_validator_by_slot_band(own_validator_id)
+                .address
+                .clone()
+        };
+
+        let mut futures = FuturesUnordered::new();
+        for peer_id in self.network.get_peers_by_validator(&our_address) {
+            let network = Arc::clone(&self.network);
+            let msg = msg.clone();
+            futures.push(async move { network.message(msg, peer_id).await });
+        }
+
+        let results = futures.collect::<Vec<Result<(), RequestError>>>().await;
+        if results.iter().any(|result| result.is_ok()) {
+            Ok(())
+        } else {
+            Err(UnknownValidator(validator_id))
+        }
     }
 
     async fn request<TRequest: Request>(
