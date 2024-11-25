@@ -135,7 +135,7 @@ impl std::fmt::Debug for Protocol {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "C: AggregatableContribution")]
 struct SerializableLevelUpdate<C: AggregatableContribution> {
     aggregate: C,
@@ -164,7 +164,7 @@ impl<C: AggregatableContribution> From<LevelUpdate<C>> for SerializableLevelUpda
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "C: AggregatableContribution")]
 struct Update<C: AggregatableContribution>(pub SerializableLevelUpdate<C>);
 

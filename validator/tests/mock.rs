@@ -30,7 +30,7 @@ use nimiq_validator::aggregation::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct SkipBlockMessage(SerializableLevelUpdate<SignedSkipBlockMessage>);
 
 impl RequestCommon for SkipBlockMessage {

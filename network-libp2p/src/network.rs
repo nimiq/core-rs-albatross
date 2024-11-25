@@ -530,8 +530,10 @@ impl NetworkInterface for Network {
         Ok(filtered_peers)
     }
 
-    fn get_peers_by_validator(&self, validator_address: Address) -> Vec<Self::PeerId> {
-        todo!()
+    fn get_peers_by_validator(&self, validator_address: &Address) -> Vec<Self::PeerId> {
+        self.contacts
+            .read()
+            .get_validator_peer_ids(validator_address)
     }
 
     fn peer_provides_required_services(&self, peer_id: PeerId) -> bool {
