@@ -11,7 +11,7 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::slots_allocation::{Validator, Validators};
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_utils::{spawn, stream::FuturesUnordered};
+use nimiq_utils::{spawn, stream::FuturesUnordered, tagged_signing::TaggedSigned};
 use parking_lot::RwLock;
 use time::OffsetDateTime;
 
@@ -546,5 +546,20 @@ where
     fn get_peer_id(&self, validator_id: u16) -> Option<<Self::NetworkType as Network>::PeerId> {
         self.get_validator_cache(validator_id)
             .potentially_outdated_peer_id()
+    }
+
+    /// Registers a callback to produce a signed ValidatorRecord from a given peer_id and timestamp.
+    fn register_validator_signing_callback(
+        &self,
+        callback: impl Fn(
+                <Self::NetworkType as Network>::PeerId,
+                u64,
+            )
+                -> TaggedSigned<ValidatorRecord<<Self::NetworkType as Network>::PeerId>, KeyPair>
+            + Send
+            + Sync
+            + 'static,
+    ) {
+        self.network.register_validator_signing_callback(callback)
     }
 }
