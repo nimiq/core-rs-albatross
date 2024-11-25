@@ -758,8 +758,13 @@ impl NetworkInterface for Network {
 
     fn register_validator_signing_callback(
         &self,
-        callback: impl Fn(Self::PeerId, u64) -> TaggedSigned<ValidatorRecord<Self::PeerId>, KeyPair>,
+        callback: impl Fn(Self::PeerId, u64) -> TaggedSigned<ValidatorRecord<Self::PeerId>, KeyPair>
+            + Send
+            + Sync
+            + 'static,
     ) {
-        todo!()
+        self.contacts
+            .write()
+            .register_validator_signing_callback(callback)
     }
 }

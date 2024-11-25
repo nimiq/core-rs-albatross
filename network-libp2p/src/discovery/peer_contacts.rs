@@ -1,5 +1,6 @@
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
+    fmt::Debug,
     sync::Arc,
     time::Duration,
 };
@@ -11,7 +12,7 @@ use libp2p::{
     multiaddr::Protocol,
     Multiaddr, PeerId,
 };
-use nimiq_keys::{Address, KeyPair};
+use nimiq_keys::{Address, KeyPair as SchnorrKey};
 use nimiq_network_interface::{
     network::Network as NetworkInterface,
     peer_info::{PeerInfo, Services},
@@ -44,7 +45,7 @@ pub struct ValidatorInfo {
     /// The signature for the [ValidatorRecord].
     /// It does _not_ verify for this structure, but only once the [nimiq_utils::tagged_signing::TaggedSigned] is reconstructed
     /// with the given information of this struct and the corresponding [PeerContact].
-    signature: TaggedSignature<ValidatorRecord<<Network as NetworkInterface>::PeerId>, KeyPair>,
+    signature: TaggedSignature<ValidatorRecord<<Network as NetworkInterface>::PeerId>, SchnorrKey>,
 }
 
 #[derive(Debug)]
@@ -57,7 +58,10 @@ pub enum ValidatorInfoError {
 impl ValidatorInfo {
     pub fn new(
         validator_address: Address,
-        signature: TaggedSignature<ValidatorRecord<<Network as NetworkInterface>::PeerId>, KeyPair>,
+        signature: TaggedSignature<
+            ValidatorRecord<<Network as NetworkInterface>::PeerId>,
+            SchnorrKey,
+        >,
     ) -> Self {
         Self {
             validator_address,
@@ -69,7 +73,7 @@ impl ValidatorInfo {
         &self,
         timestamp: u64,
         peer_id: PeerId,
-        verification_key: &<KeyPair as TaggedKeyPair>::PublicKey,
+        verification_key: &<SchnorrKey as TaggedKeyPair>::PublicKey,
     ) -> Result<(), ValidatorInfoError> {
         // Reconstruct the record
         let record = ValidatorRecord {
@@ -94,7 +98,7 @@ pub trait ValidatorRecordVerifier: Send + Sync {
         &self,
         signed_record: &TaggedSigned<
             ValidatorRecord<<Network as NetworkInterface>::PeerId>,
-            KeyPair,
+            SchnorrKey,
         >,
     ) -> Result<(), ValidatorInfoError>;
 }
@@ -104,7 +108,7 @@ impl ValidatorRecordVerifier for () {
         &self,
         _signed_record: &TaggedSigned<
             ValidatorRecord<<Network as NetworkInterface>::PeerId>,
-            KeyPair,
+            SchnorrKey,
         >,
     ) -> Result<(), ValidatorInfoError> {
         Ok(())
@@ -420,7 +424,6 @@ impl PeerContactInfo {
 
 /// Main structure that holds the peer information that has been obtained or
 /// discovered by the discovery protocol.
-#[derive(Debug)]
 pub struct PeerContactBook {
     /// Contact information for our own.
     own_peer_contact: PeerContactInfo,
@@ -439,6 +442,24 @@ pub struct PeerContactBook {
     allow_loopback_addresses: bool,
     /// Flag to indicate whether to support memory transport addresses
     memory_transport: bool,
+    /// Validator signing callback:
+    validator_record_signing: Option<
+        Box<dyn Fn(PeerId, u64) -> TaggedSigned<ValidatorRecord<PeerId>, SchnorrKey> + Send + Sync>,
+    >,
+}
+
+impl Debug for PeerContactBook {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PeerContactBook")
+            .field("own_peer_contact", &self.own_peer_contact)
+            .field("own_peer_id", &self.own_peer_id)
+            .field("peer_contacts", &self.peer_contacts)
+            .field("validator_peer_ids", &self.validator_peer_ids)
+            .field("only_secure_addresses", &self.only_secure_addresses)
+            .field("allow_loopback_addresses", &self.allow_loopback_addresses)
+            .field("memory_transport", &self.memory_transport)
+            .finish()
+    }
 }
 
 impl PeerContactBook {
@@ -461,6 +482,7 @@ impl PeerContactBook {
             allow_loopback_addresses,
             memory_transport,
             validator_peer_ids: HashMap::new(),
+            validator_record_signing: None,
         }
     }
 
@@ -706,6 +728,13 @@ impl PeerContactBook {
 
         // Update timestamp
         contact.set_current_time();
+        contact.validator_info = self.validator_record_signing.as_ref().and_then(|callback| {
+            let tagged_signed = (callback)(contact.peer_id(), contact.timestamp);
+            Some(ValidatorInfo {
+                validator_address: tagged_signed.record.validator_address.clone(),
+                signature: tagged_signed.signature.clone(),
+            })
+        });
 
         self.own_peer_contact = PeerContactInfo::from(contact.sign(keypair));
     }
@@ -814,6 +843,16 @@ impl PeerContactBook {
                 _ => return false,
             }
         }
+    }
+
+    pub fn register_validator_signing_callback(
+        &mut self,
+        callback: impl Fn(PeerId, u64) -> TaggedSigned<ValidatorRecord<PeerId>, SchnorrKey>
+            + Send
+            + Sync
+            + 'static,
+    ) {
+        self.validator_record_signing = Some(Box::new(callback));
     }
 }
 

@@ -243,6 +243,9 @@ pub trait Network: Send + Sync + Unpin + 'static {
     /// Registers a callback to produce a signed ValidatorRecord from a given peer_id and timestamp.
     fn register_validator_signing_callback(
         &self,
-        callback: impl Fn(Self::PeerId, u64) -> TaggedSigned<ValidatorRecord<Self::PeerId>, KeyPair>,
+        callback: impl Fn(Self::PeerId, u64) -> TaggedSigned<ValidatorRecord<Self::PeerId>, KeyPair>
+            + Send
+            + Sync
+            + 'static,
     );
 }
