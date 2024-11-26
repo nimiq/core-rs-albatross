@@ -31,7 +31,7 @@ use libp2p::{
 use libp2p::{dns, tcp, websocket};
 use log::Instrument;
 use nimiq_network_interface::{
-    network::{CloseReason, NetworkEvent},
+    network::{CloseReason, DhtMode, NetworkEvent},
     peer_info::PeerInfo,
     request::{peek_type, InboundRequestError, OutboundRequestError, RequestError},
 };
@@ -170,7 +170,7 @@ pub(crate) async fn swarm_task(
                 },
                 action = action_rx.recv() => {
                     if let Some(action) = action {
-                        perform_action(action, &mut swarm, &mut task_state);
+                        perform_action(action, &mut swarm, &mut task_state, &events_tx);
                     }
                     else {
                         // `action_rx.next()` will return `None` if all senders (i.e. the `Network` object) are dropped.
@@ -509,7 +509,9 @@ fn handle_dht_event(event: kad::Event, event_info: EventInfo) {
                 },
         } => handle_dht_inbound_put(source, connection, record, event_info),
 
-        kad::Event::ModeChanged { new_mode } => handle_dht_mode_change(new_mode, event_info),
+        kad::Event::ModeChanged { new_mode } => {
+            handle_dht_mode_change(new_mode, event_info.state, event_info.events_tx)
+        }
 
         _ => {}
     }
@@ -697,12 +699,16 @@ fn handle_dht_inbound_put(
 }
 
 #[cfg(feature = "kad")]
-fn handle_dht_mode_change(new_mode: Mode, event_info: EventInfo) {
+fn handle_dht_mode_change(
+    new_mode: Mode,
+    state: &mut TaskState,
+    events_tx: &broadcast::Sender<NetworkEvent<PeerId>>,
+) {
     debug!(%new_mode, "DHT mode changed");
     if new_mode == Mode::Server {
-        event_info.state.dht_server_mode = true;
-        if event_info.state.dht_bootstrap_state == DhtBootStrapState::Completed {
-            let _ = event_info.events_tx.send(NetworkEvent::DhtReady);
+        state.dht_server_mode = true;
+        if state.dht_bootstrap_state == DhtBootStrapState::Completed {
+            let _ = events_tx.send(NetworkEvent::DhtReady);
         }
     }
 }
@@ -1000,7 +1006,12 @@ fn handle_request_response_inbound_failure(
     error!(%request_id, %peer_id, %error, "Inbound request failed");
 }
 
-fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut TaskState) {
+fn perform_action(
+    action: NetworkAction,
+    swarm: &mut NimiqSwarm,
+    state: &mut TaskState,
+    events_tx: &broadcast::Sender<NetworkEvent<PeerId>>,
+) {
     match action {
         NetworkAction::Dial { peer_id, output } => {
             let dial_opts = DialOpts::peer_id(peer_id)
@@ -1015,6 +1026,27 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
             let dial_opts = DialOpts::unknown_peer_id().address(address).build();
             let result = swarm.dial(dial_opts).map_err(Into::into);
             output.send(result).ok();
+        }
+        NetworkAction::DhtSetMode { mode } => {
+            #[cfg(feature = "kad")]
+            let mode = match mode {
+                DhtMode::Client => Some(Mode::Client),
+                DhtMode::Server => {
+                    if state.nat_status.get_status() == NatStatus::Public {
+                        Some(Mode::Server)
+                    } else {
+                        // Set to auto, such that it automatically switches to server mode in case
+                        // the NAT status changes to public later on.
+                        None
+                    }
+                }
+            };
+            #[cfg(feature = "kad")]
+            swarm.behaviour_mut().dht.set_mode(mode);
+            #[cfg(feature = "kad")]
+            if let Some(mode) = mode {
+                handle_dht_mode_change(mode, state, events_tx);
+            }
         }
         NetworkAction::DhtGet { key, output } => {
             #[cfg(feature = "kad")]

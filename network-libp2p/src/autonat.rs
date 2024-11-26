@@ -26,6 +26,11 @@ pub(crate) struct NatState {
 }
 
 impl NatState {
+    /// Gets the current NAT status of the local peer
+    pub fn get_status(&self) -> NatStatus {
+        self.status
+    }
+
     /// Adds an address to track its NAT status
     pub fn add_address(&mut self, address: Multiaddr) {
         self.address_status.insert(address, NatStatus::Unknown);

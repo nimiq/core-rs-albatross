@@ -10,7 +10,8 @@ use async_trait::async_trait;
 use futures::{stream::BoxStream, StreamExt};
 use nimiq_network_interface::{
     network::{
-        CloseReason, MsgAcceptance, Network, NetworkEvent, PubsubId, SubscribeEvents, Topic,
+        CloseReason, DhtMode, MsgAcceptance, Network, NetworkEvent, PubsubId, SubscribeEvents,
+        Topic,
     },
     peer_info::{PeerInfo, Services},
     request::{
@@ -531,6 +532,10 @@ impl Network for MockNetwork {
     where
         TTopic: Topic + Sync,
     {
+        // TODO implement
+    }
+
+    async fn dht_set_mode(&self, _mode: DhtMode) {
         // TODO implement
     }
 

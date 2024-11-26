@@ -17,7 +17,10 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 #[cfg(feature = "full")]
 use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::{network::Network, request::request_handler};
+use nimiq_network_interface::{
+    network::{DhtMode, Network},
+    request::request_handler,
+};
 use nimiq_time::{interval, Interval};
 use nimiq_utils::{spawn, WakerExt};
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
@@ -391,8 +394,7 @@ impl<N: Network> Consensus<N> {
         if self.is_established() {
             if self.num_agents() < self.min_peers {
                 warn!("Lost consensus!");
-                self.established_flag.swap(false, Ordering::Release);
-                return Some(ConsensusEvent::Lost);
+                return Some(self.on_consensus_lost());
             }
             // Check if validity window availability changed.
             if let (_, Some(event)) = self.check_validity_window() {
@@ -408,19 +410,12 @@ impl<N: Network> Consensus<N> {
             if self.num_agents() >= self.min_peers && self.sync.state_complete() {
                 if self.sync.accepted_block_announcements() >= Self::MIN_BLOCKS_ESTABLISHED {
                     info!("Consensus established, number of accepted announcements satisfied.");
-                    self.established_flag.swap(true, Ordering::Release);
 
                     // Also stop any other checks.
                     self.head_requests = None;
                     self.head_requests_time = None;
 
-                    self.zkp_proxy
-                        .request_zkp_from_peers(self.sync.peers(), false);
-
-                    let (synced_validity_window, _) = self.check_validity_window();
-                    return Some(ConsensusEvent::Established {
-                        synced_validity_window,
-                    });
+                    return Some(self.on_consensus_established());
                 } else {
                     // The head state check is carried out immediately after we reach the minimum
                     // number of peers and then after certain time intervals until consensus is reached.
@@ -430,15 +425,7 @@ impl<N: Network> Consensus<N> {
                         // We would like that 2/3 of our peers have a known state.
                         if head_request.num_known_blocks >= 2 * head_request.num_unknown_blocks {
                             info!("Consensus established, 2/3 of heads known.");
-                            self.established_flag.swap(true, Ordering::Release);
-
-                            self.zkp_proxy
-                                .request_zkp_from_peers(self.sync.peers(), false);
-
-                            let (synced_validity_window, _) = self.check_validity_window();
-                            return Some(ConsensusEvent::Established {
-                                synced_validity_window,
-                            });
+                            return Some(self.on_consensus_established());
                         }
                     }
 
@@ -448,6 +435,30 @@ impl<N: Network> Consensus<N> {
             }
         }
         None
+    }
+
+    fn on_consensus_established(&mut self) -> ConsensusEvent {
+        self.established_flag.swap(true, Ordering::Release);
+
+        self.zkp_proxy
+            .request_zkp_from_peers(self.sync.peers(), false);
+
+        let network = Arc::clone(&self.network);
+        spawn(async move { network.dht_set_mode(DhtMode::Server).await });
+
+        let (synced_validity_window, _) = self.check_validity_window();
+        ConsensusEvent::Established {
+            synced_validity_window,
+        }
+    }
+
+    fn on_consensus_lost(&mut self) -> ConsensusEvent {
+        self.established_flag.swap(false, Ordering::Release);
+
+        let network = Arc::clone(&self.network);
+        spawn(async move { network.dht_set_mode(DhtMode::Client).await });
+
+        ConsensusEvent::Lost
     }
 
     /// Requests heads from connected peers.
