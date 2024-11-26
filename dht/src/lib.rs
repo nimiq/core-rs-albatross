@@ -32,10 +32,8 @@ impl ValidatorRecordVerifier for Verifier {
     ) -> Result<(), ValidatorInfoError> {
         // Acquire blockchain read access. For now exclude Light clients.
         let blockchain = match self.blockchain {
-            BlockchainProxy::Light(ref _light_blockchain) => {
-                panic!("Light Blockchains cannot verify validator records.")
-            }
-            BlockchainProxy::Full(ref full_blockchain) => full_blockchain,
+            BlockchainProxy::Full(ref blockchain) => blockchain,
+            BlockchainProxy::Light(_) => return Err(ValidatorInfoError::StateIncomplete),
         };
         let blockchain_read = blockchain.read();
 

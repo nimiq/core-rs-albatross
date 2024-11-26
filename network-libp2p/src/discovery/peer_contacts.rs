@@ -487,12 +487,11 @@ impl PeerContactBook {
     }
 
     /// Obtain a list of peer ids associated to the given validator address
-    pub fn get_validator_peer_ids(&self, validator_address: &Address) -> Vec<PeerId> {
-        let Some(peer_ids) = self.validator_peer_ids.get(validator_address) else {
-            return vec![];
-        };
-
-        peer_ids.iter().cloned().collect()
+    pub fn get_validator_peer_ids(&self, validator_address: &Address) -> HashSet<PeerId> {
+        self.validator_peer_ids
+            .get(validator_address)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Insert a peer contact or update an existing one
@@ -504,7 +503,6 @@ impl PeerContactBook {
 
         let peer_id = contact.peer_id();
 
-        log::debug!(peer_id = %contact.peer_id(), addresses = ?contact.inner.addresses, "Adding peer contact");
         let current_ts = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
@@ -531,6 +529,13 @@ impl PeerContactBook {
                 }
             }
             Entry::Vacant(entry) => {
+                log::trace!(
+                    peer_id = %info.peer_id,
+                    services = ?info.services(),
+                    addresses = ?info.contact.inner.addresses,
+                    validator_address = ?info.contact.inner.validator_info.as_ref().map(|info| info.validator_address.clone()),
+                    "Adding peer contact",
+                );
                 entry.insert(Arc::new(info));
             }
         }
@@ -593,6 +598,7 @@ impl PeerContactBook {
                 peer_id = %info.peer_id,
                 services = ?info.services(),
                 addresses = ?info.contact.inner.addresses,
+                validator_address = ?info.contact.inner.validator_info.as_ref().map(|info| info.validator_address.clone()),
                 "Adding peer contact",
             );
         }

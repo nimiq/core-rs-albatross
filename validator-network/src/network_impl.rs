@@ -1,7 +1,13 @@
-use std::{collections::BTreeMap, error::Error, fmt::Debug, future, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    error::Error,
+    fmt::Debug,
+    future,
+    sync::Arc,
+};
 
 use async_trait::async_trait;
-use futures::{future::BoxFuture, stream::BoxStream, FutureExt, StreamExt, TryFutureExt};
+use futures::{future::BoxFuture, stream::BoxStream, FutureExt, StreamExt};
 use log::warn;
 use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
@@ -299,6 +305,22 @@ where
             }
         }
     }
+
+    /// Fetches all peer ids from the contact book for the given validator_id.
+    fn get_validator_peer_ids(&self, validator_id: u16) -> HashSet<N::PeerId> {
+        // Try all validator peer_ids from our peer contact book.
+        let validator_address = {
+            let validators = self.validators.read();
+            let Some(validators) = validators.as_ref() else {
+                return HashSet::new();
+            };
+            validators
+                .get_validator_by_slot_band(validator_id)
+                .address
+                .clone()
+        };
+        self.network.get_peers_by_validator(&validator_address)
+    }
 }
 
 /// Messages sent over the validator network get augmented with the sending
@@ -400,19 +422,8 @@ where
         }
 
         // Try all validator peer_ids from our peer contact book.
-        let validator_address = {
-            let validators = self.validators.read();
-            let Some(validators) = validators.as_ref() else {
-                return Err(UnknownValidator(validator_id));
-            };
-            validators
-                .get_validator_by_slot_band(validator_id)
-                .address
-                .clone()
-        };
-
         let mut futures = FuturesUnordered::new();
-        for peer_id in self.network.get_peers_by_validator(&validator_address) {
+        for peer_id in self.get_validator_peer_ids(validator_id) {
             let network = Arc::clone(&self.network);
             let msg = msg.clone();
             futures.push(async move { network.message(msg, peer_id).await });
@@ -438,19 +449,27 @@ where
             validator_id: self.local_validator_id()?,
             inner: request,
         };
-        if let Some(peer_id) = self.get_validator_cache(validator_id).current_peer_id() {
-            self.network
-                .request(request, peer_id)
-                .map_err(|e| {
-                    // The validator peer id might have changed and thus caused a connection failure.
-                    self.clear_validator_peer_id_cache_on_error(validator_id, &e, &peer_id);
 
-                    NetworkError::Request(e)
-                })
-                .await
-        } else {
-            Err(NetworkError::Unreachable)
+        if let Some(peer_id) = self.get_validator_cache(validator_id).current_peer_id() {
+            match self.network.request(request.clone(), peer_id).await {
+                Ok(response) => return Ok(response),
+                Err(e) => self.clear_validator_peer_id_cache_on_error(validator_id, &e, &peer_id),
+            }
         }
+
+        // Try all validator peer_ids from our peer contact book.
+        let mut futures = FuturesUnordered::new();
+        for peer_id in self.get_validator_peer_ids(validator_id) {
+            let network = Arc::clone(&self.network);
+            let request = request.clone();
+            futures.push(async move { network.request(request, peer_id).await });
+        }
+
+        futures
+            .filter_map(|result| future::ready(result.ok()))
+            .next()
+            .await
+            .ok_or(UnknownValidator(validator_id))
     }
 
     fn receive<M>(&self) -> MessageStream<M>
@@ -464,17 +483,20 @@ where
                 .filter_map(move |(message, peer_id)| {
                     let self_ = self_.arc_clone();
                     async move {
-                        let validator_peer_id = self_.get_validator_cache(message.validator_id).potentially_outdated_peer_id();
+                        let cached_peer_id = self_.get_validator_cache(message.validator_id).potentially_outdated_peer_id();
+                        let peer_ids = self_.get_validator_peer_ids(message.validator_id);
+
                         // Check that each message actually comes from the peer that it
                         // claims it comes from. Reject it otherwise.
-                        if validator_peer_id
+                        if cached_peer_id
                             .as_ref()
                             .map(|pid| *pid != peer_id)
-                            .unwrap_or(true)
+                            .unwrap_or(true) && !peer_ids.contains(&peer_id)
                         {
-                            warn!(%peer_id, ?validator_peer_id, claimed_validator_id = message.validator_id, "Dropping validator message");
+                            warn!(%peer_id, ?cached_peer_id, ?peer_ids, claimed_validator_id = message.validator_id, "Dropping validator message");
                             return None;
                         }
+
                         Some((message.inner, message.validator_id))
                     }
                 }),
@@ -491,18 +513,22 @@ where
             .filter_map(move |(message, request_id, peer_id)| {
                 let self_ = self_.arc_clone();
                 async move {
-                    let validator_peer_id = self_.get_validator_cache(message.validator_id).potentially_outdated_peer_id();
+                    let cached_peer_id = self_.get_validator_cache(message.validator_id).potentially_outdated_peer_id();
+                    let peer_ids = self_.get_validator_peer_ids(message.validator_id);
+
                     // Check that each message actually comes from the peer that it
                     // claims it comes from. Reject it otherwise.
-                    if validator_peer_id
+                    if cached_peer_id
                         .as_ref()
                         .map(|pid| *pid != peer_id)
-                        .unwrap_or(true)
+                        .unwrap_or(true) && !peer_ids.contains(&peer_id)
                     {
-                        warn!(%peer_id, ?validator_peer_id, claimed_validator_id = message.validator_id, "Dropping validator request");
+                        warn!(%peer_id, ?cached_peer_id, ?peer_ids, claimed_validator_id = message.validator_id, "Dropping validator message");
                         return None;
                     }
+
                     Some((message.inner, request_id, message.validator_id))
+
                 }
             })
             .boxed()

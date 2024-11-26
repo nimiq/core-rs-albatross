@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     future::Future,
     pin::Pin,
     sync::Arc,
@@ -530,7 +530,7 @@ impl NetworkInterface for Network {
         Ok(filtered_peers)
     }
 
-    fn get_peers_by_validator(&self, validator_address: &Address) -> Vec<Self::PeerId> {
+    fn get_peers_by_validator(&self, validator_address: &Address) -> HashSet<Self::PeerId> {
         self.contacts
             .read()
             .get_validator_peer_ids(validator_address)
