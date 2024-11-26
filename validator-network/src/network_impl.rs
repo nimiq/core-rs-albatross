@@ -114,16 +114,6 @@ where
         self.own_validator_id.read().ok_or(NetworkError::NotElected)
     }
 
-    /// Given the Validators and a validator_id, returns the Validator represented by the id if it exists.
-    /// None otherwise.
-    fn get_validator(validators: Option<&Validators>, validator_id: u16) -> Option<&Validator> {
-        // Acquire read on the validators and make sure they have been set. Return None otherwise.
-        validators.and_then(|validators| {
-            (usize::from(validator_id) < validators.num_validators())
-                .then(|| validators.get_validator_by_slot_band(validator_id))
-        })
-    }
-
     /// Looks up the peer ID for a validator address in the DHT.
     async fn resolve_peer_id(
         network: &N,
@@ -143,14 +133,11 @@ where
         network: &N,
         validator_address: &Address,
     ) -> Result<Option<N::PeerId>, NetworkError<N::Error>> {
-        if let Some(record) = network
+        let peer_id = network
             .dht_get::<_, ValidatorRecord<N::PeerId>, KeyPair>(validator_address)
             .await?
-        {
-            Ok(Some(record.peer_id))
-        } else {
-            Ok(None)
-        }
+            .map(|record| record.peer_id);
+        Ok(peer_id)
     }
 
     /// Looks up the peer ID for a validator address in the DHT and updates
@@ -161,24 +148,25 @@ where
     ///
     /// The given `validator_id` is used for logging purposes only.
     async fn update_peer_id_cache(&self, validator_id: u16, validator_address: &Address) {
-        let cache_value = match Self::resolve_peer_id(
+        let result = Self::resolve_peer_id(
             &self.network,
             validator_address,
             Arc::clone(&self.dht_fallback),
         )
-        .await
-        {
+        .await;
+
+        let mut cache_value = match result {
             Ok(Some(peer_id)) => {
-                log::trace!(
+                log::debug!(
                     %peer_id,
                     validator_id,
                     %validator_address,
-                    "Resolved validator peer ID"
+                    "Resolved validator peer ID from DHT"
                 );
                 Ok(peer_id)
             }
             Ok(None) => {
-                log::debug!(validator_id, %validator_address, "Unable to resolve validator peer ID: Entry not found in DHT");
+                log::debug!(validator_id, %validator_address, "Unable to resolve validator peer ID from DHT: Entry not found");
                 Err(())
             }
             Err(error) => {
@@ -186,11 +174,26 @@ where
                     validator_id,
                     ?error,
                     %validator_address,
-                    "Unable to resolve validator peer ID: Network error"
+                    "Unable to resolve validator peer ID from DHT: Network error"
                 );
                 Err(())
             }
         };
+
+        // If the DHT lookup failed, check the peer contact book for a verified peer id.
+        if cache_value.is_err() {
+            cache_value = self
+                .get_verified_validator_peer_id(validator_id)
+                .inspect(|peer_id| {
+                    log::debug!(
+                        %peer_id,
+                        validator_id,
+                        %validator_address,
+                        "Resolved validator peer ID from contact book"
+                    );
+                })
+                .ok_or(());
+        }
 
         match self
             .validator_peer_id_cache
@@ -213,12 +216,11 @@ where
 
     /// Look up the peer ID for a validator ID.
     fn get_validator_cache(&self, validator_id: u16) -> CacheState<N::PeerId> {
-        let validators = self.validators.read();
-        let Some(validator) = Self::get_validator(validators.as_ref(), validator_id) else {
+        let Some(validator_address) = self.get_validator_address(validator_id) else {
             return CacheState::Error(None);
         };
 
-        if let Some(cache_state) = self.validator_peer_id_cache.read().get(&validator.address) {
+        if let Some(cache_state) = self.validator_peer_id_cache.read().get(&validator_address) {
             match *cache_state {
                 CacheState::Resolved(..) => return *cache_state,
                 CacheState::Error(..) => {}
@@ -235,7 +237,7 @@ where
         {
             // Re-check the validator Peer ID cache with the write lock taken and update it if necessary
             let mut validator_peer_id_cache = self.validator_peer_id_cache.write();
-            if let Some(cache_state) = validator_peer_id_cache.get_mut(&validator.address) {
+            if let Some(cache_state) = validator_peer_id_cache.get_mut(&validator_address) {
                 new_cache_state = match *cache_state {
                     CacheState::Resolved(..) => return *cache_state,
                     CacheState::Error(prev_peer_id) => {
@@ -255,9 +257,9 @@ where
             } else {
                 new_cache_state = CacheState::InProgress(None);
                 // No cache entry for this validator ID: we are going to perform the DHT query
-                validator_peer_id_cache.insert(validator.address.clone(), new_cache_state);
+                validator_peer_id_cache.insert(validator_address.clone(), new_cache_state);
                 log::debug!(
-                    ?validator.address,
+                    %validator_address,
                     validator_id,
                     "No cache entry found, querying DHT",
                 );
@@ -265,7 +267,6 @@ where
         }
 
         let self_ = self.arc_clone();
-        let validator_address = validator.address.clone();
         spawn(async move {
             Self::update_peer_id_cache(&self_, validator_id, &validator_address).await;
         });
@@ -287,14 +288,13 @@ where
 
         // Fetch the validator from the validators. If it does not exist that peer_id is not
         // assigned in this epoch and there is no cached entry to clear.
-        let validators = self.validators.read();
-        let Some(validator) = Self::get_validator(validators.as_ref(), validator_id) else {
+        let Some(validator_address) = self.get_validator_address(validator_id) else {
             return;
         };
 
         // Fetch the cache. If it does not exist there is no need to clear.
         let mut validator_peer_id_cache = self.validator_peer_id_cache.write();
-        let Some(cache_entry) = validator_peer_id_cache.get_mut(&validator.address) else {
+        let Some(cache_entry) = validator_peer_id_cache.get_mut(&validator_address) else {
             return;
         };
 
@@ -306,20 +306,43 @@ where
         }
     }
 
-    /// Fetches all peer ids from the contact book for the given validator_id.
+    /// Fetches all peer ids (including unverified ones) from the contact book for the given validator_id.
     fn get_validator_peer_ids(&self, validator_id: u16) -> HashSet<N::PeerId> {
-        // Try all validator peer_ids from our peer contact book.
-        let validator_address = {
-            let validators = self.validators.read();
-            let Some(validators) = validators.as_ref() else {
-                return HashSet::new();
-            };
-            validators
-                .get_validator_by_slot_band(validator_id)
-                .address
-                .clone()
+        let Some(validator_address) = self.get_validator_address(validator_id) else {
+            return HashSet::new();
         };
-        self.network.get_peers_by_validator(&validator_address)
+        self.network
+            .get_peers_by_validator(&validator_address, true)
+    }
+
+    /// Fetches the verified peer id from the contact book for the given validator_id if it exists.
+    fn get_verified_validator_peer_id(&self, validator_id: u16) -> Option<N::PeerId> {
+        let validator_address = self.get_validator_address(validator_id)?;
+        let peer_ids = self
+            .network
+            .get_peers_by_validator(&validator_address, false);
+
+        if peer_ids.len() > 1 {
+            warn!(
+                %validator_address,
+                num_peer_ids = peer_ids.len(),
+                "More than one verified peer id found for validator"
+            );
+        }
+
+        // TODO Pick latest peer id instead of random one.
+        peer_ids.iter().next().cloned()
+    }
+
+    /// Fetches the validator address for the given validator_id.
+    fn get_validator_address(&self, validator_id: u16) -> Option<Address> {
+        let validators = self.validators.read();
+        let address = validators
+            .as_ref()?
+            .get_validator_by_slot_band(validator_id)
+            .address
+            .clone();
+        Some(address)
     }
 }
 

@@ -531,10 +531,14 @@ impl NetworkInterface for Network {
         Ok(filtered_peers)
     }
 
-    fn get_peers_by_validator(&self, validator_address: &Address) -> HashSet<Self::PeerId> {
+    fn get_peers_by_validator(
+        &self,
+        validator_address: &Address,
+        include_unverified: bool,
+    ) -> HashSet<Self::PeerId> {
         self.contacts
             .read()
-            .get_validator_peer_ids(validator_address)
+            .get_validator_peer_ids(validator_address, include_unverified)
     }
 
     fn peer_provides_required_services(&self, peer_id: PeerId) -> bool {

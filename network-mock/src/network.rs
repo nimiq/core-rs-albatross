@@ -656,7 +656,11 @@ impl Network for MockNetwork {
         Ok(self.get_peers())
     }
 
-    fn get_peers_by_validator(&self, _validator_address: &Address) -> HashSet<Self::PeerId> {
+    fn get_peers_by_validator(
+        &self,
+        _validator_address: &Address,
+        _include_unverified: bool,
+    ) -> HashSet<Self::PeerId> {
         // TODO
         HashSet::new()
     }

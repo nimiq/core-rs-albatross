@@ -493,11 +493,29 @@ impl PeerContactBook {
     }
 
     /// Obtain a list of peer ids associated to the given validator address
-    pub fn get_validator_peer_ids(&self, validator_address: &Address) -> HashSet<PeerId> {
-        self.validator_peer_ids
-            .get(validator_address)
+    pub fn get_validator_peer_ids(
+        &self,
+        validator_address: &Address,
+        include_unverified: bool,
+    ) -> HashSet<PeerId> {
+        let Some(peers) = self.validator_peer_ids.get(validator_address) else {
+            return HashSet::new();
+        };
+
+        if include_unverified {
+            return peers.clone();
+        }
+
+        peers
+            .iter()
+            .filter(|peer_id| {
+                self.peer_contacts
+                    .get(peer_id)
+                    .map(|contact| !contact.contact.local_only)
+                    .unwrap_or(false)
+            })
             .cloned()
-            .unwrap_or_default()
+            .collect()
     }
 
     /// Insert a peer contact or update an existing one
@@ -853,6 +871,7 @@ impl PeerContactBook {
         }
     }
 
+    /// Registers a callback to produce a signed ValidatorRecord from a given peer_id and timestamp.
     pub fn register_validator_signing_callback(
         &mut self,
         callback: impl Fn(PeerId, u64) -> TaggedSigned<ValidatorRecord<PeerId>, SchnorrKey>
