@@ -129,7 +129,7 @@ impl Behaviour {
         #[cfg(feature = "kad")] verifier: Arc<dyn ValidatorRecordVerifier>,
     ) -> Self {
         let house_keeping_timer = interval(config.house_keeping_interval);
-        peer_contact_book.write().update_own_contact(&keypair);
+        peer_contact_book.write().refresh_own_contact();
 
         // Report our own known addresses as candidates to the swarm
         let mut events = VecDeque::new();
@@ -151,9 +151,7 @@ impl Behaviour {
 
     /// Adds addresses into our own contact within the peer contact book
     pub fn add_own_addresses(&self, addresses: Vec<Multiaddr>) {
-        self.peer_contact_book
-            .write()
-            .add_own_addresses(addresses, &self.keypair)
+        self.peer_contact_book.write().add_own_addresses(addresses)
     }
 
     /// Returns whether an address in `Multiaddr` format is a dialable websocket address
@@ -238,7 +236,7 @@ impl NetworkBehaviour for Behaviour {
             Poll::Ready(Some(_)) => {
                 trace!("Doing house-keeping in peer address book");
                 let mut peer_address_book = self.peer_contact_book.write();
-                peer_address_book.update_own_contact(&self.keypair);
+                peer_address_book.refresh_own_contact();
                 peer_address_book.house_keeping();
             }
             Poll::Ready(None) => unreachable!(),

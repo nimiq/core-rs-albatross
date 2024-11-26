@@ -429,10 +429,12 @@ pub struct PeerContactBook {
     own_peer_contact: PeerContactInfo,
     /// Own Peer ID (also present in `own_peer_contact`)
     own_peer_id: PeerId,
+    /// Identity keypair for this node.
+    key_pair: Keypair,
     /// Contact information for other peers in the network indexed by their
     /// peer ID.
     peer_contacts: HashMap<PeerId, Arc<PeerContactInfo>>,
-    /// Reverse map when we
+    /// Map from validator address to peer ids.
     validator_peer_ids: HashMap<Address, HashSet<PeerId>>,
     /// Only return secure websocket addresses.
     /// With this flag non secure websocket addresses will be stored (to still have a valid signature of the peer contact)
@@ -468,15 +470,19 @@ impl PeerContactBook {
 
     /// Creates a new `PeerContactBook` given our own peer contact information.
     pub fn new(
-        own_peer_contact: SignedPeerContact,
+        mut own_peer_contact: PeerContact,
+        key_pair: Keypair,
         only_secure_addresses: bool,
         allow_loopback_addresses: bool,
         memory_transport: bool,
     ) -> Self {
-        let own_peer_id = own_peer_contact.inner.peer_id();
+        let own_peer_id = own_peer_contact.peer_id();
+        own_peer_contact.set_current_time();
+
         Self {
-            own_peer_contact: own_peer_contact.into(),
+            own_peer_contact: own_peer_contact.sign(&key_pair).into(),
             own_peer_id,
+            key_pair,
             peer_contacts: HashMap::new(),
             only_secure_addresses,
             allow_loopback_addresses,
@@ -703,37 +709,33 @@ impl PeerContactBook {
     }
 
     /// Adds a set of addresses to the list of addresses known for our own contact.
-    pub fn add_own_addresses<I: IntoIterator<Item = Multiaddr>>(
-        &mut self,
-        addresses: I,
-        keypair: &Keypair,
-    ) {
+    pub fn add_own_addresses<I: IntoIterator<Item = Multiaddr>>(&mut self, addresses: I) {
         let mut contact = self.own_peer_contact.contact.inner.clone();
         let addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
         trace!(?addresses, "Adding own addresses");
         contact.add_addresses(addresses);
-        self.own_peer_contact = PeerContactInfo::from(contact.sign(keypair));
+        self.update_own_contact(contact);
     }
 
     /// Removes a set of addresses from the list of addresses known for our own.
-    pub fn remove_own_addresses<I: IntoIterator<Item = Multiaddr>>(
-        &mut self,
-        addresses: I,
-        keypair: &Keypair,
-    ) {
+    pub fn remove_own_addresses<I: IntoIterator<Item = Multiaddr>>(&mut self, addresses: I) {
         let mut contact = self.own_peer_contact.contact.inner.clone();
         let addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
         contact.remove_addresses(addresses);
-        self.own_peer_contact = PeerContactInfo::from(contact.sign(keypair));
+        self.update_own_contact(contact);
     }
 
-    /// Updates the timestamp of our own contact
-    pub fn update_own_contact(&mut self, keypair: &Keypair) {
-        // Not really optimal to clone here, but *shrugs*
-        let mut contact = self.own_peer_contact.contact.inner.clone();
+    /// Updates the timestamp of our own contact.
+    pub fn refresh_own_contact(&mut self) {
+        let contact = self.own_peer_contact.contact.inner.clone();
+        self.update_own_contact(contact);
+    }
 
-        // Update timestamp
+    fn update_own_contact(&mut self, mut contact: PeerContact) {
+        // Update timestamp.
         contact.set_current_time();
+
+        // Update validator info.
         contact.validator_info = self.validator_record_signing.as_ref().and_then(|callback| {
             let tagged_signed = (callback)(contact.peer_id(), contact.timestamp);
             Some(ValidatorInfo {
@@ -742,7 +744,7 @@ impl PeerContactBook {
             })
         });
 
-        self.own_peer_contact = PeerContactInfo::from(contact.sign(keypair));
+        self.own_peer_contact = PeerContactInfo::from(contact.sign(&self.key_pair));
     }
 
     /// Gets our own contact information
@@ -856,6 +858,7 @@ impl PeerContactBook {
             + 'static,
     ) {
         self.validator_record_signing = Some(Box::new(callback));
+        self.refresh_own_contact();
     }
 }
 
