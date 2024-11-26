@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, fmt::Debug};
+use std::{
+    collections::BTreeMap,
+    fmt::{Debug, Display},
+};
 
 use nimiq_block::{MacroBody, MacroHeader};
 use nimiq_database_value_derive::DbSerializable;
@@ -35,10 +38,47 @@ impl Debug for MacroState {
         dbg.field("step", &self.step);
         dbg.field("locked", &self.locked);
         dbg.field("valid", &self.valid);
-        dbg.field("best_votes", &self.best_votes);
-        dbg.field("votes", &self.votes);
+        // Wrap the following fields to clean up the debug representation.
+        dbg.field("best_votes", &BestVotes(&self.best_votes));
+        dbg.field("votes", &Votes(&self.votes));
 
         dbg.finish()
+    }
+}
+
+/// A simple wrapper to use `Display` instead of `Debug`.
+struct DisplayWrapper<'a, T>(&'a T);
+impl<'a, T> Debug for DisplayWrapper<'a, T>
+where
+    T: Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Use Display instead.
+        Display::fmt(&self.0, f)
+    }
+}
+
+struct BestVotes<'a>(&'a BTreeMap<(u32, Step), TendermintContribution>);
+impl<'a> Debug for BestVotes<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Use the `Display` implementation for `TendermintContribution` instead.
+        f.debug_map()
+            .entries(self.0.iter().map(|(k, v)| (k, DisplayWrapper(v))))
+            .finish()
+    }
+}
+
+struct Votes<'a>(&'a BTreeMap<(u32, Step), Option<Blake2sHash>>);
+impl<'a> Debug for Votes<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Use short representations for the hashes instead.
+        f.debug_map()
+            .entries(
+                self.0
+                    .iter()
+                    .map(|(k, v)| (k, v.as_ref().map(|hash| hash.to_short_str()))),
+            )
+            .finish()
     }
 }
 

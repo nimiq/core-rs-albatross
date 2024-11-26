@@ -603,7 +603,7 @@ where
                 // In case of a new state update we need to store the new version of it disregarding
                 // any old state which potentially still lingers.
                 MappedReturn::Update(update) => {
-                    trace!(?update, "Tendermint state update");
+                    debug!(?update, "Tendermint state update");
 
                     let expected_block_number = self.blockchain.read().block_number() + 1;
                     if expected_block_number != update.block_number {

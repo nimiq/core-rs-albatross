@@ -25,6 +25,19 @@ impl std::fmt::Debug for TendermintContribution {
     }
 }
 
+impl std::fmt::Display for TendermintContribution {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut debug = f.debug_map();
+        // Use short string for hashes.
+        debug.entries(
+            self.contributions
+                .iter()
+                .map(|(v, m)| (v.as_ref().map(|hash| hash.to_short_str()), &m.signers)),
+        );
+        debug.finish()
+    }
+}
+
 impl TendermintContribution {
     pub(crate) fn from_vote(
         vote: TendermintVote,
