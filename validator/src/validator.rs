@@ -204,6 +204,19 @@ where
                 .await
         });
 
+        let key = signing_key.clone();
+        let validator_address1 = validator_address.clone();
+        network.register_validator_signing_callback(move |peer_id, timestamp| {
+            let record = ValidatorRecord {
+                timestamp,
+                peer_id,
+                validator_address: validator_address1.clone(),
+            };
+
+            let signature = key.tagged_sign(&record);
+            TaggedSigned::new(record, signature)
+        });
+
         Self {
             consensus: consensus.proxy(),
             blockchain,
