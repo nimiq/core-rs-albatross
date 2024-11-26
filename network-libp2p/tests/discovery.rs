@@ -72,11 +72,11 @@ impl TestNode {
                 .unwrap()
                 .as_secs(),
         )
-        .expect("PeerContact must be creatable")
-        .sign(&keypair);
+        .expect("PeerContact must be creatable");
 
         let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(
             peer_contact,
+            keypair.clone(),
             false,
             true,
             true,
@@ -127,6 +127,11 @@ impl TestNode {
 }
 
 fn random_peer_contact(n: usize, services: Services) -> SignedPeerContact {
+    let (keypair, peer_contact) = random_peer_key_and_contact(n, services);
+    peer_contact.sign(&keypair)
+}
+
+fn random_peer_key_and_contact(n: usize, services: Services) -> (Keypair, PeerContact) {
     let keypair = Keypair::generate_ed25519();
 
     let peer_contact = PeerContact::new(
@@ -144,9 +149,8 @@ fn random_peer_contact(n: usize, services: Services) -> SignedPeerContact {
     )
     .expect("PeerContact must be creatable");
 
-    peer_contact.sign(&keypair)
+    (keypair, peer_contact)
 }
-
 fn test_peers_in_contact_book(
     peer_contact_book: &PeerContactBook,
     peer_contacts: &[SignedPeerContact],
@@ -257,18 +261,13 @@ pub async fn test_dialing_peer_from_contacts() {
 
 #[test]
 fn test_housekeeping() {
-    let mut peer_contact_book = PeerContactBook::new(
-        random_peer_contact(1, Services::FULL_BLOCKS),
-        false,
-        true,
-        true,
-    );
+    let (keypair, peer_contact) = random_peer_key_and_contact(1, Services::FULL_BLOCKS);
+    let mut peer_contact_book = PeerContactBook::new(peer_contact, keypair, false, true, true);
 
     let fresh_contact = random_peer_contact(1, Services::FULL_BLOCKS);
 
     let old_contact = {
         let keypair = Keypair::generate_ed25519();
-
         let peer_contact = PeerContact::new(
             Some("/dns/test_old.local/tcp/443/wss".parse().unwrap()),
             keypair.public(),

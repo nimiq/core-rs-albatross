@@ -87,7 +87,8 @@ impl Network {
         // TODO: persist to disk
         let own_peer_contact = config.peer_contact.clone();
         let contacts = Arc::new(RwLock::new(PeerContactBook::new(
-            own_peer_contact.sign(&config.keypair),
+            own_peer_contact,
+            config.keypair.clone(),
             config.only_secure_ws_connections,
             config.allow_loopback_addresses,
             config.memory_transport,
