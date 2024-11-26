@@ -51,7 +51,9 @@ nimiq-utils = { workspace = true, features = [
     "tagged-signing",
     "libp2p",
     "time",
+    "spawn",
 ] }
+nimiq-validator-network = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 libp2p = { version = "0.54", default-features = false, features = [
@@ -84,7 +86,14 @@ libp2p = { version = "0.54", default-features = false, features = [
 
 [dev-dependencies]
 # In dev/testing we require more tokio features
-tokio = { version = "1.43", features = ["macros", "rt", "rt-multi-thread", "test-util", "time", "tracing"] }
+tokio = { version = "1.43", features = [
+    "macros",
+    "rt",
+    "rt-multi-thread",
+    "test-util",
+    "time",
+    "tracing",
+] }
 
 nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }
@@ -92,4 +101,9 @@ nimiq-test-utils = { workspace = true }
 [features]
 kad = []
 metrics = ["prometheus-client"]
-tokio-websocket = ["libp2p/dns", "libp2p/tcp", "libp2p/tokio", "libp2p/websocket"]
+tokio-websocket = [
+    "libp2p/dns",
+    "libp2p/tcp",
+    "libp2p/tokio",
+    "libp2p/websocket",
+]

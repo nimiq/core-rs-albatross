@@ -4524,6 +4524,7 @@ dependencies = [
  "nimiq-test-utils",
  "nimiq-time",
  "nimiq-utils",
+ "nimiq-validator-network",
  "parking_lot",
  "pin-project",
  "pin-project-lite",
