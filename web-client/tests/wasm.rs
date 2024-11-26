@@ -7,7 +7,6 @@ use nimiq_genesis::NetworkId;
 use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::network::{Network, Topic};
 use nimiq_network_mock::MockHub;
-use nimiq_primitives::policy::Policy;
 use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};

@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fmt::{Debug, Display},
     hash::Hash,
     time::Duration,
@@ -127,7 +128,7 @@ pub trait Network: Send + Sync + Unpin + 'static {
 
     /// Returns all peer ids that are known for the given validator.
     /// The returned list might contain unverified mappings.
-    fn get_peers_by_validator(&self, validator_address: &Address) -> Vec<Self::PeerId>;
+    fn get_peers_by_validator(&self, validator_address: &Address) -> HashSet<Self::PeerId>;
 
     /// Returns true when the given peer provides the services flags that are required by us
     fn peer_provides_required_services(&self, peer_id: Self::PeerId) -> bool;
