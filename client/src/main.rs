@@ -103,7 +103,10 @@ async fn main_inner() -> Result<(), Error> {
     // Start validator
     let val_metric_monitor = tokio_metrics::TaskMonitor::new();
     if let Some(validator) = client.take_validator() {
-        info!("Initializing validator {}", validator.validator_address());
+        info!(
+            "Initializing validator {}",
+            validator.state().read().validator_address
+        );
 
         if metrics_enabled {
             let mp_metrics_monitor = validator.get_mempool_monitor();

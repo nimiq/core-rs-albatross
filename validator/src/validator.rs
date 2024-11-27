@@ -2,10 +2,7 @@ use std::{
     error::Error,
     future::Future,
     pin::Pin,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::Arc,
     task::{Context, Poll},
     time::Duration,
 };
@@ -15,7 +12,6 @@ use nimiq_account::Validator as ValidatorAccount;
 use nimiq_block::{Block, BlockType, EquivocationProof};
 use nimiq_blockchain::{interface::HistoryInterface, BlockProducer, Blockchain};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, ForkEvent};
-use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_consensus::{
     messages::{BlockBodyTopic, BlockHeaderMessage, BlockHeaderTopic},
     Consensus, ConsensusEvent, ConsensusProxy,
@@ -63,33 +59,19 @@ pub struct ConsensusState {
 }
 
 /// Validator inactivity
-struct InactivityState {
-    inactive_tx_hash: Blake2bHash,
-    inactive_tx_validity_window_start: u32,
+pub struct InactivityState {
+    pub inactive_tx_hash: Blake2bHash,
+    pub inactive_tx_validity_window_start: u32,
 }
 
-pub struct ValidatorProxy {
-    pub validator_address: Arc<RwLock<Address>>,
-    pub signing_key: Arc<RwLock<SchnorrKeyPair>>,
-    pub voting_keys: Arc<RwLock<VotingKeys>>,
-    pub fee_key: Arc<RwLock<SchnorrKeyPair>>,
-    pub automatic_reactivate: Arc<AtomicBool>,
-    pub slot_band: Arc<RwLock<Option<u16>>>,
-    pub consensus_state: Arc<RwLock<ConsensusState>>,
-}
-
-impl Clone for ValidatorProxy {
-    fn clone(&self) -> Self {
-        Self {
-            validator_address: Arc::clone(&self.validator_address),
-            signing_key: Arc::clone(&self.signing_key),
-            voting_keys: Arc::clone(&self.voting_keys),
-            fee_key: Arc::clone(&self.fee_key),
-            automatic_reactivate: Arc::clone(&self.automatic_reactivate),
-            slot_band: Arc::clone(&self.slot_band),
-            consensus_state: Arc::clone(&self.consensus_state),
-        }
-    }
+pub struct ValidatorState {
+    pub validator_address: Address,
+    pub signing_key: SchnorrKeyPair,
+    pub voting_keys: VotingKeys,
+    pub fee_key: SchnorrKeyPair,
+    pub automatic_reactivate: bool,
+    pub slot_band: Option<u16>,
+    pub consensus: ConsensusState,
 }
 
 declare_table!(ValidatorTable, "ValidatorState", () => MacroState);
@@ -105,10 +87,8 @@ where
     table: ValidatorTable,
     env: MdbxDatabase,
 
-    validator_address: Arc<RwLock<Address>>,
-    signing_key: Arc<RwLock<SchnorrKeyPair>>,
-    voting_keys: Arc<RwLock<VotingKeys>>,
-    fee_key: Arc<RwLock<SchnorrKeyPair>>,
+    state: Arc<RwLock<ValidatorState>>,
+    inactivity_state: Option<InactivityState>,
 
     proposal_receiver: ProposalReceiver<TValidatorNetwork>,
 
@@ -116,17 +96,40 @@ where
     network_event_rx: SubscribeEvents<<TValidatorNetwork::NetworkType as Network>::PeerId>,
     fork_event_rx: BroadcastStream<ForkEvent>,
 
-    slot_band: Arc<RwLock<Option<u16>>>,
-    consensus_state: Arc<RwLock<ConsensusState>>,
-    validator_state: Option<InactivityState>,
-    automatic_reactivate: Arc<AtomicBool>,
-
     macro_producer: Option<ProduceMacroBlock<TValidatorNetwork>>,
     macro_state: Arc<RwLock<Option<MacroState>>>,
 
     micro_producer: Option<ProduceMicroBlock<TValidatorNetwork>>,
 
     pub mempool_task: MempoolTask<TValidatorNetwork::NetworkType>,
+}
+
+impl ValidatorState {
+    fn get_validator(&self, blockchain: &Blockchain) -> Option<ValidatorAccount> {
+        blockchain
+            .get_staking_contract_if_complete(None)
+            .and_then(|staking_contract| {
+                // Then fetch the validator to see if it is active.
+                let data_store = blockchain.get_staking_contract_store();
+                let txn = blockchain.read_transaction();
+                staking_contract.get_validator(&data_store.read(&txn), &self.validator_address)
+            })
+    }
+
+    fn get_staking_state(&self, blockchain: &Blockchain) -> ValidatorStakingState {
+        self.get_validator(blockchain).map_or(
+            ValidatorStakingState::UnknownOrNoStake,
+            |validator| match validator.inactive_from {
+                Some(_) => ValidatorStakingState::Inactive(validator.jailed_from),
+                None => ValidatorStakingState::Active,
+            },
+        )
+    }
+
+    /// Checks whether we are an elected validator in the current epoch.
+    fn is_elected(&self) -> bool {
+        self.slot_band.is_some()
+    }
 }
 
 impl<TValidatorNetwork: ValidatorNetwork> Validator<TValidatorNetwork>
@@ -186,8 +189,6 @@ where
 
         let mempool = MempoolTask::new(consensus, Arc::clone(&blockchain), mempool_config);
 
-        let automatic_reactivate = Arc::new(AtomicBool::new(automatic_reactivate));
-
         Self::init_network_request_receivers(&consensus.network, &macro_state);
 
         let network1 = Arc::clone(&network);
@@ -208,21 +209,22 @@ where
             table: ValidatorTable,
             env,
 
-            validator_address: Arc::new(RwLock::new(validator_address)),
-            signing_key: Arc::new(RwLock::new(signing_key)),
-            voting_keys: Arc::new(RwLock::new(voting_keys)),
-            fee_key: Arc::new(RwLock::new(fee_key)),
+            state: Arc::new(RwLock::new(ValidatorState {
+                validator_address,
+                signing_key,
+                voting_keys,
+                fee_key,
+                automatic_reactivate,
+                slot_band: None,
+                consensus: blockchain_state,
+            })),
+            inactivity_state: None,
 
             proposal_receiver,
 
             consensus_event_rx,
             network_event_rx,
             fork_event_rx,
-
-            slot_band: Arc::new(RwLock::new(None)),
-            consensus_state: Arc::new(RwLock::new(blockchain_state)),
-            validator_state: None,
-            automatic_reactivate,
 
             macro_producer: None,
             macro_state: Arc::clone(&macro_state),
@@ -300,32 +302,32 @@ where
     /// ourselves if the previous tx didn't get included within the validity window.
     fn check_reactivate(&mut self, block_number: u32) {
         // Check if the reactivate/activate transaction was sent
-        if let Some(validator_state) = &self.validator_state {
+        if let Some(inactivity_state) = &self.inactivity_state {
             // We check this in the last possible block of the validity window
-            let tx_validity_window_start = validator_state.inactive_tx_validity_window_start;
+            let tx_validity_window_start = inactivity_state.inactive_tx_validity_window_start;
             if block_number
                 >= tx_validity_window_start + Policy::transaction_validity_window_blocks() - 1
             {
                 let blockchain = self.blockchain.read();
-                let staking_state = self.get_staking_state(&blockchain);
+                let staking_state = self.state.read().get_staking_state(&blockchain);
                 // Check that the transaction was sent in the validity window
                 if (matches!(staking_state, ValidatorStakingState::Inactive(..)))
                     && !blockchain.history_store.tx_in_validity_window(
-                        &validator_state.inactive_tx_hash.clone().into(),
+                        &inactivity_state.inactive_tx_hash.clone().into(),
                         None,
                     )
                 {
                     // If we are inactive and no transaction has been seen in the expected validity window
                     // after an epoch, reset our inactive state
                     log::debug!("Resetting state to re-send reactivate transactions since we are inactive and validity window doesn't contain the transaction sent");
-                    self.validator_state = None;
+                    self.inactivity_state = None;
                 }
             }
         }
     }
 
     fn init_epoch(&mut self) {
-        *self.slot_band.write() = None;
+        self.state.write().slot_band = None;
 
         if !self.is_synced() {
             return;
@@ -334,12 +336,13 @@ where
         let blockchain = self.blockchain.read();
         let validators = blockchain.current_validators().unwrap();
 
-        *self.slot_band.write() = validators.get_slot_band_by_address(&self.validator_address());
+        let mut state = self.state.write();
+        state.slot_band = validators.get_slot_band_by_address(&state.validator_address);
 
-        if let Some(slot_band) = *self.slot_band.read() {
+        if let Some(slot_band) = state.slot_band {
             let epoch_validator = validators.get_validator_by_slot_band(slot_band);
             log::info!(
-                validator_address = %self.validator_address(),
+                validator_address = %state.validator_address,
                 validator_slot_band = slot_band,
                 epoch_number = blockchain.epoch_number(),
                 slots = ?epoch_validator.slots,
@@ -347,9 +350,8 @@ where
             );
 
             // Update the validator key to be the expected one (relevant in case of a key rotation).
-            if self
+            if state
                 .voting_keys
-                .write()
                 .update_current_key(epoch_validator.voting_key.compressed())
                 .is_err()
             {
@@ -357,19 +359,19 @@ where
             }
 
             // Compare configured validator signing key to the one in the current epoch to make sure it is the same.
-            if epoch_validator.signing_key != self.signing_key().public {
+            if epoch_validator.signing_key != state.signing_key.public {
                 panic!("Invalid validator configuration: Configured signing key does not match signing key in this epoch");
             }
         } else {
             log::info!(
-                validator_address = %self.validator_address(),
+                validator_address = %state.validator_address,
                 epoch_number = blockchain.epoch_number(),
                 "We are NOT ELECTED in this epoch"
             );
         }
 
         // Inform the network about the current validator ID.
-        self.network.set_validator_id(*self.slot_band.read());
+        self.network.set_validator_id(state.slot_band);
 
         // Set the elected validators of the current epoch in the network as well.
         self.network.set_validators(validators);
@@ -379,9 +381,15 @@ where
         self.macro_producer = None;
         self.micro_producer = None;
 
-        if !self.is_elected() || !self.is_synced() {
+        if !self.is_synced() {
             return;
         }
+
+        let state = self.state.read();
+        let Some(slot_band) = state.slot_band else {
+            // Not elected.
+            return;
+        };
 
         let blockchain = self.blockchain.read();
 
@@ -395,7 +403,10 @@ where
         let head = blockchain.head();
         let next_block_number = head.block_number() + 1;
         let network_id = head.network();
-        let block_producer = BlockProducer::new(self.signing_key(), self.current_voting_key());
+        let block_producer = BlockProducer::new(
+            state.signing_key.clone(),
+            state.voting_keys.get_current_key(),
+        );
 
         debug!(
             next_block_number = next_block_number,
@@ -413,7 +424,7 @@ where
                     Arc::clone(&self.blockchain),
                     Arc::clone(&self.network),
                     block_producer,
-                    self.validator_slot_band(),
+                    slot_band,
                     active_validators,
                     network_id,
                     next_block_number,
@@ -422,9 +433,8 @@ where
                 ));
             }
             BlockType::Micro => {
-                let equivocation_proofs = self
-                    .consensus_state
-                    .read()
+                let equivocation_proofs = state
+                    .consensus
                     .equivocation_proofs
                     .get_equivocation_proofs_for_block(Self::EQUIVOCATION_PROOFS_MAX_SIZE);
                 let prev_seed = head.seed().clone();
@@ -434,7 +444,7 @@ where
                     Arc::clone(&self.mempool_task.mempool),
                     Arc::clone(&self.network),
                     block_producer,
-                    self.validator_slot_band(),
+                    slot_band,
                     equivocation_proofs,
                     prev_seed,
                     next_block_number,
@@ -446,7 +456,7 @@ where
     }
 
     fn pause(&mut self) {
-        *self.slot_band.write() = None;
+        self.state.write().slot_band = None;
         self.macro_producer = None;
         self.micro_producer = None;
     }
@@ -481,8 +491,9 @@ where
             .expect("Head block not found");
 
         // Update mempool and blockchain state
-        self.consensus_state
+        self.state
             .write()
+            .consensus
             .equivocation_proofs
             .apply_block(&block);
 
@@ -496,14 +507,14 @@ where
         new_chain: &[(Blake2bHash, Block)],
     ) {
         // Update mempool and blockchain state
-        let mut consensus_state = self.consensus_state.write();
+        let mut state = self.state.write();
         for (_hash, block) in old_chain.iter() {
-            consensus_state.equivocation_proofs.revert_block(block);
+            state.consensus.equivocation_proofs.revert_block(block);
         }
         for (_hash, block) in new_chain.iter() {
-            consensus_state.equivocation_proofs.apply_block(block);
+            state.consensus.equivocation_proofs.apply_block(block);
         }
-        drop(consensus_state);
+        drop(state);
 
         let head_hash = &new_chain.last().expect("new_chain must not be empty").0;
         self.init_block_producer(Some(head_hash));
@@ -524,8 +535,9 @@ where
         {
             return;
         }
-        self.consensus_state
+        self.state
             .write()
+            .consensus
             .equivocation_proofs
             .insert(proof);
     }
@@ -625,8 +637,9 @@ where
 
     /// Publish our own validator record to the DHT.
     fn publish_dht(&self) {
-        let key_pair = self.signing_key();
-        let validator_address = self.validator_address();
+        let state = self.state.read();
+        let key_pair = state.signing_key.clone();
+        let validator_address = state.validator_address.clone();
         let network = Arc::clone(&self.network);
 
         spawn(async move {
@@ -636,50 +649,26 @@ where
         });
     }
 
-    /// Checks whether we are an elected validator in the current epoch.
-    fn is_elected(&self) -> bool {
-        self.slot_band.read().is_some()
-    }
-
     /// Checks whether the validator fulfills the conditions for producing valid blocks.
     /// This includes having consensus, being able to extend the history tree and to enforce transaction validity.
     fn is_synced(&self) -> bool {
         self.consensus.is_ready_for_validation()
     }
 
-    fn get_validator(&self, blockchain: &Blockchain) -> Option<ValidatorAccount> {
-        let validator_address = self.validator_address();
-        blockchain
-            .get_staking_contract_if_complete(None)
-            .and_then(|staking_contract| {
-                // Then fetch the validator to see if it is active.
-                let data_store = blockchain.get_staking_contract_store();
-                let txn = blockchain.read_transaction();
-                staking_contract.get_validator(&data_store.read(&txn), &validator_address)
-            })
-    }
-
-    fn get_staking_state(&self, blockchain: &Blockchain) -> ValidatorStakingState {
-        self.get_validator(blockchain).map_or(
-            ValidatorStakingState::UnknownOrNoStake,
-            |validator| match validator.inactive_from {
-                Some(_) => ValidatorStakingState::Inactive(validator.jailed_from),
-                None => ValidatorStakingState::Active,
-            },
-        )
-    }
-
     fn reactivate(&self, blockchain: &Blockchain) -> InactivityState {
         let validity_start_height = blockchain.block_number();
 
-        let reactivate_transaction = TransactionBuilder::new_reactivate_validator(
-            &self.fee_key(),
-            self.validator_address(),
-            &self.signing_key(),
-            Coin::ZERO,
-            validity_start_height,
-            blockchain.network_id(),
-        );
+        let reactivate_transaction = {
+            let state = self.state.read();
+            TransactionBuilder::new_reactivate_validator(
+                &state.fee_key,
+                state.validator_address.clone(),
+                &state.signing_key,
+                Coin::ZERO,
+                validity_start_height,
+                blockchain.network_id(),
+            )
+        };
         let tx_hash = reactivate_transaction.hash();
 
         let cn = self.consensus.clone();
@@ -700,36 +689,8 @@ where
         }
     }
 
-    pub fn validator_slot_band(&self) -> u16 {
-        self.slot_band.read().expect("Validator not elected")
-    }
-
-    pub fn validator_address(&self) -> Address {
-        self.validator_address.read().clone()
-    }
-
-    pub fn current_voting_key(&self) -> BlsKeyPair {
-        self.voting_keys.read().get_current_key()
-    }
-
-    pub fn signing_key(&self) -> SchnorrKeyPair {
-        self.signing_key.read().clone()
-    }
-
-    pub fn fee_key(&self) -> SchnorrKeyPair {
-        self.fee_key.read().clone()
-    }
-
-    pub fn proxy(&self) -> ValidatorProxy {
-        ValidatorProxy {
-            validator_address: Arc::clone(&self.validator_address),
-            signing_key: Arc::clone(&self.signing_key),
-            voting_keys: Arc::clone(&self.voting_keys),
-            fee_key: Arc::clone(&self.fee_key),
-            automatic_reactivate: Arc::clone(&self.automatic_reactivate),
-            slot_band: Arc::clone(&self.slot_band),
-            consensus_state: Arc::clone(&self.consensus_state),
-        }
+    pub fn state(&self) -> &Arc<RwLock<ValidatorState>> {
+        &self.state
     }
 
     #[cfg(feature = "metrics")]
@@ -813,7 +774,7 @@ where
         }
 
         // If we are an active validator, participate in block production.
-        if self.is_synced() && self.is_elected() {
+        if self.is_synced() && self.state.read().is_elected() {
             if self.macro_producer.is_some() {
                 self.poll_macro(cx);
             }
@@ -825,26 +786,29 @@ where
         // Once the validator can be active is established, check the validator staking state.
         if self.is_synced() {
             let blockchain = self.blockchain.read();
-            match self.get_staking_state(&blockchain) {
+            let state = self.state.read();
+            match state.get_staking_state(&blockchain) {
                 ValidatorStakingState::Active => {
+                    drop(state);
                     drop(blockchain);
-                    if self.validator_state.is_some() {
-                        self.validator_state = None;
+                    if self.inactivity_state.is_some() {
+                        self.inactivity_state = None;
                         info!("Automatically reactivated.");
                     }
                 }
                 ValidatorStakingState::Inactive(jailed_from) => {
-                    if self.validator_state.is_none()
+                    drop(state);
+                    if self.inactivity_state.is_none()
                         && jailed_from
                             .map(|jailed_from| {
                                 blockchain.block_number() >= Policy::block_after_jail(jailed_from)
                             })
                             .unwrap_or(true)
-                        && self.automatic_reactivate.load(Ordering::Acquire)
+                        && self.state.read().automatic_reactivate
                     {
                         let inactivity_state = self.reactivate(&blockchain);
                         drop(blockchain);
-                        self.validator_state = Some(inactivity_state);
+                        self.inactivity_state = Some(inactivity_state);
                     }
                 }
                 ValidatorStakingState::UnknownOrNoStake => {}

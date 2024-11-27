@@ -166,7 +166,13 @@ where
     validators
         .iter()
         .find(|validator| {
-            &validator.current_voting_key().public_key.compress()
+            &validator
+                .state()
+                .read()
+                .voting_keys
+                .get_current_key()
+                .public_key
+                .compress()
                 == slot.validator.voting_key.compressed()
         })
         .unwrap()
@@ -193,7 +199,13 @@ where
     let index = validators
         .iter()
         .position(|validator| {
-            &validator.current_voting_key().public_key.compress()
+            &validator
+                .state()
+                .read()
+                .voting_keys
+                .get_current_key()
+                .public_key
+                .compress()
                 == slot.validator.voting_key.compressed()
         })
         .unwrap();

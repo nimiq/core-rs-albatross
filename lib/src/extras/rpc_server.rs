@@ -57,9 +57,9 @@ pub fn initialize_rpc_server(
         dispatcher.add(MempoolDispatcher::new(client.consensus_proxy(), mempool));
     }
     dispatcher.add(PolicyDispatcher {});
-    if let Some(validator_proxy) = client.validator_proxy() {
+    if let Some(validator_state) = client.validator_state() {
         dispatcher.add(ValidatorDispatcher::new(
-            validator_proxy,
+            validator_state,
             client.consensus_proxy(),
         ));
     }

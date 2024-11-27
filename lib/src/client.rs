@@ -39,7 +39,7 @@ use nimiq_validator::key_utils::VotingKeys;
 #[cfg(feature = "validator")]
 use nimiq_validator::validator::Validator as AbstractValidator;
 #[cfg(feature = "validator")]
-use nimiq_validator::validator::ValidatorProxy as AbstractValidatorProxy;
+use nimiq_validator::validator::ValidatorState as AbstractValidatorState;
 #[cfg(feature = "validator")]
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 #[cfg(feature = "wallet")]
@@ -72,7 +72,7 @@ pub type ConsensusProxy = AbstractConsensusProxy<Network>;
 #[cfg(feature = "validator")]
 pub type Validator = AbstractValidator<ValidatorNetworkImpl<Network>>;
 #[cfg(feature = "validator")]
-pub type ValidatorProxy = AbstractValidatorProxy;
+pub type ValidatorState = AbstractValidatorState;
 
 pub type ZKPComponent = AbstractZKPComponent<Network>;
 pub type ZKPComponentProxy = AbstractZKPComponentProxy<Network>;
@@ -104,7 +104,7 @@ pub(crate) struct ClientInner {
     blockchain: BlockchainProxy,
 
     #[cfg(feature = "validator")]
-    validator: Option<ValidatorProxy>,
+    validator: Option<Arc<RwLock<ValidatorState>>>,
 
     /// Wallet that stores key pairs for transaction signing
     #[cfg(feature = "wallet")]
@@ -544,7 +544,7 @@ impl ClientInner {
         let mut validator_or_mempool = None;
 
         #[cfg(feature = "validator")]
-        let validator_proxy = match config.validator {
+        let validator_state = match config.validator {
             Some(validator_config) => {
                 if let BlockchainProxy::Full(ref blockchain) = blockchain_proxy {
                     // Load validator address
@@ -615,9 +615,9 @@ impl ClientInner {
                     blockchain.write().tx_verification_cache =
                         Arc::<Mempool>::clone(&validator.mempool_task.mempool);
 
-                    let validator_proxy = validator.proxy();
+                    let validator_state = Arc::clone(validator.state());
                     validator_or_mempool = Some(ValidatorOrMempool::Validator(validator));
-                    Some(validator_proxy)
+                    Some(validator_state)
                 } else {
                     None
                 }
@@ -652,7 +652,7 @@ impl ClientInner {
                 consensus: consensus.proxy(),
                 blockchain: blockchain_proxy,
                 #[cfg(feature = "validator")]
-                validator: validator_proxy,
+                validator: validator_state,
                 #[cfg(feature = "wallet")]
                 wallet_store,
                 zkp_component: zkp_component.proxy(),
@@ -767,8 +767,8 @@ impl Client {
     }
 
     #[cfg(feature = "validator")]
-    /// Returns a reference to the *Validator proxy*.
-    pub fn validator_proxy(&self) -> Option<ValidatorProxy> {
+    /// Returns a reference to the *Validator state*.
+    pub fn validator_state(&self) -> Option<Arc<RwLock<ValidatorState>>> {
         self.inner.validator.clone()
     }
 
