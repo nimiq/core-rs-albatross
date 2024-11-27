@@ -34,7 +34,7 @@ tokio = { version = "1.41", features = [
     "rt-multi-thread",
     "tracing",
 ] }
-tokio-metrics = "0.3"
+tokio-metrics = "0.4"
 
 nimiq-blockchain = { workspace = true, features = ["metrics"] }
 nimiq-blockchain-interface = { workspace = true }
