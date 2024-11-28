@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-bytes = "1.8"
+bytes = "1.9"
 futures = "0.3"
 http-body-util = { version = "0.1" }
 hyper = { version = "1.5" }
@@ -34,7 +34,7 @@ tokio = { version = "1.41", features = [
     "rt-multi-thread",
     "tracing",
 ] }
-tokio-metrics = "0.3"
+tokio-metrics = "0.4"
 
 nimiq-blockchain = { workspace = true, features = ["metrics"] }
 nimiq-blockchain-interface = { workspace = true }
