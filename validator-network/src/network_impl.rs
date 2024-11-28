@@ -15,7 +15,7 @@ use nimiq_network_interface::{
     request::{InboundRequestError, Message, Request, RequestCommon, RequestError},
     validator_record::ValidatorRecord,
 };
-use nimiq_primitives::slots_allocation::{Validator, Validators};
+use nimiq_primitives::slots_allocation::Validators;
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_utils::{spawn, stream::FuturesUnordered, tagged_signing::TaggedSigned};
 use parking_lot::RwLock;

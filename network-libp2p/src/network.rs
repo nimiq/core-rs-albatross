@@ -86,12 +86,18 @@ impl Network {
         let required_services = config.required_services;
         // TODO: persist to disk
         let own_peer_contact = config.peer_contact.clone();
+
+        #[cfg(feature = "kad")]
+        let verifier = Arc::new(verifier);
+
         let contacts = Arc::new(RwLock::new(PeerContactBook::new(
             own_peer_contact,
             config.keypair.clone(),
             config.only_secure_ws_connections,
             config.allow_loopback_addresses,
             config.memory_transport,
+            #[cfg(feature = "kad")]
+            (Arc::clone(&verifier) as Arc<dyn ValidatorRecordVerifier>),
         )));
         let params = gossipsub::PeerScoreParams {
             ip_colocation_factor_threshold: 20.0,
@@ -103,9 +109,6 @@ impl Network {
         // In memory transport we don't have a mechanism that sets the DHT in server mode such as confirming an address
         // with Autonat. This is because Autonat v1 only works with IP addresses.
         let force_dht_server_mode = config.memory_transport;
-
-        #[cfg(feature = "kad")]
-        let verifier = Arc::new(verifier);
 
         let swarm = new_swarm(
             config,

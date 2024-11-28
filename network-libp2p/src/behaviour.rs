@@ -174,6 +174,6 @@ impl Behaviour {
     /// Updates the scores of all peers in the peer contact book.
     /// Updates are performed with the score values of Gossipsub
     pub fn update_scores(&self, contacts: Arc<RwLock<PeerContactBook>>) {
-        contacts.read().update_scores(&self.gossipsub);
+        contacts.write().update_scores(&self.gossipsub);
     }
 }

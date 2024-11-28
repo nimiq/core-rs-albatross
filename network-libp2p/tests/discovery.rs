@@ -20,7 +20,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::peer_info::Services;
 use nimiq_network_libp2p::discovery::{
     self,
-    peer_contacts::{PeerContact, PeerContactBook, SignedPeerContact},
+    peer_contacts::{PeerContact, PeerContactBook, SignedPeerContact, ValidatorRecordVerifier},
 };
 use nimiq_test_log::test;
 use nimiq_utils::spawn;
@@ -80,6 +80,8 @@ impl TestNode {
             false,
             true,
             true,
+            #[cfg(feature = "kad")]
+            (Arc::new(()) as Arc<dyn ValidatorRecordVerifier>),
         )));
 
         let behaviour = discovery::Behaviour::new(
@@ -262,7 +264,15 @@ pub async fn test_dialing_peer_from_contacts() {
 #[test]
 fn test_housekeeping() {
     let (keypair, peer_contact) = random_peer_key_and_contact(1, Services::FULL_BLOCKS);
-    let mut peer_contact_book = PeerContactBook::new(peer_contact, keypair, false, true, true);
+    let mut peer_contact_book = PeerContactBook::new(
+        peer_contact,
+        keypair,
+        false,
+        true,
+        true,
+        #[cfg(feature = "kad")]
+        (Arc::new(()) as Arc<dyn ValidatorRecordVerifier>),
+    );
 
     let fresh_contact = random_peer_contact(1, Services::FULL_BLOCKS);
 
@@ -275,8 +285,8 @@ fn test_housekeeping() {
             SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap()
-                .as_secs()
-                .saturating_sub(PeerContactBook::MAX_PEER_AGE * 2),
+                .saturating_sub(PeerContactBook::MAX_PEER_AGE * 2)
+                .as_secs(),
         )
         .expect("Peer contact must be creatable");
 
