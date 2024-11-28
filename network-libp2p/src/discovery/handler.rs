@@ -1,5 +1,6 @@
 use std::{
     collections::{HashSet, VecDeque},
+    ops::Deref,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll, Waker},
@@ -189,7 +190,7 @@ impl Handler {
         peer_address: Multiaddr,
         #[cfg(feature = "kad")] verifier: Arc<dyn ValidatorRecordVerifier>,
     ) -> Self {
-        if let Some(peer_contact) = peer_contact_book.write().get(&peer_id) {
+        if let Some(peer_contact) = peer_contact_book.write().get_mut(&peer_id) {
             if let Some(outer_protocol_address) = outer_protocol_address(&peer_address) {
                 peer_contact.set_outer_protocol_address(outer_protocol_address);
             }
@@ -299,39 +300,22 @@ pub(crate) fn outer_protocol_address(addr: &Multiaddr) -> Option<Multiaddr> {
 }
 
 fn filter_contact(
-    timestamp: u64,
     #[cfg(feature = "kad")] verifier: Arc<dyn ValidatorRecordVerifier>,
 ) -> Box<dyn Fn(SignedPeerContact) -> Option<SignedPeerContact>> {
     Box::new(move |mut peer_contact: SignedPeerContact| {
         match peer_contact.verify(
             #[cfg(feature = "kad")]
-            Arc::clone(&verifier),
+            verifier.deref(),
         ) {
-            // Contacts with too many addresses or an invalid peer signature are rejected
-            // and removed from the collection
-            Err(PeerContactError::AdvertisedAddressesExceeded)
-            | Err(PeerContactError::InvalidSignature) => None,
+            Ok(_) => Some(peer_contact),
             // If there is a validator record, but the state is incomplete,
             // then it cannot be verified and must be checked again at a later time.
             Err(PeerContactError::ValidatorRecord(ValidatorInfoError::StateIncomplete)) => {
                 peer_contact.local_only = true;
                 Some(peer_contact)
             }
-            // If there is a validator record but either the signature is invalid, or the validator is unknown,
-            // the head timestamp of the blockchain and the creation timestamp must be compared.
-            Err(PeerContactError::ValidatorRecord(ValidatorInfoError::InvalidSignature))
-            | Err(PeerContactError::ValidatorRecord(ValidatorInfoError::UnknownValidator(_))) => {
-                // Set it to local only. Some contacts will be discarded by the next condition still.
-                peer_contact.local_only = true;
-
-                // Retain only contacts which are in the future, as they may still verify then.
-                if timestamp < peer_contact.inner.timestamp() {
-                    Some(peer_contact)
-                } else {
-                    None
-                }
-            }
-            Ok(_) => Some(peer_contact),
+            // Filter contact if verification fails for any other reason.
+            Err(_) => None,
         }
     })
 }
@@ -575,13 +559,11 @@ impl ConnectionHandler for Handler {
                                     peer_contacts,
                                 } => {
                                     // Check the peer contact for a valid signature.
-                                    let Some(peer_contact) = filter_contact(
-                                        0,
+                                    let filter_fn = filter_contact(
                                         #[cfg(feature = "kad")]
                                         Arc::clone(&self.verifier),
-                                    )(
-                                        peer_contact.clone()
-                                    ) else {
+                                    );
+                                    let Some(peer_contact) = filter_fn(peer_contact.clone()) else {
                                         return Poll::Ready(
                                             ConnectionHandlerEvent::NotifyBehaviour(
                                                 HandlerOutEvent::Error(
@@ -632,7 +614,6 @@ impl ConnectionHandler for Handler {
                                     let peer_contacts: Vec<SignedPeerContact> = peer_contacts
                                         .into_iter()
                                         .filter_map(filter_contact(
-                                            0,
                                             #[cfg(feature = "kad")]
                                             Arc::clone(&self.verifier),
                                         ))
@@ -739,7 +720,6 @@ impl ConnectionHandler for Handler {
                                     let peer_contacts: Vec<SignedPeerContact> = peer_contacts
                                         .into_iter()
                                         .filter_map(filter_contact(
-                                            0,
                                             #[cfg(feature = "kad")]
                                             Arc::clone(&self.verifier),
                                         ))
