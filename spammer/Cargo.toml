@@ -26,8 +26,8 @@ futures = { workspace = true }
 log = { workspace = true }
 rand = "0.8.5"
 serde = "1.0"
-tokio = { version = "1.41", features = ["rt-multi-thread", "time", "tracing"] }
-tokio-metrics = { version = "0.3" }
+tokio = { version = "1.42", features = ["rt-multi-thread", "time", "tracing"] }
+tokio-metrics = { version = "0.4" }
 toml = "0.8"
 
 nimiq-block = { workspace = true }

@@ -23,7 +23,7 @@ workspace = true
 futures = { workspace = true }
 log = { workspace = true }
 parking_lot = "0.12"
-tokio-metrics = { version = "0.3", optional = true }
+tokio-metrics = { version = "0.4", optional = true }
 tokio-stream = { version = "0.1", features = ["sync"] }
 
 nimiq-blockchain = { workspace = true }

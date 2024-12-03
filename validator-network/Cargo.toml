@@ -27,14 +27,14 @@ parking_lot = "0.12"
 serde = "1.0"
 thiserror = "2.0"
 time = { version = "0.3" }
-tokio = { version = "1.41", features = ["rt"] }
+tokio = { version = "1.42", features = ["rt"] }
 
 nimiq-keys = { workspace = true, features = ["serde-derive"] }
 nimiq-network-interface = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["slots"] }
 nimiq-serde = { workspace = true }
 nimiq-utils = { workspace = true, features = ["futures", "spawn", "tagged-signing"] }
-url = "2.5.3"
+url = "2.5.4"
 
 [dev-dependencies]
-tokio = { version = "1.41", features = ["macros"] }
+tokio = { version = "1.42", features = ["macros"] }
