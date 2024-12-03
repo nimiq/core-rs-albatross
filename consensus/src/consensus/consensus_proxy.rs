@@ -358,9 +358,7 @@ impl<N: Network> ConsensusProxy<N> {
                                     log::warn!(peer = %peer_id, "The genesis hash from the peer does not match our own");
                                     continue;
                                 }
-                            }
-
-                            if election_head.hash() == block_hash
+                            } else if election_head.hash() == block_hash
                                 || election_head.header.parent_election_hash == block_hash
                             {
                                 already_proven = true;
