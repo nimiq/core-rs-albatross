@@ -438,7 +438,7 @@ impl Transaction {
     }
 
     pub fn to_plain_transaction(&self) -> PlainTransaction {
-        PlainTransaction {
+        let plain = PlainTransaction {
             transaction_hash: self.hash(),
             format: self.format(),
             sender: self.sender().to_plain(),
@@ -527,7 +527,22 @@ impl Transaction {
             },
             size: self.serialized_size(),
             valid: self.verify(None).is_ok(),
-        }
+        };
+
+        // Reconstruct the Transaction from the recently created PlainTransaction.
+        let reconstructed = Self::from_plain_transaction(&plain).ok().expect("@#%@#");
+
+        // For the reconstructed Transaction as well as the original transaction,
+        // check their validity on both chains. Log the results.
+        log::warn!(
+            original = self.verify(Some(42)).is_ok(),
+            original_albatross = self.verify(Some(24)).is_ok(),
+            reconstructed = reconstructed.verify(Some(42)).is_ok(),
+            reconstructed_albatross = reconstructed.verify(Some(24)).is_ok(),
+            "Transaction validity",
+        );
+
+        plain
     }
 
     pub fn from_plain_transaction(plain: &PlainTransaction) -> Result<Transaction, JsError> {
