@@ -501,7 +501,27 @@ impl Transaction {
                 } else if self.inner.sender_type == AccountType::HTLC {
                     HashedTimeLockedContract::parse_proof(&self.inner.proof).unwrap()
                 } else {
-                    let proof = SignatureProof::deserialize(&self.inner.proof).unwrap();
+                    // Depending on the network the signature proofs are constructed slightly differently.
+                    let proof = match self.inner.network_id {
+                        NetworkId::Bounty
+                        | NetworkId::Dev
+                        | NetworkId::Dummy
+                        | NetworkId::Main
+                        | NetworkId::Test => {
+                            // PoW transactions need an extra 0 byte prepended to the proof as the webauthn_fields
+                            // were added in PoS and the option will always be None for PoW transactions.
+                            let mut proof = vec![0];
+                            proof.append(&mut self.inner.proof.clone());
+                            SignatureProof::deserialize(&proof).unwrap()
+                        }
+                        NetworkId::DevAlbatross
+                        | NetworkId::MainAlbatross
+                        | NetworkId::TestAlbatross
+                        | NetworkId::UnitAlbatross => {
+                            // PoS transactions need no special treatment.
+                            SignatureProof::deserialize(&self.inner.proof).unwrap()
+                        }
+                    };
                     proof.to_plain_transaction_proof()
                 }
             },
