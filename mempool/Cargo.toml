@@ -28,8 +28,8 @@ parking_lot = "0.12"
 prometheus-client = { version = "0.22.3", optional = true }
 serde = "1.0"
 thiserror = "2.0"
-tokio = { version = "1.41", features = ["rt", "rt-multi-thread", "sync", "tracing"] }
-tokio-metrics = "0.3"
+tokio = { version = "1.42", features = ["rt", "rt-multi-thread", "sync", "tracing"] }
+tokio-metrics = "0.4"
 tokio-stream = { version = "0.1", features = ["sync"] }
 
 nimiq-account = { workspace = true }

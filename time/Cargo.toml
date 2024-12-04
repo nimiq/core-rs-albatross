@@ -19,5 +19,5 @@ gloo-timers = { version = "0.3", features = ["futures"] }
 instant = { version = "0.1", features = ["wasm-bindgen"] }
 pin-project-lite = "0.2.15"
 send_wrapper = { version = "0.6", features = ["futures"] }
-tokio = { version = "1.41", features = ["time"] }
+tokio = { version = "1.42", features = ["time"] }
 tokio-stream = { version = "0.1", features = ["time"] }
