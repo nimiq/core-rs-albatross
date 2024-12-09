@@ -23,7 +23,7 @@ workspace = true
 async-trait = "0.1"
 futures = { workspace = true }
 futures-executor = { version = "0.3" }
-hashlink = "0.9"
+hashlink = "0.10"
 instant = { version = "0.1", features = ["wasm-bindgen"] }
 log = { workspace = true }
 parking_lot = "0.12"
