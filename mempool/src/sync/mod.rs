@@ -25,11 +25,10 @@ use nimiq_network_interface::{
     peer_info::Services,
     request::{request_handler, RequestError},
 };
-use nimiq_time::sleep_until;
+use nimiq_time::{sleep_until, Sleep};
 use nimiq_transaction::{historic_transaction::RawTransactionHash, Transaction};
 use nimiq_utils::{spawn, stream::FuturesUnordered};
 use parking_lot::RwLock;
-use tokio::time::Sleep;
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{executor::PubsubIdOrPeerId, mempool_state::MempoolState};

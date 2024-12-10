@@ -2051,14 +2051,15 @@ async fn assert_rebase_invalidates_mempool_tx(tx1: Transaction, tx2: Transaction
     let temp_producer2 = TemporaryBlockProducer::new();
     assert_eq!(temp_producer2.push(block), Ok(PushResult::Extended));
 
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
     // Create mempool and subscribe with a custom txn stream.
     let mempool = Mempool::new(
         Arc::clone(&temp_producer1.blockchain),
         MempoolConfig::default(),
+        Arc::clone(&mock_network),
     );
-    let mut hub = MockHub::new();
-    let mock_id = MockId::new(hub.new_address().into());
-    let mock_network = Arc::new(hub.new_network());
 
     // Include tx1 in block1
     let block1 = temp_producer1.next_block_with_txs(vec![], false, vec![tx1.clone()]);
@@ -2088,14 +2089,15 @@ async fn assert_rebase_invalidates_mempool_tx(tx1: Transaction, tx2: Transaction
 async fn mempool_update_rebase_earlier_time() {
     let temp_producer1 = TemporaryBlockProducer::new();
 
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
     // Create mempool and subscribe with a custom txn stream.
     let mempool = Mempool::new(
         Arc::clone(&temp_producer1.blockchain),
         MempoolConfig::default(),
+        Arc::clone(&mock_network),
     );
-    let mut hub = MockHub::new();
-    let mock_id = MockId::new(hub.new_address().into());
-    let mock_network = Arc::new(hub.new_network());
 
     // Create vesting and redeeming txs
     let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);

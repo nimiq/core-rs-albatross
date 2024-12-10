@@ -563,11 +563,7 @@ mod test {
 
     use futures::{FutureExt, StreamExt};
     use nimiq_block::MacroHeader;
-    use nimiq_blockchain::Blockchain;
-    use nimiq_blockchain_proxy::BlockchainProxy;
-    use nimiq_consensus::{
-        sync::syncer_proxy::SyncerProxy, BlsCache, Consensus, ConsensusEvent, ConsensusProxy,
-    };
+    use nimiq_consensus::{ConsensusEvent, ConsensusProxy};
     use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
     use nimiq_network_interface::network::Network as NetworkInterface;
     use nimiq_network_mock::{MockHub, MockNetwork};
