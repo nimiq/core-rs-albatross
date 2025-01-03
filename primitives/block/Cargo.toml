@@ -23,6 +23,7 @@ bitflags = { version = "2.6", features = ["serde"] }
 byteorder = "1.5"
 hex = "0.4"
 log = { workspace = true }
+schemars = "0.8"
 serde = "1.0"
 serde_repr = "0.1"
 thiserror = "2.0"
@@ -36,7 +37,13 @@ nimiq-hash_derive = { workspace = true }
 nimiq-keys = { workspace = true }
 nimiq-macros = { workspace = true }
 nimiq-network-interface = { workspace = true }
-nimiq-primitives = { workspace = true, features = ["coin", "networks", "policy", "slots", "tendermint"] }
+nimiq-primitives = { workspace = true, features = [
+    "coin",
+    "networks",
+    "policy",
+    "slots",
+    "tendermint",
+] }
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
 nimiq-utils = { workspace = true, features = ["merkle"] }

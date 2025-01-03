@@ -20,6 +20,7 @@ use nimiq_macros::{
 };
 use nimiq_mmr::hash::Merge;
 use nimiq_serde::{Deserialize, Serialize};
+use schemars::{schema::SchemaObject, JsonSchema};
 use sha2::{Digest, Sha256, Sha512};
 use subtle::ConstantTimeEq;
 
@@ -226,6 +227,26 @@ impl HashOutput for Blake2sHash {
     }
     fn len() -> usize {
         BLAKE2S_LENGTH
+    }
+}
+
+impl JsonSchema for Blake2sHash {
+    fn schema_name() -> String {
+        "Blake2sHash".into()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        schemars::schema::Schema::Object(SchemaObject::default())
+    }
+}
+
+impl JsonSchema for Blake2bHash {
+    fn schema_name() -> String {
+        "Blake2bHash".into()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        schemars::schema::Schema::Object(SchemaObject::default())
     }
 }
 

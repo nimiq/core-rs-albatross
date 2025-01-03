@@ -2,6 +2,7 @@ use nimiq_bls::AggregateSignature;
 use nimiq_collections::bitset::BitSet;
 use nimiq_primitives::policy::Policy;
 use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
+use schemars::{schema::SchemaObject, JsonSchema};
 
 /*
 This does not really belong here, but as there would otherwise be a cyclic dependency it needs to be here for now.
@@ -13,6 +14,16 @@ pub struct MultiSignature {
     pub signature: AggregateSignature,
     #[serialize_size(bitset_max_elem = Policy::SLOTS as usize)]
     pub signers: BitSet,
+}
+
+impl JsonSchema for MultiSignature {
+    fn schema_name() -> String {
+        "MultiSignature".into()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        schemars::schema::Schema::Object(SchemaObject::default())
+    }
 }
 
 impl MultiSignature {

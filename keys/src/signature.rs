@@ -1,11 +1,22 @@
 use std::{convert::TryFrom, fmt, str::FromStr};
 
 use hex::FromHex;
+use schemars::{schema::SchemaObject, JsonSchema};
 
 use crate::errors::{ParseError, SignatureError};
 
 #[derive(Debug, Clone)]
 pub struct Ed25519Signature(pub(super) ed25519_zebra::Signature);
+
+impl JsonSchema for Ed25519Signature {
+    fn schema_name() -> String {
+        "Ed25519Signature".into()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        schemars::schema::Schema::Object(SchemaObject::default())
+    }
+}
 
 impl Ed25519Signature {
     pub const SIZE: usize = 64;

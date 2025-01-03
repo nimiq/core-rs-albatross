@@ -1,7 +1,10 @@
 [package]
 name = "nimiq-hash"
 version.workspace = true
-authors = ["Pascal B <git@paberr.net>", "The Nimiq Core Development Team <info@nimiq.com>"]
+authors = [
+    "Pascal B <git@paberr.net>",
+    "The Nimiq Core Development Team <info@nimiq.com>",
+]
 license.workspace = true
 edition.workspace = true
 description = "Common wrapper around hash implementations used in Nimiq"
@@ -24,6 +27,7 @@ blake2-rfc = "0.2"
 byteorder = "1.5"
 hex = "0.4"
 rust-argon2 = "2.1"
+schemars = "0.8"
 serde = "1.0"
 sha2 = "0.10"
 subtle = "2.6"

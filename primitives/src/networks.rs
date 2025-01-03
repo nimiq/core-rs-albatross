@@ -3,9 +3,10 @@ use std::{
     str::FromStr,
 };
 
+use schemars::JsonSchema;
 use thiserror::Error;
 
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, JsonSchema)]
 #[repr(u8)]
 pub enum NetworkId {
     Test = 1,

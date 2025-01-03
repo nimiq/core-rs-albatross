@@ -8,12 +8,13 @@ use std::{
 };
 
 use regex::Regex;
+use schemars::JsonSchema;
 use thiserror::Error;
 
 /// An amount of NIM.
 ///
 /// Internally stored as a 64-bit integer of LUNAs.
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Default, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Default, Hash, JsonSchema)]
 pub struct Coin(u64);
 
 impl Coin {

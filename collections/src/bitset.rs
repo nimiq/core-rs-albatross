@@ -5,6 +5,7 @@ use std::{
 };
 
 use nimiq_serde::SerializedMaxSize as _;
+use schemars::JsonSchema;
 use serde::{
     de::{Error as _, SeqAccess, Visitor},
     ser::SerializeSeq,
@@ -16,7 +17,7 @@ fn index_and_mask(value: usize) -> (usize, u64) {
     (value >> 6, 1u64 << (value & 63))
 }
 
-#[derive(Clone, Eq, PartialOrd, Ord)]
+#[derive(Clone, Eq, PartialOrd, Ord, JsonSchema)]
 pub struct BitSet {
     store: Vec<u64>,
     count: usize,

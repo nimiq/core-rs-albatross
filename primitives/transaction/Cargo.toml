@@ -21,10 +21,13 @@ base64 = "0.22"
 bitflags = { version = "2.6", features = ["serde"] }
 hex = "0.4"
 log = { workspace = true }
+schemars = "0.8"
 serde = "1.0"
 serde_json = "1.0"
 thiserror = "2.0"
-tsify = { git = "https://github.com/sisou/tsify", branch = "sisou/comments", default-features = false, features = ["js"], optional = true }
+tsify = { git = "https://github.com/sisou/tsify", branch = "sisou/comments", default-features = false, features = [
+    "js",
+], optional = true }
 url = { version = "2.5", features = ["serde"] }
 wasm-bindgen = { version = "0.2", optional = true }
 
@@ -37,7 +40,15 @@ nimiq-keys = { workspace = true, features = ["serde-derive"] }
 nimiq-macros = { workspace = true }
 nimiq-mmr = { workspace = true, features = ["serde-derive"] }
 nimiq-network-interface = { workspace = true }
-nimiq-primitives = { workspace = true, features = ["account", "coin", "networks", "policy", "serde-derive", "slots", "tendermint"] }
+nimiq-primitives = { workspace = true, features = [
+    "account",
+    "coin",
+    "networks",
+    "policy",
+    "serde-derive",
+    "slots",
+    "tendermint",
+] }
 nimiq-serde = { workspace = true }
 nimiq-utils = { workspace = true, features = ["merkle"] }
 

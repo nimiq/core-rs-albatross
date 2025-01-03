@@ -1,7 +1,8 @@
+#![allow(dead_code)]
 use std::collections::BTreeMap;
 
-use nimiq_serde::{Deserialize, Serialize};
 use schemars::{gen::SchemaSettings, schema::RootSchema, JsonSchema};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum Openrpc {
@@ -492,7 +493,7 @@ pub type ExamplePairingComponents = BTreeMap<String, Option<serde_json::Value>>;
 pub type ContentDescriptorComponents = BTreeMap<String, Option<serde_json::Value>>;
 pub type TagComponents = BTreeMap<String, Option<serde_json::Value>>;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 pub struct Components {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub schemas: Option<SchemaComponents>,

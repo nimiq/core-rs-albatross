@@ -8,6 +8,7 @@ use nimiq_keys::Address;
 use nimiq_macros::{add_hex_io_fns_typed_arr, add_serialization_fns_typed_arr, create_typed_array};
 use nimiq_primitives::account::AccountType;
 use nimiq_serde::{Deserialize, Serialize};
+use schemars::{schema::SchemaObject, JsonSchema};
 
 use crate::{
     account::AccountTransactionVerification, PoWSignatureProof, SignatureProof, Transaction,
@@ -101,6 +102,16 @@ pub enum AnyHash {
     Sha512(AnyHash64),
 }
 
+impl JsonSchema for AnyHash {
+    fn schema_name() -> String {
+        "AnyHash".into()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        schemars::schema::Schema::Object(SchemaObject::default())
+    }
+}
+
 impl AnyHash {
     /// Returns the hex string representation of the hash
     pub fn to_hex(&self) -> String {
@@ -145,7 +156,7 @@ impl From<Sha512Hash> for AnyHash {
     }
 }
 
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Hash, JsonSchema)]
 #[repr(u8)]
 pub enum PreImage {
     PreImage32(AnyHash32),
@@ -212,9 +223,29 @@ create_typed_array!(AnyHash32, u8, 32);
 add_hex_io_fns_typed_arr!(AnyHash32, AnyHash32::SIZE);
 add_serialization_fns_typed_arr!(AnyHash32, AnyHash32::SIZE);
 
+impl JsonSchema for AnyHash32 {
+    fn schema_name() -> String {
+        "AnyHash32".into()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        schemars::schema::Schema::Object(SchemaObject::default())
+    }
+}
+
 create_typed_array!(AnyHash64, u8, 64);
 add_hex_io_fns_typed_arr!(AnyHash64, AnyHash64::SIZE);
 add_serialization_fns_typed_arr!(AnyHash64, AnyHash64::SIZE);
+
+impl JsonSchema for AnyHash64 {
+    fn schema_name() -> String {
+        "AnyHash64".into()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        schemars::schema::Schema::Object(SchemaObject::default())
+    }
+}
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct CreationTransactionData {

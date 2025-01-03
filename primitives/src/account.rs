@@ -2,6 +2,7 @@ use std::{convert::TryFrom, fmt};
 
 use nimiq_keys::Address;
 use nimiq_serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
 use thiserror::Error;
 
 use crate::{
@@ -109,7 +110,7 @@ impl From<CoinUnderflowError> for AccountError {
     }
 }
 
-#[derive(Debug, Clone, Copy, Error, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Error, PartialEq, Eq, Hash, JsonSchema)]
 #[cfg_attr(
     feature = "serde-derive",
     derive(nimiq_serde::Serialize, nimiq_serde::Deserialize)

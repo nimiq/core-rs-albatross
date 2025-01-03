@@ -8,12 +8,23 @@ use curve25519_dalek::scalar::Scalar;
 use hex::FromHex;
 use nimiq_utils::key_rng::SecureGenerate;
 use rand_core::{CryptoRng, RngCore};
+use schemars::{schema::SchemaObject, JsonSchema};
 use sha2::{Digest as _, Sha512};
 
 use crate::errors::{KeysError, ParseError};
 
 #[cfg_attr(feature = "serde-derive", derive(nimiq_hash_derive::SerializeContent))]
 pub struct PrivateKey(pub ed25519_zebra::SigningKey);
+
+impl JsonSchema for PrivateKey {
+    fn schema_name() -> String {
+        "PrivateKey".into()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        schemars::schema::Schema::Object(SchemaObject::default())
+    }
+}
 
 impl PrivateKey {
     pub const SIZE: usize = 32;

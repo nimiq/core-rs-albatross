@@ -1,7 +1,10 @@
 [package]
 name = "nimiq-mnemonic"
 version.workspace = true
-authors = ["Pascal B <git@paberr.net>", "The Nimiq Core Development Team <info@nimiq.com>"]
+authors = [
+    "Pascal B <git@paberr.net>",
+    "The Nimiq Core Development Team <info@nimiq.com>",
+]
 license.workspace = true
 edition.workspace = true
 description = "Mnemonic helper library for Nimiq"
@@ -23,6 +26,7 @@ workspace = true
 bitvec = "1.0"
 hex = "0.4"
 rand_core = "0.6.4"
+schemars = "0.8"
 serde = "1.0"
 unicode-normalization = "0.1"
 

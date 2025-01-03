@@ -9,8 +9,9 @@ use nimiq_transaction::{
     account::htlc_contract::{AnyHash, PreImage},
     Transaction,
 };
+use schemars::JsonSchema;
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize, JsonSchema)]
 // Renaming affects only the struct names and thus their tag, the "type" field.
 #[serde(rename_all = "kebab-case", tag = "type")]
 pub enum Log {
@@ -336,7 +337,7 @@ impl Log {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionLog {
     #[serde(rename = "hash")]

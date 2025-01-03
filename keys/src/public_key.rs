@@ -5,6 +5,7 @@ use std::{
 };
 
 use hex::FromHex;
+use schemars::{schema::SchemaObject, JsonSchema};
 
 use crate::{
     errors::{KeysError, ParseError},
@@ -14,6 +15,16 @@ use crate::{
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde-derive", derive(nimiq_hash_derive::SerializeContent))]
 pub struct Ed25519PublicKey(pub ed25519_zebra::VerificationKeyBytes);
+
+impl JsonSchema for Ed25519PublicKey {
+    fn schema_name() -> String {
+        "Ed25519PublicKey".into()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        schemars::schema::Schema::Object(SchemaObject::default())
+    }
+}
 
 impl Ed25519PublicKey {
     pub const SIZE: usize = 32;

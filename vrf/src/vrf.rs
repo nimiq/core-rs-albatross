@@ -18,6 +18,7 @@ use nimiq_keys::{Ed25519PublicKey, KeyPair};
 use nimiq_macros::add_serialization_fns_typed_arr;
 use nimiq_macros::create_typed_array;
 use rand::{CryptoRng, RngCore};
+use schemars::{schema::SchemaObject, JsonSchema};
 use sha2::{Digest, Sha256, Sha512};
 
 use crate::rng::Rng;
@@ -83,6 +84,16 @@ impl fmt::Debug for VrfEntropy {
 pub struct VrfSeed {
     #[cfg_attr(feature = "serde-derive", serde(with = "nimiq_serde::HexArray"))]
     pub(crate) signature: [u8; VrfSeed::SIZE],
+}
+
+impl JsonSchema for VrfSeed {
+    fn schema_name() -> String {
+        "VrfSeed".into()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        schemars::schema::Schema::Object(SchemaObject::default())
+    }
 }
 
 impl VrfSeed {

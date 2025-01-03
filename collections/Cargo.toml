@@ -1,7 +1,10 @@
 [package]
 name = "nimiq-collections"
 version.workspace = true
-authors = ["Pascal B <git@paberr.net>", "The Nimiq Core Development Team <info@nimiq.com>"]
+authors = [
+    "Pascal B <git@paberr.net>",
+    "The Nimiq Core Development Team <info@nimiq.com>",
+]
 license.workspace = true
 edition.workspace = true
 description = "A set of advanced collections for use in the Nimiq Rust implementation"
@@ -20,6 +23,7 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
+schemars = "0.8"
 serde = "1.0"
 
 nimiq-serde = { workspace = true }

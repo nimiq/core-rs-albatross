@@ -18,6 +18,7 @@ hex = "0.4"
 log = { workspace = true }
 parking_lot = "0.12"
 rand = "0.8"
+schemars = "0.8"
 serde = "1.0"
 thiserror = "2.0"
 
@@ -29,7 +30,14 @@ nimiq-database-value-derive = { workspace = true }
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true, features = ["serde-derive"] }
 nimiq-macros = { workspace = true }
-nimiq-primitives = { workspace = true, features = ["coin", "policy", "serde-derive", "slots", "tree-proof", "trie"] }
+nimiq-primitives = { workspace = true, features = [
+    "coin",
+    "policy",
+    "serde-derive",
+    "slots",
+    "tree-proof",
+    "trie",
+] }
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
 nimiq-trie = { workspace = true, optional = true }

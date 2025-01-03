@@ -4,6 +4,7 @@ use hex::FromHex;
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseBytes};
 use nimiq_hash::{hash_typed_array, Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_macros::create_typed_array;
+use schemars::{schema::SchemaObject, JsonSchema};
 use thiserror::Error;
 
 use crate::{key_pair::KeyPair, ES256PublicKey, Ed25519PublicKey, PublicKey};
@@ -11,6 +12,16 @@ use crate::{key_pair::KeyPair, ES256PublicKey, Ed25519PublicKey, PublicKey};
 const ADDRESS_LEN: usize = 20;
 create_typed_array!(Address, u8, ADDRESS_LEN);
 hash_typed_array!(Address);
+
+impl JsonSchema for Address {
+    fn schema_name() -> String {
+        "Address".into()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        schemars::schema::Schema::Object(SchemaObject::default())
+    }
+}
 
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum AddressParseError {

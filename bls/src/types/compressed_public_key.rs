@@ -7,6 +7,7 @@ use std::{
 use ark_ec::AffineRepr;
 use ark_mnt6_753::G2Affine;
 use ark_serialize::CanonicalDeserialize;
+use schemars::{schema::SchemaObject, JsonSchema};
 
 use crate::PublicKey;
 
@@ -28,6 +29,16 @@ use crate::PublicKey;
 pub struct CompressedPublicKey {
     #[cfg_attr(feature = "serde-derive", serde(with = "nimiq_serde::HexArray"))]
     pub public_key: [u8; CompressedPublicKey::SIZE],
+}
+
+impl JsonSchema for CompressedPublicKey {
+    fn schema_name() -> String {
+        "CompressedPublicKey".into()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        schemars::schema::Schema::Object(SchemaObject::default())
+    }
 }
 
 impl CompressedPublicKey {

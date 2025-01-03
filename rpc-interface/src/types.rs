@@ -30,6 +30,8 @@ use nimiq_vrf::VrfSeed;
 use serde::{de::Error, Deserialize, Serialize};
 use serde_with::{serde_as, SerializeDisplay};
 
+use crate::serde_helpers::hex::{deserialize as deserialize_hex, serialize as serialize_hex};
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum HashOrTx {
@@ -138,7 +140,8 @@ pub struct Block {
     pub timestamp: u64,
     pub parent_hash: Blake2bHash,
     pub seed: VrfSeed,
-    #[serde(with = "crate::serde_helpers::hex")]
+    #[serde(deserialize_with = "deserialize_hex")]
+    #[serde(serialize_with = "serialize_hex")]
     pub extra_data: Vec<u8>,
     pub state_hash: Blake2bHash,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -620,13 +623,16 @@ pub struct Transaction {
     pub to_type: u8,
     pub value: Coin,
     pub fee: Coin,
-    #[serde(with = "crate::serde_helpers::hex")]
+    #[serde(deserialize_with = "deserialize_hex")]
+    #[serde(serialize_with = "serialize_hex")]
     pub sender_data: Vec<u8>,
-    #[serde(with = "crate::serde_helpers::hex")]
+    #[serde(deserialize_with = "deserialize_hex")]
+    #[serde(serialize_with = "serialize_hex")]
     pub recipient_data: Vec<u8>,
     pub flags: u8,
     pub validity_start_height: u32,
-    #[serde(with = "crate::serde_helpers::hex")]
+    #[serde(deserialize_with = "deserialize_hex")]
+    #[serde(serialize_with = "serialize_hex")]
     pub proof: Vec<u8>,
     pub network_id: u8,
 }

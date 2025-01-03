@@ -8,6 +8,7 @@ use nimiq_primitives::{networks::NetworkId, policy::Policy, slots_allocation::Va
 use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize, SerializedSize};
 use nimiq_transaction::{ExecutedTransaction, Transaction};
 use nimiq_vrf::VrfSeed;
+use schemars::{schema::SchemaObject, JsonSchema};
 
 use crate::{
     equivocation_proof::EquivocationProof, skip_block::SkipBlockProof, BlockError, SkipBlockInfo,
@@ -138,6 +139,16 @@ pub enum MicroJustification {
     /// Skip block justification which is the aggregated signature of the validator's
     /// signatures for a skip block.
     Skip(SkipBlockProof),
+}
+
+impl JsonSchema for MicroJustification {
+    fn schema_name() -> String {
+        "MicroJustification".into()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        schemars::schema::Schema::Object(SchemaObject::default())
+    }
 }
 
 impl MicroJustification {
