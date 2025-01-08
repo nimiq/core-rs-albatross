@@ -366,9 +366,15 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         let current_epoch_number = blockchain.epoch_number();
         let num_known_txs = if epoch_number == current_epoch_number {
             let last_macro_block = Policy::last_macro_block(current_block_number);
-            blockchain
-                .history_store
-                .num_epoch_transactions_before(last_macro_block, None) as u64
+            // Make sure the retrieved transactions are in the same epoch.
+            // If the current batch is the first batch of an epoch the transaction count will be 0.
+            if Policy::epoch_at(last_macro_block) != current_epoch_number {
+                0
+            } else {
+                blockchain
+                    .history_store
+                    .num_epoch_transactions_before(last_macro_block, None) as u64
+            }
         } else {
             0
         };
