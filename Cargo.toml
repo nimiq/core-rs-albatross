@@ -197,9 +197,9 @@ nimiq-handel = { path = "handel", default-features = false }
 nimiq-hash = { path = "hash", default-features = false }
 nimiq-hash_derive = { path = "hash/hash_derive", default-features = false }
 nimiq-jsonrpc-client = { version = "0.1.1", default-features = false }
-nimiq-jsonrpc-core = { version = "0.1.1", default-features = false }
+nimiq-jsonrpc-core = { version = "0.1.2", default-features = false }
 nimiq-jsonrpc-derive = { version = "0.1.1", default-features = false }
-nimiq-jsonrpc-server = { version = "0.1.1", default-features = false }
+nimiq-jsonrpc-server = { version = "0.1.2", default-features = false }
 nimiq-key-derivation = { path = "key-derivation", default-features = false }
 nimiq-keys = { path = "keys", default-features = false }
 nimiq-light-blockchain = { path = "light-blockchain", default-features = false }
