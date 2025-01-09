@@ -21,7 +21,7 @@ log = { workspace = true }
 instant = { version = "0.1", features = ["wasm-bindgen"] }
 parking_lot = "0.12"
 thiserror = "2.0"
-tokio = { version = "1.42", features = ["rt"] }
+tokio = { version = "1.43", features = ["rt"] }
 
 nimiq-bls = { workspace = true }
 nimiq-collections = { workspace = true }
@@ -33,7 +33,7 @@ nimiq-utils = { workspace = true, features = ["futures"] }
 [dev-dependencies]
 rand = "0.8"
 serde = "1.0"
-tokio = { version = "1.42", features = ["rt", "time", "macros"] }
+tokio = { version = "1.43", features = ["rt", "time", "macros"] }
 
 nimiq-network-interface = { workspace = true }
 nimiq-network-mock = { workspace = true }
