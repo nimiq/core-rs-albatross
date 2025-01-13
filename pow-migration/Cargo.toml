@@ -21,7 +21,7 @@ workspace = true
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
-convert_case = "0.6"
+convert_case = "0.7"
 hex = "0.4"
 humantime = "2.1"
 log = { workspace = true }

@@ -36,7 +36,7 @@ path = "src/trim-genesis-config/main.rs"
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["cargo"] }
-convert_case = "0.6"
+convert_case = "0.7"
 hex = "0.4"
 log = { workspace = true }
 quote = "1.0"
