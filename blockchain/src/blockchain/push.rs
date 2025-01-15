@@ -322,7 +322,14 @@ impl Blockchain {
         post_validation_hook: &F,
     ) -> Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError> {
         let start = Instant::now();
+
+        let upgrade_start = Instant::now();
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
+        log::debug!(
+            "Upgraded blockchain lock, took {:?}",
+            upgrade_start.elapsed()
+        );
+
         let mut txn = this.write_transaction();
 
         let block_number = this.block_number() + 1;
@@ -334,8 +341,11 @@ impl Blockchain {
             block_number,
             chain_info.head.timestamp(),
         );
+
+        let cc_start = Instant::now();
         let total_tx_size =
             this.check_and_commit(&chain_info.head, diff, &mut txn, &mut block_logger)?;
+        log::debug!("Check and commit complete, took {:?}", cc_start.elapsed());
 
         chain_info.on_main_chain = true;
         chain_info.set_cumulative_hist_tx_size(&prev_info, total_tx_size);
@@ -378,7 +388,9 @@ impl Blockchain {
         // Call the post-validation hook before commiting to the database.
         post_validation_hook.post_validation(Ok(&PushResult::Extended));
 
+        let commit_start = Instant::now();
         txn.commit();
+        log::debug!("Commit complete, took {:?}", commit_start.elapsed());
 
         if let Block::Macro(ref macro_block) = chain_info.head {
             this.state.macro_info = chain_info.clone();
