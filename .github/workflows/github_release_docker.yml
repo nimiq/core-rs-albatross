@@ -7,44 +7,31 @@ on:
   workflow_dispatch:
 
 jobs:
-  rust_build:
-    name: Build Nimiq with release flag
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Build binaries in release mode
-        run: |
-          cargo build --release
-      - name: Archive production artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: nimiq-dist
-          path: |
-            target/release/nimiq-client
-            target/release/nimiq-bls
-            target/release/nimiq-address
-            target/release/nimiq-rpc
-
   build_docker:
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.runs-on }}
     name: Build & publish docker image
-    needs: rust_build
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
     steps:
+      - name: Prepare
+        run: |
+          if [[ "${{ matrix.runs-on }}" == "ubuntu-24.04" ]]; then
+            platform="linux/amd64"
+          elif [[ "${{ matrix.runs-on }}" == "ubuntu-24.04-arm" ]]; then
+            platform=linux/arm64
+          else
+            echo "Unsupported runner/platform pair"
+            exit 1;
+          fi
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
       - name: Check out the repo
         uses: actions/checkout@v4
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Download nimiq client artifact from previous job
-        uses: actions/download-artifact@v4
-        with:
-          name: nimiq-dist
-          path: target/release/
-
-      - name: Run some commands
-        run: |
-          ls target/release/ -al
-          chmod -R +x target/release/
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
@@ -60,19 +47,78 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push by digest
+        id: build
         uses: docker/build-push-action@48aba3b46d1b1fec4febb7c5d0c644b249a11355
         with:
           context: .
           file: Dockerfile
           push: ${{ github.ref_type == 'tag' }}
-          # This is required or a package with unknown architecture will be published too.
-          # See https://github.com/docker/build-push-action/issues/820 for further
-          # details.
-          # TODO - investigate further and see if we can find a solution where we
-          # don't have to set this.
+          # This is required or a package with unknown architecture will be shown in the GHCR too.
+          # This is because GHCR doesn't properly show attestations.
+          # See https://github.com/docker/build-push-action/issues/900 for further details.
           provenance: false
-          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha
           cache-to: type=gha
+          outputs: type=image,"name=ghcr.io/${{ github.repository }}",push-by-digest=true,name-canonical=true,push=${{ github.ref_type == 'tag' }}
+      
+      - name: Export digest
+        run: |
+          mkdir -p ${{ runner.temp }}/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"          
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    if: ${{ github.ref_type == 'tag' }}
+    runs-on: ubuntu-24.04
+    needs:
+      - build_docker
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          flavor: latest=true
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}S
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
