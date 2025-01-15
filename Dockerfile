@@ -1,4 +1,21 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04 AS build
+
+# Install build dependencies in a single layer to reduce the number of image layers.
+RUN apt-get update && \
+    apt-get --no-install-recommends -y install ca-certificates clang cmake curl git libssl-dev pkg-config && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Compile the code
+WORKDIR /root
+COPY ./ core-rs-albatross
+RUN cd core-rs-albatross && \
+    cargo build --release --bin nimiq-client --bin nimiq-bls --bin nimiq-address --bin nimiq-rpc
+
+FROM ubuntu:24.04
 
 # Install dependencies in a single layer to reduce the number of image layers.
 RUN apt-get update && \
@@ -7,7 +24,7 @@ RUN apt-get update && \
 
 # Run as an unprivileged user, combining commands to reduce layers.
 RUN groupadd --system --gid 1001 nimiq && \
-    adduser --system --home /home/nimiq --uid 1001 --gid 1001 nimiq
+    useradd --system --home /home/nimiq --uid 1001 --gid 1001 nimiq
 
 # Switch to the unprivileged user and set working directory in one layer.
 USER nimiq
@@ -17,11 +34,11 @@ WORKDIR /home/nimiq
 RUN mkdir -p /home/nimiq/.nimiq
 
 # Copy configuration file and binaries in one command to improve caching.
-COPY ./lib/src/config/config_file/client.example.toml /home/nimiq/.nimiq/client.toml
-COPY ./target/release/nimiq-client \
-     ./target/release/nimiq-bls \
-     ./target/release/nimiq-address \
-     ./target/release/nimiq-rpc /usr/local/bin/
+COPY --from=build /root/core-rs-albatross/lib/src/config/config_file/client.example.toml /home/nimiq/.nimiq/client.toml
+COPY --from=build /root/core-rs-albatross/target/release/nimiq-client \
+     /root/core-rs-albatross/target/release/nimiq-bls \
+     /root/core-rs-albatross/target/release/nimiq-address \
+     /root/core-rs-albatross/target/release/nimiq-rpc /usr/local/bin/
 
 # Expose the necessary ports
 EXPOSE 8443 8648 9100
