@@ -11,7 +11,7 @@ use libp2p::{
     identity::Keypair,
     swarm::{
         behaviour::{ConnectionClosed, ConnectionEstablished},
-        ConnectionDenied, ConnectionId, FromSwarm, NetworkBehaviour, ToSwarm,
+        CloseConnection, ConnectionDenied, ConnectionId, FromSwarm, NetworkBehaviour, ToSwarm,
     },
     Multiaddr, PeerId,
 };
@@ -297,8 +297,10 @@ impl NetworkBehaviour for Behaviour {
                     .push_back(ToSwarm::NewExternalAddrCandidate(observed_address));
             }
             HandlerOutEvent::Update => self.events.push_back(ToSwarm::GenerateEvent(Event::Update)),
-            // Errors must not result in a closed connection as light clients are unable to verify ValidatorRecord.
-            HandlerOutEvent::Error(error) => log::trace!(?error, "Received invalid contact"),
+            HandlerOutEvent::Error(_) => self.events.push_back(ToSwarm::CloseConnection {
+                peer_id,
+                connection: CloseConnection::All,
+            }),
         }
     }
 }
