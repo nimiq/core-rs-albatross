@@ -927,9 +927,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.26"
+version = "4.5.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8eb5e908ef3a6efbe1ed62520fb7287959888c88485abe072543190ecc66783"
+checksum = "769b0145982b4b48713e01ec42d61614425f27b7058bda7180a3a41f30104796"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -937,9 +937,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.26"
+version = "4.5.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96b01801b5fc6a0a232407abc821660c9c6d25a1cafc0d4f85f29fb8d9afc121"
+checksum = "1b26884eb4b57140e4d2d93652abfa49498b938b3c9179f9fc487b0acc3edad7"
 dependencies = [
  "anstream",
  "anstyle",
@@ -3851,7 +3851,7 @@ dependencies = [
  "nimiq-zkp",
  "nimiq-zkp-primitives",
  "parking_lot",
- "prometheus-client 0.23.0",
+ "prometheus-client 0.23.1",
  "rand",
  "rand_chacha",
  "serde",
@@ -4406,7 +4406,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot",
- "prometheus-client 0.23.0",
+ "prometheus-client 0.23.1",
  "rand",
  "serde",
  "thiserror 2.0.11",
@@ -4453,7 +4453,7 @@ dependencies = [
  "nimiq-time",
  "nimiq-utils",
  "parking_lot",
- "prometheus-client 0.23.0",
+ "prometheus-client 0.23.1",
  "tokio",
  "tokio-metrics",
  "tracing",
@@ -4526,7 +4526,7 @@ dependencies = [
  "parking_lot",
  "pin-project",
  "pin-project-lite",
- "prometheus-client 0.23.0",
+ "prometheus-client 0.23.1",
  "rand",
  "serde",
  "sha2",
@@ -5937,9 +5937,9 @@ dependencies = [
 
 [[package]]
 name = "prometheus-client"
-version = "0.23.0"
+version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92f2b0cae6fd19ec4f2b6ded3f39ffcce7a8c8490b34aa406c27e2c855bdc97d"
+checksum = "cf41c1a7c32ed72abe5082fb19505b969095c12da9f5732a4bc9878757fd087c"
 dependencies = [
  "dtoa",
  "itoa",
@@ -6816,9 +6816,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.135"
+version = "1.0.137"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b0d7ba2887406110130a978386c4e1befb98c674b4fba677954e4db976630d9"
+checksum = "930cfb6e6abf99298aaad7d29abbef7a9999a9a8806a40088f55f0dcec03146b"
 dependencies = [
  "indexmap 2.7.0",
  "itoa",
