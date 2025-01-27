@@ -426,6 +426,7 @@ pub struct PeerContactBook {
         Box<dyn Fn(PeerId, u64) -> TaggedSigned<ValidatorRecord<PeerId>, SchnorrKey> + Send + Sync>,
     >,
     /// Validator record verifier
+    #[cfg(feature = "kad")]
     validator_record_verifier: Arc<dyn ValidatorRecordVerifier>,
 }
 
@@ -469,6 +470,7 @@ impl PeerContactBook {
             memory_transport,
             validator_peer_ids: HashMap::new(),
             validator_record_signer: None,
+            #[cfg(feature = "kad")]
             validator_record_verifier,
         }
     }
@@ -825,6 +827,7 @@ impl PeerContactBook {
                 }
 
                 // Re-verify local_only contacts.
+                #[cfg(feature = "kad")]
                 if peer_contact.contact.local_only {
                     let result = peer_contact
                         .contact
