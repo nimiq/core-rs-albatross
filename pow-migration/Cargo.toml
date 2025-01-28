@@ -54,7 +54,7 @@ nimiq-utils = { workspace = true, features = ["spawn"] }
 nimiq-vrf = { workspace = true }
 nimiq_rpc = "0.5"
 percentage = "0.1"
-rand = "0.8"
+rand = "0.9"
 serde = "1.0"
 serde_derive = "1.0"
 thiserror = "2.0"
