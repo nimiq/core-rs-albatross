@@ -26,7 +26,7 @@ ark-serialize = "0.4"
 ark-std = "0.4"
 hex = "0.4"
 log = { workspace = true }
-rand = { version = "0.8", features = ["small_rng"] }
+rand = { version = "0.9", features = ["small_rng"] }
 rayon = { version = "^1.10", optional = true }
 serde = { version = "1.0" }
 thiserror = "2.0"
