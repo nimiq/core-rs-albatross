@@ -30,7 +30,7 @@ nimiq-transaction = { workspace = true }
 
 [dev-dependencies]
 hex = "0.4"
-rand = "0.8"
+rand = "0.9"
 
 nimiq-test-log = { workspace = true }
 nimiq-utils = { workspace = true, features = ["otp", "key-rng"]}

@@ -28,7 +28,7 @@ instant = { version = "0.1", features = ["wasm-bindgen"] }
 log = { workspace = true }
 parking_lot = "0.12"
 pin-project = "1.1"
-rand = "0.8"
+rand = "0.9"
 serde = "1.0"
 thiserror = "2.0"
 tokio = { version = "1.43", features = ["rt", "sync", "time"] }
