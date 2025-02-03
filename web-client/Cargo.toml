@@ -27,7 +27,7 @@ gloo-timers = { version = "0.3", features = ["futures"] }
 hex = "0.4"
 js-sys = "0.3"
 log = { workspace = true }
-rand_core = "0.6.4"
+rand_core = "0.9.0"
 serde = "1.0"
 serde-wasm-bindgen = "0.6"
 tokio = { version = "1.43", features = ["sync"] }

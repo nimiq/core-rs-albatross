@@ -22,7 +22,7 @@ workspace = true
 [dependencies]
 async-trait = "0.1"
 base64 = "0.22"
-bytes = "1.9"
+bytes = "1.10"
 futures = { workspace = true }
 hex = "0.4"
 instant = { version = "0.1", features = ["wasm-bindgen"] }
@@ -32,7 +32,7 @@ parking_lot = "0.12"
 pin-project = "1.1"
 pin-project-lite = "0.2.16"
 prometheus-client = { version = "0.23.1", optional = true }
-rand = "0.8"
+rand = "0.9"
 serde = "1.0"
 sha2 = "0.10"
 thiserror = "2.0"

@@ -20,10 +20,10 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-bytes = "1.9"
+bytes = "1.10"
 futures = { workspace = true }
 http-body-util = { version = "0.1" }
-hyper = { version = "1.5" }
+hyper = { version = "1.6" }
 hyper-util = { version = "0.1", features = ["server-auto", "tokio"] }
 log = { workspace = true }
 parking_lot = "0.12"
