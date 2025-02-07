@@ -59,6 +59,9 @@ pub enum SyncMode {
     Full,
     /// Light nodes: They use LightMacroSync + BlockLiveSync
     Light,
+    /// Pico nodes: They use PicoMacroSync optimistically
+    /// if something fails, they fallback to LightMacroSync
+    Pico,
 }
 
 impl fmt::Display for SyncMode {
@@ -102,7 +105,7 @@ impl ConsensusConfigBuilder {
     ) -> &mut Self {
         let index_history = should_index_history.unwrap_or(match sync_mode {
             SyncMode::History => true,
-            SyncMode::Full | SyncMode::Light => false,
+            SyncMode::Full | SyncMode::Light | SyncMode::Pico => false,
         });
 
         self.index_history = Some(index_history);
@@ -787,6 +790,15 @@ impl ClientConfigBuilder {
     pub fn light(&mut self) -> &mut Self {
         let consensus_config = ConsensusConfig {
             sync_mode: SyncMode::Light,
+            ..Default::default()
+        };
+        self.consensus(consensus_config)
+    }
+
+    /// Configuration for Pico Client
+    pub fn pico(&mut self) -> &mut Self {
+        let consensus_config = ConsensusConfig {
+            sync_mode: SyncMode::Pico,
             ..Default::default()
         };
         self.consensus(consensus_config)

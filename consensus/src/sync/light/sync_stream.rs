@@ -180,7 +180,6 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                     peer_id = ?epoch_ids.sender,
                     "Peer is behind or on different chain"
                 );
-
                 return Poll::Ready(Some(MacroSyncReturn::Outdated(epoch_ids.sender)));
             } else if epoch_ids.ids.is_empty() && epoch_ids.checkpoint.is_none() {
                 match self.blockchain {

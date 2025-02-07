@@ -12,6 +12,7 @@ use nimiq_primitives::{
 };
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfEntropy;
+use parking_lot::RwLockUpgradableReadGuard;
 use tokio::sync::broadcast;
 
 use crate::chain_store::ChainStore;
@@ -77,6 +78,23 @@ impl LightBlockchain {
             notifier: broadcast::Sender::new(BROADCAST_MAX_CAPACITY),
             fork_notifier: broadcast::Sender::new(BROADCAST_MAX_CAPACITY),
         }
+    }
+
+    /// Resets the light blockchain to its initial state
+    pub fn reset_blockchain(this: RwLockUpgradableReadGuard<Self>) {
+        // Upgrade lock
+        let genesis_block = this.genesis_block.clone();
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
+
+        let chain_info = ChainInfo::new(genesis_block.clone(), true);
+        this.chain_store = ChainStore::default();
+
+        this.chain_store.put_chain_info(chain_info);
+
+        this.head = genesis_block.clone();
+        this.macro_head = genesis_block.clone().unwrap_macro();
+        this.election_head = genesis_block.clone().unwrap_macro();
+        this.current_validators = genesis_block.validators()
     }
 
     /// Gets the active validators for a given epoch.

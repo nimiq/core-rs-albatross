@@ -60,6 +60,14 @@ impl MacroSync<MockPeerId> for MockHistorySyncStream {
     fn add_peer(&mut self, peer_id: MockPeerId) {
         self.peers.write().push(peer_id);
     }
+
+    fn collect_peers(&mut self) -> Vec<MockPeerId> {
+        unimplemented!()
+    }
+
+    fn fallback(&mut self, _peers: Vec<MockPeerId>) {
+        unimplemented!()
+    }
 }
 
 fn blockchain() -> Arc<RwLock<Blockchain>> {

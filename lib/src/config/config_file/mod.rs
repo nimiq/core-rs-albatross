@@ -271,6 +271,9 @@ pub enum SyncMode {
     Full,
     /// Light nodes use LightMacroSync + BlockLiveSync to reach consensus
     Light,
+    /// Pico nodes: They use PicoMacroSync optimistically
+    /// if something fails, they fallback to LightMacroSync
+    Pico,
 }
 
 #[derive(Debug, Error)]
@@ -296,6 +299,7 @@ impl From<SyncMode> for config::SyncMode {
             SyncMode::History => Self::History,
             SyncMode::Full => Self::Full,
             SyncMode::Light => Self::Light,
+            SyncMode::Pico => Self::Pico,
         }
     }
 }

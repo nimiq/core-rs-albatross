@@ -2,6 +2,7 @@ use nimiq_block::Block;
 use nimiq_blockchain_interface::{
     AbstractBlockchain, BlockchainEvent, ChainInfo, PushError, PushResult,
 };
+use nimiq_primitives::policy::Policy;
 use nimiq_zkp::{verify::verify, NanoProof, ZKP_VERIFYING_DATA};
 use parking_lot::RwLockUpgradableReadGuard;
 
@@ -187,6 +188,73 @@ impl LightBlockchain {
                 .send(BlockchainEvent::Finalized(block_hash))
                 .ok();
         }
+
+        Ok(PushResult::Extended)
+    }
+
+    /// Pushes an election block for the pico sync, bypassing many checks
+    pub fn push_pico_election(
+        this: RwLockUpgradableReadGuard<Self>,
+        mut block: Block,
+    ) -> Result<PushResult, PushError> {
+        // Must be a macro block.
+        assert!(block.is_macro());
+        assert!(Policy::is_election_block_at(block.block_number()));
+
+        let block_hash = block.hash_cached();
+
+        // Check if we already know this block.
+        if this.chain_store.get_chain_info(&block_hash, false).is_ok() {
+            return Ok(PushResult::Known);
+        }
+
+        if block.block_number() <= this.macro_head.block_number() {
+            return Ok(PushResult::Ignored);
+        }
+
+        // We expect blocks without body here. Defensively strip the block body as opposed to
+        // rejecting the block if the body is present as we can still push it just fine.
+        match block {
+            Block::Macro(ref mut block) => block.body = None,
+            Block::Micro(ref mut block) => block.body = None,
+        }
+
+        // Perform block intrinsic checks.
+        block.verify(this.network_id)?;
+
+        // Upgrade the blockchain lock
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
+
+        // Create the chain info for the new block.
+        let chain_info = ChainInfo::new(block.clone(), true);
+
+        // Remove old blocks from the ChainStore.
+        this.chain_store
+            .clear_old_blocks(chain_info.head.block_number());
+
+        // Store the block chain info.
+        this.chain_store.put_chain_info(chain_info);
+
+        // Update the blockchain.
+        this.head = block.clone();
+
+        this.macro_head = block.clone().unwrap_macro();
+
+        this.notifier
+            .send(BlockchainEvent::Extended(block_hash.clone()))
+            .ok();
+
+        this.election_head = block.unwrap_macro_ref().clone();
+
+        this.current_validators = block.validators();
+
+        // Store the election block header.
+        this.chain_store.put_election(block.unwrap_macro().header);
+
+        // We shouldn't log errors if there are no listeners.
+        this.notifier
+            .send(BlockchainEvent::EpochFinalized(block_hash))
+            .ok();
 
         Ok(PushResult::Extended)
     }

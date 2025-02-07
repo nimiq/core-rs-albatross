@@ -135,6 +135,10 @@ pub fn generate_service_flags(sync_mode: SyncMode, index_history: bool) -> (Serv
             log::info!("Client configured as a light node");
             Services::provided(NodeType::Light)
         }
+        SyncMode::Pico => {
+            log::info!("Client configured as a pico node");
+            Services::provided(NodeType::Pico)
+        }
     };
 
     let required_services = match sync_mode {
@@ -144,6 +148,7 @@ pub fn generate_service_flags(sync_mode: SyncMode, index_history: bool) -> (Serv
         SyncMode::Full => Services::required(NodeType::Full),
         // Services required by light nodes
         SyncMode::Light => Services::required(NodeType::Light),
+        SyncMode::Pico => Services::required(NodeType::Pico),
     };
     (provided_services, required_services)
 }
@@ -417,9 +422,9 @@ impl ClientInner {
                 };
                 BlockchainProxy::from(&blockchain)
             }
-            SyncMode::Light => BlockchainProxy::from(&Arc::new(RwLock::new(LightBlockchain::new(
-                config.network_id,
-            )))),
+            SyncMode::Light | SyncMode::Pico => BlockchainProxy::from(&Arc::new(RwLock::new(
+                LightBlockchain::new(config.network_id),
+            ))),
         };
 
         // Create the Dht verifier
@@ -516,6 +521,20 @@ impl ClientInner {
                     ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&network), zkp_storage)
                         .await;
                 let syncer = SyncerProxy::new_light(
+                    blockchain_proxy.clone(),
+                    Arc::clone(&network),
+                    bls_cache,
+                    zkp_component.proxy(),
+                    network_events,
+                )
+                .await;
+                (syncer, zkp_component)
+            }
+            SyncMode::Pico => {
+                let zkp_component =
+                    ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&network), zkp_storage)
+                        .await;
+                let syncer = SyncerProxy::new_pico(
                     blockchain_proxy.clone(),
                     Arc::clone(&network),
                     bls_cache,

@@ -55,6 +55,8 @@ pub enum NodeType {
     Light,
     /// Full node type
     Full,
+    /// Pico node type
+    Pico,
 }
 
 impl Services {
@@ -71,6 +73,7 @@ impl Services {
             NodeType::Full => {
                 Services::ACCOUNTS_PROOF | Services::FULL_BLOCKS | Services::ACCOUNTS_CHUNKS
             }
+            NodeType::Pico => Services::empty(),
         }
     }
 
@@ -80,6 +83,7 @@ impl Services {
             NodeType::History => Services::HISTORY | Services::FULL_BLOCKS,
             NodeType::Light => Services::ACCOUNTS_PROOF,
             NodeType::Full => Services::FULL_BLOCKS | Services::HISTORY | Services::ACCOUNTS_CHUNKS,
+            NodeType::Pico => Services::ACCOUNTS_PROOF,
         }
     }
 }
