@@ -32,6 +32,11 @@ pub trait MacroSync<TPeerId>: Stream<Item = MacroSyncReturn<TPeerId>> + Unpin + 
     const MAX_REQUEST_EPOCHS: u16;
     /// Adds a peer to synchronize macro blocks
     fn add_peer(&mut self, peer_id: TPeerId);
+    /// Gets the list of peers that are being synced with and removes them from the sync process
+    fn collect_peers(&mut self) -> Vec<TPeerId>;
+    /// Fallbacks to other macro syncing mechanism.
+    /// Currently we can only fallback from Pico to Light macro sync.
+    fn fallback(&mut self, peers: Vec<TPeerId>);
 }
 
 /// Trait that defines how a node synchronizes receiving the blocks the peers are currently
@@ -69,6 +74,8 @@ pub enum MacroSyncReturn<T> {
     Outdated(T),
     /// We can't sync with this peer.
     Incompatible(T),
+    /// Conflicting peer, can only be returned from the Pico Macro sync
+    Conflicting(T),
 }
 
 #[derive(Clone, Debug)]
@@ -323,6 +330,14 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
                 Some(MacroSyncReturn::Incompatible(peer_id)) => {
                     debug!(%peer_id, "Macro sync returned incompatible peer");
                     self.check_incompatible_peer(peer_id);
+                }
+                Some(MacroSyncReturn::Conflicting(peer_id)) => {
+                    debug!(%peer_id, "Macro sync returned conflicting peer");
+                    let mut syncing_peers = self.live_sync.peers();
+                    syncing_peers.push(peer_id);
+                    syncing_peers.append(&mut self.macro_sync.collect_peers());
+
+                    self.macro_sync.fallback(syncing_peers);
                 }
                 None => {}
             }

@@ -1,6 +1,7 @@
 #[cfg(feature = "full")]
 use std::cmp::max;
 use std::{
+    mem,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -9,6 +10,7 @@ use std::{
 use futures::{Stream, StreamExt};
 use nimiq_block::Block;
 use nimiq_blockchain_proxy::BlockchainProxy;
+use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::network::{Network, SubscribeEvents};
 #[cfg(feature = "full")]
 use nimiq_primitives::policy::Policy;
@@ -16,6 +18,10 @@ use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 use parking_lot::Mutex;
 use pin_project::pin_project;
 
+use super::{
+    pico::PicoMacroSync,
+    syncer::{MacroSync, MacroSyncReturn},
+};
 #[cfg(feature = "full")]
 use crate::sync::{
     history::HistoryMacroSync,
@@ -43,6 +49,7 @@ macro_rules! gen_syncer_match {
             #[cfg(feature = "full")]
             SyncerProxy::Full(syncer) => syncer.$f($( $arg ),*),
             SyncerProxy::Light(syncer) => syncer.$f($( $arg ),*),
+            SyncerProxy::Pico(syncer) => syncer.$f($( $arg ),*),
         }
     };
 }
@@ -58,6 +65,88 @@ pub enum SyncerProxy<N: Network> {
     Full(Syncer<N, LightMacroSync<N>, StateLiveSync<N>>),
     /// Light Syncer, uses light macro sync for macro sync and block live sync.
     Light(Syncer<N, LightMacroSync<N>, BlockLiveSync<N>>),
+    /// Pico Syncer, uses pico macro sync, light macro sync and block live sync
+    Pico(Syncer<N, EitherSyncer<N>, BlockLiveSync<N>>),
+}
+
+/// Represents one of two possible macro sync mechanisms: LightMacroSync or PicoMacroSync
+/// only one of them can be active at any point in time.
+#[pin_project(project = EitherSyncerProj)]
+pub enum EitherSyncer<N: Network> {
+    Fallback(LightMacroSync<N>),
+    Normal(PicoMacroSync<N>),
+}
+
+impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for EitherSyncer<TNetwork> {
+    const MAX_REQUEST_EPOCHS: u16 = 1000; // TODO: Use other value
+
+    fn add_peer(&mut self, peer_id: TNetwork::PeerId) {
+        match self {
+            EitherSyncer::Fallback(macro_sync) => macro_sync.add_peer(peer_id),
+            EitherSyncer::Normal(macro_sync) => macro_sync.add_peer(peer_id),
+        }
+    }
+
+    fn fallback(&mut self, peers: Vec<TNetwork::PeerId>) {
+        // This functionality is only implemented for switching from Pico to Light macro sync.
+        let EitherSyncer::Normal(pico) = self else {
+            return;
+        };
+
+        log::info!("Falling back to light macro sync");
+
+        // Get all the peers from the pico macro sync move them to light macro sync
+        let network = &pico.network;
+        let network_event_rx = network.subscribe_events();
+        let blockchain = &pico.blockchain;
+
+        match blockchain {
+            #[cfg(feature = "full")]
+            BlockchainProxy::Full(_) => {
+                unimplemented!()
+            }
+            BlockchainProxy::Light(light_blockchain) => {
+                let blockchain = light_blockchain.upgradable_read();
+                // Reset the blockchain state
+                log::info!("Resetting the light blockchain state");
+                LightBlockchain::reset_blockchain(blockchain);
+            }
+        }
+
+        log::info!("Initializing Light Macro Sync");
+        let mut light_macro_sync = LightMacroSync::new(
+            pico.blockchain.clone(),
+            Arc::clone(&pico.network),
+            network_event_rx,
+            pico.zkp_component_proxy.clone(),
+            0, // Since the light sync does not keep state, we ignore the threshold.
+        );
+
+        for peer_id in peers {
+            info!(%peer_id, "Adding peer into fallback macro sync");
+            light_macro_sync.add_peer(peer_id);
+        }
+
+        let _ = mem::replace(self, EitherSyncer::Fallback(light_macro_sync));
+    }
+
+    fn collect_peers(&mut self) -> Vec<TNetwork::PeerId> {
+        match self {
+            EitherSyncer::Fallback(macro_sync) => macro_sync.collect_peers(),
+            EitherSyncer::Normal(macro_sync) => macro_sync.collect_peers(),
+        }
+    }
+}
+
+impl<TNetwork: Network> Stream for EitherSyncer<TNetwork> {
+    type Item = MacroSyncReturn<TNetwork::PeerId>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        match self.project() {
+            EitherSyncerProj::Fallback(macro_sync) => macro_sync.poll_next_unpin(cx),
+            EitherSyncerProj::Normal(macro_sync) => macro_sync.poll_next_unpin(cx),
+        }
+    }
 }
 
 impl<N: Network> SyncerProxy<N> {
@@ -207,6 +296,51 @@ impl<N: Network> SyncerProxy<N> {
         ))
     }
 
+    /// Creates a new instance of a `SyncerProxy` for the `Pico` variant
+    pub async fn new_pico(
+        blockchain_proxy: BlockchainProxy,
+        network: Arc<N>,
+        bls_cache: Arc<Mutex<BlsCache>>,
+        zkp_component_proxy: ZKPComponentProxy<N>,
+        network_event_rx: SubscribeEvents<N::PeerId>,
+    ) -> Self {
+        let block_queue_config = QueueConfig {
+            include_body: false,
+            ..Default::default()
+        };
+
+        let block_queue = BlockQueue::new(
+            Arc::clone(&network),
+            blockchain_proxy.clone(),
+            block_queue_config,
+        )
+        .await;
+
+        let live_sync = BlockLiveSync::with_queue(
+            blockchain_proxy.clone(),
+            Arc::clone(&network),
+            block_queue,
+            bls_cache,
+        );
+
+        let pico_macro_sync = PicoMacroSync::new(
+            blockchain_proxy.clone(),
+            Arc::clone(&network),
+            network_event_rx,
+            zkp_component_proxy,
+        );
+
+        // We start with the Pico Macro sync mechanism
+        let normal_syncer = EitherSyncer::Normal(pico_macro_sync);
+
+        Self::Pico(Syncer::new(
+            blockchain_proxy,
+            network,
+            live_sync,
+            normal_syncer,
+        ))
+    }
+
     /// Pushes a block for the live sync method
     pub fn push_block(&mut self, block: Block, block_source: BlockSource<N>) {
         gen_syncer_match!(self, push_block, block, block_source)
@@ -247,6 +381,7 @@ impl<N: Network> Stream for SyncerProxy<N> {
             #[cfg(feature = "full")]
             SyncerProxyProj::Full(syncer) => syncer.poll_next_unpin(cx),
             SyncerProxyProj::Light(syncer) => syncer.poll_next_unpin(cx),
+            SyncerProxyProj::Pico(syncer) => syncer.poll_next_unpin(cx),
         }
     }
 }

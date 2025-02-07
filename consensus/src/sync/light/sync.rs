@@ -1,7 +1,5 @@
-#[cfg(feature = "full")]
-use std::collections::HashSet;
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     sync::Arc,
 };
 
@@ -34,7 +32,7 @@ use crate::{
 #[derive(Clone)]
 /// This struct is used to request Epochs IDs (hashes) from other peers
 /// in order to determine their macro chain state relative to us
-pub(crate) struct EpochIds<T> {
+pub struct EpochIds<T> {
     /// Indicates if the latest epoch id that was queried was found in the peer's chain
     pub locator_found: bool,
     /// The most recent epoch ids (hashes)
@@ -80,6 +78,12 @@ pub struct PeerMacroRequests {
     completed_requests: usize,
     /// A Queue used to track the requests that have been sent, and their respective result
     queued_requests: VecDeque<(Blake2bHash, Option<Block>)>,
+}
+
+impl Default for PeerMacroRequests {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 impl PeerMacroRequests {
     pub fn new() -> Self {
@@ -275,8 +279,15 @@ impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for LightMacroSync<TNetwork>
 
     fn add_peer(&mut self, peer_id: TNetwork::PeerId) {
         info!(%peer_id, "Requesting zkp from peer");
-
         self.zkp_requests
             .push(Self::request_zkps(self.zkp_component_proxy.clone(), peer_id).boxed());
+    }
+
+    fn fallback(&mut self, _peers: Vec<TNetwork::PeerId>) {
+        unimplemented!()
+    }
+
+    fn collect_peers(&mut self) -> Vec<TNetwork::PeerId> {
+        unimplemented!()
     }
 }

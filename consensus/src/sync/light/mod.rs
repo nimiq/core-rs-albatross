@@ -4,4 +4,4 @@ mod sync_stream;
 #[cfg(feature = "full")]
 mod validity_window;
 
-pub use sync::LightMacroSync;
+pub use sync::{EpochIds, LightMacroSync, PeerMacroRequests};

@@ -119,4 +119,12 @@ impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for HistoryMacroSync<TNetwor
         .boxed();
         self.epoch_ids_stream.push(future);
     }
+
+    fn fallback(&mut self, _peers: Vec<TNetwork::PeerId>) {
+        unimplemented!()
+    }
+
+    fn collect_peers(&mut self) -> Vec<TNetwork::PeerId> {
+        unimplemented!()
+    }
 }

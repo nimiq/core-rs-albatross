@@ -180,6 +180,12 @@ pub async fn sync_two_peers(
             syncer.move_peer_into_live_sync(net1.get_local_peer_id());
             macro_sync_result
         }
+        SyncerProxy::Pico(ref mut syncer) => {
+            let macro_sync_result = syncer.macro_sync.next().await;
+            // Now we move the syncing peer to the live sync.
+            syncer.move_peer_into_live_sync(net1.get_local_peer_id());
+            macro_sync_result
+        }
     };
     log::debug!("Macro sync result {:?}", macro_sync_result);
     assert_eq!(
