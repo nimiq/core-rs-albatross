@@ -345,6 +345,7 @@ impl ClientInner {
             config.network.peer_count_per_ip_max,
             config.network.peer_count_per_subnet_max,
             config.network.only_secure_ws_connections,
+            config.network.num_initial_connections,
             config.network.allow_loopback_addresses,
             config
                 .network

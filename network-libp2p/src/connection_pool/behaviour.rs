@@ -46,6 +46,8 @@ struct Limits {
 pub(crate) struct Config {
     /// Desired count of peers
     pub desired_peer_count: usize,
+    /// The number of initial attempted connections. These will connect to seed nodes.
+    pub num_initial_connections: usize,
     /// Maximum count of peers
     pub peer_count_max: usize,
     /// Maximum peer count per IP
@@ -83,6 +85,7 @@ impl Default for Config {
             ipv4_subnet_prefix_len: 24,
             ipv6_subnet_prefix_len: 96,
             dialing_count_max: 3,
+            num_initial_connections: 1,
             retry_down_after: Duration::from_secs(60 * 10), // 10 minutes
             housekeeping_interval: Duration::from_secs(60 * 2), // 2 minutes
         }
@@ -584,7 +587,7 @@ impl Behaviour {
             return vec![];
         }
 
-        let num_seeds = 1;
+        let num_seeds = self.config.num_initial_connections;
         let contacts = self.contacts.read();
         let own_contact = contacts.get_own_contact();
         let own_addresses: HashSet<&Multiaddr> = own_contact.addresses().collect();

@@ -182,6 +182,10 @@ pub struct NetworkConfig {
     /// Optional, quorum value for the network DHT.
     #[builder(default)]
     pub dht_quorum: Option<NonZeroU8>,
+
+    /// Optional, number of peers connected to at startup.
+    #[builder(default = "4")]
+    pub num_initial_connections: usize,
 }
 
 /// Configuration for setting TLS for secure WebSocket
@@ -871,6 +875,7 @@ impl ClientConfigBuilder {
             only_secure_ws_connections: false,
             allow_loopback_addresses: config_file.network.allow_loopback_addresses,
             dht_quorum: config_file.network.dht_quorum,
+            num_initial_connections: config_file.network.num_initial_connections,
         });
 
         // Configure consensus

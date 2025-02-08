@@ -92,6 +92,7 @@ impl Behaviour {
             peer_count_max: config.peer_count_max,
             peer_count_per_ip_max: config.peer_count_per_ip_max,
             peer_count_per_subnet_max: config.peer_count_per_subnet_max,
+            num_initial_connections: config.num_initial_connections,
             ..Default::default()
         };
 

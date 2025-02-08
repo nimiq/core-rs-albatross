@@ -97,6 +97,12 @@ seed_nodes = [
 # Default: 20
 #peer_count_per_subnet_max = 20
 
+# The amount of connections initially attempted at startup. 
+# This must be a number bigger than 0 or no connections at all will be attempted.
+# The default is one more than the default of consensus.min_peers.
+# Default: 4 
+#num_initial_connections = 4
+
 ##############################################################################
 #
 # TLS network configuration:

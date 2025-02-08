@@ -247,6 +247,7 @@ fn network_config(address: Multiaddr) -> Config {
         required_services: Services::all(),
         tls: None,
         desired_peer_count: 3,
+        num_initial_connections: 1,
         peer_count_max: 4000,
         peer_count_per_ip_max: 20,
         peer_count_per_subnet_max: 20,

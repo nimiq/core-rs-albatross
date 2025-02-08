@@ -79,6 +79,7 @@ impl TestNetwork for Network {
             20,
             20,
             false,
+            1,
             true,
             NonZeroU8::new(1).unwrap(),
         );
