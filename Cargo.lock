@@ -4758,6 +4758,7 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-serde",
  "nimiq-transaction",
+ "nimiq-transaction-builder",
  "nimiq-utils",
  "quote",
  "schemars 1.2.1",
