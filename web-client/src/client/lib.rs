@@ -146,7 +146,7 @@ impl Client {
         // Finalize config.
         let mut config = builder
             .volatile()
-            .light()
+            .pico()
             .build()
             .expect("Build configuration failed");
 

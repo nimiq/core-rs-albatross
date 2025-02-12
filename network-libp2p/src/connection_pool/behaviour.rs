@@ -584,7 +584,7 @@ impl Behaviour {
             return vec![];
         }
 
-        let num_seeds = 1;
+        let num_seeds = 4;
         let contacts = self.contacts.read();
         let own_contact = contacts.get_own_contact();
         let own_addresses: HashSet<&Multiaddr> = own_contact.addresses().collect();

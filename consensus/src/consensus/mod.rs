@@ -168,7 +168,7 @@ impl<N: Network> Consensus<N> {
     const MIN_PEERS_ESTABLISHED: usize = 3;
 
     /// Minimum number of block announcements extending the chain for consensus to be established.
-    const MIN_BLOCKS_ESTABLISHED: usize = 5;
+    const MIN_BLOCKS_ESTABLISHED: usize = 3;
 
     /// Timeout after which head requests will be performed (again) to determine consensus
     /// established state and to advance the chain.
