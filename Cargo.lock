@@ -4999,6 +4999,7 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-serde",
  "nimiq-transaction",
+ "nimiq-transaction-builder",
  "nimiq-utils",
  "quote",
  "rand 0.8.5",

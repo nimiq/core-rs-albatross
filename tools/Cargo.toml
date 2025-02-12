@@ -26,6 +26,11 @@ name = "nimiq-signtx"
 path = "src/signtx/main.rs"
 
 [[bin]]
+name = "nimiq-maketx"
+path = "src/maketx/main.rs"
+
+
+[[bin]]
 name = "nimiq-rpc-schema"
 path = "src/rpc-schema/main.rs"
 
@@ -35,8 +40,9 @@ path = "src/trim-genesis-config/main.rs"
 
 [dependencies]
 anyhow = "1.0"
-clap = { version = "4.5", features = ["cargo"] }
+clap = { version = "4.5", features = ["cargo","derive"] }
 convert_case = "0.8"
+
 hex = "0.4"
 log = { workspace = true }
 quote = "1.0"
@@ -56,4 +62,5 @@ nimiq-keys = { workspace = true }
 nimiq-primitives = { workspace = true }
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
+nimiq-transaction-builder = { workspace = true, features = ["serde-derive"] }
 nimiq-utils = { workspace = true }
