@@ -20,7 +20,7 @@ use pin_project::pin_project;
 
 use super::{
     pico::PicoMacroSync,
-    syncer::{MacroSync, MacroSyncReturn},
+    sync_interface::{MacroSync, MacroSyncReturn},
 };
 #[cfg(feature = "full")]
 use crate::sync::{
@@ -36,7 +36,8 @@ use crate::{
             queue::QueueConfig,
             BlockLiveSync,
         },
-        syncer::{LiveSyncPushEvent, Syncer},
+        sync_interface::LiveSyncPushEvent,
+        syncer::Syncer,
     },
     BlsCache,
 };

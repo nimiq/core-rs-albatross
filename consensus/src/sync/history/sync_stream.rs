@@ -17,7 +17,7 @@ use crate::sync::{
         sync::Job,
         HistoryMacroSync,
     },
-    syncer::{MacroSync, MacroSyncReturn},
+    sync_interface::{MacroSync, MacroSyncReturn},
 };
 
 impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
@@ -273,7 +273,7 @@ mod tests {
 
     use crate::{
         messages::{RequestBatchSet, RequestHistoryChunk, RequestMacroChain},
-        sync::{history::HistoryMacroSync, syncer::MacroSyncReturn},
+        sync::{history::HistoryMacroSync, sync_interface::MacroSyncReturn},
     };
 
     fn blockchain() -> Arc<RwLock<Blockchain>> {

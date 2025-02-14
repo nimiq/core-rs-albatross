@@ -34,7 +34,10 @@ use self::remote_event_dispatcher::RemoteEventDispatcher;
 use crate::{
     consensus::head_requests::{HeadRequests, HeadRequestsResult},
     messages::{RequestBlock, RequestHead, RequestMacroChain, RequestMissingBlocks},
-    sync::{live::block_queue::BlockSource, syncer::LiveSyncPushEvent, syncer_proxy::SyncerProxy},
+    sync::{
+        live::block_queue::BlockSource, sync_interface::LiveSyncPushEvent,
+        syncer_proxy::SyncerProxy,
+    },
 };
 #[cfg(feature = "full")]
 use crate::{

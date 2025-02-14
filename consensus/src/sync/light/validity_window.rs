@@ -19,7 +19,7 @@ use nimiq_transaction::historic_transaction::HistoricTransaction;
 use super::LightMacroSync;
 use crate::{
     messages::{HistoryChunk, HistoryChunkError, RequestHistoryChunk},
-    sync::{light::sync::ValidityChunkRequest, syncer::MacroSyncReturn},
+    sync::{light::sync::ValidityChunkRequest, sync_interface::MacroSyncReturn},
 };
 
 impl<TNetwork: Network> LightMacroSync<TNetwork> {

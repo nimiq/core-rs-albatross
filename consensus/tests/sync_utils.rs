@@ -7,7 +7,7 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::{
     consensus::Consensus,
     messages::{BlockBodyTopic, BlockHeaderMessage, BlockHeaderTopic},
-    sync::{syncer::MacroSyncReturn, syncer_proxy::SyncerProxy},
+    sync::{sync_interface::MacroSyncReturn, syncer_proxy::SyncerProxy},
     BlsCache,
 };
 use nimiq_database::mdbx::MdbxDatabase;

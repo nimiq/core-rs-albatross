@@ -23,7 +23,7 @@ use crate::{
             block_queue::queue::BlockQueue,
             queue::{self, LiveSyncQueue},
         },
-        syncer::{LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
+        sync_interface::{LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
     },
     BlsCache,
 };

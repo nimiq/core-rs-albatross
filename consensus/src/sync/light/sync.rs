@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     sync::Arc,
 };
 
@@ -20,42 +20,14 @@ use nimiq_zkp_component::{
 use parking_lot::RwLock;
 
 use crate::{
-    messages::{BlockError, Checkpoint},
-    sync::syncer::MacroSync,
+    messages::BlockError,
+    sync::sync_interface::{EpochIds, MacroSync, PeerMacroRequests},
 };
 #[cfg(feature = "full")]
 use crate::{
     messages::{HistoryChunk, HistoryChunkError, RequestHistoryChunk},
     sync::{peer_list::PeerList, sync_queue::SyncQueue},
 };
-
-#[derive(Clone)]
-/// This struct is used to request Epochs IDs (hashes) from other peers
-/// in order to determine their macro chain state relative to us
-pub struct EpochIds<T> {
-    /// Indicates if the latest epoch id that was queried was found in the peer's chain
-    pub locator_found: bool,
-    /// The most recent epoch ids (hashes)
-    pub ids: Vec<Blake2bHash>,
-    /// The most recent checkpoint block in the latest epoch (if any)
-    pub checkpoint: Option<Checkpoint>,
-    /// Epoch number corresponding to the first hash in ids
-    pub first_epoch_number: usize,
-    /// The sender that created this struct
-    pub sender: T,
-}
-
-impl<T> EpochIds<T> {
-    #[inline]
-    pub(crate) fn checkpoint_epoch_number(&self) -> usize {
-        self.first_epoch_number + self.ids.len()
-    }
-
-    #[inline]
-    pub(crate) fn last_epoch_number(&self) -> usize {
-        self.checkpoint_epoch_number().saturating_sub(1)
-    }
-}
 
 #[cfg(feature = "full")]
 /// Struct used to track the progress of the validity window chunk process.
@@ -70,68 +42,6 @@ pub struct ValidityChunkRequest {
     pub election_in_window: bool,
     /// Number of items in the previous requested chunk (for cases where we adopt a new macro head)
     pub last_chunk_items: Option<usize>,
-}
-
-/// This struct is used to track all the macro requests sent to a particular peer
-pub struct PeerMacroRequests {
-    /// Number of requests that have been fulfilled
-    completed_requests: usize,
-    /// A Queue used to track the requests that have been sent, and their respective result
-    queued_requests: VecDeque<(Blake2bHash, Option<Block>)>,
-}
-
-impl Default for PeerMacroRequests {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-impl PeerMacroRequests {
-    pub fn new() -> Self {
-        Self {
-            completed_requests: 0,
-            queued_requests: VecDeque::new(),
-        }
-    }
-
-    // Pushes a new request into the queue
-    pub fn push_request(&mut self, block_hash: Blake2bHash) {
-        self.queued_requests.push_back((block_hash, None))
-    }
-
-    // Pops a request from the queue
-    pub fn pop_request(&mut self) -> Option<(Blake2bHash, Option<Block>)> {
-        self.queued_requests.pop_front()
-    }
-
-    // Returns true if the request was updated, false in case the request was not found
-    pub fn update_request(&mut self, mut block: Block) -> bool {
-        let position = self
-            .queued_requests
-            .iter()
-            .position(|(hash, _)| *hash == block.hash_cached());
-
-        if let Some(position) = position {
-            if self.queued_requests[position].1.is_none() {
-                // A fulfilled request is only count once
-                self.completed_requests += 1;
-            }
-            // We update our block request.
-            // Note: If we receive a response more than once, we use the latest
-            let block_hash = block.hash_cached();
-            log::trace!(%block_hash, "Updating block request");
-            self.queued_requests[position] = (block_hash, Some(block));
-
-            true
-        } else {
-            log::trace!("Received a response for a block that we didn't expect");
-            false
-        }
-    }
-
-    // Returns true if all the requests have been completed
-    pub fn is_ready(&self) -> bool {
-        self.queued_requests.len() == self.completed_requests
-    }
 }
 
 #[cfg(feature = "full")]

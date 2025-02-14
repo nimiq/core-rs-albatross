@@ -21,7 +21,7 @@ use crate::{
             block_queue::{live_sync::PushOpResult as BlockPushOpResult, BlockAndSource},
             queue::{self, LiveSyncQueue},
         },
-        syncer::{LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
+        sync_interface::{LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
     },
     BlsCache,
 };

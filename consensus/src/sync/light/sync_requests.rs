@@ -20,11 +20,8 @@ use nimiq_zkp_component::{
 use crate::{
     messages::{BlockError, MacroChain, MacroChainError, RequestBlock, RequestMacroChain},
     sync::{
-        light::{
-            sync::{EpochIds, PeerMacroRequests},
-            LightMacroSync,
-        },
-        syncer::MacroSync,
+        light::LightMacroSync,
+        sync_interface::{EpochIds, MacroSync, PeerMacroRequests},
     },
 };
 

@@ -24,7 +24,7 @@ use crate::{
     sync::{
         live::{block_queue::live_sync::PushOpResult, queue::LiveSyncQueue},
         peer_list::PeerList,
-        syncer::LiveSyncEvent,
+        sync_interface::LiveSyncEvent,
     },
 };
 

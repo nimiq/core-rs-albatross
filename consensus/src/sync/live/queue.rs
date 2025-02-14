@@ -29,7 +29,7 @@ use crate::{
     consensus::ResolveBlockRequest,
     sync::{
         live::block_queue::{BlockAndSource, BlockSource},
-        syncer::LiveSyncEvent,
+        sync_interface::LiveSyncEvent,
     },
     BlsCache,
 };
