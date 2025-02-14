@@ -15,7 +15,7 @@ use crate::{
     messages::Checkpoint,
     sync::{
         history::cluster::{SyncCluster, SyncClusterResult},
-        syncer::MacroSync,
+        sync_interface::MacroSync,
     },
 };
 

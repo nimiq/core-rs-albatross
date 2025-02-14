@@ -14,9 +14,8 @@ use nimiq_primitives::policy::Policy;
 use crate::{
     messages::{BlockError, MacroChain, MacroChainError, RequestBlock, RequestMacroChain},
     sync::{
-        light::{EpochIds, PeerMacroRequests},
         pico::PicoMacroSync,
-        syncer::MacroSync,
+        sync_interface::{EpochIds, MacroSync, PeerMacroRequests},
     },
 };
 

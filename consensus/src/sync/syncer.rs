@@ -11,107 +11,17 @@ use futures::{future::BoxFuture, FutureExt, Stream, StreamExt};
 use nimiq_block::Block;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
-use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::{CloseReason, Network, NetworkEvent, SubscribeEvents};
 use nimiq_primitives::policy::Policy;
 use nimiq_time::{interval, Interval};
 use nimiq_utils::stream::FuturesUnordered;
 
+use super::sync_interface::{
+    LiveSync, LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent, MacroSync, MacroSyncReturn,
+};
 use crate::{
     consensus::ResolveBlockRequest, messages::RequestHead, sync::live::block_queue::BlockSource,
 };
-
-/// Trait that defines how a node synchronizes macro blocks
-/// The expected functionality is that there could be different methods of syncing but they
-/// all must synchronize to the latest macro block. An implementation of this trait requests,
-/// process and validates these macro blocks.
-/// The quantity of macro blocks needed or extra metadata associated are defined by each
-/// implementor of these trait.
-pub trait MacroSync<TPeerId>: Stream<Item = MacroSyncReturn<TPeerId>> + Unpin + Send {
-    /// The maximum amount of epochs we request for MacroSync
-    const MAX_REQUEST_EPOCHS: u16;
-    /// Adds a peer to synchronize macro blocks
-    fn add_peer(&mut self, peer_id: TPeerId);
-    /// Gets the list of peers that are being synced with and removes them from the sync process
-    fn collect_peers(&mut self) -> Vec<TPeerId>;
-    /// Fallbacks to other macro syncing mechanism.
-    /// Currently we can only fallback from Pico to Light macro sync.
-    fn fallback(&mut self, peers: Vec<TPeerId>);
-}
-
-/// Trait that defines how a node synchronizes receiving the blocks the peers are currently
-/// processing.
-/// The expected functionality is that there could be different methods of syncing but they
-/// all must synchronize to the latest macro block. Once that happened, an implementation of
-/// this trait comes into play to start receiving or processing the blocks that the peers are
-/// currently processing and/or synchronize micro blocks.
-pub trait LiveSync<N: Network>: Stream<Item = LiveSyncEvent<N::PeerId>> + Unpin + Send {
-    /// This function will be called each time a Block is received or announced by any of the
-    /// peers added into the LiveSync.
-    fn push_block(&mut self, block: Block, block_source: BlockSource<N>);
-    /// Adds a peer to receive or request blocks from it.
-    fn add_peer(&mut self, peer_id: N::PeerId);
-    /// Returns the number of peers that are being synced with
-    fn num_peers(&self) -> usize;
-    /// Returns the list of peers that are being synced with
-    fn peers(&self) -> Vec<N::PeerId>;
-    /// Returns whether the state sync has finished (or `true` if there is no state sync required)
-    fn state_complete(&self) -> bool {
-        true
-    }
-    /// Initiates an attempt to resolve a ResolveBlockRequest.
-    fn resolve_block(&mut self, request: ResolveBlockRequest<N>);
-    /// The maximum number of blocks a peer can be ahead before it is considered out-of-sync.
-    fn acceptance_window_size(&self) -> u32;
-}
-
-#[derive(Debug, PartialEq, Eq)]
-/// Return type for a `MacroSync`
-pub enum MacroSyncReturn<T> {
-    /// We have synced to this peer's macro state.
-    Good(T),
-    /// The peer is behind our own state.
-    Outdated(T),
-    /// We can't sync with this peer.
-    Incompatible(T),
-    /// Conflicting peer, can only be returned from the Pico Macro sync
-    Conflicting(T),
-}
-
-#[derive(Clone, Debug)]
-/// Enumeration for events emitted by the Live Sync stream
-pub enum LiveSyncEvent<TPeerId> {
-    /// Events related to received/accepted or rejected blocks
-    PushEvent(LiveSyncPushEvent),
-    /// Events related to peer qualifications in the sync
-    PeerEvent(LiveSyncPeerEvent<TPeerId>),
-}
-
-#[derive(Clone, Debug)]
-/// Enumeration for the LiveSync stream events related to blocks
-pub enum LiveSyncPushEvent {
-    /// An announced block has been accepted
-    AcceptedAnnouncedBlock(Blake2bHash),
-    /// A buffered block has been accepted
-    AcceptedBufferedBlock(Blake2bHash, usize),
-    /// Missing blocks were received. The vec of all adopted blocks hashes is given here.
-    ReceivedMissingBlocks(Vec<Blake2bHash>),
-    /// Block was rejected
-    /// (this is only returned in *some* cases blocks were rejected)
-    RejectedBlock(Blake2bHash),
-    /// Chunks have been accepted for the head block
-    /// (note that other accepted chunks won't be announced)
-    AcceptedChunks(Blake2bHash),
-}
-
-#[derive(Clone, Debug)]
-/// Enumeration for the LiveSync stream events related to peers
-pub enum LiveSyncPeerEvent<TPeerId> {
-    /// Peer is in the past (outdated)
-    Behind(TPeerId),
-    /// Peer is in the future (advanced)
-    Ahead(TPeerId),
-}
 
 /// Syncer is the main synchronization object inside `Consensus`
 /// It has a reference to the main blockchain and network and has two dynamic

@@ -15,10 +15,7 @@ use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 
 use crate::{
     messages::BlockError,
-    sync::{
-        light::{EpochIds, PeerMacroRequests},
-        syncer::MacroSync,
-    },
+    sync::sync_interface::{EpochIds, MacroSync, PeerMacroRequests},
 };
 
 /// The PicoMacroSync is one type of MacroSync that operates on a per peer basis,

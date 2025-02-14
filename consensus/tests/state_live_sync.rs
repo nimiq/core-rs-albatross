@@ -16,7 +16,7 @@ use nimiq_consensus::{
             state_queue::{Chunk, ChunkRequestState, RequestChunk, ResponseChunk, StateQueue},
             StateLiveSync,
         },
-        syncer::{LiveSync, LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
+        sync_interface::{LiveSync, LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent},
     },
     BlsCache,
 };

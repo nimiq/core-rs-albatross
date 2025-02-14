@@ -29,7 +29,7 @@ use crate::{
             },
             queue::{LiveSyncQueue, QueueConfig},
         },
-        syncer::LiveSyncEvent,
+        sync_interface::LiveSyncEvent,
     },
     BlsCache,
 };

@@ -13,7 +13,8 @@ use nimiq_consensus::{
     messages::{RequestMissingBlocks, ResponseBlocks},
     sync::{
         live::{block_queue::BlockQueue, queue::QueueConfig, BlockLiveSync},
-        syncer::{LiveSync, MacroSync, MacroSyncReturn, Syncer},
+        sync_interface::{LiveSync, MacroSync, MacroSyncReturn},
+        syncer::Syncer,
     },
     BlsCache,
 };

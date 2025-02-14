@@ -18,7 +18,7 @@ use nimiq_zkp_component::types::ZKPRequestEvent::{OutdatedProof, Proof};
 
 use crate::sync::{
     light::LightMacroSync,
-    syncer::{MacroSync, MacroSyncReturn},
+    sync_interface::{MacroSync, MacroSyncReturn},
 };
 
 impl<TNetwork: Network> LightMacroSync<TNetwork> {
@@ -483,7 +483,7 @@ mod tests {
 
     use crate::{
         messages::{RequestBlock, RequestHistoryChunk, RequestMacroChain},
-        sync::{light::LightMacroSync, syncer::MacroSyncReturn},
+        sync::{light::LightMacroSync, sync_interface::MacroSyncReturn},
     };
 
     fn blockchain() -> BlockchainProxy {

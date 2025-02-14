@@ -20,7 +20,7 @@ use crate::{
             HistoryMacroSync,
         },
         peer_list::PeerList,
-        syncer::MacroSync,
+        sync_interface::MacroSync,
     },
 };
 

@@ -16,7 +16,7 @@ use tokio_stream::wrappers::ReceiverStream;
 #[cfg(feature = "full")]
 use self::state_queue::StateQueue;
 use self::{block_queue::BlockQueue, queue::LiveSyncQueue};
-use super::syncer::{LiveSync, LiveSyncEvent};
+use super::sync_interface::{LiveSync, LiveSyncEvent};
 use crate::{
     consensus::ResolveBlockRequest,
     sync::live::block_queue::{BlockAndSource, BlockSource},

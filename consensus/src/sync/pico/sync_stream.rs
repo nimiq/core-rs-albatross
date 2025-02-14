@@ -13,7 +13,7 @@ use nimiq_primitives::policy::Policy;
 
 use crate::sync::{
     pico::PicoMacroSync,
-    syncer::{MacroSync, MacroSyncReturn},
+    sync_interface::{MacroSync, MacroSyncReturn},
 };
 
 impl<TNetwork: Network> PicoMacroSync<TNetwork> {
