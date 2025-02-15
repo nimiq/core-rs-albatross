@@ -42,3 +42,7 @@ sync_mode = "history"
 [[node]]
 restartable = false
 sync_mode = "light"
+
+[[node]]
+restartable = false
+sync_mode = "pico"
