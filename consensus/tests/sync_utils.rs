@@ -31,6 +31,7 @@ pub enum SyncMode {
     History,
     Full,
     Light,
+    Pico,
 }
 
 async fn syncer(
@@ -62,6 +63,16 @@ async fn syncer(
         }
         SyncMode::Light => {
             SyncerProxy::new_light(
+                blockchain.clone(),
+                Arc::clone(network),
+                Arc::new(Mutex::new(BlsCache::new_test())),
+                zkp_prover.proxy(),
+                network.subscribe_events(),
+            )
+            .await
+        }
+        SyncMode::Pico => {
+            SyncerProxy::new_pico(
                 blockchain.clone(),
                 Arc::clone(network),
                 Arc::new(Mutex::new(BlsCache::new_test())),
@@ -140,6 +151,10 @@ pub async fn sync_two_peers(
             BlockchainProxy::from(blockchain2)
         }
         SyncMode::Light => {
+            let blockchain2 = Arc::new(RwLock::new(LightBlockchain::new(NetworkId::UnitAlbatross)));
+            BlockchainProxy::from(blockchain2)
+        }
+        SyncMode::Pico => {
             let blockchain2 = Arc::new(RwLock::new(LightBlockchain::new(NetworkId::UnitAlbatross)));
             BlockchainProxy::from(blockchain2)
         }

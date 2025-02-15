@@ -105,7 +105,7 @@ class Topology:
             for count, node in enumerate(topology[key]):
                 if 'sync_mode' not in node:
                     raise Exception("Missing sync_mode for a node")
-                elif node['sync_mode'] not in ["full", "history", "light"]:
+                elif node['sync_mode'] not in ["full", "history", "light", "pico"]:
                     raise Exception(
                         "Unexpected sync_mode for a node: "
                         f"{node['sync_mode']}")
