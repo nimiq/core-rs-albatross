@@ -261,9 +261,26 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
                 }
             }
 
-            // If the macro header process deems a peer useless, it is returned here and we emit it.
-            if let Some(agent) = self.request_macro_headers(epoch_ids) {
-                return Poll::Ready(Some(MacroSyncReturn::Outdated(agent)));
+            // Request the macro headers from the peer or emit it accordingly
+            if let Some(macro_sync_return) = self.request_macro_headers(epoch_ids) {
+                match macro_sync_return {
+                    MacroSyncReturn::Good(peer_id) => {
+                        // We are synced with this peer.
+                        debug!(?peer_id, "Finished macro syncing with peer");
+
+                        if self.blockchain.read().can_enforce_validity_window() {
+                            // We can enforce the validity window, so we are done.
+                            return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
+                        } else {
+                            #[cfg(feature = "full")]
+                            self.start_validity_synchronization(peer_id);
+                        }
+                    }
+                    _ => {
+                        // Propagate any other sync result (outdated is the only one that can be emitted by the macro headers process)
+                        return Poll::Ready(Some(macro_sync_return));
+                    }
+                }
             }
         }
 
