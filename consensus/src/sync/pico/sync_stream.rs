@@ -55,32 +55,29 @@ impl<TNetwork: Network> PicoMacroSync<TNetwork> {
         cx: &mut Context<'_>,
     ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
         while let Poll::Ready(Some(Some(epoch_ids))) = self.epoch_ids_stream.poll_next_unpin(cx) {
+            let peer_id = epoch_ids.sender;
+
             // The peer might have disconnected during the request.
-            if !self.network.has_peer(epoch_ids.sender) {
+            if !self.network.has_peer(peer_id) {
                 continue;
             }
 
             // If the peer didn't find any of our locators, we are done with it and emit it.
             if !epoch_ids.locator_found {
-                debug!(
-                    peer_id = ?epoch_ids.sender,
-                    "Peer is behind or on different chain"
-                );
-                self.syncing_peers.remove(&epoch_ids.sender);
+                debug!(?peer_id, "Peer is behind or on different chain");
+                self.syncing_peers.remove(&peer_id);
                 return Poll::Ready(Some(MacroSyncReturn::Outdated(epoch_ids.sender)));
             } else if epoch_ids.ids.is_empty() && epoch_ids.checkpoint.is_none() {
                 // We are synced with this peer.
-                debug!(
-                    peer_id = ?epoch_ids.sender,
-                    "Finished macro syncing with peer");
-                self.syncing_peers.remove(&epoch_ids.sender);
+                debug!(?peer_id, "Finished macro syncing with peer");
+                self.syncing_peers.remove(&peer_id);
                 return Poll::Ready(Some(MacroSyncReturn::Good(epoch_ids.sender)));
             }
 
-            // If the macro header process deems a peer useless, it is returned here and we emit it.
-            if let Some(agent) = self.request_macro_headers(epoch_ids) {
-                self.syncing_peers.remove(&agent);
-                return Poll::Ready(Some(MacroSyncReturn::Outdated(agent)));
+            // Request macro headers from this peer
+            if let Some(macro_sync_return) = self.request_macro_headers(epoch_ids) {
+                self.syncing_peers.remove(&peer_id);
+                return Poll::Ready(Some(macro_sync_return));
             }
         }
 

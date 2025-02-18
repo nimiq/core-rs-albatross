@@ -15,7 +15,7 @@ use crate::{
     messages::{BlockError, MacroChain, MacroChainError, RequestBlock, RequestMacroChain},
     sync::{
         pico::PicoMacroSync,
-        sync_interface::{EpochIds, MacroSync, PeerMacroRequests},
+        sync_interface::{EpochIds, MacroSync, MacroSyncReturn, PeerMacroRequests},
     },
 };
 
@@ -129,7 +129,7 @@ impl<TNetwork: Network> PicoMacroSync<TNetwork> {
     pub(crate) fn request_macro_headers(
         &mut self,
         mut epoch_ids: EpochIds<TNetwork::PeerId>,
-    ) -> Option<TNetwork::PeerId> {
+    ) -> Option<MacroSyncReturn<TNetwork::PeerId>> {
         // Read our current blockchain state.
         let (our_epoch_id, our_epoch_number, our_block_number) = {
             let blockchain = self.blockchain.read();
@@ -153,7 +153,7 @@ impl<TNetwork: Network> PicoMacroSync<TNetwork> {
                     peer = %epoch_ids.sender,
                     "Peer is behind"
                 );
-                return Some(epoch_ids.sender);
+                return Some(MacroSyncReturn::Outdated(epoch_ids.sender));
             } else {
                 // Check that the epoch_id sent by the peer at our current epoch number corresponds to
                 // our accepted state. If it doesn't, the peer is on a "permanent" fork, so we ban it.
@@ -167,7 +167,7 @@ impl<TNetwork: Network> PicoMacroSync<TNetwork> {
                         peer = %epoch_ids.sender,
                         "Peer is on a different chain"
                     );
-                    return Some(epoch_ids.sender);
+                    return Some(MacroSyncReturn::Outdated(epoch_ids.sender));
                 }
 
                 epoch_ids.ids = epoch_ids
@@ -182,6 +182,13 @@ impl<TNetwork: Network> PicoMacroSync<TNetwork> {
             if checkpoint.block_number <= our_block_number {
                 epoch_ids.checkpoint = None;
             }
+        }
+
+        // After discarding all epoch_ids & checkpoint prior to our current state
+        // It could happen that we don't have anything new to learn from this peer
+        if epoch_ids.ids.is_empty() && epoch_ids.checkpoint.is_none() {
+            log::debug!("Nothing new to learn from this peer, emit it as good");
+            return Some(MacroSyncReturn::Good(epoch_ids.sender));
         }
 
         let mut peer_requests = PeerMacroRequests::new();
