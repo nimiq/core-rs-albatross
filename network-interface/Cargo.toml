@@ -20,15 +20,15 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-async-trait = "0.1"
-bitflags = { version = "2.9", features = ["serde"] }
+async-trait = { workspace = true }
+bitflags = { workspace = true, features = ["serde"] }
 futures = { workspace = true }
 log = { workspace = true }
-multiaddr = "0.18"
-serde = "1.0"
-thiserror = "2.0"
-tokio = { version = "1.44", features = ["rt"] }
-tokio-stream = { version = "0.1", features = ["default", "sync"] }
+multiaddr = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }
+tokio-stream = { workspace = true, features = ["default", "sync"] }
 
 nimiq-serde = { workspace = true }
 nimiq-utils = { workspace = true, features = ["tagged-signing"] }

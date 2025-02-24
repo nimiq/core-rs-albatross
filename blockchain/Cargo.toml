@@ -21,15 +21,15 @@ workspace = true
 
 [dependencies]
 futures = { workspace = true }
-hex = "0.4"
+hex = { workspace = true }
 log = { workspace = true }
-parking_lot = "0.12"
-prometheus-client = { version = "0.23.1", optional = true }
-rand = "0.8"
-serde = "1.0"
-thiserror = "2.0"
-tokio = { version = "1.44", features = ["sync"] }
-tokio-stream = { version = "0.1", features = ["sync"] }
+parking_lot = { workspace = true }
+prometheus-client = { workspace = true, optional = true }
+rand = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+tokio-stream = { workspace = true, features = ["sync"] }
 
 nimiq-account = { workspace = true, features = ["accounts"] }
 nimiq-block = { workspace = true }
@@ -52,8 +52,8 @@ nimiq-vrf = { workspace = true }
 nimiq-zkp = { workspace = true }
 
 [dev-dependencies]
-rand_chacha = "0.3.1"
-tempfile = "3.19"
+rand_chacha = { workspace = true }
+tempfile = { workspace = true }
 
 nimiq-tendermint = { workspace = true }
 nimiq-test-log = { workspace = true }

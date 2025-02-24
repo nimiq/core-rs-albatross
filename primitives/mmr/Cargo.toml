@@ -14,7 +14,7 @@ keywords.workspace = true
 workspace = true
 
 [dependencies]
-serde = { version = "1.0", optional = true }
+serde = { workspace = true, optional = true }
 
 nimiq-serde = { workspace = true, optional = true }
 

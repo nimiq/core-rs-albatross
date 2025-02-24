@@ -24,21 +24,21 @@ name = "nimiq-test-prover"
 required-features = ["test-prover", "tokio/rt-multi-thread"]
 
 [dependencies]
-ark-groth16 = { version = "0.4", default-features = false }
-ark-mnt4-753 = "0.4"
-ark-mnt6-753 = "0.4"
-ark-serialize = "0.4"
-async-trait = "0.1"
+ark-groth16 = { workspace = true }
+ark-mnt4-753 = { workspace = true }
+ark-mnt6-753 = { workspace = true }
+ark-serialize = { workspace = true }
+async-trait = { workspace = true }
 futures = { workspace = true }
-hex = "0.4"
+hex = { workspace = true }
 log = { workspace = true }
-parking_lot = "0.12"
-rand = "0.8"
-serde = "1.0"
-thiserror = "2.0"
-tokio = { version = "1.44", features = ["macros", "rt", "sync"] }
-tokio-stream = { version = "0.1", features = ["sync"] }
-tracing-subscriber = { version = "0.3", optional = true }
+parking_lot = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }
+tokio-stream = { workspace = true, features = ["sync"] }
+tracing-subscriber = { workspace = true, optional = true }
 
 nimiq-block = { workspace = true }
 nimiq-blockchain = { workspace = true, optional = true }
@@ -66,7 +66,7 @@ nimiq-zkp-circuits = { workspace = true }
 nimiq-zkp-primitives = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.19"
+tempfile = { workspace = true }
 
 nimiq-bls = { workspace = true }
 nimiq-genesis-builder = { workspace = true }

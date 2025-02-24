@@ -17,16 +17,16 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 workspace = true
 
 [dependencies]
-base64 = "0.22"
-bitflags = { version = "2.9", features = ["serde"] }
-hex = "0.4"
+base64 = { workspace = true }
+bitflags = { workspace = true, features = ["serde"] }
+hex = { workspace = true }
 log = { workspace = true }
-serde = "1.0"
-serde_json = "1.0"
-thiserror = "2.0"
-tsify = { git = "https://github.com/sisou/tsify", branch = "sisou/comments", default-features = false, features = ["js"], optional = true }
-url = { version = "2.5", features = ["serde"] }
-wasm-bindgen = { version = "0.2", optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tsify = { workspace = true, features = ["js"], optional = true }
+url = { workspace = true, features = ["serde"] }
+wasm-bindgen = { workspace = true, optional = true }
 
 nimiq-bls = { workspace = true, features = ["serde-derive"] }
 nimiq-database-value = { workspace = true }
@@ -42,7 +42,7 @@ nimiq-serde = { workspace = true }
 nimiq-utils = { workspace = true, features = ["merkle"] }
 
 [dev-dependencies]
-serde_json = "1.0"
+serde_json = { workspace = true }
 
 nimiq-test-log = { workspace = true }
 nimiq-test-utils = { workspace = true }

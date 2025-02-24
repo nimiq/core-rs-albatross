@@ -14,12 +14,12 @@ keywords.workspace = true
 workspace = true
 
 [dependencies]
-hex = "0.4"
+hex = { workspace = true }
 log = { workspace = true }
-parking_lot = "0.12"
-rand = "0.8"
-serde = "1.0"
-thiserror = "2.0"
+parking_lot = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
 
 nimiq-bls = { workspace = true }
 nimiq-collections = { workspace = true }
@@ -37,8 +37,8 @@ nimiq-utils = { workspace = true, features = ["key-rng"] }
 nimiq-vrf = { workspace = true }
 
 [dev-dependencies]
-hex = "0.4"
-tempfile = "3.19"
+hex = { workspace = true }
+tempfile = { workspace = true }
 
 nimiq-genesis-builder = { workspace = true }
 nimiq-test-log = { workspace = true }

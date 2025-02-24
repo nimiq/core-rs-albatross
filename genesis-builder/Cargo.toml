@@ -14,13 +14,13 @@ keywords.workspace = true
 workspace = true
 
 [dependencies]
-hex = "0.4"
+hex = { workspace = true }
 log = { workspace = true }
-serde = "1.0"
-thiserror = "2.0"
-time = { version = "0.3", features = ["formatting", "parsing", "serde"] }
-toml = "0.8"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true, features = ["formatting", "parsing", "serde"] }
+toml = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 nimiq-account = { workspace = true, features = ["accounts", "interaction-traits"] }
 nimiq-block = { workspace = true }

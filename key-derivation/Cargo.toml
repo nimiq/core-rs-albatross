@@ -20,15 +20,15 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-byteorder = "1.5"
-regex = "1.11"
-serde = "1.0"
+byteorder = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true }
 
 nimiq-hash = { workspace = true }
 nimiq-keys = { workspace = true, features = ["serde-derive"] }
 nimiq-serde = { workspace = true }
 
 [dev-dependencies]
-hex = "0.4"
+hex = { workspace = true }
 
 nimiq-test-log = { workspace = true }

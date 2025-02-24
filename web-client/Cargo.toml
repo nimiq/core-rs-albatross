@@ -22,24 +22,24 @@ workspace = true
 crate-type = ["rlib", "cdylib"]
 
 [dependencies]
-ark-serialize = "0.4"
+ark-serialize = { workspace = true }
 futures = { workspace = true }
-gloo-timers = { version = "0.3", features = ["futures"] }
-hex = "0.4"
-idb = "0.6.4"
-js-sys = "0.3"
+gloo-timers = { workspace = true, features = ["futures"] }
+hex = { workspace = true }
+idb = { workspace = true }
+js-sys = { workspace = true }
 log = { workspace = true }
-rand_core = "0.6.4"
-serde = "1.0"
-serde_bytes = "0.11"
-serde_json = "1.0"
-serde-wasm-bindgen = "0.6"
-tokio = { version = "1.44", features = ["sync"] }
-tsify = { git = "https://github.com/sisou/tsify", branch = "sisou/comments", default-features = false, features = ["js"] }
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
-wasm-bindgen-derive = { version = "0.3", optional = true }
-web-sys = { version = "0.3.72", features = ["MessageEvent"] }
+rand_core = { workspace = true }
+serde = { workspace = true }
+serde_bytes = { workspace = true }
+serde_json = { workspace = true }
+serde-wasm-bindgen = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+tsify = { workspace = true, features = ["js"] }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+wasm-bindgen-derive = { workspace = true, optional = true }
+web-sys = { workspace = true, features = ["MessageEvent"] }
 
 nimiq-account = { workspace = true, default-features = false }
 nimiq-block = { workspace = true }
@@ -65,9 +65,9 @@ features = [
 ]
 
 [dev-dependencies]
-parking_lot = "0.12"
-serde = "1.0"
-wasm-bindgen-test = "0.3"
+parking_lot = { workspace = true }
+serde = { workspace = true }
+wasm-bindgen-test = { workspace = true }
 
 nimiq-bls = { workspace = true }
 nimiq-blockchain-proxy = { workspace = true, default-features = false }

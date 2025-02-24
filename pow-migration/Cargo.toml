@@ -20,10 +20,10 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-clap = { version = "4.5", features = ["derive"] }
-convert_case = "0.8"
-hex = "0.4"
-humantime = "2.2"
+clap = { workspace = true, features = ["derive"] }
+convert_case = { workspace = true }
+hex = { workspace = true }
+humantime = { workspace = true }
 log = { workspace = true }
 nimiq-blockchain = { workspace = true }
 nimiq-bls = { workspace = true }
@@ -52,26 +52,22 @@ nimiq-time = { workspace = true }
 nimiq-transaction = { workspace = true }
 nimiq-utils = { workspace = true, features = ["spawn"] }
 nimiq-vrf = { workspace = true }
-nimiq_rpc = "0.5"
-percentage = "0.1"
-rand = "0.8"
-serde = "1.0"
-serde_derive = "1.0"
-thiserror = "2.0"
-time = "0.3"
-tokio = { version = "1.44", features = [
-    "macros",
-    "rt-multi-thread",
-    "tracing",
-] }
-toml = "0.8"
-url = "2.5"
+nimiq_rpc = { workspace = true }
+percentage = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "tracing"] }
+toml = { workspace = true }
+url = { workspace = true }
 
 [build-dependencies]
-build-data = "0.2"
+build-data = { workspace = true }
 
 [dev-dependencies]
-serde_json = "1.0"
+serde_json = { workspace = true }
 
 nimiq-test-log = { workspace = true }
 nimiq-web-client = { workspace = true, features = ["primitives"] }

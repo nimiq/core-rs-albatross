@@ -24,18 +24,14 @@ name = "nimiq-rpc"
 path = "src/main.rs"
 
 [dependencies]
-async-trait = "0.1"
-anyhow = "1.0"
-clap = { version = "4.5", features = ["derive"] }
-dotenvy = "0.15"
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+dotenvy = { workspace = true }
 futures = { workspace = true }
-tokio = { version = "1.44", features = [
-    "macros",
-    "rt-multi-thread",
-    "tracing",
-] }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-url = "2.5"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "tracing"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+url = { workspace = true }
 
 nimiq-account = { workspace = true }
 nimiq-bls = { workspace = true }

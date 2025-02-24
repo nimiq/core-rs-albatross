@@ -21,9 +21,9 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-hex = "0.4"
-serde = "1.0"
-url = "2.5"
+hex = { workspace = true }
+serde = { workspace = true }
+url = { workspace = true }
 
 nimiq-block = { workspace = true }
 nimiq-bls = { workspace = true }
@@ -40,7 +40,7 @@ nimiq-utils = { workspace = true, features = ["time"] }
 
 [build-dependencies]
 log = { workspace = true }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 nimiq-database = { workspace = true }
 nimiq-genesis-builder = { workspace = true }

@@ -21,14 +21,14 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-clap = { version = "4.5", features = ["derive"] }
+clap = { workspace = true, features = ["derive"] }
 futures = { workspace = true }
 log = { workspace = true }
-rand = "0.8.5"
-serde = "1.0"
-tokio = { version = "1.44", features = ["rt-multi-thread", "time", "tracing"] }
-tokio-metrics = { version = "0.4" }
-toml = "0.8"
+rand = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "time", "tracing"] }
+tokio-metrics = { workspace = true }
+toml = { workspace = true }
 
 nimiq-block = { workspace = true }
 nimiq-blockchain = { workspace = true }

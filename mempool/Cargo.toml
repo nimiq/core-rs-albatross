@@ -21,16 +21,16 @@ workspace = true
 
 [dependencies]
 futures = { workspace = true }
-hashlink = "0.10"
-keyed_priority_queue = "0.4"
+hashlink = { workspace = true }
+keyed_priority_queue = { workspace = true }
 log = { workspace = true }
-parking_lot = "0.12"
-prometheus-client = { version = "0.23.1", optional = true }
-serde = "1.0"
-thiserror = "2.0"
-tokio = { version = "1.44", features = ["rt", "rt-multi-thread", "sync", "tracing"] }
-tokio-metrics = "0.4"
-tokio-stream = { version = "0.1", features = ["sync"] }
+parking_lot = { workspace = true }
+prometheus-client = { workspace = true, optional = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "tracing"] }
+tokio-metrics = { workspace = true }
+tokio-stream = { workspace = true, features = ["sync"] }
 
 nimiq-account = { workspace = true }
 nimiq-block = { workspace = true }
@@ -46,8 +46,8 @@ nimiq-transaction = { workspace = true }
 nimiq-utils = { workspace = true, features = ["spawn", "time"] }
 
 [dev-dependencies]
-hex = "0.4"
-rand = "0.8"
+hex = { workspace = true }
+rand = { workspace = true }
 
 nimiq-block = { workspace = true }
 nimiq-blockchain = { workspace = true }

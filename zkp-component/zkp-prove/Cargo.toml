@@ -14,13 +14,13 @@ keywords.workspace = true
 workspace = true
 
 [dependencies]
-clap = { version = "4.5", features = ["cargo", "string", "derive"] }
-hex = "0.4"
+clap = { workspace = true, features = ["cargo", "string", "derive"] }
+hex = { workspace = true }
 log = { workspace = true }
-parking_lot = "0.12"
-serde = "1.0"
-tokio = { version = "1.44", features = ["macros", "rt", "sync"] }
-tracing-subscriber = { version = "0.3" }
+parking_lot = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }
+tracing-subscriber = { workspace = true }
 
 nimiq-block = { workspace = true }
 nimiq-blockchain = { workspace = true }

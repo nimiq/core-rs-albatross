@@ -18,14 +18,14 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-ark-ec = "0.4"
-bitflags = { version = "2.9", features = ["serde"] }
-byteorder = "1.5"
-hex = "0.4"
+ark-ec = { workspace = true }
+bitflags = { workspace = true, features = ["serde"] }
+byteorder = { workspace = true }
+hex = { workspace = true }
 log = { workspace = true }
-serde = "1.0"
-serde_repr = "0.1"
-thiserror = "2.0"
+serde = { workspace = true }
+serde_repr = { workspace = true }
+thiserror = { workspace = true }
 
 nimiq-bls = { workspace = true, features = ["serde-derive"] }
 nimiq-collections = { workspace = true }

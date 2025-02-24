@@ -20,19 +20,19 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-async-trait = "0.1"
+async-trait = { workspace = true }
 futures = { workspace = true }
-futures-executor = { version = "0.3" }
-hashlink = "0.10"
-instant = { version = "0.1", features = ["wasm-bindgen"] }
+futures-executor = { workspace = true }
+hashlink = { workspace = true }
+instant = { workspace = true, features = ["wasm-bindgen"] }
 log = { workspace = true }
-parking_lot = "0.12"
-pin-project = "1.1"
-rand = "0.8"
-serde = "1.0"
-thiserror = "2.0"
-tokio = { version = "1.44", features = ["rt", "sync", "time"] }
-tokio-stream = { version = "0.1", features = ["sync"] }
+parking_lot = { workspace = true }
+pin-project = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
+tokio-stream = { workspace = true, features = ["sync"] }
 
 nimiq-account = { workspace = true, default-features = false }
 nimiq-block = { workspace = true }
@@ -54,7 +54,7 @@ nimiq-utils = { workspace = true, features = ["futures", "merkle", "spawn", "tim
 nimiq-zkp-component = { workspace = true }
 
 [dev-dependencies]
-hex = "0.4"
+hex = { workspace = true }
 
 nimiq-bls = { workspace = true }
 nimiq-database = { workspace = true }

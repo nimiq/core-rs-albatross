@@ -21,8 +21,8 @@ workspace = true
 
 [dependencies]
 futures = { workspace = true }
-parking_lot = "0.12"
-tokio-stream = { version = "0.1", features = ["sync"] }
+parking_lot = { workspace = true }
+tokio-stream = { workspace = true, features = ["sync"] }
 
 nimiq-block = { workspace = true }
 nimiq-blockchain = { workspace = true, optional = true }

@@ -20,13 +20,13 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-blake2-rfc = "0.2"
-byteorder = "1.5"
-hex = "0.4"
-rust-argon2 = "2.1"
-serde = "1.0"
-sha2 = "0.10"
-subtle = "2.6"
+blake2-rfc = { workspace = true }
+byteorder = { workspace = true }
+hex = { workspace = true }
+rust-argon2 = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+subtle = { workspace = true }
 
 nimiq-database-value = { workspace = true }
 nimiq-macros = { workspace = true }

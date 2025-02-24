@@ -14,10 +14,10 @@ keywords.workspace = true
 workspace = true
 
 [dependencies]
-hex = "0.4"
+hex = { workspace = true }
 log = { workspace = true }
-serde = "1.0"
-thiserror = "2.0"
+serde = { workspace = true }
+thiserror = { workspace = true }
 
 nimiq-database = { workspace = true }
 nimiq-hash = { workspace = true }

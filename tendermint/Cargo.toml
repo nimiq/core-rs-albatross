@@ -16,14 +16,10 @@ workspace = true
 [dependencies]
 futures = { workspace = true }
 log = { workspace = true }
-rand = "0.8"
-serde = "1.0"
-tokio = { version = "1.44", features = [
-    "macros",
-    "rt-multi-thread",
-    "tracing",
-] }
-tokio-stream = "0.1"
+rand = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "tracing"] }
+tokio-stream = { workspace = true }
 
 nimiq-collections = { workspace = true }
 nimiq-utils = { workspace = true, features = ["futures"] }
@@ -31,9 +27,5 @@ nimiq-time = { workspace = true }
 
 [dev-dependencies]
 nimiq-test-log = { workspace = true }
-tokio = { version = "1.44", features = [
-    "macros",
-    "rt-multi-thread",
-    "tracing",
-] }
-tokio-util = "0.7"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "tracing"] }
+tokio-util = { workspace = true }

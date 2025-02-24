@@ -20,21 +20,16 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-bytes = "1.10"
+bytes = { workspace = true }
 futures = { workspace = true }
-http-body-util = { version = "0.1" }
-hyper = { version = "1.6" }
-hyper-util = { version = "0.1", features = ["server-auto", "tokio"] }
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true, features = ["server-auto", "tokio"] }
 log = { workspace = true }
-parking_lot = "0.12"
-prometheus-client = "0.23.1"
-tokio = { version = "1.44", features = [
-    "macros",
-    "net",
-    "rt-multi-thread",
-    "tracing",
-] }
-tokio-metrics = "0.4"
+parking_lot = { workspace = true }
+prometheus-client = { workspace = true }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "tracing"] }
+tokio-metrics = { workspace = true }
 
 nimiq-blockchain = { workspace = true, features = ["metrics"] }
 nimiq-blockchain-interface = { workspace = true }

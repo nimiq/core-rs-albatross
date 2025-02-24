@@ -20,18 +20,15 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-async-trait = "0.1"
-derive_more = { version = "1.0", features = ["display", "from", "into"] }
+async-trait = { workspace = true }
+derive_more = { workspace = true, features = ["display", "from", "into"] }
 futures = { workspace = true }
 log = { workspace = true }
-parking_lot = "0.12"
-serde = "1.0"
-thiserror = "2.0"
-tokio = { version = "1.44", features = [
-    "rt",
-    "sync",
-] }
-tokio-stream = "0.1"
+parking_lot = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync"] }
+tokio-stream = { workspace = true }
 
 nimiq-network-interface = { workspace = true }
 nimiq-serde = { workspace = true }

@@ -18,19 +18,19 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-async-trait = "0.1"
-byteorder = "1.5"
+async-trait = { workspace = true }
+byteorder = { workspace = true }
 futures = { workspace = true }
-hashlink = "0.10"
-instant = { version = "0.1", features = ["wasm-bindgen"] }
+hashlink = { workspace = true }
+instant = { workspace = true, features = ["wasm-bindgen"] }
 log = { workspace = true }
-parking_lot = "0.12"
-rand = "0.8"
-rayon = "1.10"
-serde = "1.0"
-tokio = { version = "1.44", features = ["rt", "time", "tracing"] }
-tokio-metrics = "0.4"
-tokio-stream = { version = "0.1", features = ["sync"] }
+parking_lot = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true, features = ["rt", "time", "tracing"] }
+tokio-metrics = { workspace = true }
+tokio-stream = { workspace = true, features = ["sync"] }
 
 nimiq-account = { workspace = true }
 nimiq-block = { workspace = true }
@@ -59,10 +59,10 @@ nimiq-validator-network = { workspace = true }
 nimiq-vrf = { workspace = true }
 
 [dev-dependencies]
-hex = "0.4"
-tokio = { version = "1.44", features = ["rt", "test-util", "time", "tracing"] }
-tracing-core = "0.1"
-tracing-subscriber = "0.3"
+hex = { workspace = true }
+tokio = { workspace = true, features = ["rt", "test-util", "time", "tracing"] }
+tracing-core = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 nimiq-blockchain-proxy = { workspace = true }
 nimiq-genesis-builder = { workspace = true }

@@ -18,8 +18,8 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-serde = { version = "1.0", optional = true }
-thiserror = "2.0"
+serde = { workspace = true, optional = true }
+thiserror = { workspace = true }
 
 nimiq-bls = { workspace = true }
 nimiq-hash = { workspace = true }
@@ -29,8 +29,8 @@ nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
 
 [dev-dependencies]
-hex = "0.4"
-rand = "0.8"
+hex = { workspace = true }
+rand = { workspace = true }
 
 nimiq-test-log = { workspace = true }
 nimiq-utils = { workspace = true, features = ["otp", "key-rng"]}

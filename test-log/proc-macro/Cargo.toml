@@ -14,11 +14,11 @@ workspace = true
 proc-macro = true
 
 [dependencies]
-darling = "0.20"
-quote = "1.0"
-syn = { version = "2.0", features = ["full"] }
+darling = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
-tokio = { version = "1.44", features = ["macros", "rt"] }
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 nimiq-test-log = { workspace = true }

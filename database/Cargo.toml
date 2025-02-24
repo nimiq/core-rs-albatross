@@ -23,21 +23,17 @@ maintenance = { status = "experimental" }
 workspace = true
 
 [dependencies]
-libmdbx = "0.5.3"
+libmdbx = { workspace = true }
 log = { workspace = true }
-tempfile = "3"
-thiserror = "2.0"
+tempfile = { workspace = true }
+thiserror = { workspace = true }
 
 nimiq-database-value = { workspace = true }
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
-pprof = { version = "0.14", features = [
-    "flamegraph",
-    "frame-pointer",
-    "criterion",
-] }
-rand = "0.8"
+criterion = { workspace = true, features = ["html_reports"] }
+pprof = { workspace = true, features = ["flamegraph", "frame-pointer", "criterion"] }
+rand = { workspace = true }
 
 [[bench]]
 name = "hash_keys"
