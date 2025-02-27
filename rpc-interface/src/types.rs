@@ -141,8 +141,7 @@ pub struct Block {
     #[serde(with = "crate::serde_helpers::hex")]
     pub extra_data: Vec<u8>,
     pub state_hash: Blake2bHash,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub body_hash: Option<Blake2sHash>,
+    pub body_hash: Blake2sHash,
     pub history_hash: Blake2bHash,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -241,7 +240,7 @@ impl Block {
             seed: macro_block.header.seed,
             extra_data: macro_block.header.extra_data,
             state_hash: macro_block.header.state_root,
-            body_hash: Some(macro_block.header.body_root),
+            body_hash: macro_block.header.body_root,
             history_hash: macro_block.header.history_root,
             transactions,
             additional_fields: BlockAdditionalFields::Macro {
@@ -314,7 +313,7 @@ impl Block {
             seed: micro_block.header.seed,
             extra_data: micro_block.header.extra_data,
             state_hash: micro_block.header.state_root,
-            body_hash: Some(micro_block.header.body_root),
+            body_hash: micro_block.header.body_root,
             history_hash: micro_block.header.history_root,
             transactions,
             additional_fields: BlockAdditionalFields::Micro {
