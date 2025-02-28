@@ -1,8 +1,9 @@
 use libp2p::{kad::Record, PeerId};
 use nimiq_keys::Address;
-use nimiq_network_interface::network::Network as NetworkInterface;
+use nimiq_network_interface::{
+    network::Network as NetworkInterface, validator_record::ValidatorRecord,
+};
 use nimiq_serde::DeserializeError;
-use nimiq_validator_network::validator_record::ValidatorRecord;
 
 pub use crate::network_types::DhtRecord;
 use crate::Network;
@@ -22,6 +23,8 @@ pub enum DhtVerifierError {
     ),
     StateIncomplete,
     InvalidSignature,
+    ValidatorInfoError,
+    MissingPublisher,
 }
 
 pub trait Verifier: Send + Sync {

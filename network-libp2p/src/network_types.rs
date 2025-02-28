@@ -15,10 +15,10 @@ use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, PubsubId, Topic},
     peer_info::Services,
     request::{RequestError, RequestType},
+    validator_record::ValidatorRecord,
 };
 use nimiq_serde::{Deserialize, DeserializeError};
 use nimiq_utils::tagged_signing::{TaggedSignable, TaggedSigned};
-use nimiq_validator_network::validator_record::ValidatorRecord;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 

@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fmt::{Debug, Display},
     hash::Hash,
     time::Duration,
@@ -6,14 +7,16 @@ use std::{
 
 use async_trait::async_trait;
 use futures::stream::BoxStream;
+use nimiq_keys::{Address, KeyPair};
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
-use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable};
+use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned};
 use thiserror::Error;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 use crate::{
     peer_info::*,
     request::{Message, Request, RequestError},
+    validator_record::ValidatorRecord,
 };
 
 /// Network events that the network will report when subscribing
@@ -87,7 +90,17 @@ pub enum SendError {
 
 #[async_trait]
 pub trait Network: Send + Sync + Unpin + 'static {
-    type PeerId: Copy + Debug + Display + Ord + Hash + Send + Sync + Unpin + 'static;
+    type PeerId: Copy
+        + Debug
+        + Display
+        + Ord
+        + Hash
+        + Send
+        + Sync
+        + Unpin
+        + Serialize
+        + Deserialize
+        + 'static;
     type AddressType: Debug + Display + 'static;
     type Error: std::error::Error;
     type PubsubId: PubsubId<Self::PeerId> + Send + Sync + Unpin;
@@ -112,6 +125,14 @@ pub trait Network: Send + Sync + Unpin + 'static {
         services: Services,
         min_peers: usize,
     ) -> Result<Vec<Self::PeerId>, Self::Error>;
+
+    /// Returns all peer ids that are known for the given validator.
+    /// The returned list might contain unverified mappings.
+    fn get_peers_by_validator(
+        &self,
+        validator_address: &Address,
+        include_unverified: bool,
+    ) -> HashSet<Self::PeerId>;
 
     /// Returns true when the given peer provides the services flags that are required by us
     fn peer_provides_required_services(&self, peer_id: Self::PeerId) -> bool;
@@ -218,4 +239,13 @@ pub trait Network: Send + Sync + Unpin + 'static {
         request_id: Self::RequestId,
         response: Req::Response,
     ) -> Result<(), Self::Error>;
+
+    /// Registers a callback to produce a signed ValidatorRecord from a given peer_id and timestamp.
+    fn register_validator_signing_callback(
+        &self,
+        callback: impl Fn(Self::PeerId, u64) -> TaggedSigned<ValidatorRecord<Self::PeerId>, KeyPair>
+            + Send
+            + Sync
+            + 'static,
+    );
 }

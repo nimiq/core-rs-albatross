@@ -12,10 +12,14 @@ use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, Topic},
     peer_info::Services,
+    validator_record::ValidatorRecord,
 };
 use nimiq_network_libp2p::{
     dht,
-    discovery::{self, peer_contacts::PeerContact},
+    discovery::{
+        self,
+        peer_contacts::{PeerContact, ValidatorInfoError, ValidatorRecordVerifier},
+    },
     Config, Network,
 };
 use nimiq_serde::{Deserialize, Serialize};
@@ -27,7 +31,6 @@ use nimiq_utils::{
     spawn,
     tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned},
 };
-use nimiq_validator_network::validator_record::ValidatorRecord;
 use parking_lot::RwLock;
 use rand::{thread_rng, Rng};
 
@@ -203,6 +206,26 @@ impl Verifier {
     }
 }
 
+impl ValidatorRecordVerifier for Verifier {
+    fn verify_validator_record(
+        &self,
+        signed_record: &TaggedSigned<
+            ValidatorRecord<<Network as NetworkInterface>::PeerId>,
+            KeyPair,
+        >,
+    ) -> Result<(), ValidatorInfoError> {
+        let keys = self.keys.read();
+        let public_key = keys.get(&signed_record.record.validator_address).ok_or(
+            ValidatorInfoError::UnknownValidator(signed_record.record.validator_address.clone()),
+        )?;
+
+        signed_record
+            .verify(&public_key)
+            .then(|| ())
+            .ok_or(ValidatorInfoError::InvalidSignature)
+    }
+}
+
 impl dht::Verifier for Verifier {
     fn verify(
         &self,
@@ -228,21 +251,15 @@ impl dht::Verifier for Verifier {
         let validator_address = Address::deserialize_from_vec(record.key.as_ref())
             .map_err(dht::DhtVerifierError::MalformedKey)?;
 
-        let keys = self.keys.read();
-        let public_key = keys
-            .get(&validator_address)
-            .ok_or(dht::DhtVerifierError::UnknownValidator(validator_address))?;
-
-        validator_record
-            .verify(public_key)
-            .then(|| {
+        self.verify_validator_record(&validator_record)
+            .map(|_| {
                 dht::DhtRecord::Validator(
-                    record.publisher.unwrap(),
+                    validator_record.record.peer_id,
                     validator_record.record,
                     record.clone(),
                 )
             })
-            .ok_or(dht::DhtVerifierError::InvalidSignature)
+            .map_err(|_| dht::DhtVerifierError::ValidatorInfoError)
     }
 }
 

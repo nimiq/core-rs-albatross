@@ -22,7 +22,7 @@ use parking_lot::RwLock;
 
 use super::{
     handler::{Handler, HandlerOutEvent},
-    peer_contacts::{PeerContact, PeerContactBook},
+    peer_contacts::{PeerContact, PeerContactBook, ValidatorRecordVerifier},
 };
 
 #[derive(Clone, Debug)]
@@ -115,6 +115,10 @@ pub struct Behaviour {
 
     /// Timer to do house-keeping in the peer address book.
     house_keeping_timer: Interval,
+
+    /// dht verifier TODO
+    #[cfg(feature = "kad")]
+    verifier: Arc<dyn ValidatorRecordVerifier>,
 }
 
 impl Behaviour {
@@ -122,9 +126,10 @@ impl Behaviour {
         config: Config,
         keypair: Keypair,
         peer_contact_book: Arc<RwLock<PeerContactBook>>,
+        #[cfg(feature = "kad")] verifier: Arc<dyn ValidatorRecordVerifier>,
     ) -> Self {
         let house_keeping_timer = interval(config.house_keeping_interval);
-        peer_contact_book.write().update_own_contact(&keypair);
+        peer_contact_book.write().refresh_own_contact();
 
         // Report our own known addresses as candidates to the swarm
         let mut events = VecDeque::new();
@@ -139,14 +144,14 @@ impl Behaviour {
             peer_contact_book,
             events,
             house_keeping_timer,
+            #[cfg(feature = "kad")]
+            verifier,
         }
     }
 
     /// Adds addresses into our own contact within the peer contact book
     pub fn add_own_addresses(&self, addresses: Vec<Multiaddr>) {
-        self.peer_contact_book
-            .write()
-            .add_own_addresses(addresses, &self.keypair)
+        self.peer_contact_book.write().add_own_addresses(addresses)
     }
 
     /// Returns whether an address in `Multiaddr` format is a dialable websocket address
@@ -177,6 +182,8 @@ impl NetworkBehaviour for Behaviour {
             self.keypair.clone(),
             self.peer_contact_book(),
             remote_addr.clone(),
+            #[cfg(feature = "kad")]
+            Arc::clone(&self.verifier),
         ))
     }
 
@@ -194,6 +201,8 @@ impl NetworkBehaviour for Behaviour {
             self.keypair.clone(),
             self.peer_contact_book(),
             addr.clone(),
+            #[cfg(feature = "kad")]
+            Arc::clone(&self.verifier),
         ))
     }
 
@@ -227,7 +236,7 @@ impl NetworkBehaviour for Behaviour {
             Poll::Ready(Some(_)) => {
                 trace!("Doing house-keeping in peer address book");
                 let mut peer_address_book = self.peer_contact_book.write();
-                peer_address_book.update_own_contact(&self.keypair);
+                peer_address_book.refresh_own_contact();
                 peer_address_book.house_keeping();
             }
             Poll::Ready(None) => unreachable!(),

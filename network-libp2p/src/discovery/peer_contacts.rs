@@ -1,5 +1,7 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet},
+    fmt::Debug,
+    ops::Deref,
     sync::Arc,
     time::Duration,
 };
@@ -11,14 +13,13 @@ use libp2p::{
     multiaddr::Protocol,
     Multiaddr, PeerId,
 };
-use nimiq_keys::{Address, KeyPair};
+use nimiq_keys::{Address, KeyPair as SchnorrKey};
 use nimiq_network_interface::{
     network::Network as NetworkInterface,
     peer_info::{PeerInfo, Services},
+    validator_record::ValidatorRecord,
 };
-use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSignature};
-use nimiq_validator_network::validator_record::ValidatorRecord;
-use parking_lot::RwLock;
+use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSignature, TaggedSigned};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -28,6 +29,10 @@ use crate::{utils, Network};
 pub enum PeerContactError {
     #[error("Exceeded number of advertised addresses")]
     AdvertisedAddressesExceeded,
+    #[error("Validator Record failed to verify")]
+    ValidatorRecord(ValidatorInfoError),
+    #[error("Contact signature is invalid")]
+    InvalidSignature,
 }
 
 /// The validator info contains all information which is not present in a [PeerContact]
@@ -40,13 +45,58 @@ pub struct ValidatorInfo {
     /// The signature for the [ValidatorRecord].
     /// It does _not_ verify for this structure, but only once the [nimiq_utils::tagged_signing::TaggedSigned] is reconstructed
     /// with the given information of this struct and the corresponding [PeerContact].
-    signature: TaggedSignature<ValidatorRecord<<Network as NetworkInterface>::PeerId>, KeyPair>,
+    signature: TaggedSignature<ValidatorRecord<<Network as NetworkInterface>::PeerId>, SchnorrKey>,
+}
+
+#[derive(Debug)]
+pub enum ValidatorInfoError {
+    StateIncomplete,
+    InvalidSignature,
+    UnknownValidator(Address),
+}
+
+impl ValidatorInfo {
+    pub fn new(
+        validator_address: Address,
+        signature: TaggedSignature<
+            ValidatorRecord<<Network as NetworkInterface>::PeerId>,
+            SchnorrKey,
+        >,
+    ) -> Self {
+        Self {
+            validator_address,
+            signature,
+        }
+    }
+}
+
+pub trait ValidatorRecordVerifier: Send + Sync {
+    fn verify_validator_record(
+        &self,
+        signed_record: &TaggedSigned<
+            ValidatorRecord<<Network as NetworkInterface>::PeerId>,
+            SchnorrKey,
+        >,
+    ) -> Result<(), ValidatorInfoError>;
+}
+
+impl ValidatorRecordVerifier for () {
+    fn verify_validator_record(
+        &self,
+        _signed_record: &TaggedSigned<
+            ValidatorRecord<<Network as NetworkInterface>::PeerId>,
+            SchnorrKey,
+        >,
+    ) -> Result<(), ValidatorInfoError> {
+        Ok(())
+    }
 }
 
 /// A plain peer contact. This contains:
 ///
 ///  - A set of multi-addresses for the peer.
 ///  - The peer's public key.
+///  - An optional [ValidatorInfo] in case this peer is a running a validator.
 ///  - A bitmask of the services supported by this peer.
 ///  - A timestamp when this contact information was generated.
 ///
@@ -91,15 +141,15 @@ impl PeerContact {
         Ok(Self {
             addresses,
             public_key,
-            services,
             validator_info: None,
+            services,
             timestamp,
         })
     }
 
     /// Derives the peer ID from the public key
     pub fn peer_id(&self) -> PeerId {
-        self.public_key.clone().to_peer_id()
+        self.public_key.to_peer_id()
     }
 
     /// Returns the timestamp of the contact. It is generally set to the time the contact was created.
@@ -123,6 +173,7 @@ impl PeerContact {
         SignedPeerContact {
             inner: self,
             signature,
+            local_only: false,
         }
     }
 
@@ -160,10 +211,35 @@ impl PeerContact {
 
     /// Verifies whether the lengths of the advertised addresses are within
     /// the expected limits. This is helpful to verify a received peer contact.
-    pub fn verify(&self) -> Result<(), PeerContactError> {
+    pub fn verify(
+        &self,
+        #[cfg(feature = "kad")] verifier: &dyn ValidatorRecordVerifier,
+    ) -> Result<(), PeerContactError> {
         if self.addresses.len() > Self::MAX_ADDRESSES {
             return Err(PeerContactError::AdvertisedAddressesExceeded);
         }
+
+        // In case the Contact includes a ValidatorInfo it also needs to be verified.
+        #[cfg(feature = "kad")]
+        if let Some(ValidatorInfo {
+            validator_address,
+            signature,
+        }) = self.validator_info.clone()
+        {
+            // Reconstruct the record
+            let record = ValidatorRecord {
+                validator_address,
+                timestamp: self.timestamp,
+                peer_id: self.peer_id(),
+            };
+
+            let signed_record = TaggedSigned::new(record, signature);
+
+            verifier
+                .verify_validator_record(&signed_record)
+                .map_err(PeerContactError::ValidatorRecord)?;
+        }
+
         Ok(())
     }
 }
@@ -180,17 +256,30 @@ pub struct SignedPeerContact {
 
     /// The signature over the serialized peer contact.
     pub signature: TaggedSignature<PeerContact, Keypair>,
+
+    #[serde(skip)]
+    pub local_only: bool,
 }
 
 impl SignedPeerContact {
     /// Verifies that the signature is valid for this peer contact and also does
     /// intrinsic verification on the inner PeerContact.
-    pub fn verify(&self) -> bool {
-        if self.inner.verify().is_err() {
-            return false;
-        };
-        self.signature
+    pub fn verify(
+        &self,
+        #[cfg(feature = "kad")] verifier: &dyn ValidatorRecordVerifier,
+    ) -> Result<(), PeerContactError> {
+        // The record signature must be verified first.
+        if !self
+            .signature
             .tagged_verify(&self.inner, &self.inner.public_key)
+        {
+            return Err(PeerContactError::InvalidSignature);
+        }
+
+        self.inner.verify(
+            #[cfg(feature = "kad")]
+            verifier,
+        )
     }
 
     /// Gets the public key of this peer contact.
@@ -213,7 +302,7 @@ struct PeerContactMeta {
 
 /// This encapsulates a peer contact (signed), but also pre-computes frequently used values such as `peer_id` and
 /// `protocols`. It also contains meta-data that can be mutated.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PeerContactInfo {
     /// The peer ID derived from the public key in the peer contact.
     peer_id: PeerId,
@@ -222,7 +311,7 @@ pub struct PeerContactInfo {
     contact: SignedPeerContact,
 
     /// Mutable meta-data.
-    meta: RwLock<PeerContactMeta>,
+    meta: PeerContactMeta,
 }
 
 impl From<SignedPeerContact> for PeerContactInfo {
@@ -232,10 +321,10 @@ impl From<SignedPeerContact> for PeerContactInfo {
         Self {
             peer_id,
             contact,
-            meta: RwLock::new(PeerContactMeta {
+            meta: PeerContactMeta {
                 score: 0.,
                 outer_protocol_address: None,
-            }),
+            },
         }
     }
 }
@@ -272,7 +361,10 @@ impl PeerContactInfo {
     }
 
     /// Returns whether the peer contact exceeds its age limit
-    pub fn exceeds_age(&self, max_age: Duration, unix_time: Duration) -> bool {
+    pub fn exceeds_age(&self, max_age: Duration) -> bool {
+        let unix_time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap();
         unix_time
             .checked_sub(Duration::from_secs(self.contact.inner.timestamp()))
             .is_some_and(|age| age > max_age)
@@ -285,42 +377,42 @@ impl PeerContactInfo {
 
     /// Gets the peer score
     pub fn get_score(&self) -> f64 {
-        self.meta.read().score
+        self.meta.score
     }
 
     /// Sets the peer score
-    pub fn set_score(&self, score: f64) {
-        self.meta.write().score = score;
+    pub fn set_score(&mut self, score: f64) {
+        self.meta.score = score;
     }
 
     /// Gets the outer protocol address of the peer. For example `/ip4/x.x.x.x` or `/dns4/foo.bar`
     pub fn get_outer_protocol_address(&self) -> Option<Multiaddr> {
-        self.meta.read().outer_protocol_address.clone()
+        self.meta.outer_protocol_address.clone()
     }
 
     /// Sets the outer protocol address of the peer once
-    pub fn set_outer_protocol_address(&self, addr: Multiaddr) {
-        self.meta
-            .write()
-            .outer_protocol_address
-            .get_or_insert_with(|| {
-                trace!(peer_id = %self.peer_id, %addr, "Set outer protocol address for peer");
-                addr
-            });
+    pub fn set_outer_protocol_address(&mut self, addr: Multiaddr) {
+        self.meta.outer_protocol_address.get_or_insert_with(|| {
+            trace!(peer_id = %self.peer_id, %addr, "Set outer protocol address for peer");
+            addr
+        });
     }
 }
 
 /// Main structure that holds the peer information that has been obtained or
 /// discovered by the discovery protocol.
-#[derive(Debug)]
 pub struct PeerContactBook {
     /// Contact information for our own.
     own_peer_contact: PeerContactInfo,
     /// Own Peer ID (also present in `own_peer_contact`)
     own_peer_id: PeerId,
+    /// Identity keypair for this node.
+    key_pair: Keypair,
     /// Contact information for other peers in the network indexed by their
     /// peer ID.
-    peer_contacts: HashMap<PeerId, Arc<PeerContactInfo>>,
+    peer_contacts: HashMap<PeerId, PeerContactInfo>,
+    /// Map from validator address to peer ids.
+    validator_peer_ids: HashMap<Address, HashSet<PeerId>>,
     /// Only return secure websocket addresses.
     /// With this flag non secure websocket addresses will be stored (to still have a valid signature of the peer contact)
     /// but won't be returned when calling `get_addresses`
@@ -329,28 +421,84 @@ pub struct PeerContactBook {
     allow_loopback_addresses: bool,
     /// Flag to indicate whether to support memory transport addresses
     memory_transport: bool,
+    /// Validator signing callback
+    validator_record_signer: Option<
+        Box<dyn Fn(PeerId, u64) -> TaggedSigned<ValidatorRecord<PeerId>, SchnorrKey> + Send + Sync>,
+    >,
+    /// Validator record verifier
+    #[cfg(feature = "kad")]
+    validator_record_verifier: Arc<dyn ValidatorRecordVerifier>,
+}
+
+impl Debug for PeerContactBook {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PeerContactBook")
+            .field("own_peer_contact", &self.own_peer_contact)
+            .field("own_peer_id", &self.own_peer_id)
+            .field("peer_contacts", &self.peer_contacts)
+            .field("validator_peer_ids", &self.validator_peer_ids)
+            .field("only_secure_addresses", &self.only_secure_addresses)
+            .field("allow_loopback_addresses", &self.allow_loopback_addresses)
+            .field("memory_transport", &self.memory_transport)
+            .finish()
+    }
 }
 
 impl PeerContactBook {
     /// If a peer's age exceeds this value in seconds, it is removed (30 minutes)
-    pub const MAX_PEER_AGE: u64 = 30 * 60;
+    pub const MAX_PEER_AGE: Duration = Duration::from_secs(30 * 60);
 
     /// Creates a new `PeerContactBook` given our own peer contact information.
     pub fn new(
-        own_peer_contact: SignedPeerContact,
+        mut own_peer_contact: PeerContact,
+        key_pair: Keypair,
         only_secure_addresses: bool,
         allow_loopback_addresses: bool,
         memory_transport: bool,
+        #[cfg(feature = "kad")] validator_record_verifier: Arc<dyn ValidatorRecordVerifier>,
     ) -> Self {
-        let own_peer_id = own_peer_contact.inner.peer_id();
+        let own_peer_id = own_peer_contact.peer_id();
+        own_peer_contact.set_current_time();
+
         Self {
-            own_peer_contact: own_peer_contact.into(),
+            own_peer_contact: own_peer_contact.sign(&key_pair).into(),
             own_peer_id,
+            key_pair,
             peer_contacts: HashMap::new(),
             only_secure_addresses,
             allow_loopback_addresses,
             memory_transport,
+            validator_peer_ids: HashMap::new(),
+            validator_record_signer: None,
+            #[cfg(feature = "kad")]
+            validator_record_verifier,
         }
+    }
+
+    /// Obtain a list of peer ids associated to the given validator address
+    pub fn get_validator_peer_ids(
+        &self,
+        validator_address: &Address,
+        include_unverified: bool,
+    ) -> HashSet<PeerId> {
+        let Some(peers) = self.validator_peer_ids.get(validator_address) else {
+            return HashSet::new();
+        };
+
+        if include_unverified {
+            return peers.clone();
+        }
+
+        peers
+            .iter()
+            .filter(|peer_id| {
+                self.peer_contacts
+                    .get(peer_id)
+                    .map(|contact| !contact.contact.local_only)
+                    .unwrap_or(false)
+            })
+            .cloned()
+            .collect()
     }
 
     /// Insert a peer contact or update an existing one
@@ -360,28 +508,42 @@ impl PeerContactBook {
             return;
         }
 
-        log::debug!(peer_id = %contact.peer_id(), addresses = ?contact.inner.addresses, "Adding peer contact");
+        let peer_id = contact.peer_id();
+
         let current_ts = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs();
 
+        if let Some(validator) = &contact.inner.validator_info {
+            self.validator_peer_ids
+                .entry(validator.validator_address.clone())
+                .or_default()
+                .insert(peer_id);
+        }
+
         let info = PeerContactInfo::from(contact);
-        let peer_id = info.peer_id;
 
         match self.peer_contacts.entry(peer_id) {
-            std::collections::hash_map::Entry::Occupied(mut entry) => {
+            Entry::Occupied(mut entry) => {
                 let entry_value = entry.get_mut();
                 // Only update the contact if the timestamp is greater than the entry we have for this peer
                 // and if the timestamp of the peer contact is not in the future
                 if entry_value.contact().timestamp < info.contact().timestamp
                     && info.contact().timestamp <= current_ts
                 {
-                    *entry_value = Arc::new(info);
+                    *entry_value = info;
                 }
             }
-            std::collections::hash_map::Entry::Vacant(entry) => {
-                entry.insert(Arc::new(info));
+            Entry::Vacant(entry) => {
+                log::trace!(
+                    peer_id = %info.peer_id,
+                    services = ?info.services(),
+                    addresses = ?info.contact.inner.addresses,
+                    validator_address = ?info.contact.inner.validator_info.as_ref().map(|info| info.validator_address.clone()),
+                    "Adding peer contact",
+                );
+                entry.insert(info);
             }
         }
     }
@@ -426,16 +588,23 @@ impl PeerContactBook {
         // TODO Check peer contact timestamp
         //  Call `insert()` here instead?
 
-        let info = Arc::new(info);
         let is_new = self
             .peer_contacts
-            .insert(info.peer_id, Arc::clone(&info))
+            .insert(info.peer_id, info.clone())
             .is_none();
+        if let Some(validator_info) = &info.contact.inner.validator_info {
+            self.validator_peer_ids
+                .entry(validator_info.validator_address.clone())
+                .or_default()
+                .insert(info.peer_id);
+        }
+
         if is_new {
             log::trace!(
                 peer_id = %info.peer_id,
                 services = ?info.services(),
                 addresses = ?info.contact.inner.addresses,
+                validator_address = ?info.contact.inner.validator_info.as_ref().map(|info| info.validator_address.clone()),
                 "Adding peer contact",
             );
         }
@@ -462,10 +631,16 @@ impl PeerContactBook {
         }
     }
 
-    /// Gets a peer contact if it exists given its peer_id.
+    /// Gets a reference to a peer contact if it exists given its peer_id.
     /// If the peer_id is not found, `None` is returned.
-    pub fn get(&self, peer_id: &PeerId) -> Option<Arc<PeerContactInfo>> {
-        self.peer_contacts.get(peer_id).cloned()
+    pub fn get(&self, peer_id: &PeerId) -> Option<&PeerContactInfo> {
+        self.peer_contacts.get(peer_id)
+    }
+
+    /// Gets a mutable reference to a peer contact if it exists given its peer_id.
+    /// If the peer_id is not found, `None` is returned.
+    pub fn get_mut(&mut self, peer_id: &PeerId) -> Option<&mut PeerContactInfo> {
+        self.peer_contacts.get_mut(peer_id)
     }
 
     /// Gets the peer contact's addresses if it exists given its peer_id.
@@ -509,12 +684,16 @@ impl PeerContactBook {
 
     /// Gets a set of peer contacts given a services filter.
     /// Every peer contact that matches such services will be returned.
-    pub fn query(&self, services: Services) -> impl Iterator<Item = Arc<PeerContactInfo>> + '_ {
+    pub fn query(
+        &self,
+        services: Services,
+        include_local_only: bool,
+    ) -> impl Iterator<Item = &PeerContactInfo> + '_ {
         // TODO: This is a naive implementation
         // TODO: Sort by score?
         self.peer_contacts.iter().filter_map(move |(_, contact)| {
-            if contact.matches(services) {
-                Some(Arc::clone(contact))
+            if contact.matches(services) && (!contact.contact.local_only || include_local_only) {
+                Some(contact)
             } else {
                 None
             }
@@ -523,9 +702,8 @@ impl PeerContactBook {
 
     /// Updates the score of every peer in the contact book with the gossipsub
     /// peer score.
-    pub fn update_scores(&self, gossipsub: &gossipsub::Behaviour) {
-        let contacts = self.peer_contacts.iter();
-
+    pub fn update_scores(&mut self, gossipsub: &gossipsub::Behaviour) {
+        let contacts = self.peer_contacts.iter_mut();
         for contact in contacts {
             if let Some(score) = gossipsub.peer_score(contact.0) {
                 contact.1.set_score(score);
@@ -536,71 +714,47 @@ impl PeerContactBook {
     }
 
     /// Adds a set of addresses to the list of addresses known for our own contact.
-    pub fn add_own_addresses<I: IntoIterator<Item = Multiaddr>>(
-        &mut self,
-        addresses: I,
-        keypair: &Keypair,
-    ) {
+    pub fn add_own_addresses<I: IntoIterator<Item = Multiaddr>>(&mut self, addresses: I) {
         let mut contact = self.own_peer_contact.contact.inner.clone();
         let addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
         trace!(?addresses, "Adding own addresses");
         contact.add_addresses(addresses);
-        self.own_peer_contact = PeerContactInfo::from(contact.sign(keypair));
+        self.update_own_contact(contact);
     }
 
     /// Removes a set of addresses from the list of addresses known for our own.
-    pub fn remove_own_addresses<I: IntoIterator<Item = Multiaddr>>(
-        &mut self,
-        addresses: I,
-        keypair: &Keypair,
-    ) {
+    pub fn remove_own_addresses<I: IntoIterator<Item = Multiaddr>>(&mut self, addresses: I) {
         let mut contact = self.own_peer_contact.contact.inner.clone();
         let addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
         contact.remove_addresses(addresses);
-        self.own_peer_contact = PeerContactInfo::from(contact.sign(keypair));
+        self.update_own_contact(contact);
     }
 
-    /// Updates the timestamp of our own contact
-    pub fn update_own_contact(&mut self, keypair: &Keypair) {
-        // Not really optimal to clone here, but *shrugs*
-        let mut contact = self.own_peer_contact.contact.inner.clone();
+    /// Updates the timestamp of our own contact.
+    pub fn refresh_own_contact(&mut self) {
+        let contact = self.own_peer_contact.contact.inner.clone();
+        self.update_own_contact(contact);
+    }
 
-        // Update timestamp
+    fn update_own_contact(&mut self, mut contact: PeerContact) {
+        // Update timestamp.
         contact.set_current_time();
 
-        self.own_peer_contact = PeerContactInfo::from(contact.sign(keypair));
+        // Update validator info.
+        contact.validator_info = self.validator_record_signer.as_ref().and_then(|callback| {
+            let tagged_signed = (callback)(contact.peer_id(), contact.timestamp);
+            Some(ValidatorInfo {
+                validator_address: tagged_signed.record.validator_address.clone(),
+                signature: tagged_signed.signature.clone(),
+            })
+        });
+
+        self.own_peer_contact = PeerContactInfo::from(contact.sign(&self.key_pair));
     }
 
     /// Gets our own contact information
     pub fn get_own_contact(&self) -> &PeerContactInfo {
         &self.own_peer_contact
-    }
-
-    /// Removes peer contacts that have already exceeded the maximum age as
-    /// defined in `MAX_PEER_AGE`.
-    pub fn house_keeping(&mut self) {
-        if let Ok(unix_time) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-            let delete_peers = self
-                .peer_contacts
-                .iter()
-                .filter_map(|(peer_id, peer_contact)| {
-                    if peer_contact.exceeds_age(
-                        Duration::from_secs(PeerContactBook::MAX_PEER_AGE),
-                        unix_time,
-                    ) {
-                        debug!(%peer_id, "Removing peer contact because of old age");
-                        Some(peer_id)
-                    } else {
-                        None
-                    }
-                })
-                .cloned()
-                .collect::<Vec<PeerId>>();
-
-            for peer_id in delete_peers {
-                self.peer_contacts.remove(&peer_id);
-            }
-        }
     }
 
     /// Returns true if an address is valid for dialing.
@@ -658,6 +812,71 @@ impl PeerContactBook {
                 _ => return false,
             }
         }
+    }
+
+    /// Removes expired or invalid peer contacts from the contact books.
+    pub fn house_keeping(&mut self) {
+        let peers_to_delete = self
+            .peer_contacts
+            .iter_mut()
+            .filter_map(|(peer_id, peer_contact)| {
+                // Remove expired peers.
+                if peer_contact.exceeds_age(PeerContactBook::MAX_PEER_AGE) {
+                    debug!(%peer_id, "Removing peer contact because of old age");
+                    return Some(peer_id.clone());
+                }
+
+                // Re-verify local_only contacts.
+                #[cfg(feature = "kad")]
+                if peer_contact.contact.local_only {
+                    let result = peer_contact
+                        .contact
+                        .verify(self.validator_record_verifier.deref());
+                    match result {
+                        // Verification succeeded, clear local_only flag.
+                        Ok(_) => peer_contact.contact.local_only = false,
+                        // State is (still) incomplete, do nothing.
+                        Err(PeerContactError::ValidatorRecord(
+                            ValidatorInfoError::StateIncomplete,
+                        )) => {}
+                        // Verification failed, delete contact.
+                        Err(_) => return Some(peer_id.clone()),
+                    };
+                }
+
+                None
+            })
+            .collect::<Vec<_>>();
+
+        for peer_id in peers_to_delete {
+            let contact = self.peer_contacts.remove(&peer_id).unwrap();
+
+            let Some(validator_info) = contact.contact.inner.validator_info.as_ref() else {
+                continue;
+            };
+
+            let entry = self
+                .validator_peer_ids
+                .entry(validator_info.validator_address.clone());
+            if let Entry::Occupied(mut entry) = entry {
+                entry.get_mut().remove(&peer_id);
+                if entry.get().is_empty() {
+                    entry.remove();
+                }
+            }
+        }
+    }
+
+    /// Registers a callback to produce a signed ValidatorRecord from a given peer_id and timestamp.
+    pub fn register_validator_signing_callback(
+        &mut self,
+        callback: impl Fn(PeerId, u64) -> TaggedSigned<ValidatorRecord<PeerId>, SchnorrKey>
+            + Send
+            + Sync
+            + 'static,
+    ) {
+        self.validator_record_signer = Some(Box::new(callback));
+        self.refresh_own_contact();
     }
 }
 

@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     future::Future,
     pin::Pin,
     sync::Arc,
@@ -13,6 +13,7 @@ use futures::{future::BoxFuture, ready, stream::BoxStream, Stream, StreamExt};
 use libp2p::{
     gossipsub, request_response::InboundRequestId, swarm::NetworkInfo, Multiaddr, PeerId, Swarm,
 };
+use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
     network::{
         CloseReason, MsgAcceptance, Network as NetworkInterface, NetworkEvent, SubscribeEvents,
@@ -23,6 +24,7 @@ use nimiq_network_interface::{
         InboundRequestError, Message, OutboundRequestError, Request, RequestCommon, RequestError,
         RequestSerialize, RequestType,
     },
+    validator_record::ValidatorRecord,
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_time::{interval, timeout};
@@ -38,7 +40,7 @@ use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 use crate::network_metrics::NetworkMetrics;
 use crate::{
     dht,
-    discovery::peer_contacts::PeerContactBook,
+    discovery::peer_contacts::{PeerContactBook, ValidatorRecordVerifier},
     network_types::{GossipsubId, NetworkAction, ValidateMessage},
     rate_limiting::RateLimitConfig,
     swarm::{new_swarm, swarm_task},
@@ -79,16 +81,23 @@ impl Network {
     ///
     pub async fn new(
         config: Config,
-        #[cfg(feature = "kad")] dht_verifier: impl dht::Verifier + 'static,
+        #[cfg(feature = "kad")] verifier: impl dht::Verifier + ValidatorRecordVerifier + 'static,
     ) -> Self {
         let required_services = config.required_services;
         // TODO: persist to disk
         let own_peer_contact = config.peer_contact.clone();
+
+        #[cfg(feature = "kad")]
+        let verifier = Arc::new(verifier);
+
         let contacts = Arc::new(RwLock::new(PeerContactBook::new(
-            own_peer_contact.sign(&config.keypair),
+            own_peer_contact,
+            config.keypair.clone(),
             config.only_secure_ws_connections,
             config.allow_loopback_addresses,
             config.memory_transport,
+            #[cfg(feature = "kad")]
+            (Arc::clone(&verifier) as Arc<dyn ValidatorRecordVerifier>),
         )));
         let params = gossipsub::PeerScoreParams {
             ip_colocation_factor_threshold: 20.0,
@@ -100,11 +109,14 @@ impl Network {
         // In memory transport we don't have a mechanism that sets the DHT in server mode such as confirming an address
         // with Autonat. This is because Autonat v1 only works with IP addresses.
         let force_dht_server_mode = config.memory_transport;
+
         let swarm = new_swarm(
             config,
             Arc::clone(&contacts),
             params.clone(),
             force_dht_server_mode,
+            #[cfg(feature = "kad")]
+            (Arc::clone(&verifier) as Arc<dyn ValidatorRecordVerifier>),
         );
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
@@ -128,7 +140,7 @@ impl Network {
             update_scores,
             Arc::clone(&contacts),
             #[cfg(feature = "kad")]
-            dht_verifier,
+            (Arc::clone(&verifier) as Arc<dyn dht::Verifier>),
             force_dht_server_mode,
             dht_quorum,
             #[cfg(feature = "metrics")]
@@ -522,6 +534,16 @@ impl NetworkInterface for Network {
         Ok(filtered_peers)
     }
 
+    fn get_peers_by_validator(
+        &self,
+        validator_address: &Address,
+        include_unverified: bool,
+    ) -> HashSet<Self::PeerId> {
+        self.contacts
+            .read()
+            .get_validator_peer_ids(validator_address, include_unverified)
+    }
+
     fn peer_provides_required_services(&self, peer_id: PeerId) -> bool {
         if let Some(peer_info) = self.connected_peers.read().get(&peer_id) {
             peer_info.get_services().contains(self.required_services)
@@ -742,5 +764,17 @@ impl NetworkInterface for Network {
             .await?;
 
         output_rx.await?
+    }
+
+    fn register_validator_signing_callback(
+        &self,
+        callback: impl Fn(Self::PeerId, u64) -> TaggedSigned<ValidatorRecord<Self::PeerId>, KeyPair>
+            + Send
+            + Sync
+            + 'static,
+    ) {
+        self.contacts
+            .write()
+            .register_validator_signing_callback(callback)
     }
 }

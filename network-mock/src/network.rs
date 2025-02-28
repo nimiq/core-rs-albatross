@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -8,6 +9,7 @@ use std::{
 
 use async_trait::async_trait;
 use futures::{stream::BoxStream, StreamExt};
+use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
     network::{
         CloseReason, MsgAcceptance, Network, NetworkEvent, PubsubId, SubscribeEvents, Topic,
@@ -17,10 +19,11 @@ use nimiq_network_interface::{
         InboundRequestError, Message, OutboundRequestError, Request, RequestCommon, RequestError,
         RequestKind, RequestSerialize, RequestType,
     },
+    validator_record::ValidatorRecord,
 };
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_time::timeout;
-use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable};
+use nimiq_utils::tagged_signing::{TaggedKeyPair, TaggedSignable, TaggedSigned};
 use parking_lot::{Mutex, RwLock};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -651,5 +654,21 @@ impl Network for MockNetwork {
         _peers: usize,
     ) -> Result<Vec<Self::PeerId>, MockNetworkError> {
         Ok(self.get_peers())
+    }
+
+    fn get_peers_by_validator(
+        &self,
+        _validator_address: &Address,
+        _include_unverified: bool,
+    ) -> HashSet<Self::PeerId> {
+        // TODO
+        HashSet::new()
+    }
+
+    fn register_validator_signing_callback(
+        &self,
+        _callback: impl Fn(Self::PeerId, u64) -> TaggedSigned<ValidatorRecord<Self::PeerId>, KeyPair>,
+    ) {
+        // TODO
     }
 }

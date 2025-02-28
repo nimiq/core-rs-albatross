@@ -1,21 +1,28 @@
-use std::{collections::BTreeMap, error::Error, fmt::Debug, future, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    error::Error,
+    fmt::Debug,
+    future,
+    sync::Arc,
+};
 
 use async_trait::async_trait;
-use futures::{future::BoxFuture, stream::BoxStream, FutureExt, StreamExt, TryFutureExt};
+use futures::{future::BoxFuture, stream::BoxStream, FutureExt, StreamExt};
 use log::warn;
 use nimiq_keys::{Address, KeyPair};
 use nimiq_network_interface::{
     network::{CloseReason, MsgAcceptance, Network, SubscribeEvents, Topic},
     request::{InboundRequestError, Message, Request, RequestCommon, RequestError},
+    validator_record::ValidatorRecord,
 };
-use nimiq_primitives::slots_allocation::{Validator, Validators};
+use nimiq_primitives::slots_allocation::Validators;
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_utils::spawn;
+use nimiq_utils::{spawn, stream::FuturesUnordered, tagged_signing::TaggedSigned};
 use parking_lot::RwLock;
 use time::OffsetDateTime;
 
 use super::{MessageStream, NetworkError, PubsubId, ValidatorNetwork};
-use crate::validator_record::ValidatorRecord;
+use crate::NetworkError::UnknownValidator;
 
 /// Validator `PeerId` cache state
 #[derive(Clone, Copy)]
@@ -107,16 +114,6 @@ where
         self.own_validator_id.read().ok_or(NetworkError::NotElected)
     }
 
-    /// Given the Validators and a validator_id, returns the Validator represented by the id if it exists.
-    /// None otherwise.
-    fn get_validator(validators: Option<&Validators>, validator_id: u16) -> Option<&Validator> {
-        // Acquire read on the validators and make sure they have been set. Return None otherwise.
-        validators.and_then(|validators| {
-            (usize::from(validator_id) < validators.num_validators())
-                .then(|| validators.get_validator_by_slot_band(validator_id))
-        })
-    }
-
     /// Looks up the peer ID for a validator address in the DHT.
     async fn resolve_peer_id(
         network: &N,
@@ -136,14 +133,11 @@ where
         network: &N,
         validator_address: &Address,
     ) -> Result<Option<N::PeerId>, NetworkError<N::Error>> {
-        if let Some(record) = network
+        let peer_id = network
             .dht_get::<_, ValidatorRecord<N::PeerId>, KeyPair>(validator_address)
             .await?
-        {
-            Ok(Some(record.peer_id))
-        } else {
-            Ok(None)
-        }
+            .map(|record| record.peer_id);
+        Ok(peer_id)
     }
 
     /// Looks up the peer ID for a validator address in the DHT and updates
@@ -154,24 +148,25 @@ where
     ///
     /// The given `validator_id` is used for logging purposes only.
     async fn update_peer_id_cache(&self, validator_id: u16, validator_address: &Address) {
-        let cache_value = match Self::resolve_peer_id(
+        let result = Self::resolve_peer_id(
             &self.network,
             validator_address,
             Arc::clone(&self.dht_fallback),
         )
-        .await
-        {
+        .await;
+
+        let mut cache_value = match result {
             Ok(Some(peer_id)) => {
-                log::trace!(
+                log::debug!(
                     %peer_id,
                     validator_id,
                     %validator_address,
-                    "Resolved validator peer ID"
+                    "Resolved validator peer ID from DHT"
                 );
                 Ok(peer_id)
             }
             Ok(None) => {
-                log::debug!(validator_id, %validator_address, "Unable to resolve validator peer ID: Entry not found in DHT");
+                log::debug!(validator_id, %validator_address, "Unable to resolve validator peer ID from DHT: Entry not found");
                 Err(())
             }
             Err(error) => {
@@ -179,11 +174,26 @@ where
                     validator_id,
                     ?error,
                     %validator_address,
-                    "Unable to resolve validator peer ID: Network error"
+                    "Unable to resolve validator peer ID from DHT: Network error"
                 );
                 Err(())
             }
         };
+
+        // If the DHT lookup failed, check the peer contact book for a verified peer id.
+        if cache_value.is_err() {
+            cache_value = self
+                .get_verified_validator_peer_id(validator_id)
+                .inspect(|peer_id| {
+                    log::debug!(
+                        %peer_id,
+                        validator_id,
+                        %validator_address,
+                        "Resolved validator peer ID from contact book"
+                    );
+                })
+                .ok_or(());
+        }
 
         match self
             .validator_peer_id_cache
@@ -206,12 +216,11 @@ where
 
     /// Look up the peer ID for a validator ID.
     fn get_validator_cache(&self, validator_id: u16) -> CacheState<N::PeerId> {
-        let validators = self.validators.read();
-        let Some(validator) = Self::get_validator(validators.as_ref(), validator_id) else {
+        let Some(validator_address) = self.get_validator_address(validator_id) else {
             return CacheState::Error(None);
         };
 
-        if let Some(cache_state) = self.validator_peer_id_cache.read().get(&validator.address) {
+        if let Some(cache_state) = self.validator_peer_id_cache.read().get(&validator_address) {
             match *cache_state {
                 CacheState::Resolved(..) => return *cache_state,
                 CacheState::Error(..) => {}
@@ -228,7 +237,7 @@ where
         {
             // Re-check the validator Peer ID cache with the write lock taken and update it if necessary
             let mut validator_peer_id_cache = self.validator_peer_id_cache.write();
-            if let Some(cache_state) = validator_peer_id_cache.get_mut(&validator.address) {
+            if let Some(cache_state) = validator_peer_id_cache.get_mut(&validator_address) {
                 new_cache_state = match *cache_state {
                     CacheState::Resolved(..) => return *cache_state,
                     CacheState::Error(prev_peer_id) => {
@@ -248,9 +257,9 @@ where
             } else {
                 new_cache_state = CacheState::InProgress(None);
                 // No cache entry for this validator ID: we are going to perform the DHT query
-                validator_peer_id_cache.insert(validator.address.clone(), new_cache_state);
+                validator_peer_id_cache.insert(validator_address.clone(), new_cache_state);
                 log::debug!(
-                    ?validator.address,
+                    %validator_address,
                     validator_id,
                     "No cache entry found, querying DHT",
                 );
@@ -258,7 +267,6 @@ where
         }
 
         let self_ = self.arc_clone();
-        let validator_address = validator.address.clone();
         spawn(async move {
             Self::update_peer_id_cache(&self_, validator_id, &validator_address).await;
         });
@@ -280,14 +288,13 @@ where
 
         // Fetch the validator from the validators. If it does not exist that peer_id is not
         // assigned in this epoch and there is no cached entry to clear.
-        let validators = self.validators.read();
-        let Some(validator) = Self::get_validator(validators.as_ref(), validator_id) else {
+        let Some(validator_address) = self.get_validator_address(validator_id) else {
             return;
         };
 
         // Fetch the cache. If it does not exist there is no need to clear.
         let mut validator_peer_id_cache = self.validator_peer_id_cache.write();
-        let Some(cache_entry) = validator_peer_id_cache.get_mut(&validator.address) else {
+        let Some(cache_entry) = validator_peer_id_cache.get_mut(&validator_address) else {
             return;
         };
 
@@ -298,6 +305,45 @@ where
             }
         }
     }
+
+    /// Fetches all peer ids (including unverified ones) from the contact book for the given validator_id.
+    fn get_validator_peer_ids(&self, validator_id: u16) -> HashSet<N::PeerId> {
+        let Some(validator_address) = self.get_validator_address(validator_id) else {
+            return HashSet::new();
+        };
+        self.network
+            .get_peers_by_validator(&validator_address, true)
+    }
+
+    /// Fetches the verified peer id from the contact book for the given validator_id if it exists.
+    fn get_verified_validator_peer_id(&self, validator_id: u16) -> Option<N::PeerId> {
+        let validator_address = self.get_validator_address(validator_id)?;
+        let peer_ids = self
+            .network
+            .get_peers_by_validator(&validator_address, false);
+
+        if peer_ids.len() > 1 {
+            warn!(
+                %validator_address,
+                num_peer_ids = peer_ids.len(),
+                "More than one verified peer id found for validator"
+            );
+        }
+
+        // TODO Pick latest peer id instead of random one.
+        peer_ids.iter().next().cloned()
+    }
+
+    /// Fetches the validator address for the given validator_id.
+    fn get_validator_address(&self, validator_id: u16) -> Option<Address> {
+        let validators = self.validators.read();
+        let address = validators
+            .as_ref()?
+            .get_validator_by_slot_band(validator_id)
+            .address
+            .clone();
+        Some(address)
+    }
 }
 
 /// Messages sent over the validator network get augmented with the sending
@@ -305,7 +351,7 @@ where
 ///
 /// This makes it easier for the recipient to check that the sender is indeed a
 /// currently elected validator.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct ValidatorMessage<M> {
     validator_id: u16,
     inner: M,
@@ -380,25 +426,38 @@ where
             validator_id: self.local_validator_id()?,
             inner: msg,
         };
+
         // Use the last known peer ID, knowing that it might be already outdated.
-        // The network doesn't have a way to know if a record is outdated but we mark
+        // The network doesn't have a way to know if a record is outdated, but we mark
         // them as potentially outdated when a request/response error happens.
         // If the cache has a potentially outdated value, it will be updated soon
         // and then available to use by future calls to this function.
-        let peer_id = self
+        let cached_peer_id = self
             .get_validator_cache(validator_id)
-            .potentially_outdated_peer_id()
-            .ok_or_else(|| NetworkError::UnknownValidator(validator_id))?;
-
-        self.network
-            .message(msg, peer_id)
-            .map_err(|e| {
+            .potentially_outdated_peer_id();
+        if let Some(peer_id) = cached_peer_id {
+            if let Err(e) = self.network.message(msg.clone(), peer_id).await {
                 // The validator peer id might have changed and thus caused a connection failure.
                 self.clear_validator_peer_id_cache_on_error(validator_id, &e, &peer_id);
+            } else {
+                return Ok(());
+            }
+        }
 
-                NetworkError::Request(e)
-            })
-            .await
+        // Try all validator peer_ids from our peer contact book.
+        let mut futures = FuturesUnordered::new();
+        for peer_id in self.get_validator_peer_ids(validator_id) {
+            let network = Arc::clone(&self.network);
+            let msg = msg.clone();
+            futures.push(async move { network.message(msg, peer_id).await });
+        }
+
+        let results = futures.collect::<Vec<Result<(), RequestError>>>().await;
+        if results.iter().any(|result| result.is_ok()) {
+            Ok(())
+        } else {
+            Err(UnknownValidator(validator_id))
+        }
     }
 
     async fn request<TRequest: Request>(
@@ -413,19 +472,27 @@ where
             validator_id: self.local_validator_id()?,
             inner: request,
         };
-        if let Some(peer_id) = self.get_validator_cache(validator_id).current_peer_id() {
-            self.network
-                .request(request, peer_id)
-                .map_err(|e| {
-                    // The validator peer id might have changed and thus caused a connection failure.
-                    self.clear_validator_peer_id_cache_on_error(validator_id, &e, &peer_id);
 
-                    NetworkError::Request(e)
-                })
-                .await
-        } else {
-            Err(NetworkError::Unreachable)
+        if let Some(peer_id) = self.get_validator_cache(validator_id).current_peer_id() {
+            match self.network.request(request.clone(), peer_id).await {
+                Ok(response) => return Ok(response),
+                Err(e) => self.clear_validator_peer_id_cache_on_error(validator_id, &e, &peer_id),
+            }
         }
+
+        // Try all validator peer_ids from our peer contact book.
+        let mut futures = FuturesUnordered::new();
+        for peer_id in self.get_validator_peer_ids(validator_id) {
+            let network = Arc::clone(&self.network);
+            let request = request.clone();
+            futures.push(async move { network.request(request, peer_id).await });
+        }
+
+        futures
+            .filter_map(|result| future::ready(result.ok()))
+            .next()
+            .await
+            .ok_or(UnknownValidator(validator_id))
     }
 
     fn receive<M>(&self) -> MessageStream<M>
@@ -439,17 +506,20 @@ where
                 .filter_map(move |(message, peer_id)| {
                     let self_ = self_.arc_clone();
                     async move {
-                        let validator_peer_id = self_.get_validator_cache(message.validator_id).potentially_outdated_peer_id();
+                        let cached_peer_id = self_.get_validator_cache(message.validator_id).potentially_outdated_peer_id();
+                        let peer_ids = self_.get_validator_peer_ids(message.validator_id);
+
                         // Check that each message actually comes from the peer that it
                         // claims it comes from. Reject it otherwise.
-                        if validator_peer_id
+                        if cached_peer_id
                             .as_ref()
                             .map(|pid| *pid != peer_id)
-                            .unwrap_or(true)
+                            .unwrap_or(true) && !peer_ids.contains(&peer_id)
                         {
-                            warn!(%peer_id, ?validator_peer_id, claimed_validator_id = message.validator_id, "Dropping validator message");
+                            warn!(%peer_id, ?cached_peer_id, ?peer_ids, claimed_validator_id = message.validator_id, "Dropping validator message");
                             return None;
                         }
+
                         Some((message.inner, message.validator_id))
                     }
                 }),
@@ -466,18 +536,22 @@ where
             .filter_map(move |(message, request_id, peer_id)| {
                 let self_ = self_.arc_clone();
                 async move {
-                    let validator_peer_id = self_.get_validator_cache(message.validator_id).potentially_outdated_peer_id();
+                    let cached_peer_id = self_.get_validator_cache(message.validator_id).potentially_outdated_peer_id();
+                    let peer_ids = self_.get_validator_peer_ids(message.validator_id);
+
                     // Check that each message actually comes from the peer that it
                     // claims it comes from. Reject it otherwise.
-                    if validator_peer_id
+                    if cached_peer_id
                         .as_ref()
                         .map(|pid| *pid != peer_id)
-                        .unwrap_or(true)
+                        .unwrap_or(true) && !peer_ids.contains(&peer_id)
                     {
-                        warn!(%peer_id, ?validator_peer_id, claimed_validator_id = message.validator_id, "Dropping validator request");
+                        warn!(%peer_id, ?cached_peer_id, ?peer_ids, claimed_validator_id = message.validator_id, "Dropping validator message");
                         return None;
                     }
+
                     Some((message.inner, request_id, message.validator_id))
+
                 }
             })
             .boxed()
@@ -547,5 +621,20 @@ where
     fn get_peer_id(&self, validator_id: u16) -> Option<<Self::NetworkType as Network>::PeerId> {
         self.get_validator_cache(validator_id)
             .potentially_outdated_peer_id()
+    }
+
+    /// Registers a callback to produce a signed ValidatorRecord from a given peer_id and timestamp.
+    fn register_validator_signing_callback(
+        &self,
+        callback: impl Fn(
+                <Self::NetworkType as Network>::PeerId,
+                u64,
+            )
+                -> TaggedSigned<ValidatorRecord<<Self::NetworkType as Network>::PeerId>, KeyPair>
+            + Send
+            + Sync
+            + 'static,
+    ) {
+        self.network.register_validator_signing_callback(callback)
     }
 }
