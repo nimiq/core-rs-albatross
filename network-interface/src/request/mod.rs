@@ -223,7 +223,7 @@ pub fn request_handler<T: Send + Sync + Clone + 'static, Req: Handle<N, T>, N: N
     network: &Arc<N>,
     stream: BoxStream<'static, (Req, N::RequestId, N::PeerId)>,
     req_environment: &T,
-) -> impl Future<Output = ()> {
+) -> impl Future<Output = ()> + use<T, Req, N> {
     let req_environment = req_environment.clone();
     let network = Arc::clone(network);
     async move {

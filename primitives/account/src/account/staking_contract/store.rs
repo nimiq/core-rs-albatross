@@ -69,14 +69,14 @@ impl<T: DataStoreReadOps> StakingContractStoreReadOps for StakingContractStoreRe
 }
 
 impl<T: DataStoreReadOps + DataStoreIterOps> StakingContractStoreRead<'_, T> {
-    pub(crate) fn iter_stakers(&self) -> impl Iterator<Item = Staker> {
+    pub(crate) fn iter_stakers(&self) -> impl Iterator<Item = Staker> + use<T> {
         self.0.iter(
             &StakingContractStore::staker_key(&Address::START_ADDRESS),
             &StakingContractStore::staker_key(&Address::END_ADDRESS),
         )
     }
 
-    pub(crate) fn iter_validators(&self) -> impl Iterator<Item = Validator> {
+    pub(crate) fn iter_validators(&self) -> impl Iterator<Item = Validator> + use<T> {
         self.0.iter(
             &StakingContractStore::validator_key(&Address::START_ADDRESS),
             &StakingContractStore::validator_key(&Address::END_ADDRESS),

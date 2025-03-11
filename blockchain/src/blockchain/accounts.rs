@@ -40,7 +40,7 @@ impl Blockchain {
 
         // Check the type of the block.
         match block {
-            Block::Macro(ref macro_block) => {
+            Block::Macro(macro_block) => {
                 // Initialize a vector to store the inherents.
                 let inherents = self.create_macro_block_inherents(macro_block);
 
@@ -61,7 +61,7 @@ impl Blockchain {
 
                 Ok(total_tx_size)
             }
-            Block::Micro(ref micro_block) => {
+            Block::Micro(micro_block) => {
                 // Get the body of the block.
                 let body = micro_block
                     .body

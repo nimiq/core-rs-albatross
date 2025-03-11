@@ -152,7 +152,7 @@ fn setup_pk_tree_leaf<R: Rng + CryptoRng>(
         return Ok(());
     }
 
-    let circuit: LeafMNT6 = rng.gen();
+    let circuit: LeafMNT6 = rng.r#gen();
 
     let (pk, vk) = Groth16::<MNT4_753>::setup(circuit, rng)?;
 

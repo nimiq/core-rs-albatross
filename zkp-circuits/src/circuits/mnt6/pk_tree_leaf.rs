@@ -139,7 +139,7 @@ impl Distribution<PKTreeLeafCircuit> for Standard {
 
         let mut signer_bitmap = Vec::with_capacity(Policy::SLOTS as usize / PK_TREE_BREADTH);
         for _ in 0..Policy::SLOTS as usize / PK_TREE_BREADTH {
-            signer_bitmap.push(rng.gen());
+            signer_bitmap.push(rng.r#gen());
         }
 
         // Create parameters for our circuit

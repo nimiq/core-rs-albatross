@@ -34,7 +34,7 @@ impl<N: Network> DiffRequestComponent<N> {
 
     pub fn request_diff(
         &mut self,
-    ) -> impl FnMut(&BlockAndSource<N>) -> BoxFuture<'static, Result<TrieDiff, ()>> {
+    ) -> impl FnMut(&BlockAndSource<N>) -> BoxFuture<'static, Result<TrieDiff, ()>> + use<N> {
         let mut starting_peer_index = self.current_peer_index.clone();
         self.current_peer_index.increment();
 

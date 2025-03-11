@@ -122,7 +122,7 @@ impl PKTreeNodeCircuit {
         let mut signer_bitmap_chunk =
             Vec::with_capacity(Policy::SLOTS as usize / 2_usize.pow(tree_level as u32));
         for _ in 0..Policy::SLOTS as usize / 2_usize.pow(tree_level as u32) {
-            signer_bitmap_chunk.push(rng.gen());
+            signer_bitmap_chunk.push(rng.r#gen());
         }
 
         let keys = VerifyingKeys::rand(rng);

@@ -165,7 +165,7 @@ impl<N: Network> ZKPComponent<N> {
 
         // Activates the prover based on the configuration provided.
         zkp_component.zk_prover = match (is_prover_active, &zkp_component.blockchain) {
-            (true, BlockchainProxy::Full(ref blockchain)) => Some(
+            (true, BlockchainProxy::Full(blockchain)) => Some(
                 ZKProver::new(
                     Arc::clone(blockchain),
                     Arc::clone(&zkp_component.network),

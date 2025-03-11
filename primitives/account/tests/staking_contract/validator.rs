@@ -49,7 +49,7 @@ fn revert_penalize_inherent(
         .expect("Failed to revert inherent");
 
     let mut offense_event_block = block_state.number;
-    if let Inherent::Penalize { ref slot } = inherent {
+    if let Inherent::Penalize { slot } = inherent {
         offense_event_block = slot.offense_event_block;
     }
 

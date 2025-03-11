@@ -2,7 +2,7 @@
 name = "nimiq-test-log-proc-macro"
 version.workspace = true
 authors = ["Daniel Mueller <deso@posteo.net>"]
-edition = "2021"
+edition.workspace = true
 license = "Apache-2.0 OR MIT"
 readme = "README.md"
 include = ["src/lib.rs", "LICENSE-*", "README.md", "CHANGELOG.md"]

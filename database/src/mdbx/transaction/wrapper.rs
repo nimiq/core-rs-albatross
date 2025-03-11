@@ -41,15 +41,15 @@ impl<'db> ReadTransaction<'db> for MdbxReadTransaction<'db> {
 
     fn get<T: Table>(&self, table: &T, key: &T::Key) -> Option<T::Value> {
         match self {
-            MdbxReadTransaction::Read(ref txn) => txn.get(table, key),
-            MdbxReadTransaction::Write(ref txn) => txn.get(table, key),
+            MdbxReadTransaction::Read(txn) => txn.get(table, key),
+            MdbxReadTransaction::Write(txn) => txn.get(table, key),
         }
     }
 
     fn cursor<'txn, T: RegularTable>(&'txn self, table: &T) -> Self::Cursor<'txn, T> {
         match self {
-            MdbxReadTransaction::Read(ref txn) => CursorProxy::Read(txn.cursor(table)),
-            MdbxReadTransaction::Write(ref txn) => {
+            MdbxReadTransaction::Read(txn) => CursorProxy::Read(txn.cursor(table)),
+            MdbxReadTransaction::Write(txn) => {
                 CursorProxy::Write(ReadTransaction::cursor(txn, table))
             }
         }
@@ -57,8 +57,8 @@ impl<'db> ReadTransaction<'db> for MdbxReadTransaction<'db> {
 
     fn dup_cursor<'txn, T: DupTable>(&'txn self, table: &T) -> Self::DupCursor<'txn, T> {
         match self {
-            MdbxReadTransaction::Read(ref txn) => CursorProxy::Read(txn.dup_cursor(table)),
-            MdbxReadTransaction::Write(ref txn) => {
+            MdbxReadTransaction::Read(txn) => CursorProxy::Read(txn.dup_cursor(table)),
+            MdbxReadTransaction::Write(txn) => {
                 CursorProxy::Write(ReadTransaction::dup_cursor(txn, table))
             }
         }

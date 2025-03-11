@@ -20,7 +20,7 @@ use crate::sync::{peer_list::PeerList, sync_queue::SyncQueue};
 ///
 /// - The sync queue which manages the requests and responses.
 /// - The peers list.
-/// - The network stream of events used to remove the peers that have left.  
+/// - The network stream of events used to remove the peers that have left.
 ///
 /// The public interface allows to request chunks, which are not immediately returned.
 /// The chunks instead are returned by polling the component.
@@ -50,7 +50,7 @@ impl<N: Network> ChunkRequestComponent<N> {
             },
             |request, (response, _, peer_id), _| {
                 // Verifies the response chunk size.
-                if let ResponseChunk::Chunk(ref chunk) = response {
+                if let ResponseChunk::Chunk(chunk) = response {
                     if chunk.chunk.items.len() > request.limit as usize {
                         debug!(
                                 "Peer[{}] Chunk size exceeded the request limit. Req: {:?} Chunk size: {}",

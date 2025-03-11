@@ -53,24 +53,24 @@ impl Block {
     /// Returns the network ID of the block.
     pub fn network(&self) -> NetworkId {
         match self {
-            Block::Macro(ref block) => block.header.network,
-            Block::Micro(ref block) => block.header.network,
+            Block::Macro(block) => block.header.network,
+            Block::Micro(block) => block.header.network,
         }
     }
 
     /// Returns the version number of the block.
     pub fn version(&self) -> u16 {
         match self {
-            Block::Macro(ref block) => block.header.version,
-            Block::Micro(ref block) => block.header.version,
+            Block::Macro(block) => block.header.version,
+            Block::Micro(block) => block.header.version,
         }
     }
 
     /// Returns the block number of the block.
     pub fn block_number(&self) -> u32 {
         match self {
-            Block::Macro(ref block) => block.header.block_number,
-            Block::Micro(ref block) => block.header.block_number,
+            Block::Macro(block) => block.header.block_number,
+            Block::Micro(block) => block.header.block_number,
         }
     }
 
@@ -87,8 +87,8 @@ impl Block {
     /// Returns the timestamp of the block.
     pub fn timestamp(&self) -> u64 {
         match self {
-            Block::Macro(ref block) => block.header.timestamp,
-            Block::Micro(ref block) => block.header.timestamp,
+            Block::Macro(block) => block.header.timestamp,
+            Block::Micro(block) => block.header.timestamp,
         }
     }
 
@@ -96,8 +96,8 @@ impl Block {
     /// immediately preceding block.
     pub fn parent_hash(&self) -> &Blake2bHash {
         match self {
-            Block::Macro(ref block) => &block.header.parent_hash,
-            Block::Micro(ref block) => &block.header.parent_hash,
+            Block::Macro(block) => &block.header.parent_hash,
+            Block::Micro(block) => &block.header.parent_hash,
         }
     }
 
@@ -105,48 +105,48 @@ impl Block {
     /// header of the preceding election macro block.
     pub fn parent_election_hash(&self) -> Option<&Blake2bHash> {
         match self {
-            Block::Macro(ref block) => Some(&block.header.parent_election_hash),
-            Block::Micro(ref _block) => None,
+            Block::Macro(block) => Some(&block.header.parent_election_hash),
+            Block::Micro(_block) => None,
         }
     }
 
     /// Returns the seed of the block.
     pub fn seed(&self) -> &VrfSeed {
         match self {
-            Block::Macro(ref block) => &block.header.seed,
-            Block::Micro(ref block) => &block.header.seed,
+            Block::Macro(block) => &block.header.seed,
+            Block::Micro(block) => &block.header.seed,
         }
     }
 
     /// Returns the extra data of the block.
     pub fn extra_data(&self) -> &[u8] {
         match self {
-            Block::Macro(ref block) => &block.header.extra_data,
-            Block::Micro(ref block) => &block.header.extra_data,
+            Block::Macro(block) => &block.header.extra_data,
+            Block::Micro(block) => &block.header.extra_data,
         }
     }
 
     /// Returns the state root of the block.
     pub fn state_root(&self) -> &Blake2bHash {
         match self {
-            Block::Macro(ref block) => &block.header.state_root,
-            Block::Micro(ref block) => &block.header.state_root,
+            Block::Macro(block) => &block.header.state_root,
+            Block::Micro(block) => &block.header.state_root,
         }
     }
 
     /// Returns the body root of the block.
     pub fn body_root(&self) -> &Blake2sHash {
         match self {
-            Block::Macro(ref block) => &block.header.body_root,
-            Block::Micro(ref block) => &block.header.body_root,
+            Block::Macro(block) => &block.header.body_root,
+            Block::Micro(block) => &block.header.body_root,
         }
     }
 
     /// Returns the history root of the block.
     pub fn history_root(&self) -> &Blake2bHash {
         match self {
-            Block::Macro(ref block) => &block.header.history_root,
-            Block::Micro(ref block) => &block.header.history_root,
+            Block::Macro(block) => &block.header.history_root,
+            Block::Micro(block) => &block.header.history_root,
         }
     }
 
@@ -161,8 +161,8 @@ impl Block {
     /// Returns the Blake2b hash of the block header.
     pub fn hash(&self) -> Blake2bHash {
         match self {
-            Block::Macro(ref block) => block.header.hash(),
-            Block::Micro(ref block) => block.header.hash(),
+            Block::Macro(block) => block.header.hash(),
+            Block::Micro(block) => block.header.hash(),
         }
     }
 
@@ -203,8 +203,8 @@ impl Block {
     /// Returns true if this block contains a body.
     pub fn has_body(&self) -> bool {
         match self {
-            Block::Macro(ref block) => block.body.is_some(),
-            Block::Micro(ref block) => block.body.is_some(),
+            Block::Macro(block) => block.body.is_some(),
+            Block::Micro(block) => block.body.is_some(),
         }
     }
 
@@ -213,7 +213,7 @@ impl Block {
     pub fn transactions(&self) -> Option<&[ExecutedTransaction]> {
         match self {
             Block::Macro(_) => None,
-            Block::Micro(ref block) => block.body.as_ref().map(|ex| &ex.transactions[..]),
+            Block::Micro(block) => block.body.as_ref().map(|ex| &ex.transactions[..]),
         }
     }
 
@@ -222,7 +222,7 @@ impl Block {
     pub fn transactions_mut(&mut self) -> Option<&mut Vec<ExecutedTransaction>> {
         match self {
             Block::Macro(_) => None,
-            Block::Micro(ref mut block) => block.body.as_mut().map(|ex| &mut ex.transactions),
+            Block::Micro(block) => block.body.as_mut().map(|ex| &mut ex.transactions),
         }
     }
 
@@ -237,7 +237,7 @@ impl Block {
     pub fn sum_transaction_fees(&self) -> Coin {
         match self {
             Block::Macro(_) => Coin::ZERO,
-            Block::Micro(ref block) => block
+            Block::Micro(block) => block
                 .body
                 .as_ref()
                 .map(|ex| {
@@ -252,7 +252,7 @@ impl Block {
 
     /// Unwraps the block and returns a reference to the underlying Macro block.
     pub fn unwrap_macro_ref(&self) -> &MacroBlock {
-        if let Block::Macro(ref block) = self {
+        if let Block::Macro(block) = self {
             block
         } else {
             unreachable!()
@@ -261,7 +261,7 @@ impl Block {
 
     /// Unwraps the block and returns a reference to the underlying Micro block.
     pub fn unwrap_micro_ref(&self) -> &MicroBlock {
-        if let Block::Micro(ref block) = self {
+        if let Block::Micro(block) = self {
             block
         } else {
             unreachable!()
@@ -270,7 +270,7 @@ impl Block {
 
     /// Unwraps the block and returns a mutable reference to the underlying Macro block.
     pub fn unwrap_macro_ref_mut(&mut self) -> &mut MacroBlock {
-        if let Block::Macro(ref mut block) = self {
+        if let Block::Macro(block) = self {
             block
         } else {
             unreachable!()
@@ -279,7 +279,7 @@ impl Block {
 
     /// Unwraps the block and returns a mutable reference to the underlying Micro block.
     pub fn unwrap_micro_ref_mut(&mut self) -> &mut MicroBlock {
-        if let Block::Micro(ref mut block) = self {
+        if let Block::Micro(block) = self {
             block
         } else {
             unreachable!()

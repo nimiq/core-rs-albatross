@@ -12,7 +12,7 @@ fn impl_serialize_content(ast: &DeriveInput) -> TokenStream {
     let name = &ast.ident;
     let (impl_generics, ty_generics, _) = ast.generics.split_for_impl();
 
-    let gen = quote! {
+    let generated = quote! {
         impl #impl_generics ::nimiq_hash::SerializeContent for #name #ty_generics where #name #ty_generics: ::nimiq_hash::nimiq_serde::Serialize {
             #[allow(unused_mut, unused_variables)]
             fn serialize_content<W: ::std::io::Write, H>(&self, writer: &mut W) -> ::std::io::Result<()> {
@@ -21,5 +21,5 @@ fn impl_serialize_content(ast: &DeriveInput) -> TokenStream {
             }
         }
     };
-    gen
+    generated
 }

@@ -19,8 +19,8 @@ macro_rules! gen_blockchain_match {
     ($self: ident, $t: ident, $f: ident $(, $arg:expr )*) => {
         match $self {
             #[cfg(feature = "full")]
-            $t::Full(ref blockchain) => AbstractBlockchain::$f(&**blockchain, $( $arg ),*),
-            $t::Light(ref light_blockchain) => AbstractBlockchain::$f(&**light_blockchain, $( $arg ),*),
+            $t::Full(blockchain) => AbstractBlockchain::$f(&**blockchain, $( $arg ),*),
+            $t::Light(light_blockchain) => AbstractBlockchain::$f(&**light_blockchain, $( $arg ),*),
         }
     };
 }

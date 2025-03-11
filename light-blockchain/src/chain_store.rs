@@ -75,11 +75,11 @@ impl ChainStore {
         // - Micro blocks: Headers and Justifications
         // - Macro blocks: Headers
         match &mut chain_info.head {
-            Block::Macro(ref mut block) => {
+            Block::Macro(block) => {
                 block.body = None;
                 block.justification = None;
             }
-            Block::Micro(ref mut block) => {
+            Block::Micro(block) => {
                 block.body = None;
             }
         }

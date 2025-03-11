@@ -559,19 +559,16 @@ impl BlockLog {
 
     pub fn transaction_logs(&self) -> &[TransactionLog] {
         match self {
-            BlockLog::AppliedBlock { ref tx_logs, .. }
-            | BlockLog::RevertedBlock { ref tx_logs, .. } => tx_logs,
+            BlockLog::AppliedBlock { tx_logs, .. } | BlockLog::RevertedBlock { tx_logs, .. } => {
+                tx_logs
+            }
         }
     }
 
     pub fn inherent_logs(&self) -> &[Log] {
         match self {
-            BlockLog::AppliedBlock {
-                ref inherent_logs, ..
-            }
-            | BlockLog::RevertedBlock {
-                ref inherent_logs, ..
-            } => inherent_logs,
+            BlockLog::AppliedBlock { inherent_logs, .. }
+            | BlockLog::RevertedBlock { inherent_logs, .. } => inherent_logs,
         }
     }
 }

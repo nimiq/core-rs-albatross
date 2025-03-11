@@ -12,7 +12,7 @@ fn impl_db_serialize(ast: &DeriveInput) -> TokenStream {
     let name = &ast.ident;
     let (impl_generics, ty_generics, _) = ast.generics.split_for_impl();
 
-    let gen = quote! {
+    let generated = quote! {
         impl #impl_generics ::nimiq_database_value::AsDatabaseBytes for #name #ty_generics where #name #ty_generics: ::nimiq_hash::nimiq_serde::Serialize {
             fn as_key_bytes(&self) -> std::borrow::Cow<[u8]> {
                 std::borrow::Cow::Owned(::nimiq_hash::nimiq_serde::Serialize::serialize_to_vec(&self))
@@ -35,5 +35,5 @@ fn impl_db_serialize(ast: &DeriveInput) -> TokenStream {
             }
         }
     };
-    gen
+    generated
 }

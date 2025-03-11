@@ -44,7 +44,7 @@ fn main() {
     let start = Instant::now();
     let mut rng = &mut rand_core_compat::Rng09(rand::rng());
 
-    let circuit: mnt6::PKTreeLeafCircuit = rng.gen();
+    let circuit: mnt6::PKTreeLeafCircuit = rng.r#gen();
     evaluate_circuit(circuit, "pk_tree_leaf mnt6");
 
     let circuit = mnt4::PKTreeNodeCircuit::rand(0, &mut rng);
