@@ -20,7 +20,7 @@ pub trait MacroSync<TPeerId>: Stream<Item = MacroSyncReturn<TPeerId>> + Unpin + 
     /// Adds a peer to synchronize macro blocks
     fn add_peer(&mut self, peer_id: TPeerId);
     /// Gets the list of peers that are being synced with and removes them from the sync process
-    fn collect_peers(&mut self) -> Vec<TPeerId>;
+    fn drain_peers(&mut self) -> Vec<TPeerId>;
     /// Fallbacks to other macro syncing mechanism.
     /// Currently we can only fallback from Pico to Light macro sync.
     fn fallback(&mut self, peers: Vec<TPeerId>);

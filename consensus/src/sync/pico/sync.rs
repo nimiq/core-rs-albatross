@@ -111,7 +111,7 @@ impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for PicoMacroSync<TNetwork> 
         unimplemented!()
     }
 
-    fn collect_peers(&mut self) -> Vec<TNetwork::PeerId> {
+    fn drain_peers(&mut self) -> Vec<TNetwork::PeerId> {
         self.syncing_peers.drain().collect()
     }
 }

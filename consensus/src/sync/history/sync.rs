@@ -124,7 +124,7 @@ impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for HistoryMacroSync<TNetwor
         unimplemented!()
     }
 
-    fn collect_peers(&mut self) -> Vec<TNetwork::PeerId> {
+    fn drain_peers(&mut self) -> Vec<TNetwork::PeerId> {
         unimplemented!()
     }
 }

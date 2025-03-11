@@ -62,7 +62,7 @@ impl MacroSync<MockPeerId> for MockHistorySyncStream {
         self.peers.write().push(peer_id);
     }
 
-    fn collect_peers(&mut self) -> Vec<MockPeerId> {
+    fn drain_peers(&mut self) -> Vec<MockPeerId> {
         unimplemented!()
     }
 

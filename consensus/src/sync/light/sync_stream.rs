@@ -293,6 +293,15 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         while let Poll::Ready(Some(result)) = self.block_headers.poll_next_unpin(cx) {
             match result {
                 (Ok(Ok(block)), peer_id) => {
+                    if !block.is_macro() {
+                        // We received a non macro block during the macro sync process.
+                        log::warn!(%peer_id,
+                            "Banning peer due to a non expected response",
+                        );
+                        self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
+                        return Poll::Ready(None);
+                    }
+
                     if let Some(peer_requests) = self.peer_requests.get_mut(&peer_id) {
                         if !peer_requests.update_request(block) {
                             // We received a block we were not expecting from this peer

@@ -131,10 +131,10 @@ impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for EitherSyncer<TNetwork> {
         let _ = mem::replace(self, EitherSyncer::Fallback(light_macro_sync));
     }
 
-    fn collect_peers(&mut self) -> Vec<TNetwork::PeerId> {
+    fn drain_peers(&mut self) -> Vec<TNetwork::PeerId> {
         match self {
-            EitherSyncer::Fallback(macro_sync) => macro_sync.collect_peers(),
-            EitherSyncer::Normal(macro_sync) => macro_sync.collect_peers(),
+            EitherSyncer::Fallback(macro_sync) => macro_sync.drain_peers(),
+            EitherSyncer::Normal(macro_sync) => macro_sync.drain_peers(),
         }
     }
 }

@@ -245,7 +245,7 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
                     debug!(%peer_id, "Macro sync returned conflicting peer");
                     let mut syncing_peers = self.live_sync.peers();
                     syncing_peers.push(peer_id);
-                    syncing_peers.append(&mut self.macro_sync.collect_peers());
+                    syncing_peers.append(&mut self.macro_sync.drain_peers());
 
                     self.macro_sync.fallback(syncing_peers);
                 }
