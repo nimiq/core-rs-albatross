@@ -349,7 +349,7 @@ where
     /// skip block.
     blockchain: Arc<RwLock<Blockchain>>,
 
-    /// Reference to the network structure. Necessary to validate message for gossipsup as well as
+    /// Reference to the network structure. Necessary to validate message for gossipsub as well as
     /// banning peers if necessary.
     network: Arc<TValidatorNetwork>,
 }
@@ -499,7 +499,7 @@ where
     /// as well as the validators.
     blockchain: Arc<RwLock<Blockchain>>,
 
-    /// Reference to the network structure. Necessary to validate message for gossipsup as well as
+    /// Reference to the network structure. Necessary to validate message for gossipsub as well as
     /// banning peers if necessary.
     network: Arc<TValidatorNetwork>,
 }
@@ -713,7 +713,7 @@ mod test {
             signature: (signing_key.sign(&data), 0),
         };
 
-        // Send the proposal over gossipsup to get it correctly filled with a pubsub_id
+        // Send the proposal over gossipsub to get it correctly filled with a pubsub_id
         // First subscribe to the topic on network2. Note that nothing else subscribes to this.
         // Usually the validator does, but none is present.
         let mut proposals = nw2

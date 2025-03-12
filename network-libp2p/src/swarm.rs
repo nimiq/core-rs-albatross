@@ -450,7 +450,7 @@ fn handle_behaviour_event(event: behaviour::BehaviourEvent, event_info: EventInf
         #[cfg(feature = "kad")]
         behaviour::BehaviourEvent::Dht(event) => handle_dht_event(event, event_info),
         behaviour::BehaviourEvent::Discovery(event) => handle_discovery_event(event, event_info),
-        behaviour::BehaviourEvent::Gossipsub(event) => handle_gossipsup_event(event, event_info),
+        behaviour::BehaviourEvent::Gossipsub(event) => handle_gossipsub_event(event, event_info),
         behaviour::BehaviourEvent::Ping(event) => handle_ping_event(event, event_info),
         behaviour::BehaviourEvent::RequestResponse(event) => {
             handle_request_response_event(event, event_info)
@@ -736,7 +736,7 @@ fn handle_discovery_event(event: discovery::Event, event_info: EventInfo) {
     }
 }
 
-fn handle_gossipsup_event(event: gossipsub::Event, event_info: EventInfo) {
+fn handle_gossipsub_event(event: gossipsub::Event, event_info: EventInfo) {
     match event {
         gossipsub::Event::Message {
             propagation_source,
