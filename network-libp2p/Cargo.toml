@@ -39,7 +39,6 @@ thiserror = "2.0"
 tokio = { version = "1.44", features = ["macros", "rt", "tracing"] }
 tokio-stream = "0.1"
 unsigned-varint = "0.8"
-void = "1.0"
 
 nimiq-keys = { workspace = true }
 nimiq-macros = { workspace = true }
@@ -55,7 +54,7 @@ nimiq-utils = { workspace = true, features = [
 nimiq-validator-network = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-libp2p = { version = "0.54", default-features = false, features = [
+libp2p = { version = "0.55", default-features = false, features = [
     "autonat",
     "gossipsub",
     "kad",
@@ -69,7 +68,7 @@ libp2p = { version = "0.54", default-features = false, features = [
 ] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-libp2p = { version = "0.54", default-features = false, features = [
+libp2p = { version = "0.55", default-features = false, features = [
     "autonat",
     "gossipsub",
     "kad",

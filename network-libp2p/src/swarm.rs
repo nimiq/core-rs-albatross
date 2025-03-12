@@ -135,19 +135,15 @@ pub(crate) async fn swarm_task(
                 validate_msg = validate_rx.recv() => {
                     if let Some(validate_msg) = validate_msg {
                         let topic = validate_msg.topic;
-                        let result: Result<bool, gossipsub::PublishError> = swarm
+                        if !swarm
                             .behaviour_mut()
                             .gossipsub
                             .report_message_validation_result(
                                 &validate_msg.pubsub_id.message_id,
                                 &validate_msg.pubsub_id.propagation_source,
                                 validate_msg.acceptance,
-                            );
-
-                        match result {
-                            Ok(true) => {}, // success
-                            Ok(false) => debug!(topic, "Validation took too long: message is no longer in the message cache"),
-                            Err(e) => error!(topic, error = %e, "Network error while relaying message"),
+                            ) {
+                            debug!(topic, "Validation took too long: message is no longer in the message cache");
                         }
                     }
                 },
@@ -770,8 +766,8 @@ fn handle_gossipsub_event(event: gossipsub::Event, event_info: EventInfo) {
                 return;
             }
 
-            if !topic_info.validate {
-                if let Err(error) = event_info
+            if !topic_info.validate
+                && !event_info
                     .swarm
                     .behaviour_mut()
                     .gossipsub
@@ -780,9 +776,8 @@ fn handle_gossipsub_event(event: gossipsub::Event, event_info: EventInfo) {
                         &propagation_source,
                         gossipsub::MessageAcceptance::Accept,
                     )
-                {
-                    error!(%message_id, %error, "Failed to report message validation result");
-                }
+            {
+                warn!(%topic, "validation failed even though message was immediately accepted");
             }
 
             if let Err(error) =
@@ -792,6 +787,12 @@ fn handle_gossipsub_event(event: gossipsub::Event, event_info: EventInfo) {
             {
                 error!(%topic, %error, "Failed to dispatch gossipsub message")
             }
+        }
+        gossipsub::Event::SlowPeer {
+            peer_id,
+            failed_messages,
+        } => {
+            warn!(%peer_id, ?failed_messages, "slow peer");
         }
         gossipsub::Event::Subscribed { peer_id, topic } => {
             trace!(%peer_id, %topic, "peer subscribed to topic");
@@ -828,34 +829,63 @@ fn handle_request_response_event(
     match event {
         request_response::Event::Message {
             peer: peer_id,
+            connection_id,
             message,
         } => match message {
             request_response::Message::Request {
                 request_id,
                 request,
                 channel,
-            } => handle_request_response_request(peer_id, request_id, request, channel, event_info),
+            } => handle_request_response_request(
+                peer_id,
+                connection_id,
+                request_id,
+                request,
+                channel,
+                event_info,
+            ),
             request_response::Message::Response {
                 request_id,
                 response,
-            } => handle_request_response_response(peer_id, request_id, response, event_info),
+            } => handle_request_response_response(
+                peer_id,
+                connection_id,
+                request_id,
+                response,
+                event_info,
+            ),
         },
         request_response::Event::OutboundFailure {
             peer: peer_id,
+            connection_id,
             request_id,
             error,
-        } => handle_request_response_outbound_failure(peer_id, request_id, error, event_info),
+        } => handle_request_response_outbound_failure(
+            peer_id,
+            connection_id,
+            request_id,
+            error,
+            event_info,
+        ),
         request_response::Event::InboundFailure {
             peer: peer_id,
+            connection_id,
             request_id,
             error,
-        } => handle_request_response_inbound_failure(peer_id, request_id, error, event_info),
+        } => handle_request_response_inbound_failure(
+            peer_id,
+            connection_id,
+            request_id,
+            error,
+            event_info,
+        ),
         request_response::Event::ResponseSent { .. } => {}
     }
 }
 
 fn handle_request_response_request(
     peer_id: PeerId,
+    connection_id: ConnectionId,
     request_id: InboundRequestId,
     request: Option<Vec<u8>>,
     channel: ResponseChannel<Option<Vec<u8>>>,
@@ -868,7 +898,7 @@ fn handle_request_response_request(
 
     // Peek the request type, if it fails return as the request cannot be determined.
     let Ok(type_id) = peek_type(&request) else {
-        debug!(%request_id, %peer_id, "Could not parse request type");
+        debug!(%request_id, %peer_id, %connection_id, "Could not parse request type");
         return;
     };
 
@@ -890,6 +920,7 @@ fn handle_request_response_request(
                 %type_id,
                 %request_id,
                 %peer_id,
+                %connection_id,
                 max_requests = %rate_limit_config.max_requests,
                 time_window = ?rate_limit_config.time_window,
                 "Denied request - exceeded max requests rate",
@@ -904,7 +935,7 @@ fn handle_request_response_request(
                 .send_response(channel, Some(response.serialize_to_vec()))
                 .is_err()
             {
-                error!(%type_id, %request_id, %peer_id, "Could not send rate limit error response");
+                error!(%type_id, %request_id, %peer_id, %connection_id, "Could not send rate limit error response");
             }
         } else {
             if type_id.requires_response() {
@@ -922,15 +953,15 @@ fn handle_request_response_request(
                     .send_response(channel, Some(response.serialize_to_vec()))
                     .is_err()
                 {
-                    error!(%type_id, %request_id, %peer_id, "Could not send auto response");
+                    error!(%type_id, %request_id, %peer_id, %connection_id, "Could not send auto response");
                 }
             }
             if let Err(e) = sender.try_send((request.into(), request_id, peer_id)) {
-                error!(%type_id, %request_id, %peer_id, error = %e, "Failed to dispatch request to handler");
+                error!(%type_id, %request_id, %peer_id, %connection_id, error = %e, "Failed to dispatch request to handler");
             }
         }
     } else {
-        trace!(%type_id, %request_id, %peer_id, "No request handler registered, replying with a 'NoReceiver' error");
+        trace!(%type_id, %request_id, %peer_id, %connection_id, "No request handler registered, replying with a 'NoReceiver' error");
         let err: Result<(), InboundRequestError> = Err(InboundRequestError::NoReceiver);
         if event_info
             .swarm
@@ -939,7 +970,7 @@ fn handle_request_response_request(
             .send_response(channel, Some(err.serialize_to_vec()))
             .is_err()
         {
-            error!(%type_id, %request_id, %peer_id, "Could not send default response");
+            error!(%type_id, %request_id, %peer_id, %connection_id, "Could not send default response");
         };
 
         // We remove it in case the channel was already closed.
@@ -949,6 +980,7 @@ fn handle_request_response_request(
 
 fn handle_request_response_response(
     _peer_id: PeerId,
+    _connection_id: ConnectionId,
     request_id: OutboundRequestId,
     response: Option<Vec<u8>>,
     event_info: EventInfo,
@@ -975,14 +1007,15 @@ fn handle_request_response_response(
 
 fn handle_request_response_outbound_failure(
     peer_id: PeerId,
+    connection_id: ConnectionId,
     request_id: OutboundRequestId,
     error: OutboundFailure,
     event_info: EventInfo,
 ) {
-    error!(%request_id, %peer_id, %error, "Failed to send request to peer");
+    error!(%request_id, %peer_id, %connection_id, %error, "Failed to send request to peer");
 
     let Some(channel) = event_info.state.requests.remove(&request_id) else {
-        debug!(%request_id, %peer_id, "No request found for outbound failure");
+        debug!(%request_id, %connection_id, %peer_id, "No request found for outbound failure");
         return;
     };
 
@@ -993,11 +1026,12 @@ fn handle_request_response_outbound_failure(
 
 fn handle_request_response_inbound_failure(
     peer_id: PeerId,
+    connection_id: ConnectionId,
     request_id: InboundRequestId,
     error: InboundFailure,
     _event_info: EventInfo,
 ) {
-    error!(%request_id, %peer_id, %error, "Inbound request failed");
+    error!(%request_id, %peer_id, %connection_id, %error, "Inbound request failed");
 }
 
 fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut TaskState) {
@@ -1108,27 +1142,16 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
                 return;
             }
 
-            match swarm.behaviour_mut().gossipsub.unsubscribe(&topic) {
-                // Unsubscription. Remove the topic from the subscription table.
-                Ok(true) => {
-                    drop(state.gossip_topics.remove(&topic.hash()).unwrap().output);
-                    output.send(Ok(())).ok();
-                }
-
-                // Apparently we're already unsubscribed.
-                Ok(false) => {
-                    drop(state.gossip_topics.remove(&topic.hash()).unwrap().output);
-                    let error = NetworkError::AlreadyUnsubscribed {
-                        topic_name: topic_name.clone(),
-                    };
-                    output.send(Err(error)).ok();
-                }
-
-                // Unsubscribe failed. Send back error.
-                Err(e) => {
-                    output.send(Err(e.into())).ok();
-                }
-            }
+            let success = swarm.behaviour_mut().gossipsub.unsubscribe(&topic);
+            drop(state.gossip_topics.remove(&topic.hash()).unwrap().output);
+            // The initiator might no longer exist, so we silently ignore any errors here.
+            let _ = output.send(if success {
+                Ok(())
+            } else {
+                Err(NetworkError::AlreadyUnsubscribed {
+                    topic_name: topic_name.clone(),
+                })
+            });
         }
         NetworkAction::Publish {
             topic_name,

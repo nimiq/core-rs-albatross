@@ -1,5 +1,6 @@
 use std::{
     collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    convert::Infallible,
     future::Future,
     net::IpAddr,
     pin::Pin,
@@ -25,7 +26,6 @@ use nimiq_time::{interval, sleep_until, Instant, Interval, Sleep};
 use nimiq_utils::WakerExt as _;
 use parking_lot::RwLock;
 use rand::{seq::IteratorRandom, thread_rng};
-use void::Void;
 
 use super::Error;
 use crate::discovery::{handler, peer_contacts::PeerContactBook};
@@ -326,7 +326,7 @@ impl<T> std::fmt::Display for ConnectionState<T> {
     }
 }
 
-type PoolToSwarm = ToSwarm<Void, Void>;
+type PoolToSwarm = ToSwarm<Infallible, Infallible>;
 
 /// Connection pool behaviour
 ///
@@ -885,7 +885,7 @@ impl Behaviour {
 
 impl NetworkBehaviour for Behaviour {
     type ConnectionHandler = dummy::ConnectionHandler;
-    type ToSwarm = Void;
+    type ToSwarm = Infallible;
 
     fn on_swarm_event(&mut self, event: FromSwarm) {
         match event {
@@ -928,7 +928,7 @@ impl NetworkBehaviour for Behaviour {
         _connection_id: ConnectionId,
         event: THandlerOutEvent<Self>,
     ) {
-        void::unreachable(event)
+        match event {}
     }
 
     fn handle_pending_outbound_connection(
