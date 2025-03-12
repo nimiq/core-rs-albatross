@@ -319,7 +319,7 @@ impl Block {
             additional_fields: BlockAdditionalFields::Micro {
                 producer: Slot::from_block_hash(blockchain, &block_hash)?,
                 equivocation_proofs,
-                justification: micro_block.justification.map(Into::into),
+                justification: micro_block.justification,
             },
         })
     }
