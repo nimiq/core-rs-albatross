@@ -5,7 +5,7 @@ use nimiq_hash::{hmac::compute_hmac_sha512, pbkdf2::compute_pbkdf2_sha512};
 #[cfg(feature = "crypto")]
 use nimiq_utils::otp::{otp, Algorithm};
 #[cfg(feature = "primitives")]
-use rand_core::RngCore;
+use rand::{OsRng, RngCore};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -18,7 +18,7 @@ impl CryptoUtils {
     #[wasm_bindgen(js_name = getRandomValues)]
     pub fn get_random_values(length: usize) -> Vec<u8> {
         let mut buf = vec![0u8; length];
-        rand_core::OsRng.fill_bytes(&mut buf);
+        OsRng.fill_bytes(&mut buf);
         buf
     }
 

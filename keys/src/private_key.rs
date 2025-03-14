@@ -7,7 +7,7 @@ use std::{
 use curve25519_dalek::scalar::Scalar;
 use hex::FromHex;
 use nimiq_utils::key_rng::SecureGenerate;
-use rand_core::{CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 use sha2::{Digest as _, Sha512};
 
 use crate::errors::{KeysError, ParseError};

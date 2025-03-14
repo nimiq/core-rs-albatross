@@ -1,6 +1,6 @@
 use ed25519_zebra::{SigningKey, VerificationKeyBytes};
 use nimiq_utils::key_rng::SecureGenerate;
-use rand_core::{CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 #[cfg(feature = "serde-derive")]
 use serde::{Deserialize, Serialize};
 

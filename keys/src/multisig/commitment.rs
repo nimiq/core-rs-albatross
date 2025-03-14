@@ -2,8 +2,7 @@ use curve25519_dalek::{
     constants, edwards::CompressedEdwardsY, traits::Identity, EdwardsPoint, Scalar,
 };
 use nimiq_utils::key_rng::SecureGenerate;
-use rand::Rng;
-use rand_core::{CryptoRng, RngCore};
+use rand::{CryptoRng, Rng, RngCore};
 use sha2::digest::Update;
 use zeroize::Zeroize;
 

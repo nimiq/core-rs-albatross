@@ -7,8 +7,7 @@ use curve25519_dalek::{
 };
 use nimiq_hash::{sha512::Sha512Hasher, Hasher};
 use nimiq_utils::key_rng::SecureGenerate;
-use rand::Rng;
-use rand_core::{CryptoRng, RngCore};
+use rand::{CryptoRng, Rng, RngCore};
 use sha2::{self, Digest, Sha512};
 
 use self::{
