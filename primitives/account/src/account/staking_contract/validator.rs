@@ -46,7 +46,9 @@ use crate::{
 ///      in the first place.
 /// (**) The validator may be set to automatically reactivate itself upon inactivation.
 ///      If this setting is not enabled the state change can only be triggered manually.
-///
+///      However, there is a delay incurred if the validator is deactivated multiple consecutive times
+///      in the current epoch. The delay is a function of the number of deactivations and is reduced
+///      if the validator starts producing blocks in time.
 /// Create, Update, Deactivate, Retire and Re-activate are incoming transactions to the staking contract.
 /// Delete is an outgoing transaction from the staking contract.
 /// To Create, Update or Delete, the cold key must be used (the one corresponding to the validator

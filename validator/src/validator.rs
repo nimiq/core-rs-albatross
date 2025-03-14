@@ -40,6 +40,7 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{
     aggregation::tendermint::{proposal::RequestProposal, state::MacroState},
+    health::ValidatorHealth,
     jail::EquivocationProofPool,
     key_utils::VotingKeys,
     micro::ProduceMicroBlock,
@@ -72,6 +73,7 @@ pub struct ValidatorState {
     pub automatic_reactivate: bool,
     pub slot_band: Option<u16>,
     pub consensus: ConsensusState,
+    pub validator_health: ValidatorHealth,
 }
 
 declare_table!(ValidatorTable, "ValidatorState", () => MacroState);
@@ -201,6 +203,8 @@ where
                 .await
         });
 
+        let validator_health = ValidatorHealth::new(&validator_address);
+
         Self {
             consensus: consensus.proxy(),
             blockchain,
@@ -217,6 +221,7 @@ where
                 automatic_reactivate,
                 slot_band: None,
                 consensus: blockchain_state,
+                validator_health,
             })),
             inactivity_state: None,
 
@@ -450,6 +455,7 @@ where
                     next_block_number,
                     Self::compute_micro_block_producer_timeout(head, &blockchain),
                     Self::BLOCK_SEPARATION_TIME,
+                    Arc::clone(&self.state),
                 ));
             }
         }
@@ -469,6 +475,8 @@ where
                 self.on_blockchain_extended(hash);
             }
             BlockchainEvent::EpochFinalized(ref hash) => {
+                // Reset the validator health for the new epoch
+                self.state().write().validator_health.reset_epoch();
                 self.init_epoch();
                 // The on_blockchain_extended is necessary for the order of events to not matter.
                 self.on_blockchain_extended(hash);
@@ -499,6 +507,20 @@ where
 
         self.check_reactivate(block.block_number());
         self.init_block_producer(Some(hash));
+
+        let block_number = block.block_number();
+        let blockchain = self.blockchain.read();
+
+        if block_number
+            == self
+                .state
+                .read()
+                .validator_health
+                .get_reactivate_block_number()
+        {
+            let inactivity_state = self.reactivate(&blockchain);
+            self.inactivity_state = Some(inactivity_state);
+        }
     }
 
     fn on_blockchain_rebranched(
@@ -673,7 +695,7 @@ where
 
         let cn = self.consensus.clone();
         spawn(async move {
-            debug!("Sending reactivate transaction to the network");
+            info!("Sending reactivate transaction to the network");
             if cn
                 .send_transaction(reactivate_transaction.clone())
                 .await
@@ -786,18 +808,23 @@ where
         // Once the validator can be active is established, check the validator staking state.
         if self.is_synced() {
             let blockchain = self.blockchain.read();
-            let state = self.state.read();
-            match state.get_staking_state(&blockchain) {
+            let block_number = blockchain.block_number();
+            let staking_state = self.state.read().get_staking_state(&blockchain);
+            match staking_state {
                 ValidatorStakingState::Active => {
-                    drop(state);
-                    drop(blockchain);
                     if self.inactivity_state.is_some() {
+                        drop(blockchain);
                         self.inactivity_state = None;
+                        self.state.write().validator_health.reactivate();
                         info!("Automatically reactivated.");
                     }
+
+                    self.state
+                        .write()
+                        .validator_health
+                        .refresh_validator_health_status();
                 }
                 ValidatorStakingState::Inactive(jailed_from) => {
-                    drop(state);
                     if self.inactivity_state.is_none()
                         && jailed_from
                             .map(|jailed_from| {
@@ -806,9 +833,7 @@ where
                             .unwrap_or(true)
                         && self.state.read().automatic_reactivate
                     {
-                        let inactivity_state = self.reactivate(&blockchain);
-                        drop(blockchain);
-                        self.inactivity_state = Some(inactivity_state);
+                        self.state.write().validator_health.inactivate(block_number);
                     }
                 }
                 ValidatorStakingState::UnknownOrNoStake => {}

@@ -66,6 +66,7 @@ pub async fn build_validators<N: TestNetwork + NetworkInterface>(
     peer_ids: &[u64],
     hub: &mut Option<MockHub>,
     is_prover_active: bool,
+    automatic_reactivate: bool,
 ) -> Vec<Validator<ValidatorNetworkImpl<N>>>
 where
     N::Error: Send + Sync,
@@ -113,7 +114,7 @@ where
         let (v, c) = build_validator(
             peer_ids[i],
             Address::from(&validator_keys[i]),
-            false,
+            automatic_reactivate,
             signing_keys[i].clone(),
             voting_keys[i].clone(),
             fee_keys[i].clone(),

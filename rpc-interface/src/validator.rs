@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use nimiq_keys::Address;
 
-use crate::types::RPCResult;
+use crate::types::{RPCResult, ValidatorHealth};
 
 #[nimiq_jsonrpc_derive::proxy(name = "ValidatorProxy", rename_all = "camelCase")]
 #[async_trait]
@@ -19,6 +19,9 @@ pub trait ValidatorInterface {
 
     /// Returns all available voting keys.
     async fn get_voting_keys(&mut self) -> RPCResult<Vec<String>, (), Self::Error>;
+
+    /// Returns the current validator health.
+    async fn get_validator_health(&mut self) -> RPCResult<ValidatorHealth, (), Self::Error>;
 
     // Adds a voting key that will be used when the key expected by the chain changes
     async fn add_voting_key(&mut self, secret_key: String) -> RPCResult<(), (), Self::Error>;

@@ -124,6 +124,14 @@ pub enum HashAlgorithm {
     Sha512 = 4,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum ValidatorHealth {
+    Green = 1,
+    Yellow = 2,
+    Red = 3,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Block {

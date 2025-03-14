@@ -18,7 +18,10 @@ use nimiq_validator_network::ValidatorNetwork;
 use nimiq_vrf::VrfSeed;
 use parking_lot::RwLock;
 
-use crate::{aggregation::skip_block::SkipBlockAggregation, validator::Validator};
+use crate::{
+    aggregation::skip_block::SkipBlockAggregation,
+    validator::{Validator, ValidatorState},
+};
 
 pub(crate) enum ProduceMicroBlockEvent {
     MicroBlock,
@@ -36,6 +39,7 @@ struct NextProduceMicroBlockEvent<TValidatorNetwork> {
     block_number: u32,
     producer_timeout: Duration,
     block_separation_time: Duration,
+    state: Arc<RwLock<ValidatorState>>,
 }
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<TValidatorNetwork> {
@@ -53,6 +57,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         block_number: u32,
         producer_timeout: Duration,
         block_separation_time: Duration,
+        state: Arc<RwLock<ValidatorState>>,
     ) -> Self {
         Self {
             blockchain,
@@ -65,6 +70,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             block_number,
             producer_timeout,
             block_separation_time,
+            state,
         }
     }
 
@@ -117,6 +123,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             info!(
                 block_number = self.block_number,
                 slot_band = self.validator_slot_band,
+                address = %self.state.read().validator_address,
                 "Our turn, producing micro block #{}",
                 self.block_number,
             );
@@ -153,6 +160,11 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                 num_transactions
             );
 
+            if !self.state.read().validator_health.publish_block() {
+                log::warn!(block = block.block_number(), "Not publishing block");
+                break Some(Some(ProduceMicroBlockEvent::MicroBlock));
+            }
+
             // Publish the block. It is valid as we have just created it.
             Validator::publish_block(Arc::clone(&self.network), block.clone());
 
@@ -180,6 +192,9 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                 delay = Duration::from_millis(50);
                 continue;
             }
+
+            // Each successful block will decrease the number of inactivations
+            self.state.write().validator_health.block_produced();
 
             let event = result
                 .map(move |_result| ProduceMicroBlockEvent::MicroBlock)
@@ -404,6 +419,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
         block_number: u32,
         producer_timeout: Duration,
         block_separation_time: Duration,
+        state: Arc<RwLock<ValidatorState>>,
     ) -> Self {
         let next_event = NextProduceMicroBlockEvent::new(
             blockchain,
@@ -416,6 +432,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
             block_number,
             producer_timeout,
             block_separation_time,
+            state,
         )
         .next()
         .boxed();

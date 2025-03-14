@@ -5,9 +5,12 @@ use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_consensus::ConsensusProxy;
 use nimiq_keys::Address;
 use nimiq_network_libp2p::Network;
-use nimiq_rpc_interface::{types::RPCResult, validator::ValidatorInterface};
+use nimiq_rpc_interface::{
+    types::{RPCResult, ValidatorHealth},
+    validator::ValidatorInterface,
+};
 use nimiq_serde::{Deserialize, Serialize};
-use nimiq_validator::validator::ValidatorState;
+use nimiq_validator::{health::ValidatorHealthState, validator::ValidatorState};
 use parking_lot::RwLock;
 
 use crate::error::Error;
@@ -62,6 +65,14 @@ impl ValidatorInterface for ValidatorDispatcher {
             .map(|key| hex::encode(key.secret_key.serialize_to_vec()))
             .collect::<Vec<String>>()
             .into())
+    }
+
+    async fn get_validator_health(&mut self) -> RPCResult<ValidatorHealth, (), Self::Error> {
+        Ok(match self.validator.read().validator_health.health() {
+            ValidatorHealthState::Green => ValidatorHealth::Green.into(),
+            ValidatorHealthState::Yellow => ValidatorHealth::Yellow.into(),
+            ValidatorHealthState::Red => ValidatorHealth::Red.into(),
+        })
     }
 
     async fn add_voting_key(&mut self, secret_key: String) -> RPCResult<(), (), Self::Error> {
