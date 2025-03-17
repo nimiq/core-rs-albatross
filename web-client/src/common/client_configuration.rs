@@ -31,6 +31,8 @@ pub struct ClientConfiguration {
     pub peer_count_per_ip_max: usize,
     #[wasm_bindgen(skip)]
     pub peer_count_per_subnet_max: usize,
+    #[wasm_bindgen(skip)]
+    pub sync_mode: String,
 }
 
 #[cfg(any(feature = "client", feature = "primitives"))]
@@ -58,6 +60,8 @@ pub struct PlainClientConfiguration {
     pub peer_count_per_ip_max: Option<usize>,
     #[cfg_attr(feature = "client", serde(skip_serializing_if = "Option::is_none"))]
     pub peer_count_per_subnet_max: Option<usize>,
+    #[cfg_attr(feature = "client", serde(skip_serializing_if = "Option::is_none"))]
+    pub sync_mode: Option<String>,
 }
 
 impl Default for ClientConfiguration {
@@ -86,6 +90,7 @@ impl Default for ClientConfiguration {
             peer_count_max: 50,
             peer_count_per_ip_max: 10,
             peer_count_per_subnet_max: 10,
+            sync_mode: "light".to_string(),
         }
     }
 }
@@ -166,6 +171,14 @@ impl ClientConfiguration {
         self.peer_count_per_subnet_max = peer_count_per_subnet_max;
     }
 
+    /// Sets the sync mode that shoud be used.
+    /// Only "light" and "pico" are supported for web clients
+    /// Default is "light"
+    #[wasm_bindgen(js_name = syncMode)]
+    pub fn sync_mode(&mut self, sync_mode: String) {
+        self.sync_mode = sync_mode.to_lowercase();
+    }
+
     // TODO: Find a way to make this method work, maybe by using the synthetic Client from the main thread as an import?
     // /// Instantiates a client from this configuration builder.
     // #[wasm_bindgen(js_name = instantiateClient)]
@@ -187,6 +200,7 @@ impl ClientConfiguration {
             peer_count_max: Some(self.peer_count_max),
             peer_count_per_ip_max: Some(self.peer_count_per_ip_max),
             peer_count_per_subnet_max: Some(self.peer_count_per_subnet_max),
+            sync_mode: Some(self.sync_mode.clone()),
         })
         .unwrap()
         .into()
@@ -231,6 +245,15 @@ impl TryFrom<PlainClientConfiguration> for ClientConfiguration {
 
         if let Some(peer_count_per_subnet_max) = config.peer_count_per_subnet_max {
             client_config.peer_count_per_subnet_max = peer_count_per_subnet_max;
+        }
+
+        if let Some(sync_mode) = config.sync_mode {
+            // Only "pico" and "light" sync modes are supported for web clients
+            if !(sync_mode == "pico" || sync_mode == "light") {
+                return Err(JsError::new(&format!("Invalid sync mode: {}", sync_mode)));
+            }
+
+            client_config.sync_mode = sync_mode;
         }
 
         Ok(client_config)

@@ -143,12 +143,19 @@ impl Client {
         // Create config builder.
         let mut builder = ClientConfig::builder();
 
-        // Finalize config.
-        let mut config = builder
-            .volatile()
-            .light()
-            .build()
-            .expect("Build configuration failed");
+        let mut config = if web_config.sync_mode == "pico" {
+            builder
+                .volatile()
+                .pico()
+                .build()
+                .expect("Build configuration failed")
+        } else {
+            builder
+                .volatile()
+                .light()
+                .build()
+                .expect("Build configuration failed")
+        };
 
         // Set the seed nodes
         let seed_nodes = web_config
