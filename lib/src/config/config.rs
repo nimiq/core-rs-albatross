@@ -21,7 +21,7 @@ use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_mempool::{config::MempoolConfig, filter::MempoolRules};
 use nimiq_network_interface::Multiaddr;
 use nimiq_network_libp2p::{Keypair as IdentityKeypair, Libp2pKeyPair};
-use nimiq_primitives::{networks::NetworkId, policy::Policy};
+use nimiq_primitives::networks::NetworkId;
 use nimiq_serde::Deserialize;
 #[cfg(feature = "validator")]
 use nimiq_utils::key_rng::SecureGenerate;
@@ -80,8 +80,8 @@ impl Default for SyncMode {
 #[builder(setter(into))]
 /// Client Consensus settings configuration
 pub struct ConsensusConfig {
-    #[builder(default)]
-    /// Sync mode used based upon its client type
+    #[builder(setter(custom))]
+    /// Sync mode used based upon its client type, default is SyncMode::History
     pub sync_mode: SyncMode,
     #[builder(default = "3")]
     /// Minimum number of peers necessary to reach consensus
@@ -97,36 +97,71 @@ pub struct ConsensusConfig {
     pub index_history: bool,
 }
 
-impl ConsensusConfigBuilder {
-    fn index_history(
-        &mut self,
-        should_index_history: Option<bool>,
-        sync_mode: SyncMode,
-    ) -> &mut Self {
-        let index_history = should_index_history.unwrap_or(match sync_mode {
-            SyncMode::History => true,
-            SyncMode::Full | SyncMode::Light | SyncMode::Pico => false,
-        });
-
-        self.index_history = Some(index_history);
-        self
+impl Default for ConsensusConfig {
+    fn default() -> Self {
+        ConsensusConfigBuilder::history()
+            .build()
+            .expect("Failed to build default ConsensusConfig")
     }
 }
 
-impl Default for ConsensusConfig {
-    fn default() -> Self {
-        ConsensusConfig {
-            sync_mode: SyncMode::default(),
-            min_peers: 3,
-            max_epochs_stored: Policy::MIN_EPOCHS_STORED,
-            full_sync_threshold: 10800,
-            index_history: true,
+impl ConsensusConfigBuilder {
+    pub fn new<Mode: Into<SyncMode>>(sync_mode: Mode) -> Self {
+        match sync_mode.into() {
+            SyncMode::History => Self::history(),
+            SyncMode::Full => Self::full(),
+            SyncMode::Light => Self::light(),
+            SyncMode::Pico => Self::pico(),
+        }
+    }
+
+    fn index_history(&mut self, index_history: Option<bool>) -> &mut Self {
+        if let Some(index_history) = index_history {
+            self.index_history = Some(index_history)
+        }
+        self
+    }
+
+    fn history() -> Self {
+        Self {
+            sync_mode: Some(SyncMode::History),
+            min_peers: None,
+            max_epochs_stored: None,
+            full_sync_threshold: None,
+            index_history: Some(true),
+        }
+    }
+    fn full() -> Self {
+        Self {
+            sync_mode: Some(SyncMode::Full),
+            min_peers: None,
+            max_epochs_stored: None,
+            full_sync_threshold: None,
+            index_history: Some(false),
+        }
+    }
+    fn light() -> Self {
+        Self {
+            sync_mode: Some(SyncMode::Light),
+            min_peers: None,
+            max_epochs_stored: None,
+            full_sync_threshold: None,
+            index_history: Some(false),
+        }
+    }
+    fn pico() -> Self {
+        Self {
+            sync_mode: Some(SyncMode::Pico),
+            min_peers: None,
+            max_epochs_stored: None,
+            full_sync_threshold: None,
+            index_history: Some(false),
         }
     }
 }
 
 /// Network config
-#[derive(Debug, Clone, Builder, Default)]
+#[derive(Debug, Clone, Builder)]
 #[builder(setter(into))]
 pub struct NetworkConfig {
     /// List of addresses this node is going to listen to
@@ -186,6 +221,14 @@ pub struct NetworkConfig {
     /// Optional, number of peers connected to at startup.
     #[builder(default = "4")]
     pub num_initial_connections: usize,
+}
+
+impl Default for NetworkConfig {
+    fn default() -> Self {
+        NetworkConfigBuilder::default()
+            .build()
+            .expect("Failed to build default NetworkConfig")
+    }
 }
 
 /// Configuration for setting TLS for secure WebSocket
@@ -313,17 +356,16 @@ pub struct DatabaseConfig {
     #[builder(default = "600")]
     max_readers: u32,
 }
+
 #[cfg(feature = "database-storage")]
 impl Default for DatabaseConfig {
     fn default() -> Self {
-        Self {
-            // 1 TB
-            size: 1024 * 1024 * 1024 * 1024,
-            max_dbs: 20,
-            max_readers: 600,
-        }
+        DatabaseConfigBuilder::default()
+            .build()
+            .expect("Failed to build default DatabaseConfig")
     }
 }
+
 #[cfg(feature = "database-storage")]
 impl From<Option<DatabaseSettings>> for DatabaseConfig {
     fn from(db_settings: Option<DatabaseSettings>) -> Self {
@@ -792,19 +834,17 @@ impl ClientConfigBuilder {
 
     /// Configuration for Light Client
     pub fn light(&mut self) -> &mut Self {
-        let consensus_config = ConsensusConfig {
-            sync_mode: SyncMode::Light,
-            ..Default::default()
-        };
+        let consensus_config = ConsensusConfigBuilder::new(SyncMode::Light)
+            .build()
+            .expect("Failed to build light consensus default ConsensusConfig");
         self.consensus(consensus_config)
     }
 
     /// Configuration for Pico Client
     pub fn pico(&mut self) -> &mut Self {
-        let consensus_config = ConsensusConfig {
-            sync_mode: SyncMode::Pico,
-            ..Default::default()
-        };
+        let consensus_config = ConsensusConfigBuilder::new(SyncMode::Pico)
+            .build()
+            .expect("Failed to build pico consensus default ConsensusConfig");
         self.consensus(consensus_config)
     }
 
@@ -879,12 +919,8 @@ impl ClientConfigBuilder {
         });
 
         // Configure consensus
-        let mut consensus = ConsensusConfigBuilder::default()
-            .sync_mode(config_file.consensus.sync_mode)
-            .index_history(
-                config_file.consensus.index_history,
-                config_file.consensus.sync_mode.into(),
-            )
+        let mut consensus = ConsensusConfigBuilder::new(config_file.consensus.sync_mode)
+            .index_history(config_file.consensus.index_history)
             .max_epochs_stored(config_file.consensus.max_epochs_stored as u32)
             .build()
             .unwrap();
@@ -1079,4 +1115,24 @@ impl ClientConfigBuilder {
 pub struct ZKProverConfig {
     /// Prover keys path for the zkp prover.
     pub prover_keys_path: PathBuf,
+}
+
+mod test {
+    #[test]
+    fn test_num_connections_match() {
+        // Create ClientConfig builder.
+        let config = super::ClientConfig::builder()
+            .build()
+            .expect("Build configuration failed");
+        // Create NetworkConfig builder.
+        let net_config = super::NetworkConfigBuilder::default()
+            .build()
+            .expect("Build Network configuration failed");
+
+        // Make sure num_initial_connections is the same.
+        assert_eq!(
+            config.network.num_initial_connections,
+            net_config.num_initial_connections
+        );
+    }
 }
