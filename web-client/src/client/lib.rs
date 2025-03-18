@@ -175,6 +175,7 @@ impl Client {
         config.network.peer_count_max = web_config.peer_count_max;
         config.network.peer_count_per_ip_max = web_config.peer_count_per_ip_max;
         config.network.peer_count_per_subnet_max = web_config.peer_count_per_subnet_max;
+        config.network.num_initial_connections = web_config.num_initial_connections;
 
         log::info!(?config, "Final configuration");
 

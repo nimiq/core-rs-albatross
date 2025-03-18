@@ -33,6 +33,8 @@ pub struct ClientConfiguration {
     pub peer_count_per_subnet_max: usize,
     #[wasm_bindgen(skip)]
     pub sync_mode: String,
+    #[wasm_bindgen(skip)]
+    pub num_initial_connections: usize,
 }
 
 #[cfg(any(feature = "client", feature = "primitives"))]
@@ -62,6 +64,8 @@ pub struct PlainClientConfiguration {
     pub peer_count_per_subnet_max: Option<usize>,
     #[cfg_attr(feature = "client", serde(skip_serializing_if = "Option::is_none"))]
     pub sync_mode: Option<String>,
+    #[cfg_attr(feature = "client", serde(skip_serializing_if = "Option::is_none"))]
+    pub num_initial_connections: Option<usize>,
 }
 
 impl Default for ClientConfiguration {
@@ -91,6 +95,7 @@ impl Default for ClientConfiguration {
             peer_count_per_ip_max: 10,
             peer_count_per_subnet_max: 10,
             sync_mode: "light".to_string(),
+            num_initial_connections: 4,
         }
     }
 }
@@ -201,6 +206,7 @@ impl ClientConfiguration {
             peer_count_per_ip_max: Some(self.peer_count_per_ip_max),
             peer_count_per_subnet_max: Some(self.peer_count_per_subnet_max),
             sync_mode: Some(self.sync_mode.clone()),
+            num_initial_connections: Some(self.num_initial_connections),
         })
         .unwrap()
         .into()
