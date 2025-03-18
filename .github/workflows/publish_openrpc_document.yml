@@ -1,8 +1,10 @@
 name: Publish OpenRPC document
 
 on:
-  release:
-    types: [created]
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
   build_release_binary_and_publish_document:
