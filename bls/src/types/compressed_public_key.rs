@@ -35,7 +35,7 @@ impl CompressedPublicKey {
 
     /// Transforms the compressed form back into the projective form.
     pub fn uncompress(&self) -> Result<PublicKey, Error> {
-        log::info!(
+        log::debug!(
             compressed = &self.to_hex()[..16],
             "decompressing BLS public key",
         );
