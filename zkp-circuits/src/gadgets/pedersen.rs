@@ -92,11 +92,10 @@ mod tests {
     use ark_mnt6_753::{constraints::G1Var, Fq as MNT6Fq, G1Projective, MNT6_753};
     use ark_r1cs_std::{prelude::AllocVar, R1CSVar};
     use ark_relations::r1cs::ConstraintSystem;
-    use ark_std::test_rng;
+    use ark_std::{rand::RngCore, test_rng};
     use nimiq_pedersen_generators::{pedersen_generator_powers, GenericWindow};
     use nimiq_test_log::test;
     use nimiq_zkp_primitives::pedersen::pedersen_hash;
-    use rand::RngCore;
 
     use super::*;
 

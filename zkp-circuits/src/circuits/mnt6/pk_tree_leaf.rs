@@ -5,9 +5,9 @@ use ark_r1cs_std::{
     uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use ark_std::rand::{distributions::Standard, prelude::Distribution, Rng};
 use nimiq_primitives::{policy::Policy, slots_allocation::PK_TREE_BREADTH};
 use nimiq_zkp_primitives::pedersen_parameters_mnt6;
-use rand::{distributions::Standard, prelude::Distribution};
 
 use crate::{
     blake2s::evaluate_blake2s,
@@ -128,7 +128,7 @@ impl ConstraintSynthesizer<MNT6Fq> for PKTreeLeafCircuit {
 }
 
 impl Distribution<PKTreeLeafCircuit> for Standard {
-    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> PKTreeLeafCircuit {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> PKTreeLeafCircuit {
         let pks = vec![G2Projective::rand(rng); Policy::SLOTS as usize / PK_TREE_BREADTH];
 
         let mut pk_tree_root = [0u8; 32];

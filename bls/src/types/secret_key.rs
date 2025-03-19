@@ -38,6 +38,7 @@ impl SecretKey {
 
 impl SecureGenerate for SecretKey {
     fn generate<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
+        let rng = &mut rand_core_compat::Rng09(rng);
         let mut x = Fr::rand(rng);
         loop {
             if !x.is_zero() {

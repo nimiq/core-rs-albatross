@@ -388,7 +388,7 @@ mod tests {
     use nimiq_test_log::test;
     use nimiq_test_utils::{block_production::TemporaryBlockProducer, test_rng::test_rng};
     use nimiq_transaction::reward::RewardTransaction;
-    use rand::Rng;
+    use rand::Rng as _;
 
     use super::*;
 
@@ -433,15 +433,15 @@ mod tests {
             block_number: 5,
             round: 3,
             timestamp: 16274824,
-            parent_hash: Blake2bHash(rng.gen()),
-            parent_election_hash: Blake2bHash(rng.gen()),
-            interlink: Some(vec![Blake2bHash(rng.gen()), Blake2bHash(rng.gen())]),
+            parent_hash: Blake2bHash(rng.random()),
+            parent_election_hash: Blake2bHash(rng.random()),
+            interlink: Some(vec![Blake2bHash(rng.random()), Blake2bHash(rng.random())]),
             seed: Default::default(),
             extra_data: vec![0x42],
-            state_root: Blake2bHash(rng.gen()),
+            state_root: Blake2bHash(rng.random()),
             body_root,
-            diff_root: Blake2bHash(rng.gen()),
-            history_root: Blake2bHash(rng.gen()),
+            diff_root: Blake2bHash(rng.random()),
+            history_root: Blake2bHash(rng.random()),
             validators,
             next_batch_initial_punished_set: Default::default(),
             ..Default::default()
@@ -510,7 +510,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut test_rng(true);
+        let rng = &mut rand_core_compat::Rng09(test_rng(true));
 
         // Create more block parameters.
         let block_number = u32::rand(rng);
@@ -550,7 +550,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut test_rng(true);
+        let rng = &mut rand_core_compat::Rng09(test_rng(true));
 
         // Create more block parameters.
         let block_number = u32::rand(rng);
@@ -592,7 +592,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut test_rng(true);
+        let rng = &mut rand_core_compat::Rng09(test_rng(true));
 
         // Create more block parameters.
         let block_number = u32::rand(rng);
@@ -634,7 +634,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut test_rng(true);
+        let rng = &mut rand_core_compat::Rng09(test_rng(true));
 
         // Create more block parameters.
         let block_number = u32::rand(rng);
@@ -676,7 +676,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut test_rng(true);
+        let rng = &mut rand_core_compat::Rng09(test_rng(true));
 
         // Create more block parameters.
         let block_number = u32::rand(rng);
@@ -724,7 +724,7 @@ mod tests {
         let cs = ConstraintSystem::<MNT6Fq>::new_ref();
 
         // Create random number generator.
-        let rng = &mut test_rng(true);
+        let rng = &mut rand_core_compat::Rng09(test_rng(true));
 
         // Create more block parameters.
         let block_number = u32::rand(rng);

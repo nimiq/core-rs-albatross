@@ -11,7 +11,7 @@ use nimiq_utils::{
     key_rng::SecureGenerate,
     otp::{otp, Algorithm},
 };
-use rand::{rngs::OsRng, CryptoRng, RngCore};
+use rand::{rngs::OsRng, CryptoRng, RngCore, TryRngCore as _};
 use unicode_normalization::UnicodeNormalization;
 
 #[cfg(feature = "key-derivation")]
@@ -79,7 +79,7 @@ impl Entropy {
 
     pub fn export_encrypted(&self, key: &[u8]) -> Result<Vec<u8>, String> {
         let mut salt = [0u8; Entropy::ENCRYPTION_SALT_SIZE];
-        OsRng.fill_bytes(&mut salt);
+        OsRng.unwrap_err().fill_bytes(&mut salt);
 
         let mut data = Vec::with_capacity(/*purposeId*/ 4 + Entropy::SIZE);
         data.extend_from_slice(&Entropy::PURPOSE_ID.to_be_bytes());

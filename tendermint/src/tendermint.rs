@@ -14,7 +14,7 @@ use futures::{
 use nimiq_collections::BitSet;
 use nimiq_time::{sleep, Sleep};
 use nimiq_utils::stream::{FuturesUnordered, SelectAll};
-use rand::{thread_rng, Rng};
+use rand::{rng, Rng};
 use tokio::{sync::mpsc, time::Duration};
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -527,7 +527,7 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             {
                 did_something = true;
                 // Choose a message at random
-                let index = thread_rng().gen_range(0..self.future_round_messages.len());
+                let index = rng().random_range(0..self.future_round_messages.len());
                 let validator_id = *self.future_round_messages.keys().nth(index).unwrap();
                 let message = self.future_round_messages.remove(&validator_id).unwrap();
 

@@ -10,10 +10,10 @@ use ark_mnt6_753::{
 };
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget, UInt32, UInt8};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use ark_std::rand::Rng;
 use nimiq_block::MacroBlock;
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::pedersen_parameters_mnt6;
-use rand::Rng;
 
 use super::pk_tree_node::hash_g2;
 use crate::{

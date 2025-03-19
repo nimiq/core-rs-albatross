@@ -3,10 +3,10 @@ use std::{io, time::Instant};
 use ark_ff::{FftField, Field};
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystem, OptimizationGoal};
+use ark_std::rand::Rng as _;
 use log::{info, level_filters::LevelFilter};
 use nimiq_log::TargetsExt;
 use nimiq_zkp_circuits::circuits::{mnt4, mnt6};
-use rand::{thread_rng, Rng};
 use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt};
 
 fn evaluate_circuit<F: Field + FftField, C: ConstraintSynthesizer<F> + Clone>(
@@ -42,7 +42,7 @@ fn main() {
     // Print sizes for each circuit.
     info!("====== ZKP constraint estimation initiated ======");
     let start = Instant::now();
-    let mut rng = thread_rng();
+    let mut rng = &mut rand_core_compat::Rng09(rand::rng());
 
     let circuit: mnt6::PKTreeLeafCircuit = rng.gen();
     evaluate_circuit(circuit, "pk_tree_leaf mnt6");

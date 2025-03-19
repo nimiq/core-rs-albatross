@@ -15,7 +15,6 @@ use ark_relations::r1cs::{
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{cfg_into_iter, cfg_iter, rand::Rng};
 use nimiq_zkp_primitives::NanoZKPError;
-use rand::CryptoRng;
 #[cfg(feature = "parallel")]
 use rayon::iter::{
     IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
@@ -245,10 +244,12 @@ impl<E: Pairing> ToxicWaste<E> {
     }
 }
 
-pub fn setup_merger_wrapper_simulation<R: Rng + CryptoRng>(
+pub fn setup_merger_wrapper_simulation<R: rand::CryptoRng>(
     rng: &mut R,
     path: &Path,
 ) -> Result<ToxicWaste<MNT6_753>, NanoZKPError> {
+    let rng = &mut rand_core_compat::Rng09(rng);
+
     // Create parameters for our circuit
     let circuit = MergerWrapperCircuit::rand(rng);
 

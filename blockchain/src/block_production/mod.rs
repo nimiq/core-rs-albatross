@@ -92,7 +92,7 @@ impl BlockProducer {
             transactions,
             extra_data,
             skip_block_proof,
-            &mut rand::thread_rng(),
+            &mut rand::rng(),
         )
     }
 
@@ -273,7 +273,7 @@ impl BlockProducer {
             timestamp,
             round,
             extra_data,
-            &mut rand::thread_rng(),
+            &mut rand::rng(),
         )
     }
 

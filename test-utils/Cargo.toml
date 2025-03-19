@@ -38,8 +38,9 @@ instant = { version = "0.1", features = ["wasm-bindgen"] }
 log = { workspace = true }
 parking_lot = "0.12"
 paste = "1.0"
-rand = "0.8"
-rand_chacha = "0.3.1"
+rand = "0.9"
+rand_chacha = "0.9"
+rand_core_compat = { version = "0.1", features = ["rand_core_0_6", "rand_core_0_9"] }
 serde = "1.0"
 tempfile = "3.19"
 tokio = { version = "1.44", features = ["rt", "time", "tracing"] }

@@ -13,7 +13,7 @@ use nimiq_zkp_circuits::{
     test_setup::{setup_merger_wrapper_simulation, UNIT_TOXIC_WASTE_SEED},
 };
 use nimiq_zkp_primitives::NanoZKPError;
-use rand::{thread_rng, SeedableRng};
+use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -68,14 +68,14 @@ fn main() -> Result<(), NanoZKPError> {
 
     match network_id {
         NetworkId::UnitAlbatross | NetworkId::DevAlbatross => setup(
-            ChaCha20Rng::from_seed(DEVELOPMENT_SEED),
+            &mut ChaCha20Rng::from_seed(DEVELOPMENT_SEED),
             &keys_path,
             network_id,
             true,
         )
         .unwrap(),
         NetworkId::TestAlbatross | NetworkId::MainAlbatross => {
-            setup(thread_rng(), &keys_path, network_id, true).unwrap()
+            setup(&mut rand::rng(), &keys_path, network_id, true).unwrap()
         }
         _ => panic!("Invalid network id."),
     };

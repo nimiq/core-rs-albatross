@@ -25,7 +25,6 @@ use nimiq_network_libp2p::discovery::{
 use nimiq_test_log::test;
 use nimiq_utils::spawn;
 use parking_lot::RwLock;
-use rand::{thread_rng, Rng};
 
 struct TestNode {
     peer_id: PeerId,
@@ -40,7 +39,7 @@ impl TestNode {
         let peer_id = PeerId::from(keypair.public());
 
         let base_transport = MemoryTransport::default();
-        let address = multiaddr![Memory(thread_rng().gen::<u64>())];
+        let address = multiaddr![Memory(rand::random::<u64>())];
 
         log::info!(%peer_id, %address);
 

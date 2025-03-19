@@ -289,7 +289,7 @@ async fn send_micro_blocks_out_of_order() {
 
     let mock_id = MockId::new(mock_node.network.get_local_peer_id());
     let producer = BlockProducer::new(signing_key(), voting_key());
-    let n_blocks = rng.gen_range(2..15);
+    let n_blocks = rng.random_range(2..15);
 
     for _ in 0..n_blocks {
         let block = push_micro_block(&producer, &blockchain2);
@@ -299,7 +299,7 @@ async fn send_micro_blocks_out_of_order() {
     let mut blocks = ordered_blocks.clone();
 
     while blocks.len() > 1 {
-        let index = rng.gen_range(1..blocks.len());
+        let index = rng.random_range(1..blocks.len());
 
         block_tx
             .send((blocks.remove(index).clone(), mock_id.clone()))

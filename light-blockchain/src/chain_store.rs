@@ -395,9 +395,9 @@ mod tests {
         let block_1 = Block::Micro(MicroBlock {
             header: MicroHeader {
                 network: NetworkId::UnitAlbatross,
-                version: rng.gen(),
+                version: rng.random(),
                 block_number: 0,
-                timestamp: rng.gen(),
+                timestamp: rng.random(),
                 parent_hash: hash_1.clone(),
                 seed: Default::default(),
                 extra_data: vec![],
@@ -418,9 +418,9 @@ mod tests {
         let block_2 = Block::Micro(MicroBlock {
             header: MicroHeader {
                 network: NetworkId::UnitAlbatross,
-                version: rng.gen(),
+                version: rng.random(),
                 block_number: 0,
-                timestamp: rng.gen(),
+                timestamp: rng.random(),
                 parent_hash: hash_2.clone(),
                 seed: Default::default(),
                 extra_data: vec![],

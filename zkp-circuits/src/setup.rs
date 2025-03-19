@@ -9,11 +9,11 @@ use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
 use ark_mnt4_753::MNT4_753;
 use ark_mnt6_753::MNT6_753;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_std::rand::{CryptoRng, Rng};
 use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_serde::Deserialize;
 use nimiq_zkp_primitives::{NanoZKPError, VerifyingData};
-use rand::{CryptoRng, Rng};
 
 use crate::{
     circuits::{
@@ -37,8 +37,8 @@ pub const DEVELOPMENT_SEED: [u8; 32] = [
 /// It does this by generating the parameters for each circuit, "from bottom to top". The
 /// order is absolutely necessary because each circuit needs a verifying key from the circuit "below"
 /// it. Note that the parameter generation can take longer than one hour, even two on some computers.
-pub fn setup<R: Rng + CryptoRng>(
-    mut rng: R,
+pub fn setup<R: rand::Rng + rand::CryptoRng>(
+    rng: &mut R,
     path: &Path,
     network_id: NetworkId,
     prover_active: bool,
@@ -49,26 +49,17 @@ pub fn setup<R: Rng + CryptoRng>(
         return Ok(());
     }
 
-    setup_pk_tree_leaf(&mut rng, path, "pk_tree_5")?;
-
-    setup_pk_tree_node_mnt4(&mut rng, path, "pk_tree_4", 4)?;
-
-    setup_pk_tree_node_mnt6(&mut rng, path, "pk_tree_3", 3)?;
-
-    setup_pk_tree_node_mnt4(&mut rng, path, "pk_tree_2", 2)?;
-
-    setup_pk_tree_node_mnt6(&mut rng, path, "pk_tree_1", 1)?;
-
-    setup_pk_tree_node_mnt4(&mut rng, path, "pk_tree_0", 0)?;
-
-    setup_macro_block(&mut rng, path)?;
-
-    setup_macro_block_wrapper(&mut rng, path)?;
-
-    setup_merger(&mut rng, path)?;
-
-    setup_merger_wrapper(&mut rng, path)?;
-
+    let rng = &mut rand_core_compat::Rng09(rng);
+    setup_pk_tree_leaf(rng, path, "pk_tree_5")?;
+    setup_pk_tree_node_mnt4(rng, path, "pk_tree_4", 4)?;
+    setup_pk_tree_node_mnt6(rng, path, "pk_tree_3", 3)?;
+    setup_pk_tree_node_mnt4(rng, path, "pk_tree_2", 2)?;
+    setup_pk_tree_node_mnt6(rng, path, "pk_tree_1", 1)?;
+    setup_pk_tree_node_mnt4(rng, path, "pk_tree_0", 0)?;
+    setup_macro_block(rng, path)?;
+    setup_macro_block_wrapper(rng, path)?;
+    setup_merger(rng, path)?;
+    setup_merger_wrapper(rng, path)?;
     save_metadata_to_file(path, network_id)?;
 
     Ok(())

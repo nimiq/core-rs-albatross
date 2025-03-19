@@ -5,7 +5,6 @@ use nimiq_genesis::{NetworkId, NetworkInfo};
 use nimiq_log::TargetsExt;
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_circuits::setup::setup;
-use rand::thread_rng;
 use tracing_subscriber::{filter::Targets, prelude::*};
 
 const DEFAULT_EXAMPLE_ZKP_PATH: &str = ".zkp_example";
@@ -43,7 +42,7 @@ fn main() {
 
     // use the current directory
     setup(
-        thread_rng(),
+        &mut rand::rng(),
         &PathBuf::from(DEFAULT_EXAMPLE_ZKP_PATH),
         NetworkId::TestAlbatross,
         true,

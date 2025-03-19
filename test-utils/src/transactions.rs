@@ -474,7 +474,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                     time_step: 1,
                     total_amount: balance,
                 });
-                let contract_address = Address(self.rng.gen());
+                let contract_address = Address(self.rng.random());
 
                 debug!(?contract_address, "Create vesting contract");
                 self.put_account(&contract_address, account);
@@ -497,7 +497,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 };
 
                 // HTLC account.
-                let pre_image = PreImage::PreImage32(AnyHash32(self.rng.gen()));
+                let pre_image = PreImage::PreImage32(AnyHash32(self.rng.random()));
                 let hash_root = AnyHash::from(
                     Blake2bHasher::default()
                         .chain(&pre_image.as_bytes())
@@ -512,7 +512,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                     timeout,
                     total_amount: balance,
                 });
-                let contract_address = Address(self.rng.gen());
+                let contract_address = Address(self.rng.random());
 
                 debug!(?contract_address, "Create HTLC contract");
                 self.put_account(&contract_address, account);
@@ -560,11 +560,11 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
 
         match incoming_type {
             IncomingType::Basic => IncomingAccountData::Basic {
-                address: Address(self.rng.gen()),
+                address: Address(self.rng.random()),
             },
             IncomingType::CreateVesting => IncomingAccountData::Vesting {
                 parameters: VestingCreationTransactionData {
-                    owner: Address(self.rng.gen()),
+                    owner: Address(self.rng.random()),
                     start_time: 0,
                     time_step: 1,
                     step_amount: balance,
@@ -573,8 +573,8 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
             },
             IncomingType::CreateHTLC => IncomingAccountData::Htlc {
                 parameters: HTLCCreationTransactionData {
-                    sender: Address(self.rng.gen()),
-                    recipient: Address(self.rng.gen()),
+                    sender: Address(self.rng.random()),
+                    recipient: Address(self.rng.random()),
                     hash_root: AnyHash::default(),
                     hash_count: 1,
                     timeout: 100,
@@ -597,7 +597,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                     parameters: IncomingStakingTransactionData::CreateValidator {
                         signing_key: validator_key_pair.public,
                         voting_key: validator_voting_key_compressed.clone(),
-                        reward_address: Address(self.rng.gen()),
+                        reward_address: Address(self.rng.random()),
                         signal_data: None,
                         proof_of_knowledge: validator_voting_key_pair
                             .sign(&validator_voting_key_compressed.serialize_to_vec())
@@ -626,7 +626,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                     parameters: IncomingStakingTransactionData::UpdateValidator {
                         new_signing_key: Some(new_validator_key_pair.public),
                         new_voting_key: Some(new_validator_voting_key_compressed.clone()),
-                        new_reward_address: Some(Address(self.rng.gen())),
+                        new_reward_address: Some(Address(self.rng.random())),
                         new_signal_data: None,
                         new_proof_of_knowledge: Some(
                             new_validator_voting_key_pair

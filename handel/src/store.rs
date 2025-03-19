@@ -395,10 +395,10 @@ mod tests {
 
     #[test]
     fn it_can_combine_contributions() {
-        let mut rng = rand::thread_rng();
-        let num_ids = rng.gen_range(8..512);
+        let mut rng = rand::rng();
+        let num_ids = rng.random_range(8..512);
 
-        let node_id = rng.gen_range(0..num_ids);
+        let node_id = rng.random_range(0..num_ids);
 
         log::debug!(num_ids, node_id);
 
@@ -410,7 +410,7 @@ mod tests {
         )));
 
         // Define a level that is going to be used for the contributions
-        let level = rng.gen_range(0..partitioner.levels()) as usize;
+        let level = rng.random_range(0..partitioner.levels()) as usize;
 
         // Create the first contribution
         let mut first_contributors = BitSet::new();
@@ -477,10 +477,10 @@ mod tests {
 
     #[test]
     fn it_doesnt_get_better_contribution() {
-        let mut rng = rand::thread_rng();
-        let num_ids = rng.gen_range(8..512);
+        let mut rng = rand::rng();
+        let num_ids = rng.random_range(8..512);
 
-        let node_id = rng.gen_range(0..num_ids);
+        let node_id = rng.random_range(0..num_ids);
 
         log::debug!(num_ids, node_id);
 
@@ -492,7 +492,7 @@ mod tests {
         )));
 
         // Define a level that is going to be used for the contributions
-        let level = rng.gen_range(0..partitioner.levels()) as usize;
+        let level = rng.random_range(0..partitioner.levels()) as usize;
 
         // Create the first contribution
         let mut first_contributors = BitSet::new();

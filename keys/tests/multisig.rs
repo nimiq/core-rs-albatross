@@ -13,7 +13,7 @@ use nimiq_keys::{
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::test_rng::test_rng;
-use nimiq_utils::merkle::{self, MerklePath};
+use nimiq_utils::merkle::MerklePath;
 use sha2::Digest;
 
 struct StrTestVector {

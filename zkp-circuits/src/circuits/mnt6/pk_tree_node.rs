@@ -13,9 +13,9 @@ use ark_r1cs_std::{
     uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use ark_std::rand::Rng;
 use nimiq_primitives::policy::Policy;
 use nimiq_zkp_primitives::pedersen_parameters_mnt6;
-use rand::Rng;
 
 use crate::{
     blake2s::evaluate_blake2s,

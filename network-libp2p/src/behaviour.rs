@@ -9,7 +9,6 @@ use libp2p::{
     Multiaddr, PeerId, StreamProtocol,
 };
 use parking_lot::RwLock;
-use rand::rngs::OsRng;
 
 use crate::{
     connection_pool,
@@ -114,10 +113,11 @@ impl Behaviour {
         );
 
         // AutoNAT server behaviour
-        let autonat_server = autonat::server::Behaviour::new(OsRng);
+        let autonat_server = autonat::server::Behaviour::new(Default::default());
 
         // AutoNAT client behaviour
-        let autonat_client = autonat::client::Behaviour::new(OsRng, AutonatConfig::default());
+        let autonat_client =
+            autonat::client::Behaviour::new(Default::default(), AutonatConfig::default());
 
         // Connection limits behaviour
         let limits = connection_limits::ConnectionLimits::default()

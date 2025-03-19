@@ -86,7 +86,7 @@ pub fn simulate_merger_wrapper(
 
     // Simulate proof.
     let toxic_waste = load_merger_wrapper_simulator(path).expect("Missing toxic waste.");
-    let proof = toxic_waste.simulate_proof(&inputs, rng);
+    let proof = toxic_waste.simulate_proof(&inputs, &mut rand_core_compat::Rng09(rng));
     ZKProof {
         block_number: block.block_number(),
         proof: Some(proof),

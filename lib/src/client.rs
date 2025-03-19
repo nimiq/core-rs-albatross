@@ -202,7 +202,7 @@ impl ClientInner {
                             zk_prover_config.prover_keys_path
                         );
                         setup(
-                            ChaCha20Rng::from_seed(DEVELOPMENT_SEED),
+                            &mut ChaCha20Rng::from_seed(DEVELOPMENT_SEED),
                             &zk_prover_config.prover_keys_path,
                             config.network_id,
                             true,

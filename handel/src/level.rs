@@ -162,7 +162,7 @@ impl Level {
 mod test {
     use nimiq_collections::bitset::BitSet;
     use nimiq_test_log::test;
-    use rand::{thread_rng, Rng};
+    use rand::Rng;
     use serde::{Deserialize, Serialize};
 
     use super::*;
@@ -186,8 +186,8 @@ mod test {
 
     #[test]
     fn it_can_handle_empty_level() {
-        let mut rng = thread_rng();
-        let id: usize = rng.gen_range(0..10);
+        let mut rng = rand::rng();
+        let id: usize = rng.random_range(0..10);
         let level = Level::new(id, Identity::NOBODY);
 
         // Check that the level is actually empty
@@ -199,14 +199,14 @@ mod test {
         assert!(level.state.read().started);
 
         // Check that it can properly select next peers (return empty vector)
-        assert!(level.select_next_peers(rng.gen_range(0..512)).is_empty());
+        assert!(level.select_next_peers(rng.random_range(0..512)).is_empty());
     }
 
     #[test]
     fn it_can_handle_non_empty_level() {
-        let mut rng = thread_rng();
-        let id: usize = rng.gen_range(0..10);
-        let num_ids = rng.gen_range(1..512);
+        let mut rng = rand::rng();
+        let id: usize = rng.random_range(0..10);
+        let num_ids = rng.random_range(1..512);
         let mut ids: Identity = (0..num_ids).into();
         let level = Level::new(id, ids.clone());
 
@@ -218,7 +218,7 @@ mod test {
         level.start();
 
         // Check that it can properly select next peers (return empty vector)
-        let select_size = rng.gen_range(0..num_ids) + 1;
+        let select_size = rng.random_range(0..num_ids) + 1;
         let iterations = num_ids / select_size;
         if id != 0 {
             for _ in 0..iterations {

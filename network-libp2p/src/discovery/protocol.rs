@@ -7,7 +7,6 @@ use nimiq_macros::{add_hex_io_fns_typed_arr, add_serialization_fns_typed_arr, cr
 use nimiq_network_interface::peer_info::Services;
 use nimiq_serde::{Deserialize, DeserializeError, Serialize};
 use nimiq_utils::tagged_signing::{TaggedSignable, TaggedSignature};
-use rand::{thread_rng, RngCore};
 
 use super::{
     message_codec::{MessageReader, MessageWriter},
@@ -22,9 +21,7 @@ add_serialization_fns_typed_arr!(ChallengeNonce, ChallengeNonce::SIZE);
 impl ChallengeNonce {
     pub fn generate() -> Self {
         let mut nonce = Self::default();
-
-        thread_rng().fill_bytes(&mut nonce.0);
-
+        rand::fill(&mut nonce.0);
         nonce
     }
 }

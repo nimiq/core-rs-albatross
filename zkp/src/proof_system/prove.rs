@@ -12,7 +12,10 @@ use ark_mnt4_753::{Fq as MNT4Fq, MNT4_753};
 use ark_mnt6_753::{Fq as MNT6Fq, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
 use ark_relations::r1cs::SynthesisError;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::UniformRand;
+use ark_std::{
+    rand::{CryptoRng, Rng},
+    UniformRand,
+};
 use nimiq_block::MacroBlock;
 use nimiq_hash::{Blake2sHash, Hash};
 use nimiq_primitives::{policy::Policy, slots_allocation::PK_TREE_DEPTH};
@@ -33,7 +36,6 @@ use nimiq_zkp_primitives::{
     ext_traits::CompressedComposite, pedersen::default_pedersen_hash, serialize_g1_mnt6,
     serialize_g2_mnt6, NanoZKPError,
 };
-use rand::{thread_rng, CryptoRng, Rng};
 
 /// Checks whether cached proofs are compatible with the current proof.
 /// If not, it clears the folder and creates a new metadata file.
@@ -92,7 +94,7 @@ pub fn prove(
     // Make sure proofs cache is up-to-date.
     update_proof_cache(prover_keys_path, &final_block.hash_blake2s().0)?;
 
-    let rng = &mut thread_rng();
+    let rng = &mut rand_core_compat::Rng09(rand::rng());
     let proofs = prover_keys_path.join("proofs");
 
     const NUM_PROOFS: usize = 4;

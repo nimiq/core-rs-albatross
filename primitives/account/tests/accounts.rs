@@ -1025,7 +1025,7 @@ fn can_revert_inherents() {
     info!("Testing inherent Reward");
     let inherent = Inherent::Reward {
         validator_address: Address::burn_address(),
-        target: Address(rng.gen()),
+        target: Address(rng.random()),
         value: Coin::from_u64_unchecked(10),
     };
 
@@ -1039,7 +1039,7 @@ fn can_revert_inherents() {
     info!("Testing inherent Penalize");
     let inherent = Inherent::Penalize {
         slot: PenalizedSlot {
-            slot: rng.gen_range(0..Policy::SLOTS),
+            slot: rng.random_range(0..Policy::SLOTS),
             validator_address: Address::from(&validator_key_pair),
             offense_event_block: block_state.number - 1,
         },
@@ -1050,8 +1050,8 @@ fn can_revert_inherents() {
     assert!(matches!(receipts.inherents[..], [OperationReceipt::Ok(_)]));
 
     info!("Testing inherent Jail");
-    let slot_start = rng.gen_range(0..Policy::SLOTS);
-    let slot_end = rng.gen_range(slot_start..Policy::SLOTS);
+    let slot_start = rng.random_range(0..Policy::SLOTS);
+    let slot_end = rng.random_range(slot_start..Policy::SLOTS);
     let inherent = Inherent::Jail {
         jailed_validator: JailedValidator {
             slots: slot_start..slot_end,

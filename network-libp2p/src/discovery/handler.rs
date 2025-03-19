@@ -27,7 +27,7 @@ use nimiq_serde::DeserializeError;
 use nimiq_time::{interval, sleep, Interval, Sleep};
 use nimiq_utils::tagged_signing::TaggedKeyPair;
 use parking_lot::RwLock;
-use rand::{seq::IteratorRandom, thread_rng};
+use rand::seq::IteratorRandom;
 use thiserror::Error;
 
 use super::{
@@ -229,11 +229,9 @@ impl Handler {
         peer_contact_book: &PeerContactBook,
         limit: usize,
     ) -> Vec<SignedPeerContact> {
-        let mut rng = thread_rng();
-
         peer_contact_book
             .query(self.services_filter)
-            .choose_multiple(&mut rng, limit)
+            .choose_multiple(&mut rand::rng(), limit)
             .into_iter()
             .map(|c| c.signed().clone())
             .collect()

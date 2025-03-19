@@ -162,7 +162,7 @@ impl VrfSeed {
     /// key pair.
     #[must_use]
     pub fn sign_next(&self, keypair: &KeyPair, nonce: u32) -> Self {
-        self.sign_next_with_rng(keypair, nonce, &mut rand::thread_rng())
+        self.sign_next_with_rng(keypair, nonce, &mut rand::rng())
     }
 
     /// Produces the next VRF Seed given the current VRF Seed (which is part of the message), a

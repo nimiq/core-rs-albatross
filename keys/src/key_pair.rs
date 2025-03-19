@@ -22,7 +22,7 @@ impl KeyPair {
 
 impl SecureGenerate for KeyPair {
     fn generate<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
-        let zebra_priv_key = SigningKey::new(rng);
+        let zebra_priv_key = SigningKey::new(rand_core_compat::Rng09(rng));
         let priv_key = PrivateKey(zebra_priv_key);
         let pub_key = Ed25519PublicKey(VerificationKeyBytes::from(&zebra_priv_key));
         KeyPair {

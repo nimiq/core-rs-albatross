@@ -29,7 +29,6 @@ use nimiq_utils::{
 };
 use nimiq_validator_network::validator_record::ValidatorRecord;
 use parking_lot::RwLock;
-use rand::{thread_rng, Rng};
 
 mod helper;
 
@@ -92,7 +91,7 @@ struct TestNetwork {
 impl TestNetwork {
     pub fn new() -> Self {
         Self {
-            next_address: thread_rng().gen::<u64>(),
+            next_address: rand::random(),
             addresses: vec![],
         }
     }
@@ -125,9 +124,8 @@ impl TestNetwork {
 
 async fn create_connected_networks() -> (Network, Network) {
     log::debug!("creating connected test networks");
-    let mut rng = thread_rng();
-    let addr1 = multiaddr![Memory(rng.gen::<u64>())];
-    let addr2 = multiaddr![Memory(rng.gen::<u64>())];
+    let addr1 = multiaddr![Memory(rand::random::<u64>())];
+    let addr2 = multiaddr![Memory(rand::random::<u64>())];
 
     let net1 = Network::new(network_config(addr1.clone()), ()).await;
     net1.listen_on(vec![addr1.clone()]).await;
@@ -159,9 +157,8 @@ async fn create_connected_networks() -> (Network, Network) {
 
 async fn create_double_connected_networks() -> (Network, Network) {
     log::debug!("Creating connected test networks");
-    let mut rng = thread_rng();
-    let addr1 = multiaddr![Memory(rng.gen::<u64>())];
-    let addr2 = multiaddr![Memory(rng.gen::<u64>())];
+    let addr1 = multiaddr![Memory(rand::random::<u64>())];
+    let addr2 = multiaddr![Memory(rand::random::<u64>())];
 
     let net1 = Network::new(network_config(addr1.clone()), ()).await;
     net1.listen_on(vec![addr1.clone()]).await;
@@ -256,13 +253,12 @@ async fn create_network_with_n_peers(
     let mut networks = Vec::new();
     let mut addresses = Vec::new();
     let mut events = Vec::new();
-    let mut rng = thread_rng();
 
     let keys = Arc::new(RwLock::new(BTreeMap::default()));
 
     // Create all the networks and addresses
     for peer in 0..n_peers {
-        let addr = multiaddr![Memory(rng.gen::<u64>())];
+        let addr = multiaddr![Memory(rand::random::<u64>())];
 
         log::debug!(index = peer, "Creating network");
 
@@ -327,9 +323,9 @@ async fn create_network_with_n_peers(
         let peer_id1 = network1.local_peer_id();
         let mut events1 = network1.subscribe_events();
 
-        let mut close_peer = rng.gen_range(0..n_peers);
+        let mut close_peer = rand::random_range(0..n_peers);
         while peer == close_peer {
-            close_peer = rng.gen_range(0..n_peers);
+            close_peer = rand::random_range(0..n_peers);
         }
         let network2 = &networks[close_peer];
         let peer_id2 = network2.local_peer_id();

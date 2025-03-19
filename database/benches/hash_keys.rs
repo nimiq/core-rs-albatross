@@ -10,8 +10,8 @@ use nimiq_database::{
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseBytes};
 use pprof::criterion::{Output, PProfProfiler};
 use rand::{
-    distributions::{Distribution, Standard},
-    thread_rng, Rng,
+    distr::{Distribution, StandardUniform},
+    rng, Rng,
 };
 
 const TABLE: &str = "bench";
@@ -46,15 +46,15 @@ struct Blake2bHash([u8; 32]);
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct Address([u8; 20]);
 
-impl Distribution<Blake2bHash> for Standard {
+impl Distribution<Blake2bHash> for StandardUniform {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Blake2bHash {
-        Blake2bHash(rng.gen())
+        Blake2bHash(rng.random())
     }
 }
 
-impl Distribution<Address> for Standard {
+impl Distribution<Address> for StandardUniform {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Address {
-        Address(rng.gen())
+        Address(rng.random())
     }
 }
 
@@ -112,7 +112,7 @@ fn measure_table_insertion<K: Eq + PartialEq + PartialOrd + Ord + Hash + Clone +
     size: usize,
     ty: &'static str,
 ) where
-    Standard: Distribution<K>,
+    StandardUniform: Distribution<K>,
 {
     let scenarios: Vec<(fn(_, _) -> _, &str)> = vec![
         (append, "append_all"),
@@ -194,17 +194,17 @@ fn measure_table_insertion<K: Eq + PartialEq + PartialOrd + Ord + Hash + Clone +
 /// benchmark. The second is to be benchmarked with.
 fn generate_batches<K: Eq + Hash + Clone>(size: usize) -> (Vec<(K, Vec<u8>)>, Vec<(K, Vec<u8>)>)
 where
-    Standard: Distribution<K>,
+    StandardUniform: Distribution<K>,
 {
     let mut preload = Vec::with_capacity(size);
     let mut input = Vec::with_capacity(size);
     for _ in 0..size {
-        let mut rng = thread_rng();
-        let key1: K = rng.gen();
-        let key2: K = rng.gen();
+        let mut rng = rng();
+        let key1: K = rng.random();
+        let key2: K = rng.random();
 
-        let value1: Vec<u8> = (0..32).map(|_| rng.gen::<u8>()).collect();
-        let value2: Vec<u8> = (0..32).map(|_| rng.gen::<u8>()).collect();
+        let value1: Vec<u8> = (0..32).map(|_| rng.random::<u8>()).collect();
+        let value2: Vec<u8> = (0..32).map(|_| rng.random::<u8>()).collect();
 
         preload.push((key1, value1));
         input.push((key2, value2));

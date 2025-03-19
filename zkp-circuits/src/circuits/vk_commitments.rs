@@ -8,13 +8,12 @@ use ark_r1cs_std::{
     alloc::AllocVar, eq::EqGadget, groups::GroupOpsBounds, pairing::PairingVar, uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
-use ark_std::UniformRand;
+use ark_std::{rand::Rng, UniformRand};
 use log::error;
 use nimiq_zkp_primitives::{
     ext_traits::CompressedComposite, non_native_vk_commitment,
     pedersen::DefaultPedersenParameters95, vk_commitment, vks_commitment,
 };
-use rand::Rng;
 
 use super::{
     mnt4::{

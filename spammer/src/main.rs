@@ -30,8 +30,8 @@ use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::spawn;
 use rand::{
-    distributions::{Distribution, WeightedIndex},
-    thread_rng, Rng,
+    distr::{weighted::WeightedIndex, Distribution},
+    Rng,
 };
 use serde::Deserialize;
 
@@ -408,7 +408,7 @@ async fn spam(
         ];
 
         let dist = WeightedIndex::new(config.weights).unwrap();
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         let new_count;
 
         let txs = match choices[dist.sample(&mut rng)] {
@@ -424,7 +424,7 @@ async fn spam(
                 )
             }
             SpamType::BurstBasicTransaction => {
-                new_count = rng.gen_range(config.tpb * 10..config.tpb * 20);
+                new_count = rng.random_range(config.tpb * 10..config.tpb * 20);
                 generate_basic_transactions(
                     &key_pair,
                     number,
@@ -435,7 +435,7 @@ async fn spam(
                 )
             }
             SpamType::Vesting => {
-                new_count = rng.gen_range(0..config.tpb);
+                new_count = rng.random_range(0..config.tpb);
                 generate_vesting_contracts(&key_pair, number, net_id, new_count, state)
             }
         };
@@ -470,7 +470,7 @@ fn generate_basic_transactions(
 ) -> Vec<Transaction> {
     let mut txs = Vec::new();
 
-    let mut rng = thread_rng();
+    let mut rng = rand::rng();
     let mut accounts_idx: HashSet<usize> = HashSet::new();
 
     log::debug!(
@@ -484,24 +484,24 @@ fn generate_basic_transactions(
 
         // This ensures that first we create 10 * count, and after that,
         // we start sending txns from those accounts
-        if rng.gen_bool(config.many_to_many.into()) && state.balances.len() > (10 * count) {
+        if rng.random_bool(config.many_to_many.into()) && state.balances.len() > (10 * count) {
             //This is the case where we send from an existing account
 
             // Obtain a random index
             let accounts_len = state.balances.len();
 
-            let mut sender_index = rng.gen_range(0..accounts_len);
+            let mut sender_index = rng.random_range(0..accounts_len);
 
             // This is used to make sure we select different sender accounts for each set of txns.
             while accounts_idx.contains(&sender_index) {
-                sender_index = rng.gen_range(0..accounts_len);
+                sender_index = rng.random_range(0..accounts_len);
             }
 
             accounts_idx.insert(sender_index);
 
-            let mut recipient_index = rng.gen_range(0..accounts_len);
+            let mut recipient_index = rng.random_range(0..accounts_len);
             while sender_index == recipient_index {
-                recipient_index = rng.gen_range(0..accounts_len);
+                recipient_index = rng.random_range(0..accounts_len);
             }
 
             let sender_account = &state.balances[sender_index];
@@ -519,8 +519,8 @@ fn generate_basic_transactions(
             }
 
             let recipient = Address::from(&recipient_account.key_pair);
-            let amount = Coin::from_u64_unchecked(rng.gen_range(1..5));
-            let fee = Coin::from_u64_unchecked(rng.gen_range(config.min_fee..config.max_fee));
+            let amount = Coin::from_u64_unchecked(rng.random_range(1..5));
+            let fee = Coin::from_u64_unchecked(rng.random_range(config.min_fee..config.max_fee));
 
             let tx = TransactionBuilder::new_basic(
                 &sender_account.key_pair,
@@ -548,7 +548,7 @@ fn generate_basic_transactions(
             Coin::from_u64_unchecked(10000)
         } else {
             // When only creating new accounts we send a smaller value
-            Coin::from_u64_unchecked(rng.gen_range(1..5))
+            Coin::from_u64_unchecked(rng.random_range(1..5))
         };
 
         if config.many_to_many > 0.0 {
@@ -565,7 +565,7 @@ fn generate_basic_transactions(
             }
         }
 
-        let fee = Coin::from_u64_unchecked(rng.gen_range(config.min_fee..config.max_fee));
+        let fee = Coin::from_u64_unchecked(rng.random_range(config.min_fee..config.max_fee));
 
         let tx = TransactionBuilder::new_basic(
             key_pair,
@@ -591,7 +591,7 @@ fn generate_vesting_contracts(
 ) -> Vec<Transaction> {
     let mut txs = Vec::new();
 
-    let mut rng = thread_rng();
+    let mut rng = rand::rng();
 
     let mut state = state.write().unwrap();
     let current_block_number = state.current_block_number;

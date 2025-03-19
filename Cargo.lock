@@ -2024,6 +2024,17 @@ dependencies = [
 
 [[package]]
 name = "getrandom"
+version = "0.1.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fc3cb4d91f53b50155bdcfd23f6a4c39ae1969c2ae85982b135750cccaf5fce"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "wasi 0.9.0+wasi-snapshot-preview1",
+]
+
+[[package]]
+name = "getrandom"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4567c8db10ae91089c99af84c68c38da3ec2f087c3f82960bcdbf3656b6f4d7"
@@ -2042,8 +2053,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43a49c392881ce6d5c3b8cb70f98717b7c07aabbdff06687b9030dbfbe2725f8"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi 0.13.3+wasi-0.2.2",
+ "wasm-bindgen",
  "windows-targets 0.52.6",
 ]
 
@@ -3848,7 +3861,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "tempfile",
  "thiserror 2.0.12",
@@ -3917,8 +3930,8 @@ dependencies = [
  "nimiq-zkp-primitives",
  "parking_lot",
  "prometheus-client 0.23.1",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
+ "rand 0.9.0",
+ "rand_chacha 0.9.0",
  "serde",
  "tempfile",
  "thiserror 2.0.12",
@@ -3984,7 +3997,8 @@ dependencies = [
  "nimiq-test-utils",
  "nimiq-utils",
  "parking_lot",
- "rand 0.8.5",
+ "rand 0.9.0",
+ "rand_core_compat",
  "serde",
  "thiserror 2.0.12",
  "tracing",
@@ -4010,7 +4024,7 @@ dependencies = [
  "hex",
  "nimiq-serde",
  "nimiq-test-log",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "serde_json",
 ]
@@ -4054,7 +4068,7 @@ dependencies = [
  "nimiq-zkp-component",
  "parking_lot",
  "pin-project",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "thiserror 2.0.12",
  "tokio",
@@ -4070,7 +4084,7 @@ dependencies = [
  "libmdbx",
  "nimiq-database-value",
  "pprof",
- "rand 0.8.5",
+ "rand 0.9.0",
  "tempfile",
  "thiserror 2.0.12",
  "tracing",
@@ -4179,7 +4193,7 @@ dependencies = [
  "nimiq-time",
  "nimiq-utils",
  "parking_lot",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "thiserror 2.0.12",
  "tokio",
@@ -4316,7 +4330,8 @@ dependencies = [
  "nimiq-test-utils",
  "nimiq-utils",
  "p256",
- "rand 0.8.5",
+ "rand 0.9.0",
+ "rand_core_compat",
  "serde",
  "sha2",
  "thiserror 2.0.12",
@@ -4374,8 +4389,8 @@ dependencies = [
  "nimiq-zkp-component",
  "nimiq-zkp-primitives",
  "parking_lot",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
+ "rand 0.9.0",
+ "rand_chacha 0.9.0",
  "rustls",
  "rustls-pemfile",
  "serde",
@@ -4411,7 +4426,7 @@ dependencies = [
  "nimiq-vrf",
  "nimiq-zkp",
  "parking_lot",
- "rand 0.8.5",
+ "rand 0.9.0",
  "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
@@ -4470,7 +4485,7 @@ dependencies = [
  "nimiq-vrf",
  "parking_lot",
  "prometheus-client 0.23.1",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "thiserror 2.0.12",
  "tokio",
@@ -4542,7 +4557,7 @@ dependencies = [
  "nimiq-macros",
  "nimiq-test-log",
  "nimiq-utils",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "unicode-normalization",
 ]
@@ -4590,7 +4605,7 @@ dependencies = [
  "pin-project",
  "pin-project-lite",
  "prometheus-client 0.23.1",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "sha2",
  "thiserror 2.0.12",
@@ -4636,8 +4651,9 @@ dependencies = [
  "hex",
  "nimiq-hash",
  "nimiq-primitives",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
+ "rand 0.9.0",
+ "rand_chacha 0.9.0",
+ "rand_core_compat",
 ]
 
 [[package]]
@@ -4666,7 +4682,7 @@ dependencies = [
  "nimiq-web-client",
  "nimiq_rpc",
  "percentage",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "serde_derive",
  "serde_json",
@@ -4848,7 +4864,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-transaction-builder",
  "nimiq-utils",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "tokio",
  "tokio-metrics",
@@ -4882,7 +4898,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-time",
  "nimiq-utils",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "tokio",
  "tokio-stream",
@@ -4959,8 +4975,9 @@ dependencies = [
  "nimiq-zkp-primitives",
  "parking_lot",
  "paste",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
+ "rand 0.9.0",
+ "rand_chacha 0.9.0",
+ "rand_core_compat",
  "serde",
  "tempfile",
  "tokio",
@@ -5000,7 +5017,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-utils",
  "quote",
- "rand 0.8.5",
+ "rand 0.9.0",
  "schemars",
  "serde",
  "serde_json",
@@ -5053,7 +5070,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-transaction",
  "nimiq-utils",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "thiserror 2.0.12",
 ]
@@ -5091,7 +5108,8 @@ dependencies = [
  "nimiq-test-utils",
  "parking_lot",
  "pin-project",
- "rand 0.8.5",
+ "rand 0.9.0",
+ "rand_core 0.9.3",
  "serde",
  "thiserror 2.0.12",
  "tokio",
@@ -5142,7 +5160,7 @@ dependencies = [
  "nimiq-vrf",
  "nimiq-zkp-component",
  "parking_lot",
- "rand 0.8.5",
+ "rand 0.9.0",
  "rayon",
  "serde",
  "tokio",
@@ -5186,7 +5204,7 @@ dependencies = [
  "nimiq-serde",
  "nimiq-test-log",
  "nimiq-test-utils",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "sha2",
  "tracing",
@@ -5219,6 +5237,7 @@ version = "1.0.9"
 dependencies = [
  "ark-serialize",
  "futures-util",
+ "getrandom 0.3.1",
  "gloo-timers 0.3.0",
  "hex",
  "idb",
@@ -5244,7 +5263,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-zkp-component",
  "parking_lot",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "serde-wasm-bindgen 0.6.5",
  "serde_bytes",
@@ -5287,8 +5306,9 @@ dependencies = [
  "nimiq-zkp-primitives",
  "once_cell",
  "parking_lot",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
+ "rand 0.9.0",
+ "rand_chacha 0.9.0",
+ "rand_core_compat",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -5328,8 +5348,9 @@ dependencies = [
  "nimiq-test-utils",
  "nimiq-transaction",
  "nimiq-zkp-primitives",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
+ "rand 0.9.0",
+ "rand_chacha 0.9.0",
+ "rand_core_compat",
  "rayon",
  "serde",
  "serde_json",
@@ -5374,7 +5395,7 @@ dependencies = [
  "nimiq-zkp-circuits",
  "nimiq-zkp-primitives",
  "parking_lot",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "tempfile",
  "thiserror 2.0.12",
@@ -5407,7 +5428,7 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-serde",
  "nimiq-utils",
- "rand 0.8.5",
+ "rand 0.9.0",
  "rayon",
  "serde",
  "thiserror 2.0.12",
@@ -6235,6 +6256,15 @@ dependencies = [
 
 [[package]]
 name = "rand_core"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90bde5296fc891b0cef12a6d03ddccc162ce7b2aff54160af9338f8d40df6d19"
+dependencies = [
+ "getrandom 0.1.16",
+]
+
+[[package]]
+name = "rand_core"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
@@ -6249,6 +6279,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38"
 dependencies = [
  "getrandom 0.3.1",
+]
+
+[[package]]
+name = "rand_core_compat"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d35761af2a12c8beac5a0610aa7f93db993cbf6feb38c4e50f510f95213b6f84"
+dependencies = [
+ "rand_core 0.5.1",
+ "rand_core 0.6.4",
+ "rand_core 0.9.3",
 ]
 
 [[package]]
@@ -7952,6 +7993,12 @@ checksum = "bfa7760aed19e106de2c7c0b581b509f2f25d3dacaf737cb82ac61bc6d760b0e"
 dependencies = [
  "try-lock",
 ]
+
+[[package]]
+name = "wasi"
+version = "0.9.0+wasi-snapshot-preview1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
 
 [[package]]
 name = "wasi"

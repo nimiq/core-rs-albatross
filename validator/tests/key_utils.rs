@@ -1,11 +1,11 @@
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_utils::key_rng::SecureGenerate;
 use nimiq_validator::key_utils::VotingKeys;
-use rand::{self, rngs::StdRng, thread_rng, SeedableRng};
+use rand::{rngs::StdRng, SeedableRng};
 
 #[test]
 fn test_voting_keys() {
-    let mut rng = StdRng::from_rng(thread_rng()).expect("Could not initialize test rng");
+    let mut rng = StdRng::from_rng(&mut rand::rng());
 
     // Initialize the VotingKeys
     let key1 = BlsKeyPair::generate(&mut rng);

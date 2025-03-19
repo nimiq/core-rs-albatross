@@ -23,7 +23,6 @@ use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_time::sleep;
 use nimiq_utils::spawn;
-use rand::{thread_rng, Rng};
 
 mod helper;
 
@@ -109,9 +108,8 @@ struct TestNetwork {}
 impl TestNetwork {
     async fn create_connected_networks() -> (Network, Network) {
         log::debug!("Creating connected test networks");
-        let mut rng = thread_rng();
-        let addr1 = multiaddr![Memory(rng.gen::<u64>())];
-        let addr2 = multiaddr![Memory(rng.gen::<u64>())];
+        let addr1 = multiaddr![Memory(rand::random::<u64>())];
+        let addr2 = multiaddr![Memory(rand::random::<u64>())];
 
         let net1 = Network::new(network_config(addr1.clone()), ()).await;
         net1.listen_on(vec![addr1.clone()]).await;
@@ -148,11 +146,10 @@ impl TestNetwork {
         (Network, Multiaddr),
     ) {
         log::debug!("Creating connected test networks");
-        let mut rng = thread_rng();
-        let addr1 = multiaddr![Memory(rng.gen::<u64>())];
-        let addr2 = multiaddr![Memory(rng.gen::<u64>())];
-        let addr3 = multiaddr![Memory(rng.gen::<u64>())];
-        let addr4 = multiaddr![Memory(rng.gen::<u64>())];
+        let addr1 = multiaddr![Memory(rand::random::<u64>())];
+        let addr2 = multiaddr![Memory(rand::random::<u64>())];
+        let addr3 = multiaddr![Memory(rand::random::<u64>())];
+        let addr4 = multiaddr![Memory(rand::random::<u64>())];
 
         let net1 = Network::new(network_config(addr1.clone()), ()).await;
         net1.listen_on(vec![addr1.clone()]).await;

@@ -10,8 +10,8 @@ use ark_r1cs_std::{
     uint8::UInt8,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use ark_std::rand::Rng;
 use nimiq_zkp_primitives::pedersen::pedersen_parameters_mnt4;
-use rand::Rng;
 
 use crate::{
     circuits::{

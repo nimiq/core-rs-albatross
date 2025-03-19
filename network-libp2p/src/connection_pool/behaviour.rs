@@ -25,7 +25,7 @@ use nimiq_network_interface::{network::CloseReason, peer_info::Services};
 use nimiq_time::{interval, sleep_until, Instant, Interval, Sleep};
 use nimiq_utils::WakerExt as _;
 use parking_lot::RwLock;
-use rand::{seq::IteratorRandom, thread_rng};
+use rand::seq::IteratorRandom;
 
 use super::Error;
 use crate::discovery::{handler, peer_contacts::PeerContactBook};
@@ -549,7 +549,7 @@ impl Behaviour {
                     None
                 }
             })
-            .choose_multiple(&mut thread_rng(), num_peers)
+            .choose_multiple(&mut rand::rng(), num_peers)
     }
 
     /// This function is used to select a list of peers, based on services flag, in order to dial them.
@@ -577,7 +577,7 @@ impl Behaviour {
                     None
                 }
             })
-            .choose_multiple(&mut thread_rng(), num_peers)
+            .choose_multiple(&mut rand::rng(), num_peers)
     }
 
     fn choose_seeds_to_dial(&self) -> Vec<Multiaddr> {
@@ -595,7 +595,7 @@ impl Behaviour {
             .iter()
             .filter(|address| !own_addresses.contains(address) && self.addresses.can_dial(*address))
             .cloned()
-            .choose_multiple(&mut thread_rng(), num_seeds)
+            .choose_multiple(&mut rand::rng(), num_seeds)
     }
 
     fn housekeeping(&mut self) {

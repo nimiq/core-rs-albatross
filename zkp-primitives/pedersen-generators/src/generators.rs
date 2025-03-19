@@ -38,7 +38,7 @@ impl<C: CurveGroup> PedersenParameters<C> {
 fn pedersen_generators<P: Pairing>(number: usize, personalization: u64) -> Vec<P::G1> {
     // This gets a verifiably random seed. We pass in the personalization value to get unique results.
     let seed = generate_random_seed(personalization);
-    let mut rng = ChaCha20Rng::from_seed(seed);
+    let mut rng = rand_core_compat::Rng09(ChaCha20Rng::from_seed(seed));
 
     // Initialize the vector that will contain the generators.
     let mut generators = Vec::new();

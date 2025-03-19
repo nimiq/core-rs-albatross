@@ -27,8 +27,9 @@ required-features = ["zkp-prover", "parallel", "cli"]
 clap = { version = "4.5", features = ["cargo", "string", "derive"] }
 hex = "0.4"
 log = { workspace = true }
-rand = { version = "0.8", features = ["small_rng"] }
-rand_chacha = "0.3.1"
+rand = "0.9"
+rand_chacha = "0.9"
+rand_core_compat = { version = "0.1", features = ["rand_core_0_6", "rand_core_0_9"] }
 rayon = { version = "^1.10", optional = true }
 serde = "1.0"
 serde_json = "1.0"

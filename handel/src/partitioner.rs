@@ -367,11 +367,11 @@ mod tests {
 
     #[test]
     fn test_symmetry() {
-        let mut rng = rand::thread_rng();
-        let num_ids = rng.gen_range(8..512);
+        let mut rng = rand::rng();
+        let num_ids = rng.random_range(8..512);
 
-        let node_id = rng.gen_range(0..num_ids);
-        let second_node_id = rng.gen_range(0..num_ids);
+        let node_id = rng.random_range(0..num_ids);
+        let second_node_id = rng.random_range(0..num_ids);
 
         log::debug!(num_ids, node_id, second_node_id);
 
