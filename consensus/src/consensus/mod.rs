@@ -417,8 +417,15 @@ impl<N: Network> Consensus<N> {
                     self.head_requests = None;
                     self.head_requests_time = None;
 
-                    self.zkp_proxy
-                        .request_zkp_from_peers(self.sync.peers(), false);
+                    match self.sync {
+                        SyncerProxy::Pico(_) => {
+                            // Dont request zkps for pico consensus
+                        }
+                        _ => {
+                            self.zkp_proxy
+                                .request_zkp_from_peers(self.sync.peers(), false);
+                        }
+                    }
 
                     let (synced_validity_window, _) = self.check_validity_window();
                     return Some(ConsensusEvent::Established {
@@ -435,8 +442,15 @@ impl<N: Network> Consensus<N> {
                             info!("Consensus established, 2/3 of heads known.");
                             self.established_flag.swap(true, Ordering::Release);
 
-                            self.zkp_proxy
-                                .request_zkp_from_peers(self.sync.peers(), false);
+                            match self.sync {
+                                SyncerProxy::Pico(_) => {
+                                    // Dont request zkps for pico consensus
+                                }
+                                _ => {
+                                    self.zkp_proxy
+                                        .request_zkp_from_peers(self.sync.peers(), false);
+                                }
+                            }
 
                             let (synced_validity_window, _) = self.check_validity_window();
                             return Some(ConsensusEvent::Established {
