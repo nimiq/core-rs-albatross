@@ -101,6 +101,7 @@ The configuration file is generated automatically and in a specific location.
 cargo run --release --bin nimiq-client
 ```
 This generates a sample file and places it in a folder `./nimiq`.
+
 2. Copy the sample configuration file into a new file in the same directory where you will edit it according to your needs:
 ```bash
 cp $HOME/.nimiq/client.example.toml $HOME/.nimiq/client.toml 
