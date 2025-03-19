@@ -79,14 +79,14 @@ mod tests {
         let hash_stream = net2.receive_requests::<RequestMempoolHashes>();
         let txns_stream = net2.receive_requests::<RequestMempoolTransactions>();
 
-        let hashes_repsonse = ResponseMempoolHashes {
+        let hashes_response = ResponseMempoolHashes {
             hashes: hashes.clone(),
         };
 
         let net2_clone = Arc::clone(&net2);
         let hashes_listener_future =
             hash_stream.for_each(move |(_request, request_id, _peer_id)| {
-                let test_response = hashes_repsonse.clone();
+                let test_response = hashes_response.clone();
                 let net2 = Arc::clone(&net2_clone);
                 async move {
                     net2.respond::<RequestMempoolHashes>(request_id, test_response.clone())
@@ -130,9 +130,12 @@ mod tests {
 
         // Verify that all the hashes of the test transactions we generated, have been received by the syncer
         hashes.iter().for_each(|hash| {
-            assert!(syncer.unknown_hashes.contains_key(hash));
+            assert!(syncer
+                .requested_transactions
+                .get(&net2.peer_id())
+                .unwrap()
+                .contains_key(&hash));
         });
-        assert_eq!(syncer.unknown_hashes.len(), num_transactions);
 
         // Poll to request the transactions and we should have at least 1 transaction by now
         sleep(Duration::from_millis(200)).await;
@@ -198,14 +201,14 @@ mod tests {
         // Setup stream to respond to requests
         let hash_stream = net2.receive_requests::<RequestMempoolHashes>();
 
-        let hashes_repsonse = ResponseMempoolHashes {
+        let hashes_response = ResponseMempoolHashes {
             hashes: known_hashes.clone(),
         };
 
         let net2_clone = Arc::clone(&net2);
         let hashes_listener_future =
             hash_stream.for_each(move |(_request, request_id, _peer_id)| {
-                let test_response = hashes_repsonse.clone();
+                let test_response = hashes_response.clone();
                 let net2 = Arc::clone(&net2_clone);
                 async move {
                     net2.respond::<RequestMempoolHashes>(request_id, test_response.clone())
@@ -291,17 +294,18 @@ mod tests {
         let net2 = Arc::new(hub.new_network());
         net1.dial_mock(&net2);
 
-        // Setup stream to respond to requests
+        // Setup streams to respond to requests
         let hash_stream = net2.receive_requests::<RequestMempoolHashes>();
+        let txns_stream = net2.receive_requests::<RequestMempoolTransactions>();
 
-        let hashes_repsonse = ResponseMempoolHashes {
+        let hashes_response = ResponseMempoolHashes {
             hashes: hashes.clone(),
         };
 
         let net2_clone = Arc::clone(&net2);
         let hashes_listener_future =
             hash_stream.for_each(move |(_request, request_id, _peer_id)| {
-                let test_response = hashes_repsonse.clone();
+                let test_response = hashes_response.clone();
                 let net2 = Arc::clone(&net2_clone);
                 async move {
                     net2.respond::<RequestMempoolHashes>(request_id, test_response.clone())
@@ -310,8 +314,22 @@ mod tests {
                 }
             });
 
-        // Spawn the request responder
+        let net2_clone = Arc::clone(&net2);
+        let txns_listener_future = txns_stream.for_each(move |(_request, request_id, _peer_id)| {
+            let test_response = ResponseMempoolTransactions {
+                transactions: txns.clone(),
+            };
+            let net2 = Arc::clone(&net2_clone);
+            async move {
+                net2.respond::<RequestMempoolTransactions>(request_id, test_response.clone())
+                    .await
+                    .unwrap();
+            }
+        });
+
+        // Spawn the request responders
         spawn(hashes_listener_future);
+        spawn(txns_listener_future);
 
         // Dynamically add new peer to mempool syncer
         syncer.add_peer(net2.peer_id());
@@ -321,7 +339,14 @@ mod tests {
 
         // We have received unknown hashes from the added peer
         let _ = poll!(syncer.next());
-        assert_eq!(syncer.unknown_hashes.len(), num_transactions);
+        assert_eq!(
+            syncer
+                .requested_transactions
+                .get(&net2.peer_id())
+                .unwrap()
+                .len(),
+            num_transactions
+        );
     }
 
     fn generate_test_transactions(num: usize, mut rng: &mut StdRng) -> Vec<TestTransaction> {

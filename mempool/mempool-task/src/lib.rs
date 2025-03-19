@@ -6,7 +6,7 @@ use std::{
 };
 
 use futures::{stream::BoxStream, Future, Stream, StreamExt};
-use log::{debug, warn};
+use log::{debug, error, warn};
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_consensus::{sync::syncer::SyncEvent, Consensus, ConsensusEvent, ConsensusProxy};
@@ -219,13 +219,21 @@ impl<N: Network> Stream for MempoolTask<N> {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // Process consensus sync updates.
-        while let Poll::Ready(Some(Ok(event))) = self.sync_event_rx.poll_next_unpin(cx) {
-            self.on_consensus_sync_event(event)
+        while let Poll::Ready(Some(sync_event_stream)) = self.sync_event_rx.poll_next_unpin(cx) {
+            match sync_event_stream {
+                Ok(event) => self.on_consensus_sync_event(event),
+                Err(error) => error!(%error, "Failed to poll consensus sync events"),
+            }
         }
 
         // Process network updates.
-        while let Poll::Ready(Some(Ok(event))) = self.network_event_rx.poll_next_unpin(cx) {
-            self.on_network_event(event)
+        while let Poll::Ready(Some(network_event_stream)) =
+            self.network_event_rx.poll_next_unpin(cx)
+        {
+            match network_event_stream {
+                Ok(event) => self.on_network_event(event),
+                Err(error) => error!(%error, "Failed to poll network events"),
+            }
         }
 
         // Process consensus updates.

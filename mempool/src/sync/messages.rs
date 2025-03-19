@@ -9,6 +9,7 @@ use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::Transaction;
 use parking_lot::RwLock;
 
+use super::MAX_TOTAL_HASHES;
 use crate::mempool_state::MempoolState;
 
 const MAX_REQUEST_RESPONSE_MEMPOOL_STATE: u32 = 1000;
@@ -63,6 +64,7 @@ impl<N: Network> Handle<N, Arc<RwLock<MempoolState>>> for RequestMempoolHashes {
                 .regular_transactions
                 .best_transactions
                 .iter()
+                .take(MAX_TOTAL_HASHES)
                 .map(|txn| txn.0.clone())
                 .collect(),
             MempoolTransactionType::Control => context
@@ -70,6 +72,7 @@ impl<N: Network> Handle<N, Arc<RwLock<MempoolState>>> for RequestMempoolHashes {
                 .control_transactions
                 .best_transactions
                 .iter()
+                .take(MAX_TOTAL_HASHES)
                 .map(|txn| txn.0.clone())
                 .collect(),
         };

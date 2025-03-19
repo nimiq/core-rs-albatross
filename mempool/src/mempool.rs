@@ -15,10 +15,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_consensus::ConsensusProxy;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_network_interface::{
-    network::{Network, Topic},
-    peer_info::Services,
-};
+use nimiq_network_interface::network::{Network, Topic};
 use nimiq_serde::Serialize;
 use nimiq_transaction::{
     historic_transaction::RawTransactionHash, ControlTransactionTopic, Transaction,
@@ -146,7 +143,7 @@ impl Mempool {
         network: Arc<N>,
         monitor: Option<TaskMonitor>,
         control_monitor: Option<TaskMonitor>,
-        mut peers: Vec<N::PeerId>,
+        peers: Vec<N::PeerId>,
         consensus: ConsensusProxy<N>,
     ) {
         let executor_handle = self.executor_handle.lock().await;
@@ -158,7 +155,6 @@ impl Mempool {
         }
 
         info!("Initializing mempool syncers");
-        peers.retain(|peer_id| network.peer_provides_services(*peer_id, Services::MEMPOOL));
         // Sync regular transactions with the mempool of other peers
         let regular_transactions_syncer = MempoolSyncer::new(
             peers.clone(),

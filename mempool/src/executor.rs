@@ -123,38 +123,40 @@ impl<N: Network, T: Topic + Unpin + Sync> Future for MempoolExecutor<N, T> {
                     TxPriority::Medium,
                 );
 
-                match pubsub_or_peer_id {
-                    PubsubIdOrPeerId::PeerId(peer_id) => match verify_tx_ret {
-                        Ok(_) => (),
-                        Err(VerifyErr::InvalidAccount(_))
-                        | Err(VerifyErr::InvalidBlockNumber)
-                        | Err(VerifyErr::InvalidTransaction(_)) => {
-                            if network.has_peer(peer_id) {
-                                warn!(
-                                    %peer_id,
-                                    "Banning peer because it responded with an invalid mempool transaction while syncing"
-                                );
-                                network
-                                    .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
-                                    .await;
-                            }
-                        }
-                        Err(_) => (),
-                    },
-                    PubsubIdOrPeerId::PubsubId(pubsub_id) => {
-                        let acceptance = match verify_tx_ret {
-                            Ok(_) => MsgAcceptance::Accept,
-                            // Reject the message if signature verification fails or transaction is invalid
-                            // for current validation window
-                            Err(VerifyErr::InvalidTransaction(_)) => MsgAcceptance::Reject,
-                            Err(VerifyErr::AlreadyIncluded) => MsgAcceptance::Reject,
-                            Err(_) => MsgAcceptance::Ignore,
-                        };
+                let (peer_id, pubsub_id) = match pubsub_or_peer_id {
+                    PubsubIdOrPeerId::PeerId(peer_id) => (Some(peer_id), None),
+                    PubsubIdOrPeerId::PubsubId(pubsub_id) => (None, Some(pubsub_id)),
+                };
 
-                        network.validate_message::<T>(pubsub_id, acceptance);
+                let (acceptance, is_valid_txn) = match verify_tx_ret {
+                    Ok(_) => (MsgAcceptance::Accept, Some(true)),
+                    Err(error) => match error {
+                        VerifyErr::InvalidBlockNumber | VerifyErr::InvalidAccount(_) => {
+                            (MsgAcceptance::Ignore, Some(false)) // It's either an invalid or malformed transaction so ignore this gossipsub message
+                        }
+                        VerifyErr::InvalidTransaction(_) => (MsgAcceptance::Reject, Some(false)), // It's a malformed transaction so stop propagating this gossipsub message
+                        VerifyErr::AlreadyIncluded => (MsgAcceptance::Reject, Some(true)), // It's a valid transaction but no further gossipsub propagating needed
+                        VerifyErr::Known | VerifyErr::Filtered | VerifyErr::NoConsensus => {
+                            (MsgAcceptance::Ignore, None) // We either can't know or don't care if it's a valid transaction and stop propagating without penalty
+                        }
+                    },
+                };
+
+                if let (Some(peer_id), Some(is_valid_txn)) = (peer_id, is_valid_txn) {
+                    if !is_valid_txn && network.has_peer(peer_id) {
+                        warn!(
+                            %peer_id,
+                            "Banning peer because it responded with an invalid mempool transaction while syncing"
+                        );
+                        network
+                            .disconnect_peer(peer_id, CloseReason::MaliciousPeer)
+                            .await;
                     }
                 }
 
+                if let Some(pubsub_id) = pubsub_id {
+                    network.validate_message::<T>(pubsub_id, acceptance);
+                }
                 drop(decrement);
             });
         }

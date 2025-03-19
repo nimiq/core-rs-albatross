@@ -2,10 +2,7 @@ pub(crate) mod messages;
 mod tests;
 
 use std::{
-    collections::{
-        hash_map::Entry::{Occupied, Vacant},
-        HashMap, VecDeque,
-    },
+    collections::{HashMap, HashSet, VecDeque},
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -33,61 +30,18 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{executor::PubsubIdOrPeerId, mempool_state::MempoolState};
 
-enum RequestStatus {
-    Pending,
-    Requested,
-    Received,
-}
-
-/// Struct for keeping track which peers have a specific hash in their mempool and
-/// store if we have a requested the corresponding transaction already to one of those peers.
-struct HashRequestStatus<N: Network> {
-    status: RequestStatus,
-    peer_ids: Vec<N::PeerId>,
-}
-
-impl<N: Network> HashRequestStatus<N> {
-    pub fn new(peer_ids: Vec<N::PeerId>) -> Self {
-        Self {
-            status: RequestStatus::Pending,
-            peer_ids,
-        }
-    }
-
-    pub fn add_peer(&mut self, peer_id: N::PeerId) {
-        self.peer_ids.push(peer_id);
-    }
-
-    pub fn has_peer(&self, peer_id: &N::PeerId) -> bool {
-        self.peer_ids.contains(peer_id)
-    }
-
-    pub fn is_requested(&self) -> bool {
-        !matches!(self.status, RequestStatus::Pending)
-    }
-
-    pub fn mark_as_requested(&mut self) {
-        self.status = RequestStatus::Requested;
-    }
-
-    pub fn mark_as_received(&mut self) {
-        self.status = RequestStatus::Received
-    }
-}
-
 const MAX_HASHES_PER_REQUEST: usize = 500;
 const MAX_TOTAL_HASHES: usize = 25_000;
 const SHUTDOWN_TIMEOUT_DURATION: Duration = Duration::from_secs(10 * 60); // 10 minutes
 
-/// Struct responsible for discovering hashes and retrieving transactions from the mempool of other nodes that have a mempool
+/// Struct responsible for discovering hashes and retrieving corresponding transactions from the mempool of other peers
 pub(crate) struct MempoolSyncer<N: Network> {
     /// Timeout to gracefully shutdown the mempool syncer entirely
     shutdown_timer: Pin<Box<Sleep>>,
 
-    /// Consensus sync event receiver
-    consensus_sync_event_rx: BroadcastStream<SyncEvent<<N>::PeerId>>,
+    /// Consensus sync event receiver used to receive notifications when new peers getting added to live sync
+    sync_event_rx: BroadcastStream<SyncEvent<<N>::PeerId>>,
 
-    /// Blockchain reference
     blockchain: Arc<RwLock<Blockchain>>,
 
     /// Requests to other peers for fetching transaction hashes that currently are in their mempool
@@ -99,7 +53,7 @@ pub(crate) struct MempoolSyncer<N: Network> {
     network: Arc<N>,
 
     /// Peers with a mempool we reach out for to discover and retrieve their mempool hashes and transactions
-    peers: Vec<N::PeerId>,
+    peers: HashSet<N::PeerId>,
 
     /// The mempool state: the data structure where the transactions are stored locally
     mempool_state: Arc<RwLock<MempoolState>>,
@@ -113,7 +67,10 @@ pub(crate) struct MempoolSyncer<N: Network> {
     >,
 
     /// Collection of transaction hashes not present in the local mempool
-    unknown_hashes: HashMap<Blake2bHash, HashRequestStatus<N>>,
+    unknown_hashes: HashMap<Blake2bHash, HashSet<N::PeerId>>,
+
+    /// Collection that keeps track which transactions are currently being requested and to which peer
+    requested_transactions: HashMap<N::PeerId, HashMap<Blake2bHash, HashSet<N::PeerId>>>,
 
     /// The type of mempool transactions requested to other peers
     mempool_transaction_type: MempoolTransactionType,
@@ -127,71 +84,49 @@ impl<N: Network> MempoolSyncer<N> {
         consensus: ConsensusProxy<N>,
         mempool_state: Arc<RwLock<MempoolState>>,
     ) -> Self {
-        let hashes_requests = peers
-            .iter()
-            .map(|peer_id| {
-                let peer_id = *peer_id;
-                let network = Arc::clone(&consensus.network);
-                let transaction_type = transaction_type.to_owned();
-                async move {
-                    (
-                        peer_id,
-                        Self::request_mempool_hashes(network, peer_id, transaction_type).await,
-                    )
-                }
-                .boxed()
-            })
-            .collect();
-
-        debug!(num_peers = %peers.len(), ?transaction_type, "Fetching mempool hashes from peers");
-
-        Self {
+        let mut syncer = Self {
             shutdown_timer: Box::pin(sleep_until(Instant::now() + SHUTDOWN_TIMEOUT_DURATION)),
-            consensus_sync_event_rx: consensus.subscribe_sync_events(),
+            sync_event_rx: consensus.subscribe_sync_events(),
             blockchain,
-            hashes_requests,
+            hashes_requests: FuturesUnordered::new(),
             network: consensus.network,
-            peers,
+            peers: HashSet::new(),
             mempool_state: Arc::clone(&mempool_state),
             unknown_hashes: HashMap::new(),
+            requested_transactions: HashMap::new(),
             transactions: VecDeque::new(),
             transactions_requests: FuturesUnordered::new(),
             mempool_transaction_type: transaction_type,
+        };
+
+        for peer_id in peers {
+            syncer.add_peer(peer_id);
         }
+        debug!(num_peers = %syncer.peers.len(), transaction_type = ?syncer.mempool_transaction_type, "Fetching mempool hashes from peers");
+        syncer
     }
 
     /// Push newly discovered hashes into the `unknown_hashes` and keep track which peers have those hashes
-    fn push_unknown_hashes(&mut self, hashes: Vec<Blake2bHash>, peer_id: N::PeerId) -> bool {
+    fn push_unknown_hashes(&mut self, hashes: Vec<Blake2bHash>, peer_id: N::PeerId) {
         let blockchain = self.blockchain.read();
         let state = self.mempool_state.read();
 
         debug!(peer_id = %peer_id, num = %hashes.len(), "Received unknown mempool hashes");
-        let mut new_hashes_discovered = false;
-
-        hashes.into_iter().take(MAX_TOTAL_HASHES).for_each(|hash| {
-            // Perform some basic checks to reduce the amount of transactions we are going to request later
+        for hash in hashes.into_iter().take(MAX_TOTAL_HASHES) {
+            // Perform some basic checks to reduce the amount of transactions that are going to be requested later
             if state.contains(&hash)
                 || blockchain
                     .contains_tx_in_validity_window(&RawTransactionHash::from((hash).clone()), None)
             {
-                return;
+                continue;
             }
 
-            match self.unknown_hashes.entry(hash) {
-                Occupied(mut entry) => {
-                    entry.get_mut().add_peer(peer_id);
-                }
-                Vacant(entry) => {
-                    entry.insert(HashRequestStatus::new(vec![peer_id]));
-                    new_hashes_discovered = true;
-                }
-            };
-        });
-
-        new_hashes_discovered
+            self.unknown_hashes.entry(hash).or_default().insert(peer_id);
+        }
     }
 
-    /// Add peer to discover its mempool
+    /// Add peer to discover its mempool.
+    /// Adding the peer fails if the peer doesn't provide the `Mempool` network service or the syncer already knows this peer
     fn add_peer(&mut self, peer_id: N::PeerId) {
         if self.peers.contains(&peer_id)
             || !self
@@ -201,8 +136,8 @@ impl<N: Network> MempoolSyncer<N> {
             return;
         }
 
-        debug!(%peer_id, "Peer added to mempool sync");
-        self.peers.push(peer_id);
+        trace!(%peer_id, "Peer added to mempool sync");
+        self.peers.insert(peer_id);
         let network = Arc::clone(&self.network);
         let transaction_type = self.mempool_transaction_type.clone();
         let request = async move {
@@ -223,25 +158,38 @@ impl<N: Network> MempoolSyncer<N> {
     ) -> Option<(RequestMempoolTransactions, N::PeerId)> {
         let hashes: Vec<Blake2bHash> = self
             .unknown_hashes
-            .iter_mut()
-            .filter(|(_, request_status)| {
-                matches!(request_status.status, RequestStatus::Pending)
-                    && request_status.has_peer(&peer_id)
-            })
+            .iter()
             .take(MAX_HASHES_PER_REQUEST)
-            .map(|(hash, request_status)| {
-                request_status.mark_as_requested();
+            .filter(|(_, peer_ids)| peer_ids.contains(&peer_id))
+            .map(|(hash, _)| {
+                // Get a fresh copy of all the other peers who shared to also have the corresponding transaction.
+                // These peers act as a fallback in the case where the current peer fails provide the actual transaction
+                // so it can get requested via another peer.
+                let mut fallback_peers = self.unknown_hashes.get(&hash).unwrap().clone();
+
+                // Remove the peer we are about to request the transaction from to not let it
+                // be a fallback peer when the request fails.
+                fallback_peers.remove(&peer_id);
+
+                self.requested_transactions
+                    .entry(peer_id)
+                    .or_default()
+                    .insert(hash.clone(), fallback_peers);
                 hash.to_owned()
             })
             .collect();
 
         if hashes.is_empty() {
-            // This peer has no interesting transactions for us
             return None;
         }
 
-        debug!(peer_id = %peer_id, num = %hashes.len(), "Fetching mempool transactions from peer");
+        // Tracking issue for HashMap/Set drain_filter: https://github.com/rust-lang/rust/issues/59618.
+        // Once stabilized, this second iteration isn't necessary anymore.
+        for hash in hashes.iter() {
+            self.unknown_hashes.remove(hash);
+        }
 
+        debug!(peer_id = %peer_id, num = %hashes.len(), "Fetching mempool transactions from peer");
         Some((RequestMempoolTransactions { hashes }, peer_id))
     }
 
@@ -271,33 +219,27 @@ impl<N: Network> MempoolSyncer<N> {
 
     /// While there still are unknown transaction hashes which are not part of a request, generate requests and send them to other peers
     fn send_mempool_transactions_requests(&mut self) {
-        let mut prepared_requests = vec![];
+        if self.unknown_hashes.is_empty() {
+            return;
+        }
 
-        while self
-            .unknown_hashes
-            .iter()
-            .any(|(_, request_status)| !request_status.is_requested())
-        {
-            for i in 0..self.peers.len() {
-                let peer = self.peers[i];
-                if let Some(request) = self.batch_hashes_by_peer_id(peer) {
+        let mut prepared_requests = vec![];
+        while !self.unknown_hashes.is_empty() {
+            let peer_ids = self.peers.clone();
+            for peer_id in peer_ids {
+                if let Some(request) = self.batch_hashes_by_peer_id(peer_id) {
                     prepared_requests.push(request);
                 }
             }
         }
 
-        let requests = prepared_requests.into_iter().map(|request| {
-            let peer_id = request.1;
+        let requests = prepared_requests.into_iter().map(|(request, peer_id)| {
             let network = Arc::clone(&self.network);
             async move {
                 (
                     peer_id,
-                    Self::request_mempool_transactions(
-                        network,
-                        peer_id,
-                        request.0.hashes.to_owned(),
-                    )
-                    .await,
+                    Self::request_mempool_transactions(network, peer_id, request.hashes.to_owned())
+                        .await,
                 )
             }
             .boxed()
@@ -347,66 +289,77 @@ impl<N: Network> Stream for MempoolSyncer<N> {
             return Poll::Ready(None);
         }
 
-        // Then we check if peers got added to live sync in the mean time
-        while let Poll::Ready(Some(Ok(event))) = self.consensus_sync_event_rx.poll_next_unpin(cx) {
-            match event {
-                SyncEvent::AddLiveSync(peer_id) => self.add_peer(peer_id),
+        // Then we check if peers got added to live sync in the meantime
+        while let Poll::Ready(Some(sync_event_stream)) = self.sync_event_rx.poll_next_unpin(cx) {
+            match sync_event_stream {
+                Ok(event) => match event {
+                    SyncEvent::AddLiveSync(peer_id) => self.add_peer(peer_id),
+                },
+                Err(error) => error!(%error, "Failed to poll consensus sync events"),
             }
         }
 
         // Then we check our RequestMempoolHashes responses
-        let mut new_hashes_discovered = false;
         while let Poll::Ready(Some((peer_id, result))) = self.hashes_requests.poll_next_unpin(cx) {
             match result {
-                Ok(hashes) => {
-                    if self.push_unknown_hashes(hashes.hashes, peer_id) {
-                        new_hashes_discovered = true;
-                    }
-                }
+                Ok(response) => self.push_unknown_hashes(response.hashes, peer_id),
                 Err(err) => {
                     error!(%err, %peer_id, "Failed to fetch mempool hashes");
+                    self.peers.remove(&peer_id);
                 }
             }
         }
 
         // Then we construct our RequestMempoolTransactions requests and send them over the network to our peers
-        if new_hashes_discovered {
-            self.send_mempool_transactions_requests();
-        }
+        self.send_mempool_transactions_requests();
 
         // Then we check our RequestMempoolTransactions responses
         while let Poll::Ready(Some((peer_id, result))) =
             self.transactions_requests.poll_next_unpin(cx)
         {
             match result {
-                Ok(transactions) => {
-                    let transactions: Vec<(Transaction, N::PeerId)> = transactions
+                Ok(response) => {
+                    let mut requested_hashes_from_peer =
+                        self.requested_transactions.get_mut(&peer_id);
+
+                    let transactions: Vec<(Transaction, N::PeerId)> = response
                         .transactions
                         .into_iter()
                         .filter_map(|txn| {
-                            // Filter out transactions we didn't ask and mark the ones we did ask for as received
-                            match self.unknown_hashes.entry(txn.hash()) {
-                                Occupied(mut entry) => match entry.get().status {
-                                    RequestStatus::Requested => {
-                                        entry.get_mut().mark_as_received();
-                                        Some((txn, peer_id))
-                                    }
-                                    RequestStatus::Pending | RequestStatus::Received => None,
-                                },
-                                Vacant(_) => None,
+                            // Compute the hash for the received transaction and remove it from the peer's collection
+                            if let Some(hashes_by_peer) = &mut requested_hashes_from_peer {
+                                if hashes_by_peer.remove(&txn.hash()).is_some() {
+                                    return Some((txn, peer_id));
+                                }
                             }
+                            None
                         })
                         .collect();
 
                     if transactions.is_empty() {
                         continue;
                     }
-
                     info!(num = %transactions.len(), "Synced mempool transactions");
                     self.transactions.extend(transactions);
                 }
                 Err(err) => {
                     error!(%err, %peer_id, "Failed to fetch mempool transactions");
+                    self.peers.remove(&peer_id);
+
+                    if let Some(failed_transactions) = self.requested_transactions.remove(&peer_id)
+                    {
+                        for (hash, fallback_peers) in failed_transactions {
+                            // Don't retry transaction when there is no known peer for it
+                            if fallback_peers.is_empty() {
+                                continue;
+                            }
+
+                            // Move all the transactions hashes that were supposed to be retrieved from this peer back to `unknown_hashes`
+                            // in order to request them via another peer
+                            self.unknown_hashes.insert(hash, fallback_peers);
+                        }
+                        self.send_mempool_transactions_requests();
+                    }
                 }
             }
         }
