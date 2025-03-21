@@ -15,7 +15,7 @@ use messages::{
     ResponseMempoolHashes, ResponseMempoolTransactions,
 };
 use nimiq_blockchain::Blockchain;
-use nimiq_consensus::{sync::syncer::SyncEvent, ConsensusProxy};
+use nimiq_consensus::{sync::sync_interface::SyncEvent, ConsensusProxy};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_network_interface::{
     network::Network,
@@ -165,7 +165,7 @@ impl<N: Network> MempoolSyncer<N> {
                 // Get a fresh copy of all the other peers who shared to also have the corresponding transaction.
                 // These peers act as a fallback in the case where the current peer fails provide the actual transaction
                 // so it can get requested via another peer.
-                let mut fallback_peers = self.unknown_hashes.get(&hash).unwrap().clone();
+                let mut fallback_peers = self.unknown_hashes.get(hash).unwrap().clone();
 
                 // Remove the peer we are about to request the transaction from to not let it
                 // be a fallback peer when the request fails.
@@ -354,7 +354,7 @@ impl<N: Network> Stream for MempoolSyncer<N> {
                                 continue;
                             }
 
-                            // Move all the transactions hashes that were supposed to be retrieved from this peer back to `unknown_hashes`
+                            // Move all the transactions hashes that we're supposed to be retrieved from this peer back to `unknown_hashes`
                             // in order to request them via another peer
                             self.unknown_hashes.insert(hash, fallback_peers);
                         }

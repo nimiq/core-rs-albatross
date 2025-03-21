@@ -19,6 +19,7 @@ use tokio::sync::broadcast;
 
 use super::sync_interface::{
     LiveSync, LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent, MacroSync, MacroSyncReturn,
+    SyncEvent,
 };
 use crate::{
     consensus::ResolveBlockRequest, messages::RequestHead, sync::live::block_queue::BlockSource,

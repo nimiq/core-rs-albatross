@@ -36,7 +36,7 @@ use crate::{
             queue::QueueConfig,
             BlockLiveSync,
         },
-        sync_interface::{LiveSyncPushEvent, SyncEvent},
+        sync_interface::LiveSyncPushEvent,
         syncer::Syncer,
     },
     BlsCache,

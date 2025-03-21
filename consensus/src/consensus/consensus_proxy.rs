@@ -34,7 +34,7 @@ use crate::{
         RequestBlocksProof, RequestSubscribeToAddress, RequestTransactionReceiptsByAddress,
         RequestTransactionsProof, ResponseBlocksProof,
     },
-    sync::syncer::SyncEvent,
+    sync::sync_interface::SyncEvent,
     ConsensusEvent,
 };
 

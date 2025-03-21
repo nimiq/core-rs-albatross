@@ -9,7 +9,7 @@ use futures::{stream::BoxStream, Future, Stream, StreamExt};
 use log::{debug, error, warn};
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
-use nimiq_consensus::{sync::syncer::SyncEvent, Consensus, ConsensusEvent, ConsensusProxy};
+use nimiq_consensus::{sync::sync_interface::SyncEvent, Consensus, ConsensusEvent, ConsensusProxy};
 use nimiq_mempool::{config::MempoolConfig, mempool::Mempool};
 use nimiq_network_interface::network::{Network, NetworkEvent, SubscribeEvents};
 use nimiq_utils::spawn;
