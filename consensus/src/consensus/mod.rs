@@ -18,6 +18,7 @@ use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::Network, request::request_handler};
+use nimiq_primitives::policy::Policy;
 use nimiq_time::{interval, Interval};
 use nimiq_utils::{spawn, WakerExt};
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
@@ -417,16 +418,6 @@ impl<N: Network> Consensus<N> {
                     self.head_requests = None;
                     self.head_requests_time = None;
 
-                    match self.sync {
-                        SyncerProxy::Pico(_) => {
-                            // Dont request zkps for pico consensus
-                        }
-                        _ => {
-                            self.zkp_proxy
-                                .request_zkp_from_peers(self.sync.peers(), false);
-                        }
-                    }
-
                     let (synced_validity_window, _) = self.check_validity_window();
                     return Some(ConsensusEvent::Established {
                         synced_validity_window,
@@ -442,16 +433,6 @@ impl<N: Network> Consensus<N> {
                             info!("Consensus established, 2/3 of heads known.");
                             self.established_flag.swap(true, Ordering::Release);
 
-                            match self.sync {
-                                SyncerProxy::Pico(_) => {
-                                    // Dont request zkps for pico consensus
-                                }
-                                _ => {
-                                    self.zkp_proxy
-                                        .request_zkp_from_peers(self.sync.peers(), false);
-                                }
-                            }
-
                             let (synced_validity_window, _) = self.check_validity_window();
                             return Some(ConsensusEvent::Established {
                                 synced_validity_window,
@@ -460,36 +441,36 @@ impl<N: Network> Consensus<N> {
                     }
 
                     // If there's no ongoing head request, check whether we should start a new one.
-                    self.request_heads();
+                    if self.should_request_heads() {
+                        self.request_heads();
+                    }
                 }
             }
         }
         None
     }
 
-    /// Requests heads from connected peers.
-    fn request_heads(&mut self) {
+    fn should_request_heads(&self) -> bool {
         // Wait for an ongoing head request to finish.
         if self.head_requests.is_some() {
-            return;
+            return false;
         }
 
         // We need at least one synced peer to perform a head request.
         // Specifying `min_peers = 0` in the consensus config allows the first seed node
         // on a network to establish consensus without any other nodes present.
         if self.num_agents() == 0 && self.min_peers > 0 {
-            return;
+            return false;
         }
 
         // This is the case if `head_requests_time` is unset or the timeout is hit.
-        let should_start_request = self
-            .head_requests_time
+        self.head_requests_time
             .map(|time| time.elapsed() >= Self::HEAD_REQUESTS_TIMEOUT)
-            .unwrap_or(true);
-        if !should_start_request {
-            return;
-        }
+            .unwrap_or(true)
+    }
 
+    /// Requests heads from connected peers.
+    fn request_heads(&mut self) {
         debug!(
             "Initiating head requests (to {} peers)",
             self.sync.num_peers()
@@ -506,6 +487,34 @@ impl<N: Network> Consensus<N> {
 
         // Wake up the task such that we start working on the head request immediately.
         self.waker.wake();
+    }
+
+    /// Requests zkps from connected peers.
+    fn request_zkps(&self) {
+        match self.sync {
+            #[cfg(feature = "full")]
+            // The syncing process of the history node does guarantee we have the most recent zkp proof. Thus,
+            // we may request it to our peers. This ensures the latest zkp replication across the different node types.
+            SyncerProxy::History(_) => {
+                // Only request a proof when we are too far from the last election head.
+                // This avoids spam requests when the proof for the latest election block is still being generated.
+                if self.zkp_proxy.get_zkp_state().latest_block.block_number()
+                    < Policy::election_block_before(
+                        self.blockchain.read().election_head().block_number(),
+                    )
+                {
+                    self.zkp_proxy
+                        .request_zkp_from_peers(self.sync.peers(), false);
+                }
+            }
+            _ => {
+                // The Full and Light sync ensure the latest proof is already pushed, there is no need to
+                // eagerly request them.
+                // For Pico sync we avoid zkp overhead as much as possible. The zkp component will
+                // lazily store zkps propagated by the network. In the case of fall back to full sync,
+                // the latest proof is ensured by the syncing mechanism itself.
+            }
+        }
     }
 
     fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
@@ -592,7 +601,10 @@ impl<N: Network> Future for Consensus<N> {
         while self.head_requests_interval.poll_next_unpin(cx).is_ready() {}
 
         // Advance consensus and catch-up through head requests.
-        self.request_heads();
+        if self.should_request_heads() {
+            self.request_heads();
+            self.request_zkps();
+        }
 
         self.waker.store_waker(cx);
         Poll::Pending
