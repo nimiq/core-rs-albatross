@@ -372,6 +372,7 @@ pub struct PolicyConstants {
     pub block_separation_time: u64,
     pub jail_epochs: u32,
     pub genesis_block_number: u32,
+    pub max_supported_version: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

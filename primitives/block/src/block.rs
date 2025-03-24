@@ -384,19 +384,13 @@ impl Block {
             return Err(BlockError::NetworkMismatch);
         }
 
-        error!(
-            obtained_version = self.version(),
-            maximum_version = Policy::max_supported_version(network),
-            "Version check"
-        );
-
         // Check that the version is supported.
         // The blockchain should then make sure that the version is never decreased.
-        if self.version() > Policy::max_supported_version(network) {
+        if self.version() > Policy::max_supported_version() {
             warn!(
                 header = %self,
                 obtained_version = self.version(),
-                maximum_version = Policy::max_supported_version(network),
+                maximum_version = Policy::max_supported_version(),
                 reason = "invalid version",
                 "Invalid block header"
             );

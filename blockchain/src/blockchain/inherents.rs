@@ -328,7 +328,7 @@ impl Blockchain {
         // Create the FinalizeEpoch inherent.
         let mut inherents = vec![Inherent::FinalizeEpoch];
         // Add version upgrade inherent if needed.
-        if version != self.state.current_version() {
+        if Some(version) == self.state.current_version().checked_add(1) {
             inherents.push(Inherent::VersionUpgrade {
                 new_version: version,
             })

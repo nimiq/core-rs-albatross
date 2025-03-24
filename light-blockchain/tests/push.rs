@@ -308,7 +308,23 @@ fn it_works_with_valid_blocks() {
 fn it_validates_version() {
     expect_push_micro_block(
         BlockConfig {
-            version: Some(Policy::max_supported_version(NetworkId::UnitAlbatross) + 1),
+            version: Some(Policy::max_supported_version() + 1),
+            ..Default::default()
+        },
+        Err(InvalidBlock(BlockError::UnsupportedVersion)),
+    );
+
+    expect_push_micro_block(
+        BlockConfig {
+            version: Some(Policy::max_supported_version() + 2),
+            ..Default::default()
+        },
+        Err(InvalidBlock(BlockError::UnsupportedVersion)),
+    );
+
+    expect_push_micro_block(
+        BlockConfig {
+            version: Some(0),
             ..Default::default()
         },
         Err(InvalidBlock(BlockError::UnsupportedVersion)),

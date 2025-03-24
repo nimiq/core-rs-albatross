@@ -315,6 +315,20 @@ impl Blockchain {
 
                     // If the version changed, add the upgrade inherent.
                     if this.state.current_version() < block.version() {
+                        if Some(block.version()) != this.state.current_version().checked_add(1) {
+                            error!(
+                                %block,
+                                reason = "invalid version",
+                                current_version = this.state.current_version(),
+                                new_version = block.version(),
+                                "Rejecting block",
+                            );
+
+                            txn.abort();
+                            #[cfg(feature = "metrics")]
+                            this.metrics.note_invalid_block();
+                            return Err(PushError::InvalidBlock(BlockError::UnsupportedVersion));
+                        }
                         block_inherents
                             .get_mut(i)
                             .unwrap()

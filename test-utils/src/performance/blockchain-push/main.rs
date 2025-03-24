@@ -51,6 +51,7 @@ fn main() {
     // Run tests with different policy values:
     let policy_config = Policy {
         genesis_block_number: genesis_block.block_number(),
+        max_supported_version: network_info.max_supported_version(),
         ..Default::default()
     };
 

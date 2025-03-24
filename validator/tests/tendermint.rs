@@ -12,7 +12,7 @@ use nimiq_primitives::{coin::Coin, key_nibbles::KeyNibbles, networks::NetworkId,
 use nimiq_tendermint::{ProposalMessage, Protocol, SignedProposalMessage};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
-    block_production::TemporaryBlockProducer, test_network::TestNetwork, test_rng::test_rng,
+    block_production::TemporaryBlockProducer, test_network::TestNetwork, test_rng,
 };
 use nimiq_validator::{aggregation::tendermint::proposal::Header, tendermint::TendermintProtocol};
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
@@ -366,7 +366,7 @@ async fn it_triggers_version_upgrades() {
         "Test assumes current version"
     );
     assert_eq!(
-        Policy::max_supported_version(NetworkId::UnitAlbatross),
+        Policy::max_supported_version(),
         2,
         "Test assumes max supported version"
     );

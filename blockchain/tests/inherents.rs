@@ -9,7 +9,7 @@ use nimiq_blockchain::{Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_bls::AggregateSignature;
 use nimiq_database::{mdbx::MdbxDatabase, traits::WriteTransaction};
-use nimiq_hash::{Blake2bHash, Blake2sHash, HashOutput};
+use nimiq_hash::{Blake2sHash, HashOutput};
 use nimiq_keys::Address;
 use nimiq_primitives::{
     coin::Coin,
@@ -25,7 +25,6 @@ use nimiq_test_utils::{
 };
 use nimiq_transaction::inherent::Inherent;
 use nimiq_utils::time::OffsetTime;
-use nimiq_vrf::VrfSeed;
 use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 
 #[test]
@@ -56,16 +55,6 @@ fn it_can_create_batch_finalization_inherents() {
         block_number,
         round: 0,
         timestamp: blockchain.state.election_head.header.timestamp + 20000,
-        parent_hash: Blake2bHash::default(),
-        parent_election_hash: Blake2bHash::default(),
-        interlink: None,
-        seed: VrfSeed::default(),
-        extra_data: vec![],
-        state_root: Blake2bHash::default(),
-        body_root: Blake2sHash::default(),
-        diff_root: Blake2bHash::default(),
-        history_root: Blake2bHash::default(),
-        validators: None,
         next_batch_initial_punished_set,
         ..Default::default()
     };
@@ -246,16 +235,6 @@ fn it_can_penalize_delayed_batch() {
         block_number: 42 + genesis_block_number,
         round: 0,
         timestamp: next_timestamp,
-        parent_hash: Blake2bHash::default(),
-        parent_election_hash: Blake2bHash::default(),
-        interlink: None,
-        seed: VrfSeed::default(),
-        extra_data: vec![],
-        state_root: Blake2bHash::default(),
-        body_root: Blake2sHash::default(),
-        diff_root: Blake2bHash::default(),
-        history_root: Blake2bHash::default(),
-        validators: None,
         next_batch_initial_punished_set,
         ..Default::default()
     };
@@ -728,16 +707,6 @@ fn it_can_create_version_upgrade_inherents() {
         block_number,
         round: 0,
         timestamp: blockchain.state.election_head.header.timestamp + 20000,
-        parent_hash: Blake2bHash::default(),
-        parent_election_hash: Blake2bHash::default(),
-        interlink: None,
-        seed: VrfSeed::default(),
-        extra_data: vec![],
-        state_root: Blake2bHash::default(),
-        body_root: Blake2sHash::default(),
-        diff_root: Blake2bHash::default(),
-        history_root: Blake2bHash::default(),
-        validators: None,
         next_batch_initial_punished_set,
         ..Default::default()
     };
@@ -755,7 +724,7 @@ fn it_can_create_version_upgrade_inherents() {
         justification: None,
     };
 
-    // Simple case. Expect 1x FinalizeBatch, 1x FinalizeEpoch, 1x Reward to validator, 2x Version Upgrade
+    // Simple case. Expect 1x FinalizeBatch, 1x FinalizeEpoch, 1x Reward to validator, 1x Version Upgrade
     let inherents = blockchain.create_macro_block_inherents(&macro_block);
     assert_eq!(inherents.len(), 4);
 
@@ -765,7 +734,7 @@ fn it_can_create_version_upgrade_inherents() {
     let mut got_version_upgrade = false;
     for inherent in &inherents {
         match inherent {
-            Inherent::Reward { value, .. } => {
+            Inherent::Reward { .. } => {
                 got_reward = true;
             }
             Inherent::FinalizeBatch => {
@@ -792,7 +761,7 @@ fn it_can_create_version_upgrade_inherents() {
         justification: None,
     };
 
-    // Simple case. Expect 1x FinalizeBatch, 1x FinalizeEpoch, 1x Reward to validator, 2x Version Upgrade
+    // Simple case. Expect 1x FinalizeBatch, 1x FinalizeEpoch, 1x Reward to validator
     let inherents = blockchain.create_macro_block_inherents(&macro_block);
     assert_eq!(inherents.len(), 3);
 
@@ -801,7 +770,7 @@ fn it_can_create_version_upgrade_inherents() {
     let mut got_finalize_epoch = false;
     for inherent in &inherents {
         match inherent {
-            Inherent::Reward { value, .. } => {
+            Inherent::Reward { .. } => {
                 got_reward = true;
             }
             Inherent::FinalizeBatch => {

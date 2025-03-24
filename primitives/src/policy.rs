@@ -7,8 +7,6 @@ use once_cell::sync::OnceCell;
 #[cfg(feature = "ts-types")]
 use wasm_bindgen::prelude::*;
 
-use crate::networks::NetworkId;
-
 /// Global policy
 static GLOBAL_POLICY: OnceCell<Policy> = OnceCell::new();
 
@@ -31,6 +29,9 @@ pub struct Policy {
     /// Genesis block number
     #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
     pub genesis_block_number: u32,
+    /// Maximum supported version
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(skip))]
+    pub max_supported_version: u16,
 }
 
 impl Policy {
@@ -159,10 +160,10 @@ impl Policy {
 
     /// Percentage of minimum supporting stake to perform upgrade.
     /// A value of `80` means 80% of the stake needs to support the upgrade.
-    pub const UPGRADE_MIN_SUPPORT: u8 = 80;
+    pub const UPGRADE_MIN_SUPPORT: u64 = 80;
 
     /// This function is used to determine if a validator signalled for a specific upgrade.
-    /// For now, this is checking the first two bytes of the signal data.
+    /// This is checking the first two bytes of the signal data.
     /// However, the check could also be version specific in the future.
     pub fn supports_upgrade(signal_data: Option<Blake2bHash>, version: u16) -> bool {
         signal_data
@@ -173,19 +174,6 @@ impl Policy {
                 supported_version == version
             })
             .unwrap_or(false)
-    }
-
-    /// The maximum supported version number of the protocol per network id.
-    pub const fn max_supported_version(network_id: NetworkId) -> u16 {
-        match network_id {
-            NetworkId::TestAlbatross => 1,
-            NetworkId::DevAlbatross => 1,
-            NetworkId::MainAlbatross => 1,
-
-            NetworkId::UnitAlbatross => 2,
-
-            _ => 1,
-        }
     }
 
     #[inline]
@@ -250,6 +238,15 @@ impl Policy {
         GLOBAL_POLICY
             .get_or_init(Self::default)
             .genesis_block_number
+    }
+
+    /// Genesis block number
+    #[inline]
+    #[cfg_attr(feature = "ts-types", wasm_bindgen(getter = MAX_SUPPORTED_VERSION))]
+    pub fn max_supported_version() -> u16 {
+        GLOBAL_POLICY
+            .get_or_init(Self::default)
+            .max_supported_version
     }
 
     /// Maximum size of accounts trie chunks.
@@ -666,12 +663,6 @@ impl Policy {
     pub fn wasm_history_chunks_max_size() -> u64 {
         Self::HISTORY_CHUNKS_MAX_SIZE
     }
-
-    /// Get the maximum supported version for a network.
-    #[cfg_attr(feature = "ts-types", wasm_bindgen(js_name = maxSupportedVersion))]
-    pub fn wasm_max_supported_version(network: u8) -> Result<u16, JsError> {
-        Ok(Self::max_supported_version(NetworkId::try_from(network)?))
-    }
 }
 
 impl Default for Policy {
@@ -688,6 +679,7 @@ pub const MAINNET_POLICY: Policy = Policy {
     transaction_validity_window: 120,
     // As defined in the `main` network genesis file
     genesis_block_number: 3456000,
+    max_supported_version: 1,
 };
 
 /// Policy constants for TestNet
@@ -698,6 +690,7 @@ pub const TESTNET_POLICY: Policy = Policy {
     transaction_validity_window: 120,
     // As defined in the `test` network genesis file
     genesis_block_number: 3032010,
+    max_supported_version: 1,
 };
 
 /// Policy constants used for testing purposes
@@ -708,6 +701,7 @@ pub const TEST_POLICY: Policy = Policy {
     transaction_validity_window: 2,
     // This number should match the one that is defined in the `unit` network genesis file which is the genesis used for unit testing
     genesis_block_number: 200,
+    max_supported_version: 2,
 };
 
 #[cfg(test)]

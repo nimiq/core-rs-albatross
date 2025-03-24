@@ -30,6 +30,7 @@ impl PolicyInterface for PolicyDispatcher {
             block_separation_time: Policy::BLOCK_SEPARATION_TIME,
             jail_epochs: Policy::JAIL_EPOCHS,
             genesis_block_number: Policy::genesis_block_number(),
+            max_supported_version: Policy::max_supported_version(),
         }
         .into())
     }

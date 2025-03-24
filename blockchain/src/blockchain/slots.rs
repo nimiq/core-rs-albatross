@@ -48,7 +48,7 @@ impl Blockchain {
         let txn = txn.or_new(&self.db);
         let staking_contract = self
             .get_staking_contract_if_complete(Some(&txn))
-            .expect("We should always have the staking contract.");
+            .expect("We should always have the staking contract");
         let data_store = self.get_staking_contract_store();
         staking_contract.select_validators(&data_store.read(&txn), seed)
     }

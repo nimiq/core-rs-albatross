@@ -123,17 +123,6 @@ impl<'write, 'store, 'tree, 'txn, 'txni, 'env>
     pub fn remove_tombstone(&mut self, address: &Address) {
         self.0.remove(&StakingContractStore::tombstone_key(address))
     }
-
-    pub(crate) fn filter_map_validators<F: FnMut(Validator) -> Option<B>, B>(
-        &self,
-        f: F,
-    ) -> Vec<B> {
-        self.0.filter_map(
-            &StakingContractStore::validator_key(&Address::START_ADDRESS),
-            &StakingContractStore::validator_key(&Address::END_ADDRESS),
-            f,
-        )
-    }
 }
 
 #[cfg(feature = "interaction-traits")]

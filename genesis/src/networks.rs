@@ -28,6 +28,7 @@ pub struct NetworkInfo {
     network_id: NetworkId,
     name: &'static str,
     genesis: GenesisData,
+    max_supported_version: u16,
 }
 
 impl NetworkInfo {
@@ -60,6 +61,11 @@ impl NetworkInfo {
             Deserialize::deserialize_from_vec(accounts)
                 .expect("Failed to deserialize genesis accounts.")
         })
+    }
+
+    #[inline]
+    pub fn max_supported_version(&self) -> u16 {
+        self.max_supported_version
     }
 
     pub fn from_network_id(network_id: NetworkId) -> &'static Self {
@@ -135,6 +141,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                         name: "dev-albatross",
                         genesis: read_genesis_config(Path::new(&p))
                             .expect("failure reading provided NIMIQ_OVERRIDE_DEVNET_CONFIG"),
+                        max_supported_version: 1,
                     })
                 }) {
                     return Some(info);
@@ -147,6 +154,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                     env!("OUT_DIR"),
                     "/genesis/dev-albatross/genesis.rs",
                 )),
+                max_supported_version: 1,
             };
             &INFO
         }
@@ -162,6 +170,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                         name: "test-albatross",
                         genesis: read_genesis_config(Path::new(&p))
                             .expect("failure reading provided NIMIQ_OVERRIDE_TESTNET_CONFIG"),
+                        max_supported_version: 1,
                     })
                 }) {
                     return Some(info);
@@ -174,6 +183,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                     env!("OUT_DIR"),
                     "/genesis/test-albatross/genesis.rs"
                 )),
+                max_supported_version: 1,
             };
             &INFO
         }
@@ -185,6 +195,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                     env!("OUT_DIR"),
                     "/genesis/unit-albatross/genesis.rs"
                 )),
+                max_supported_version: 2,
             };
             &INFO
         }
@@ -200,6 +211,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                         name: "main-albatross",
                         genesis: read_genesis_config(Path::new(&p))
                             .expect("failure reading provided NIMIQ_OVERRIDE_MAINNET_CONFIG"),
+                        max_supported_version: 1,
                     })
                 }) {
                     return Some(info);
@@ -212,6 +224,7 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                     env!("OUT_DIR"),
                     "/genesis/main-albatross/genesis.rs"
                 )),
+                max_supported_version: 1,
             };
             &INFO
         }

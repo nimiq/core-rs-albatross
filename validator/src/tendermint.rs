@@ -231,8 +231,7 @@ where
         // Check if we want to upgrade the version.
         // This assumes we only ever upgrade to the latest version
         // and don't queue multiple upgrades.
-        let version = if blockchain.state().current_version() + 1
-            == Policy::max_supported_version(blockchain.network_id)
+        let version = if blockchain.state().current_version() + 1 == Policy::max_supported_version()
         {
             let staking_contract = blockchain
                 .get_staking_contract_if_complete(None)
@@ -257,10 +256,10 @@ where
 
             // We propose an upgraded block version only if:
             // - `Policy::UPGRADE_MIN_SUPPORT` of the stake supports the upgrade.
-            // - `Policy::TWO_F_PLUS_ONE` slots support the upgrade.
-            if supporting_slots >= Policy::TWO_F_PLUS_ONE
-                && u64::from(supporting_stake) * 100 / u64::from(total_active_stake)
-                    >= Policy::UPGRADE_MIN_SUPPORT as u64
+            // - `Policy::UPGRADE_MIN_SUPPORT` slots support the upgrade.
+            if supporting_slots * 100 >= Policy::SLOTS * Policy::UPGRADE_MIN_SUPPORT as u16
+                && u64::from(supporting_stake) * 100
+                    >= u64::from(total_active_stake) * Policy::UPGRADE_MIN_SUPPORT
             {
                 info!(
                     supporting_slots,
@@ -279,7 +278,6 @@ where
         };
 
         // Create the proposal.
-        // TODO: Version
         let time = blockchain.time.now();
         let block = self
             .block_producer

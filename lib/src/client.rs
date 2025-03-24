@@ -166,6 +166,7 @@ impl ClientInner {
 
         let policy_config = Policy {
             genesis_block_number: network_info.genesis_block().block_number(),
+            max_supported_version: network_info.max_supported_version(),
             ..Default::default()
         };
 

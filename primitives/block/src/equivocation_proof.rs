@@ -619,7 +619,7 @@ mod test {
 
         let header1 = MicroHeader {
             network: NetworkId::UnitAlbatross,
-            version: Policy::max_supported_version(NetworkId::UnitAlbatross),
+            version: Policy::max_supported_version(),
             block_number: Policy::genesis_block_number(),
             timestamp: 0,
             parent_hash: Blake2bHash::default(),
@@ -725,7 +725,7 @@ mod test {
 
         let header1 = MacroHeader {
             network: NetworkId::UnitAlbatross,
-            version: Policy::max_supported_version(NetworkId::UnitAlbatross),
+            version: Policy::max_supported_version(),
             block_number: Policy::genesis_block_number(),
             round: 0,
             timestamp: 0,

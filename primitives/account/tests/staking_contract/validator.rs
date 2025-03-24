@@ -10,7 +10,7 @@ use nimiq_primitives::{
     account::AccountError,
     coin::Coin,
     policy::Policy,
-    slots_allocation::{JailedValidator, PenalizedSlot, Validators, ValidatorsBuilder},
+    slots_allocation::{JailedValidator, PenalizedSlot, ValidatorsBuilder},
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;

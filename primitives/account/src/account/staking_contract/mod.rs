@@ -199,14 +199,15 @@ impl StakingContract {
         data_store: &T,
         support_check: F,
     ) -> Coin {
-        StakingContractStoreRead::new(data_store)
-            .iter_validators()
-            .filter_map(|validator| {
-                if validator.is_active() && support_check(validator.signal_data) {
-                    Some(validator.total_stake)
-                } else {
-                    None
-                }
+        let staking_contract_read = StakingContractStoreRead::new(data_store);
+        self.active_validators
+            .iter()
+            .filter_map(|(validator_address, stake)| {
+                let validator_signal_data = staking_contract_read
+                    .get_validator(validator_address)
+                    .expect("Active Validators must be present in the Staking Contract.")
+                    .signal_data;
+                support_check(validator_signal_data).then_some(*stake)
             })
             .sum()
     }
@@ -251,13 +252,20 @@ impl StakingContract {
         tx_logger: &mut TransactionLog,
     ) -> Result<(), AccountError> {
         // Retrieve unsupporting validators.
-        let unsupporting_validators = store.filter_map_validators(|validator| {
-            if validator.is_active() && !support_check(validator.signal_data) {
-                Some((validator.address, Address::from(&validator.signing_key)))
-            } else {
-                None
-            }
-        });
+        let unsupporting_validators: Vec<_> = self
+            .active_validators
+            .iter()
+            .filter_map(|(validator_address, _stake)| {
+                let validator = store
+                    .get_validator(validator_address)
+                    .expect("Active Validators must be present in the Staking Contract.");
+                if !support_check(validator.signal_data) {
+                    Some((validator.address, Address::from(&validator.signing_key)))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         // Deactivate those validators.
         for (validator_address, signer) in unsupporting_validators {
