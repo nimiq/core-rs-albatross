@@ -942,6 +942,7 @@ pub enum TransactionState {
     Pending,
     /// The transaction has been included into the blockchain, but not yet finalized by a following
     /// macro block.
+    #[serde(alias = "mined")]
     Included,
     /// The transaction is included in the blockchain and has been finalized by a following macro block.
     Confirmed,
