@@ -5233,7 +5233,6 @@ dependencies = [
 name = "nimiq-web-client"
 version = "1.0.9"
 dependencies = [
- "ark-serialize",
  "futures-util",
  "getrandom 0.3.2",
  "hex",

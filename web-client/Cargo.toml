@@ -22,7 +22,6 @@ workspace = true
 crate-type = ["rlib", "cdylib"]
 
 [dependencies]
-ark-serialize = "0.4"
 futures = { workspace = true }
 getrandom = { version = "0.3", features = ["wasm_js"] }
 hex = "0.4"
