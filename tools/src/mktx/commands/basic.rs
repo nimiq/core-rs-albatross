@@ -11,11 +11,11 @@ use super::{hex_secret_key_to_pair, CommandError, TransactionOrProof};
 pub struct AllArgs {
     /// The hex-encoded private key to access the sender account.
     hex_secret_key: String,
-    /// The recipient address in user friendly format (NQXX XXXX XXXX ...).
+    /// The recipient address in user friendly format (NQXXXXXX...).
     recipient: Address,
-    /// The amount (in lunas) to transfer
+    /// The amount (in lunas) to transfer.
     value: Coin,
-    /// The hex-encoded data that will be stored in the transaction's data field.
+    /// The optional hex-encoded data that will be stored in the transaction's data field.
     data: Option<String>,
 }
 

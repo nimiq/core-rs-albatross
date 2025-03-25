@@ -8,17 +8,22 @@ use super::{hex_option_secret_key_to_option_pair, hex_secret_key_to_pair, Comman
 
 #[derive(Debug, Subcommand)]
 pub enum StakeCommands {
+    /// Creates a transaction that creates a new staker with a given initial stake and delegation.
     Create {
+        /// The key pair used to sign the outgoing transaction. The initial stake is sent from the basic account belonging to this key pair.
         secret_key: String,
+        /// The key pair used to sign the incoming transaction. The staker address will be derived from this key pair.
         staker_secret_key: String,
         value: Coin,
         delegation: Option<Address>,
     },
+    /// Creates a transaction to add stake from the address of a given `key_pair` to a specified `staker_address`.
     Add {
         secret_key: String,   
         staker_address: Address,
         value: Coin,
     },
+    /// Creates an update staker transaction for a given staker that changes the delegation.
     Update {
         /// Activate all inactive stake as part of the update.
         #[arg(short, long)]

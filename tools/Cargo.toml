@@ -26,8 +26,8 @@ name = "nimiq-signtx"
 path = "src/signtx/main.rs"
 
 [[bin]]
-name = "nimiq-maketx"
-path = "src/maketx/main.rs"
+name = "nimiq-mktx"
+path = "src/mktx/main.rs"
 
 
 [[bin]]
@@ -40,7 +40,7 @@ path = "src/trim-genesis-config/main.rs"
 
 [dependencies]
 anyhow = "1.0"
-clap = { version = "4.5", features = ["cargo","derive"] }
+clap = { version = "4.5", features = ["cargo", "derive"] }
 convert_case = "0.8"
 
 hex = "0.4"

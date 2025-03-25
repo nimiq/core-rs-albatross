@@ -7,8 +7,8 @@ use nimiq_primitives::{coin::Coin, networks::NetworkId};
 mod commands;
 
 #[derive(Parser)]
-#[command(version, about, long_about = None)]
-#[command(subcommand_required = true)]
+#[command(name = "mktx", subcommand_required = true, disable_help_flag = true)]
+#[command(about = "CLI tool to create and sign Nimiq transactions offline")]
 pub struct Cli {
     #[clap(flatten)]
     global_opts: CliGlobalOpts,
@@ -29,6 +29,7 @@ struct CliGlobalOpts {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Create basic transactions with or without data
     Basic(BasicArgs),
     Htlc(HtlcArgs),
     Stake(StakeArgs),
@@ -43,28 +44,28 @@ struct BasicArgs {
 }
 
 #[derive(Debug, Args)]
-#[command(subcommand_required = true)]
+#[command(subcommand_required = true, disable_help_subcommand = true)]
 struct HtlcArgs {
     #[command(subcommand)]
     command: commands::htlc::HtlcCommands,
 }
 
 #[derive(Debug, Args)]
-#[command(subcommand_required = true)]
+#[command(subcommand_required = true, disable_help_subcommand = true)]
 struct StakeArgs {
     #[command(subcommand)]
     command: commands::stake::StakeCommands,
 }
 
 #[derive(Debug, Args)]
-#[command(subcommand_required = true)]
+#[command(subcommand_required = true, disable_help_subcommand = true)]
 struct ValidatorArgs {
     #[command(subcommand)]
     command: commands::validator::ValidatorCommands,
 }
 
 #[derive(Debug, Args)]
-#[command(subcommand_required = true)]
+#[command(subcommand_required = true, disable_help_subcommand = true)]
 struct VestingArgs {
     #[command(subcommand)]
     command: commands::vesting::VestingCommands,
