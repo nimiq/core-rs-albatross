@@ -14,7 +14,7 @@
 //!                      |             SlotBand                      |    SlotBand       |
 //!                      +-------------------------------------------+-------------------+
 //! ```
-use std::{cmp::max, collections::BTreeMap, ops::Range, slice::Iter};
+use std::{cmp::Ordering, collections::BTreeMap, ops::Range, slice::Iter};
 
 use ark_ec::CurveGroup;
 use ark_serialize::CanonicalSerialize;
@@ -142,24 +142,21 @@ impl Validators {
     pub fn get_band_from_slot(&self, slot: u16) -> u16 {
         assert!(slot < Policy::SLOTS);
 
-        let mut pivot = self.num_validators() / 2;
-        let mut last_pivot = 0usize;
-        loop {
-            let pivot_diff = if pivot < last_pivot {
-                last_pivot - pivot
-            } else {
-                pivot - last_pivot
-            };
-            last_pivot = pivot;
-            let slots = self.validators[pivot].slots.clone();
-            if slot < slots.start {
-                pivot -= max(pivot_diff / 2, 1);
-            } else if slot >= slots.end {
-                pivot += max(pivot_diff / 2, 1);
-            } else {
-                return pivot as u16;
-            }
-        }
+        #[allow(clippy::ok_expect)]
+        self.validators
+            .binary_search_by(|validator| {
+                if validator.slots.end <= slot {
+                    Ordering::Less
+                } else if validator.slots.start > slot {
+                    Ordering::Greater
+                } else {
+                    Ordering::Equal
+                }
+            })
+            .ok()
+            .expect("validator slot band not found")
+            .try_into()
+            .unwrap()
     }
 
     /// Returns the validator given the slot number.
