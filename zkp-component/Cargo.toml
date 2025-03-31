@@ -33,7 +33,6 @@ futures = { workspace = true }
 hex = "0.4"
 log = { workspace = true }
 parking_lot = "0.12"
-rand = "0.9"
 serde = "1.0"
 thiserror = "2.0"
 tokio = { version = "1.44", features = ["macros", "rt", "sync"] }

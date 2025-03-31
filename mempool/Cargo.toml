@@ -47,7 +47,6 @@ nimiq-utils = { workspace = true, features = ["spawn", "time"] }
 
 [dev-dependencies]
 hex = "0.4"
-rand = "0.9"
 
 nimiq-block = { workspace = true }
 nimiq-blockchain = { workspace = true }
