@@ -621,7 +621,7 @@ impl Blockchain {
                 )?;
                 a.commit();
             }
-            Self::revert_state(&mut this, &current_info, &prev_info);
+            Self::revert_state_original(&mut this, &current_info, &prev_info);
 
             log::trace!("Block= {} reverted", current_info.head.block_number());
             // Check that the block reverted cleanly.
@@ -641,7 +641,7 @@ impl Blockchain {
         Ok(())
     }
 
-    fn revert_state(
+    fn revert_state_original(
         this: &mut RwLockWriteGuard<Self>,
         current_info: &ChainInfo,
         prev_info: &ChainInfo,
@@ -699,10 +699,10 @@ impl Blockchain {
             this.state.election_head = target_election_block;
         }
 
-        Self::revert_chain_store(this, current_info, prev_info);
+        Self::revert_chain_store_original(this, current_info, prev_info);
     }
 
-    pub fn revert_chain_store(
+    pub fn revert_chain_store_original(
         this: &mut RwLockWriteGuard<Self>,
         current_info: &ChainInfo,
         prev_info: &ChainInfo,

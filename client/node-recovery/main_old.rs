@@ -7,7 +7,7 @@ use nimiq::{
     extras::logging::{initialize_logging, log_error_cause_chain},
 };
 use nimiq_blockchain::Blockchain;
-use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
+use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::policy::Policy;
@@ -107,21 +107,11 @@ fn revert_blocks(
             std::process::exit(0);
         }
     }
-    let result = Blockchain::reset_to_latest_macro_block(blockchain, num_blocks);
-    if let Err(result) = result {
+
+    if let Err(result) = Blockchain::revert_blocks_macro(blockchain, num_blocks) {
         return Err(NodeRecoveryError::RevertingBlocksError(
             format!("Couldn't revert the blocks. {:?}", result).to_string(),
         ));
-    } else if let Ok(mut blocks_till_target) = result {
-        // Push the blocks of the current batch.
-        while !blocks_till_target.is_empty() {
-            let block = blocks_till_target.pop_back().unwrap();
-            assert_eq!(
-                Blockchain::push(get_upgradable_read(&blockchain_proxy)?, block),
-                Ok(PushResult::Extended),
-                "Failed to push the blocks from the current batch."
-            );
-        }
     }
 
     // Remove the zkp if necessary.

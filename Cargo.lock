@@ -4005,6 +4005,7 @@ dependencies = [
  "nimiq-time",
  "nimiq-utils",
  "nimiq-zkp-component",
+ "parking_lot",
  "thiserror 2.0.12",
  "tokio",
  "tokio-metrics",
