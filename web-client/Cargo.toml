@@ -25,7 +25,6 @@ crate-type = ["rlib", "cdylib"]
 ark-serialize = "0.4"
 futures = { workspace = true }
 getrandom = { version = "0.3", features = ["wasm_js"] }
-gloo-timers = { version = "0.3", features = ["futures"] }
 hex = "0.4"
 idb = "0.6.4"
 js-sys = "0.3"

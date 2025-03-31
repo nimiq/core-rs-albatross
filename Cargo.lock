@@ -4036,7 +4036,6 @@ name = "nimiq-consensus"
 version = "1.0.9"
 dependencies = [
  "async-trait",
- "futures-executor",
  "futures-util",
  "hashlink 0.10.0",
  "hex",
@@ -5237,7 +5236,6 @@ dependencies = [
  "ark-serialize",
  "futures-util",
  "getrandom 0.3.2",
- "gloo-timers 0.3.0",
  "hex",
  "idb",
  "js-sys",
