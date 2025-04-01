@@ -20,7 +20,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use crate::error::Error;
 
 pub struct BlockchainDispatcher {
-    blockchain: BlockchainProxy,
+    pub blockchain: BlockchainProxy,
 }
 
 impl BlockchainDispatcher {

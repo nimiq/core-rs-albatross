@@ -1,6 +1,7 @@
 pub mod blockchain;
 pub mod consensus;
 pub mod error;
+pub mod eth_interface;
 pub mod mempool;
 pub mod network;
 pub mod policy;

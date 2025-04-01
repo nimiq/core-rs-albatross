@@ -4,6 +4,7 @@ use nimiq_jsonrpc_server::{
     AllowListDispatcher, Config, Cors, Credentials, ModularDispatcher, Server as _Server,
 };
 use nimiq_rpc_server::dispatchers::*;
+use nimiq_rpc_server::eth_interface::*;
 use nimiq_wallet::WalletStore;
 
 #[cfg(feature = "rpc-server")]
@@ -66,6 +67,16 @@ pub fn initialize_rpc_server(
     dispatcher.add(wallet_dispatcher);
 
     dispatcher.add(ZKPComponentDispatcher::new(client.zkp_component()));
+
+    // Eth interface dispatchers
+    dispatcher.add(GossipDispatcher::new(
+        client.consensus_proxy(),
+        client.blockchain(),
+    ));
+
+    dispatcher.add(HistoryDispatcher::new(client.blockchain()));
+
+    dispatcher.add(StateDispatcher::new(client.blockchain()));
 
     Ok(Server::new(
         Config {
