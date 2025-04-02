@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use futures::{future, StreamExt};
 use nimiq_block::Block;
 use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, PushResult};
@@ -8,15 +7,13 @@ use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis::NetworkId;
 use nimiq_keys::KeyPair;
-use nimiq_network_libp2p::Network;
 use nimiq_primitives::{coin::Coin, policy::Policy};
 use nimiq_test_log::test;
-use nimiq_test_utils::{
-    blockchain::{produce_macro_blocks_with_txns, signing_key, validator_key, voting_key},
-    validator::build_validators,
+use nimiq_test_utils::blockchain::{
+    produce_macro_blocks_with_txns, signing_key, validator_key, voting_key,
 };
 use nimiq_transaction_builder::TransactionBuilder;
-use nimiq_utils::{key_rng::SecureGenerate, spawn, time::OffsetTime};
+use nimiq_utils::{key_rng::SecureGenerate, time::OffsetTime};
 use parking_lot::RwLock;
 
 #[test(tokio::test)]

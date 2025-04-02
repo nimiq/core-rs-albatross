@@ -1,29 +1,20 @@
 use std::{sync::Arc, task::Poll, time::Duration};
 
 use futures::{future, StreamExt};
-use nimiq_block::{MultiSignature, SignedSkipBlockInfo, SkipBlockInfo};
-use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
-use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair};
-use nimiq_collections::BitSet;
+use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis_builder::GenesisBuilder;
-use nimiq_handel::update::LevelUpdate;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
-use nimiq_network_interface::{
-    network::{CloseReason, Network as NetworkInterface},
-    request::{MessageMarker, RequestCommon},
-};
+use nimiq_network_interface::request::{MessageMarker, RequestCommon};
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
 use nimiq_test_log::test;
-use nimiq_test_utils::{
-    test_network::TestNetwork,
-    validator::{
-        build_validator, build_validators, pop_validator_for_slot, seeded_rng, validator_for_slot,
-    },
+use nimiq_test_utils::validator::{
+    build_validator, build_validators, pop_validator_for_slot, seeded_rng,
 };
-use nimiq_time::{sleep, timeout};
+use nimiq_time::timeout;
 use nimiq_utils::spawn;
 use nimiq_validator::aggregation::{
     skip_block::SignedSkipBlockMessage, update::SerializableLevelUpdate,
@@ -174,38 +165,4 @@ async fn validators_can_do_skip_block() {
 
     assert!(block.is_skip());
     assert!(block.block_number() > Policy::genesis_block_number());
-}
-
-fn create_skip_block_update(
-    skip_block_info: SkipBlockInfo,
-    key_pair: BlsKeyPair,
-    validator_id: u16,
-    slots: &[u16],
-) -> LevelUpdate<SignedSkipBlockMessage> {
-    // get a single signature for this skip block data
-    let signed_skip_block_info =
-        SignedSkipBlockInfo::from_message(skip_block_info, &key_pair.secret_key, validator_id);
-
-    // multiply with number of slots to get a signature representing all the slots of this public_key
-    let signature = AggregateSignature::from_signatures(&[signed_skip_block_info
-        .signature
-        .multiply(slots.len() as u16)]);
-
-    // compute the signers bitset (which is just all the slots)
-    let mut signers = BitSet::new();
-    for &slot in slots {
-        signers.insert(slot as usize);
-    }
-
-    // the contribution is composed of the signers bitset with the signature already multiplied by the number of slots.
-    let contribution = SignedSkipBlockMessage {
-        proof: MultiSignature::new(signature, signers),
-    };
-
-    LevelUpdate::new(
-        contribution.clone(),
-        Some(contribution),
-        1,
-        validator_id as usize,
-    )
 }
