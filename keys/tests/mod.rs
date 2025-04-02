@@ -3,7 +3,7 @@ use nimiq_keys::{
     KeyPair, PrivateKey, SecureGenerate,
 };
 use nimiq_test_log::test;
-use nimiq_test_utils::test_rng::test_rng;
+use nimiq_test_utils::test_rng;
 
 mod multisig;
 

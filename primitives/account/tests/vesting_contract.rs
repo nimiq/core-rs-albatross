@@ -14,7 +14,7 @@ use nimiq_primitives::{
 };
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
-use nimiq_test_utils::{accounts_revert::TestCommitRevert, test_rng::test_rng};
+use nimiq_test_utils::{accounts_revert::TestCommitRevert, test_rng};
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_utils::key_rng::SecureGenerate;
 

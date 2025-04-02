@@ -17,7 +17,7 @@ use nimiq_primitives::{
 };
 use nimiq_serde::Deserialize;
 use nimiq_test_log::test;
-use nimiq_test_utils::{block_production::TemporaryBlockProducer, test_rng::test_rng};
+use nimiq_test_utils::{block_production::TemporaryBlockProducer, test_rng};
 use nimiq_transaction_builder::TransactionBuilder;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;

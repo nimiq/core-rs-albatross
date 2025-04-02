@@ -208,7 +208,7 @@ mod tests {
     use nimiq_keys::{Ed25519PublicKey, Ed25519Signature, KeyPair, SecureGenerate};
     use nimiq_serde::{Deserialize, Serialize};
     use nimiq_test_log::test;
-    use nimiq_test_utils::test_rng::test_rng;
+    use nimiq_test_utils::test_rng;
 
     use super::{TaggedKeyPair, TaggedPublicKey, TaggedSignable, TaggedSignature};
 

@@ -19,7 +19,7 @@ use nimiq_test_utils::{
         fill_micro_blocks, fill_micro_blocks_with_txns, produce_macro_blocks, sign_macro_block,
         signing_key, validator_address, voting_key,
     },
-    test_rng::test_rng,
+    test_rng,
 };
 use nimiq_transaction::ExecutedTransaction;
 use nimiq_transaction_builder::TransactionBuilder;

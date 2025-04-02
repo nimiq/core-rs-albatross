@@ -28,7 +28,7 @@ use nimiq_test_utils::{
         next_micro_block, produce_macro_blocks, push_micro_block, signing_key, voting_key,
     },
     mock_node::MockNode,
-    test_rng::test_rng,
+    test_rng,
 };
 use nimiq_utils::time::OffsetTime;
 use parking_lot::{Mutex, RwLock};

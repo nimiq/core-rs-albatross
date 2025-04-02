@@ -12,7 +12,7 @@ use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, Ed25519PublicKey, KeyPair, SecureGenerate};
 use nimiq_primitives::policy::Policy;
 use nimiq_test_utils::{
-    test_rng::test_rng,
+    test_rng,
     test_transaction::{generate_accounts, generate_transactions, TestAccount, TestTransaction},
 };
 use rand::{CryptoRng, Rng};

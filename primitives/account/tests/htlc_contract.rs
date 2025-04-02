@@ -15,7 +15,7 @@ use nimiq_primitives::{
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
-    accounts_revert::TestCommitRevert, test_rng::test_rng, transactions::TransactionsGenerator,
+    accounts_revert::TestCommitRevert, test_rng, transactions::TransactionsGenerator,
 };
 use nimiq_transaction::{
     account::htlc_contract::{

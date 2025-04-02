@@ -386,7 +386,7 @@ mod tests {
     };
     use nimiq_tendermint::ProposalMessage;
     use nimiq_test_log::test;
-    use nimiq_test_utils::{block_production::TemporaryBlockProducer, test_rng::test_rng};
+    use nimiq_test_utils::{block_production::TemporaryBlockProducer, test_rng};
     use nimiq_transaction::reward::RewardTransaction;
     use rand::Rng as _;
 

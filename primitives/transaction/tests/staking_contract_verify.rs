@@ -11,7 +11,7 @@ use nimiq_primitives::{
 };
 use nimiq_serde::{Deserialize, Serialize, SerializedMaxSize};
 use nimiq_test_log::test;
-use nimiq_test_utils::test_rng::test_rng;
+use nimiq_test_utils::test_rng;
 use nimiq_transaction::{
     account::{
         staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionData},

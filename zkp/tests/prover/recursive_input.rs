@@ -14,7 +14,7 @@ use ark_relations::r1cs::{
 };
 use ark_std::rand::RngCore;
 use nimiq_test_log::test;
-use nimiq_test_utils::test_rng::test_rng;
+use nimiq_test_utils::test_rng;
 use nimiq_zkp_circuits::recursive::RecursiveInputVar;
 
 const NUMBER_OF_BYTES: usize = 128;

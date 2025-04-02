@@ -318,7 +318,7 @@ impl Rng for VrfRng {
 mod tests {
     use nimiq_keys::SecureGenerate;
     use nimiq_test_log::test;
-    use nimiq_test_utils::test_rng::test_rng;
+    use nimiq_test_utils::test_rng;
 
     use super::*;
 

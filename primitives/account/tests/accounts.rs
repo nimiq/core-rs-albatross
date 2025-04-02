@@ -23,7 +23,7 @@ use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
     accounts_revert::TestCommitRevert,
-    test_rng::test_rng,
+    test_rng,
     test_transaction::{generate_accounts, generate_transactions, TestTransaction},
     transactions::{IncomingType, OutgoingType, TransactionsGenerator, ValidatorState},
 };

@@ -19,7 +19,7 @@ use nimiq_test_log::test;
 use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
     blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key},
-    test_rng::test_rng,
+    test_rng,
     test_transaction::{generate_accounts, generate_transactions, TestTransaction},
 };
 use nimiq_transaction::{ExecutedTransaction, Transaction};

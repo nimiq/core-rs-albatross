@@ -21,7 +21,7 @@ use nimiq_test_utils::{
     block_production::TemporaryBlockProducer,
     blockchain::validator_address,
     test_custom_block::{next_macro_block, next_micro_block, next_skip_block, BlockConfig},
-    test_rng::test_rng,
+    test_rng,
     zkp_test_data::{get_base_seed, simulate_merger_wrapper, ZKP_TEST_KEYS_PATH},
 };
 use nimiq_utils::key_rng::SecureGenerate;

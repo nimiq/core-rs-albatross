@@ -379,7 +379,7 @@ mod tests {
     use nimiq_hash::Blake2sHash;
     use nimiq_primitives::networks::NetworkId;
     use nimiq_test_log::test;
-    use nimiq_test_utils::test_rng::test_rng;
+    use nimiq_test_utils::test_rng;
     use rand::{Rng, RngCore};
 
     use super::*;
