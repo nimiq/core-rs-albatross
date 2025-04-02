@@ -127,14 +127,8 @@ fn revert_blocks(
     // Remove the zkp if necessary.
     if block_head.saturating_sub(num_blocks) < Policy::last_election_block(block_head) {
         log::info!("We are reverting across a election block. The zkp state will also be reset.");
-        let blockchain = match &blockchain_proxy {
-            BlockchainProxy::Full(blockchain) => blockchain.upgradable_read(),
-            BlockchainProxy::Light(_) => {
-                return Err(NodeRecoveryError::RevertingBlocksError(
-                    "Reverting blocks is only available for history or full nodes.".to_string(),
-                ))
-            }
-        };
+
+        let blockchain = get_upgradable_read(&blockchain_proxy)?;
         if let Some(zkp_db) = zkp_db {
             let network_info = NetworkInfo::from_network_id(blockchain.network_id());
             let genesis_block = network_info.genesis_block().unwrap_macro();
@@ -143,7 +137,7 @@ fn revert_blocks(
         }
     }
 
-    log::error!(
+    log::info!(
         "Successfully reverted the blocks. New head: {}",
         blockchain_proxy.read().head()
     );

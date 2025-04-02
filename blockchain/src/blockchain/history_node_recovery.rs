@@ -12,7 +12,7 @@ use crate::Blockchain;
 impl Blockchain {
     pub fn reset_to_latest_macro_block(
         this: RwLockUpgradableReadGuard<Self>,
-        num_blocks: u32,
+        mut num_blocks: u32,
     ) -> Result<VecDeque<Block>, PushError> {
         // Store the blocks to be pushed later.
         let mut blocks_till_target = VecDeque::new();
@@ -22,15 +22,20 @@ impl Blockchain {
             .get_chain_info(&head.hash(), true, None)
             .expect("Couldn't fetch chain info for the head of the chain");
         let target_block = head.block_number().saturating_sub(num_blocks);
-        if target_block < Policy::last_macro_block(head.block_number()) {
+        let is_reverting_across_macro_block =
+            target_block < Policy::last_macro_block(head.block_number());
+
+        let mut macro_info = None;
+        if is_reverting_across_macro_block {
             log::info!("Reverting across a macro block requires a reset to the earliest macro block predecessor first.");
             let target_macro_block = this
                 .get_block_at(Policy::last_macro_block(target_block), true, None)
                 .unwrap()
                 .unwrap_macro();
-            let macro_info = this
-                .get_chain_info(&target_macro_block.hash(), true, None)
-                .expect("Couldn't fetch chain info for the head of the chain");
+            macro_info = Some(
+                this.get_chain_info(&target_macro_block.hash(), true, None)
+                    .expect("Couldn't fetch chain info for the head of the chain"),
+            );
 
             for _ in target_macro_block.block_number() + 1..target_block + 1 {
                 blocks_till_target.push_front(
@@ -39,13 +44,20 @@ impl Blockchain {
                 );
             }
 
-            // Delete all until target macro block
-            Self::revert_last_micro_blocks(&this, num_blocks)?;
-            let mut this: RwLockWriteGuard<_> = RwLockUpgradableReadGuard::upgrade(this);
-            Self::revert_state(&mut this, &head_chain_info, &macro_info);
-            let this = RwLockWriteGuard::downgrade_to_upgradable(this);
+            num_blocks = num_blocks + (target_macro_block.block_number() - target_block);
+        }
 
+        log::error!("{}", num_blocks);
+
+        // Delete all until target macro block
+        let result = Self::revert_last_micro_blocks(&this, num_blocks)?;
+
+        let mut this: RwLockWriteGuard<_> = RwLockUpgradableReadGuard::upgrade(this);
+        if is_reverting_across_macro_block {
             // Assert that the state is consistent at this point.
+            let macro_info = macro_info.unwrap();
+            Self::revert_state(&mut this, &head_chain_info, &macro_info);
+
             let accounts_hash = this.state.accounts.get_root_hash_assert(None);
             assert_eq!(
                 *macro_info.head.state_root(),
@@ -54,6 +66,13 @@ impl Blockchain {
                 *macro_info.head.state_root(),
                 accounts_hash,
             );
+        } else {
+            log::error!(
+                "head: {} Destination {}",
+                head_chain_info.head.block_number(),
+                result.head.block_number()
+            );
+            Self::revert_state(&mut this, &head_chain_info, &result);
         }
 
         Ok(blocks_till_target)
@@ -63,7 +82,7 @@ impl Blockchain {
     pub fn revert_last_micro_blocks(
         this: &RwLockUpgradableReadGuard<Self>,
         num_blocks: u32,
-    ) -> Result<(), PushError> {
+    ) -> Result<ChainInfo, PushError> {
         debug!(
             num_blocks,
             "Need to revert micro blocks from the current epoch",
@@ -118,7 +137,9 @@ impl Blockchain {
             current_info = prev_info;
         }
 
-        Ok(())
+        log::error!("Destination {}", current_info.head.block_number());
+
+        Ok(current_info)
     }
 
     fn revert_state(
