@@ -1,10 +1,11 @@
 name: Publish OpenRPC document
 
+# This workflow only works with the 'on.release'-trigger.
+# On.release ensures a new release exists when artifacts from this workflow are being uploaded to the release.
+# On.tags can get triggered without the creation of a new release thus causing uploads to fail.
 on:
-  push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
+  release:
+    types: [published]
 
 jobs:
   build_release_binary_and_publish_document:
