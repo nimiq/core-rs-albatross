@@ -1,14 +1,8 @@
 use anyhow::{bail, Error};
 use clap::Parser;
-use nimiq_jsonrpc_client::{
-    websocket::WebsocketClient, ArcClient, Client as RPCclient, Credentials,
-};
-use nimiq_rpc_interface::{
-    blockchain::BlockchainProxy, consensus::ConsensusProxy, mempool::MempoolProxy,
-    network::NetworkProxy, policy::PolicyProxy, validator::ValidatorProxy, wallet::WalletProxy,
-    zkp_component::ZKPComponentProxy,
-};
-use url::Url;
+use nimiq_jsonrpc_client::Credentials;
+use nimiq_rpc_client::Client;
+
 pub mod subcommands;
 
 use crate::subcommands::*;
@@ -77,41 +71,6 @@ impl Command {
             Command::Validator(command) => command.handle_subcommand(client).await,
             Command::Zkp(command) => command.handle_subcommand(client).await,
         }
-    }
-}
-
-pub struct Client {
-    pub ws_client: ArcClient<WebsocketClient>,
-    pub policy: PolicyProxy<ArcClient<WebsocketClient>>,
-    blockchain: BlockchainProxy<ArcClient<WebsocketClient>>,
-    pub consensus: ConsensusProxy<ArcClient<WebsocketClient>>,
-    pub mempool: MempoolProxy<ArcClient<WebsocketClient>>,
-    pub wallet: WalletProxy<ArcClient<WebsocketClient>>,
-    pub validator: ValidatorProxy<ArcClient<WebsocketClient>>,
-    pub network: NetworkProxy<ArcClient<WebsocketClient>>,
-    pub zkp_component: ZKPComponentProxy<ArcClient<WebsocketClient>>,
-}
-
-impl Client {
-    pub async fn new(url: Url, credentials: Option<Credentials>) -> Result<Self, Error> {
-        let client = ArcClient::new(WebsocketClient::new(url, credentials).await?);
-
-        Ok(Self {
-            policy: PolicyProxy::new(client.clone()),
-            blockchain: BlockchainProxy::new(client.clone()),
-            consensus: ConsensusProxy::new(client.clone()),
-            mempool: MempoolProxy::new(client.clone()),
-            wallet: WalletProxy::new(client.clone()),
-            validator: ValidatorProxy::new(client.clone()),
-            network: NetworkProxy::new(client.clone()),
-            zkp_component: ZKPComponentProxy::new(client.clone()),
-            ws_client: client,
-        })
-    }
-
-    /// Closes the WS connection
-    pub async fn close(&mut self) {
-        self.ws_client.close().await;
     }
 }
 
