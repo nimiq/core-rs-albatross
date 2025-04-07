@@ -17,7 +17,7 @@ jobs:
         - test: ValidatorsStress
           devnet_args: -t .github/devnet_topologies/validators_stress.toml -R -k 2 -as -dt 30
 
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Free Disk Space (Ubuntu)

@@ -12,7 +12,7 @@ on:
 jobs:
 
   rustfmt:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
     - uses: actions/checkout@v4
@@ -22,7 +22,7 @@ jobs:
     - run: cargo fmt --all -- --check
 
   check:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
     - uses: actions/checkout@v4
@@ -31,7 +31,7 @@ jobs:
     - run: cargo check --all-features --tests --benches
 
   test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Free Disk Space (Ubuntu)
@@ -76,7 +76,7 @@ jobs:
 
   clippy:
     if: github.event_name != 'push' || github.event.pusher.name != 'dependabot[bot]'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
     - uses: actions/checkout@v4
@@ -91,7 +91,7 @@ jobs:
         args: --release --all-features
 
   web-client:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Free Disk Space (Ubuntu)
@@ -118,7 +118,7 @@ jobs:
       run: wasm-pack test --chrome --headless
 
   web-client-lib:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Free Disk Space (Ubuntu)
@@ -142,7 +142,7 @@ jobs:
       run: yarn test
 
   reconnect-test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
     - uses: actions/checkout@v4

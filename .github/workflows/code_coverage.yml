@@ -23,7 +23,7 @@ jobs:
         - test: CodeCov3
           args: third_piece
 
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
     - name: manually remove gcloud
