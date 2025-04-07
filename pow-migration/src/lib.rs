@@ -35,14 +35,14 @@ use crate::{
 
 const RETRYER_MAX_ATTEMPTS: u8 = 5;
 
-/// In PoW blocks are produced approximetely every minute
+/// In PoW blocks are produced approximately every minute
 const POW_BLOCKS_PER_HOUR: u32 = 60;
 
 /// Number of reporting windows in which we start reporting as online
 const NUMBER_ONLINE_REPORTING_WINDOWS: u32 = 3;
 
 /// Numbers of activation windows from which we start removing validators for not being ready
-pub const ACTIVATION_WINDOW_TRESHOLD: u32 = 5;
+pub const ACTIVATION_WINDOW_THRESHOLD: u32 = 5;
 
 static TESTNET_BLOCK_WINDOWS: &BlockWindows = &BlockWindows {
     // The testnet blocks are produced ~every minute.
@@ -167,11 +167,11 @@ pub async fn classify_validators(
     let mut active_validators = HashMap::new();
     let mut inactive_validators = HashMap::new();
 
-    // This function should only be exeucted if we are past the ACTIVATION_WINDOW_TRESHOLD
+    // This function should only be executed if we are past the ACTIVATION_WINDOW_THRESHOLD
     // We should already have the previous genesis hashes of the previous activation windows to this point.
-    assert!(current_activation_window > ACTIVATION_WINDOW_TRESHOLD);
+    assert!(current_activation_window > ACTIVATION_WINDOW_THRESHOLD);
 
-    for activation_window in ACTIVATION_WINDOW_TRESHOLD..current_activation_window {
+    for activation_window in ACTIVATION_WINDOW_THRESHOLD..current_activation_window {
         let candidate_start = block_windows.election_candidate
             + ((activation_window - 1) * block_windows.readiness_window);
         let next_candidate = candidate_start + block_windows.readiness_window;
@@ -308,27 +308,27 @@ pub async fn migrate(
     )
     .await?;
 
-    // Check if we are pass the ACTIVATION_WINDOW_TRESHOLD
+    // Check if we are pass the ACTIVATION_WINDOW_THRESHOLD
     // We start counting in 1.
     let activation_window =
         ((candidate_block - block_windows.election_candidate) / block_windows.readiness_window) + 1;
 
-    let (active_validators, inactive_validators) = if activation_window > ACTIVATION_WINDOW_TRESHOLD
-    {
-        // Note that this function is called with the validators set that was returned by the get_stakers function
-        // This means the validators in this set already have their stake distribution set.
-        classify_validators(
-            pow_client,
-            block_windows,
-            genesis_hashes,
-            activation_window,
-            &validators,
-        )
-        .await
-    } else {
-        // If we are not past the activation threshold, then we consider all validators as active.
-        (validators, vec![])
-    };
+    let (active_validators, inactive_validators) =
+        if activation_window > ACTIVATION_WINDOW_THRESHOLD {
+            // Note that this function is called with the validators set that was returned by the get_stakers function
+            // This means the validators in this set already have their stake distribution set.
+            classify_validators(
+                pow_client,
+                block_windows,
+                genesis_hashes,
+                activation_window,
+                &validators,
+            )
+            .await
+        } else {
+            // If we are not past the activation threshold, then we consider all validators as active.
+            (validators, vec![])
+        };
 
     assert_eq!(
         registered_validators.len(),
