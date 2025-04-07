@@ -6,16 +6,19 @@ use std::{
 };
 
 use futures::stream::{BoxStream, Stream, StreamExt};
-use nimiq_block::MacroBlock;
+use nimiq_block::{DoubleProposalProof, DoubleVoteProof, MacroBlock, MacroHeader, MultiSignature};
 use nimiq_blockchain::{BlockProducer, Blockchain};
-use nimiq_keys::Ed25519Signature as SchnorrSignature;
+use nimiq_blockchain_interface::AbstractBlockchain;
+use nimiq_keys::{Address, Ed25519Signature as SchnorrSignature};
 use nimiq_network_interface::network::Topic;
-use nimiq_primitives::{networks::NetworkId, slots_allocation::Validators};
+use nimiq_primitives::{
+    networks::NetworkId, slots_allocation::Validators, TendermintProposal, TendermintVote,
+};
 use nimiq_tendermint::{
     Return as TendermintReturn, SignedProposalMessage, TaggedAggregationMessage, Tendermint,
 };
 use nimiq_validator_network::{PubsubId, ValidatorNetwork};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 
 use crate::{
     aggregation::tendermint::{
@@ -24,6 +27,8 @@ use crate::{
         state::MacroState,
         update_message::TendermintUpdate,
     },
+    double_proposal::DoubleProposalDetector,
+    double_vote::DoubleVoteDetector,
     tendermint::TendermintProtocol,
 };
 
@@ -34,13 +39,22 @@ where
     Update(MacroState),
     Decision(MacroBlock),
     ProposalAccepted(
-        SignedProposalMessage<Header<PubsubId<TValidatorNetwork>>, (SchnorrSignature, u16)>,
+        SignedProposalMessage<
+            Header<PubsubId<TValidatorNetwork>>,
+            (SchnorrSignature, Address, u16),
+        >,
     ),
     ProposalIgnored(
-        SignedProposalMessage<Header<PubsubId<TValidatorNetwork>>, (SchnorrSignature, u16)>,
+        SignedProposalMessage<
+            Header<PubsubId<TValidatorNetwork>>,
+            (SchnorrSignature, Address, u16),
+        >,
     ),
     ProposalRejected(
-        SignedProposalMessage<Header<PubsubId<TValidatorNetwork>>, (SchnorrSignature, u16)>,
+        SignedProposalMessage<
+            Header<PubsubId<TValidatorNetwork>>,
+            (SchnorrSignature, Address, u16),
+        >,
     ),
 }
 
@@ -83,10 +97,16 @@ where
         state_opt: Option<MacroState>,
         proposal_stream: BoxStream<
             'static,
-            SignedProposalMessage<Header<PubsubId<TValidatorNetwork>>, (SchnorrSignature, u16)>,
+            SignedProposalMessage<
+                Header<PubsubId<TValidatorNetwork>>,
+                (SchnorrSignature, Address, u16),
+            >,
         >,
+        // TODO: make this just one parameter for equivocation proofs
+        on_double_proposal: Arc<dyn Fn(DoubleProposalProof) + Send + Sync>,
+        on_double_vote: Arc<dyn Fn(DoubleVoteProof) + Send + Sync>,
     ) -> Self {
-        let input = network
+        let level_update_stream = network
             .receive::<TendermintUpdate>()
             .filter_map(move |(item, validator_id)| async move {
                 // Check that the update is for the correct block.
@@ -100,6 +120,55 @@ where
             })
             .boxed();
 
+        let observe_valid_vote = {
+            let double_vote_detector = Arc::new(Mutex::new(DoubleVoteDetector::new(
+                network_id,
+                block_height,
+                blockchain.read().current_validators().unwrap().clone(),
+            )));
+            Arc::new(move |vote: &TendermintVote, signature: &MultiSignature| {
+                for proof in double_vote_detector
+                    .lock()
+                    .observe_valid_vote(vote, signature)
+                {
+                    on_double_vote(proof);
+                }
+            })
+        };
+
+        let observe_valid_requested_proposal = {
+            let double_proposal_detector =
+                Arc::new(Mutex::new(DoubleProposalDetector::new(network_id, block_height)));
+            Arc::new(
+                move |address: Address,
+                      proposal: TendermintProposal<MacroHeader>,
+                      signature: SchnorrSignature| {
+                    if let Some(proof) = double_proposal_detector
+                        .lock()
+                        // TODO: are these already verified here?
+                        .observe_valid_proposal(address, proposal, signature)
+                    {
+                        on_double_proposal(proof);
+                    }
+                },
+            )
+        };
+
+        let observe = Arc::clone(&observe_valid_requested_proposal);
+        let proposal_stream = proposal_stream
+            .inspect(move |proposal| {
+                observe(
+                    proposal.signature.1.clone(),
+                    TendermintProposal {
+                        proposal: proposal.message.proposal.0.clone(),
+                        round: proposal.message.round,
+                        valid_round: proposal.message.valid_round,
+                    },
+                    proposal.signature.0.clone(),
+                )
+            })
+            .boxed();
+
         let dependencies = TendermintProtocol::new(
             blockchain,
             network,
@@ -108,6 +177,8 @@ where
             validator_slot_band,
             network_id,
             block_height,
+            observe_valid_requested_proposal,
+            observe_valid_vote,
         );
 
         // create the Tendermint instance, which implements Stream
@@ -115,7 +186,7 @@ where
             dependencies,
             state_opt.and_then(|s| s.into_tendermint_state(block_height)),
             proposal_stream,
-            input,
+            level_update_stream,
         )
         // and map the return value such that a state update can be persisted.
         .map(move |item| match item {

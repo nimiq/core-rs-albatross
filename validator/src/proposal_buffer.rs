@@ -16,7 +16,7 @@ use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_consensus::consensus::{
     consensus_proxy::ConsensusProxy, ResolveBlockError as ConsensusResolveBlockError,
 };
-use nimiq_keys::Ed25519Signature as SchnorrSignature;
+use nimiq_keys::{Address, Ed25519Signature as SchnorrSignature};
 use nimiq_network_interface::network::{CloseReason, MsgAcceptance, Network, PubsubId as _, Topic};
 use nimiq_primitives::{policy::Policy, TendermintProposal};
 use nimiq_serde::Serialize;
@@ -62,10 +62,7 @@ enum ResolveBlockError<TValidatorNetwork: ValidatorNetwork> {
 /// the assumed proposer may be punished (as he produced faulty data, proven by the signature and the predecessor vrf).
 /// If the predecessor is unavailable (even after requesting it from the peer who originated the proposal or relayed
 /// the proposal) they both could be banned as they failed to produce proper data upon being asked to do so.
-pub(crate) struct ProposalBuffer<TValidatorNetwork: ValidatorNetwork + 'static>
-where
-    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
-{
+pub(crate) struct ProposalBuffer<TValidatorNetwork: ValidatorNetwork + 'static> {
     /// The network used to validate messages and disconnect peers if necessary.
     network: Arc<TValidatorNetwork>,
 
@@ -88,7 +85,7 @@ where
         BoxFuture<
             'static,
             Result<
-                (SignedProposal, PubsubId<TValidatorNetwork>),
+                (SignedProposal, Address, PubsubId<TValidatorNetwork>),
                 ResolveBlockError<TValidatorNetwork>,
             >,
         >,
@@ -103,10 +100,7 @@ where
     waker: Option<Waker>,
 }
 
-impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalBuffer<TValidatorNetwork>
-where
-    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
-{
+impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalBuffer<TValidatorNetwork> {
     /// Creates a new ProposalBuffer, returning the [ProposalSender] and [ProposalReceiver] that share the buffer.
     /// Blockchain, Consensus and Network are necessary to do basic verification and punishments as well as to resolve blocks.
     // Ignoring clippy warning: this return type is on purpose
@@ -182,13 +176,13 @@ where
     pub fn poll_resolve_block_futures(
         &mut self,
         cx: &mut Context,
-    ) -> Option<ProposalAndPubsubId<TValidatorNetwork>> {
+    ) -> Option<(SignedProposal, Address, PubsubId<TValidatorNetwork>)> {
         while let Poll::Ready(Some(result)) = self.resolve_block_futures.poll_next_unpin(cx) {
             match result {
                 Ok(proposal_and_id) => {
                     // Proposal is good to go. Remove peer from the map and return.
                     self.peers_with_resolving_blocks
-                        .remove(&proposal_and_id.1.propagation_source());
+                        .remove(&proposal_and_id.2.propagation_source());
                     return Some(proposal_and_id);
                 }
                 Err(ResolveBlockError::Invalid(pubsub_id)) => {
@@ -227,7 +221,7 @@ where
     pub fn poll_proposal(
         &mut self,
         blockchain_arc: &Arc<RwLock<Blockchain>>,
-    ) -> Option<(SignedProposal, PubsubId<TValidatorNetwork>)> {
+    ) -> Option<(SignedProposal, Address, PubsubId<TValidatorNetwork>)> {
         while let Some((_peer, (signed_proposal, pubsub_id))) = self.buffer.pop_front() {
             // Get a read lock of the blockchain.
             let blockchain = blockchain_arc.read();
@@ -251,15 +245,17 @@ where
                 }
                 // Micro block predecessors can be used to verify the signer. If the block itself is good will be checked later.
                 Ok(Block::Micro(block)) => {
-                    if !signed_proposal.verify_signer_matches_producer(block, &blockchain) {
+                    if let Ok(address) =
+                        signed_proposal.verify_signer_matches_producer(block, &blockchain)
+                    {
+                        // No validate message call here, as later in the process more proposal verification happens.
+                        return Some((signed_proposal, address, pubsub_id));
+                    } else {
                         log::debug!(
                             ?pubsub_id,
                             "Verification of signed proposal failed. Disconnecting the peer."
                         );
                         self.disconnect_and_reject(pubsub_id);
-                    } else {
-                        // No validate message call here, as later in the process more proposal verification happens.
-                        return Some((signed_proposal, pubsub_id));
                     }
                 }
                 Err(_error) => {
@@ -293,8 +289,10 @@ where
         (signed_proposal, pubsub_id): (SignedProposal, PubsubId<TValidatorNetwork>),
         consensus_proxy: ConsensusProxy<TValidatorNetwork::NetworkType>,
         blockchain: Arc<RwLock<Blockchain>>,
-    ) -> Result<(SignedProposal, PubsubId<TValidatorNetwork>), ResolveBlockError<TValidatorNetwork>>
-    {
+    ) -> Result<
+        (SignedProposal, Address, PubsubId<TValidatorNetwork>),
+        ResolveBlockError<TValidatorNetwork>,
+    > {
         let hash = signed_proposal.proposal.parent_hash.clone();
 
         consensus_proxy
@@ -320,9 +318,10 @@ where
                         let blockchain = blockchain.read();
 
                         // Make sure the signer matches the producer. This also performs some basic predecessor checks.
-                        if signed_proposal.verify_signer_matches_producer(predecessor, &blockchain)
+                        if let Ok(address) =
+                            signed_proposal.verify_signer_matches_producer(predecessor, &blockchain)
                         {
-                            Ok((signed_proposal, pubsub_id))
+                            Ok((signed_proposal, address, pubsub_id))
                         } else {
                             Err(ResolveBlockError::Invalid(pubsub_id))
                         }
@@ -337,10 +336,7 @@ where
 /// identity in the message.
 /// Checking for a known predecessor and it having been signed by the correct proposer, happens on the receiver
 /// side as chances are higher to already have received the blocks predecessor later in the process.
-pub(crate) struct ProposalSender<TValidatorNetwork: ValidatorNetwork + 'static>
-where
-    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
-{
+pub(crate) struct ProposalSender<TValidatorNetwork: ValidatorNetwork + 'static> {
     /// The buffer holding all buffered proposals shared with the [ProposalReceiver]
     shared: Arc<Mutex<ProposalBuffer<TValidatorNetwork>>>,
 
@@ -354,10 +350,7 @@ where
     network: Arc<TValidatorNetwork>,
 }
 
-impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalSender<TValidatorNetwork>
-where
-    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
-{
+impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalSender<TValidatorNetwork> {
     /// Sends the proposal and PubsubId into the buffer.
     ///
     /// This function may lead to the proposal not actually being admitted into the buffer as the signature may not verify.
@@ -488,10 +481,7 @@ where
     }
 }
 
-pub(crate) struct ProposalReceiver<TValidatorNetwork: ValidatorNetwork + 'static>
-where
-    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
-{
+pub(crate) struct ProposalReceiver<TValidatorNetwork: ValidatorNetwork + 'static> {
     /// The buffer holding all buffered proposals shared with the [ProposalSender]
     shared: Arc<Mutex<ProposalBuffer<TValidatorNetwork>>>,
 
@@ -504,27 +494,27 @@ where
     network: Arc<TValidatorNetwork>,
 }
 
-impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProposalReceiver<TValidatorNetwork>
-where
-    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
-{
-    type Item = SignedProposalMessage<Header<PubsubId<TValidatorNetwork>>, (SchnorrSignature, u16)>;
+impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProposalReceiver<TValidatorNetwork> {
+    type Item = SignedProposalMessage<
+        Header<PubsubId<TValidatorNetwork>>,
+        (SchnorrSignature, Address, u16),
+    >;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // Acquire the shared buffer lock.
         let mut shared = self.shared.lock();
 
         // Poll proposals from the shared buffer.
-        if let Some((proposal, pubsub_id)) = shared.poll_proposal(&self.blockchain) {
+        if let Some((proposal, address, pubsub_id)) = shared.poll_proposal(&self.blockchain) {
             return Poll::Ready(Some(
-                proposal.into_tendermint_signed_message(Some(pubsub_id)),
+                proposal.into_tendermint_signed_message(address, Some(pubsub_id)),
             ));
         }
 
         // Poll the resolve block futures to see if a proposals predecessor has resolved.
-        if let Some((proposal, pubsub_id)) = shared.poll_resolve_block_futures(cx) {
+        if let Some((proposal, address, pubsub_id)) = shared.poll_resolve_block_futures(cx) {
             return Poll::Ready(Some(
-                proposal.into_tendermint_signed_message(Some(pubsub_id)),
+                proposal.into_tendermint_signed_message(address, Some(pubsub_id)),
             ));
         }
 
@@ -544,10 +534,7 @@ where
     }
 }
 
-impl<TValidatorNetwork: ValidatorNetwork + 'static> Clone for ProposalReceiver<TValidatorNetwork>
-where
-    PubsubId<TValidatorNetwork>: std::fmt::Debug + Unpin,
-{
+impl<TValidatorNetwork: ValidatorNetwork + 'static> Clone for ProposalReceiver<TValidatorNetwork> {
     fn clone(&self) -> Self {
         Self {
             shared: Arc::clone(&self.shared),
@@ -568,7 +555,7 @@ mod test {
     use nimiq_consensus::{
         sync::syncer_proxy::SyncerProxy, BlsCache, Consensus, ConsensusEvent, ConsensusProxy,
     };
-    use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
+    use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
     use nimiq_network_interface::network::Network as NetworkInterface;
     use nimiq_network_mock::{MockHub, MockNetwork};
     use nimiq_primitives::{policy::Policy, TendermintProposal};
@@ -710,7 +697,7 @@ mod test {
 
         let signed_message = SignedProposalMessage {
             message: proposal_message,
-            signature: (signing_key.sign(&data), 0),
+            signature: (signing_key.sign(&data), Address::default(), 0),
         };
 
         // Send the proposal over gossipsub to get it correctly filled with a pubsub_id

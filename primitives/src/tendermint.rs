@@ -29,7 +29,7 @@ impl SerializedSize for TendermintStep {
 }
 
 /// Unique identifier for a single instance of TendermintAggregation
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct TendermintIdentifier {
     /// Network ID this tendermint vote is meant for.
     pub network: NetworkId,
@@ -105,7 +105,7 @@ impl<T: SerializeContent> TendermintProposal<T> {
 // that can be included plain text as the proof alongside it also contains it.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TendermintVote {
-    /// Hash of the proposed macro block
+    /// Hash of the proposed macro or skip block
     pub proposal_hash: Option<Blake2sHash>,
     /// Identifier to this votes aggregation
     pub id: TendermintIdentifier,

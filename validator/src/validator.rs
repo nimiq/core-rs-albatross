@@ -430,6 +430,28 @@ where
                     next_block_number,
                     self.macro_state.read().clone(),
                     proposal_stream,
+                    {
+                        let blockchain = Arc::clone(&self.blockchain);
+                        let state = Arc::clone(&self.state);
+                        Arc::new(move |double_proposal_proof| {
+                            Self::on_equivocation_proof_impl(
+                                &blockchain,
+                                &state,
+                                double_proposal_proof.into(),
+                            )
+                        })
+                    },
+                    {
+                        let blockchain = Arc::clone(&self.blockchain);
+                        let state = Arc::clone(&self.state);
+                        Arc::new(move |double_vote_proof| {
+                            Self::on_equivocation_proof_impl(
+                                &blockchain,
+                                &state,
+                                double_vote_proof.into(),
+                            )
+                        })
+                    },
                 ));
             }
             BlockType::Micro => {
@@ -526,20 +548,28 @@ where
         }
     }
 
-    fn on_equivocation_proof(&mut self, proof: EquivocationProof) {
+    fn on_equivocation_proof_impl(
+        blockchain: &RwLock<Blockchain>,
+        validator_state: &RwLock<ValidatorState>,
+        proof: EquivocationProof,
+    ) {
         // Keep the lock until the proof is added to the proof pool.
-        let blockchain = self.blockchain.read();
+        let blockchain = blockchain.read();
         if blockchain
             .history_store
             .has_equivocation_proof(proof.locator(), None)
         {
             return;
         }
-        self.state
+        validator_state
             .write()
             .consensus
             .equivocation_proofs
             .insert(proof);
+    }
+
+    fn on_equivocation_proof(&mut self, proof: EquivocationProof) {
+        Self::on_equivocation_proof_impl(&self.blockchain, &self.state, proof);
     }
 
     fn poll_macro(&mut self, cx: &mut Context<'_>) {

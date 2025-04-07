@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
+use nimiq_block::MultiSignature;
 use nimiq_handel::{
     evaluator::WeightedVote, partitioner::BinomialPartitioner, protocol::Protocol,
     store::ReplaceStore,
 };
-use nimiq_primitives::{policy::Policy, TendermintIdentifier};
-use nimiq_tendermint::Aggregation;
+use nimiq_primitives::{policy::Policy, TendermintIdentifier, TendermintVote};
+use nimiq_tendermint::Aggregation as _;
 use parking_lot::RwLock;
 
 use super::{
@@ -13,7 +14,6 @@ use super::{
     verifier::TendermintVerifier,
 };
 
-#[derive(std::fmt::Debug)]
 pub(crate) struct TendermintAggregationProtocol {
     verifier: Arc<<Self as Protocol<TendermintIdentifier>>::Verifier>,
     partitioner: Arc<<Self as Protocol<TendermintIdentifier>>::Partitioner>,
@@ -30,6 +30,7 @@ impl TendermintAggregationProtocol {
         registry: Arc<ValidatorRegistry>,
         node_id: usize,
         id: TendermintIdentifier,
+        observe_valid_vote: Arc<dyn Fn(&TendermintVote, &MultiSignature) + Send + Sync>,
     ) -> Self {
         let partitioner = Arc::new(BinomialPartitioner::new(node_id, registry.len()));
 
@@ -53,7 +54,11 @@ impl TendermintAggregationProtocol {
             },
         ));
 
-        let verifier = Arc::new(TendermintVerifier::new(registry.clone(), id.clone()));
+        let verifier = Arc::new(TendermintVerifier::new(
+            registry.clone(),
+            id.clone(),
+            observe_valid_vote,
+        ));
 
         Self {
             verifier,
