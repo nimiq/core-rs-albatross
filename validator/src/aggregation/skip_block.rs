@@ -269,7 +269,6 @@ impl SkipBlockAggregation {
             protocol,
             Config::default(),
             own_contribution,
-            None,
             input_stream,
             NetworkWrapper::new(skip_block_info.clone(), Arc::clone(&network)),
         );

@@ -87,7 +87,6 @@ where
         protocol: P,
         config: Config,
         own_contribution: P::Contribution,
-        own_contribution2: Option<P::Contribution>,
         input_stream: LevelUpdateStream<P::Contribution>,
         network: N,
     ) -> Self {
@@ -113,9 +112,6 @@ where
             protocol.node_id(),
             true,
         );
-        if let Some(own_contribution) = own_contribution2 {
-            pending_contributions.add_contribution(own_contribution, 0, protocol.node_id(), true)
-        }
 
         // Regardless of level completion consecutive levels need to be activated at some point.
         // Activate levels every time this interval ticks, if the level has not already been

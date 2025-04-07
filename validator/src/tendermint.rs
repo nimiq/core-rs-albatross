@@ -451,15 +451,6 @@ where
             self.validator_registry.get_slots(self.validator_slot_band),
         );
 
-        let own_contribution2 = TendermintContribution::from_vote(
-            TendermintVote {
-                proposal_hash: None,
-                id: id.clone(),
-            },
-            &self.block_producer.voting_key.secret_key,
-            self.validator_registry.get_slots(self.validator_slot_band),
-        );
-
         let protocol = TendermintAggregationProtocol::new(
             Arc::clone(&self.validator_registry),
             self.validator_slot_band as usize,
@@ -471,7 +462,6 @@ where
             protocol,
             nimiq_handel::config::Config::default(),
             own_contribution,
-            Some(own_contribution2),
             update_stream.map(|item| item.0).boxed(),
             network,
         )
