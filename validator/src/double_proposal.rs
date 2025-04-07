@@ -6,7 +6,7 @@ use std::{
 use nimiq_block::{DoubleProposalProof, MacroHeader};
 use nimiq_hash::Blake2sHash;
 use nimiq_keys::{Address, Ed25519Signature as SchnorrSignature};
-use nimiq_primitives::TendermintProposal;
+use nimiq_primitives::{networks::NetworkId, TendermintProposal};
 
 struct Proposal {
     proposer: Address,
@@ -30,6 +30,7 @@ impl Round {
 }
 
 pub struct DoubleProposalDetector {
+    network: NetworkId,
     block_number: u32,
     rounds: BTreeMap<u32, Round>,
 }
@@ -37,8 +38,12 @@ pub struct DoubleProposalDetector {
 impl DoubleProposalDetector {
     // TODO: add network_id
     // TODO: record one proposal per validator per height
-    pub fn new(block_number: u32) -> DoubleProposalDetector {
+    pub fn new(
+        network: NetworkId,
+        block_number: u32,
+    ) -> DoubleProposalDetector {
         DoubleProposalDetector {
+            network,
             block_number,
             rounds: BTreeMap::new(),
         }
@@ -49,6 +54,7 @@ impl DoubleProposalDetector {
         proposal: TendermintProposal<MacroHeader>,
         signature: SchnorrSignature,
     ) -> Option<DoubleProposalProof> {
+        assert_eq!(proposal.proposal.network, self.network);
         assert_eq!(proposal.proposal.block_number, self.block_number);
         match self.rounds.entry(proposal.round) {
             btree_map::Entry::Vacant(v) => {

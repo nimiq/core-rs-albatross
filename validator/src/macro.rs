@@ -138,7 +138,7 @@ where
 
         let observe_valid_requested_proposal = {
             let double_proposal_detector =
-                Arc::new(Mutex::new(DoubleProposalDetector::new(block_height)));
+                Arc::new(Mutex::new(DoubleProposalDetector::new(network_id, block_height)));
             Arc::new(
                 move |address: Address,
                       proposal: TendermintProposal<MacroHeader>,
