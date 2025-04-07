@@ -204,6 +204,9 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
         let root_hash = root.hash();
 
         // Make sure the root hash can only be None if the trie is incomplete.
+        log::error!("root_hash: {}", root_hash.is_some());
+        log::error!("Is complete: {}", self.is_complete(txn));
+
         assert!(root_hash.is_some() || !self.is_complete(txn));
 
         root_hash

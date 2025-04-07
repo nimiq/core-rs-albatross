@@ -26,8 +26,19 @@ impl Blockchain {
             target_block < Policy::last_macro_block(head.block_number());
 
         let mut macro_info = None;
+        let mut reverted_macro_info = None;
+        let mut additional_blocks = 0;
         if is_reverting_across_macro_block {
             log::info!("Reverting across a macro block requires a reset to the earliest macro block predecessor first.");
+            let reverted_macro_block = this
+                .get_block_at(Policy::last_macro_block(target_block), true, None)
+                .unwrap()
+                .unwrap_macro();
+            reverted_macro_info = Some(
+                this.get_chain_info(&reverted_macro_block.hash(), true, None)
+                    .expect("Couldn't fetch chain info for the head of the chain"),
+            );
+
             let target_macro_block = this
                 .get_block_at(Policy::last_macro_block(target_block), true, None)
                 .unwrap()
@@ -44,19 +55,37 @@ impl Blockchain {
                 );
             }
 
-            num_blocks = num_blocks + (target_macro_block.block_number() - target_block);
+            additional_blocks = target_block - target_macro_block.block_number();
         }
 
-        log::error!("{}", num_blocks);
+        log::error!("Number of blocks to revert: {}", num_blocks);
 
-        // Delete all until target macro block
+        // Delete all until target macro block.
         let result = Self::revert_last_micro_blocks(&this, num_blocks)?;
 
         let mut this: RwLockWriteGuard<_> = RwLockUpgradableReadGuard::upgrade(this);
         if is_reverting_across_macro_block {
             // Assert that the state is consistent at this point.
-            let macro_info = macro_info.unwrap();
-            Self::revert_state(&mut this, &head_chain_info, &macro_info);
+            let macro_info = reverted_macro_info.unwrap();
+
+            Self::revert_state(
+                &mut this,
+                &head_chain_info,
+                &result,
+                is_reverting_across_macro_block,
+            );
+            log::error!("Removing the batch too");
+            let this = RwLockWriteGuard::downgrade_to_upgradable(this);
+
+            let result = Self::revert_last_micro_blocks(&this, additional_blocks)?;
+            let mut this: RwLockWriteGuard<_> = RwLockUpgradableReadGuard::upgrade(this);
+
+            Self::revert_state(
+                &mut this,
+                &head_chain_info,
+                &result,
+                is_reverting_across_macro_block,
+            );
 
             let accounts_hash = this.state.accounts.get_root_hash_assert(None);
             assert_eq!(
@@ -72,7 +101,12 @@ impl Blockchain {
                 head_chain_info.head.block_number(),
                 result.head.block_number()
             );
-            Self::revert_state(&mut this, &head_chain_info, &result);
+            Self::revert_state(
+                &mut this,
+                &head_chain_info,
+                &result,
+                is_reverting_across_macro_block,
+            );
         }
 
         Ok(blocks_till_target)
@@ -111,7 +145,7 @@ impl Blockchain {
             {
                 let mut a = this.write_transaction();
                 // Revert the accounts tree. This also reverts the history store.
-                this.revert_accounts(
+                this.revert_accounts_macro(
                     &this.state.accounts,
                     &mut (&mut a).into(),
                     &current_info.head,
@@ -123,7 +157,8 @@ impl Blockchain {
             // Check that the block reverted cleanly.
             // If we reverted a macro block the state will be inconsistent until we fix it.
             reverted_macro_block |= current_info.head.is_macro();
-            if reverted_macro_block {
+            log::error!(" {}", reverted_macro_block);
+            if !reverted_macro_block {
                 let accounts_hash = this.state.accounts.get_root_hash_assert(None);
                 assert_eq!(
                     *prev_info.head.state_root(),
@@ -146,6 +181,7 @@ impl Blockchain {
         this: &mut RwLockWriteGuard<Self>,
         current_info: &ChainInfo,
         prev_info: &ChainInfo,
+        is_reverting_macro_block: bool,
     ) {
         // Get the chain info for the target block.
         let target_macro_block = this
@@ -178,13 +214,13 @@ impl Blockchain {
         this.state.head_hash = target_block_hash.clone();
 
         // Revert the slots.
-        if current_info.head.is_macro() {
+        if is_reverting_macro_block {
             log::trace!("Reverting the macro block related state");
             this.state.macro_info = macro_chain_info;
             this.state.macro_head_hash = target_macro_block.hash().clone();
         }
         // Revert the election head state.
-        if current_info.head.is_election() {
+        if is_reverting_macro_block && current_info.head.is_election() {
             let target_previous_epoch_election = this
                 .get_block_at(
                     Policy::election_block_before(target_election_block.block_number()),
@@ -214,6 +250,7 @@ impl Blockchain {
         let mut txn = this.write_transaction();
 
         for height in prev_info.head.block_number() + 1..old_head_height + 1 {
+            log::error!("Prune height: {}", height);
             let hashes = this.chain_store.get_block_hashes_at(height, Some(&txn));
             for hash in hashes {
                 log::trace!("Reverting chain_store #{}:{}", height, hash);
