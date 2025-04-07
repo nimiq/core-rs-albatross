@@ -5,9 +5,9 @@ use async_trait::async_trait;
 use clap::{Args, Parser};
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
-use nimiq_rpc_interface::{
-    consensus::ConsensusInterface,
+use nimiq_rpc_client::{
     types::{HashAlgorithm, ValidityStartHeight},
+    ConsensusInterface,
 };
 use nimiq_transaction::account::htlc_contract::{AnyHash, AnyHash32, AnyHash64, PreImage};
 

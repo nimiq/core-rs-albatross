@@ -2,7 +2,7 @@ use anyhow::Error;
 use async_trait::async_trait;
 use clap::Parser;
 use nimiq_keys::Address;
-use nimiq_rpc_interface::{consensus::ConsensusInterface, validator::ValidatorInterface};
+use nimiq_rpc_client::{ConsensusInterface, ValidatorInterface};
 
 use super::{
     accounts_subcommands::HandleSubcommand,

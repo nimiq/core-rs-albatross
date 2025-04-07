@@ -2,6 +2,12 @@ use anyhow::Error;
 use nimiq_jsonrpc_client::{
     websocket::WebsocketClient, ArcClient, Client as RPCclient, Credentials,
 };
+// Re-export the interfaces and types from the RPC interface subcrate
+pub use nimiq_rpc_interface::{
+    blockchain::BlockchainInterface, consensus::ConsensusInterface, mempool::MempoolInterface,
+    network::NetworkInterface, policy::PolicyInterface, types, validator::ValidatorInterface,
+    wallet::WalletInterface, zkp_component::ZKPComponentInterface,
+};
 use nimiq_rpc_interface::{
     blockchain::BlockchainProxy, consensus::ConsensusProxy, mempool::MempoolProxy,
     network::NetworkProxy, policy::PolicyProxy, validator::ValidatorProxy, wallet::WalletProxy,

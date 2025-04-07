@@ -2,7 +2,7 @@ use anyhow::Error;
 use async_trait::async_trait;
 use clap::Parser;
 use nimiq_keys::{Address, Ed25519PublicKey, Ed25519Signature};
-use nimiq_rpc_interface::{blockchain::BlockchainInterface, wallet::WalletInterface};
+use nimiq_rpc_client::{BlockchainInterface, WalletInterface};
 
 use crate::Client;
 

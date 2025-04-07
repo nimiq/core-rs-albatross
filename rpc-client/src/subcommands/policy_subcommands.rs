@@ -1,7 +1,7 @@
 use anyhow::Error;
 use async_trait::async_trait;
 use clap::Parser;
-use nimiq_rpc_interface::policy::PolicyInterface;
+use nimiq_rpc_client::PolicyInterface;
 
 use super::accounts_subcommands::HandleSubcommand;
 use crate::Client;

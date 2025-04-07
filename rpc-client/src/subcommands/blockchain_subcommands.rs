@@ -4,7 +4,7 @@ use clap::{ArgGroup, Parser};
 use futures::StreamExt;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_rpc_interface::{blockchain::BlockchainInterface, types::LogType};
+use nimiq_rpc_client::{types::LogType, BlockchainInterface};
 
 use super::accounts_subcommands::HandleSubcommand;
 use crate::Client;
