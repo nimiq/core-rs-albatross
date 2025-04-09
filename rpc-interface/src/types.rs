@@ -145,7 +145,7 @@ pub struct Block {
     pub history_hash: Blake2bHash,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    transactions: Option<Vec<ExecutedTransaction>>,
+    pub transactions: Option<Vec<ExecutedTransaction>>,
 
     #[serde(flatten)]
     pub additional_fields: BlockAdditionalFields,
@@ -532,8 +532,8 @@ impl From<nimiq_block::DoubleVoteProof> for DoubleVoteProof {
 #[serde(rename_all = "camelCase")]
 pub struct ExecutedTransaction {
     #[serde(flatten)]
-    transaction: Transaction,
-    execution_result: bool,
+    pub transaction: Transaction,
+    pub execution_result: bool,
 }
 
 impl ExecutedTransaction {
