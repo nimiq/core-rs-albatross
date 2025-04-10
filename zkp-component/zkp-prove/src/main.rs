@@ -3,7 +3,6 @@ use std::{io, path::PathBuf, sync::Arc, time::Instant};
 use clap::Parser;
 use log::metadata::LevelFilter;
 use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
-use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis::NetworkInfo;
@@ -32,7 +31,8 @@ use tracing_subscriber::{filter::Targets, prelude::*};
 #[derive(Debug, Parser)]
 struct TestProving {
     /// Network ID to utilize.
-    /// Only Albatross network ids are supported.
+    /// Only Albatross network ids are supported and the `Main` network ID.
+    /// If you want to tests for mainnet, use `Main` instead.
     #[clap(short = 'n', long, value_enum)]
     network_id: NetworkId,
 }
@@ -54,9 +54,10 @@ fn initialize(network_id: NetworkId) {
     // Run tests with different policy values:
     let mut policy_config = match network_id {
         NetworkId::UnitAlbatross => TEST_POLICY,
-        NetworkId::TestAlbatross | NetworkId::DevAlbatross | NetworkId::MainAlbatross => {
-            Policy::default()
-        }
+        NetworkId::TestAlbatross
+        | NetworkId::DevAlbatross
+        | NetworkId::MainAlbatross
+        | NetworkId::Main => Policy::default(),
         _ => panic!("Invalid network id"),
     };
     // The genesis block number must be set accordingly
@@ -83,19 +84,27 @@ async fn main() -> Result<(), NanoZKPError> {
     Ok(())
 }
 
-fn blockchain(network_id: NetworkId) -> Arc<RwLock<Blockchain>> {
+fn blockchain(network_info: &NetworkInfo) -> Arc<RwLock<Blockchain>> {
     let time = Arc::new(OffsetTime::new());
     let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain_config = BlockchainConfig {
+        keep_history: false,
+        max_epochs_stored: Policy::MIN_EPOCHS_STORED,
+        index_history: false,
+    };
+
     Arc::new(RwLock::new(
-        Blockchain::new(env, BlockchainConfig::default(), network_id, time).unwrap(),
+        Blockchain::new(env, blockchain_config, network_info.network_id(), time).unwrap(),
     ))
 }
 
 async fn produce_two_consecutive_valid_zk_proofs(network_id: NetworkId) {
-    let keys_path = PathBuf::from(format!("../{}", network_id.default_zkp_path().unwrap()));
+    let keys_path = PathBuf::from(network_id.default_zkp_path().unwrap());
 
+    let network_info = NetworkInfo::from_network_id(network_id);
     ZKP_VERIFYING_DATA.init_with_data(load_verifying_data(&keys_path).unwrap());
-    let blockchain = blockchain(network_id);
+
+    let blockchain = blockchain(network_info);
 
     // Produce the 1st election block after genesis.
     let producer = BlockProducer::new(signing_key(), voting_key());
@@ -107,7 +116,6 @@ async fn produce_two_consecutive_valid_zk_proofs(network_id: NetworkId) {
     );
 
     let block = blockchain.read().state.election_head.clone();
-    let network_info = NetworkInfo::from_network_id(blockchain.read().network_id());
     let genesis_block = network_info.genesis_block().unwrap_macro();
     let zkp_state = ZKPState::with_genesis(&genesis_block).expect("Invalid genesis block");
     let genesis_header_hash = genesis_block.hash_blake2s().0;

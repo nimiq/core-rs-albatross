@@ -103,7 +103,7 @@ fn network(network_id: NetworkId) -> Option<&'static NetworkInfo> {
             NetworkId::DevAlbatross => &KEYS_DEV,
             NetworkId::TestAlbatross => &KEYS_TEST,
             NetworkId::UnitAlbatross => &KEYS_UNIT,
-            NetworkId::MainAlbatross => &KEYS_MAIN,
+            NetworkId::MainAlbatross | NetworkId::Main => &KEYS_MAIN,
             _ => unreachable!(),
         };
         keys.get_or_init(|| {
@@ -212,6 +212,14 @@ fn network_impl(network_id: NetworkId) -> Option<&'static NetworkInfo> {
                     env!("OUT_DIR"),
                     "/genesis/main-albatross/genesis.rs"
                 )),
+            };
+            &INFO
+        }
+        NetworkId::Main => {
+            static INFO: NetworkInfo = NetworkInfo {
+                network_id: NetworkId::Main,
+                name: "main",
+                genesis: include!(concat!(env!("OUT_DIR"), "/genesis/main/genesis.rs")),
             };
             &INFO
         }
