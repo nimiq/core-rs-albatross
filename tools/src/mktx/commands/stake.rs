@@ -21,7 +21,7 @@ pub enum StakeCommands {
     Add {
         secret_key: String,   
         staker_address: Address,
-        value: Coin,
+        value: u64,
     },
     /// Creates an update staker transaction for a given staker that changes the delegation.
     Update {
@@ -35,6 +35,7 @@ pub enum StakeCommands {
         /// The new address to delegate to.
         new_delegation: Option<Address>,
     },
+    /// Creates a set active stake transaction for a given staker.
     Activate {
         staker_secret_key: String,
         new_active_balance: Coin,
@@ -78,7 +79,7 @@ pub fn get_tx(subcommand: StakeCommands, fee: Coin, validity_start_height: u32, 
             Ok(TransactionOrProof::Transaction(TransactionBuilder::new_add_stake(
                 &hex_secret_key_to_pair(secret_key)?,
                 staker_address,
-                value,
+                Coin::from_u64_unchecked(value),
                 fee,
                 validity_start_height,
                 network_id,
