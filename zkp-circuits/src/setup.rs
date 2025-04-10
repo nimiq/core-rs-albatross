@@ -1,5 +1,5 @@
 use std::{
-    fs::{self, DirBuilder, File},
+    fs::{read_to_string, DirBuilder, File},
     path::Path,
 };
 
@@ -12,7 +12,6 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::{CryptoRng, Rng};
 use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_serde::Deserialize;
 use nimiq_zkp_primitives::{NanoZKPError, VerifyingData};
 
 use crate::{
@@ -66,12 +65,13 @@ pub fn setup<R: rand::Rng + rand::CryptoRng>(
 }
 
 pub fn load_verifying_data(path: &Path) -> Result<VerifyingData, NanoZKPError> {
-    let metadata = fs::read(path.join("meta_data.bin"))?;
-    let metadata = VerifyingKeyMetadata::deserialize_from_vec(&metadata)?;
+    let meta_data_bytes = read_to_string(path.join("meta_data.json"))?;
+    let meta_data: VerifyingKeyMetadata = serde_json::from_str(&meta_data_bytes)
+        .expect("Invalid metadata. Please rebuild the ZKP keys.");
 
     Ok(VerifyingData {
         merger_wrapper_vk: load_key(&path.join("verifying_keys"), "merger_wrapper")?,
-        keys_commitment: *metadata.vks_commitment(),
+        keys_commitment: *meta_data.vks_commitment(),
     })
 }
 

@@ -49,7 +49,7 @@ impl ZKPVerifyingKey {
                     "/../.zkp_testnet/meta_data.json"
                 )),
             ),
-            NetworkId::MainAlbatross => (
+            NetworkId::MainAlbatross | NetworkId::Main => (
                 include_bytes!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
                     "/../.zkp_mainnet/verifying_keys/merger_wrapper.bin"

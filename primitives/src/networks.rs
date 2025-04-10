@@ -12,7 +12,7 @@ pub enum NetworkId {
     Dev = 2,
     Bounty = 3,
     Dummy = 4,
-    Main = 42,
+    Main = 42, // This is mainnet albatross with the genesis data of unit tests. Useful for zkp tests.
 
     TestAlbatross = 5,
     DevAlbatross = 6,
@@ -112,7 +112,7 @@ impl NetworkId {
             NetworkId::TestAlbatross => Ok(".zkp_testnet"),
             NetworkId::DevAlbatross => Ok(".zkp_devnet"),
             NetworkId::UnitAlbatross => Ok(".zkp_tests"),
-            NetworkId::MainAlbatross => Ok(".zkp_mainnet"),
+            NetworkId::MainAlbatross | NetworkId::Main => Ok(".zkp_mainnet"),
             _ => Err(NetworkIdNotAlbatross(self.as_str().to_owned())),
         }
     }

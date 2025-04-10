@@ -66,4 +66,5 @@ fn main() {
     generate_albatross("test-albatross", &out_dir, &src_dir);
     generate_albatross("unit-albatross", &out_dir, &src_dir);
     generate_albatross("main-albatross", &out_dir, &src_dir);
+    generate_albatross("main", &out_dir, &src_dir);
 }

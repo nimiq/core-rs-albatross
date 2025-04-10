@@ -43,9 +43,10 @@ fn initialize(network_id: NetworkId) {
     // Run tests with different policy values:
     let mut policy_config = match network_id {
         NetworkId::UnitAlbatross => TEST_POLICY,
-        NetworkId::TestAlbatross | NetworkId::DevAlbatross | NetworkId::MainAlbatross => {
-            Policy::default()
-        }
+        NetworkId::TestAlbatross
+        | NetworkId::DevAlbatross
+        | NetworkId::MainAlbatross
+        | NetworkId::Main => Policy::default(),
         _ => panic!("Invalid network id"),
     };
     // The genesis block number must be set accordingly
@@ -74,7 +75,7 @@ fn main() -> Result<(), NanoZKPError> {
             true,
         )
         .unwrap(),
-        NetworkId::TestAlbatross | NetworkId::MainAlbatross => {
+        NetworkId::TestAlbatross | NetworkId::MainAlbatross | NetworkId::Main => {
             setup(&mut rand::rng(), &keys_path, network_id, true).unwrap()
         }
         _ => panic!("Invalid network id."),
