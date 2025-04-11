@@ -19,7 +19,7 @@ use nimiq_test_utils::{
 };
 use nimiq_utils::time::OffsetTime;
 use nimiq_zkp::ZKP_VERIFYING_DATA;
-use nimiq_zkp_circuits::setup::load_verifying_data;
+use nimiq_zkp_circuits::setup::{all_files_created, load_verifying_data};
 use nimiq_zkp_component::{
     proof_gen_utils::generate_new_proof, proof_utils::validate_proof, types::ZKPState,
 };
@@ -101,9 +101,14 @@ fn blockchain(network_info: &NetworkInfo) -> Arc<RwLock<Blockchain>> {
 async fn produce_two_consecutive_valid_zk_proofs(network_id: NetworkId) {
     let keys_path = PathBuf::from(network_id.default_zkp_path().unwrap());
 
-    let network_info = NetworkInfo::from_network_id(network_id);
     ZKP_VERIFYING_DATA.init_with_data(load_verifying_data(&keys_path).unwrap());
-
+    if !all_files_created(&keys_path, true) {
+        log::error!(
+            "Proving keys missing, please place them in this folder: {:?}.",
+            keys_path
+        );
+    }
+    let network_info = NetworkInfo::from_network_id(network_id);
     let blockchain = blockchain(network_info);
 
     // Produce the 1st election block after genesis.

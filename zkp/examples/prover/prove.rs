@@ -16,6 +16,7 @@ use nimiq_test_utils::{
     test_rng,
 };
 use nimiq_zkp::prove::prove;
+use nimiq_zkp_circuits::setup::all_files_created;
 use tracing_subscriber::{filter::Targets, prelude::*};
 
 const DEFAULT_EXAMPLE_ZKP_PATH: &str = ".zkp_example";
@@ -48,6 +49,14 @@ fn initialize() {
 /// Run this example with `cargo run --all-features --release --example prove`.
 fn main() {
     initialize();
+    let keys_path = PathBuf::from(NetworkId::UnitAlbatross.default_zkp_path().unwrap());
+    if !all_files_created(&keys_path, true) {
+        log::error!(
+            "Proving keys missing, please place them in this folder: {:?}.",
+            keys_path
+        );
+    }
+
     // Ask user for the number of epochs.
     println!("Enter the number of epochs to prove:");
 
