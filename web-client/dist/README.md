@@ -24,37 +24,7 @@ This package contains the WASM file bundled for three [targets](https://rustwasm
 
 If you use any bundler for your project, like Webpack or Vite, you should probably use the `bundler` target exported from the package root. If that doesn't work, or you require the `web` target for your use-case, jump to the [With ES Modules](#with-es-modules) section.
 
-> [!IMPORTANT]
-> For Webpack 5:
-> - Enable the [`asyncWebAssembly`](https://webpack.js.org/configuration/experiments/#asyncWebAssembly) experiment in your config.
-> - Dynamically import the package with `await import()`.
-
-> [!IMPORTANT]
-> For Vite:
-> - Add [`vite-plugin-wasm`](https://www.npmjs.com/package/vite-plugin-wasm) to your `plugins` in Vite's config.
-> - Also add it to the `worker.plugins` list.
-> - Exclude this package from Vite's dependency optimization:
-> ```ts
-> // vite.config.ts
-> optimizeDeps: {
->    exclude: ['@nimiq/core'],
-> }
-> ```
-
-> [!IMPORTANT]
-> For Nuxt:
-> - Add [`vite-plugin-wasm`](https://www.npmjs.com/package/vite-plugin-wasm) to the `vite.plugins` list in Nuxt's config.
-> - Also add it to the `vite.worker.plugins` list.
-> - Exclude this package from Vite's dependency optimization:
-> ```ts
-> // nuxt.config.ts
-> vite: {
->   optimizeDeps: {
->      exclude: ['@nimiq/core'],
->   }
-> }
-> ```
-> - Ensure the package is only run client-side: either set [`ssr: false`](https://nuxt.com/docs/guide/concepts/rendering#client-side-rendering) in your Nuxt config, import this package only in client-side plugins, or wrap it in [`<ClientOnly>`](https://nuxt.com/docs/api/components/client-only).
+For detailed installation instructions for your bundler/framework, refer to the [Nimiq Developer Center](https://www.nimiq.com/developers/build/web-client/installation).
 
 ```js
 // With Webpack: import the package asynchronously:
