@@ -1,3 +1,5 @@
+//! Block queue auxiliary structures.
+
 use futures::stream::BoxStream;
 use nimiq_block::Block;
 use nimiq_network_interface::network::{MsgAcceptance, Network, PubsubId};
@@ -22,6 +24,7 @@ pub type BlockAndSource<N> = (Block, BlockSource<N>);
 
 pub type ResolveBlockSender<N> = oneshot::Sender<Result<Block, ResolveBlockError<N>>>;
 
+/// Represents the block queue events.
 pub enum QueuedBlock<N: Network> {
     Head(BlockAndSource<N>),
     Buffered(Vec<BlockAndSource<N>>),
@@ -30,6 +33,7 @@ pub enum QueuedBlock<N: Network> {
     TooFarBehind(N::PeerId),
 }
 
+/// Describes the origin of a block
 #[derive(Debug)]
 pub enum BlockSource<N: Network> {
     Announced {
@@ -42,14 +46,17 @@ pub enum BlockSource<N: Network> {
 }
 
 impl<N: Network> BlockSource<N> {
+    /// Creates a `BlockSource` for an announced block
     pub fn announced(header_id: N::PubsubId, body_id: Option<N::PubsubId>) -> Self {
         Self::Announced { header_id, body_id }
     }
 
+    /// From a specific peer
     pub fn requested(id: N::PeerId) -> Self {
         Self::Requested { id }
     }
 
+    /// Returns the peer ID associated with the `BlockSource`
     pub fn peer_id(&self) -> N::PeerId {
         match self {
             BlockSource::Announced { header_id, .. } => header_id.propagation_source(),
@@ -57,26 +64,33 @@ impl<N: Network> BlockSource<N> {
         }
     }
 
+    /// Returns true if the block was received via announcement.
     pub fn is_announced(&self) -> bool {
         matches!(self, BlockSource::Announced { .. })
     }
 
+    /// Returns true if the block was received as a direct response to a request.
     pub fn is_requested(&self) -> bool {
         matches!(self, BlockSource::Requested { .. })
     }
 
+    /// Marks the block as accepted.
     pub fn accept_block(&self, network: &N) {
         self.validate_block(network, MsgAcceptance::Accept);
     }
 
+    /// Marks the block as rejected
     pub fn reject_block(&self, network: &N) {
         self.validate_block(network, MsgAcceptance::Reject);
     }
 
+    /// Marks the block as ignored.
     pub fn ignore_block(&self, network: &N) {
         self.validate_block(network, MsgAcceptance::Ignore);
     }
 
+    /// Applies the given acceptance decision to the associated network messages
+    /// for blocks received via gossip.
     pub fn validate_block(&self, network: &N, acceptance: MsgAcceptance) {
         match self {
             BlockSource::Announced { header_id, body_id } => {

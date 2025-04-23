@@ -1,3 +1,5 @@
+//! Implements utilities and logic for pushing blocks and state chunks during live sync.
+
 use std::{
     collections::{HashSet, VecDeque},
     fmt,
@@ -46,6 +48,8 @@ async fn spawn_blocking<R: Send + 'static, F: FnOnce() -> R + Send + 'static>(f:
     }
 }
 
+/// Used during state live sync to track which peer provided which chunk,
+/// and to locate the chunk's position in the trie.
 pub struct ChunkAndSource<N: Network> {
     pub chunk: TrieChunk,
     pub start_key: KeyNibbles,
@@ -63,6 +67,7 @@ impl<N: Network> fmt::Debug for ChunkAndSource<N> {
 }
 
 impl<N: Network> ChunkAndSource<N> {
+    /// Creates a new instance given chunk, start key, and peer ID
     pub fn new(chunk: TrieChunk, start_key: KeyNibbles, peer_id: N::PeerId) -> Self {
         Self {
             chunk,
@@ -71,6 +76,7 @@ impl<N: Network> ChunkAndSource<N> {
         }
     }
 
+    /// Converts this struct into a pair consisting of a `TrieChunkWithStart` and its source peer ID.
     pub fn into_pair(self) -> (TrieChunkWithStart, N::PeerId) {
         (
             TrieChunkWithStart {
@@ -82,10 +88,13 @@ impl<N: Network> ChunkAndSource<N> {
     }
 }
 
+/// Trait defining the behavior of a live sync queue; manages incoming blocks, tracks peers,
+/// and coordinates the integration of blocks into the blockchain.
 pub trait LiveSyncQueue<N: Network>: Stream<Item = Self::QueueResult> + Send + Unpin {
     type QueueResult: Send;
     type PushResult;
 
+    /// Converts a queue result into a list of push operations to be run in order.
     fn push_queue_result(
         network: Arc<N>,
         blockchain: BlockchainProxy,
@@ -93,12 +102,16 @@ pub trait LiveSyncQueue<N: Network>: Stream<Item = Self::QueueResult> + Send + U
         result: Self::QueueResult,
     ) -> VecDeque<BoxFuture<'static, Self::PushResult>>;
 
+    /// Called once a push operation completes, to process its outcome and emit a sync event.
     fn process_push_result(&mut self, item: Self::PushResult) -> Option<LiveSyncEvent<N::PeerId>>;
 
+    /// Returns a list of peer IDs currently tracked by the queue.
     fn peers(&self) -> Vec<N::PeerId>;
 
+    /// Returns the number of tracked peers.
     fn num_peers(&self) -> usize;
 
+    /// Adds a peer to the sync queue.
     fn add_peer(&self, peer_id: N::PeerId);
 
     /// Adds a block stream by replacing the current block stream with a `select` of both streams.
@@ -106,8 +119,10 @@ pub trait LiveSyncQueue<N: Network>: Stream<Item = Self::QueueResult> + Send + U
     where
         S: Stream<Item = BlockAndSource<N>> + Send + 'static;
 
+    /// Returns whether this queue expects blocks to include bodies.
     fn include_body(&self) -> bool;
 
+    /// Returns `true` if the state sync is complete.
     fn state_complete(&self) -> bool {
         true
     }
@@ -119,6 +134,7 @@ pub trait LiveSyncQueue<N: Network>: Stream<Item = Self::QueueResult> + Send + U
     fn acceptance_window_size(&self) -> u32;
 }
 
+/// Parameters for any of the syncing queues (`BlockQueue` or `StateQueue`).
 #[derive(Clone, Debug)]
 pub struct QueueConfig {
     /// Buffer size limit
@@ -154,6 +170,7 @@ struct BlockchainPushResult<N: Network> {
 }
 
 impl<N: Network> BlockchainPushResult<N> {
+    /// Creates a push result based on the result of pushing a block without associated chunks.
     fn with_light_block_result(
         push_result: Result<PushResult, PushError>,
         block_hash: Blake2bHash,
@@ -166,6 +183,7 @@ impl<N: Network> BlockchainPushResult<N> {
         }
     }
 
+    /// Creates a push result based on the result of pushing a block and its associated chunks.
     #[cfg(feature = "full")]
     fn with_block_result(
         push_result: Result<(PushResult, Result<ChunksPushResult, ChunksPushError>), PushError>,
@@ -191,6 +209,7 @@ impl<N: Network> BlockchainPushResult<N> {
         }
     }
 
+    /// Creates a push result that only involves chunk processing.
     #[cfg(feature = "full")]
     fn with_chunks_result(
         push_chunks_result: Result<ChunksPushResult, ChunksPushError>,
@@ -364,6 +383,7 @@ pub async fn push_multiple_blocks_impl<N: Network>(
     )
 }
 
+/// Pushes a sequence of blocks along with their associated state diffs and chunks into the blockchain.
 pub async fn push_multiple_blocks_with_chunks<N: Network>(
     blockchain: BlockchainProxy,
     bls_cache: Arc<Mutex<BlsCache>>,
@@ -418,11 +438,14 @@ pub async fn push_chunks_only<N: Network>(
 
 pub struct MessageValidator<N: Network> {
     network: Arc<N>,
+    /// Whether annouced or requested
     block_source: BlockSource<N>,
 }
 
 #[cfg(feature = "full")]
 impl<N: Network> PostValidationHook for MessageValidator<N> {
+    /// Called after a block has been validated and pushed to the blockchain.
+    /// Communicates the acceptance result to the peer that sent the block.
     fn post_validation(&self, push_result: Result<&PushResult, &PushError>) {
         let acceptance = match push_result {
             Ok(result) => match result {
@@ -441,6 +464,7 @@ impl<N: Network> PostValidationHook for MessageValidator<N> {
     }
 }
 
+/// Caches the BLS public keys from the given macro block’s validator list.
 fn update_cache(block: &Block, bls_cache: &mut BlsCache) {
     let Block::Macro(block) = block else {
         return;

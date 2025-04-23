@@ -1,3 +1,8 @@
+//! Peer list management for synchronization.
+//!
+//! This module provides the [`PeerList`] and [`PeerListIndex`] types, which are used to manage
+//! and iterate over peers involved in the sync process.
+
 use std::{collections::HashSet, fmt, ops::Index, slice::SliceIndex, sync::Arc};
 
 use futures::future::BoxFuture;

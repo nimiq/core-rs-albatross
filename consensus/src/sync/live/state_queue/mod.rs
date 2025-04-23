@@ -1,3 +1,5 @@
+//! Implements the state sync queue for live syncing accounts state.
+
 pub mod chunk_request_component;
 pub mod live_sync;
 
@@ -63,6 +65,7 @@ impl Display for Chunk {
     }
 }
 
+/// Returns a `Chunk` or a `IncompleteState` indicating the peer does not yet have the complete state
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum ResponseChunk {
@@ -89,6 +92,8 @@ impl RequestCommon for RequestChunk {
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_CHUNKS;
 }
 
+/// Used during state synchronization to track the push result of blocks and their corresponding trie diffs
+/// and chunks
 pub enum QueuedStateChunks<N: Network> {
     Head(BlockAndSource<N>, Option<TrieDiff>, Vec<ChunkAndSource<N>>),
     Buffered(Vec<(BlockAndSource<N>, Option<TrieDiff>, Vec<ChunkAndSource<N>>)>),

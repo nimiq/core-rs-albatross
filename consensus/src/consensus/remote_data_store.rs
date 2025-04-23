@@ -223,6 +223,8 @@ impl<N: Network> RemoteDataStore<N> {
         self.exec(RemoteDataStoreOps::Tombstone(addresses)).await
     }
 
+    /// Executes a remote data store operation by converting addresses into trie keys,
+    /// querying remote peers for their values, and returning a map of addresses to their stored items.
     async fn exec<T: Deserialize + Clone>(
         &self,
         op: RemoteDataStoreOps,

@@ -1,3 +1,8 @@
+//! This module coordinates multiple `SyncCluster`s used for history macro syncing.
+//! It handles clusters, their prioritization, and polling behavior.
+//! Only one cluster is active at a time; the rest are queued and managed based on
+//! sync progress and peer availability.
+
 use std::{collections::VecDeque, sync::Arc};
 
 use nimiq_blockchain::Blockchain;

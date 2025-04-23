@@ -18,6 +18,7 @@ use pin_project::pin_project;
 use super::peer_list::PeerList;
 use crate::sync::peer_list::PeerListIndex;
 
+/// A wrapper struct that tracks metadata for each in-flight request.
 #[pin_project]
 #[derive(Debug)]
 struct OrderWrapper<TId, TOutput> {
@@ -97,6 +98,7 @@ pub struct SyncQueue<
     ids_to_request: VecDeque<(TId, Option<TNetwork::PeerId>)>,
     pending_futures:
         FuturesUnordered<OrderWrapper<TId, BoxFuture<'static, Option<Result<TOutput, TError>>>>>,
+    // outputs received but not yet yielded.
     queued_outputs: BinaryHeap<OrderWrapper<TId, Option<TOutput>>>,
     next_incoming_index: usize,
     next_outgoing_index: usize,
@@ -254,6 +256,7 @@ where
         }
     }
 
+    // Handles re-requesting failed items from a different peer.
     fn retry_request(
         &mut self,
         id: TId,
@@ -330,20 +333,24 @@ where
             .truncate(len.saturating_sub(self.next_incoming_index));
     }
 
+    /// Returns the current number of peers in the peer list.
     #[cfg(feature = "full")]
     pub fn num_peers(&self) -> usize {
         self.peers.read().len()
     }
 
+    /// Returns the total number of unresolved requested items.
     pub fn len(&self) -> usize {
         self.ids_to_request.len() + self.pending_futures.len() + self.queued_outputs.len()
     }
 
+    /// Checks if there are no more items to request and all request responses have been processed and returned.
     #[cfg(feature = "full")]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Sets the internal verification state for the incoming responses' verification.
     #[cfg(feature = "full")]
     pub fn set_verify_state(&mut self, verify_state: TVerifyState) {
         self.verify_state = verify_state;
@@ -361,6 +368,7 @@ where
 {
     type Item = Result<TOutput, TId>;
 
+    // The stream implementation that returns items in order as they become available and pass verification.
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.waker.store_waker(cx);
 

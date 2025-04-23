@@ -29,6 +29,7 @@ struct CachedBodyKey {
     header_message_hash: Blake2bHash,
 }
 
+/// Collects blocks headers and bodies and tries to assemble full blocks.
 pub struct BlockAssembler<N: Network> {
     network: Arc<N>,
     header_stream: BoxStream<'static, PubsubHeader<N>>,
@@ -54,6 +55,7 @@ impl<N: Network> BlockAssembler<N> {
         }
     }
 
+    /// Combines a block header and body into a full block; retuns either a micro or macro block
     fn assemble_block(header: BlockHeaderMessage, body: BlockBody) -> Block {
         match header {
             BlockHeaderMessage::Macro {
@@ -75,6 +77,7 @@ impl<N: Network> BlockAssembler<N> {
         }
     }
 
+    /// Marks the given messages as invalid and disconnects the respective peers.
     fn reject_messages(&self, pubsub_id_header: N::PubsubId, pubsub_id_body: N::PubsubId) {
         let network = Arc::clone(&self.network);
         let peer_id_header = pubsub_id_header.propagation_source();
@@ -100,6 +103,7 @@ impl<N: Network> BlockAssembler<N> {
 impl<N: Network> Stream for BlockAssembler<N> {
     type Item = (Block, BlockSource<N>);
 
+    /// a stream that assembles full blocks from separate header and body messages.
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         while let Poll::Ready(item) = self.header_stream.poll_next_unpin(cx) {
             let Some((header_message, header_id)) = item else {
@@ -237,14 +241,17 @@ impl<K: Eq + std::hash::Hash + Clone, V> TimeLimitedCache<K, V> {
         evicted_entries
     }
 
+    /// Retrieves a reference to the value for the given key, if it exists and is not expired.
     fn get(&self, k: &K) -> Option<&V> {
         self.map.get(k).map(|v| &v.0)
     }
 
+    /// Inserts a key-value pair into the cache
     fn insert(&mut self, k: K, v: V) -> Option<V> {
         self.map.insert(k, (v, Instant::now())).map(|v| v.0)
     }
 
+    /// Removes the entry associated with the given key and returns it
     fn remove(&mut self, k: &K) -> Option<V> {
         self.map.remove(k).map(|v| v.0)
     }
@@ -263,6 +270,8 @@ impl<K: Eq + std::hash::Hash + Clone, V> TimeLimitedCache<K, V> {
 impl<K: Eq + std::hash::Hash + Unpin + Clone, V: Unpin> Stream for TimeLimitedCache<K, V> {
     type Item = Vec<(K, V)>;
 
+    /// Periodically polls the cache and returns any entries that have expired since the last poll.
+    /// Each poll returns a `Vec` of all expired entries at that moment.
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         while self.interval.poll_next_unpin(cx).is_ready() {
             let evicted_entries = self.evict_expired_entries();

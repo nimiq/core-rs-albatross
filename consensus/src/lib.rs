@@ -1,3 +1,13 @@
+//! The `consensus` crate implements the Albatross consensus protocol.
+//! It coordinates synchronization and peer-to-peer communication.
+//!
+//! The main modules are:
+//! - `consensus`: manages the consensus state.
+//! - `sync`: handles synchronization across different modes.
+//! - `messages`: defines the network message formats.
+//! - `error`: defines errors related to consensus and communication.
+//! - `bls_cache`: internal LRU cache for optimizing BLS key usage.
+
 #[macro_use]
 extern crate log;
 

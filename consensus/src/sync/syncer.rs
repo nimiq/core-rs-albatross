@@ -1,3 +1,5 @@
+//! Syncer component coordinating macro and live synchronization modes.
+
 use std::{
     collections::HashSet,
     mem,
@@ -69,6 +71,11 @@ pub struct Syncer<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> {
 impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
     const CHECK_INTERVAL: Duration = Duration::from_secs(60);
 
+    /// Creates a new `Syncer` instance with the given blockchain proxy, network,
+    /// live sync component, and macro sync component.
+    ///
+    /// Also subscribes to network events and initializes internal state used
+    /// for peer tracking and periodic checks.
     pub fn new(
         blockchain: BlockchainProxy,
         network: Arc<N>,
@@ -90,32 +97,39 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
         }
     }
 
+    /// Pushes a block to the live sync component.
     pub fn push_block(&mut self, block: Block, block_source: BlockSource<N>) {
         self.live_sync.push_block(block, block_source);
     }
 
+    // Moves a peer into macro sync
     fn move_peer_into_macro_sync(&mut self, peer_id: N::PeerId) {
         debug!(%peer_id, "Adding peer to macro sync");
         self.macro_sync.add_peer(peer_id);
     }
 
+    /// Moves a peer into live sync
     pub fn move_peer_into_live_sync(&mut self, peer_id: N::PeerId) {
         debug!(%peer_id, "Adding peer to live sync");
         self.live_sync.add_peer(peer_id);
     }
 
+    /// Returns the number of peers currently participating in live sync.
     pub fn num_peers(&self) -> usize {
         self.live_sync.num_peers()
     }
 
+    /// Returns the list of peer IDs currently in live sync.
     pub fn peers(&self) -> Vec<N::PeerId> {
         self.live_sync.peers()
     }
 
+    /// Returns the number of accepted block announcements.
     pub fn accepted_block_announcements(&self) -> usize {
         self.accepted_announcements
     }
 
+    /// Indicates whether the live sync state has been fully synchronized.
     pub fn state_complete(&self) -> bool {
         self.live_sync.state_complete()
     }
@@ -125,18 +139,22 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
         self.live_sync.resolve_block(request)
     }
 
+    // Moves all peers marked as outdated into macro sync.
     fn check_outdated_peers(&mut self) {
         for peer_id in mem::take(&mut self.outdated_peers) {
             self.move_peer_into_macro_sync(peer_id);
         }
     }
 
+    // Triggers a compatibility check for all peers marked as incompatible.
     fn check_incompatible_peers(&mut self) {
         for peer_id in mem::take(&mut self.incompatible_peers) {
             self.check_incompatible_peer(peer_id);
         }
     }
 
+    // Initiates an asynchronous check to determine if a previously incompatible peer
+    // has caught up and is now in sync within the `acceptance_window_size`.
     fn check_incompatible_peer(&mut self, peer_id: N::PeerId) {
         let blockchain = self.blockchain.clone();
         let network = Arc::clone(&self.network);
@@ -154,6 +172,7 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
         self.pending_checks.push(future);
     }
 
+    /// Checks whether the given peer is considered in sync with the local blockchain state.
     async fn is_peer_synced(
         blockchain: BlockchainProxy,
         network: Arc<N>,
@@ -212,8 +231,10 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
 impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M, L> {
     type Item = LiveSyncPushEvent;
 
+    // Polls internal components and handles network, macro sync, and live sync events.
+    // Also manages peer states by removing incompatible peers and assigning
+    // compatible ones to macro or live sync based on the current sync phase.
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        // Poll network events and remove disconnected peers.
         while let Poll::Ready(event) = self.network_events.poll_next_unpin(cx) {
             let event = match event {
                 Some(event) => event,
@@ -290,6 +311,7 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Stream for Syncer<N, M
                     self.incompatible_peers.insert(peer_id);
                 }
             } else {
+                // Peer is still not in sync.
                 self.incompatible_peers.insert(peer_id);
             }
         }

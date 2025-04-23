@@ -1,3 +1,11 @@
+//! The `syncer_proxy` module provides an abstraction layer over multiple syncing mechanisms
+//! used in Nimiq nodes. Each variant corresponds to a different type of node configuration.
+//!
+//! - `History`: History node syncs all the historical data.
+//! - `Full`: Full node focused on state sync.
+//! - `Light`: Light node using macro light sync.
+//! - `Pico`: Pico node using minimal sync logic, with fallback.
+
 #[cfg(feature = "full")]
 use std::cmp::max;
 use std::{
@@ -131,6 +139,7 @@ impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for EitherSyncer<TNetwork> {
         let _ = mem::replace(self, EitherSyncer::Fallback(light_macro_sync));
     }
 
+    /// Removes all peers from the macro sync and returns their IDs.
     fn drain_peers(&mut self) -> Vec<TNetwork::PeerId> {
         match self {
             EitherSyncer::Fallback(macro_sync) => macro_sync.drain_peers(),
@@ -142,6 +151,10 @@ impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for EitherSyncer<TNetwork> {
 impl<TNetwork: Network> Stream for EitherSyncer<TNetwork> {
     type Item = MacroSyncReturn<TNetwork::PeerId>;
 
+    /// Polls the underlying macro sync variant for the next macro sync result.
+    ///
+    /// This delegates to the currently active macro sync implementation (either `LightMacroSync`
+    /// or `PicoMacroSync`), allowing `EitherSyncer` to behave as a single stream interface.
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match self.project() {
             EitherSyncerProj::Fallback(macro_sync) => macro_sync.poll_next_unpin(cx),
@@ -164,11 +177,13 @@ impl<N: Network> SyncerProxy<N> {
             "History Syncer can only be created for a full blockchain"
         );
 
+        // Extract the full blockchain from the proxy.
         let blockchain = match &blockchain_proxy {
             BlockchainProxy::Full(blockchain) => Arc::clone(blockchain),
             BlockchainProxy::Light(_) => unreachable!(),
         };
 
+        // Initialize the block queue for pending blocks to be processed during sync
         let block_queue = BlockQueue::new(
             Arc::clone(&network),
             blockchain_proxy.clone(),
@@ -176,6 +191,7 @@ impl<N: Network> SyncerProxy<N> {
         )
         .await;
 
+        // Set up the live sync component using the block queue
         let live_sync = BlockLiveSync::with_queue(
             blockchain_proxy.clone(),
             Arc::clone(&network),
@@ -183,6 +199,7 @@ impl<N: Network> SyncerProxy<N> {
             bls_cache,
         );
 
+        // Set up the macro sync component for historical sync.
         let macro_sync = HistoryMacroSync::new(blockchain, Arc::clone(&network), network_event_rx);
 
         Self::History(Syncer::new(
@@ -203,11 +220,14 @@ impl<N: Network> SyncerProxy<N> {
         network_event_rx: SubscribeEvents<N::PeerId>,
         full_sync_threshold: u32,
     ) -> Self {
+        // Start from the default configuration for the block queue.
         let mut queue_config = QueueConfig::default();
+        // Ensure the queue size is large enough for full sync, based on the given threshold.
         let min_queue_size = full_sync_threshold + Policy::blocks_per_batch() * 2;
         queue_config.window_ahead_max = max(min_queue_size, queue_config.window_ahead_max);
         queue_config.buffer_max = max(min_queue_size as usize, queue_config.buffer_max);
 
+        // Create the block queue used to buffer and manage incoming blocks.
         let block_queue = BlockQueue::new(
             Arc::clone(&network),
             blockchain_proxy.clone(),
@@ -215,13 +235,16 @@ impl<N: Network> SyncerProxy<N> {
         )
         .await;
 
+        // Extract the full blockchain reference from the proxy.
         let blockchain = match &blockchain_proxy {
             BlockchainProxy::Full(blockchain) => Arc::clone(blockchain),
             BlockchainProxy::Light(_) => unreachable!(),
         };
 
+        // Create the diff queue, which buffers block differences before applying state changes.
         let diff_queue = DiffQueue::with_block_queue(Arc::clone(&network), block_queue);
 
+        // Create the state queue, which applies state updates based on the diff queue.
         let state_queue = StateQueue::with_diff_queue(
             Arc::clone(&network),
             Arc::clone(&blockchain),
@@ -229,6 +252,7 @@ impl<N: Network> SyncerProxy<N> {
             queue_config,
         );
 
+        // Set up live sync with state queue.
         let live_sync = StateLiveSync::with_queue(
             blockchain_proxy.clone(),
             Arc::clone(&network),
@@ -246,6 +270,7 @@ impl<N: Network> SyncerProxy<N> {
             full_sync_threshold,
         );
 
+        // Return the Full node variant of the SyncerProxy.
         Self::Full(Syncer::new(
             blockchain_proxy,
             network,
@@ -262,11 +287,13 @@ impl<N: Network> SyncerProxy<N> {
         zkp_component_proxy: ZKPComponentProxy<N>,
         network_event_rx: SubscribeEvents<N::PeerId>,
     ) -> Self {
+        // Light sync does not require full block bodies, only headers and metadata.
         let block_queue_config = QueueConfig {
             include_body: false,
             ..Default::default()
         };
 
+        // Create a block queue to manage block announcements and requests.
         let block_queue = BlockQueue::new(
             Arc::clone(&network),
             blockchain_proxy.clone(),
@@ -274,6 +301,7 @@ impl<N: Network> SyncerProxy<N> {
         )
         .await;
 
+        // Live sync is responsible for syncing micro blocks using the block queue.
         let live_sync = BlockLiveSync::with_queue(
             blockchain_proxy.clone(),
             Arc::clone(&network),
@@ -281,6 +309,7 @@ impl<N: Network> SyncerProxy<N> {
             bls_cache,
         );
 
+        // Set up LightMacroSync, which uses ZKPs to sync the light node to the latest macro block.
         let macro_sync = LightMacroSync::new(
             blockchain_proxy.clone(),
             Arc::clone(&network),
@@ -289,6 +318,7 @@ impl<N: Network> SyncerProxy<N> {
             0, // Since the light sync does not keep state, we ignore the threshold.
         );
 
+        // Return the constructed Light node variant of the SyncerProxy.
         Self::Light(Syncer::new(
             blockchain_proxy,
             network,
@@ -305,11 +335,13 @@ impl<N: Network> SyncerProxy<N> {
         zkp_component_proxy: ZKPComponentProxy<N>,
         network_event_rx: SubscribeEvents<N::PeerId>,
     ) -> Self {
+        // Configure the block queue to exclude block bodies
         let block_queue_config = QueueConfig {
             include_body: false,
             ..Default::default()
         };
 
+        // Set up a block queue to be used by the live sync process.
         let block_queue = BlockQueue::new(
             Arc::clone(&network),
             blockchain_proxy.clone(),
@@ -317,6 +349,7 @@ impl<N: Network> SyncerProxy<N> {
         )
         .await;
 
+        // Create a live sync instance using the configured block queue.
         let live_sync = BlockLiveSync::with_queue(
             blockchain_proxy.clone(),
             Arc::clone(&network),
@@ -324,6 +357,7 @@ impl<N: Network> SyncerProxy<N> {
             bls_cache,
         );
 
+        // Set up PicoMacroSync
         let pico_macro_sync = PicoMacroSync::new(
             blockchain_proxy.clone(),
             Arc::clone(&network),
@@ -331,9 +365,10 @@ impl<N: Network> SyncerProxy<N> {
             zkp_component_proxy,
         );
 
-        // We start with the Pico Macro sync mechanism
+        // We start with the Pico Macro sync mechanism; can later fall back to LightMacroSync
         let normal_syncer = EitherSyncer::Normal(pico_macro_sync);
 
+        // Return the SyncerProxy in the Pico node variant.
         Self::Pico(Syncer::new(
             blockchain_proxy,
             network,
@@ -366,7 +401,7 @@ impl<N: Network> SyncerProxy<N> {
     pub fn state_complete(&self) -> bool {
         gen_syncer_match!(self, state_complete)
     }
-
+    /// Triggers resolution of a block.
     pub fn resolve_block(&mut self, request: ResolveBlockRequest<N>) {
         gen_syncer_match!(self, resolve_block, request)
     }

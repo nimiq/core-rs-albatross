@@ -1,3 +1,6 @@
+//! Defines how queued blocks are pushed to the blockchain during live sync
+//! and how the results are processed into higher-level sync events.
+
 use std::{
     collections::{HashSet, VecDeque},
     mem,
@@ -28,6 +31,7 @@ use crate::{
     BlsCache,
 };
 
+/// Represents the result of pushing blocks to the blockchain during live sync.
 pub enum PushOpResult<N: Network> {
     Head(Result<PushResult, PushError>, Blake2bHash),
     Buffered(Result<PushResult, PushError>, Blake2bHash),
@@ -49,6 +53,7 @@ impl<N: Network> LiveSyncQueue<N> for BlockQueue<N> {
         bls_cache: Arc<Mutex<BlsCache>>,
         result: Self::QueueResult,
     ) -> VecDeque<BoxFuture<'static, Self::PushResult>> {
+        // Queue of push operation futures to be executed in order.
         let mut future_results = VecDeque::new();
         match result {
             QueuedBlock::Head((block, block_source)) => {

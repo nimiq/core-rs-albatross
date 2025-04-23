@@ -1,3 +1,9 @@
+//! Contains implementations of request handlers for consensus-related message types.
+//!
+//! Each handler defines how to respond to a specific request (e.g., block, head, macro chain,
+//! missing blocks, history chunk) by interacting with the local blockchain state.
+//! These handlers are registered to process incoming network requests during consensus and syncing operations.
+
 #[cfg(feature = "full")]
 use std::sync::Arc;
 use std::{cmp, collections::HashSet};
@@ -106,16 +112,23 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
     ) -> Result<BatchSetInfo, BatchSetError> {
         let blockchain = blockchain.read();
 
+        // Fetch the block corresponding to the given hash and ensure it is a macro block.
+        // Return an error if it is a micro block or the hash is not found.
         let block = match blockchain.get_block(&self.hash, true, None) {
             Ok(Block::Macro(block)) => block,
             Ok(Block::Micro(_)) => return Err(BatchSetError::MicroBlockGiven),
             Err(_) => return Err(BatchSetError::TargetHashNotFound),
         };
-
+        // Try to get the epoch chunk hashes following the given macro block.
+        // For each hash, fetch the macro block and its history length, and build a batch set.
+        // If there are no chunks, create a single batch set with the provided block.
         let batch_sets = if let Ok(macro_hashes) = blockchain
             .chain_store
             .get_epoch_chunks(block.block_number(), None)
         {
+            // Build a list of batch sets for the given macro blocks.
+            // For each macro block in the current epoch, retrieve the full block and its associated history length.
+            // These are bundled into `BatchSet` items and collected into a vector.
             let mut batch_sets = vec![];
             for macro_hash in macro_hashes {
                 let macro_block = blockchain
@@ -135,6 +148,7 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestBatchSet {
             }
             batch_sets
         } else {
+            // If there are no epoch chunks, create a single batch set from the given macro block.
             let history_len = blockchain
                 .history_store
                 .prove_num_leaves(block.block_number(), None)
@@ -168,6 +182,7 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
         _peer_id: N::PeerId,
         blockchain: &Arc<RwLock<Blockchain>>,
     ) -> Result<HistoryChunk, HistoryChunkError> {
+        // Attempt to retrieve a proof for the requested history chunk.
         if let Some(chunk) = blockchain.read().history_store.prove_chunk(
             self.epoch_number,
             self.block_number,
@@ -175,8 +190,10 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestHistoryChunk {
             self.chunk_index as usize,
             None,
         ) {
+            // Return the chunk if the proof was successfully generated.
             Ok(HistoryChunk { chunk })
         } else {
+            // Return an error if the proof could not be produced.
             Err(HistoryChunkError::CouldntProduceProof)
         }
     }
@@ -188,6 +205,9 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestBlock {
         _peer_id: N::PeerId,
         blockchain: &BlockchainProxy,
     ) -> Result<Block, BlockError> {
+        // Attempt to retrieve the requested block from the blockchain.
+        // The block body is included if `include_body` is true.
+        // If the block is not found, return an error.
         blockchain
             .read()
             .get_block(&self.hash, self.include_body)
@@ -356,6 +376,7 @@ impl RequestMissingBlocks {
 impl<N: Network> Handle<N, BlockchainProxy> for RequestHead {
     fn handle(&self, _peer_id: N::PeerId, blockchain: &BlockchainProxy) -> ResponseHead {
         let blockchain = blockchain.read();
+        // Read blockchain state and return the current head information
         ResponseHead {
             block_number: blockchain.block_number(),
             block_hash: blockchain.head_hash(),
@@ -376,6 +397,8 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestChunk {
             return ResponseChunk::IncompleteState;
         }
 
+        // Request a chunk of the accounts state starting at the specified key,
+        // up to the defined limit (bounded by the protocol maximum).
         let chunk = blockchain_rg.state.accounts.get_chunk(
             self.start_key.clone(),
             cmp::min(self.limit, Policy::state_chunks_max_size()) as usize,
@@ -414,6 +437,7 @@ impl RequestTransactionsProof {
     const MAX_TRANSACTIONS: usize = 255;
 
     #[cfg(feature = "full")]
+    /// Proves inclusion of transactions for a specific block number.
     fn prove_txns_with_block_number(
         blockchain: &Arc<RwLock<Blockchain>>,
         transactions: &[Blake2bHash],
@@ -539,6 +563,7 @@ impl RequestTransactionsProof {
     }
 
     #[cfg(feature = "full")]
+    /// Attempts to prove inclusion of a single transaction by hash.
     fn prove_transaction(
         blockchain: &Arc<RwLock<Blockchain>>,
         transaction: &Blake2bHash,
@@ -621,6 +646,7 @@ impl<N: Network> Handle<N, Arc<RwLock<Blockchain>>> for RequestTransactionsProof
     ) -> Result<ResponseTransactionsProof, ResponseTransactionProofError> {
         // Validate request.
         if self.hashes.len() > Self::MAX_TRANSACTIONS {
+            // Reject request that exceed the tx limit
             return Err(ResponseTransactionProofError::TooManyTransactionsProvided);
         }
 

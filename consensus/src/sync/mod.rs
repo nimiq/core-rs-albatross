@@ -1,3 +1,5 @@
+//! Synchronization logic for different types of sync in the consensus layer.
+
 #[cfg(feature = "full")]
 pub mod history;
 pub mod light;

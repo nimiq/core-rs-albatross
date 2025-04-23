@@ -30,13 +30,17 @@ pub mod queue;
 #[cfg(feature = "full")]
 pub mod state_queue;
 
+/// Live sync stream using `BlockQueue`.
 pub type BlockLiveSync<N> = LiveSyncer<N, BlockQueue<N>>;
+/// Live sync stream using `StateQueue`.
 #[cfg(feature = "full")]
 pub type StateLiveSync<N> = LiveSyncer<N, StateQueue<N>>;
 
 /// The maximum capacity of the external block stream passed into the block queue.
 const MAX_BLOCK_STREAM_BUFFER: usize = 256;
 
+/// The `LiveSyncer` manages the live sync process by coordinating block and chunk
+/// processing through a `LiveSyncQueue`.
 pub struct LiveSyncer<N: Network, Q: LiveSyncQueue<N>> {
     blockchain: BlockchainProxy,
 
@@ -57,6 +61,7 @@ pub struct LiveSyncer<N: Network, Q: LiveSyncQueue<N>> {
 }
 
 impl<N: Network, Q: LiveSyncQueue<N>> LiveSyncer<N, Q> {
+    // Sets up an internal channel to receive blocks and connects it to the queue
     pub fn with_queue(
         blockchain: BlockchainProxy,
         network: Arc<N>,
@@ -115,6 +120,8 @@ impl<N: Network, Q: LiveSyncQueue<N>> LiveSync<N> for LiveSyncer<N, Q> {
 impl<N: Network, Q: LiveSyncQueue<N>> Stream for LiveSyncer<N, Q> {
     type Item = LiveSyncEvent<N::PeerId>;
 
+    // Stream that polls for completed block push operations and new sync items from the queue.
+    // Completed operations produce events. New items are turned into push tasks.
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         Poll::Ready(loop {
             if let Some(p) = self.pending.front_mut() {

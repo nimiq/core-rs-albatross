@@ -13,6 +13,7 @@ use crate::sync::{
     peer_list::{PeerList, PeerListIndex},
 };
 
+/// Handles requesting `TrieDiff` for blocks from peers during live sync.
 pub struct DiffRequestComponent<N: Network> {
     network: Arc<N>,
     peers: Arc<RwLock<PeerList<N>>>,
@@ -23,6 +24,7 @@ pub struct DiffRequestComponent<N: Network> {
 impl<N: Network> DiffRequestComponent<N> {
     const NUM_PENDING_DIFFS: usize = 5;
 
+    /// Creates a new `DiffRequestComponent` with a limit on concurrent diff requests.
     pub fn new(network: Arc<N>, peers: Arc<RwLock<PeerList<N>>>) -> Self {
         DiffRequestComponent {
             network,
@@ -62,15 +64,18 @@ impl<N: Network> DiffRequestComponent<N> {
             let max_backoff = Duration::from_secs(30);
 
             Box::pin(async move {
+                // Controls the number of concurrent diff requests.
                 let _request_permit = concurrent_requests.acquire().await.unwrap();
                 let mut num_tries = 0;
                 let mut backoff_delay = Duration::from_secs(1);
 
                 loop {
+                    // Get the current peer based on the index.
                     let peer_id = peers.read().get(&current_peer_index);
                     let peer_id = match peer_id {
                         Some(peer_id) => peer_id,
                         None => {
+                            // If no peer is available, wait and retry.
                             error!("couldn't fetch diff: no peers");
                             sleep(Duration::from_secs(5)).await;
                             continue;
@@ -78,6 +83,7 @@ impl<N: Network> DiffRequestComponent<N> {
                     };
                     current_peer_index.increment();
 
+                    // Send the diff request to the selected peer.
                     let result = network
                         .request(
                             RequestTrieDiff {
@@ -91,8 +97,11 @@ impl<N: Network> DiffRequestComponent<N> {
                     let max_tries = peers.read().len();
 
                     match result {
+                        // If the peer returns a partial diff, validate it.
                         Ok(ResponseTrieDiff::PartialDiff(diff)) => {
+                            // Verify that the returned diff matches the block’s expected diff root.
                             if TreeProof::new(diff.0.iter()).root_hash() == block_diff_root {
+                                // If valid, return the diff.
                                 return Ok(diff);
                             }
                             warn!(%peer_id, block = %block_desc, %num_tries, %max_tries, "couldn't fetch diff: invalid diff");
@@ -121,6 +130,7 @@ impl<N: Network> DiffRequestComponent<N> {
         }
     }
 
+    /// Returns the current peer list used for diff requests.
     pub fn peer_list(&self) -> Arc<RwLock<PeerList<N>>> {
         Arc::clone(&self.peers)
     }

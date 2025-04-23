@@ -42,7 +42,8 @@ pub struct HeadRequests<TNetwork: Network + 'static> {
     unknown_blocks: Vec<(Block, TNetwork::PeerId)>,
     include_body: bool,
 }
-
+/// Contains the number of known and unknown blocks,
+/// and a list of unknown blocks paired with the peer they came from.
 pub struct HeadRequestsResult<TNetwork: Network + 'static> {
     pub num_known_blocks: usize,
     pub num_unknown_blocks: usize,
@@ -50,6 +51,7 @@ pub struct HeadRequestsResult<TNetwork: Network + 'static> {
 }
 
 impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
+    /// Creates a new `HeadRequest` instance for a given set of peers.
     pub fn new(
         peers: Vec<TNetwork::PeerId>,
         network: Arc<TNetwork>,
@@ -84,10 +86,12 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
         }
     }
 
+    /// Returns `true` if all head and block requests have been processed.
     pub fn is_finished(&self) -> bool {
         self.head_hashes.is_empty() && self.head_blocks.is_empty()
     }
 
+    /// Used to retrieve the peer's current head block information.
     async fn request_head(
         network: Arc<TNetwork>,
         peer_id: TNetwork::PeerId,
@@ -97,6 +101,9 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
             .await
     }
 
+    /// Requests a block by hash from the specified peer, optionally including the body.
+    ///
+    /// Verifies that the returned block matches the requested hash.
     async fn request_block(
         network: Arc<TNetwork>,
         peer_id: TNetwork::PeerId,
@@ -127,6 +134,11 @@ impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
 impl<TNetwork: Network + 'static> Future for HeadRequests<TNetwork> {
     type Output = HeadRequestsResult<TNetwork>;
 
+    /// Polls the future for head requests. First collects head hashes from peers,
+    /// checks if each hash is known or unknown, and schedules a block request if unknown.
+    /// Then polls for block responses, collecting valid ones and banning peers that respond
+    /// with mismatched data. When all requests have been processed, the future returns with the result;
+    /// otherwise, it remains pending.
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // We poll the hashes first.
         while let Poll::Ready(Some((i, result))) = self.head_hashes.poll_next_unpin(cx) {

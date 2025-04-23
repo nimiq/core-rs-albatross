@@ -1,3 +1,7 @@
+//! Defines the `BlockRequestComponent`, which handles requesting missing blocks
+//! from peers during synchronization. It maintains a list of active peers, manages a queue
+//! of block requests, and verifies the integrity of responses.
+
 use std::{
     collections::BTreeSet,
     fmt::{Debug, Formatter},
@@ -24,6 +28,7 @@ use crate::{
     sync::{peer_list::PeerList, sync_queue::SyncQueue},
 };
 
+/// Result of a successful missing block request.
 #[derive(Debug)]
 pub struct BlockRequestResult<N: Network> {
     pub target_block_number: u32,
@@ -33,6 +38,7 @@ pub struct BlockRequestResult<N: Network> {
     pub sender: N::PeerId,
 }
 
+/// Request for a sequence of missing blocks from a peer.
 #[derive(Clone)]
 pub struct MissingBlockRequest {
     /// The block number of the requested block.
@@ -62,6 +68,7 @@ impl Debug for MissingBlockRequest {
     }
 }
 
+/// Response to a missing block request from a peer.
 #[derive(Debug, Clone)]
 pub struct MissingBlockResponse<N: Network> {
     pub target_block_number: u32,
@@ -71,6 +78,7 @@ pub struct MissingBlockResponse<N: Network> {
     pub sender: N::PeerId,
 }
 
+/// Error type for missing block requests during sync
 #[derive(Clone, Debug, Error)]
 pub enum MissingBlockError {
     #[error("request: {0}")]
@@ -79,6 +87,7 @@ pub enum MissingBlockError {
     Response(ResponseBlocksError),
 }
 
+/// Error returned when a block request fails within the sync queue.
 #[derive(Debug, Error)]
 #[error("Sync queue error. Target block hash: {target_block_hash}, target block number {target_block_number}")]
 pub struct SyncQueueError {
@@ -349,7 +358,9 @@ impl<N: Network> Stream for BlockRequestComponent<N> {
         // Poll self.sync_queue, return results.
         while let Poll::Ready(result) = self.sync_queue.poll_next_unpin(cx) {
             match result {
+                // A valid response was received with blocks from a peer.
                 Some(Ok(response)) => {
+                    // Remove this request from the pending set.
                     self.pending_requests.remove(&response.target_block_hash);
                     return Poll::Ready(Some(Ok(BlockRequestResult {
                         target_block_number: response.target_block_number,
@@ -359,6 +370,7 @@ impl<N: Network> Stream for BlockRequestComponent<N> {
                         sender: response.sender,
                     })));
                 }
+                // The request failed
                 Some(Err(request)) => {
                     self.pending_requests.remove(&request.target_block_hash);
                     debug!(

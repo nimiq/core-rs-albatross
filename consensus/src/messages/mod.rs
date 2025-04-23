@@ -1,3 +1,10 @@
+//! Contains the message types and request/response handlers used for peer-to-peer communication during consensus and sync.
+//!
+//! This module groups together:
+//! - Request types that a node can send to peers.
+//! - Response types for the corresponding requests.
+//! - Handler implementations for processing incoming requests.
+
 use std::{
     fmt::{Debug, Display, Formatter},
     io::Write,
@@ -29,6 +36,8 @@ use crate::error::SubscribeToAddressesError;
 
 mod handlers;
 
+/// Message containing the header and justification of either a macro or micro block.
+/// Used when broadcasting block headers over the network.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum BlockHeaderMessage {
     Macro {
@@ -56,6 +65,7 @@ impl BlockHeaderMessage {
         }
     }
 
+    /// Splits a block into its header and body messages for transmission.
     pub fn split_block(block: Block) -> (BlockHeaderMessage, BlockBodyMessage) {
         match block {
             Block::Macro(block) => {
@@ -122,6 +132,7 @@ impl From<BlockHeaderMessage> for Block {
     }
 }
 
+/// Message containing the body of a block, paired with the hash of its header message.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BlockBodyMessage {
     /// Hash of the corresponding [`BlockHeaderMessage`].
@@ -130,6 +141,7 @@ pub struct BlockBodyMessage {
     /// [`MacroHeader`]/[`MicroHeader`] since the header hash wouldn't capture
     /// the justification.
     pub header_message_hash: Blake2bHash,
+    /// The block body of either a micro or macro block.
     pub body: BlockBody,
 }
 
@@ -146,6 +158,7 @@ impl Topic for BlockHeaderTopic {
     const MAX_MESSAGES: u32 = 20;
 }
 
+/// GossipSub topic for broadcasting block body messages.
 #[derive(Clone, Debug, Default)]
 pub struct BlockBodyTopic;
 
@@ -232,6 +245,7 @@ impl RequestCommon for RequestMacroChain {
     const MAX_REQUESTS: u32 = 20;
 }
 
+/// Request a batch set for the given macro block hash.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestBatchSet {
     /// The hash of the macro block.
@@ -245,6 +259,7 @@ impl RequestCommon for RequestBatchSet {
     const MAX_REQUESTS: u32 = 100;
 }
 
+/// A batch set containing a macro block and the total history length at its height.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BatchSet {
     /// Verifying macro block
@@ -253,6 +268,7 @@ pub struct BatchSet {
     pub history_len: SizeProof<Blake2bHash, HistoricTransaction>,
 }
 
+/// Errors that can occur when processing a [`RequestBatchSet`].
 #[derive(Clone, Debug, Deserialize, Error, Serialize)]
 pub enum BatchSetError {
     #[error("target hash not found")]
@@ -306,7 +322,7 @@ impl Debug for BatchSetInfo {
 }
 
 #[cfg(feature = "full")]
-/// This message contains a chunk of the history.
+/// Request to get a specific chunk of the history for a given block and epoch.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestHistoryChunk {
     pub epoch_number: u32,
@@ -329,6 +345,7 @@ pub struct HistoryChunk {
     pub chunk: HistoryTreeChunk,
 }
 
+/// Error returned when [`RequestHistoryChunk`] fails.
 #[cfg(feature = "full")]
 #[derive(Clone, Debug, Deserialize, Error, Serialize)]
 pub enum HistoryChunkError {
@@ -437,9 +454,9 @@ pub struct RequestMissingBlocks {
     ///
     /// The locator ordering should be from newest to oldest block.
     ///
-    /// For requests with `Direction::Forward`, if not ordered that way any response may include blocks which are
-    /// not necessary as they answer with respect to an older locator than they could have.
-    /// For `Direction::Backward` it does have no effect.
+    /// For `Direction::Forward`, locators must be ordered from newest to oldest.
+    /// Otherwise, the responder may select an older locator as the starting point, returning unnecessary blocks.
+    /// The order does not matter for `Direction::Backward`.
     pub locators: Vec<Blake2bHash>,
 
     /// The direction the responder should take to search.
@@ -465,6 +482,7 @@ impl RequestCommon for RequestMissingBlocks {
 #[derive(Clone, Debug, Deserialize, Serialize, SerializedMaxSize)]
 pub struct RequestHead {}
 
+/// Indicates the responder’s latest known state.
 #[derive(Clone, Debug, Deserialize, Serialize, SerializedMaxSize)]
 pub struct ResponseHead {
     pub block_number: u32,
@@ -481,12 +499,19 @@ impl RequestCommon for RequestHead {
 }
 test_max_req_size!(RequestHead, request_head_req_size, request_head_resp_size);
 
+/// Response containing a proof of transaction inclusion.
 #[derive(Serialize, Deserialize)]
 pub struct ResponseTransactionsProof {
+    /// The history MMR proof
     pub proof: HistoryTreeProof,
+    /// Block used to generate the history tree proof.
+    ///
+    /// The block is determined by internal logic (see the `prove_txns_with_block_number`
+    /// function in the implementation of [`RequestTransactionsProof`])
     pub block: Block,
 }
 
+/// Errors returned when generating a transaction inclusion proof in response to a [`RequestTransactionsProof`].
 #[derive(Clone, Debug, Deserialize, Error, Serialize)]
 pub enum ResponseTransactionProofError {
     #[error("empty list of transactions given")]
@@ -510,6 +535,7 @@ pub enum ResponseTransactionProofError {
     Other,
 }
 
+/// Request a proof of inclusion for one or more transactions.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestTransactionsProof {
     pub hashes: Vec<Blake2bHash>,
@@ -543,6 +569,7 @@ impl RequestCommon for RequestTransactionReceiptsByAddress {
     const MAX_REQUESTS: u32 = 20;
 }
 
+/// Response containing a list of transactions related to a specific address.
 #[derive(Serialize, Deserialize)]
 pub struct ResponseTransactionReceiptsByAddress {
     /// Tuples of `(transaction_hash, block_number)`
@@ -572,6 +599,7 @@ pub struct ResponseTrieProof {
     pub block_hash: Blake2bHash,
 }
 
+/// Errors returned in response to a [`RequestTrieProof`].
 #[derive(Clone, Debug, Deserialize, Error, Serialize)]
 pub enum ResponseTrieProofError {
     #[error("incomplete trie")]
@@ -583,17 +611,20 @@ pub enum ResponseTrieProofError {
     Other,
 }
 
+/// Request a block inclusion proof for a set of block numbers relative to a given election head.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestBlocksProof {
     pub election_head: u32,
     pub blocks: Vec<u32>,
 }
 
+/// Response containing a proof of inclusion for a set of blocks.
 #[derive(Serialize, Deserialize)]
 pub struct ResponseBlocksProof {
     pub proof: BlockInclusionProof,
 }
 
+/// Errors returned when generating a blocks proof in response to a [`RequestBlocksProof`].
 #[derive(Clone, Debug, Deserialize, Error, Serialize)]
 pub enum ResponseBlocksProofError {
     #[error("bad block number {0}")]

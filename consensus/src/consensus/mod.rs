@@ -1,3 +1,10 @@
+//! Core implementation of the Albatross consensus protocol.
+//!
+//! This module manages the consensus state, and facilitates synchronization with peers.
+//!
+//! It serves as the control center of the blockchain's
+//! agreement mechanism, ensuring all nodes converge on a single chain state.
+
 use std::{
     future::Future,
     pin::Pin,
@@ -125,7 +132,9 @@ pub struct ResolveBlockRequest<N: Network> {
 pub enum ConsensusRequest<N: Network> {
     ResolveBlock(ResolveBlockRequest<N>),
 }
-
+/// Coordinates synchronization between the blockchain and the network.
+/// Tracks peers, handles event notifications, and manages requests for chain data.
+/// Provides channels and flags for other components to maintain chain state.
 pub struct Consensus<N: Network> {
     pub blockchain: BlockchainProxy,
     pub network: Arc<N>,

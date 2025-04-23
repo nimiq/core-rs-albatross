@@ -164,6 +164,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         Poll::Pending
     }
 
+    /// Polls for results from epoch ID requests made to peers.
     fn poll_epoch_ids(
         &mut self,
         cx: &mut Context<'_>,
@@ -286,6 +287,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         Poll::Pending
     }
 
+    /// Polls for macro block headers received in response to previous requests.
     fn poll_macro_blocks(
         &mut self,
         cx: &mut Context<'_>,
@@ -439,6 +441,15 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
 impl<TNetwork: Network> Stream for LightMacroSync<TNetwork> {
     type Item = MacroSyncReturn<TNetwork::PeerId>;
 
+    /// Polls all syncing stages in order and returns the result of the first completed stage.
+    ///
+    /// This function implements the `Stream` trait for `LightMacroSync`, making it a driver that
+    /// progresses syncing in steps. It checks for:
+    /// - Peer join/leave events
+    /// - ZKP proofs
+    /// - Epoch ID responses
+    /// - Macro block headers
+    /// - Validity window chunks
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if let Poll::Ready(o) = self.poll_network_events(cx) {
             return Poll::Ready(o);

@@ -1,3 +1,5 @@
+//! Handles the logic for syncing historical blockchain data in clustered epochs.
+
 use std::{
     collections::VecDeque,
     fmt::Formatter,
@@ -69,18 +71,26 @@ struct PendingBatchSet {
 }
 
 impl PendingBatchSet {
+    /// Returns `true` if all expected history transactions for this batch set
+    /// have been received.
     fn is_complete(&self) -> bool {
         self.history_len == self.history.len() as u64
     }
 
+    /// Returns the epoch number associated with the macro block of this batch set.
     fn epoch_number(&self) -> u32 {
         self.macro_block.epoch_number()
     }
 }
 
+/// Represents a single batch set of historic transactions for a macro block during synchronization.
+/// Multiple `BatchSet`s are managed and ordered by a sync cluster to reconstruct the full history of an epoch.
 pub struct BatchSet {
+    /// Macro block that proves this batch set
     pub block: MacroBlock,
+    /// The list of history items
     pub history: Vec<HistoricTransaction>,
+    /// Identifies the position of this batch set within the epoch.
     pub batch_index: usize,
 }
 
@@ -88,7 +98,6 @@ impl std::fmt::Debug for BatchSet {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut dbg = f.debug_struct("BatchSet");
         dbg.field("epoch_number", &self.block.epoch_number());
-        dbg.field("", &self.block.epoch_number());
         dbg.field("history_len", &self.history.len());
         dbg.field("batch_index", &self.batch_index);
         dbg.finish()
@@ -96,6 +105,7 @@ impl std::fmt::Debug for BatchSet {
 }
 
 impl From<PendingBatchSet> for BatchSet {
+    // Converts a completed `PendingBatchSet` into a `BatchSet` by reusing its data.
     fn from(batch_set: PendingBatchSet) -> Self {
         Self {
             block: batch_set.macro_block,
@@ -105,12 +115,14 @@ impl From<PendingBatchSet> for BatchSet {
     }
 }
 
+/// Keeps track of verification context for validating batch sets.
 pub struct BatchSetVerifyState {
     network: NetworkId,
     predecessor: Block,
     validators: Validators,
 }
 
+/// Represents a request for a specific chunk of the history for a macro block.
 #[derive(Clone, Debug)]
 pub struct HistoryChunkRequest {
     epoch_number: u32,
@@ -132,6 +144,8 @@ impl HistoryChunkRequest {
 
 static SYNC_CLUSTER_ID: AtomicUsize = AtomicUsize::new(0);
 
+/// Manages synchronization of a specific set of epochs. Coordinates the download and verification of macro blocks
+/// and their corresponding history chunks for a range of epochs.
 pub struct SyncCluster<TNetwork: Network> {
     pub id: usize,
     pub epoch_ids: Vec<Blake2bHash>,
@@ -160,6 +174,9 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
     const NUM_PENDING_BATCH_SETS: usize = 5;
     const NUM_PENDING_CHUNKS: usize = 12;
 
+    /// This is used when a history node needs to sync full epochs (including their macro blocks
+    /// and historic transactions) from other peers. The `epoch_ids` parameter identifies the macro blocks
+    /// to request, and the cluster will sequentially download them.
     pub(crate) fn for_epoch(
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TNetwork>,
@@ -178,6 +195,9 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         )
     }
 
+    /// This is used when syncing from a specific checkpoint block,
+    /// instead of an entire epoch. It starts the cluster with a single checkpoint block hash
+    /// and the corresponding epoch.
     pub(crate) fn for_checkpoint(
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TNetwork>,
@@ -204,8 +224,10 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         first_epoch_number: usize,
         first_block_number: usize,
     ) -> Self {
+        // Assigns a unique ID for the the cluster.
         let id = SYNC_CLUSTER_ID.fetch_add(1, Ordering::SeqCst);
 
+        // Verifies the current state.
         let batch_verify_state = {
             let blockchain = blockchain.read();
             BatchSetVerifyState {
@@ -214,10 +236,12 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
                 validators: blockchain.election_head().get_validators().unwrap(),
             }
         };
+        // Prepare the queue of epoch IDs.
         let epoch_ids_queue = epoch_ids
             .iter()
             .map(|epoch_id| (epoch_id.clone(), None))
             .collect();
+        // Create a SyncQueue to fetch and verify BatchSetInfo for each epoch.
         let batch_set_queue = SyncQueue::with_verification(
             Arc::clone(&network),
             epoch_ids_queue,
@@ -256,6 +280,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             batch_verify_state,
         );
 
+        // Create a SyncQueue for downloading history chunks
         let history_queue = SyncQueue::new(
             Arc::clone(&network),
             Vec::<(HistoryChunkRequest, Option<_>)>::new(),
@@ -284,6 +309,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         }
     }
 
+    // Verifies macro block and returns an error in case any of the checks fail.
     fn verify_macro_block(
         block: &Block,
         network: NetworkId,
@@ -308,6 +334,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         Ok(())
     }
 
+    // Verifies the validity of the `batch_set_info`
     fn verify_batch_set_info(
         network: NetworkId,
         batch_set_info: &BatchSetInfo,
@@ -352,6 +379,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         Ok(())
     }
 
+    // Processes a newly received epoch
     fn on_epoch_received(&mut self, epoch: BatchSetInfo) -> Result<(), SyncClusterResult> {
         let block = epoch.final_macro_block();
         let epoch_number = block.epoch_number();
@@ -454,6 +482,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         Ok(())
     }
 
+    // Handles an incoming verified history chunk and updates the corresponding pending batch set.
     fn on_history_chunk_received(
         &mut self,
         epoch_number: u32,
@@ -506,6 +535,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         self.batch_set_queue.peers.read().peers().to_vec()
     }
 
+    /// Splits the current cluster at the given index and returns a new cluster with the remaining epochs.
     pub(crate) fn split_off(&mut self, at: usize) -> Self {
         assert!(
             self.num_epochs_finished() <= at,
@@ -535,6 +565,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         *self = self.split_off(usize::min(num_items, self.len()));
     }
 
+    /// Compares this cluster with another to determine which should be prioritized for syncing.
     pub(crate) fn compare(&self, other: &Self, current_epoch: usize) -> std::cmp::Ordering {
         let this_epoch_number = self.first_epoch_number.max(current_epoch);
         let other_epoch_number = other.first_epoch_number.max(current_epoch);
@@ -565,18 +596,23 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             .then_with(|| self.epoch_ids.cmp(&other.epoch_ids))
     }
 
+    /// Returns the number of remaining epoch IDs in this cluster.
     pub(crate) fn len(&self) -> usize {
         self.epoch_ids.len()
     }
 
+    /// Returns `true` if there are no more epoch IDs to process.
     pub(crate) fn is_empty(&self) -> bool {
         self.epoch_ids.is_empty()
     }
 
+    /// Returns the number of epochs that have been fully processed in this cluster.
     pub(crate) fn num_epochs_finished(&self) -> usize {
         self.num_epochs_finished
     }
 
+    /// Resets the batch set verification state using the current election head and validator set
+    /// from the blockchain.
     pub(crate) fn reset_verify_state(&mut self) {
         let blockchain = self.blockchain.read();
         let verify_state = BatchSetVerifyState {
@@ -587,6 +623,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         self.batch_set_queue.set_verify_state(verify_state);
     }
 
+    /// Sends a request to a peer to retrieve the BatchSetInfo for a given epoch.
     pub async fn request_epoch(
         network: Arc<TNetwork>,
         peer_id: TNetwork::PeerId,
@@ -611,6 +648,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         Ok(batch_set_info)
     }
 
+    /// Sends a request to a peer for a specific history chunk and verifies its validity.
     pub async fn request_history_chunk(
         network: Arc<TNetwork>,
         peer_id: TNetwork::PeerId,
@@ -642,6 +680,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         Ok(chunk)
     }
 
+    // Pops and returns the next completed batch set from the front of the queue.
     fn pop_complete_epoch(&mut self) -> Option<PendingBatchSet> {
         if !self.pending_batch_sets.is_empty() && self.pending_batch_sets[0].is_complete() {
             self.num_epochs_finished += 1;
@@ -652,6 +691,9 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
     }
 }
 
+// Implements a `Stream` trait for `SyncCluster`, enabling it to produce verified
+// and complete batch sets as they become available.
+// Coordinates epoch-level history sync.
 impl<TNetwork: Network + 'static> Stream for SyncCluster<TNetwork> {
     type Item = Result<BatchSet, SyncClusterResult>;
 
@@ -748,6 +790,7 @@ impl<TNetwork: Network + 'static> std::fmt::Debug for SyncCluster<TNetwork> {
     }
 }
 
+/// Result type returned by a `SyncCluster` after attempting to sync
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum SyncClusterResult {
     EpochSuccessful,

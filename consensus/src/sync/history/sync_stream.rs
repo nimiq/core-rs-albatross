@@ -20,6 +20,9 @@ use crate::sync::{
     sync_interface::{MacroSync, MacroSyncReturn},
 };
 
+// Implements the `Stream` trait for `HistoryMacroSync`.
+// Polls in sequence network events, epoch ID responses, active cluster processing and job queue.
+// Produces `MacroSyncReturn` events that signal sync progress.
 impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
     fn poll_network_events(
         &mut self,

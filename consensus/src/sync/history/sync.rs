@@ -19,9 +19,10 @@ use crate::{
     },
 };
 
+/// A set of epoch unique IDs.
 #[derive(Clone)]
 pub(crate) struct EpochIds<T> {
-    pub locator_found: bool,
+    pub locator_found: bool, // Whether the locator was successfully found in the peer's chain.
     pub ids: Vec<Blake2bHash>,
     pub checkpoint: Option<Checkpoint>, // The most recent checkpoint block in the latest epoch.
     pub first_epoch_number: usize,
@@ -45,6 +46,7 @@ pub(crate) enum Job<TNetwork: Network> {
     FinishCluster(SyncCluster<TNetwork>, SyncClusterResult),
 }
 
+/// Handles history synchronization for macro blocks in history nodes.
 pub struct HistoryMacroSync<TNetwork: Network> {
     pub(crate) blockchain: Arc<RwLock<Blockchain>>,
     pub(crate) network: Arc<TNetwork>,

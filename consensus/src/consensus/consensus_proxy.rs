@@ -1,3 +1,7 @@
+//! Interface for sending requests to the consensus component.
+//!
+//! Used by other modules to resolve blocks or subscribe to consensus events.
+
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     sync::{
@@ -36,7 +40,11 @@ use crate::{
     },
     ConsensusEvent,
 };
-
+/// Implements the logic for handling consensus-related requests.
+///
+/// The consensus proxy provides methods for interacting with peers, syncing nodes,
+/// retrieving blockchain data, and managing subscriptions.
+/// Used as an external interface to the internal consensus logic.
 pub struct ConsensusProxy<N: Network> {
     pub blockchain: BlockchainProxy,
     pub network: Arc<N>,
@@ -58,7 +66,6 @@ impl<N: Network> Clone for ConsensusProxy<N> {
         }
     }
 }
-
 impl<N: Network> ConsensusProxy<N> {
     pub async fn send_transaction(&self, tx: Transaction) -> Result<(), N::Error> {
         match ControlTransaction::try_from(tx) {
@@ -71,6 +78,7 @@ impl<N: Network> ConsensusProxy<N> {
         }
     }
 
+    /// Returns true if consensus is established.
     pub fn is_established(&self) -> bool {
         self.established_flag.load(Ordering::Acquire)
     }
@@ -81,6 +89,7 @@ impl<N: Network> ConsensusProxy<N> {
             && self.synced_validity_window_flag.load(Ordering::Acquire)
     }
 
+    /// Subsribes to consensus events: Established or Lost.
     pub fn subscribe_events(&self) -> BroadcastStream<ConsensusEvent> {
         BroadcastStream::new(self.events.subscribe())
     }
@@ -99,6 +108,15 @@ impl<N: Network> ConsensusProxy<N> {
         txn_stream.unwrap()
     }
 
+    /// Requests transaction receipts for a given address from multiple peers.
+    ///
+    /// The request can be limited by a maximum number of receipts (`max`),
+    /// a starting point (`start_at`, hash), and whether to include pre-genesis data.
+    ///
+    /// Fails if not enough peers are available to satisfy `min_peers`,
+    /// or if no valid response is received after contacting multiple peers.
+    ///
+    /// See [`RequestError`] and its variants for possible failure causes.
     pub async fn request_transaction_receipts_by_address(
         &self,
         address: Address,
@@ -156,6 +174,7 @@ impl<N: Network> ConsensusProxy<N> {
         Ok(receipts)
     }
 
+    /// Requests a transaction by hash and block number from multiple peers.
     pub async fn request_transaction_by_hash_and_block_number(
         &self,
         tx_hash: Blake2bHash,
@@ -174,6 +193,7 @@ impl<N: Network> ConsensusProxy<N> {
         }
     }
 
+    /// Requests a transaction by hash from multiple peers.
     pub async fn request_transaction_by_hash(
         &self,
         tx_hash: Blake2bHash,
@@ -191,6 +211,7 @@ impl<N: Network> ConsensusProxy<N> {
         }
     }
 
+    /// Returns peers that support all requested services (e.g. full blocks, history, mempool).
     async fn get_peers_for_service(
         &self,
         services: Services,
@@ -211,6 +232,8 @@ impl<N: Network> ConsensusProxy<N> {
             })
     }
 
+    /// Requests and verifies historic transactions from peers based on receipt data, and returns a list of verified transactions,
+    /// sorted by block number in descending order.
     pub async fn prove_transactions_from_receipts(
         &self,
         receipts: Vec<(Blake2bHash, Option<u32>)>,
@@ -512,6 +535,7 @@ impl<N: Network> ConsensusProxy<N> {
         remote_ds.get_stakers(addresses).await
     }
 
+    /// Subscribes to the given addresses on one or more peers.
     pub async fn subscribe_to_addresses(
         &self,
         addresses: Vec<Address>,
@@ -577,14 +601,15 @@ impl<N: Network> ConsensusProxy<N> {
         }
     }
 
+    /// Unsubscribes to the given addresses on one or more peers.
     pub async fn unsubscribe_from_addresses(
         &self,
         addresses: Vec<Address>,
         min_peers: usize,
     ) -> Result<(), RequestError> {
         // Unsubscribe given addresses from all peers
-        // Note: this does not mean that we will fully unsubscribe  from a peer,
-        // we will unsubscribe  only from the addresses that were supplied to this function
+        // Note: this does not mean that we will fully unsubscribe from a peer,
+        // we will unsubscribe only from the addresses that were supplied to this function
         for peer_id in self
             .get_peers_for_service(Services::FULL_BLOCKS, min_peers)
             .await?

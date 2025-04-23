@@ -1,13 +1,16 @@
+//! Defines error types used across the consensus layer.
+
 use nimiq_blockchain_interface::BlockchainError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+/// Errors that can occur in the consensus layer.
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Blockchain error: {0}")]
     BlockchainError(#[from] BlockchainError),
 }
-
+/// Errors returned during synchronization.
 #[derive(Debug, Error)]
 pub enum SyncError {
     #[error("Other")]

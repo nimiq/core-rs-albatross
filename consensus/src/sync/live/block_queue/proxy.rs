@@ -34,8 +34,11 @@ use crate::{
     BlsCache,
 };
 
+/// A proxy to interact with `BlockQueue` running on its independent task.
 pub struct BlockQueueProxy<N: Network> {
+    /// Shared reference to the underlying block queue.
     queue: Arc<Mutex<BlockQueue<N>>>,
+    /// Channel used to receive queued blocks from the internal background task.
     receiver: UnboundedReceiver<QueuedBlock<N>>,
 }
 
@@ -45,6 +48,7 @@ impl<N: Network> BlockQueueProxy<N> {
         Self::with_queue(queue)
     }
 
+    /// Starts the internal queue with a stream of blocks received via gossip sub.
     pub fn with_gossipsub_block_stream(
         blockchain: BlockchainProxy,
         network: Arc<N>,
@@ -56,6 +60,7 @@ impl<N: Network> BlockQueueProxy<N> {
         Self::with_queue(queue)
     }
 
+    /// Uses a specific block stream
     pub fn with_block_stream(
         blockchain: BlockchainProxy,
         network: Arc<N>,
@@ -66,6 +71,7 @@ impl<N: Network> BlockQueueProxy<N> {
         Self::with_queue(queue)
     }
 
+    /// Spawns the block queue as another task and opens the communication channel to forward block queue results to the current task.
     pub fn with_queue(queue: BlockQueue<N>) -> Self {
         let queue = Arc::new(Mutex::new(queue));
 
@@ -80,22 +86,27 @@ impl<N: Network> BlockQueueProxy<N> {
         Self { queue, receiver }
     }
 
+    /// Marks the given block as processed in the queue.
     pub fn on_block_processed(&mut self, block_hash: &Blake2bHash) {
         self.queue.lock().on_block_processed(block_hash);
     }
 
+    /// Marks invalid blocks from the queue.
     pub fn remove_invalid_blocks(&mut self, invalid_blocks: &mut HashSet<Blake2bHash>) {
         self.queue.lock().remove_invalid_blocks(invalid_blocks);
     }
 
+    /// Returns the blocks currently buffered in the queue.
     pub fn buffered_blocks(&self) -> Vec<(u32, Vec<Block>)> {
         self.queue.lock().buffered_blocks()
     }
 
+    /// Returns the total number of buffered blocks.
     pub fn num_buffered_blocks(&self) -> usize {
         self.queue.lock().num_buffered_blocks()
     }
 
+    /// Returns the peer list used by the queue
     #[cfg(feature = "full")]
     pub(crate) fn peer_list(&self) -> Arc<RwLock<PeerList<N>>> {
         self.queue.lock().peer_list()
@@ -159,6 +170,7 @@ impl<N: Network> Stream for BlockQueueProxy<N> {
     }
 }
 
+/// Background future that continuously polls the internal `BlockQueue` for new queued blocks.
 struct BlockQueueFuture<N: Network> {
     queue: Weak<Mutex<BlockQueue<N>>>,
     sender: UnboundedSender<QueuedBlock<N>>,
@@ -167,6 +179,8 @@ struct BlockQueueFuture<N: Network> {
 impl<N: Network> Future for BlockQueueFuture<N> {
     type Output = ();
 
+    /// Continuously polls the BlockQueue. If a new queued block is available,
+    /// it sends it to the proxy. Stops if the queue is dropped or the stream ends.
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let queue = match self.queue.upgrade() {
             Some(queue) => queue,

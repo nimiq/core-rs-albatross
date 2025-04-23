@@ -192,6 +192,9 @@ pub struct RemoteEventDispatcher<N: Network> {
 }
 
 impl<N: Network> RemoteEventDispatcher<N> {
+    /// Creates a new `RemoteEventDispatcher` instance and sets up the necessary
+    /// event streams to handle incoming address subscription requests and
+    /// observe blockchain and network events.
     pub fn new(network: Arc<N>, blockchain: Arc<RwLock<Blockchain>>) -> Self {
         let state = Arc::new(RwLock::new(RemoteEventDispatcherState::new()));
 

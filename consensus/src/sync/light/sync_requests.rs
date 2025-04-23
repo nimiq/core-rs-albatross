@@ -26,6 +26,8 @@ use crate::{
 };
 
 impl<TNetwork: Network> LightMacroSync<TNetwork> {
+    /// Sends a ZKP request to a specific peer.
+    /// Returns the result and the peer ID, handling any communication errors.
     pub(crate) async fn request_zkps(
         zkp_component: ZKPComponentProxy<TNetwork>,
         peer_id: TNetwork::PeerId,
@@ -46,6 +48,8 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         (zkp_result, peer_id)
     }
 
+    /// Requests epoch IDs from a peer by sending a macro chain request.
+    /// Performs basic validation on the result and may ban the peer on invalid responses.
     pub(crate) async fn request_epoch_ids(
         blockchain: BlockchainProxy,
         network: Arc<TNetwork>,
@@ -150,6 +154,8 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         }
     }
 
+    /// Adds a request for a single macro block to the block headers queue.
+    /// This is useful for fetching a specific block during sync when the latest zkp is not ready yet.
     #[cfg(feature = "full")]
     pub(crate) fn request_single_macro_block(
         &mut self,
@@ -174,6 +180,8 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         self.peer_requests.insert(peer_id, peer_requests);
     }
 
+    /// Creates block header requests for election blocks and an optional checkpoint
+    /// received from a peer.
     pub(crate) fn request_macro_headers(
         &mut self,
         mut epoch_ids: EpochIds<TNetwork::PeerId>,
@@ -291,6 +299,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         None
     }
 
+    /// Sends a macro block request to a peer.
     pub async fn request_macro_block(
         network: Arc<TNetwork>,
         peer_id: TNetwork::PeerId,
@@ -308,6 +317,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             .await
     }
 
+    /// Sends a macro chain request to a peer, using the provided locators and maximum number of epochs.
     pub async fn request_macro_chain(
         network: Arc<TNetwork>,
         peer_id: TNetwork::PeerId,

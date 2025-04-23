@@ -1,3 +1,5 @@
+//! Provides a queuing component that augments blocks with state trie diffs during live sync.
+
 use std::{
     collections::HashSet,
     future,
@@ -56,6 +58,7 @@ impl RequestCommon for RequestTrieDiff {
     const MAX_REQUESTS: u32 = MAX_REQUEST_RESPONSE_TRIE_DIFFS;
 }
 
+/// Represents a block or set of blocks classified by how they should be processed.
 pub enum QueuedDiff<N: Network> {
     Head(BlockAndSource<N>, Option<TrieDiff>),
     Buffered(Vec<(BlockAndSource<N>, Option<TrieDiff>)>),
@@ -158,6 +161,7 @@ pub struct DiffQueue<N: Network> {
 }
 
 impl<N: Network> DiffQueue<N> {
+    /// Creates a new DiffQueue using an existing BlockQueue.
     pub fn with_block_queue(network: Arc<N>, block_queue: BlockQueue<N>) -> Self {
         let diff_request_component =
             DiffRequestComponent::new(Arc::clone(&network), block_queue.peer_list());
@@ -169,6 +173,7 @@ impl<N: Network> DiffQueue<N> {
         }
     }
 
+    /// Removes blocks marked as invalid from the BlockQueue.
     pub(crate) fn remove_invalid_blocks(&mut self, invalid_blocks: &mut HashSet<Blake2bHash>) {
         // We remove invalid blocks from the block queue.
         self.block_queue.remove_invalid_blocks(invalid_blocks);
@@ -209,6 +214,7 @@ impl<N: Network> DiffQueue<N> {
         self.block_queue.num_buffered_blocks()
     }
 
+    /// Sets whether diffs should be fetched for incoming blocks.
     pub(crate) fn set_diff_needed(&mut self, diff_needed: bool) {
         self.diff_needed = diff_needed;
     }

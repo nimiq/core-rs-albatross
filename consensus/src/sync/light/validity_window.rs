@@ -43,6 +43,8 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
             .await
     }
 
+    /// Determines the correct epoch and chunk index to begin syncing from, based on the current state of
+    /// the local history store. Sets up internal state to track progress and sends the first request.
     fn start_validity_chunk_request(
         &mut self,
         peer_id: TNetwork::PeerId,
@@ -149,6 +151,7 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         self.validity_queue.add_ids(vec![(request, None)]);
     }
 
+    /// Begins the validity window sync process with the given peer from a specific starting point
     pub fn start_validity_synchronization(&mut self, peer_id: TNetwork::PeerId) {
         if self.validity_requests.is_some() {
             // We already have a synchoronization in progress, so we just add the peer

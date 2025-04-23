@@ -1,3 +1,5 @@
+//! Defines the sync interface used by both live and macro syncing modes.
+
 use std::collections::VecDeque;
 
 use futures::Stream;
