@@ -270,8 +270,11 @@ where
             None
         };
 
-        // Create the proposal.
-        let time = blockchain.time.now();
+        // Create the proposal. Ensure macro block observes the block separation time.
+        let time = u64::max(
+            blockchain.timestamp() + Policy::BLOCK_SEPARATION_TIME,
+            blockchain.time.now(),
+        );
         let block = self
             .block_producer
             .next_macro_block_proposal(&blockchain, time, round, vec![], version)
