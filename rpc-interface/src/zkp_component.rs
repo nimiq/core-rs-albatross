@@ -8,5 +8,5 @@ pub trait ZKPComponentInterface {
     type Error;
 
     /// Returns the current ZKP state (proof with its related block hash and block number).
-    async fn get_zkp_state(&mut self) -> RPCResult<ZKPState, (), Self::Error>;
+    async fn get_zkp_state(&self) -> RPCResult<ZKPState, (), Self::Error>;
 }

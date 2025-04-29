@@ -14,18 +14,18 @@ pub trait BlockchainInterface {
     type Error;
 
     /// Returns the block number for the current head.
-    async fn get_block_number(&mut self) -> RPCResult<u32, (), Self::Error>;
+    async fn get_block_number(&self) -> RPCResult<u32, (), Self::Error>;
 
     /// Returns the batch number for the current head.
-    async fn get_batch_number(&mut self) -> RPCResult<u32, (), Self::Error>;
+    async fn get_batch_number(&self) -> RPCResult<u32, (), Self::Error>;
 
     /// Returns the epoch number for the current head.
-    async fn get_epoch_number(&mut self) -> RPCResult<u32, (), Self::Error>;
+    async fn get_epoch_number(&self) -> RPCResult<u32, (), Self::Error>;
 
     /// Tries to fetch a block given its hash. It has an option to include the transactions in the
     /// block, which defaults to false.
     async fn get_block_by_hash(
-        &mut self,
+        &self,
         hash: Blake2bHash,
         include_body: Option<bool>,
     ) -> RPCResult<Block, (), Self::Error>;
@@ -34,7 +34,7 @@ pub trait BlockchainInterface {
     /// block, which defaults to false. Note that this function will only fetch blocks that are part
     /// of the main chain.
     async fn get_block_by_number(
-        &mut self,
+        &self,
         block_number: u32,
         include_body: Option<bool>,
     ) -> RPCResult<Block, (), Self::Error>;
@@ -42,7 +42,7 @@ pub trait BlockchainInterface {
     /// Returns the block at the head of the main chain. It has an option to include the
     /// transactions in the block, which defaults to false.
     async fn get_latest_block(
-        &mut self,
+        &self,
         include_body: Option<bool>,
     ) -> RPCResult<Block, (), Self::Error>;
 
@@ -51,42 +51,42 @@ pub trait BlockchainInterface {
     /// at the given height.
     /// We only have this information available for the last 2 batches at most.
     async fn get_slot_at(
-        &mut self,
+        &self,
         block_number: u32,
         offset_opt: Option<u32>,
     ) -> RPCResult<Slot, BlockchainState, Self::Error>;
 
     /// Tries to fetch a transaction (including reward transactions) given its hash.
     async fn get_transaction_by_hash(
-        &mut self,
+        &self,
         hash: Blake2bHash,
     ) -> RPCResult<ExecutedTransaction, (), Self::Error>;
 
     /// Returns all the transactions (including reward transactions) for the given block number. Note
     /// that this only considers blocks in the main chain.
     async fn get_transactions_by_block_number(
-        &mut self,
+        &self,
         block_number: u32,
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error>;
 
     /// Returns all the inherents (including reward inherents) for the given block number. Note
     /// that this only considers blocks in the main chain.
     async fn get_inherents_by_block_number(
-        &mut self,
+        &self,
         block_number: u32,
     ) -> RPCResult<Vec<Inherent>, (), Self::Error>;
 
     /// Returns all the transactions (including reward transactions) for the given batch number. Note
     /// that this only considers blocks in the main chain.
     async fn get_transactions_by_batch_number(
-        &mut self,
+        &self,
         batch_number: u32,
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error>;
 
     /// Returns all the inherents (including reward inherents) for the given batch number. Note
     /// that this only considers blocks in the main chain.
     async fn get_inherents_by_batch_number(
-        &mut self,
+        &self,
         batch_number: u32,
     ) -> RPCResult<Vec<Inherent>, (), Self::Error>;
 
@@ -97,7 +97,7 @@ pub trait BlockchainInterface {
     /// transaction hash (exclusive). If this hash is not found or does not belong to this address, it will return an empty list.
     /// The transaction hashes are returned in descending order, meaning the latest transaction is the first.
     async fn get_transaction_hashes_by_address(
-        &mut self,
+        &self,
         address: Address,
         max: Option<u16>,
         start_at: Option<Blake2bHash>,
@@ -110,7 +110,7 @@ pub trait BlockchainInterface {
     /// transaction hash (exclusive). If this hash is not found or does not belong to this address, it will return an empty list.
     /// The transactions are returned in descending order, meaning the latest transaction is the first.
     async fn get_transactions_by_address(
-        &mut self,
+        &self,
         address: Address,
         max: Option<u16>,
         start_at: Option<Blake2bHash>,
@@ -118,74 +118,74 @@ pub trait BlockchainInterface {
 
     /// Tries to fetch the account at the given address.
     async fn get_account_by_address(
-        &mut self,
+        &self,
         address: Address,
     ) -> RPCResult<Account, BlockchainState, Self::Error>;
 
     /// Fetches all accounts in the accounts tree.
     /// IMPORTANT: This operation iterates over all accounts in the accounts tree
     /// and thus is extremely computationally expensive.
-    async fn get_accounts(&mut self) -> RPCResult<Vec<Account>, BlockchainState, Self::Error>;
+    async fn get_accounts(&self) -> RPCResult<Vec<Account>, BlockchainState, Self::Error>;
 
     /// Returns a collection of the currently active validator's addresses and balances.
     async fn get_active_validators(
-        &mut self,
+        &self,
     ) -> RPCResult<Vec<Validator>, BlockchainState, Self::Error>;
 
     /// Returns information about the currently penalized slots. This includes slots that lost rewards
     /// and that were disabled.
     async fn get_current_penalized_slots(
-        &mut self,
+        &self,
     ) -> RPCResult<PenalizedSlots, BlockchainState, Self::Error>;
 
     /// Returns information about the penalized slots of the previous batch. This includes slots that
     /// lost rewards and that were disabled.
     async fn get_previous_penalized_slots(
-        &mut self,
+        &self,
     ) -> RPCResult<PenalizedSlots, BlockchainState, Self::Error>;
 
     /// Tries to fetch a validator information given its address.
     async fn get_validator_by_address(
-        &mut self,
+        &self,
         address: Address,
     ) -> RPCResult<Validator, BlockchainState, Self::Error>;
 
     /// Fetches all validators in the staking contract.
     /// IMPORTANT: This operation iterates over all validators in the staking contract
     /// and thus is extremely computationally expensive.
-    async fn get_validators(&mut self) -> RPCResult<Vec<Validator>, BlockchainState, Self::Error>;
+    async fn get_validators(&self) -> RPCResult<Vec<Validator>, BlockchainState, Self::Error>;
 
     /// Fetches all stakers for a given validator.
     /// IMPORTANT: This operation iterates over all stakers of the staking contract
     /// and thus is extremely computationally expensive.
     async fn get_stakers_by_validator_address(
-        &mut self,
+        &self,
         address: Address,
     ) -> RPCResult<Vec<Staker>, BlockchainState, Self::Error>;
 
     /// Tries to fetch a staker information given its address.
     async fn get_staker_by_address(
-        &mut self,
+        &self,
         address: Address,
     ) -> RPCResult<Staker, BlockchainState, Self::Error>;
 
     /// Subscribes to new block events (retrieves the full block).
     #[stream]
     async fn subscribe_for_head_block(
-        &mut self,
+        &self,
         include_body: Option<bool>,
     ) -> Result<BoxStream<'static, RPCData<Block, ()>>, Self::Error>;
 
     /// Subscribes to new block events (only retrieves the block hash).
     #[stream]
     async fn subscribe_for_head_block_hash(
-        &mut self,
+        &self,
     ) -> Result<BoxStream<'static, RPCData<Blake2bHash, ()>>, Self::Error>;
 
     /// Subscribes to pre epoch validators events.
     #[stream]
     async fn subscribe_for_validator_election_by_address(
-        &mut self,
+        &self,
         address: Address,
     ) -> Result<BoxStream<'static, RPCData<Validator, BlockchainState>>, Self::Error>;
 
@@ -194,7 +194,7 @@ pub trait BlockchainInterface {
     /// Thus the behavior is to assume all addresses or log_types are to be provided if the corresponding vec is empty.
     #[stream]
     async fn subscribe_for_logs_by_addresses_and_types(
-        &mut self,
+        &self,
         addresses: Vec<Address>,
         log_types: Vec<LogType>,
     ) -> Result<BoxStream<'static, RPCData<BlockLog, BlockchainState>>, Self::Error>;

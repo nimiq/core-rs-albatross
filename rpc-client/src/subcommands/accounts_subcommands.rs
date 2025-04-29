@@ -8,7 +8,7 @@ use crate::Client;
 
 #[async_trait]
 pub trait HandleSubcommand {
-    async fn handle_subcommand(self, mut client: Client) -> Result<Client, Error>;
+    async fn handle_subcommand(self, client: Client) -> Result<Client, Error>;
 }
 
 #[derive(Debug, Parser)]
@@ -104,7 +104,7 @@ pub enum AccountCommand {
 
 #[async_trait]
 impl HandleSubcommand for AccountCommand {
-    async fn handle_subcommand(self, mut client: Client) -> Result<Client, Error> {
+    async fn handle_subcommand(self, client: Client) -> Result<Client, Error> {
         match self {
             AccountCommand::List { short } => {
                 let accounts = client.wallet.list_accounts().await?.data;

@@ -23,7 +23,7 @@ impl ZKPComponentDispatcher {
 impl ZKPComponentInterface for ZKPComponentDispatcher {
     type Error = Error;
 
-    async fn get_zkp_state(&mut self) -> RPCResult<ZKPState, (), Self::Error> {
+    async fn get_zkp_state(&self) -> RPCResult<ZKPState, (), Self::Error> {
         Ok(ZKPState::with_zkp_state(&self.zkp_component.get_zkp_state()).into())
     }
 }

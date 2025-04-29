@@ -76,20 +76,20 @@ fn get_validator_by_address(
 impl BlockchainInterface for BlockchainDispatcher {
     type Error = Error;
 
-    async fn get_block_number(&mut self) -> RPCResult<u32, (), Self::Error> {
+    async fn get_block_number(&self) -> RPCResult<u32, (), Self::Error> {
         Ok(self.blockchain.read().block_number().into())
     }
 
-    async fn get_batch_number(&mut self) -> RPCResult<u32, (), Self::Error> {
+    async fn get_batch_number(&self) -> RPCResult<u32, (), Self::Error> {
         Ok(Policy::batch_at(self.blockchain.read().block_number()).into())
     }
 
-    async fn get_epoch_number(&mut self) -> RPCResult<u32, (), Self::Error> {
+    async fn get_epoch_number(&self) -> RPCResult<u32, (), Self::Error> {
         Ok(Policy::epoch_at(self.blockchain.read().block_number()).into())
     }
 
     async fn get_block_by_hash(
-        &mut self,
+        &self,
         hash: Blake2bHash,
         include_body: Option<bool>,
     ) -> RPCResult<Block, (), Self::Error> {
@@ -97,7 +97,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_block_by_number(
-        &mut self,
+        &self,
         block_number: u32,
         include_body: Option<bool>,
     ) -> RPCResult<Block, (), Self::Error> {
@@ -116,7 +116,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_latest_block(
-        &mut self,
+        &self,
         include_body: Option<bool>,
     ) -> RPCResult<Block, (), Self::Error> {
         let blockchain = self.blockchain.read();
@@ -130,7 +130,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_slot_at(
-        &mut self,
+        &self,
         block_number: u32,
         offset_opt: Option<u32>,
     ) -> RPCResult<Slot, BlockchainState, Self::Error> {
@@ -152,7 +152,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_transaction_by_hash(
-        &mut self,
+        &self,
         hash: Blake2bHash,
     ) -> RPCResult<ExecutedTransaction, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
@@ -178,7 +178,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_transactions_by_block_number(
-        &mut self,
+        &self,
         block_number: u32,
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
@@ -204,7 +204,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_inherents_by_block_number(
-        &mut self,
+        &self,
         block_number: u32,
     ) -> RPCResult<Vec<Inherent>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
@@ -229,7 +229,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_transactions_by_batch_number(
-        &mut self,
+        &self,
         batch_number: u32,
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
@@ -262,7 +262,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_inherents_by_batch_number(
-        &mut self,
+        &self,
         batch_number: u32,
     ) -> RPCResult<Vec<Inherent>, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
@@ -304,7 +304,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_transaction_hashes_by_address(
-        &mut self,
+        &self,
         address: Address,
         max: Option<u16>,
         start_at: Option<Blake2bHash>,
@@ -323,7 +323,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_transactions_by_address(
-        &mut self,
+        &self,
         address: Address,
         max: Option<u16>,
         start_at: Option<Blake2bHash>,
@@ -365,7 +365,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_account_by_address(
-        &mut self,
+        &self,
         address: Address,
     ) -> RPCResult<Account, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
@@ -383,7 +383,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         }
     }
 
-    async fn get_accounts(&mut self) -> RPCResult<Vec<Account>, BlockchainState, Self::Error> {
+    async fn get_accounts(&self) -> RPCResult<Vec<Account>, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
             let db_txn = blockchain.read_transaction();
@@ -403,7 +403,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_active_validators(
-        &mut self,
+        &self,
     ) -> RPCResult<Vec<Validator>, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
@@ -429,7 +429,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_current_penalized_slots(
-        &mut self,
+        &self,
     ) -> RPCResult<PenalizedSlots, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
@@ -453,7 +453,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_previous_penalized_slots(
-        &mut self,
+        &self,
     ) -> RPCResult<PenalizedSlots, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
@@ -477,13 +477,13 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_validator_by_address(
-        &mut self,
+        &self,
         address: Address,
     ) -> RPCResult<Validator, BlockchainState, Self::Error> {
         get_validator_by_address(&self.blockchain.read(), &address)
     }
 
-    async fn get_validators(&mut self) -> RPCResult<Vec<Validator>, BlockchainState, Self::Error> {
+    async fn get_validators(&self) -> RPCResult<Vec<Validator>, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
 
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
@@ -504,7 +504,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_stakers_by_validator_address(
-        &mut self,
+        &self,
         address: Address,
     ) -> RPCResult<Vec<Staker>, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
@@ -528,7 +528,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_staker_by_address(
-        &mut self,
+        &self,
         address: Address,
     ) -> RPCResult<Staker, BlockchainState, Self::Error> {
         let blockchain_proxy = self.blockchain.read();
@@ -553,7 +553,7 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     #[stream]
     async fn subscribe_for_head_block(
-        &mut self,
+        &self,
         include_body: Option<bool>,
     ) -> Result<BoxStream<'static, RPCData<Block, ()>>, Self::Error> {
         let blockchain = self.blockchain.clone();
@@ -577,7 +577,7 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     #[stream]
     async fn subscribe_for_head_block_hash(
-        &mut self,
+        &self,
     ) -> Result<BoxStream<'static, RPCData<Blake2bHash, ()>>, Self::Error> {
         let stream = self.blockchain.read().notifier_as_stream();
         Ok(stream
@@ -598,7 +598,7 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     #[stream]
     async fn subscribe_for_validator_election_by_address(
-        &mut self,
+        &self,
         address: Address,
     ) -> Result<BoxStream<'static, RPCData<Validator, BlockchainState>>, Self::Error> {
         let blockchain = self.blockchain.clone();
@@ -620,7 +620,7 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     #[stream]
     async fn subscribe_for_logs_by_addresses_and_types(
-        &mut self,
+        &self,
         addresses: Vec<Address>,
         log_types: Vec<LogType>,
     ) -> Result<BoxStream<'static, RPCData<BlockLog, BlockchainState>>, Self::Error> {

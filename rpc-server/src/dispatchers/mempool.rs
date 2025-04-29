@@ -31,10 +31,7 @@ impl MempoolDispatcher {
 impl MempoolInterface for MempoolDispatcher {
     type Error = Error;
 
-    async fn push_transaction(
-        &mut self,
-        raw_tx: String,
-    ) -> RPCResult<Blake2bHash, (), Self::Error> {
+    async fn push_transaction(&self, raw_tx: String) -> RPCResult<Blake2bHash, (), Self::Error> {
         let tx = Transaction::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
         let txid = tx.hash::<Blake2bHash>();
 
@@ -50,7 +47,7 @@ impl MempoolInterface for MempoolDispatcher {
     }
 
     async fn push_high_priority_transaction(
-        &mut self,
+        &self,
         raw_tx: String,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let tx = Transaction::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
@@ -71,7 +68,7 @@ impl MempoolInterface for MempoolDispatcher {
     }
 
     async fn mempool_content(
-        &mut self,
+        &self,
         include_transactions: bool,
     ) -> RPCResult<Vec<HashOrTx>, (), Self::Error> {
         return match include_transactions {
@@ -92,16 +89,16 @@ impl MempoolInterface for MempoolDispatcher {
         };
     }
 
-    async fn mempool(&mut self) -> RPCResult<MempoolInfo, (), Self::Error> {
+    async fn mempool(&self) -> RPCResult<MempoolInfo, (), Self::Error> {
         Ok(MempoolInfo::from_txs(self.mempool.get_transactions()).into())
     }
 
-    async fn get_min_fee_per_byte(&mut self) -> RPCResult<f64, (), Self::Error> {
+    async fn get_min_fee_per_byte(&self) -> RPCResult<f64, (), Self::Error> {
         Ok(self.mempool.get_rules().tx_fee_per_byte.into())
     }
 
     async fn get_transaction_from_mempool(
-        &mut self,
+        &self,
         hash: Blake2bHash,
     ) -> RPCResult<Transaction, (), Self::Error> {
         if let Some(tx) = self.mempool.get_transaction_by_hash(&hash) {

@@ -22,15 +22,15 @@ impl NetworkDispatcher {
 impl NetworkInterface for NetworkDispatcher {
     type Error = Error;
 
-    async fn get_peer_id(&mut self) -> RPCResult<String, (), Self::Error> {
+    async fn get_peer_id(&self) -> RPCResult<String, (), Self::Error> {
         Ok(self.network.local_peer_id().to_string().into())
     }
 
-    async fn get_peer_count(&mut self) -> RPCResult<usize, (), Self::Error> {
+    async fn get_peer_count(&self) -> RPCResult<usize, (), Self::Error> {
         Ok(self.network.get_peers().len().into())
     }
 
-    async fn get_peer_list(&mut self) -> RPCResult<Vec<String>, (), Self::Error> {
+    async fn get_peer_list(&self) -> RPCResult<Vec<String>, (), Self::Error> {
         Ok(self
             .network
             .get_peers()

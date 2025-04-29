@@ -34,7 +34,7 @@ pub enum MempoolCommand {
 
 #[async_trait]
 impl HandleSubcommand for MempoolCommand {
-    async fn handle_subcommand(self, mut client: Client) -> Result<Client, Error> {
+    async fn handle_subcommand(self, client: Client) -> Result<Client, Error> {
         match self {
             MempoolCommand::PushTransaction {
                 raw_tx,

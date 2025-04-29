@@ -354,7 +354,7 @@ impl TransactionCommand {
 
 #[async_trait]
 impl HandleSubcommand for TransactionCommand {
-    async fn handle_subcommand(self, mut client: Client) -> Result<Client, Error> {
+    async fn handle_subcommand(self, client: Client) -> Result<Client, Error> {
         match self {
             TransactionCommand::Basic {
                 sender_wallet,

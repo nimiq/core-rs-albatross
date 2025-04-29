@@ -177,7 +177,7 @@ pub enum BlockchainCommand {
 
 #[async_trait]
 impl HandleSubcommand for BlockchainCommand {
-    async fn handle_subcommand(self, mut client: Client) -> Result<Client, Error> {
+    async fn handle_subcommand(self, client: Client) -> Result<Client, Error> {
         match self {
             BlockchainCommand::Block {
                 block_hash,

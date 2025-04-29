@@ -21,7 +21,7 @@ pub enum NetworkCommand {
 
 #[async_trait]
 impl HandleSubcommand for NetworkCommand {
-    async fn handle_subcommand(self, mut client: Client) -> Result<Client, Error> {
+    async fn handle_subcommand(self, client: Client) -> Result<Client, Error> {
         match self {
             NetworkCommand::PeerId {} => {
                 println!("{:#?}", client.network.get_peer_id().await?);

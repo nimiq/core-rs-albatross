@@ -121,7 +121,7 @@ pub enum ValidatorCommand {
 
 #[async_trait]
 impl HandleSubcommand for ValidatorCommand {
-    async fn handle_subcommand(self, mut client: Client) -> Result<Client, Error> {
+    async fn handle_subcommand(self, client: Client) -> Result<Client, Error> {
         match self {
             ValidatorCommand::ValidatorAddress {} => {
                 println!("{:#?}", client.validator.get_address().await?);

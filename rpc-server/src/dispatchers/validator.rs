@@ -31,16 +31,16 @@ impl ValidatorDispatcher {
 impl ValidatorInterface for ValidatorDispatcher {
     type Error = Error;
 
-    async fn get_address(&mut self) -> RPCResult<Address, (), Self::Error> {
+    async fn get_address(&self) -> RPCResult<Address, (), Self::Error> {
         Ok(self.validator.read().validator_address.clone().into())
     }
 
     // TODO: why do we give out secret keys via RPC?
-    async fn get_signing_key(&mut self) -> RPCResult<String, (), Self::Error> {
+    async fn get_signing_key(&self) -> RPCResult<String, (), Self::Error> {
         Ok(hex::encode(self.validator.read().signing_key.private.serialize_to_vec()).into())
     }
 
-    async fn get_voting_key(&mut self) -> RPCResult<String, (), Self::Error> {
+    async fn get_voting_key(&self) -> RPCResult<String, (), Self::Error> {
         Ok(hex::encode(
             self.validator
                 .read()
@@ -52,7 +52,7 @@ impl ValidatorInterface for ValidatorDispatcher {
         .into())
     }
 
-    async fn get_voting_keys(&mut self) -> RPCResult<Vec<String>, (), Self::Error> {
+    async fn get_voting_keys(&self) -> RPCResult<Vec<String>, (), Self::Error> {
         Ok(self
             .validator
             .read()
@@ -64,7 +64,7 @@ impl ValidatorInterface for ValidatorDispatcher {
             .into())
     }
 
-    async fn add_voting_key(&mut self, secret_key: String) -> RPCResult<(), (), Self::Error> {
+    async fn add_voting_key(&self, secret_key: String) -> RPCResult<(), (), Self::Error> {
         self.validator.write().voting_keys.add_key(BlsKeyPair::from(
             BlsSecretKey::deserialize_from_vec(&hex::decode(secret_key)?)?,
         ));
@@ -72,13 +72,11 @@ impl ValidatorInterface for ValidatorDispatcher {
     }
 
     async fn set_automatic_reactivation(
-        &mut self,
+        &self,
         automatic_reactivate: bool,
     ) -> RPCResult<(), (), Self::Error> {
-        let old = mem::replace(
-            &mut self.validator.write().automatic_reactivate,
-            automatic_reactivate,
-        );
+        let validator = self.validator.write();
+        let old = mem::replace(&mut &validator.automatic_reactivate, &automatic_reactivate);
 
         log::debug!(
             "Automatic reactivation set to {} (from {}).",
@@ -88,12 +86,12 @@ impl ValidatorInterface for ValidatorDispatcher {
         Ok(().into())
     }
 
-    async fn is_validator_elected(&mut self) -> RPCResult<bool, (), Self::Error> {
+    async fn is_validator_elected(&self) -> RPCResult<bool, (), Self::Error> {
         let is_elected = self.validator.read().slot_band.is_some();
         Ok(is_elected.into())
     }
 
-    async fn is_validator_synced(&mut self) -> RPCResult<bool, (), Self::Error> {
+    async fn is_validator_synced(&self) -> RPCResult<bool, (), Self::Error> {
         let is_synced = self.consensus.is_ready_for_validation();
         Ok(is_synced.into())
     }

@@ -146,7 +146,7 @@ pub enum PolicyCommand {
 
 #[async_trait]
 impl HandleSubcommand for PolicyCommand {
-    async fn handle_subcommand(self, mut client: Client) -> Result<Client, Error> {
+    async fn handle_subcommand(self, client: Client) -> Result<Client, Error> {
         match self {
             PolicyCommand::PolicyConstants {} => {
                 println!("{:#?}", client.policy.get_policy_constants().await?);

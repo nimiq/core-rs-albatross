@@ -73,12 +73,12 @@ fn transaction_to_hex_string(transaction: &Transaction) -> String {
 impl ConsensusInterface for ConsensusDispatcher {
     type Error = Error;
 
-    async fn is_consensus_established(&mut self) -> RPCResult<bool, (), Self::Error> {
+    async fn is_consensus_established(&self) -> RPCResult<bool, (), Self::Error> {
         Ok(self.consensus.is_established().into())
     }
 
     async fn get_raw_transaction_info(
-        &mut self,
+        &self,
         raw_tx: String,
     ) -> RPCResult<RPCTransaction, (), Self::Error> {
         let transaction = Transaction::deserialize_from_vec(&hex::decode(raw_tx)?)?;
@@ -86,7 +86,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_raw_transaction(
-        &mut self,
+        &self,
         raw_tx: String,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let tx = Transaction::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
@@ -99,7 +99,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_basic_transaction(
-        &mut self,
+        &self,
         wallet: Address,
         recipient: Address,
         value: Coin,
@@ -119,7 +119,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_basic_transaction(
-        &mut self,
+        &self,
         wallet: Address,
         recipient: Address,
         value: Coin,
@@ -134,7 +134,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_basic_transaction_with_data(
-        &mut self,
+        &self,
         wallet: Address,
         recipient: Address,
         data: String,
@@ -156,7 +156,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_basic_transaction_with_data(
-        &mut self,
+        &self,
         wallet: Address,
         recipient: Address,
         data: String,
@@ -179,7 +179,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_new_vesting_transaction(
-        &mut self,
+        &self,
         wallet: Address,
         owner: Address,
         start_time: u64,
@@ -205,7 +205,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_new_vesting_transaction(
-        &mut self,
+        &self,
         wallet: Address,
         owner: Address,
         start_time: u64,
@@ -232,7 +232,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_redeem_vesting_transaction(
-        &mut self,
+        &self,
         wallet: Address,
         contract_address: Address,
         recipient: Address,
@@ -254,7 +254,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_redeem_vesting_transaction(
-        &mut self,
+        &self,
         wallet: Address,
         contract_address: Address,
         recipient: Address,
@@ -277,7 +277,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_new_htlc_transaction(
-        &mut self,
+        &self,
         wallet: Address,
         htlc_sender: Address,
         htlc_recipient: Address,
@@ -305,7 +305,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_new_htlc_transaction(
-        &mut self,
+        &self,
         wallet: Address,
         htlc_sender: Address,
         htlc_recipient: Address,
@@ -334,7 +334,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_redeem_regular_htlc_transaction(
-        &mut self,
+        &self,
         wallet: Address,
         contract_address: Address,
         recipient: Address,
@@ -362,7 +362,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_redeem_regular_htlc_transaction(
-        &mut self,
+        &self,
         wallet: Address,
         contract_address: Address,
         recipient: Address,
@@ -391,7 +391,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_redeem_timeout_htlc_transaction(
-        &mut self,
+        &self,
         wallet: Address,
         contract_address: Address,
         recipient: Address,
@@ -413,7 +413,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_redeem_timeout_htlc_transaction(
-        &mut self,
+        &self,
         wallet: Address,
         contract_address: Address,
         recipient: Address,
@@ -436,7 +436,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_redeem_early_htlc_transaction(
-        &mut self,
+        &self,
         contract_address: Address,
         recipient: Address,
         htlc_sender_signature: String,
@@ -467,7 +467,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_redeem_early_htlc_transaction(
-        &mut self,
+        &self,
         contract_address: Address,
         recipient: Address,
         htlc_sender_signature: String,
@@ -492,7 +492,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn sign_redeem_early_htlc_transaction(
-        &mut self,
+        &self,
         wallet: Address,
         contract_address: Address,
         recipient: Address,
@@ -514,7 +514,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_new_staker_transaction(
-        &mut self,
+        &self,
         sender_wallet: Address,
         staker_wallet: Address,
         delegation: Option<Address>,
@@ -536,7 +536,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_new_staker_transaction(
-        &mut self,
+        &self,
         sender_wallet: Address,
         staker_wallet: Address,
         delegation: Option<Address>,
@@ -559,7 +559,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_stake_transaction(
-        &mut self,
+        &self,
         sender_wallet: Address,
         staker_address: Address,
         value: Coin,
@@ -579,7 +579,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_stake_transaction(
-        &mut self,
+        &self,
         sender_wallet: Address,
         staker_address: Address,
         value: Coin,
@@ -601,7 +601,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_update_staker_transaction(
-        &mut self,
+        &self,
         sender_wallet: Option<Address>,
         staker_wallet: Address,
         new_delegation: Option<Address>,
@@ -628,7 +628,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_update_staker_transaction(
-        &mut self,
+        &self,
         sender_wallet: Option<Address>,
         staker_wallet: Address,
         new_delegation: Option<Address>,
@@ -651,7 +651,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_set_active_stake_transaction(
-        &mut self,
+        &self,
         sender_wallet: Option<Address>,
         staker_wallet: Address,
         new_active_balance: Coin,
@@ -676,7 +676,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_set_active_stake_transaction(
-        &mut self,
+        &self,
         sender_wallet: Option<Address>,
         staker_wallet: Address,
         new_active_balance: Coin,
@@ -697,7 +697,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_retire_stake_transaction(
-        &mut self,
+        &self,
         sender_wallet: Option<Address>,
         staker_wallet: Address,
         retire_stake: Coin,
@@ -722,7 +722,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_retire_stake_transaction(
-        &mut self,
+        &self,
         sender_wallet: Option<Address>,
         staker_wallet: Address,
         retire_stake: Coin,
@@ -743,7 +743,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_remove_stake_transaction(
-        &mut self,
+        &self,
         staker_wallet: Address,
         recipient: Address,
         value: Coin,
@@ -763,7 +763,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_remove_stake_transaction(
-        &mut self,
+        &self,
         staker_wallet: Address,
         recipient: Address,
         value: Coin,
@@ -784,7 +784,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_new_validator_transaction(
-        &mut self,
+        &self,
         sender_wallet: Address,
         validator_wallet: Address,
         signing_secret_key: String,
@@ -835,7 +835,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_new_validator_transaction(
-        &mut self,
+        &self,
         sender_wallet: Address,
         validator_wallet: Address,
         signing_secret_key: String,
@@ -862,7 +862,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_update_validator_transaction(
-        &mut self,
+        &self,
         sender_wallet: Address,
         validator_wallet: Address,
         new_signing_secret_key: Option<String>,
@@ -926,7 +926,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_update_validator_transaction(
-        &mut self,
+        &self,
         sender_wallet: Address,
         validator_wallet: Address,
         new_signing_secret_key: Option<String>,
@@ -953,7 +953,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_deactivate_validator_transaction(
-        &mut self,
+        &self,
         sender_wallet: Address,
         validator_address: Address,
         signing_secret_key: String,
@@ -978,7 +978,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_deactivate_validator_transaction(
-        &mut self,
+        &self,
         sender_wallet: Address,
         validator_address: Address,
         signing_secret_key: String,
@@ -999,7 +999,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_reactivate_validator_transaction(
-        &mut self,
+        &self,
         sender_wallet: Address,
         validator_address: Address,
         signing_secret_key: String,
@@ -1023,7 +1023,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_reactivate_validator_transaction(
-        &mut self,
+        &self,
         sender_wallet: Address,
         validator_address: Address,
         signing_secret_key: String,
@@ -1068,7 +1068,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_retire_validator_transaction(
-        &mut self,
+        &self,
         sender_wallet: Address,
         validator_wallet: Address,
         fee: Coin,
@@ -1086,7 +1086,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_retire_validator_transaction(
-        &mut self,
+        &self,
         sender_wallet: Address,
         validator_wallet: Address,
         fee: Coin,
@@ -1127,7 +1127,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn create_delete_validator_transaction(
-        &mut self,
+        &self,
         validator_wallet: Address,
         recipient: Address,
         fee: Coin,
@@ -1147,7 +1147,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     async fn send_delete_validator_transaction(
-        &mut self,
+        &self,
         validator_wallet: Address,
         recipient: Address,
         fee: Coin,

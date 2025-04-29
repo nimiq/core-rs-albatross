@@ -42,7 +42,7 @@ impl WalletInterface for WalletDispatcher {
     type Error = Error;
 
     async fn import_raw_key(
-        &mut self,
+        &self,
         key_data: String,
         passphrase: Option<String>,
     ) -> RPCResult<Address, (), Self::Error> {
@@ -63,23 +63,23 @@ impl WalletInterface for WalletDispatcher {
         Ok(address.into())
     }
 
-    async fn is_account_imported(&mut self, address: Address) -> RPCResult<bool, (), Self::Error> {
+    async fn is_account_imported(&self, address: Address) -> RPCResult<bool, (), Self::Error> {
         let is_imported = self.wallet_store.get(&address, None).is_some();
 
         Ok(is_imported.into())
     }
 
-    async fn list_accounts(&mut self) -> RPCResult<Vec<Address>, (), Self::Error> {
+    async fn list_accounts(&self) -> RPCResult<Vec<Address>, (), Self::Error> {
         Ok(self.wallet_store.list(None).into())
     }
 
-    async fn lock_account(&mut self, address: Address) -> RPCResult<(), (), Self::Error> {
+    async fn lock_account(&self, address: Address) -> RPCResult<(), (), Self::Error> {
         self.unlocked_wallets.write().remove(&address);
         Ok(().into())
     }
 
     async fn create_account(
-        &mut self,
+        &self,
         passphrase: Option<String>,
     ) -> RPCResult<ReturnAccount, (), Self::Error> {
         let passphrase = passphrase.unwrap_or_default();
@@ -101,7 +101,7 @@ impl WalletInterface for WalletDispatcher {
 
     // # TODO The duration parameter is ignored.
     async fn unlock_account(
-        &mut self,
+        &self,
         address: Address,
         passphrase: Option<String>,
         _duration: Option<u64>,
@@ -121,14 +121,14 @@ impl WalletInterface for WalletDispatcher {
         Ok(true.into())
     }
 
-    async fn is_account_unlocked(&mut self, address: Address) -> RPCResult<bool, (), Self::Error> {
+    async fn is_account_unlocked(&self, address: Address) -> RPCResult<bool, (), Self::Error> {
         let unlocked_wallets = self.unlocked_wallets.read();
         let is_unlocked = unlocked_wallets.get(&address).is_some();
 
         Ok(is_unlocked.into())
     }
 
-    async fn remove_account(&mut self, address: Address) -> RPCResult<bool, (), Self::Error> {
+    async fn remove_account(&self, address: Address) -> RPCResult<bool, (), Self::Error> {
         let _account = self
             .wallet_store
             .get(&address, None)
@@ -142,7 +142,7 @@ impl WalletInterface for WalletDispatcher {
     }
 
     async fn sign(
-        &mut self,
+        &self,
         message: String,
         address: Address,
         passphrase: Option<String>,
@@ -180,7 +180,7 @@ impl WalletInterface for WalletDispatcher {
     }
 
     async fn verify_signature(
-        &mut self,
+        &self,
         message: String,
         public_key: Ed25519PublicKey,
         signature: Ed25519Signature,
