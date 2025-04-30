@@ -1171,8 +1171,7 @@ pub fn is_of_log_type_and_related_to_addresses(
     log_types: &[LogType],
 ) -> bool {
     let log_type = LogType::from_log(log);
-    let matches_log_types =
-        log_types.is_empty() || log_types.iter().any(|other| log_type == *other);
+    let matches_log_types = log_types.is_empty() || log_types.contains(&log_type);
     let matches_addresses =
         addresses.is_empty() || addresses.iter().any(|addr| log.is_related_to_address(addr));
     matches_log_types && matches_addresses

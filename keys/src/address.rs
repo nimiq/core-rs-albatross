@@ -42,6 +42,7 @@ impl Address {
         &self.0
     }
 
+    #[allow(clippy::sliced_string_as_bytes)] // TODO: https://github.com/nimiq/core-rs-albatross/issues/3376
     pub fn from_user_friendly_address(friendly_addr: &str) -> Result<Address, AddressParseError> {
         let friendly_addr_wospace = str::replace(friendly_addr, " ", "");
 

@@ -157,11 +157,7 @@ impl Blockchain {
     }
 
     pub fn get_account_if_complete(&self, address: &Address) -> Option<Account> {
-        if let Ok(account) = self.state.accounts.get(address, None) {
-            Some(account)
-        } else {
-            None
-        }
+        self.state.accounts.get(address, None).ok()
     }
 
     /// The given account must correspond to the sender of the given transaction.

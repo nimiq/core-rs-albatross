@@ -587,7 +587,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                     BlockchainEvent::HistoryAdopted(hash) => Some(hash.into()),
                     BlockchainEvent::Finalized(_) | BlockchainEvent::EpochFinalized(_) => None,
                     BlockchainEvent::Rebranched(_, new_branch) => {
-                        Some(new_branch.into_iter().last().unwrap().0.into())
+                        Some(new_branch.last().unwrap().0.clone().into())
                     }
                     BlockchainEvent::Stored(_block) => None,
                 };

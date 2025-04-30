@@ -1156,7 +1156,7 @@ impl Client {
             loop {
                 let details = match network_events.next().await {
                     Some(Ok(NetworkEvent::PeerJoined(peer_id, peer_info))) => {
-                        if subscribed_addresses.borrow().len() > 0 {
+                        if !subscribed_addresses.borrow().is_empty() {
                             // Subscribe to all addresses at the new peer
                             let owned_consensus = consensus.clone();
                             let owned_subscribed_addresses = Rc::clone(&subscribed_addresses);
