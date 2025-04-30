@@ -11,6 +11,10 @@ use pin_project::pin_project;
 
 use super::header::Header;
 
+const MAX_MESSAGE_SIZE: u32 = 1_000_000;
+
+const CHUNK_SIZE: usize = 1024;
+
 /// Try to read, such that at most `wanted_len` bytes are in the buffer.
 ///
 /// This will return `Poll::Pending` until the buffer has `wanted_len` bytes in
@@ -24,33 +28,37 @@ fn read_to_buf<R>(
 where
     R: AsyncRead,
 {
-    let mut len_buffer_read = buffer.len();
-    if buffer.len() < wanted_len {
-        buffer.resize(wanted_len, 0);
-    }
-    while len_buffer_read < wanted_len {
-        match AsyncRead::poll_read(
-            reader.as_mut(),
-            cx,
-            &mut buffer[len_buffer_read..wanted_len],
-        ) {
-            // EOF
+    while buffer.len() < wanted_len {
+        let current_len = buffer.len();
+        let chunk = std::cmp::min(CHUNK_SIZE, wanted_len - current_len);
+
+        // Resize the buffer, filling new bytes with zeros.
+        buffer.resize(current_len + chunk, 0);
+        // Read into the newly allocated slice.
+        let buf = &mut buffer[current_len..current_len + chunk];
+
+        match reader.as_mut().poll_read(cx, buf) {
+            // EOF encountered: remove the extra allocated bytes and return false.
             Poll::Ready(Ok(0)) => {
-                buffer.resize(len_buffer_read, 0);
+                buffer.truncate(current_len);
                 return Poll::Ready(Ok(false));
             }
-
-            // Data was read
-            Poll::Ready(Ok(read)) => {
-                len_buffer_read += read;
+            // Some bytes were read.
+            Poll::Ready(Ok(n)) => {
+                if n < chunk {
+                    // If fewer than the requested bytes were read, truncate the buffer to the actual data.
+                    buffer.truncate(current_len + n);
+                }
+                // Continue the loop: if buffer.len() < wanted_len, a subsequent call will try to fill more data.
             }
-
-            // An error occurred
-            Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
-
-            // Reader is not ready
+            // An error occurred: revert the resize and return the error.
+            Poll::Ready(Err(e)) => {
+                buffer.truncate(current_len);
+                return Poll::Ready(Err(e));
+            }
+            // If the reader is not ready, remove the unfilled portion and return Pending.
             Poll::Pending => {
-                buffer.resize(len_buffer_read, 0);
+                buffer.truncate(current_len);
                 return Poll::Pending;
             }
         }
@@ -162,6 +170,11 @@ where
                     Ok(header) => header,
                     Err(e) => return Poll::Ready(Some(Err(e))),
                 };
+
+                // Verify max message size.
+                if header.size > MAX_MESSAGE_SIZE {
+                    return Poll::Ready(Some(Err(DeserializeError::bad_encoding())));
+                }
 
                 // Reset the buffer
                 self_projected.buffer.clear();
