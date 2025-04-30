@@ -415,6 +415,9 @@ impl TransactionBuilder {
     }
 }
 
+// `clippy::doc_overindented_list_items` triggers because whitespace is used to typeset in
+// monospace here.
+#[allow(clippy::doc_overindented_list_items)]
 // Convenience functionality.
 impl TransactionBuilder {
     /// Creates a basic transaction from the address of a given `key_pair` to a basic `recipient`.

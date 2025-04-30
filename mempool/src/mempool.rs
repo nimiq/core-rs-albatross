@@ -281,11 +281,11 @@ impl Mempool {
     /// During a Blockchain extend event a new block is mined which implies that:
     ///
     /// 1. Existing transactions in the mempool can become invalidated because:
-    ///     A. They are no longer valid at the new block height (aging)
-    ///     B. Some were already mined
+    ///    A. They are no longer valid at the new block height (aging)
+    ///    B. Some were already mined
     ///
     /// 2. A transaction, that we didn't know about, from a known sender could be included in the blockchain, which implies:
-    ///     A. We need to update the sender balances in our mempool because some txns in or mempool could become invalid
+    ///    A. We need to update the sender balances in our mempool because some txns in or mempool could become invalid
     ///
     /// 1.B and 2.A can be iterated over the txs in the adopted blocks, that is, it is not
     /// necessary to iterate all transactions in the mempool.

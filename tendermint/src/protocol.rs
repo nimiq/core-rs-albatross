@@ -60,7 +60,7 @@ pub trait AggregationMessage<ProposalHash>: Aggregation<ProposalHash> {
 
 /// A proposal for Tendermint. Signatures for these  proposals are two fold:
 /// * the proposal itself is signed by the Validator proposing it alongside its round and valid_round.
-///     The signing and verification of it is done in Deps::sign_proposal and Deps::verify_proposal.
+///   The signing and verification of it is done in Deps::sign_proposal and Deps::verify_proposal.
 /// * the proposal is signed, potentially using a different signature scheme for the aggregation itself.
 pub trait Proposal<ProposalHash, InherentHash> {
     /// Hash of the proposal. May include parts of the inherent.

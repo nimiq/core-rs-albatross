@@ -445,12 +445,12 @@ pub struct RequestMissingBlocks {
     /// The direction the responder should take to search.
     ///  - Direction::Forward searches from the best locator to the target on the main chain.
     ///
-    ///     That also implies that any block request using forward direction can only return main chain blocks.
+    ///    That also implies that any block request using forward direction can only return main chain blocks.
     ///
     ///  - Direction::Backward searches from the target hash backwards until a locator (or macro block) is reached.
     ///
-    ///     Using Backward makes retrieving inferior chains possible, but is more expensive for bigger
-    ///     sets of anticipated returned blocks.
+    ///    Using Backward makes retrieving inferior chains possible, but is more expensive for bigger
+    ///    sets of anticipated returned blocks.
     pub direction: Direction,
 }
 

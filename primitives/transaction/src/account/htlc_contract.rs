@@ -318,15 +318,15 @@ impl PoWCreationTransactionData {
 ///
 /// The funds can be unlocked by one of three mechanisms:
 /// 1. After a blockchain height called `timeout` is reached, the `sender` can withdraw the funds.
-///     (called `TimeoutResolve`)
+///    (called `TimeoutResolve`)
 /// 2. The contract stores a `hash_root`. The `recipient` can withdraw the funds before the
-///     `timeout` has been reached by presenting a hash that will yield the `hash_root`
-///     when re-hashing it `hash_count` times.
-///     By presenting a hash that will yield the `hash_root` after re-hashing it k < `hash_count`
-///     times, the `recipient` can retrieve 1/k of the funds.
-///     (called `RegularTransfer`)
+///    `timeout` has been reached by presenting a hash that will yield the `hash_root`
+///    when re-hashing it `hash_count` times.
+///    By presenting a hash that will yield the `hash_root` after re-hashing it k < `hash_count`
+///    times, the `recipient` can retrieve 1/k of the funds.
+///    (called `RegularTransfer`)
 /// 3. If both `sender` and `recipient` sign the transaction, the funds can be withdrawn at any time.
-///     (called `EarlyResolve`)
+///    (called `EarlyResolve`)
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum OutgoingHTLCTransactionProof {

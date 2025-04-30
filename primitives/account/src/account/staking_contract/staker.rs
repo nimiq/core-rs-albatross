@@ -20,6 +20,7 @@ use crate::{
     DeleteStakerReceipt, Log, RetireStakeReceipt, SetActiveStakeReceipt, TransactionLog,
 };
 
+#[allow(clippy::doc_overindented_list_items)] // Used to typeset in monospace.
 /// Struct representing a staker in the staking contract.
 /// The staker's balance is divided into active, inactive and retired stake.
 ///

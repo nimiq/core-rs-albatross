@@ -689,10 +689,10 @@ impl ClientInner {
 /// * `Consensus` - Contains most other objects, such as blockchain, mempool, etc.
 /// * `Blockchain` - The blockchain. Use this to query blocks or transactions
 /// * `Validator` - If the client runs a validator, this exposes access to the validator state,
-///     such as progress of current signature aggregations.
+///   such as progress of current signature aggregations.
 /// * `Database` - This can be stored to store arbitrary byte strings along-side the consensus state
-///     (e.g. the chain info). Make sure you don't collide with database names - e.g. by prefixing
-///     them with something.
+///   (e.g. the chain info). Make sure you don't collide with database names - e.g. by prefixing
+///   them with something.
 /// * ...
 ///
 /// # ToDo
