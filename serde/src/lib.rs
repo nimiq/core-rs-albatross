@@ -103,6 +103,7 @@ impl<T: SerializedSize> SerializedMaxSize for T {
 
 #[rustfmt::skip]
 #[allow(unused_qualifications)] // Remove with a MSVR >= 1.80
+#[allow(clippy::manual_div_ceil)] // Breaks integer type inference.
 mod integer_impls {
     use super::SerializedFixedSize;
     use super::SerializedMaxSize;
@@ -159,7 +160,7 @@ pub const fn uint_max_size(max_value: u64) -> usize {
         Some(n) => n + 1,
         None => 1,
     };
-    ((bits + 6) / 7) as usize
+    bits.div_ceil(7) as usize
 }
 
 /// Maximum size in bytes for an `Option<T>` value in binary serialization.

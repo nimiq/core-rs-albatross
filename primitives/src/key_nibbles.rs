@@ -46,7 +46,7 @@ impl KeyNibbles {
     }
 
     fn bytes_len(&self) -> usize {
-        (self.len() + 1) / 2
+        self.len().div_ceil(2)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -395,7 +395,7 @@ mod serde_derive {
                     &"fewer nibbles",
                 ));
             }
-            if result.bytes.len != (result.len + 1) / 2 {
+            if result.bytes.len != result.len.div_ceil(2) {
                 // bytes length incorrect
                 return Err(D::Error::invalid_length(
                     result.bytes.len as usize,

@@ -374,7 +374,7 @@ impl FromIterator<usize> for BitSet {
 impl BitSet {
     /// Maximum size in bytes for a single `BitSet` in binary serialization.
     pub const fn max_size(largest_bit_index: usize) -> usize {
-        let num_u64 = (largest_bit_index + 63) / 64;
+        let num_u64 = largest_bit_index.div_ceil(64);
         nimiq_serde::seq_max_size(u64::MAX_SIZE, num_u64)
     }
 }
