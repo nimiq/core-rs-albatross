@@ -272,7 +272,7 @@ pub trait Serialize: serde::Serialize {
         };
         match postcard::serialize_with_flavor(self, wrapper) {
             Ok(()) => Ok(written),
-            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e)),
+            Err(e) => Err(io::Error::other(e)),
         }
     }
     fn serialize<W: Write>(&self, writer: &mut W) -> io::Result<usize> {

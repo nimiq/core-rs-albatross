@@ -1,4 +1,4 @@
-use std::{fs, num::NonZeroU8, sync::Arc};
+use std::{fs, io, num::NonZeroU8, sync::Arc};
 
 use instant::SystemTime;
 use nimiq_block::Block;
@@ -219,12 +219,9 @@ impl ClientInner {
                             "Proving keys missing, please place them in this folder: {:?}.",
                             zk_prover_config.prover_keys_path
                         );
-                        return Err(Error::NanoZKP(NanoZKPError::Filesystem(
-                            std::io::Error::new(
-                                std::io::ErrorKind::Other,
-                                "Proving keys do not exist.",
-                            ),
-                        )));
+                        return Err(Error::NanoZKP(NanoZKPError::Filesystem(io::Error::other(
+                            "Proving keys do not exist.",
+                        ))));
                     }
                     _ => {}
                 }
@@ -302,8 +299,8 @@ impl ClientInner {
                     Some(Item::Sec1Key(key)) => Ok(key.secret_sec1_der().to_vec()),
                     Some(Item::Pkcs8Key(key)) => Ok(key.secret_pkcs8_der().to_vec()),
                     Some(Item::Pkcs1Key(key)) => Ok(key.secret_pkcs1_der().to_vec()),
-                    _ => Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
                         "Invalid TLS private key",
                     )),
                 }
@@ -316,8 +313,8 @@ impl ClientInner {
                 rustls_pemfile::read_all(&mut &*certificate_bytes)
                     .map(|item| match item {
                         Ok(Item::X509Certificate(cert)) => Ok(cert.to_vec()),
-                        _ => Err(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
+                        _ => Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
                             "Invalid TLS certificate(s)",
                         )),
                     })

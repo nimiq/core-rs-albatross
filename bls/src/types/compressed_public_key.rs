@@ -1,8 +1,4 @@
-use std::{
-    cmp::Ordering,
-    fmt,
-    io::{Error, ErrorKind},
-};
+use std::{cmp::Ordering, fmt, io};
 
 use ark_ec::AffineRepr;
 use ark_mnt6_753::G2Affine;
@@ -34,14 +30,14 @@ impl CompressedPublicKey {
     pub const SIZE: usize = 285;
 
     /// Transforms the compressed form back into the projective form.
-    pub fn uncompress(&self) -> Result<PublicKey, Error> {
+    pub fn uncompress(&self) -> Result<PublicKey, io::Error> {
         log::debug!(
             compressed = &self.to_hex()[..16],
             "decompressing BLS public key",
         );
         let affine_point: G2Affine =
             CanonicalDeserialize::deserialize_compressed(&mut &self.public_key[..])
-                .map_err(|e| Error::new(ErrorKind::Other, e))?;
+                .map_err(io::Error::other)?;
         Ok(PublicKey {
             public_key: affine_point.into_group(),
         })

@@ -1,8 +1,4 @@
-use std::{
-    cmp::Ordering,
-    fmt,
-    io::{Error, ErrorKind},
-};
+use std::{cmp::Ordering, fmt, io};
 
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_mnt6_753::{G1Affine, G1Projective};
@@ -33,10 +29,10 @@ pub struct CompressedSignature {
 
 impl CompressedSignature {
     /// Transforms the compressed form back into the projective form.
-    pub fn uncompress(&self) -> Result<Signature, Error> {
+    pub fn uncompress(&self) -> Result<Signature, io::Error> {
         let affine_point: G1Affine =
             CanonicalDeserialize::deserialize_compressed(&mut &self.signature[..])
-                .map_err(|e| Error::new(ErrorKind::Other, e))?;
+                .map_err(io::Error::other)?;
         let signature = affine_point.into_group();
         Ok(Signature {
             signature,
