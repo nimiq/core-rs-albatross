@@ -15,6 +15,7 @@ use nimiq_serde::Serialize;
 use nimiq_test_utils::{
     blockchain::{signing_key, voting_key},
     blockchain_with_rng::produce_macro_blocks_with_rng,
+    test_rng,
     zkp_test_data::get_base_seed,
 };
 use nimiq_utils::time::OffsetTime;
@@ -25,16 +26,22 @@ use nimiq_zkp_component::{
 };
 use nimiq_zkp_primitives::NanoZKPError;
 use parking_lot::RwLock;
+use rand::{CryptoRng, Rng};
 use tracing_subscriber::{filter::Targets, prelude::*};
 
 /// Run the zk proof generation.
 #[derive(Debug, Parser)]
-struct TestProving {
+struct TestZKP {
     /// Network ID to utilize.
     /// Only Albatross network ids are supported and the `Main` network ID.
     /// If you want to tests for mainnet, use `Main` instead.
-    #[clap(short = 'n', long, value_enum)]
+    #[clap(value_enum)]
     network_id: NetworkId,
+    /// If the block generation should use a deterministic seed.
+    /// This should be activated if there is a need to run the proof verification
+    /// after running this binary.
+    #[clap(short = 'd', long)]
+    deterministic: bool,
 }
 
 fn initialize(network_id: NetworkId) {
@@ -63,20 +70,28 @@ fn initialize(network_id: NetworkId) {
     // The genesis block number must be set accordingly
     policy_config.genesis_block_number = genesis_block.block_number();
 
+    let keys_path = PathBuf::from(network_id.default_zkp_path().unwrap());
+    ZKP_VERIFYING_DATA.init_with_data(load_verifying_data(&keys_path).unwrap());
+
     let _ = Policy::get_or_init(policy_config);
 }
 
 #[tokio::main]
 async fn main() -> Result<(), NanoZKPError> {
-    let args = TestProving::parse();
+    let args = TestZKP::parse();
     let network_id = args.network_id;
+    let deterministic = args.deterministic;
 
     initialize(network_id);
 
     // Generates the verifying keys if they don't exist yet.
     log::info!("====== Test ZK proof generation initiated ======");
     let start = Instant::now();
-    produce_two_consecutive_valid_zk_proofs(network_id).await;
+    if deterministic {
+        produce_two_consecutive_valid_zk_proofs(network_id, &mut test_rng(deterministic)).await;
+    } else {
+        produce_two_consecutive_valid_zk_proofs(network_id, &mut get_base_seed()).await;
+    };
 
     log::info!("====== Test ZK proof generation finished ======");
     log::info!("Total time elapsed: {:?} seconds", start.elapsed());
@@ -98,10 +113,11 @@ fn blockchain(network_info: &NetworkInfo) -> Arc<RwLock<Blockchain>> {
     ))
 }
 
-async fn produce_two_consecutive_valid_zk_proofs(network_id: NetworkId) {
+async fn produce_two_consecutive_valid_zk_proofs<R: Rng + CryptoRng>(
+    network_id: NetworkId,
+    rng: &mut R,
+) {
     let keys_path = PathBuf::from(network_id.default_zkp_path().unwrap());
-
-    ZKP_VERIFYING_DATA.init_with_data(load_verifying_data(&keys_path).unwrap());
     if !all_files_created(&keys_path, true) {
         log::error!(
             "Proving keys missing, please place them in this folder: {:?}.",
@@ -117,7 +133,7 @@ async fn produce_two_consecutive_valid_zk_proofs(network_id: NetworkId) {
         &producer,
         &blockchain,
         Policy::batches_per_epoch() as usize,
-        &mut get_base_seed(),
+        rng,
     );
 
     let block = blockchain.read().state.election_head.clone();
@@ -127,6 +143,7 @@ async fn produce_two_consecutive_valid_zk_proofs(network_id: NetworkId) {
 
     log::info!("Going to wait for the 1st proof");
     let proving_start = Instant::now();
+
     // Waits for the proof generation and verifies the proof.
     let zkp_state = generate_new_proof(
         zkp_state.latest_block,
@@ -136,7 +153,7 @@ async fn produce_two_consecutive_valid_zk_proofs(network_id: NetworkId) {
         &keys_path,
     )
     .unwrap();
-    println!(
+    log::info!(
         "Proof generated! Elapsed time: {:?}",
         proving_start.elapsed()
     );
@@ -152,7 +169,7 @@ async fn produce_two_consecutive_valid_zk_proofs(network_id: NetworkId) {
         &producer,
         &blockchain,
         Policy::batches_per_epoch() as usize,
-        &mut get_base_seed(),
+        rng,
     );
     let block = blockchain.read().state.election_head.clone();
 
@@ -166,7 +183,7 @@ async fn produce_two_consecutive_valid_zk_proofs(network_id: NetworkId) {
         &keys_path,
     )
     .unwrap();
-    println!(
+    log::info!(
         "Proof generated! Elapsed time: {:?}",
         proving_start.elapsed()
     );
