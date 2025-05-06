@@ -50,35 +50,39 @@ impl<TNetwork: Network> PicoMacroSync<TNetwork> {
         Poll::Pending
     }
 
-    fn poll_epoch_ids(
+    fn poll_heads(
         &mut self,
         cx: &mut Context<'_>,
     ) -> Poll<Option<MacroSyncReturn<TNetwork::PeerId>>> {
-        while let Poll::Ready(Some(Some(epoch_ids))) = self.epoch_ids_stream.poll_next_unpin(cx) {
-            let peer_id = epoch_ids.sender;
-
+        while let Poll::Ready(Some(Some((peer_head, peer_id)))) =
+            self.head_stream.poll_next_unpin(cx)
+        {
             // The peer might have disconnected during the request.
             if !self.network.has_peer(peer_id) {
                 continue;
             }
 
-            // If the peer didn't find any of our locators, we are done with it and emit it.
-            if !epoch_ids.locator_found {
-                debug!(?peer_id, "Peer is behind or on different chain");
-                self.syncing_peers.remove(&peer_id);
-                return Poll::Ready(Some(MacroSyncReturn::Outdated(epoch_ids.sender)));
-            } else if epoch_ids.ids.is_empty() && epoch_ids.checkpoint.is_none() {
-                // We are synced with this peer.
-                debug!(?peer_id, "Finished macro syncing with peer");
-                self.syncing_peers.remove(&peer_id);
-                return Poll::Ready(Some(MacroSyncReturn::Good(epoch_ids.sender)));
+            match self.blockchain {
+                #[cfg(feature = "full")]
+                BlockchainProxy::Full(_) => {
+                    panic!("Pico macro sync is not supported in the full blockchain")
+                }
+                BlockchainProxy::Light(ref light_blockchain) => {
+                    let blockchain = light_blockchain.upgradable_read();
+                    let macro_head = blockchain.macro_head.hash();
+                    let election_head = blockchain.election_head.hash();
+
+                    if macro_head == peer_head.macro_hash
+                        && election_head == peer_head.election_hash
+                    {
+                        // We are synced with this peer so we emit it
+                        return Poll::Ready(Some(MacroSyncReturn::Good(peer_id)));
+                    }
+                }
             }
 
             // Request macro headers from this peer
-            if let Some(macro_sync_return) = self.request_macro_headers(epoch_ids) {
-                self.syncing_peers.remove(&peer_id);
-                return Poll::Ready(Some(macro_sync_return));
-            }
+            self.request_macro_headers(peer_head, peer_id);
         }
 
         Poll::Pending
@@ -116,15 +120,6 @@ impl<TNetwork: Network> PicoMacroSync<TNetwork> {
                             while let Some((_, block)) = peer_requests.pop_request() {
                                 let block = block.expect("At this point the queue should be ready");
 
-                                if !block.is_macro() {
-                                    log::warn!(%peer_id,
-                                        "Banning peer because it sent us an invalid block type ",
-                                    );
-                                    self.disconnect_peer(peer_id, CloseReason::MaliciousPeer);
-                                    return Poll::Ready(None);
-                                }
-
-                                // Check if the block is still valid for us or if it is outdated before trying to apply it
                                 let push_result = match self.blockchain {
                                     #[cfg(feature = "full")]
                                     BlockchainProxy::Full(_) => {
@@ -132,45 +127,62 @@ impl<TNetwork: Network> PicoMacroSync<TNetwork> {
                                     }
                                     BlockchainProxy::Light(ref light_blockchain) => {
                                         let blockchain = light_blockchain.upgradable_read();
-                                        let latest_block_number = blockchain.block_number();
 
-                                        if block.block_number() < latest_block_number {
-                                            // The peer is outdated, so we emit it, and we remove it
-                                            self.peer_requests.remove(&peer_id);
-                                            self.syncing_peers.remove(&peer_id);
-                                            return Poll::Ready(Some(MacroSyncReturn::Outdated(
-                                                peer_id,
-                                            )));
-                                        }
+                                        let election_head = blockchain.election_head_hash();
+                                        let macro_head = blockchain.macro_head_hash();
 
                                         if Policy::is_election_block_at(block.block_number()) {
-                                            if Policy::genesis_block_number() == latest_block_number
+                                            if election_head == block.hash() {
+                                                // Known block so we just ignore and continue
+                                                continue;
+                                            }
+
+                                            if Policy::genesis_block_number()
+                                                == blockchain.block_number()
                                             {
                                                 log::info!("PicoSync: Pushing latest election");
-                                                // If we are currently at the genesis block we blindly push the election block we obtained
+                                                // If we are currently at the genesis block we push the election block we obtained
                                                 LightBlockchain::push_pico_election(
                                                     blockchain,
                                                     block.clone(),
                                                 )
                                             } else {
-                                                // We don't accept other election blocks if we are not in the genesis.
-                                                // Although we could tolerate +/- 1 block differences
+                                                // We don't accept other election blocks if we are not in the genesis
                                                 self.syncing_peers.remove(&peer_id);
+                                                log::warn!(
+                                                        block = block.block_number(),
+                                                        head = blockchain.block_number(),
+                                                        %peer_id,
+                                                        "Conflicting election from peer");
                                                 return Poll::Ready(Some(
                                                     MacroSyncReturn::Conflicting(peer_id),
                                                 ));
                                             }
                                         } else {
-                                            // We only accept macro blocks from the current epoch
-                                            if blockchain.epoch_number()
-                                                == Policy::epoch_at(latest_block_number)
+                                            if macro_head == block.hash() {
+                                                // Known block so we just ignore and continue
+                                                continue;
+                                            }
+
+                                            // We only accept macro blocks from the next epoch
+                                            if blockchain.epoch_number() + 1
+                                                == Policy::epoch_at(block.block_number())
                                             {
+                                                log::info!("PicoSync: Pushing latest macro");
+
                                                 LightBlockchain::push_macro(
                                                     blockchain,
                                                     block.clone(),
                                                 )
                                             } else {
                                                 self.syncing_peers.remove(&peer_id);
+                                                log::warn!(
+                                                    block = block.block_number(),
+                                                    head = blockchain.block_number(),
+                                                    current_epoch=blockchain.epoch_number() + 1,
+                                                    block_epoch=Policy::epoch_at(block.block_number()),
+                                                    %peer_id,
+                                                    "Conflicting macro block from peer");
                                                 return Poll::Ready(Some(
                                                     MacroSyncReturn::Conflicting(peer_id),
                                                 ));
@@ -207,25 +219,16 @@ impl<TNetwork: Network> PicoMacroSync<TNetwork> {
                             // At this point we applied all the pending requests from this peer
                             self.peer_requests.remove(&peer_id);
 
-                            // Re-request epoch ids after applying these blocks in order to know if we are up to date with this peer
+                            // Re-request the head after applying these blocks in order to know if we are up to date with this peer
                             // or if there is more to sync
-                            let future = Self::request_epoch_ids(
-                                self.blockchain.clone(),
-                                Arc::clone(&self.network),
-                                peer_id,
-                            )
-                            .boxed();
-                            self.epoch_ids_stream.push(future);
+                            let future =
+                                Self::request_head(Arc::clone(&self.network), peer_id).boxed();
+                            self.head_stream.push(future);
                         }
                     } else {
-                        // If we don't have any pending requests from this peer, we proceed requesting epoch ids
-                        let future = Self::request_epoch_ids(
-                            self.blockchain.clone(),
-                            Arc::clone(&self.network),
-                            peer_id,
-                        )
-                        .boxed();
-                        self.epoch_ids_stream.push(future);
+                        // If we don't have any pending requests from this peer, we proceed requesting the head
+                        let future = Self::request_head(Arc::clone(&self.network), peer_id).boxed();
+                        self.head_stream.push(future);
                     }
                 }
                 (Ok(Err(error)), peer_id) => {
@@ -253,7 +256,7 @@ impl<TNetwork: Network> Stream for PicoMacroSync<TNetwork> {
             return Poll::Ready(o);
         }
 
-        if let Poll::Ready(o) = self.poll_epoch_ids(cx) {
+        if let Poll::Ready(o) = self.poll_heads(cx) {
             return Poll::Ready(o);
         }
 

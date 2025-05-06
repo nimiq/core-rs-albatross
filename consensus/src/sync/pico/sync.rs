@@ -14,8 +14,8 @@ use nimiq_utils::{spawn, stream::FuturesUnordered};
 use nimiq_zkp_component::zkp_component::ZKPComponentProxy;
 
 use crate::{
-    messages::BlockError,
-    sync::sync_interface::{EpochIds, MacroSync, PeerMacroRequests},
+    messages::{BlockError, ResponseHead},
+    sync::sync_interface::{MacroSync, PeerMacroRequests},
 };
 
 /// The PicoMacroSync is one type of MacroSync that operates on a per peer basis,
@@ -34,9 +34,9 @@ pub struct PicoMacroSync<TNetwork: Network> {
     pub(crate) network_event_rx: SubscribeEvents<TNetwork::PeerId>,
     /// Used to track the macro requests on a per peer basis
     pub(crate) peer_requests: HashMap<TNetwork::PeerId, PeerMacroRequests>,
-    /// The stream for epoch ids requests
-    pub(crate) epoch_ids_stream:
-        FuturesUnordered<BoxFuture<'static, Option<EpochIds<TNetwork::PeerId>>>>,
+    /// The stream for head requests
+    pub(crate) head_stream:
+        FuturesUnordered<BoxFuture<'static, Option<(ResponseHead, TNetwork::PeerId)>>>,
     /// Block requests
     pub(crate) block_headers: FuturesUnordered<
         BoxFuture<
@@ -67,7 +67,7 @@ impl<TNetwork: Network> PicoMacroSync<TNetwork> {
             network,
             network_event_rx,
             peer_requests: HashMap::new(),
-            epoch_ids_stream: FuturesUnordered::new(),
+            head_stream: FuturesUnordered::new(),
             block_headers: Default::default(),
             syncing_peers: HashSet::new(),
             zkp_component_proxy,
@@ -98,13 +98,11 @@ impl<TNetwork: Network> MacroSync<TNetwork::PeerId> for PicoMacroSync<TNetwork> 
     const MAX_REQUEST_EPOCHS: u16 = 1000; // TODO: Use other value
 
     fn add_peer(&mut self, peer_id: TNetwork::PeerId) {
-        info!(%peer_id, "Pico MacroSync: Requesting epoch ids from peer");
+        info!(%peer_id, "Pico MacroSync: Requesting head from peer");
 
         self.syncing_peers.insert(peer_id);
-        let future =
-            Self::request_epoch_ids(self.blockchain.clone(), Arc::clone(&self.network), peer_id)
-                .boxed();
-        self.epoch_ids_stream.push(future);
+        let future = Self::request_head(Arc::clone(&self.network), peer_id).boxed();
+        self.head_stream.push(future);
     }
 
     fn fallback(&mut self, _peers: Vec<TNetwork::PeerId>) {
