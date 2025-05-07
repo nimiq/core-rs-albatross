@@ -9,7 +9,7 @@ changelog:
       exclude:
         labels:
           - testnet-restart
-          - dependency
+          - dependencies
     - title: Dependencies
       labels:
-        - dependency
+        - dependencies
