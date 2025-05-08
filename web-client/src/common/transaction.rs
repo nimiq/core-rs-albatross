@@ -846,19 +846,19 @@ pub struct PlainTransaction {
     /// any extra data. Basic transactions can be serialized to less bytes, so take up less place on the
     /// blockchain. Extended transactions on the other hand are all other transactions: contract creations
     /// and interactions, staking transactions, transactions with exta data, etc.
-    #[tsify(type = "PlainTransactionFormat")]
+    #[tsify(type = "\"basic\" | \"extended\"")]
     pub format: TransactionFormat,
     /// The transaction's sender address in human-readable IBAN format.
     pub sender: String,
     /// The account type of the transaction's sender. "basic" are regular private-key controlled accounts,
     /// "vesting" and "htlc" are contracts, and "staking" is the staking contract.
-    #[tsify(type = "PlainAccountType")]
+    #[tsify(type = "\"basic\" | \"vesting\" | \"htlc\" | \"staking\"")]
     pub sender_type: AccountType,
     /// The transaction's recipient address in human-readable IBAN format.
     pub recipient: String,
     /// The account type of the transaction's recipient. "basic" are regular private-key controlled accounts,
     /// "vesting" and "htlc" are contracts, and "staking" is the staking contract.
-    #[tsify(type = "PlainAccountType")]
+    #[tsify(type = "\"basic\" | \"vesting\" | \"htlc\" | \"staking\"")]
     pub recipient_type: AccountType,
     // The transaction's value in luna (NIM's smallest unit).
     pub value: u64,

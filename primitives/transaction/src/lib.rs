@@ -89,8 +89,7 @@ pub struct TransactionReceipt {
 #[repr(u8)]
 #[cfg_attr(
     feature = "ts-types",
-    derive(tsify::Tsify),
-    serde(rename = "PlainTransactionFormat", rename_all = "lowercase"),
+    serde(rename_all = "lowercase"),
     wasm_bindgen::prelude::wasm_bindgen
 )]
 pub enum TransactionFormat {
