@@ -8,11 +8,11 @@ fn test_interlink_hops_to_block() {
     fn assert_interlink_hops(target: u32, election_head: u32, hops: Vec<u32>) {
         assert_eq!(
             BlockInclusionProof::get_interlink_hops(
-                target * Policy::blocks_per_epoch(),
-                election_head * Policy::blocks_per_epoch()
+                target * Policy::blocks_per_epoch() + Policy::genesis_block_number(),
+                election_head * Policy::blocks_per_epoch() + Policy::genesis_block_number()
             ),
             hops.into_iter()
-                .map(|i| i * Policy::blocks_per_epoch())
+                .map(|i| i * Policy::blocks_per_epoch() + Policy::genesis_block_number())
                 .collect::<Vec<u32>>()
         );
     }
@@ -37,7 +37,7 @@ fn test_is_block_proven() {
         1,
         MacroBlock {
             header: MacroHeader {
-                block_number: Policy::blocks_per_epoch(),
+                block_number: Policy::blocks_per_epoch() + Policy::genesis_block_number(),
                 interlink: Some(vec![]),
                 ..Default::default()
             },
@@ -50,7 +50,7 @@ fn test_is_block_proven() {
             i,
             MacroBlock {
                 header: MacroHeader {
-                    block_number: Policy::blocks_per_epoch() * i,
+                    block_number: Policy::blocks_per_epoch() * i + Policy::genesis_block_number(),
                     interlink: Some(interlink),
                     parent_election_hash: blocks[&(i - 1)].hash(),
                     ..Default::default()

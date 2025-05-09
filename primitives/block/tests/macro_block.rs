@@ -7,7 +7,8 @@ fn test_next_interlink() {
     fn create_interlink_macro_block(election_number: u32, interlink: &[Blake2bHash]) -> MacroBlock {
         MacroBlock {
             header: MacroHeader {
-                block_number: Policy::blocks_per_epoch() * election_number,
+                block_number: Policy::blocks_per_epoch() * election_number
+                    + Policy::genesis_block_number(),
                 interlink: Some(interlink.to_vec()),
                 ..Default::default()
             },

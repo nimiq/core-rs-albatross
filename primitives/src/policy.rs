@@ -9,6 +9,7 @@ use wasm_bindgen::prelude::*;
 /// Global policy
 static GLOBAL_POLICY: OnceCell<Policy> = OnceCell::new();
 
+/// Policy constants
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "ts-types", cfg_eval::cfg_eval, wasm_bindgen)]
 pub struct Policy {
@@ -644,16 +645,31 @@ impl Policy {
 
 impl Default for Policy {
     fn default() -> Self {
-        Policy {
-            blocks_per_batch: 60,
-            batches_per_epoch: 720,
-            state_chunks_max_size: 1000,
-            transaction_validity_window: 120,
-            genesis_block_number: 0,
-        }
+        MAINNET_POLICY
     }
 }
 
+/// Policy constants for MainNet
+pub const MAINNET_POLICY: Policy = Policy {
+    blocks_per_batch: 60,
+    batches_per_epoch: 720,
+    state_chunks_max_size: 1000,
+    transaction_validity_window: 120,
+    // As defined in the `main` network genesis file
+    genesis_block_number: 3456000,
+};
+
+/// Policy constants for TestNet
+pub const TESTNET_POLICY: Policy = Policy {
+    blocks_per_batch: 60,
+    batches_per_epoch: 720,
+    state_chunks_max_size: 1000,
+    transaction_validity_window: 120,
+    // As defined in the `test` network genesis file
+    genesis_block_number: 3032010,
+};
+
+/// Policy constants used for testing purposes
 pub const TEST_POLICY: Policy = Policy {
     blocks_per_batch: 32,
     batches_per_epoch: 4,

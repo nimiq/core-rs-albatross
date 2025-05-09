@@ -7,6 +7,7 @@ use nimiq_genesis::NetworkId;
 use nimiq_light_blockchain::LightBlockchain;
 use nimiq_network_interface::network::{Network, Topic};
 use nimiq_network_mock::MockHub;
+use nimiq_primitives::policy;
 use nimiq_zkp_component::ZKPComponent;
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
@@ -17,6 +18,8 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
 #[wasm_bindgen_test]
 pub async fn it_can_initialize_with_mock_network() {
+    let _ = policy::Policy::get_or_init(policy::TEST_POLICY);
+
     let mut hub = MockHub::new();
 
     let mock_network = Arc::new(hub.new_network());
