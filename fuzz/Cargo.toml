@@ -17,6 +17,7 @@ workspace = true
 afl = { version = "0.15.17", optional = true }
 
 nimiq-collections = { workspace = true }
+nimiq-keys = { workspace = true }
 nimiq-primitives = { workspace = true, features = ["key-nibbles", "serde-derive", "trie"] }
 nimiq-serde = { workspace = true }
 

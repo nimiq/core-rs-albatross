@@ -1,6 +1,7 @@
 use std::{fs, io, iter};
 
 use nimiq_collections::BitSet;
+use nimiq_keys::Address;
 use nimiq_primitives::{
     key_nibbles::KeyNibbles,
     trie::trie_node::{TrieNode, TrieNodeChild},
@@ -55,6 +56,20 @@ fn main() -> io::Result<()> {
     write("empty", TrieNode::new_empty("".parse().unwrap()))?;
     write("with_child", trie_node_with_child())?;
     write("with_value", trie_node_with_value())?;
+
+    let write = |name: &str, object: String| {
+        fs::write(
+            format!("in/user_friendly_address/{name}"),
+            object.as_bytes(),
+        )
+    };
+    fs::create_dir_all("in/user_friendly_address")?;
+    let burn = Address::burn_address();
+    write("burn", burn.to_user_friendly_address())?;
+    write(
+        "burn_nospace",
+        burn.to_user_friendly_address().replace(" ", ""),
+    )?;
 
     Ok(())
 }

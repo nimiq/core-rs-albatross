@@ -4125,6 +4125,7 @@ version = "1.1.0"
 dependencies = [
  "afl",
  "nimiq-collections",
+ "nimiq-keys",
  "nimiq-primitives",
  "nimiq-serde",
 ]
