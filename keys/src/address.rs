@@ -1,4 +1,4 @@
-use std::{borrow::Cow, char, convert::From, fmt, io, iter::Iterator, str::FromStr};
+use std::{borrow::Cow, fmt, fmt::Write as _, io, iter::Iterator, str::FromStr, sync::LazyLock};
 
 use hex::FromHex;
 use nimiq_database_value::{AsDatabaseBytes, FromDatabaseBytes};
@@ -29,6 +29,15 @@ pub enum AddressParseError {
     UnknownFormat,
 }
 
+static ENCODING: LazyLock<data_encoding::Encoding> = LazyLock::new(|| {
+    data_encoding::Specification {
+        symbols: Address::NIMIQ_ALPHABET.into(),
+        ..Default::default()
+    }
+    .encoding()
+    .unwrap()
+});
+
 impl Address {
     const CCODE: &'static str = "NQ";
     const NIMIQ_ALPHABET: &'static str = "0123456789ABCDEFGHJKLMNPQRSTUVXY";
@@ -42,87 +51,65 @@ impl Address {
         &self.0
     }
 
-    #[allow(clippy::sliced_string_as_bytes)] // TODO: https://github.com/nimiq/core-rs-albatross/issues/3376
     pub fn from_user_friendly_address(friendly_addr: &str) -> Result<Address, AddressParseError> {
-        let friendly_addr_wospace = str::replace(friendly_addr, " ", "");
+        let friendly_addr = friendly_addr.replace(" ", "");
 
-        if friendly_addr_wospace.len() != 36 {
+        if friendly_addr.chars().count() != 36 {
             return Err(AddressParseError::WrongLength);
         }
-        if &friendly_addr_wospace[0..2] != Address::CCODE {
+        if !friendly_addr.starts_with(Address::CCODE) {
             return Err(AddressParseError::WrongCountryCode);
         }
-        let mut twisted_str = String::with_capacity(friendly_addr_wospace.len());
-        twisted_str.push_str(&friendly_addr_wospace[4..]);
-        twisted_str.push_str(&friendly_addr_wospace[..4]);
-        if Address::iban_check(&twisted_str) != 1 {
+        if Address::iban_checksum(&friendly_addr)? != 1 {
             return Err(AddressParseError::InvalidChecksum);
         }
-
-        let mut spec = data_encoding::Specification::new();
-        spec.symbols.push_str(Address::NIMIQ_ALPHABET);
-        let encoding = spec.encoding().unwrap();
-
-        let b_vec = encoding
-            .decode(friendly_addr_wospace[4..].as_bytes())
+        // Doesn't make sense to avoid the panic here, it would be an indicator of a bug.
+        #[allow(clippy::sliced_string_as_bytes)]
+        let b_vec = ENCODING
+            .decode(friendly_addr[4..].as_bytes())
             .map_err(|_| AddressParseError::UnknownFormat)?;
         let mut b = [0; ADDRESS_LEN];
-        b.copy_from_slice(&b_vec[..b_vec.len()]);
+        b.copy_from_slice(&b_vec);
         Ok(Address(b))
     }
 
     pub fn to_user_friendly_address(&self) -> String {
-        let mut spec = data_encoding::Specification::new();
-        spec.symbols.push_str(Address::NIMIQ_ALPHABET);
-        let encoding = spec.encoding().unwrap();
-
-        let base32 = encoding.encode(&self.0);
-        // Fixme: Because of https://github.com/rust-lang/rust/issues/92178 we need to specify `as &str`
-        let check_string = "00".to_string()
-            + &(98 - Address::iban_check(&(base32.clone() + Address::CCODE + "00"))).to_string()
-                as &str;
-        let check = check_string
-            .chars()
-            .skip(check_string.len() - 2)
-            .take(2)
-            .collect::<String>();
-        // Fixme: Because of https://github.com/rust-lang/rust/issues/92178 we need to specify `as &str`
-        let friendly_addr = Address::CCODE.to_string() + (&check as &str) + (&base32 as &str);
-        let mut friendly_spaces = String::with_capacity(36 + 8);
-        for i in 0..9 {
-            friendly_spaces.push_str(
-                &friendly_addr
-                    .chars()
-                    .skip(4 * i)
-                    .take(4)
-                    .collect::<String>(),
-            );
-            if i != 8 {
-                friendly_spaces.push(' ');
-            }
+        let base32 = ENCODING.encode(&self.0);
+        let checksum =
+            98 - Address::iban_checksum(&format!("{}00{}", Address::CCODE, base32)).unwrap();
+        let mut friendly = format!("{}{:02}{}", Address::CCODE, checksum, base32);
+        for i in (1..9).rev() {
+            friendly.insert(4 * i, ' ');
         }
-        friendly_spaces
+        friendly
     }
 
-    fn iban_check(s: &str) -> u32 {
-        let mut num = String::with_capacity(s.len() * 2);
-        for c in s.to_uppercase().chars() {
-            let code = c as u32;
-            if (48..=57).contains(&code) {
-                num.push(char::from_u32(code).unwrap());
-            } else {
-                num.push_str(&(code - 55).to_string());
+    fn iban_checksum(iban: &str) -> Result<u32, AddressParseError> {
+        fn iban_to_num(num: &mut String, iban_part: &str) -> Result<(), AddressParseError> {
+            for c in iban_part.chars() {
+                match c {
+                    '0'..='9' => num.push(c),
+                    'a'..='z' => write!(num, "{}", c as u32 - 'a' as u32 + 10).unwrap(),
+                    'A'..='Z' => write!(num, "{}", c as u32 - 'A' as u32 + 10).unwrap(),
+                    _ => return Err(AddressParseError::UnknownFormat),
+                }
             }
+            Ok(())
         }
-        let mut tmp: String = "".to_string();
-        for i in 0..(f32::ceil(num.len() as f32 / 6.0) as usize) {
-            let num_substr = num.chars().skip(i * 6).take(6).collect::<String>();
-            // Fixme: Because of https://github.com/rust-lang/rust/issues/92178 we need to specify `as &str`
-            let num_tmp_sub = tmp.clone() + &num_substr as &str;
-            tmp = (num_tmp_sub.parse::<u32>().unwrap() % 97).to_string();
+        let char4_idx = iban
+            .char_indices()
+            .nth(4)
+            .ok_or(AddressParseError::WrongLength)?
+            .0;
+        let mut num = String::with_capacity(iban.len() * 2);
+        iban_to_num(&mut num, &iban[char4_idx..])?;
+        iban_to_num(&mut num, &iban[..char4_idx])?;
+        let mut checksum = 0;
+        for digit_ascii in num.bytes() {
+            let digit = u32::from(digit_ascii - b'0');
+            checksum = (checksum * 10 + digit) % 97;
         }
-
-        tmp.parse::<u32>().unwrap()
+        Ok(checksum)
     }
 
     pub fn from_any_str(s: &str) -> Result<Address, AddressParseError> {

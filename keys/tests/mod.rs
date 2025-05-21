@@ -196,4 +196,7 @@ fn it_parses_friendly_addresses() {
     // Wrong alphabet (VIDM)
     let addr = Address::from_user_friendly_address("NQ16 GB8S Q5QR MAVN MR3C VIDM 62G6 NL0D ANYX");
     assert_eq!(addr, Err(AddressParseError::UnknownFormat));
+
+    let addr = Address::from_user_friendly_address("❤️❤️❤️❤️❤️❤️");
+    assert_eq!(addr, Err(AddressParseError::WrongLength));
 }
