@@ -196,7 +196,7 @@ fn new_transport(
         // TODO: Use websocket over the memory transport
 
         #[cfg(feature = "tokio-websocket")]
-        let mut transport = websocket::WsConfig::new(dns::tokio::Transport::system(
+        let mut transport = websocket::Config::new(dns::tokio::Transport::system(
             tcp::tokio::Transport::new(tcp::Config::default().nodelay(true)),
         )?);
 
@@ -239,7 +239,7 @@ fn new_transport(
         }
     } else {
         #[cfg(feature = "tokio-websocket")]
-        let mut transport = websocket::WsConfig::new(dns::tokio::Transport::system(
+        let mut transport = websocket::Config::new(dns::tokio::Transport::system(
             tcp::tokio::Transport::new(tcp::Config::default().nodelay(true)),
         )?);
 
@@ -373,12 +373,13 @@ fn handle_event(event: SwarmEvent<behaviour::BehaviourEvent>, event_info: EventI
         }
 
         SwarmEvent::IncomingConnectionError {
+            peer_id,
             connection_id,
             local_addr,
             send_back_addr,
             error,
         } => {
-            debug!(%connection_id, address = %send_back_addr, listen_address = %local_addr, %error, "Incoming connection error");
+            debug!(?peer_id, %connection_id, address = %send_back_addr, listen_address = %local_addr, %error, "Incoming connection error");
         }
 
         SwarmEvent::Dialing {
