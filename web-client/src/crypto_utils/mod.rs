@@ -41,7 +41,7 @@ impl CryptoUtils {
         derived_key_length: usize,
     ) -> Result<Vec<u8>, JsError> {
         compute_pbkdf2_sha512(password, salt, iterations, derived_key_length)
-            .map_err(|err| JsError::new(&format!("{:?}", err)))
+            .map_err(|err| JsError::new(&format!("{err:?}")))
     }
 
     #[cfg(feature = "crypto")]
@@ -59,7 +59,7 @@ impl CryptoUtils {
     ) -> Result<Uint8Array, JsError> {
         Ok(Uint8Array::from(
             otp(message, key, iterations, salt, Algorithm::Argon2d)
-                .map_err(|err| JsError::new(&format!("{:?}", err)))?
+                .map_err(|err| JsError::new(&format!("{err:?}")))?
                 .as_slice(),
         ))
     }

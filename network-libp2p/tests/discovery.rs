@@ -126,7 +126,7 @@ fn random_peer_contact(n: usize, services: Services) -> SignedPeerContact {
 
     let peer_contact = PeerContact::new(
         Some(
-            format!("/dns/test{}.local/tcp/443/wss", n)
+            format!("/dns/test{n}.local/tcp/443/wss")
                 .parse()
                 .expect("Must be able to parse Mutltiaddr"),
         ),

@@ -126,9 +126,7 @@ impl ValidityStore {
         let last_bn = self.last_bn(db_txn);
         assert!(
             first_bn <= last_bn,
-            "First block number {} is greater than last block number {}",
-            first_bn,
-            last_bn
+            "First block number {first_bn} is greater than last block number {last_bn}"
         );
         let num_blocks = last_bn - first_bn + 1;
 

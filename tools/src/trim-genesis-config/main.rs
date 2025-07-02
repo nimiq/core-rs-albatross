@@ -68,7 +68,7 @@ fn main() {
         if hash_trimmed == hash {
             log!("hashes match");
         } else {
-            eprintln!("hash mismatch, {} != {}", hash_trimmed, hash);
+            eprintln!("hash mismatch, {hash_trimmed} != {hash}");
             eprintln!("aborting");
             process::exit(1);
         }

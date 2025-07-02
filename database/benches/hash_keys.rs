@@ -180,8 +180,7 @@ fn measure_table_insertion<K: Eq + PartialEq + PartialOrd + Ord + Hash + Clone +
 
         group.bench_function(
             format!(
-                "{} |  {ty} | {scenario_str} | preload: {} | writing: {} ",
-                TABLE, preload_size, input_size
+                "{TABLE} |  {ty} | {scenario_str} | preload: {preload_size} | writing: {input_size} "
             ),
             |b| {
                 b.iter_with_setup(setup, execution);

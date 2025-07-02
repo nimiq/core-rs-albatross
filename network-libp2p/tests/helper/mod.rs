@@ -6,7 +6,7 @@ pub fn assert_peer_joined(event: &NetworkEvent<PeerId>, wanted_peer_id: &PeerId)
     if let NetworkEvent::PeerJoined(peer_id, _) = event {
         assert_eq!(peer_id, wanted_peer_id);
     } else {
-        panic!("Event is not a NetworkEvent::PeerJoined: {:?}", event);
+        panic!("Event is not a NetworkEvent::PeerJoined: {event:?}");
     }
 }
 
@@ -15,7 +15,7 @@ pub fn assert_peer_left(event: &NetworkEvent<PeerId>, wanted_peer_id: &PeerId) {
     if let NetworkEvent::PeerLeft(peer_id) = event {
         assert_eq!(peer_id, wanted_peer_id);
     } else {
-        panic!("Event is not a NetworkEvent::PeerLeft: {:?}", event);
+        panic!("Event is not a NetworkEvent::PeerLeft: {event:?}");
     }
 }
 

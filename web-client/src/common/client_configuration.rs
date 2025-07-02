@@ -222,7 +222,7 @@ impl TryFrom<PlainClientConfiguration> for ClientConfiguration {
 
         if let Some(network_id) = config.network_id {
             client_config.network_id = NetworkId::from_str(&network_id)
-                .map_err(|err| JsError::new(&format!("Invalid network ID: {}", err)))?;
+                .map_err(|err| JsError::new(&format!("Invalid network ID: {err}")))?;
         }
 
         if let Some(seed_nodes) = config.seed_nodes {
@@ -256,7 +256,7 @@ impl TryFrom<PlainClientConfiguration> for ClientConfiguration {
         if let Some(sync_mode) = config.sync_mode {
             // Only "pico" and "light" sync modes are supported for web clients
             if !(sync_mode == "pico" || sync_mode == "light") {
-                return Err(JsError::new(&format!("Invalid sync mode: {}", sync_mode)));
+                return Err(JsError::new(&format!("Invalid sync mode: {sync_mode}")));
             }
 
             client_config.sync_mode = sync_mode;

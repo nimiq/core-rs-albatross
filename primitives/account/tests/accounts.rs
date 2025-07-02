@@ -492,7 +492,7 @@ fn accounts_performance() {
     );
     match result {
         Ok(_) => assert!(true),
-        Err(err) => assert!(false, "Received {}", err),
+        Err(err) => assert!(false, "Received {err}"),
     };
     let duration = start.elapsed();
     println!(
@@ -621,7 +621,7 @@ fn accounts_performance_history_sync_batches_single_sender() {
             );
             match result {
                 Ok(_) => assert!(true),
-                Err(err) => assert!(false, "Received {}", err),
+                Err(err) => assert!(false, "Received {err}"),
             };
             block_index += 1;
         }
@@ -748,7 +748,7 @@ fn accounts_performance_history_sync_batches_many_to_many() {
             );
             match result {
                 Ok(_) => assert!(true),
-                Err(err) => assert!(false, "Received {}", err),
+                Err(err) => assert!(false, "Received {err}"),
             };
             block_index += 1;
         }

@@ -1159,8 +1159,7 @@ async fn mempool_update() {
         prev_txn = updated_txns[i].clone();
         assert_eq!(
             expected_txns[i], updated_txns[i],
-            "Transaction at position {} is not expected",
-            i
+            "Transaction at position {i} is not expected"
         );
     }
 }

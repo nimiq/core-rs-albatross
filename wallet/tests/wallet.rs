@@ -39,7 +39,7 @@ fn test_serialize_deserialize() {
             assert_eq!(wallet, deserialized);
         }
         Err(e) => {
-            panic!("Error: {}", e);
+            panic!("Error: {e}");
         }
     }
 }

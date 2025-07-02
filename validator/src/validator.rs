@@ -714,7 +714,7 @@ where
         }
 
         spawn(async move {
-            let block_id = format!("{}", block);
+            let block_id = format!("{block}");
 
             let (header, body) = BlockHeaderMessage::split_block(block);
 

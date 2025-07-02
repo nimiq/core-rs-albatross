@@ -841,8 +841,7 @@ mod serde_derive {
                 }
                 _ => {
                     return Err(Error::custom(format!(
-                        "Invalid hash algorithm type: {}",
-                        hash_algorithm
+                        "Invalid hash algorithm type: {hash_algorithm}"
                     )))
                 }
             };

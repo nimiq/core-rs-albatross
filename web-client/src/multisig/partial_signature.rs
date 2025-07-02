@@ -88,8 +88,7 @@ impl PartialSignature {
         // Sanity checks
         if own_commitment_pairs.len() != MUSIG2_PARAMETER_V {
             return Err(JsError::new(&format!(
-                "Number of own commitment pairs must be {}",
-                MUSIG2_PARAMETER_V
+                "Number of own commitment pairs must be {MUSIG2_PARAMETER_V}"
             )));
         }
         if other_public_keys.len() != other_commitments.len() {
@@ -102,8 +101,7 @@ impl PartialSignature {
             .any(|commitments| commitments.len() != MUSIG2_PARAMETER_V)
         {
             return Err(JsError::new(&format!(
-                "Number of commitments in each group must be {}",
-                MUSIG2_PARAMETER_V
+                "Number of commitments in each group must be {MUSIG2_PARAMETER_V}"
             )));
         }
 

@@ -107,7 +107,7 @@ impl Level {
                     let level = Level::new(i, Identity::NOBODY);
                     levels.push(level);
                 }
-                Err(e) => panic!("Partitioning error: {}", e),
+                Err(e) => panic!("Partitioning error: {e}"),
             }
         }
 

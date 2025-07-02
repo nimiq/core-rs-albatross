@@ -56,7 +56,7 @@ impl<N: Network> DiffRequestComponent<N> {
 
             let network = Arc::clone(&network);
             let concurrent_requests = Arc::clone(&concurrent_requests);
-            let block_desc = format!("{}", block);
+            let block_desc = format!("{block}");
             let block_hash = block.hash();
             let block_diff_root = block.diff_root().clone();
             let max_backoff = Duration::from_secs(30);

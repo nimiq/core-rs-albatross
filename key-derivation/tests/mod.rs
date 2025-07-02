@@ -124,34 +124,26 @@ fn it_correctly_derives_keys() {
             let key = key.derive_path(vector.path);
             assert!(
                 key.is_some(),
-                "Could not derive path for seed {} in test case {}",
-                i,
-                j
+                "Could not derive path for seed {i} in test case {j}"
             );
             let key = key.unwrap();
 
             assert_eq!(
                 key.get_chain_code(),
                 &vector.get_chain_code(),
-                "Invalid chain code for seed {} in test case {}",
-                i,
-                j
+                "Invalid chain code for seed {i} in test case {j}"
             );
 
             assert_eq!(
                 &key.to_public_key(),
                 &vector.get_public_key(),
-                "Invalid public key for seed {} in test case {}",
-                i,
-                j
+                "Invalid public key for seed {i} in test case {j}"
             );
 
             assert_eq!(
                 &key.into_private_key(),
                 &vector.get_private_key(),
-                "Invalid private key for seed {} in test case {}",
-                i,
-                j
+                "Invalid private key for seed {i} in test case {j}"
             );
         }
     }

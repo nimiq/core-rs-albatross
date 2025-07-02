@@ -422,8 +422,7 @@ impl ChainStore {
                 self.get_block(&block_hash, include_body, Some(&txn))
                     .unwrap_or_else(|_| {
                         panic!(
-                            "Corrupted store: Block {} referenced from index not found",
-                            block_hash
+                            "Corrupted store: Block {block_hash} referenced from index not found"
                         )
                     }),
             );

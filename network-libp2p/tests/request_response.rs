@@ -316,7 +316,7 @@ async fn test_valid_request_valid_response() {
         Ok(response) => {
             assert_eq!(response, test_response);
         }
-        Err(e) => assert!(false, "Response received with error: {:?}", e),
+        Err(e) => assert!(false, "Response received with error: {e:?}"),
     };
 }
 
@@ -368,7 +368,7 @@ async fn test_multiple_valid_requests_valid_responses() {
             Ok(response) => {
                 assert_eq!(response, test_response_2);
             }
-            Err(e) => assert!(false, "Response received with error: {:?}", e),
+            Err(e) => assert!(false, "Response received with error: {e:?}"),
         };
     }
 }
@@ -404,7 +404,7 @@ async fn test_valid_request_no_response() {
 
     match received_response {
         Ok(response) => {
-            assert!(false, "Received unexpected valid response: {:?}", response)
+            assert!(false, "Received unexpected valid response: {response:?}")
         }
         Err(e) => assert_eq!(
             e,
@@ -452,7 +452,7 @@ async fn test_valid_request_no_response_close_connection() {
 
     match received_response {
         Ok(response) => {
-            assert!(false, "Received unexpected valid response: {:?}", response)
+            assert!(false, "Received unexpected valid response: {response:?}")
         }
         Err(e) => assert_eq!(
             e,
@@ -483,7 +483,7 @@ async fn test_valid_request_no_response_no_receiver() {
     // Check the received response
     match received_response {
         Ok(response) => {
-            assert!(false, "Received unexpected valid response: {:?}", response)
+            assert!(false, "Received unexpected valid response: {response:?}")
         }
         Err(e) => assert_eq!(
             e,
@@ -563,7 +563,7 @@ async fn send_n_request_to_succeed(net1: &Arc<Network>, net2: &Arc<Network>, n: 
                     "First requests must return Ok Result"
                 );
             }
-            Err(e) => assert!(false, "Response received with error: {:?}", e),
+            Err(e) => assert!(false, "Response received with error: {e:?}"),
         };
     }
 }

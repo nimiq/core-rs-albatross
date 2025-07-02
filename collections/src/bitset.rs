@@ -429,16 +429,14 @@ impl<'de> Visitor<'de> for BitSetVisitorHumanReadable {
         let mut result = BitSet::new();
         while let Some(elem) = seq.next_element::<usize>()? {
             if elem > 65536 {
-                return Err(A::Error::custom(format!(
-                    "bitset element {} too large",
-                    elem,
-                )));
+                return Err(A::Error::custom(
+                    format!("bitset element {elem} too large",),
+                ));
             }
             if result.contains(elem) {
-                return Err(A::Error::custom(format!(
-                    "duplicate bitset element {}",
-                    elem,
-                )));
+                return Err(A::Error::custom(
+                    format!("duplicate bitset element {elem}",),
+                ));
             }
             result.insert(elem);
         }

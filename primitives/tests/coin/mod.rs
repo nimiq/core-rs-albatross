@@ -46,7 +46,7 @@ fn test_deserialize_out_of_bounds() {
     use nimiq_serde::DeserializeError;
 
     match Coin::deserialize_from_vec(&hex::decode("0020000000000000").unwrap()) {
-        Ok(coin) => panic!("Instead of failing, got {}", coin),
+        Ok(coin) => panic!("Instead of failing, got {coin}"),
         Err(err) => assert_eq!(err, DeserializeError::serde_custom()),
     }
 }

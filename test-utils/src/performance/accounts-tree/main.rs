@@ -102,7 +102,7 @@ fn accounts_tree_populate(
     println!("Done adding accounts to genesis");
 
     for loop_number in 1..loops + 1 {
-        println!("Starting loop: {}", loop_number);
+        println!("Starting loop: {loop_number}");
         println!("-----------------");
         println!("Generating transactions...");
         // Generate recipients accounts
@@ -129,7 +129,7 @@ fn accounts_tree_populate(
             txns_per_block.push(txns);
         }
 
-        println!("Done generating {} transactions", txn_index);
+        println!("Done generating {txn_index} transactions");
 
         let mut block_index = 0;
 

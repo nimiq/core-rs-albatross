@@ -348,7 +348,7 @@ mod serde_derive {
                     ark_serialize::Compress::Yes,
                 ));
                 CanonicalSerialize::serialize_compressed(latest_proof, writer.by_ref())
-                    .map_err(|e| S::Error::custom(format!("Could not serialize proof: {}", e)))?;
+                    .map_err(|e| S::Error::custom(format!("Could not serialize proof: {e}")))?;
                 Some(writer)
             } else {
                 None
@@ -420,7 +420,7 @@ mod serde_derive {
                     ark_serialize::Compress::No,
                 ));
                 CanonicalSerialize::serialize_uncompressed(latest_proof, writer.by_ref())
-                    .map_err(|e| S::Error::custom(format!("Could not serialize proof: {}", e)))?;
+                    .map_err(|e| S::Error::custom(format!("Could not serialize proof: {e}")))?;
                 Some(writer)
             } else {
                 None
@@ -505,7 +505,7 @@ mod serde_derive {
                     ark_serialize::Compress::No,
                 ));
                 CanonicalSerialize::serialize_uncompressed(previous_proof, writer.by_ref())
-                    .map_err(|e| S::Error::custom(format!("Could not serialize proof: {}", e)))?;
+                    .map_err(|e| S::Error::custom(format!("Could not serialize proof: {e}")))?;
                 Some(writer)
             } else {
                 None

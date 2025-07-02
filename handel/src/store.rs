@@ -193,7 +193,7 @@ where
             // Merge individual signature into multisig
             contribution
                 .combine(individual)
-                .unwrap_or_else(|e| panic!("Individual contribution from id={:?} can't be added to aggregate contributions: {:?}", id, e));
+                .unwrap_or_else(|e| panic!("Individual contribution from id={id:?} can't be added to aggregate contributions: {e:?}"));
             contributors.combine(&id, false);
         }
 

@@ -96,8 +96,7 @@ fn history_store_populate(
     let batches_per_round = batches / rounds;
     let blocks_per_round = number_of_blocks / rounds;
     println!(
-        " Number of rounds: {}, batches per round {} blocks per round {}",
-        rounds, batches_per_round, blocks_per_round
+        " Number of rounds: {rounds}, batches per round {batches_per_round} blocks per round {blocks_per_round}"
     );
 
     for round in 0..rounds {
@@ -180,7 +179,7 @@ fn main() {
     let loops = args.loops.unwrap_or(1);
 
     for loop_number in 1..(1 + loops) {
-        println!("Current loop {}", loop_number);
+        println!("Current loop {loop_number}");
 
         history_store_populate(
             &*history_store,

@@ -175,7 +175,7 @@ impl SignatureProof {
         let algorithm = match type_byte {
             0 => SignatureProofAlgorithm::Ed25519,
             1 => SignatureProofAlgorithm::ES256,
-            _ => return Err(format!("Invalid signature proof algorithm: {}", type_byte)),
+            _ => return Err(format!("Invalid signature proof algorithm: {type_byte}")),
         };
         // The flags are encoded in the upper 4 bits
         let flags = SignatureProofFlags::from_bits_truncate(byte >> 4);
@@ -573,6 +573,6 @@ impl Error for SerializationError {
 
 impl From<url::ParseError> for SerializationError {
     fn from(err: url::ParseError) -> Self {
-        SerializationError::new(&format!("Failed to parse URL: {}", err))
+        SerializationError::new(&format!("Failed to parse URL: {err}"))
     }
 }

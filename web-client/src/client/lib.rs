@@ -1375,8 +1375,7 @@ impl Client {
                 accounts
                     .get(address)
                     .ok_or(JsError::new(&format!(
-                        "Missing trie proof node for {}",
-                        address
+                        "Missing trie proof node for {address}"
                     )))?
                     .as_ref()
                     .unwrap_or(&default),
@@ -1403,8 +1402,7 @@ impl Client {
                 stakers
                     .get(address)
                     .ok_or(JsError::new(&format!(
-                        "Missing trie proof node for {}",
-                        address
+                        "Missing trie proof node for {address}"
                     )))?
                     .as_ref()
                     .map(PlainStaker::from),
@@ -1431,8 +1429,7 @@ impl Client {
                 validators
                     .get(address)
                     .ok_or(JsError::new(&format!(
-                        "Missing trie proof node for {}",
-                        address
+                        "Missing trie proof node for {address}"
                     )))?
                     .as_ref()
                     .map(PlainValidator::from),

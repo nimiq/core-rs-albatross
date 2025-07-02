@@ -625,13 +625,7 @@ mod tests {
             }
         }
         for key in &keys {
-            assert_eq!(
-                key.post_order_cmp(key),
-                Ordering::Equal,
-                "{} == {}",
-                key,
-                key
-            );
+            assert_eq!(key.post_order_cmp(key), Ordering::Equal, "{key} == {key}");
         }
     }
 }

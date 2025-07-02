@@ -69,7 +69,7 @@ impl ZKPVerifyingKey {
                     "/../.zkp_tests/meta_data.json"
                 )),
             ),
-            _ => panic!("Network id {:?} does not have a verifying key!", network_id),
+            _ => panic!("Network id {network_id:?} does not have a verifying key!"),
         };
         let metadata: VerifyingKeyMetadata = serde_json::from_str(metadata_bytes)
             .expect("Invalid metadata. Please rebuild the ZKP keys.");

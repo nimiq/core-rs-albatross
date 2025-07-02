@@ -160,9 +160,7 @@ impl Blockchain {
                 assert_eq!(
                     prev_info.head.state_root(),
                     &accounts_hash,
-                    "Inconsistent state after reverting block {} - {:?}",
-                    block,
-                    block,
+                    "Inconsistent state after reverting block {block} - {block:?}",
                 );
             }
 

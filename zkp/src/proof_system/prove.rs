@@ -288,7 +288,7 @@ fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
 ) -> Result<([u8; 32], [u8; 32]), NanoZKPError> {
     assert_eq!(pks.len(), signer_bitmap.len());
 
-    let name = format!("pk_tree_{}", tree_level);
+    let name = format!("pk_tree_{tree_level}");
     let vk_file = format!("pk_tree_{}", tree_level + 1);
 
     let l_pks = &pks[..pks.len() / 2];
@@ -469,7 +469,7 @@ fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
 ) -> Result<[u8; 32], NanoZKPError> {
     assert_eq!(pks.len(), signer_bitmap.len());
 
-    let name = format!("pk_tree_{}", tree_level);
+    let name = format!("pk_tree_{tree_level}");
     let vk_file = format!("pk_tree_{}", tree_level + 1);
 
     let l_pks = &pks[..pks.len() / 2];

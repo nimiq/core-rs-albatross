@@ -503,7 +503,7 @@ fn can_converge_with_changes_in_staking_contract() {
             temp_producer2.push_with_chunks(block, diff, vec![chunk]),
             Ok((PushResult::Extended, Ok(ChunksPushResult::Chunks(1, 0))))
         );
-        println!("{} {:?}", i, chunk_end);
+        println!("{i} {chunk_end:?}");
         i += 1;
         assert_eq!(
             temp_producer2

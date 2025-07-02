@@ -95,8 +95,7 @@ impl<'de> Deserialize<'de> for ValidityStartHeight {
             StrOrU32::Number(height) => Ok(Self::Absolute(height)),
             StrOrU32::String(height) => Self::from_str(&height).map_err(|e| {
                 Error::custom(format!(
-                    "ValidityStartHeight cannot be converted into a `u32`: {}",
-                    e
+                    "ValidityStartHeight cannot be converted into a `u32`: {e}"
                 ))
             }),
         }

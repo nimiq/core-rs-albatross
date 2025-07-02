@@ -192,8 +192,7 @@ mod tests_mnt4 {
             assert_eq!(
                 primitive_bytes[i],
                 gadget_bytes[i].value().unwrap(),
-                "Mismatch in byte {}",
-                i
+                "Mismatch in byte {i}"
             );
         }
     }
@@ -306,8 +305,7 @@ mod tests_mnt6 {
             assert_eq!(
                 primitive_bytes[i],
                 gadget_bytes[i].value().unwrap(),
-                "Mismatch in byte {}",
-                i
+                "Mismatch in byte {i}"
             );
         }
     }

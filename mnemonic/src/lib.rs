@@ -100,7 +100,7 @@ impl Entropy {
             &salt,
             Algorithm::Argon2d,
         )
-        .map_err(|err| format!("{:?}", err))?;
+        .map_err(|err| format!("{err:?}"))?;
 
         let mut buf = Vec::with_capacity(
             /*version*/ 1 + /*kdf rounds*/ 1 + salt.len() + ciphertext.len(),
@@ -119,7 +119,7 @@ impl Entropy {
         let version = buf[0];
         let rounds_log = buf[1];
         if rounds_log > 32 {
-            return Err(format!("Rounds out-of-bounds: 2^{}", rounds_log));
+            return Err(format!("Rounds out-of-bounds: 2^{rounds_log}"));
         }
         let rounds = 2u32.pow(rounds_log as u32);
 
@@ -127,7 +127,7 @@ impl Entropy {
             1 => unimplemented!(),
             2 => unimplemented!(),
             3 => Entropy::decrypt_v3(&buf[2..], key, rounds),
-            _ => Err(format!("Unknown version: {}", version)),
+            _ => Err(format!("Unknown version: {version}")),
         }
     }
 
@@ -140,7 +140,7 @@ impl Entropy {
             ..Entropy::ENCRYPTION_SALT_SIZE + Entropy::ENCRYPTION_CHECKSUM_SIZE_V3 + /*purposeId*/ 4 + Entropy::SIZE];
 
         let plaintext = otp(ciphertext, key, rounds, salt, Algorithm::Argon2d)
-            .map_err(|err| format!("{:?}", err))?;
+            .map_err(|err| format!("{err:?}"))?;
 
         let check = &plaintext[..Entropy::ENCRYPTION_CHECKSUM_SIZE_V3];
         let payload = &plaintext[Entropy::ENCRYPTION_CHECKSUM_SIZE_V3..];
@@ -155,7 +155,7 @@ impl Entropy {
 
         let purpose_id = u32::from_be_bytes(payload[..4].try_into().unwrap());
         if purpose_id != Entropy::PURPOSE_ID {
-            return Err(format!("Invalid secret type (Purpose ID) {}", purpose_id));
+            return Err(format!("Invalid secret type (Purpose ID) {purpose_id}"));
         }
 
         let secret = &payload[4..];

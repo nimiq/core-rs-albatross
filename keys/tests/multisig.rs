@@ -172,8 +172,7 @@ fn it_can_create_signatures() {
                 key_pair
                     .public
                     .verify_partial(&data, &partial_sig, &test.message),
-                "cannot verify {}",
-                i
+                "cannot verify {i}"
             );
 
             if i > 0 {

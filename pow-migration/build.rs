@@ -4,7 +4,7 @@ fn main() {
     } else {
         format!("v{}", env!("CARGO_PKG_VERSION"))
     };
-    println!("cargo::rustc-env=NIMIQ_POW_MIGRATION_VERSION={}", version);
+    println!("cargo::rustc-env=NIMIQ_POW_MIGRATION_VERSION={version}");
     println!("cargo::rerun-if-changed=../.git/index");
     println!("cargo::rerun-if-changed=../.git/logs/HEAD");
 }

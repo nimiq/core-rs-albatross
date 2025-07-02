@@ -555,7 +555,7 @@ impl<R: Rng + CryptoRng> TransactionsGenerator<R> {
                 IncomingType::Basic | IncomingType::CreateVesting | IncomingType::CreateHTLC
             )
         {
-            panic!("Cannot fail a {:?} account recipient", incoming_type);
+            panic!("Cannot fail a {incoming_type:?} account recipient");
         }
 
         match incoming_type {

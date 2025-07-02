@@ -14,7 +14,7 @@ fn sign_verify() {
     for i in 0..100 {
         let keypair = KeyPair::generate(rng);
 
-        let message = format!("Message {}", i);
+        let message = format!("Message {i}");
 
         let sig = keypair.sign(&message);
 
@@ -29,7 +29,7 @@ fn compress_uncompress() {
     for i in 0..100 {
         let keypair = KeyPair::generate(rng);
 
-        let message = format!("Message {}", i);
+        let message = format!("Message {i}");
 
         let sig = keypair.sign(&message);
 
@@ -51,7 +51,7 @@ fn serialize_deserialize() {
         let ser_pub_key = keypair.public_key.serialize_to_vec();
         let compress_pub_key = keypair.public_key.compress();
         let ser_comp_pub_key = compress_pub_key.serialize_to_vec();
-        let message = format!("Message {}", i);
+        let message = format!("Message {i}");
 
         let sig = keypair.sign(&message);
         let ser_signature = sig.serialize_to_vec();

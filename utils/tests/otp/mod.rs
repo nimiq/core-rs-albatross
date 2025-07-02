@@ -31,7 +31,7 @@ fn create_unlocked_checked() {
 
     let lock = match OtpLock::unlocked_with_defaults(secret.clone(), password.as_bytes()) {
         Ok(l) => l,
-        Err(e) => panic!("{:?}", e),
+        Err(e) => panic!("{e:?}"),
     };
 
     assert!(lock.is_unlocked());
@@ -63,7 +63,7 @@ fn create_locked_unchecked() {
 
     let lock = match OtpLock::locked_with_defaults(secret, password.as_bytes()) {
         Ok(l) => l,
-        Err(e) => panic!("{:?}", e),
+        Err(e) => panic!("{e:?}"),
     };
 
     assert!(lock.is_locked());

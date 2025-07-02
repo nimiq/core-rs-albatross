@@ -628,6 +628,6 @@ mod tests {
             ContentDescriptorOrReference::new_content_descriptor::<MyRet>("ret".to_string(), None);
         document.add_object_method(method);
         let j = serde_json::to_string_pretty(&document).unwrap();
-        println!("{}", j);
+        println!("{j}");
     }
 }

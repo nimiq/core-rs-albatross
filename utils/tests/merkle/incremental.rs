@@ -337,10 +337,7 @@ fn it_correctly_computes_more_complex_proofs() {
                 assert_eq!(
                     proof_result.next_index(),
                     end_i,
-                    "Invalid next index for size {}, chunk_size {}, chunk #{}",
-                    end,
-                    chunk_size,
-                    chunk_i
+                    "Invalid next index for size {end}, chunk_size {chunk_size}, chunk #{chunk_i}"
                 );
                 prev_proof = Some(proof_result);
             }
@@ -413,7 +410,7 @@ fn it_discards_invalid_proofs() {
     let proof_result = chunks[1].compute_root_from_values(&values[2..], None);
     match proof_result {
         Err(IncrementalMerkleProofError::InvalidProof) => {}
-        _ => assert!(false, "Case 2 gave invalid response: {:?}", proof_result),
+        _ => assert!(false, "Case 2 gave invalid response: {proof_result:?}"),
     }
 
     // Case 3: Invalid previous proof.
@@ -430,13 +427,13 @@ fn it_discards_invalid_proofs() {
     let proof_result = chunks[1].compute_root_from_values(&values[2..], Some(&proof_result));
     match proof_result {
         Err(_) => {}
-        _ => assert!(false, "Case 3 gave invalid response: {:?}", proof_result),
+        _ => assert!(false, "Case 3 gave invalid response: {proof_result:?}"),
     }
 
     // Case 4: Invalid chunk size.
     let builder = IncrementalMerkleProofBuilder::<Blake2bHash>::new(0);
     match builder {
         Err(IncrementalMerkleProofError::InvalidChunkSize) => {}
-        _ => assert!(false, "Case 4 gave invalid response: {:?}", proof_result),
+        _ => assert!(false, "Case 4 gave invalid response: {proof_result:?}"),
     }
 }

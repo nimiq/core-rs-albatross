@@ -161,8 +161,7 @@ impl Blockchain {
         if let Some(accounts_hash) = accounts.get_root_hash(Some(txn)) {
             assert_eq!(
                 block.header.state_root, accounts_hash,
-                "Cannot revert {} - inconsistent state",
-                block,
+                "Cannot revert {block} - inconsistent state",
             );
         }
 

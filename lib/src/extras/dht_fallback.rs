@@ -44,7 +44,7 @@ impl DhtFallback {
 
         let client = Client::builder(TokioExecutor::new()).build(https);
         let uri = url.as_str().parse().map_err(|_| {
-            io::Error::new(io::ErrorKind::InvalidInput, format!("invalid URI: {}", url))
+            io::Error::new(io::ErrorKind::InvalidInput, format!("invalid URI: {url}"))
         })?;
         Ok(DhtFallback { client, uri })
     }

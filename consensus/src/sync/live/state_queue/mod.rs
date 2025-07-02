@@ -558,7 +558,7 @@ impl<N: Network> Stream for StateQueue<N> {
                     // We throw away the remaining incoming chunks if we are complete.
                     // This avoids breaking the state sync invariant new block + no diffs, then no chunks.
                     if !self.start_key.is_complete() {
-                        let key = u32::from_str_radix(&format!("{}00000000", start_key)[..8], 16)
+                        let key = u32::from_str_radix(&format!("{start_key}00000000")[..8], 16)
                             .unwrap_or(0);
 
                         let percentage = (key as f32 / u32::MAX as f32) * 100.0;

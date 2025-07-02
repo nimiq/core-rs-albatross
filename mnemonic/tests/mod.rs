@@ -163,20 +163,17 @@ fn it_correctly_computes_mnemonics() {
         assert_eq!(
             entropy.to_mnemonic(WORDLIST_EN),
             mnemonic,
-            "Invalid entropy.to_mnemonic in test case {}",
-            i
+            "Invalid entropy.to_mnemonic in test case {i}"
         );
         let computed_entropy = mnemonic.to_entropy(WORDLIST_EN);
         assert!(
             computed_entropy.is_some(),
-            "mnemonic.to_entropy yields None in test case {}",
-            i
+            "mnemonic.to_entropy yields None in test case {i}"
         );
         assert_eq!(
             mnemonic.to_entropy(WORDLIST_EN).unwrap(),
             entropy,
-            "Invalid mnemonic.to_entropy in test case {}",
-            i
+            "Invalid mnemonic.to_entropy in test case {i}"
         );
         if vector.seed.is_some() {
             assert_eq!(mnemonic.to_seed(Some("TREZOR")).unwrap(), vector.get_seed());

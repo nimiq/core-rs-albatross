@@ -740,7 +740,7 @@ impl Behaviour {
                             TransportError::Other(e) => e.to_string(),
                         };
 
-                        format!("{} => {}", address, err)
+                        format!("{address} => {err}")
                     })
                     .collect::<Vec<String>>()
                     .join(", ")

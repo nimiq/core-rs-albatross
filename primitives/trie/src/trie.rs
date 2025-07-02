@@ -165,7 +165,7 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
         let node = if let Some(node) = self.get_node(txn, key) {
             node
         } else {
-            println!("{}-> MISSING", prefix);
+            println!("{prefix}-> MISSING");
             return;
         };
 
@@ -174,7 +174,7 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
             if let Ok(subkey) = child.key(key, missing_range) {
                 self.debug_print_subtrie(txn, &subkey, missing_range, depth + 2);
             } else {
-                println!("{}  -> MISSING", prefix);
+                println!("{prefix}  -> MISSING");
             }
         }
     }

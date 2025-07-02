@@ -9,7 +9,7 @@ fn write_genesis_rs(directory: &Path, name: &str, genesis_hash: &Blake2bHash, ha
         let mut hash = String::new();
         write!(&mut hash, "0x{:02x}", genesis_hash.0[0]).unwrap();
         for &byte in &genesis_hash.0[1..] {
-            write!(&mut hash, ", 0x{:02x}", byte).unwrap();
+            write!(&mut hash, ", 0x{byte:02x}").unwrap();
         }
         hash
     };

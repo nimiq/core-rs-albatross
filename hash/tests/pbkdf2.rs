@@ -75,8 +75,7 @@ fn it_correctly_computes_hmac_sha512() {
         assert_eq!(
             derived_key.unwrap(),
             vector.get_derived_key(),
-            "Invalid pbkdf2 in test case {}",
-            i
+            "Invalid pbkdf2 in test case {i}"
         );
     }
 }
