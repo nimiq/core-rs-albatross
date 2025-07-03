@@ -1,8 +1,6 @@
 use convert_case::{Case, Casing};
 use quote::ToTokens;
-use schemars::schema::{
-    ArrayValidation, InstanceType, RootSchema, Schema, SchemaObject, SingleOrVec,
-};
+use schemars::{json_schema, Schema};
 use serde_json::{Map, Value};
 use syn::{
     Field, File, GenericArgument, Ident, ItemStruct, Pat, PatIdent, Path, PathArguments,
@@ -245,10 +243,10 @@ impl ParsedTraitItemFn {
                                 .to_case(Case::Camel),
                             description: None,
                             summary: None,
-                            schema: JSONSchema::JsonSchemaObject(RootSchema {
-                                schema: Self::return_type_schema(&inner_segment, schema_ref),
-                                ..Default::default()
-                            }),
+                            schema: JSONSchema::JsonSchemaObject(Self::return_type_schema(
+                                &inner_segment,
+                                schema_ref,
+                            )),
                             required: Some(Self::param_required(&typed.ty)),
                             deprecated: None,
                         },
@@ -310,15 +308,9 @@ impl ParsedTraitItemFn {
                             name: "null".to_string(),
                             description: None,
                             summary: None,
-                            schema: JSONSchema::JsonSchemaObject(RootSchema {
-                                schema: SchemaObject {
-                                    instance_type: Some(SingleOrVec::Single(Box::new(
-                                        InstanceType::Null,
-                                    ))),
-                                    ..Default::default()
-                                },
-                                ..Default::default()
-                            }),
+                            schema: JSONSchema::JsonSchemaObject(json_schema!({
+                                "type": "null"
+                            })),
                             required: None,
                             deprecated: None,
                         },
@@ -343,61 +335,55 @@ impl ParsedTraitItemFn {
             name: ident.ident.to_string(),
             description: None,
             summary: None,
-            schema: JSONSchema::JsonSchemaObject(RootSchema {
-                schema: Self::return_type_schema(ident, schema_ref),
-                ..Default::default()
-            }),
+            schema: JSONSchema::JsonSchemaObject(Self::return_type_schema(ident, schema_ref)),
             required: None,
             deprecated: None,
         })
     }
 
     /// Generates the schema object for the return type of the Rust trait method.
-    fn return_type_schema(
-        ident: &PathSegment,
-        schema_ref: Option<&ParsedItemStruct>,
-    ) -> SchemaObject {
-        let mut schema = SchemaObject {
-            ..Default::default()
-        };
-
-        let (is_rust_type, instance_type) = Self::to_instance_type(&ident.ident);
+    fn return_type_schema(ident: &PathSegment, schema_ref: Option<&ParsedItemStruct>) -> Schema {
+        let (is_rust_type, json_type) = Self::to_json_type(&ident.ident);
 
         if is_rust_type {
-            schema.instance_type = Some(SingleOrVec::Single(Box::new(instance_type)));
-        } else {
-            schema.reference = Some(format!("#/components/schemas/{}", ident.ident));
-        }
+            if json_type == "array" {
+                let inner_type = Self::unwrap_type(ident);
+                let (_inner_is_rust_type, inner_json_type) = Self::to_json_type(&inner_type.1);
 
-        if instance_type == InstanceType::Array {
-            let inner_type = Self::unwrap_type(ident);
-            let mut inner_instance_type = Self::to_instance_type(&inner_type.1);
-            let mut inner_schema = SchemaObject {
-                ..Default::default()
-            };
-
-            if schema_ref.is_some() {
-                inner_schema.reference = Some(format!("#/components/schemas/{}", inner_type.1));
-            } else {
-                if inner_instance_type.1 == InstanceType::Array {
-                    inner_instance_type.1 = InstanceType::String;
+                if schema_ref.is_some() {
+                    json_schema!({
+                        "type": "array",
+                        "items": {
+                            "$ref": format!("#/components/schemas/{}", inner_type.1)
+                        }
+                    })
+                } else {
+                    let final_inner_type = if inner_json_type == "array" {
+                        "string"
+                    } else {
+                        &inner_json_type
+                    };
+                    json_schema!({
+                        "type": "array",
+                        "items": {
+                            "type": final_inner_type
+                        }
+                    })
                 }
-
-                inner_schema.instance_type =
-                    Some(SingleOrVec::Single(Box::new(inner_instance_type.1)))
+            } else {
+                json_schema!({
+                    "type": json_type
+                })
             }
-
-            schema.array = Some(Box::new(ArrayValidation {
-                items: Some(SingleOrVec::Single(Box::new(Schema::Object(inner_schema)))),
-                ..Default::default()
-            }));
+        } else {
+            json_schema!({
+                "$ref": format!("#/components/schemas/{}", ident.ident)
+            })
         }
-
-        schema
     }
 
-    /// Converts a Rust type to a JSON Value.
-    fn to_instance_type(ident: &Ident) -> (bool, InstanceType) {
+    /// Converts a Rust type to a JSON type string.
+    fn to_json_type(ident: &Ident) -> (bool, &'static str) {
         match ident.to_string().as_str() {
             "u8"
             | "u16"
@@ -407,12 +393,12 @@ impl ParsedTraitItemFn {
             | "usize"
             | "BoxStream"
             | "ValidityStartHeight"
-            | "Coin" => (true, InstanceType::Number),
-            "Vec" | "LogType" => (true, InstanceType::Array),
+            | "Coin" => (true, "number"),
+            "Vec" | "LogType" => (true, "array"),
             "String" | "AnyHash" | "Ed25519Signature" | "Ed25519PublicKey" | "PreImage"
-            | "Blake2bHash" | "Address" => (true, InstanceType::String),
-            "bool" => (true, InstanceType::Boolean),
-            _ => (false, InstanceType::Object),
+            | "Blake2bHash" | "Address" => (true, "string"),
+            "bool" => (true, "boolean"),
+            _ => (false, "object"),
         }
     }
 

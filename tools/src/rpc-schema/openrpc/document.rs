@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use nimiq_serde::{Deserialize, Serialize};
-use schemars::{r#gen::SchemaSettings, schema::RootSchema, JsonSchema};
+use schemars::{generate::SchemaSettings, JsonSchema, SchemaGenerator};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum Openrpc {
@@ -289,7 +289,7 @@ pub type ContentEncoding = String;
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum JSONSchema {
-    JsonSchemaObject(RootSchema),
+    JsonSchemaObject(schemars::Schema),
     JSONSchemaBoolean(bool),
 }
 
@@ -562,7 +562,7 @@ impl ContentDescriptorOrReference {
     ) -> Self {
         let mut setting = SchemaSettings::draft07();
         setting.inline_subschemas = true;
-        let schema = schemars::r#gen::SchemaGenerator::new(setting).into_root_schema_for::<T>();
+        let schema = SchemaGenerator::new(setting).into_root_schema_for::<T>();
         let json_schema = JSONSchema::JsonSchemaObject(schema);
         ContentDescriptorOrReference::ContentDescriptorObject(ContentDescriptorObject {
             name,
