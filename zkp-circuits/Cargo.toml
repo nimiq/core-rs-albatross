@@ -57,6 +57,7 @@ nimiq-primitives = { workspace = true, features = ["policy", "tendermint"] }
 nimiq-serde = { workspace = true }
 nimiq-zkp-primitives = { workspace = true }
 nimiq-keys = { workspace = true }
+nimiq-utils = { workspace = true }
 
 [dev-dependencies]
 nimiq-collections = { workspace = true }

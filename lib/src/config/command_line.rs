@@ -8,6 +8,7 @@ use thiserror::Error;
 use crate::config::config_file::SyncMode;
 
 #[derive(Debug, Parser)]
+#[command(name = "nimiq-client", version = nimiq_utils::CARGO_VERSION)]
 pub struct CommandLine {
     /// Use a custom configuration file.
     ///

@@ -18,4 +18,7 @@ pub trait NetworkInterface {
 
     /// Returns the address book
     async fn get_address_book(&self) -> RPCResult<Vec<(String, PeerType)>, (), Self::Error>;
+
+    /// Returns the version of the client the RPC server is running.
+    async fn get_client_version(&self) -> RPCResult<String, (), Self::Error>;
 }

@@ -8,6 +8,7 @@ pub mod subcommands;
 use crate::subcommands::*;
 
 #[derive(Debug, Parser)]
+#[command(name = "nimiq-rpc", version = nimiq_utils::CARGO_VERSION)]
 struct Opt {
     #[clap(short)]
     url: Option<String>,

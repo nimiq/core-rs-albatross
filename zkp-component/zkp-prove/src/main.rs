@@ -30,6 +30,7 @@ use tracing_subscriber::{filter::Targets, prelude::*};
 
 /// Run the zk proof generation.
 #[derive(Debug, Parser)]
+#[command(version = nimiq_utils::CARGO_VERSION)]
 struct TestProving {
     /// Network ID to utilize.
     /// Only Albatross network ids are supported.

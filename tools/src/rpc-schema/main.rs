@@ -4,15 +4,15 @@ mod parser;
 use std::{env, fs};
 
 use anyhow::Error;
-use clap::{crate_authors, crate_description, crate_version, Arg, Command};
+use clap::{crate_authors, crate_description, Arg, Command};
 use syn::parse_file;
 use thiserror::Error;
 
 use crate::openrpc::OpenRpcBuilder;
 
 fn main() -> Result<(), Error> {
-    let matches = Command::new("RPC schema generator")
-        .version(crate_version!())
+    let matches = Command::new("nimiq-rpc-schema")
+        .version(nimiq_utils::CARGO_VERSION)
         .author(crate_authors!())
         .about(crate_description!())
         .arg(

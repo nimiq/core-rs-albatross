@@ -10,6 +10,7 @@ use nimiq_rpc_interface::{
     network::NetworkInterface,
     types::{PeerType, RPCResult},
 };
+use nimiq_utils::CARGO_VERSION;
 
 use crate::error::Error;
 
@@ -70,5 +71,9 @@ impl NetworkInterface for NetworkDispatcher {
         }
 
         Ok(rpc_address_book.into())
+    }
+
+    async fn get_client_version(&self) -> RPCResult<String, (), Self::Error> {
+        Ok(String::from(CARGO_VERSION).into())
     }
 }

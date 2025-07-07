@@ -14,6 +14,7 @@ fn db() -> MdbxDatabase {
 
 fn main() {
     let matches = Command::new("nimiq-trim-genesis-config")
+        .version(nimiq_utils::CARGO_VERSION)
         .about("Trims genesis config to not contain the state")
         .arg(
             Arg::new("genesis-config")

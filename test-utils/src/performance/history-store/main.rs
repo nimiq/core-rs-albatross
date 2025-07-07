@@ -17,7 +17,7 @@ use tempfile::tempdir;
 
 /// Command line arguments for the binary
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(name = "nimiq-performance-history-store", author, version = nimiq_utils::CARGO_VERSION, about, long_about = None)]
 struct Args {
     /// Number of batches to add
     #[arg(short, long)]

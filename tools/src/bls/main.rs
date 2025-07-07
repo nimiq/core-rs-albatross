@@ -1,8 +1,16 @@
+use clap::Parser;
 use nimiq_bls::{PublicKey, SecretKey};
 use nimiq_serde::Serialize;
 use nimiq_utils::key_rng::SecureGenerate;
 
+/// Generates a random BLS keypair and its proof of knowledge.
+#[derive(Debug, Parser)]
+#[command(name = "nimiq-bls", version = nimiq_utils::CARGO_VERSION)]
+struct Args {}
+
 fn main() {
+    Args::parse();
+
     let secret_key = SecretKey::generate_default_csprng();
     let public_key = PublicKey::from_secret(&secret_key);
 

@@ -1,5 +1,7 @@
 use std::{env, fmt, str::FromStr};
 
+use nimiq_utils::CARGO_VERSION;
+
 /// A user agent string.
 ///
 /// Although you can use custom ones, it's recommended to use one provided by default:
@@ -42,10 +44,9 @@ impl From<UserAgent> for String {
 
 impl Default for UserAgent {
     fn default() -> Self {
-        let nimiq_version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
         format!(
             "core-rs-albatross/{} (native; {} {})",
-            nimiq_version,
+            CARGO_VERSION,
             env::consts::OS,
             env::consts::ARCH
         )

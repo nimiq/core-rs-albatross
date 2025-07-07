@@ -4179,6 +4179,7 @@ dependencies = [
  "nimiq-serde",
  "nimiq-transaction",
  "nimiq-trie",
+ "nimiq-utils",
  "nimiq-vrf",
  "serde",
  "thiserror 2.0.18",
@@ -4755,6 +4756,7 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-rpc-interface",
  "nimiq-transaction",
+ "nimiq-utils",
  "tokio",
  "tracing-subscriber 0.3.23",
  "url",
@@ -5105,6 +5107,7 @@ dependencies = [
 name = "nimiq-utils"
 version = "1.6.1"
 dependencies = [
+ "build-data",
  "clear_on_drop",
  "futures-util",
  "hex",
@@ -5361,6 +5364,7 @@ dependencies = [
  "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-transaction",
+ "nimiq-utils",
  "nimiq-zkp-primitives",
  "rand 0.10.1",
  "rand_chacha 0.10.0",

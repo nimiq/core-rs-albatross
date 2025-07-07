@@ -1,9 +1,7 @@
 use std::{io::stdin, process::exit, str::FromStr};
 
 use anyhow::Error;
-use clap::{
-    crate_authors, crate_description, crate_version, value_parser, Arg, ArgAction, Command,
-};
+use clap::{crate_authors, crate_description, value_parser, Arg, ArgAction, Command};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_serde::{Deserialize, Serialize};
@@ -11,8 +9,8 @@ use nimiq_transaction::Transaction;
 use thiserror::Error;
 
 fn run_app() -> Result<(), Error> {
-    let matches = Command::new("Sign transaction")
-        .version(crate_version!())
+    let matches = Command::new("nimiq-signtx")
+        .version(nimiq_utils::CARGO_VERSION)
         .author(crate_authors!())
         .about(crate_description!())
         .arg(

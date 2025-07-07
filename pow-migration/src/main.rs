@@ -31,7 +31,7 @@ const ONLINE_CHECK_BLOCKS: u32 = 10;
 
 /// Command line arguments for the binary
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version = nimiq_utils::CARGO_VERSION, about, long_about = None)]
 struct Args {
     /// Path to the PoS configuration file
     #[arg(short, long)]

@@ -4,6 +4,7 @@ use ark_ff::{FftField, Field};
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystem, OptimizationGoal};
 use ark_std::rand::Rng as _;
+use clap::Parser;
 use log::{info, level_filters::LevelFilter};
 use nimiq_log::TargetsExt;
 use nimiq_zkp_circuits::circuits::{mnt4, mnt6};
@@ -27,7 +28,14 @@ fn evaluate_circuit<F: Field + FftField, C: ConstraintSynthesizer<F> + Clone>(
     );
 }
 
+/// Estimates the number of constraints for each ZKP circuit.
+#[derive(Debug, Parser)]
+#[command(name = "nimiq-zkp-constraints", version = nimiq_utils::CARGO_VERSION)]
+struct Args {}
+
 fn main() {
+    Args::parse();
+
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().with_writer(io::stderr))
         .with(

@@ -32,3 +32,8 @@ pub use self::credentials::Credentials;
 #[cfg(feature = "spawn")]
 pub use self::spawn::{spawn, spawn_local};
 pub use self::{sensitive::Sensitive, waker::WakerExt};
+
+/// The version of the Cargo workspace package, with a `+dirty` build-metadata
+/// suffix appended when built from a Git work tree that has uncommitted changes
+/// (see `build.rs`).
+pub const CARGO_VERSION: &str = env!("NIMIQ_VERSION");

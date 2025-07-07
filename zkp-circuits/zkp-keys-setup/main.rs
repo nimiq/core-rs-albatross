@@ -19,6 +19,7 @@ use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::Subscriber
 
 /// Create the zkp keys for Devnet or Unit test.
 #[derive(Debug, Parser)]
+#[command(name = "nimiq-zkp-keys-setup", version = nimiq_utils::CARGO_VERSION)]
 struct Setup {
     /// Network ID to generate ZKP keys for.
     /// Only supports Albatross network ids.

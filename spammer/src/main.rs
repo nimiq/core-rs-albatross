@@ -36,6 +36,7 @@ use rand::{
 use serde::Deserialize;
 
 #[derive(Debug, Parser)]
+#[command(name = "nimiq-spammer", version = nimiq_utils::CARGO_VERSION)]
 pub struct SpammerCommandLine {
     /// Use a custom configuration file.
     ///

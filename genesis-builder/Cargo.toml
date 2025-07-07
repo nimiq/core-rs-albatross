@@ -32,4 +32,5 @@ nimiq-primitives = { workspace = true, features = ["serde-derive", "slots", "tre
 nimiq-serde = { workspace = true }
 nimiq-transaction = { workspace = true }
 nimiq-trie = { workspace = true }
+nimiq-utils = { workspace = true }
 nimiq-vrf = { workspace = true, features = ["serde-derive"] }

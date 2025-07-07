@@ -46,3 +46,4 @@ nimiq-keys = { workspace = true }
 nimiq-primitives = { workspace = true }
 nimiq-rpc-interface = { workspace = true }
 nimiq-transaction = { workspace = true }
+nimiq-utils = { workspace = true }

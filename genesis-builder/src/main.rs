@@ -12,13 +12,19 @@ fn usage(args: Vec<String>) -> ! {
 }
 
 fn main() {
+    let args = env::args().collect::<Vec<String>>();
+
+    if matches!(args.get(1).map(String::as_str), Some("--version" | "-V")) {
+        println!("nimiq-genesis-builder {}", nimiq_utils::CARGO_VERSION);
+        return;
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
     let db =
         MdbxDatabase::new_volatile(Default::default()).expect("Could not open a volatile database");
-    let args = env::args().collect::<Vec<String>>();
 
     if let Some(file) = args.get(1) {
         let GenesisInfo {
