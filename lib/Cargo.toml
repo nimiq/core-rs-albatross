@@ -48,7 +48,7 @@ log-panics = { version = "2.1", features = ["with-backtrace"], optional = true }
 parking_lot = "0.12"
 rand = "0.9"
 rand_chacha = "0.9"
-rustls = { version = "0.23.28", default-features = false, optional = true }
+rustls = { version = "0.23.29", default-features = false, optional = true }
 rustls-pemfile = "2.2"
 serde = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"], optional = true }
