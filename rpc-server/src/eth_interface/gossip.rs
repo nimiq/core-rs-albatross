@@ -1,13 +1,10 @@
 use async_trait::async_trait;
-
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainProxy;
 use nimiq_consensus::ConsensusProxy;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_network_libp2p::Network;
-use nimiq_rpc_interface::eth_interface::gossip::GossipInterface;
-use nimiq_rpc_interface::types::RPCResult;
-
+use nimiq_rpc_interface::{eth_interface::gossip::GossipInterface, types::RPCResult};
 use nimiq_serde::Deserialize;
 use nimiq_transaction::Transaction;
 
@@ -32,12 +29,12 @@ impl GossipDispatcher {
 impl GossipInterface for GossipDispatcher {
     type Error = Error;
 
-    async fn eth_blockNumber(&mut self) -> RPCResult<u32, (), Self::Error> {
+    async fn eth_blockNumber(&self) -> RPCResult<u32, (), Self::Error> {
         Ok(self.blockchain.read().block_number().into())
     }
 
     async fn eth_sendRawTransaction(
-        &mut self,
+        &self,
         raw_tx: String,
     ) -> RPCResult<Blake2bHash, (), Self::Error> {
         let tx = Transaction::deserialize_from_vec(&hex::decode(&raw_tx)?)?;

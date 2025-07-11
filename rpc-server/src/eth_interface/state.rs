@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use nimiq_account::Account;
+use nimiq_blockchain::interface::HistoryIndexInterface;
 use nimiq_blockchain_proxy::{BlockchainProxy, BlockchainReadProxy};
 use nimiq_keys::Address;
-use nimiq_rpc_interface::types::RPCResult;
-
-use nimiq_rpc_interface::eth_interface::state::StateInterface;
+use nimiq_primitives::coin::Coin;
+use nimiq_rpc_interface::{eth_interface::state::StateInterface, types::RPCResult};
 
 use crate::error::Error;
 
@@ -24,9 +24,9 @@ impl StateInterface for StateDispatcher {
     type Error = Error;
 
     async fn eth_getBalance(
-        &mut self,
+        &self,
         address: Address,
-        tag: String,
+        _tag: String,
     ) -> RPCResult<u32, (), Self::Error> {
         let blockchain_proxy = self.blockchain.read();
         if let BlockchainReadProxy::Full(ref blockchain) = blockchain_proxy {
@@ -34,28 +34,38 @@ impl StateInterface for StateDispatcher {
                 .get_account_if_complete(&address)
                 .ok_or(Error::NoConsensus)?;
 
-            match account {
-                Account::Basic(basic) => {
-                    let balance = basic.balance;
-                }
-                Account::Vesting(_) => todo!(),
-                Account::HTLC(_) => todo!(),
-                Account::Staking(_) => todo!(),
-            }
+            let balance = match account {
+                Account::Basic(basic) => basic.balance,
+                _ => Coin::from_u64_unchecked(0), // TODO: Contracts are not supported yet
+            };
 
-            // TODO: Need to convert coin to integer
+            // Convert Coin to u32, capping at u32::MAX if overflow occurs
+            let balance_u32: u32 = u64::from(balance).try_into().unwrap_or(u32::MAX);
 
-            Ok(0.into())
+            Ok(balance_u32.into())
         } else {
             Err(Error::NotSupportedForLightBlockchain)
         }
     }
 
     async fn eth_getTransactionCount(
-        &mut self,
+        &self,
         address: Address,
-        tag: String,
+        _tag: String,
     ) -> RPCResult<u32, (), Self::Error> {
-        todo!()
+        if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {
+            // Get all the historic transactions that correspond to this hash.
+            let tx_hashes = blockchain
+                .history_store
+                .history_index()
+                .ok_or(Error::RequiresHistoryIndex)?
+                .get_tx_hashes_by_address(&address, 100, None, None);
+
+            // Convert the historic transaction into a regular transaction. This will also convert
+            // reward inherents.
+            Ok((tx_hashes.len() as u32).into())
+        } else {
+            Err(Error::NotSupportedForLightBlockchain)
+        }
     }
 }

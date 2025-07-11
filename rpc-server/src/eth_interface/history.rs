@@ -2,10 +2,11 @@ use async_trait::async_trait;
 use nimiq_blockchain::interface::HistoryIndexInterface;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::{BlockchainProxy, BlockchainReadProxy};
-
 use nimiq_hash::Blake2bHash;
-use nimiq_rpc_interface::eth_interface::history::HistoryInterface;
-use nimiq_rpc_interface::types::{Block, ExecutedTransaction, RPCResult};
+use nimiq_rpc_interface::{
+    eth_interface::history::HistoryInterface,
+    types::{Block, ExecutedTransaction, RPCResult},
+};
 
 use crate::error::Error;
 
@@ -25,7 +26,7 @@ impl HistoryInterface for HistoryDispatcher {
     type Error = Error;
 
     async fn eth_getBlockTransactionCountByHash(
-        &mut self,
+        &self,
         block_hash: Blake2bHash,
     ) -> RPCResult<u32, (), Self::Error> {
         // TODO: Full transactions are not necessary, only the number of transactions
@@ -42,7 +43,7 @@ impl HistoryInterface for HistoryDispatcher {
     }
 
     async fn eth_getBlockTransactionCountByNumber(
-        &mut self,
+        &self,
         block_number: u32,
     ) -> RPCResult<u32, (), Self::Error> {
         // TODO: Full transactions are not necessary, only the number of transactions
@@ -56,7 +57,7 @@ impl HistoryInterface for HistoryDispatcher {
     }
 
     async fn eth_getBlockByHash(
-        &mut self,
+        &self,
         hash: Blake2bHash,
         include_body: bool,
     ) -> RPCResult<Block, (), Self::Error> {
@@ -72,7 +73,7 @@ impl HistoryInterface for HistoryDispatcher {
     }
 
     async fn eth_getBlockByNumber(
-        &mut self,
+        &self,
         block_number: u32,
         include_body: bool,
     ) -> RPCResult<Block, (), Self::Error> {
@@ -90,7 +91,7 @@ impl HistoryInterface for HistoryDispatcher {
     }
 
     async fn eth_getTransactionByHash(
-        &mut self,
+        &self,
         hash: Blake2bHash,
     ) -> RPCResult<ExecutedTransaction, (), Self::Error> {
         if let BlockchainReadProxy::Full(blockchain) = self.blockchain.read() {

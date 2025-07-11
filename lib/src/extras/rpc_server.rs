@@ -3,8 +3,7 @@ use std::{collections::HashSet, iter::FromIterator, sync::Arc};
 use nimiq_jsonrpc_server::{
     AllowListDispatcher, Config, Cors, Credentials, ModularDispatcher, Server as _Server,
 };
-use nimiq_rpc_server::dispatchers::*;
-use nimiq_rpc_server::eth_interface::*;
+use nimiq_rpc_server::{dispatchers::*, eth_interface::*};
 use nimiq_wallet::WalletStore;
 
 #[cfg(feature = "rpc-server")]
