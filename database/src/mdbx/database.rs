@@ -79,9 +79,6 @@ pub struct MdbxDatabase {
 impl MdbxDatabase {
     /// Create a table with additional flags.
     fn create_table<T: Table>(&self, _table: &T, mut flags: libmdbx::TableFlags) {
-        // Ensure `CREATE` flag is set.
-        flags.insert(libmdbx::TableFlags::CREATE);
-
         // Automatically set the integer key flag.
         let key_type = TypeId::of::<T::Key>();
         if key_type == TypeId::of::<u32>() || key_type == TypeId::of::<u64>() {
