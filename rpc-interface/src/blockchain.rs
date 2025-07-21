@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use futures::stream::BoxStream;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
+use nimiq_primitives::networks::NetworkId;
 
 use crate::types::{
     Account, Block, BlockLog, BlockchainState, ExecutedTransaction, Inherent, LogType,
@@ -12,6 +13,9 @@ use crate::types::{
 #[async_trait]
 pub trait BlockchainInterface {
     type Error;
+
+    /// Returns the network ID.
+    async fn get_network_id(&self) -> RPCResult<NetworkId, (), Self::Error>;
 
     /// Returns the block number for the current head.
     async fn get_block_number(&self) -> RPCResult<u32, (), Self::Error>;

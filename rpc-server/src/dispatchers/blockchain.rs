@@ -6,7 +6,7 @@ use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent};
 use nimiq_blockchain_proxy::{BlockchainProxy, BlockchainReadProxy};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy};
+use nimiq_primitives::{key_nibbles::KeyNibbles, networks::NetworkId, policy::Policy};
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
     types::{
@@ -80,6 +80,9 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(self.blockchain.read().block_number().into())
     }
 
+    async fn get_network_id(&self) -> RPCResult<NetworkId, (), Self::Error> {
+        Ok(self.blockchain.read().network_id().into())
+    }
     async fn get_batch_number(&self) -> RPCResult<u32, (), Self::Error> {
         Ok(Policy::batch_at(self.blockchain.read().block_number()).into())
     }
