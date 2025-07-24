@@ -29,8 +29,12 @@ use nimiq_utils::{file_store::FileStore, Sensitive};
 use nimiq_zkp_circuits::DEFAULT_PROVER_KEYS_PATH;
 use subtle::ConstantTimeEq;
 
-#[cfg(feature = "database-storage")]
-use crate::config::config_file::DatabaseSettings;
+#[cfg(feature = "metrics-server")]
+use crate::config::config_file::MetricsServerSettings;
+#[cfg(feature = "rpc-server")]
+use crate::config::config_file::RpcServerSettings;
+#[cfg(feature = "validator")]
+use crate::config::config_file::ValidatorSettings;
 #[cfg(any(feature = "rpc-server", feature = "metrics-server"))]
 use crate::config::consts;
 #[cfg(feature = "metrics-server")]
@@ -38,7 +42,10 @@ use crate::config::consts::default_bind;
 use crate::{
     config::{
         command_line::CommandLine,
-        config_file::{ConfigFile, Seed, TlsSettings},
+        config_file::{
+            ConfigFile, ConsensusSettings, DatabaseSettings, NetworkSettings, Seed, TlsSettings,
+            ZKProverSettings,
+        },
         paths,
         user_agent::UserAgent,
     },
@@ -834,18 +841,45 @@ impl ClientConfigBuilder {
 
     /// Applies settings from a configuration file
     pub fn config_file(&mut self, config_file: &ConfigFile) -> Result<&mut Self, Error> {
+        let ConfigFile {
+            network,
+            consensus,
+            zk_prover,
+            rpc_server,
+            metrics_server,
+            log: _,        // Note: log settings are handled elsewhere in the application
+            prover_log: _, // Note: prover log settings are handled elsewhere in the application
+            database,
+            #[cfg(feature = "nimiq-mempool")]
+            mempool,
+            validator,
+        } = config_file;
+
+        let NetworkSettings {
+            peer_key_file,
+            peer_key,
+            listen_addresses,
+            advertised_addresses,
+            peer_count_max,
+            peer_count_per_ip_max,
+            peer_count_per_subnet_max,
+            seed_nodes,
+            user_agent,
+            tls,
+            desired_peer_count,
+            allow_loopback_addresses,
+            dht_quorum,
+            num_initial_connections,
+        } = network;
+
         // TODO: if the config field of `listen_addresses` is empty, we should at least add `/ip4/127.0.0.1/...`
         self.network(NetworkConfig {
-            listen_addresses: config_file
-                .network
-                .listen_addresses
+            listen_addresses: listen_addresses
                 .iter()
                 .map(|addr| addr.parse())
                 .collect::<Result<Vec<Multiaddr>, _>>()?,
 
-            advertised_addresses: if let Some(advertised_addresses) =
-                &config_file.network.advertised_addresses
-            {
+            advertised_addresses: if let Some(advertised_addresses) = advertised_addresses {
                 Some(
                     advertised_addresses
                         .iter()
@@ -856,91 +890,115 @@ impl ClientConfigBuilder {
                 None
             },
 
-            user_agent: config_file
-                .network
-                .user_agent
+            user_agent: user_agent
                 .as_ref()
                 .map(|ua| UserAgent::from(ua.to_owned()))
                 .unwrap_or_default(),
 
-            seeds: config_file.network.seed_nodes.clone(),
+            seeds: seed_nodes.clone(),
 
-            desired_peer_count: config_file.network.desired_peer_count,
+            desired_peer_count: *desired_peer_count,
 
-            peer_count_max: config_file.network.peer_count_max,
-            peer_count_per_ip_max: config_file.network.peer_count_per_ip_max,
-            peer_count_per_subnet_max: config_file.network.peer_count_per_subnet_max,
+            peer_count_max: *peer_count_max,
+            peer_count_per_ip_max: *peer_count_per_ip_max,
+            peer_count_per_subnet_max: *peer_count_per_subnet_max,
 
-            tls: config_file.network.tls.as_ref().map(|s| s.clone().into()),
+            tls: tls.as_ref().map(|s| s.clone().into()),
             only_secure_ws_connections: false,
-            allow_loopback_addresses: config_file.network.allow_loopback_addresses,
-            dht_quorum: config_file.network.dht_quorum,
-            num_initial_connections: config_file.network.num_initial_connections,
+            allow_loopback_addresses: *allow_loopback_addresses,
+            dht_quorum: *dht_quorum,
+            num_initial_connections: *num_initial_connections,
         });
 
         // Configure consensus
+        let ConsensusSettings {
+            sync_mode,
+            max_epochs_stored,
+            network: network_id,
+            min_peers,
+            full_sync_threshold,
+            index_history,
+        } = consensus;
+
         let mut consensus = ConsensusConfigBuilder::default()
-            .sync_mode(config_file.consensus.sync_mode)
-            .index_history(
-                config_file.consensus.index_history,
-                config_file.consensus.sync_mode.into(),
-            )
-            .max_epochs_stored(config_file.consensus.max_epochs_stored as u32)
+            .sync_mode(*sync_mode)
+            .index_history(*index_history, (*sync_mode).into())
+            .max_epochs_stored(*max_epochs_stored as u32)
             .build()
             .unwrap();
-        if let Some(min_peers) = config_file.consensus.min_peers {
-            consensus.min_peers = min_peers;
+        if let Some(min_peers) = min_peers {
+            consensus.min_peers = *min_peers;
         }
-        if let Some(full_sync_threshold) = config_file.consensus.full_sync_threshold {
-            consensus.full_sync_threshold = full_sync_threshold;
+        if let Some(full_sync_threshold) = full_sync_threshold {
+            consensus.full_sync_threshold = *full_sync_threshold;
         }
         self.consensus(consensus);
 
-        // Configure network
-        if let Some(network) = config_file.consensus.network {
-            self.network_id(network);
+        // Configure network ID
+        if let Some(network_id) = network_id {
+            self.network_id(*network_id);
         }
 
         // Configure storage config.
         let mut file_storage = FileStorageConfig::default();
-        if let Some(db_config_file) = &config_file.database {
-            if let Some(path) = db_config_file.path.as_ref() {
+        if let Some(db_config_file) = database {
+            let DatabaseSettings {
+                path,
+                size: _,        // Note: size is handled separately in database config
+                max_dbs: _,     // Note: max_dbs is handled separately in database config
+                max_readers: _, // Note: max_readers is handled separately in database config
+            } = db_config_file;
+
+            if let Some(path) = path {
                 file_storage.database_parent = PathBuf::from(path);
             }
         }
-        if let Some(key_path) = config_file.network.peer_key_file.as_ref() {
+        if let Some(key_path) = peer_key_file {
             file_storage.peer_key_path = PathBuf::from(key_path);
         }
-        if let Some(key) = config_file.network.peer_key.as_ref() {
+        if let Some(key) = peer_key {
             file_storage.peer_key = Some(key.to_owned());
         }
         #[cfg(feature = "validator")]
-        if let Some(validator_config) = config_file.validator.as_ref() {
+        if let Some(validator_config) = validator {
+            let ValidatorSettings {
+                validator_address,
+                signing_key_file,
+                signing_key,
+                voting_key_file,
+                voting_key_files,
+                voting_key,
+                fee_key_file,
+                fee_key,
+                dht_fallback_url,
+                automatic_reactivate,
+            } = validator_config;
+
             self.validator(ValidatorConfig {
-                validator_address: Address::from_any_str(&validator_config.validator_address)?,
-                dht_fallback_url: validator_config.dht_fallback_url.clone(),
-                automatic_reactivate: validator_config.automatic_reactivate,
+                validator_address: Address::from_any_str(validator_address)?,
+                dht_fallback_url: dht_fallback_url.clone(),
+                automatic_reactivate: *automatic_reactivate,
             });
 
-            if let Some(key_paths) = &validator_config.voting_key_files {
+            if let Some(key_paths) = voting_key_files {
                 file_storage.voting_key_paths = Some(key_paths.iter().map(PathBuf::from).collect())
             }
-            if let Some(key_path) = &validator_config.voting_key_file {
+            if let Some(key_path) = voting_key_file {
                 file_storage.voting_key_path = Some(PathBuf::from(key_path));
             }
-            if let Some(key) = &validator_config.voting_key {
+            if let Some(key) = voting_key {
                 file_storage.voting_key = Some(key.to_owned());
             }
-            if let Some(key_path) = &validator_config.fee_key_file {
+            if let Some(key_path) = fee_key_file {
                 file_storage.fee_key_path = Some(PathBuf::from(key_path));
             }
-            if let Some(key) = &validator_config.fee_key {
+            if let Some(key) = fee_key {
                 file_storage.fee_key = Some(key.to_owned());
             }
-            if let Some(key_path) = &validator_config.signing_key_file {
+            if let Some(key_path) = signing_key_file {
                 file_storage.signing_key_path = Some(PathBuf::from(key_path));
             }
-            if let Some(key) = &validator_config.signing_key {
+            if let Some(key) = signing_key {
                 file_storage.signing_key = Some(key.to_owned());
             }
         }
@@ -948,12 +1006,13 @@ impl ClientConfigBuilder {
 
         // Configure database
         #[cfg(feature = "database-storage")]
-        self.database(config_file.database.clone());
+        self.database(database.clone());
 
         // Configure the zk prover
-        if let Some(zkp_settings) = config_file.zk_prover.as_ref() {
-            let prover_keys_path = zkp_settings
-                .prover_keys_path
+        if let Some(zkp_settings) = zk_prover {
+            let ZKProverSettings { prover_keys_path } = zkp_settings;
+
+            let prover_keys_path = prover_keys_path
                 .as_ref()
                 .map_or(PathBuf::from(DEFAULT_PROVER_KEYS_PATH), PathBuf::from);
 
@@ -963,8 +1022,18 @@ impl ClientConfigBuilder {
         // Configure RPC server
         #[cfg(feature = "rpc-server")]
         {
-            if let Some(rpc_config) = &config_file.rpc_server {
-                let bind_to = match rpc_config.bind.as_ref() {
+            if let Some(rpc_config) = rpc_server {
+                let RpcServerSettings {
+                    bind,
+                    port,
+                    cors_domains,
+                    allowip,
+                    methods,
+                    username,
+                    password,
+                } = rpc_config;
+
+                let bind_to = match bind.as_ref() {
                     Some(ip_string) => match ip_string.parse::<IpAddr>() {
                         Ok(parsed) => Some(parsed),
                         Err(err) => {
@@ -976,11 +1045,10 @@ impl ClientConfigBuilder {
                     None => None,
                 };
 
-                let allow_ips = if rpc_config.allowip.is_empty() {
+                let allow_ips = if allowip.is_empty() {
                     None
                 } else {
-                    let result = rpc_config
-                        .allowip
+                    let result = allowip
                         .iter()
                         .map(|s| {
                             s.parse::<IpAddr>()
@@ -990,7 +1058,7 @@ impl ClientConfigBuilder {
                     Some(result?)
                 };
 
-                let credentials = match (&rpc_config.username, &rpc_config.password) {
+                let credentials = match (username, password) {
                     (Some(u), Some(p)) => Some(Credentials::new(u, p)),
                     (None, None) => None,
                     _ => {
@@ -1002,10 +1070,10 @@ impl ClientConfigBuilder {
 
                 self.rpc_server = Some(Some(RpcServerConfig {
                     bind_to,
-                    port: rpc_config.port.unwrap_or(consts::RPC_DEFAULT_PORT),
-                    cors_domains: Some(rpc_config.cors_domains.clone()),
+                    port: port.unwrap_or(consts::RPC_DEFAULT_PORT),
+                    cors_domains: Some(cors_domains.clone()),
                     allow_ips,
-                    allowed_methods: Some(rpc_config.methods.clone()),
+                    allowed_methods: Some(methods.clone()),
                     credentials,
                 }));
             }
@@ -1014,8 +1082,15 @@ impl ClientConfigBuilder {
         // Configure metrics server
         #[cfg(feature = "metrics-server")]
         {
-            if let Some(metrics_config) = &config_file.metrics_server {
-                let ip = match metrics_config.bind.as_ref() {
+            if let Some(metrics_config) = metrics_server {
+                let MetricsServerSettings {
+                    bind,
+                    port,
+                    username,
+                    password,
+                } = metrics_config;
+
+                let ip = match bind.as_ref() {
                     Some(ip_string) => match ip_string.parse::<IpAddr>() {
                         Ok(parsed) => Some(parsed),
                         Err(err) => {
@@ -1029,11 +1104,11 @@ impl ClientConfigBuilder {
 
                 let addr = SocketAddr::new(
                     ip.unwrap_or_else(default_bind),
-                    metrics_config.port.unwrap_or(consts::METRICS_DEFAULT_PORT),
+                    port.unwrap_or(consts::METRICS_DEFAULT_PORT),
                 );
 
                 let credentials =
-                    match (&metrics_config.username, &metrics_config.password) {
+                    match (username, password) {
                         (Some(u), Some(p)) => Some(Credentials::new(u, p)),
                         (None, None) => None,
                         _ => return Err(Error::config_error(
@@ -1047,7 +1122,7 @@ impl ClientConfigBuilder {
 
         #[cfg(feature = "nimiq-mempool")]
         {
-            if let Some(mempool_settings) = &config_file.mempool {
+            if let Some(mempool_settings) = mempool {
                 self.mempool = Some(MempoolConfig::from(mempool_settings.clone()));
             }
         }

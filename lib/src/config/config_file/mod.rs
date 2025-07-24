@@ -183,7 +183,6 @@ pub struct NetworkSettings {
     pub user_agent: Option<String>,
 
     pub tls: Option<TlsSettings>,
-    pub instant_inbound: Option<bool>,
     #[serde(default = "NetworkSettings::default_desired_peer_count")]
     pub desired_peer_count: usize,
     #[serde(default)]
