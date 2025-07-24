@@ -361,7 +361,7 @@ impl ParsedTraitItemFn {
                     let final_inner_type = if inner_json_type == "array" {
                         "string"
                     } else {
-                        &inner_json_type
+                        inner_json_type
                     };
                     json_schema!({
                         "type": "array",
