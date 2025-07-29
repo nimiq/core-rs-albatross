@@ -163,7 +163,7 @@ impl KeyNibbles {
         let mut new_bytes_length = 0;
 
         // If the slice starts at the beginning of a byte, then it's an easy case.
-        if start % 2 == 0 {
+        if start.is_multiple_of(2) {
             new_bytes_length = byte_end - byte_start;
             new_bytes[0..new_bytes_length].copy_from_slice(&self.bytes[byte_start..byte_end]);
         }
@@ -190,7 +190,7 @@ impl KeyNibbles {
         if end % 2 == 1 {
             let last_nibble = self.bytes[byte_end] & 0xf0;
 
-            if start % 2 == 0 {
+            if start.is_multiple_of(2) {
                 new_bytes[new_bytes_length] = last_nibble;
             } else {
                 new_bytes[new_bytes_length - 1] |= last_nibble >> 4;
@@ -267,7 +267,7 @@ impl str::FromStr for KeyNibbles {
             return Ok(KeyNibbles::ROOT);
         }
         let mut bytes: [u8; KeyNibbles::MAX_BYTES] = [0; KeyNibbles::MAX_BYTES];
-        if s.len() % 2 == 0 {
+        if s.len().is_multiple_of(2) {
             hex::decode_to_slice(s, &mut bytes[..(s.len() / 2)])?;
 
             Ok(KeyNibbles {
@@ -327,7 +327,7 @@ impl ops::Add<&KeyNibbles> for &KeyNibbles {
     fn add(self, other: &KeyNibbles) -> KeyNibbles {
         let mut bytes = self.bytes;
 
-        if self.len() % 2 == 0 {
+        if self.len().is_multiple_of(2) {
             // Easy case: the lhs ends with a full byte.
             bytes[self.bytes_len()..self.bytes_len() + other.bytes_len()]
                 .copy_from_slice(&other.bytes[..other.bytes_len()]);
@@ -343,7 +343,7 @@ impl ops::Add<&KeyNibbles> for &KeyNibbles {
                 next_byte = (byte & 0xf) << 4;
             }
 
-            if other.length % 2 == 0 {
+            if other.length.is_multiple_of(2) {
                 // Push next_byte
                 bytes[bytes_length] = next_byte;
             }

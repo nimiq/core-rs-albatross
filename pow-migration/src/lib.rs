@@ -279,11 +279,11 @@ pub async fn migrate(
                 let mut imported_address = false;
 
                 for account in wallet_addresses {
-                    if let nimiq_rpc::primitives::Account::Basic(basic_account) = account {
-                        if basic_account.address == validator_address.to_user_friendly_address() {
-                            imported_address = true;
-                            break;
-                        }
+                    if let nimiq_rpc::primitives::Account::Basic(basic_account) = account
+                        && basic_account.address == validator_address.to_user_friendly_address()
+                    {
+                        imported_address = true;
+                        break;
                     }
                 }
 

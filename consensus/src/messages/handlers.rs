@@ -54,12 +54,12 @@ impl<N: Network> Handle<N, BlockchainProxy> for RequestMacroChain {
         let mut start_block_hash = None;
         for locator in self.locators.iter() {
             let chain_info = blockchain.get_chain_info(locator, false);
-            if let Ok(chain_info) = chain_info {
-                if chain_info.on_main_chain {
-                    // We found a block, ignore remaining block locator hashes.
-                    start_block_hash = Some(locator.clone());
-                    break;
-                }
+            if let Ok(chain_info) = chain_info
+                && chain_info.on_main_chain
+            {
+                // We found a block, ignore remaining block locator hashes.
+                start_block_hash = Some(locator.clone());
+                break;
             }
         }
         let Some(start_block_hash) = start_block_hash else {
@@ -318,12 +318,12 @@ impl RequestMissingBlocks {
         let mut start_hash = None;
         let mut start_block_number = None;
         for locator in self.locators.iter() {
-            if let Ok(chain_info) = blockchain.get_chain_info(locator, false) {
-                if chain_info.on_main_chain {
-                    start_hash = Some(locator.clone());
-                    start_block_number = Some(chain_info.head.block_number());
-                    break;
-                }
+            if let Ok(chain_info) = blockchain.get_chain_info(locator, false)
+                && chain_info.on_main_chain
+            {
+                start_hash = Some(locator.clone());
+                start_block_number = Some(chain_info.head.block_number());
+                break;
             }
         }
 

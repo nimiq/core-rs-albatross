@@ -674,14 +674,13 @@ impl<N: Network> BlockQueue<N> {
         for new_block in new_blocks {
             if let BTreeMapEntry::Occupied(mut requested_hashes) =
                 self.pending_requests.entry(new_block.block_number())
+                && let Some(sender) = requested_hashes.get_mut().remove(&new_block.hash())
             {
-                if let Some(sender) = requested_hashes.get_mut().remove(&new_block.hash()) {
-                    if let Err(error) = sender.send(Ok(new_block.clone())) {
-                        log::warn!(?error, "Failed to send block for a missing block request");
-                    }
-                    if requested_hashes.get().is_empty() {
-                        requested_hashes.remove();
-                    }
+                if let Err(error) = sender.send(Ok(new_block.clone())) {
+                    log::warn!(?error, "Failed to send block for a missing block request");
+                }
+                if requested_hashes.get().is_empty() {
+                    requested_hashes.remove();
                 }
             }
         }

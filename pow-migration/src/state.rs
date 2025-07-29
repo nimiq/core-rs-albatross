@@ -223,43 +223,43 @@ pub async fn get_validators(
         let mut voting_key = vec![vec![0u8]; 5];
         let mut txns_parsed = [false; 6];
         for txn in txns {
-            if let Some(data_hex) = &txn.data {
-                if let Ok(data) = hex::decode(data_hex) {
-                    if data.len() < 64 {
-                        continue;
+            if let Some(data_hex) = &txn.data
+                && let Ok(data) = hex::decode(data_hex)
+            {
+                if data.len() < 64 {
+                    continue;
+                }
+                match data[0] {
+                    1u8 => {
+                        if let Ok(sk) = SchnorrPublicKey::from_bytes(&data[12..44])
+                            && let Ok(addr) = Address::deserialize_from_vec(&data[44..])
+                        {
+                            signing_key = sk;
+                            address = addr;
+                            txns_parsed[0] = true;
+                        }
                     }
-                    match data[0] {
-                        1u8 => {
-                            if let Ok(sk) = SchnorrPublicKey::from_bytes(&data[12..44]) {
-                                if let Ok(addr) = Address::deserialize_from_vec(&data[44..]) {
-                                    signing_key = sk;
-                                    address = addr;
-                                    txns_parsed[0] = true;
-                                }
-                            }
-                        }
-                        2u8 => {
-                            voting_key[0] = data[7..].to_vec();
-                            txns_parsed[1] = true;
-                        }
-                        3u8 => {
-                            voting_key[1] = data[7..].to_vec();
-                            txns_parsed[2] = true;
-                        }
-                        4u8 => {
-                            voting_key[2] = data[7..].to_vec();
-                            txns_parsed[3] = true;
-                        }
-                        5u8 => {
-                            voting_key[3] = data[7..].to_vec();
-                            txns_parsed[4] = true;
-                        }
-                        6u8 => {
-                            voting_key[4] = data[7..].to_vec();
-                            txns_parsed[5] = true;
-                        }
-                        _ => {}
+                    2u8 => {
+                        voting_key[0] = data[7..].to_vec();
+                        txns_parsed[1] = true;
                     }
+                    3u8 => {
+                        voting_key[1] = data[7..].to_vec();
+                        txns_parsed[2] = true;
+                    }
+                    4u8 => {
+                        voting_key[2] = data[7..].to_vec();
+                        txns_parsed[3] = true;
+                    }
+                    5u8 => {
+                        voting_key[3] = data[7..].to_vec();
+                        txns_parsed[4] = true;
+                    }
+                    6u8 => {
+                        voting_key[4] = data[7..].to_vec();
+                        txns_parsed[5] = true;
+                    }
+                    _ => {}
                 }
             }
         }
@@ -300,24 +300,22 @@ pub async fn get_validators(
             .iter()
             .filter(|&txn| txn.value >= Policy::VALIDATOR_DEPOSIT)
         {
-            if let Some(data) = &txn.data {
-                if let Ok(address_bytes) = hex::decode(data) {
-                    if let Ok(address_str) = std::str::from_utf8(&address_bytes) {
-                        if let Ok(address) = Address::from_str(address_str) {
-                            if let Some(mut validator) = possible_validators.remove(&address) {
-                                log::info!(%address, "Found commit transaction for validator");
-                                // If the transaction had a value greater than the deposit, the excess will be converted
-                                // to stake by `get_stakers`.
-                                validator.total_stake = Coin::from_u64_unchecked(txn.value);
-                                validators.push(validator);
-                            } else {
-                                log::warn!(
-                                    %address,
-                                    "Found commit transaction for unknown validator"
-                                );
-                            }
-                        }
-                    }
+            if let Some(data) = &txn.data
+                && let Ok(address_bytes) = hex::decode(data)
+                && let Ok(address_str) = std::str::from_utf8(&address_bytes)
+                && let Ok(address) = Address::from_str(address_str)
+            {
+                if let Some(mut validator) = possible_validators.remove(&address) {
+                    log::info!(%address, "Found commit transaction for validator");
+                    // If the transaction had a value greater than the deposit, the excess will be converted
+                    // to stake by `get_stakers`.
+                    validator.total_stake = Coin::from_u64_unchecked(txn.value);
+                    validators.push(validator);
+                } else {
+                    log::warn!(
+                        %address,
+                        "Found commit transaction for unknown validator"
+                    );
                 }
             }
         }
@@ -402,57 +400,49 @@ pub async fn get_stakers(
         // First order transactions by timestamp
         txns.sort_by_cached_key(|transaction| transaction.timestamp);
         for txn in txns.iter() {
-            if let Some(data) = &txn.data {
-                if let Ok(address_bytes) = hex::decode(data) {
-                    if let Ok(address_str) = std::str::from_utf8(&address_bytes) {
-                        if let Ok(address) = Address::from_str(address_str) {
-                            if let Some(validator) = validators.get(address_str) {
-                                log::info!(staker_address=txn.from_address, validator_address=%address, "Found pre-stake transaction for validator");
-                                if let Ok(staker_address) = Address::from_str(&txn.from_address) {
-                                    let stake = Coin::from_u64_unchecked(txn.value);
-                                    match stakers.entry(staker_address.clone()) {
-                                        Entry::Occupied(mut entry) => {
-                                            // If we have an entry for this staker, treat this as a switch to another
-                                            // validator or an increase of the stake (if the validator isn't changed)
-                                            let staker = entry.get_mut();
+            if let Some(data) = &txn.data
+                && let Ok(address_bytes) = hex::decode(data)
+                && let Ok(address_str) = std::str::from_utf8(&address_bytes)
+                && let Ok(address) = Address::from_str(address_str)
+            {
+                if let Some(validator) = validators.get(address_str) {
+                    log::info!(staker_address=txn.from_address, validator_address=%address, "Found pre-stake transaction for validator");
+                    if let Ok(staker_address) = Address::from_str(&txn.from_address) {
+                        let stake = Coin::from_u64_unchecked(txn.value);
+                        match stakers.entry(staker_address.clone()) {
+                            Entry::Occupied(mut entry) => {
+                                // If we have an entry for this staker, treat this as a switch to another
+                                // validator or an increase of the stake (if the validator isn't changed)
+                                let staker = entry.get_mut();
 
-                                            // Update the staker entry
-                                            staker.delegation =
-                                                validator.validator.validator_address.clone();
-                                            staker.balance += stake;
-                                        }
-                                        Entry::Vacant(entry) => {
-                                            // If there wasn't a staker registered for this address, check minimum stake
-                                            if stake
-                                                >= Coin::from_u64_unchecked(Policy::MINIMUM_STAKE)
-                                            {
-                                                entry.insert(GenesisStaker {
-                                                    staker_address,
-                                                    balance: stake,
-                                                    delegation: validator
-                                                        .validator
-                                                        .validator_address
-                                                        .clone(),
-                                                    inactive_balance: Coin::ZERO,
-                                                    inactive_from: None,
-                                                });
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    log::error!(
-                                        staker_address = txn.from_address,
-                                        "Could not build staker address from transaction sender"
-                                    );
+                                // Update the staker entry
+                                staker.delegation = validator.validator.validator_address.clone();
+                                staker.balance += stake;
+                            }
+                            Entry::Vacant(entry) => {
+                                // If there wasn't a staker registered for this address, check minimum stake
+                                if stake >= Coin::from_u64_unchecked(Policy::MINIMUM_STAKE) {
+                                    entry.insert(GenesisStaker {
+                                        staker_address,
+                                        balance: stake,
+                                        delegation: validator.validator.validator_address.clone(),
+                                        inactive_balance: Coin::ZERO,
+                                        inactive_from: None,
+                                    });
                                 }
-                            } else {
-                                log::warn!(
-                                    staker_address = txn.from_address,
-                                    "Found pre-staking transaction for unknown validator, ignored"
-                                );
                             }
                         }
+                    } else {
+                        log::error!(
+                            staker_address = txn.from_address,
+                            "Could not build staker address from transaction sender"
+                        );
                     }
+                } else {
+                    log::warn!(
+                        staker_address = txn.from_address,
+                        "Found pre-staking transaction for unknown validator, ignored"
+                    );
                 }
             }
         }

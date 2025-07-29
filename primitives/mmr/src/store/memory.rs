@@ -11,7 +11,7 @@ impl<H: Clone> MemoryStore<H> {
         MemoryStore { inner: vec![] }
     }
 
-    pub fn transaction(&mut self) -> MemoryTransaction<H, Self> {
+    pub fn transaction(&mut self) -> MemoryTransaction<'_, H, Self> {
         MemoryTransaction::new(self)
     }
 }

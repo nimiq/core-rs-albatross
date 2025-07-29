@@ -142,7 +142,7 @@ impl<H: HashOutput> IncrementalMerkleProofBuilder<H> {
             // The next node on the level is at current_index + 1.
             // We only need to add it to the proof, if our current index is
             // at an even position (left side of two hashes).
-            if current_pos % 2 == 0 {
+            if current_pos.is_multiple_of(2) {
                 proof
                     .nodes
                     .push(self.tree[current_level][current_pos + 1].clone());
@@ -365,10 +365,10 @@ impl<H: HashOutput> IncrementalMerkleProof<H> {
         }
 
         // Check root against previous root.
-        if let Some(prev_root) = previous_result.map(|r| &r.root) {
-            if prev_root != &root {
-                return Err(IncrementalMerkleProofError::InvalidProof);
-            }
+        if let Some(prev_root) = previous_result.map(|r| &r.root)
+            && prev_root != &root
+        {
+            return Err(IncrementalMerkleProofError::InvalidProof);
         }
 
         Ok(IncrementalMerkleProofResult {

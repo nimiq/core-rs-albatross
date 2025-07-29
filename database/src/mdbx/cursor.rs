@@ -35,7 +35,7 @@ impl<Kind: TransactionKind, T: DupTable> MdbxCursor<'_, Kind, T>
 where
     T::Value: DupTableValue,
 {
-    fn encode_subkey(subkey: &DupSubKey<T>) -> Cow<[u8]> {
+    fn encode_subkey(subkey: &DupSubKey<T>) -> Cow<'_, [u8]> {
         let enc_key = subkey.as_value_bytes();
         if let Some(new_len) = T::Value::FIXED_SIZE {
             let mut owned = enc_key.into_owned();

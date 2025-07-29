@@ -2,7 +2,7 @@ use std::{
     cmp,
     cmp::Ordering,
     collections::{BinaryHeap, VecDeque},
-    fmt::{Debug, Display, Formatter},
+    fmt::{Debug, Display},
     future::Future,
     pin::Pin,
     sync::Arc,
@@ -63,15 +63,6 @@ impl<TId, TOutput> Ord for OrderWrapper<TId, TOutput> {
     fn cmp(&self, other: &Self) -> Ordering {
         // BinaryHeap is a max heap, so compare backwards here.
         other.index.cmp(&self.index)
-    }
-}
-
-#[derive(Debug)]
-pub struct Error;
-
-impl Display for Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        Display::fmt("error", f)
     }
 }
 
@@ -376,33 +367,33 @@ where
         self.try_push_futures();
 
         // Check to see if we've already received the next value.
-        if let Some(next_output) = self.queued_outputs.peek() {
-            if next_output.index == self.next_outgoing_index {
-                let request = self.queued_outputs.pop().unwrap();
+        if let Some(next_output) = self.queued_outputs.peek()
+            && next_output.index == self.next_outgoing_index
+        {
+            let request = self.queued_outputs.pop().unwrap();
 
-                match request.data {
-                    Some(mut data) => {
-                        if (self.verify_fn)(&request.id, &mut data, &mut self.verify_state) {
+            match request.data {
+                Some(mut data) => {
+                    if (self.verify_fn)(&request.id, &mut data, &mut self.verify_state) {
+                        self.next_outgoing_index += 1;
+                        return Poll::Ready(Some(Ok(data)));
+                    } else {
+                        debug!(peer_id = %request.peer, id = ?request.id, "Verification failed");
+                        let id = request.id.clone();
+                        if !self.retry_request(
+                            request.id,
+                            request.index,
+                            request.peer,
+                            request.num_tries,
+                        ) {
                             self.next_outgoing_index += 1;
-                            return Poll::Ready(Some(Ok(data)));
-                        } else {
-                            debug!(peer_id = %request.peer, id = ?request.id, "Verification failed");
-                            let id = request.id.clone();
-                            if !self.retry_request(
-                                request.id,
-                                request.index,
-                                request.peer,
-                                request.num_tries,
-                            ) {
-                                self.next_outgoing_index += 1;
-                                return Poll::Ready(Some(Err(id)));
-                            }
+                            return Poll::Ready(Some(Err(id)));
                         }
                     }
-                    None => {
-                        self.next_outgoing_index += 1;
-                        return Poll::Ready(Some(Err(request.id)));
-                    }
+                }
+                None => {
+                    self.next_outgoing_index += 1;
+                    return Poll::Ready(Some(Err(request.id)));
                 }
             }
         }

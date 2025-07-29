@@ -62,28 +62,28 @@ fn main() -> Result<(), Error> {
         Ok(entries) => {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_file() {
-                    if let Ok(contents) = fs::read_to_string(&path) {
-                        match parse_file(&contents) {
-                            Ok(ast) => {
-                                let structs = parser::extract_structs_from_ast(&ast);
-                                let fns = parser::extract_fns_from_ast(&ast);
-                                for index in 0..structs.len() {
-                                    builder = builder.with_schema(structs.get(index).unwrap());
-                                }
-                                for index in 0..fns.len() {
-                                    builder = builder.with_method(
-                                        fns.get(index).unwrap(),
-                                        path.file_name()
-                                            .unwrap()
-                                            .to_string_lossy()
-                                            .replace(".rs", ""),
-                                    );
-                                }
+                if path.is_file()
+                    && let Ok(contents) = fs::read_to_string(&path)
+                {
+                    match parse_file(&contents) {
+                        Ok(ast) => {
+                            let structs = parser::extract_structs_from_ast(&ast);
+                            let fns = parser::extract_fns_from_ast(&ast);
+                            for index in 0..structs.len() {
+                                builder = builder.with_schema(structs.get(index).unwrap());
                             }
-                            Err(err) => {
-                                return Err(AppError::ParsingError(err).into());
+                            for index in 0..fns.len() {
+                                builder = builder.with_method(
+                                    fns.get(index).unwrap(),
+                                    path.file_name()
+                                        .unwrap()
+                                        .to_string_lossy()
+                                        .replace(".rs", ""),
+                                );
                             }
+                        }
+                        Err(err) => {
+                            return Err(AppError::ParsingError(err).into());
                         }
                     }
                 }

@@ -608,20 +608,20 @@ impl<N: Network> Future for Consensus<N> {
         }
 
         // Poll any head requests if active.
-        if let Some(ref mut head_requests) = self.head_requests {
-            if let Poll::Ready(mut result) = head_requests.poll_unpin(cx) {
-                // Reset head requests.
-                self.head_requests = None;
+        if let Some(ref mut head_requests) = self.head_requests
+            && let Poll::Ready(mut result) = head_requests.poll_unpin(cx)
+        {
+            // Reset head requests.
+            self.head_requests = None;
 
-                // Push unknown blocks to the block queue, trying to sync.
-                for (block, peer_id) in result.unknown_blocks.drain(..) {
-                    self.sync.push_block(block, BlockSource::requested(peer_id));
-                }
+            // Push unknown blocks to the block queue, trying to sync.
+            for (block, peer_id) in result.unknown_blocks.drain(..) {
+                self.sync.push_block(block, BlockSource::requested(peer_id));
+            }
 
-                // Update established state using the result.
-                if let Some(event) = self.check_established(Some(result)) {
-                    self.events.send(event).ok();
-                }
+            // Update established state using the result.
+            if let Some(event) = self.check_established(Some(result)) {
+                self.events.send(event).ok();
             }
         }
 

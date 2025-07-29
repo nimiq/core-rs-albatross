@@ -108,10 +108,10 @@ impl BlockInclusionProof {
             let current_block = &number_to_block[&hops[i]];
             let next_hop = &number_to_block[&hops[i + 1]];
 
-            if let Some(interlink) = &current_block.header.interlink {
-                if !interlink.contains(&next_hop.hash()) {
-                    return false;
-                }
+            if let Some(interlink) = &current_block.header.interlink
+                && !interlink.contains(&next_hop.hash())
+            {
+                return false;
             }
         }
 

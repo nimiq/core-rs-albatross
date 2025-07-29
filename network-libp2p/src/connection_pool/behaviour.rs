@@ -605,10 +605,10 @@ impl Behaviour {
         let contacts = self.contacts.read();
         for peer_id in self.peer_ids.connected.keys() {
             let peer_score = contacts.get(peer_id).map(|e| e.get_score());
-            if let Some(score) = peer_score {
-                if score < 0.0 {
-                    info!(%peer_id, score, "Peer has a negative score");
-                }
+            if let Some(score) = peer_score
+                && score < 0.0
+            {
+                info!(%peer_id, score, "Peer has a negative score");
             }
         }
         drop(contacts);
@@ -625,11 +625,11 @@ impl Behaviour {
         debug!(%peer_id, "Banned peer");
 
         // Mark its outer protocol address as banned if we have it
-        if let Some(contact) = self.contacts.read().get(&peer_id) {
-            if let Some(outer_protocol_address) = contact.get_outer_protocol_address() {
-                debug!(address = %outer_protocol_address, "Banned address");
-                self.addresses.mark_banned(outer_protocol_address);
-            }
+        if let Some(contact) = self.contacts.read().get(&peer_id)
+            && let Some(outer_protocol_address) = contact.get_outer_protocol_address()
+        {
+            debug!(address = %outer_protocol_address, "Banned address");
+            self.addresses.mark_banned(outer_protocol_address);
         }
     }
 
@@ -849,16 +849,16 @@ impl Behaviour {
         }
 
         // Check if peer subnet IP limit is reached
-        if let Some(subnet_ip_count) = subnet_ip_count {
-            if *subnet_ip_count > self.config.peer_count_per_subnet_max {
-                // Subnet mask
-                debug!(
-                    subnet_ip = %ip_info.subnet_ip.unwrap(),
-                    limit = self.config.peer_count_per_subnet_max,
-                    "Max peer connections per IP subnet limit reached"
-                );
-                return Err(ConnectionDenied::new(Error::MaxSubnetConnectionsReached));
-            }
+        if let Some(subnet_ip_count) = subnet_ip_count
+            && *subnet_ip_count > self.config.peer_count_per_subnet_max
+        {
+            // Subnet mask
+            debug!(
+                subnet_ip = %ip_info.subnet_ip.unwrap(),
+                limit = self.config.peer_count_per_subnet_max,
+                "Max peer connections per IP subnet limit reached"
+            );
+            return Err(ConnectionDenied::new(Error::MaxSubnetConnectionsReached));
         }
 
         Ok(())
@@ -874,13 +874,12 @@ impl Behaviour {
         }
 
         // Decrement peer subnet IP counter
-        if let Some(subnet_ip) = ip_info.subnet_ip {
-            if let Entry::Occupied(mut subnet_count) = self.limits.ip_subnet_count.entry(subnet_ip)
-            {
-                *subnet_count.get_mut() = subnet_count.get().saturating_sub(1);
-                if *subnet_count.get() == 0 {
-                    subnet_count.remove();
-                }
+        if let Some(subnet_ip) = ip_info.subnet_ip
+            && let Entry::Occupied(mut subnet_count) = self.limits.ip_subnet_count.entry(subnet_ip)
+        {
+            *subnet_count.get_mut() = subnet_count.get().saturating_sub(1);
+            if *subnet_count.get() == 0 {
+                subnet_count.remove();
             }
         }
     }
@@ -959,11 +958,11 @@ impl NetworkBehaviour for Behaviour {
         _local_addr: &Multiaddr,
         remote_addr: &Multiaddr,
     ) -> Result<(), ConnectionDenied> {
-        if let Some(outer_protocol_address) = handler::outer_protocol_address(remote_addr) {
-            if self.addresses.is_banned(outer_protocol_address) {
-                debug!(%remote_addr, "Address is banned");
-                return Err(ConnectionDenied::new(Error::BannedIp));
-            }
+        if let Some(outer_protocol_address) = handler::outer_protocol_address(remote_addr)
+            && self.addresses.is_banned(outer_protocol_address)
+        {
+            debug!(%remote_addr, "Address is banned");
+            return Err(ConnectionDenied::new(Error::BannedIp));
         }
 
         // Get IP from multiaddress if it exists.

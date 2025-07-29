@@ -27,7 +27,7 @@ impl EpochBasedIndex {
 }
 
 impl AsDatabaseBytes for EpochBasedIndex {
-    fn as_key_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<'_, [u8]> {
         let bytes = [
             &self.epoch_number.to_be_bytes()[..],
             &self.index.to_be_bytes()[..],

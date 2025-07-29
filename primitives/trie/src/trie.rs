@@ -829,10 +829,10 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
             None => return Err(MerkleRadixTrieError::TrieAlreadyComplete),
         }
 
-        if let Some(end_key) = &chunk.end_key {
-            if start_key > *end_key {
-                return Err(MerkleRadixTrieError::InvalidChunk("invalid keys"));
-            }
+        if let Some(end_key) = &chunk.end_key
+            && start_key > *end_key
+        {
+            return Err(MerkleRadixTrieError::InvalidChunk("invalid keys"));
         }
         if !chunk.items.is_empty() {
             if start_key > chunk.items[0].key {
@@ -841,22 +841,22 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
                 ));
             }
             let last_item_key = chunk.items.last().unwrap().key.clone();
-            if let Some(end_key) = &chunk.end_key {
-                if last_item_key >= *end_key {
-                    return Err(MerkleRadixTrieError::InvalidChunk(
-                        "last key is inconsistent with key range",
-                    ));
-                }
+            if let Some(end_key) = &chunk.end_key
+                && last_item_key >= *end_key
+            {
+                return Err(MerkleRadixTrieError::InvalidChunk(
+                    "last key is inconsistent with key range",
+                ));
             }
             let end_key_range = chunk.end_key.clone().map(|end_key| end_key..);
             for proof_node in chunk.proof.nodes.iter() {
                 for child in proof_node.iter_children() {
-                    if let Ok(key) = child.key(&proof_node.key, &end_key_range) {
-                        if key > last_item_key {
-                            return Err(MerkleRadixTrieError::InvalidChunk(
-                                "invalid keys end, found stumps",
-                            ));
-                        }
+                    if let Ok(key) = child.key(&proof_node.key, &end_key_range)
+                        && key > last_item_key
+                    {
+                        return Err(MerkleRadixTrieError::InvalidChunk(
+                            "invalid keys end, found stumps",
+                        ));
                     }
                 }
             }
@@ -876,10 +876,10 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
         // one of the nodes of the proof.
         if let Some(end_key) = &chunk.end_key {
             let mut is_valid_end = false;
-            if let Some(last_proof_node) = chunk.proof.nodes.first() {
-                if last_proof_node.key == *end_key {
-                    is_valid_end = true;
-                }
+            if let Some(last_proof_node) = chunk.proof.nodes.first()
+                && last_proof_node.key == *end_key
+            {
+                is_valid_end = true;
             }
             if !is_valid_end {
                 for proof_node in &chunk.proof.nodes {
@@ -894,12 +894,12 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
             if !is_valid_end {
                 return Err(MerkleRadixTrieError::InvalidChunk("invalid end key"));
             }
-            if let Some(last_proof_node) = chunk.proof.nodes.first() {
-                if last_proof_node.key >= *end_key {
-                    return Err(MerkleRadixTrieError::InvalidChunk(
-                        "end key inconsistent with last proof node",
-                    ));
-                }
+            if let Some(last_proof_node) = chunk.proof.nodes.first()
+                && last_proof_node.key >= *end_key
+            {
+                return Err(MerkleRadixTrieError::InvalidChunk(
+                    "end key inconsistent with last proof node",
+                ));
             }
         }
 
@@ -1187,10 +1187,10 @@ impl<T: TrieTable> MerkleRadixTrie<T> {
         keys.sort_by(|&k1, &k2| k1.post_order_cmp(k2));
 
         let missing_range = self.get_missing_range(txn);
-        if let Some(missing) = &missing_range {
-            if keys.iter().any(|&key| missing.contains(key)) {
-                return Err(IncompleteTrie);
-            }
+        if let Some(missing) = &missing_range
+            && keys.iter().any(|&key| missing.contains(key))
+        {
+            return Err(IncompleteTrie);
         }
 
         let wanted_values: BTreeSet<&KeyNibbles> = keys.iter().cloned().collect();

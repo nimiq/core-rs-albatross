@@ -144,7 +144,7 @@ impl Blockchain {
     }
 
     /// Returns the contract data store for the staking contract.
-    pub fn get_staking_contract_store(&self) -> DataStore {
+    pub fn get_staking_contract_store(&self) -> DataStore<'_> {
         self.state
             .accounts
             .data_store(&Policy::STAKING_CONTRACT_ADDRESS)

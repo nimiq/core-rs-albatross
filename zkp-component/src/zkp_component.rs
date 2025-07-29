@@ -261,10 +261,10 @@ impl<N: Network> ZKPComponent<N> {
         *zkp_state_lock = new_zkp_state;
 
         // Adds the new proof to storage.
-        if let Some(proof_storage) = &self.proof_storage {
-            if add_to_storage {
-                proof_storage.set_zkp(&zkp_state_lock.clone().into())
-            }
+        if let Some(proof_storage) = &self.proof_storage
+            && add_to_storage
+        {
+            proof_storage.set_zkp(&zkp_state_lock.clone().into())
         }
         drop(zkp_state_lock);
 

@@ -602,10 +602,10 @@ impl<N: Network> Stream for StateQueue<N> {
         if self.peers_became_nonempty.is_none() {
             self.peers_became_nonempty = self.chunk_request_component.wait_for_peers();
         }
-        if let Some(peers_became_nonempty) = &mut self.peers_became_nonempty {
-            if peers_became_nonempty.as_mut().poll(cx).is_ready() {
-                self.peers_became_nonempty = None;
-            }
+        if let Some(peers_became_nonempty) = &mut self.peers_became_nonempty
+            && peers_became_nonempty.as_mut().poll(cx).is_ready()
+        {
+            self.peers_became_nonempty = None;
         }
         // Obvious TOCTOU, but it would otherwise need to lock the
         // `chunk_request_component`'s peer list.

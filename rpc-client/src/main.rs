@@ -96,10 +96,10 @@ async fn run_app(opt: Opt) -> Result<(), Error> {
 
 #[tokio::main]
 async fn main() {
-    if let Err(e) = dotenvy::dotenv() {
-        if !e.not_found() {
-            panic!("could not read .env file: {e}");
-        }
+    if let Err(e) = dotenvy::dotenv()
+        && !e.not_found()
+    {
+        panic!("could not read .env file: {e}");
     }
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())

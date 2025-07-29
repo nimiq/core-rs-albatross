@@ -66,7 +66,7 @@ impl<K: Clone + Eq + Hash, V: Clone> ObservableHashMap<K, V> {
     pub fn get<'a>(&'a self, k: &K) -> Option<&'a V> {
         self.inner.get(k)
     }
-    pub fn keys(&self) -> hash_map::Keys<K, V> {
+    pub fn keys(&self) -> hash_map::Keys<'_, K, V> {
         self.inner.keys()
     }
     pub fn subscribe(&self) -> broadcast::Receiver<Event<K, V>> {

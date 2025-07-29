@@ -126,17 +126,17 @@ impl Blockchain {
         let accounts = &self.state.accounts;
 
         // Verify accounts hash if the tree is complete or changes only happened in the complete part.
-        if let Some(accounts_hash) = accounts.get_root_hash(Some(txn)) {
-            if *block.state_root() != accounts_hash {
-                warn!(
-                    %block,
-                    header_root = %block.state_root(),
-                    accounts_root = %accounts_hash,
-                    reason = "Header accounts hash doesn't match real accounts hash",
-                    "Rejecting block"
-                );
-                return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
-            }
+        if let Some(accounts_hash) = accounts.get_root_hash(Some(txn))
+            && *block.state_root() != accounts_hash
+        {
+            warn!(
+                %block,
+                header_root = %block.state_root(),
+                accounts_root = %accounts_hash,
+                reason = "Header accounts hash doesn't match real accounts hash",
+                "Rejecting block"
+            );
+            return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
         }
 
         // Verify the initial punished set for the next batch.

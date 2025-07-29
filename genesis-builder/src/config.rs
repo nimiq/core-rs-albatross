@@ -135,7 +135,7 @@ pub struct GenesisHTLC {
 impl GenesisConfig {
     pub fn trimmed_from_genesis(header: &MacroHeader) -> GenesisConfig {
         assert!(
-            header.timestamp % 1000 == 0,
+            header.timestamp.is_multiple_of(1000),
             "genesis blocks must be on whole seconds",
         );
         let supply = Coin::deserialize_all(&header.extra_data)

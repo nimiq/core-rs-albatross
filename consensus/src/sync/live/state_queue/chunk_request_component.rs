@@ -50,17 +50,17 @@ impl<N: Network> ChunkRequestComponent<N> {
             },
             |request, (response, _, peer_id), _| {
                 // Verifies the response chunk size.
-                if let ResponseChunk::Chunk(chunk) = response {
-                    if chunk.chunk.items.len() > request.limit as usize {
-                        debug!(
-                                "Peer[{}] Chunk size exceeded the request limit. Req: {:?} Chunk size: {}",
-                                peer_id,
-                                request,
-                                chunk.chunk.items.len()
-                            );
-                        // TODO: Ban peer
-                        return false;
-                    }
+                if let ResponseChunk::Chunk(chunk) = response
+                    && chunk.chunk.items.len() > request.limit as usize
+                {
+                    debug!(
+                        "Peer[{}] Chunk size exceeded the request limit. Req: {:?} Chunk size: {}",
+                        peer_id,
+                        request,
+                        chunk.chunk.items.len()
+                    );
+                    // TODO: Ban peer
+                    return false;
                 }
                 true
             },

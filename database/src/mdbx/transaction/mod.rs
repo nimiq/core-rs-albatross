@@ -26,7 +26,7 @@ where
         MdbxTransaction { txn }
     }
 
-    pub(super) fn open_table<T: Table>(&self, _table: &T) -> libmdbx::Table {
+    pub(super) fn open_table<T: Table>(&self, _table: &T) -> libmdbx::Table<'_> {
         self.txn.open_table(Some(T::NAME)).unwrap()
     }
 }

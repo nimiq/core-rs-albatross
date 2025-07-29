@@ -43,7 +43,7 @@ impl<I: Key, V: Value> DupTableValue for IndexedValue<I, V> {
 }
 
 impl<I: Key, V: Value> AsDatabaseBytes for IndexedValue<I, V> {
-    fn as_key_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<'_, [u8]> {
         let bytes = [
             &self.index.as_value_bytes()[..],
             &self.value.as_value_bytes()[..],

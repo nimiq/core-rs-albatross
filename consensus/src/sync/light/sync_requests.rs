@@ -235,10 +235,10 @@ impl<TNetwork: Network> LightMacroSync<TNetwork> {
         }
 
         // Discard checkpoint block if it is old.
-        if let Some(checkpoint) = &epoch_ids.checkpoint {
-            if checkpoint.block_number <= our_block_number {
-                epoch_ids.checkpoint = None;
-            }
+        if let Some(checkpoint) = &epoch_ids.checkpoint
+            && checkpoint.block_number <= our_block_number
+        {
+            epoch_ids.checkpoint = None;
         }
 
         // After discarding all epoch_ids & checkpoint prior to our current state

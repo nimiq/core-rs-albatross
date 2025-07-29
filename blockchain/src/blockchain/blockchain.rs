@@ -239,15 +239,15 @@ impl Blockchain {
         let accounts = Accounts::new(env.clone());
 
         // Verify accounts hash if the tree is complete or changes only happened in the complete part.
-        if let Some(accounts_hash) = accounts.get_root_hash(None) {
-            if main_chain.head.state_root() != &accounts_hash {
-                log::error!(
-                    "Main chain's head state root: {:?}, Account state root: {:?}",
-                    main_chain.head.state_root(),
-                    &accounts_hash
-                );
-                return Err(BlockchainError::InconsistentState);
-            }
+        if let Some(accounts_hash) = accounts.get_root_hash(None)
+            && main_chain.head.state_root() != &accounts_hash
+        {
+            log::error!(
+                "Main chain's head state root: {:?}, Account state root: {:?}",
+                main_chain.head.state_root(),
+                &accounts_hash
+            );
+            return Err(BlockchainError::InconsistentState);
         }
 
         // Load macro chain from store.
@@ -421,11 +421,11 @@ impl Blockchain {
         self.genesis_block_number
     }
 
-    pub fn read_transaction(&self) -> MdbxReadTransaction {
+    pub fn read_transaction(&self) -> MdbxReadTransaction<'_> {
         self.db.read_transaction()
     }
 
-    pub fn write_transaction(&self) -> MdbxWriteTransaction {
+    pub fn write_transaction(&self) -> MdbxWriteTransaction<'_> {
         self.db.write_transaction()
     }
 }

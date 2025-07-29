@@ -73,7 +73,7 @@ impl<'a> From<&'a Arc<RwLock<LightBlockchain>>> for BlockchainProxy {
 impl BlockchainProxy {
     /// Returns a wrapper/proxy around a read locked blockchain.
     /// The `BlockchainReadProxy` implements `AbstractBlockchain` and allows to access common blockchain functions.
-    pub fn read(&self) -> BlockchainReadProxy {
+    pub fn read(&self) -> BlockchainReadProxy<'_> {
         match self {
             #[cfg(feature = "full")]
             BlockchainProxy::Full(blockchain) => BlockchainReadProxy::Full(blockchain.read()),

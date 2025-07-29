@@ -105,7 +105,7 @@ impl TrieProofNode {
         self.child(child_prefix)?.key(&self.key, &None)
     }
 
-    pub fn iter_children(&self) -> Iter {
+    pub fn iter_children(&self) -> Iter<'_> {
         Iter::from_children(&self.children)
     }
 }

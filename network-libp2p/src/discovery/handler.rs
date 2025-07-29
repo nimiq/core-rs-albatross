@@ -180,10 +180,10 @@ impl Handler {
         peer_contact_book: Arc<RwLock<PeerContactBook>>,
         peer_address: Multiaddr,
     ) -> Self {
-        if let Some(peer_contact) = peer_contact_book.write().get(&peer_id) {
-            if let Some(outer_protocol_address) = outer_protocol_address(&peer_address) {
-                peer_contact.set_outer_protocol_address(outer_protocol_address);
-            }
+        if let Some(peer_contact) = peer_contact_book.write().get(&peer_id)
+            && let Some(outer_protocol_address) = outer_protocol_address(&peer_address)
+        {
+            peer_contact.set_outer_protocol_address(outer_protocol_address);
         }
 
         Self {
@@ -344,12 +344,12 @@ impl ConnectionHandler for Handler {
     ) -> Poll<ConnectionHandlerEvent<Self::OutboundProtocol, (), HandlerOutEvent>> {
         loop {
             // Check if we hit the state transition timeout
-            if let Some(ref mut state_timeout) = self.state_timeout {
-                if state_timeout.as_mut().poll(cx).is_ready() {
-                    return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
-                        HandlerOutEvent::Error(Error::StateTransitionTimeout { state: self.state }),
-                    ));
-                }
+            if let Some(ref mut state_timeout) = self.state_timeout
+                && state_timeout.as_mut().poll(cx).is_ready()
+            {
+                return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
+                    HandlerOutEvent::Error(Error::StateTransitionTimeout { state: self.state }),
+                ));
             }
 
             // Send message

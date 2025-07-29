@@ -681,12 +681,11 @@ fn handle_dht_inbound_put(
     // Now verify that we should overwrite it because it's better than the one we have
     let mut overwrite = true;
     let store = event_info.swarm.behaviour_mut().dht.store_mut();
-    if let Some(current_record) = store.get(&record.key) {
-        if let Ok(current_dht_record) = DhtRecord::try_from(&current_record.into_owned()) {
-            if current_dht_record > dht_record {
-                overwrite = false;
-            }
-        }
+    if let Some(current_record) = store.get(&record.key)
+        && let Ok(current_dht_record) = DhtRecord::try_from(&current_record.into_owned())
+        && current_dht_record > dht_record
+    {
+        overwrite = false;
     }
     if overwrite && store.put(record).is_err() {
         error!("Could not store record in DHT record store");

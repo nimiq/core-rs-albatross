@@ -146,7 +146,7 @@ impl Accounts {
         }
     }
 
-    pub fn data_store(&self, address: &Address) -> DataStore {
+    pub fn data_store(&self, address: &Address) -> DataStore<'_> {
         DataStore::new(&self.tree, address)
     }
 

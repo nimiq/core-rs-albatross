@@ -59,13 +59,13 @@ impl Distribution<Address> for StandardUniform {
 }
 
 impl AsDatabaseBytes for Blake2bHash {
-    fn as_key_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<'_, [u8]> {
         Cow::Borrowed(&self.0)
     }
 }
 
 impl AsDatabaseBytes for Address {
-    fn as_key_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<'_, [u8]> {
         Cow::Borrowed(&self.0)
     }
 }

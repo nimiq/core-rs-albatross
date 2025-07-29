@@ -199,38 +199,39 @@ impl<N: Network> Stream for ZKProver<N> {
         }
 
         // If a new proof was generated it sets the state and broadcasts the new proof.
-        if let Some(proof_future) = &mut self.proof_future {
-            if let Poll::Ready(proof) = proof_future.poll_unpin(cx) {
-                self.proof_future = None;
-                self.proof_future_abort = None;
-                match proof {
-                    Ok((new_zkp_state, block)) => {
-                        assert!(
-                            new_zkp_state.latest_proof.is_some(),
-                            "The generate new proof should never produces a empty proof"
-                        );
-                        let zkp_state_lock = self.zkp_state.upgradable_read();
+        if let Some(proof_future) = &mut self.proof_future
+            && let Poll::Ready(proof) = proof_future.poll_unpin(cx)
+        {
+            self.proof_future = None;
+            self.proof_future_abort = None;
+            match proof {
+                Ok((new_zkp_state, block)) => {
+                    assert!(
+                        new_zkp_state.latest_proof.is_some(),
+                        "The generate new proof should never produces a empty proof"
+                    );
+                    let zkp_state_lock = self.zkp_state.upgradable_read();
 
-                        // If we received a more recent proof in the meanwhile, we should have cancelled the proof generation process already.
-                        assert!(
-                            zkp_state_lock.latest_block.block_number() < new_zkp_state.latest_block.block_number(),
-                            "The generated proof should always be more recent than the current state"
-                        );
+                    // If we received a more recent proof in the meanwhile, we should have cancelled the proof generation process already.
+                    assert!(
+                        zkp_state_lock.latest_block.block_number()
+                            < new_zkp_state.latest_block.block_number(),
+                        "The generated proof should always be more recent than the current state"
+                    );
 
-                        let mut zkp_state_lock = RwLockUpgradableReadGuard::upgrade(zkp_state_lock);
-                        *zkp_state_lock = new_zkp_state;
+                    let mut zkp_state_lock = RwLockUpgradableReadGuard::upgrade(zkp_state_lock);
+                    *zkp_state_lock = new_zkp_state;
 
-                        let zkp_state_lock = RwLockWriteGuard::downgrade(zkp_state_lock);
+                    let zkp_state_lock = RwLockWriteGuard::downgrade(zkp_state_lock);
 
-                        let proof: ZKProof = zkp_state_lock.clone().into();
-                        Self::broadcast_zk_proof(&self.network, proof.clone());
-                        return Poll::Ready(Some((proof, block)));
-                    }
-                    Err(e) => {
-                        log::error!(error = %e, "Error generating ZK Proof for block");
-                    }
-                };
-            }
+                    let proof: ZKProof = zkp_state_lock.clone().into();
+                    Self::broadcast_zk_proof(&self.network, proof.clone());
+                    return Poll::Ready(Some((proof, block)));
+                }
+                Err(e) => {
+                    log::error!(error = %e, "Error generating ZK Proof for block");
+                }
+            };
         }
 
         Poll::Pending

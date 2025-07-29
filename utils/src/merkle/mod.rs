@@ -22,7 +22,7 @@ pub fn compute_root_from_content<D: Hasher, T: SerializeContent>(values: &[T]) -
     compute_root_from_hashes::<D::Output>(&v).into_owned()
 }
 
-pub fn compute_root_from_hashes<T: HashOutput>(values: &[T]) -> Cow<T> {
+pub fn compute_root_from_hashes<T: HashOutput>(values: &[T]) -> Cow<'_, T> {
     let mut hasher = T::Builder::default();
     match values.len() {
         0 => {
@@ -332,7 +332,7 @@ impl<'de, H: HashOutput> Deserialize<'de> for PoWMerklePath<H> {
         // I cannot use `deserializer.deserialize_bytes()` or anything similar that deserializes vecs, because
         // they internally read the first byte as the length byte and then only let you work with that number
         // of following bytes.
-        // Additionally, the number of fields passed to `deserializer.deserialize_stuct()` limits the number
+        // Additionally, the number of fields passed to `deserializer.deserialize_struct()` limits the number
         // of times one can call `seq.next_element()` in the visitor before it throws a `SerdeDeCustom` error.
         // Since we don't know how many nodes we need to parse from the input without looking at the input first
         // (need to read that first byte), we cannot use it.
@@ -359,7 +359,7 @@ pub type PoWBlake2bMerklePath = PoWMerklePath<Blake2bHash>;
 #[test]
 fn it_can_correctly_deserialize_pow_merkle_path() {
     // PoW merkle paths have the u8 count of nodes as the first byte, then the left-bits, then immediately the
-    // node hashes themselves - no length bytes inbetween.
+    // node hashes themselves - no length bytes in between.
     let bin = hex::decode("0280de8d7ee7e54f301095294d494024430c8b251b4ebf9b1384922dc7f9dd24422f830e231d26cdc3bbd1f55f1918757568522acae62c21e8046190ea84d6e8ff16")
         .unwrap();
     let _ = PoWMerklePath::<Blake2bHash>::deserialize_all(&bin).unwrap();

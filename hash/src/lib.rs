@@ -176,7 +176,7 @@ impl Hasher for Blake2bHasher {
 }
 
 impl AsDatabaseBytes for Blake2bHash {
-    fn as_key_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<'_, [u8]> {
         Cow::Borrowed(self.as_bytes())
     }
 

@@ -319,14 +319,11 @@ impl Transaction {
             && self.recipient_type == AccountType::Basic
             && self.recipient_data.is_empty()
             && self.flags.is_empty()
+            && let Ok(signature_proof) = SignatureProof::deserialize_all(&self.proof)
+            && self.sender == Address::from(&signature_proof.public_key)
+            && signature_proof.merkle_path.is_empty()
         {
-            if let Ok(signature_proof) = SignatureProof::deserialize_all(&self.proof) {
-                if self.sender == Address::from(&signature_proof.public_key)
-                    && signature_proof.merkle_path.is_empty()
-                {
-                    return TransactionFormat::Basic;
-                }
-            }
+            return TransactionFormat::Basic;
         }
         TransactionFormat::Extended
     }

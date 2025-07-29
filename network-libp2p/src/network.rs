@@ -490,10 +490,10 @@ impl NetworkInterface for Network {
 
         // First we try to get the connected peers that support the desired services
         for peer_id in connected_peers.iter() {
-            if let Some(peer_info) = self.get_peer_info(*peer_id) {
-                if peer_info.get_services().contains(services) {
-                    filtered_peers.push(*peer_id);
-                }
+            if let Some(peer_info) = self.get_peer_info(*peer_id)
+                && peer_info.get_services().contains(services)
+            {
+                filtered_peers.push(*peer_id);
             }
         }
 

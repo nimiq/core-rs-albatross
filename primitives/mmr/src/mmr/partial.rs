@@ -150,10 +150,10 @@ impl<H: Merge + PartialEq + Clone, S: Store<H>> PartialMerkleMountainRange<H, S>
         let root = bagging(peaks_hashes.into_iter().map(Ok).rev())?;
 
         // Compare root against stored root of previous proofs.
-        if let Some(ref stored_root) = self.root {
-            if root.ne(stored_root) {
-                return Err(Error::InvalidProof);
-            }
+        if let Some(ref stored_root) = self.root
+            && root.ne(stored_root)
+        {
+            return Err(Error::InvalidProof);
         }
 
         // All done, we can commit and update our state.

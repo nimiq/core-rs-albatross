@@ -25,7 +25,7 @@ pub fn compute_pbkdf2_sha512(
     }
 
     let mut l = derived_key_length / Sha512Hash::len();
-    if derived_key_length % Sha512Hash::len() != 0 {
+    if !derived_key_length.is_multiple_of(Sha512Hash::len()) {
         l += 1;
     }
     let r = derived_key_length - (l - 1) * Sha512Hash::len();

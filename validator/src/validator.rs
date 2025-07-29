@@ -393,11 +393,11 @@ where
 
         let blockchain = self.blockchain.read();
 
-        if let Some(hash) = head_hash {
-            if blockchain.head_hash() != *hash {
-                log::debug!("Bypassed initializing block producer for obsolete block");
-                return;
-            }
+        if let Some(hash) = head_hash
+            && blockchain.head_hash() != *hash
+        {
+            log::debug!("Bypassed initializing block producer for obsolete block");
+            return;
         }
 
         let head = blockchain.head();

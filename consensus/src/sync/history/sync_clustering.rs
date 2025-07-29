@@ -201,10 +201,10 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
         }
 
         // Discard checkpoint block if it is old.
-        if let Some(checkpoint) = &epoch_ids.checkpoint {
-            if checkpoint.block_number <= our_block_number {
-                epoch_ids.checkpoint = None;
-            }
+        if let Some(checkpoint) = &epoch_ids.checkpoint
+            && checkpoint.block_number <= our_block_number
+        {
+            epoch_ids.checkpoint = None;
         }
 
         // TODO Sanity check: All of the remaining ids should be unknown
@@ -232,12 +232,12 @@ impl<TNetwork: Network> HistoryMacroSync<TNetwork> {
                     None => break 'outer,
                 };
 
-                if let Job::PushBatchSet(cid, batch_set_id, _) = job {
-                    if id == batch_set_id {
-                        num_ids_to_remove += 1;
-                        cluster_id = *cid;
-                        break;
-                    }
+                if let Job::PushBatchSet(cid, batch_set_id, _) = job
+                    && id == batch_set_id
+                {
+                    num_ids_to_remove += 1;
+                    cluster_id = *cid;
+                    break;
                 }
             }
         }

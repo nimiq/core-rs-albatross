@@ -472,7 +472,7 @@ impl BlockLogger {
     }
 
     #[cfg(feature = "interaction-traits")]
-    pub(crate) fn inherent_logger(&mut self) -> InherentLogger {
+    pub(crate) fn inherent_logger(&mut self) -> InherentLogger<'_> {
         match self.block_log {
             BlockLog::RevertedBlock {
                 ref mut inherent_logs,

@@ -418,60 +418,59 @@ impl<TProtocol: Protocol> Tendermint<TProtocol> {
             did_something = false;
 
             // First, check if the future round aggregation verification has completed.
-            if let Some(verification) = &mut self.future_round_verification {
-                if let Poll::Ready(verification_result) = verification.poll_unpin(cx) {
-                    did_something = true;
-                    self.future_round_verification = None;
+            if let Some(verification) = &mut self.future_round_verification
+                && let Poll::Ready(verification_result) = verification.poll_unpin(cx)
+            {
+                did_something = true;
+                self.future_round_verification = None;
 
-                    // If the signature was found to be valid, add the contributing validators to
-                    // the set of contributors for that future round.
-                    if let Ok((round, new_contributors)) = verification_result {
-                        if round > self.state.current_round {
-                            // future contributions need to be tracked separately, as once a round has f+1 contributions
-                            // it can be fast tracked
-                            let contributors = self.future_contributions.entry(round).or_default();
-                            *contributors |= new_contributors;
+                // If the signature was found to be valid, add the contributing validators to
+                // the set of contributors for that future round.
+                if let Ok((round, new_contributors)) = verification_result {
+                    if round > self.state.current_round {
+                        // future contributions need to be tracked separately, as once a round has f+1 contributions
+                        // it can be fast tracked
+                        let contributors = self.future_contributions.entry(round).or_default();
+                        *contributors |= new_contributors;
 
-                            // check if the skip ahead condition is fulfilled. If so, the state machine can be set to propose for round id.0
-                            if contributors.len() >= TProtocol::F_PLUS_ONE {
-                                // Vote None for all aggregations in between, as there is nothing to go by.
-                                // Keep track on aggregations which receive a vote.
-                                for round_number in self.state.current_round..round {
-                                    if let Entry::Vacant(entry) =
-                                        self.state.votes.entry((round_number, Step::Prevote))
-                                    {
-                                        entry.insert(None);
-                                        self.pending_aggregation_starts
-                                            .insert((round_number, Step::Prevote));
-                                    }
-                                    if let Entry::Vacant(entry) =
-                                        self.state.votes.entry((round_number, Step::Precommit))
-                                    {
-                                        entry.insert(None);
-                                        self.pending_aggregation_starts
-                                            .insert((round_number, Step::Precommit));
-                                    }
+                        // check if the skip ahead condition is fulfilled. If so, the state machine can be set to propose for round id.0
+                        if contributors.len() >= TProtocol::F_PLUS_ONE {
+                            // Vote None for all aggregations in between, as there is nothing to go by.
+                            // Keep track on aggregations which receive a vote.
+                            for round_number in self.state.current_round..round {
+                                if let Entry::Vacant(entry) =
+                                    self.state.votes.entry((round_number, Step::Prevote))
+                                {
+                                    entry.insert(None);
+                                    self.pending_aggregation_starts
+                                        .insert((round_number, Step::Prevote));
                                 }
-
-                                // Skip to that round
-                                self.state.current_round = round;
-                                self.state.current_step = Step::Propose;
-                                self.future_contributions.retain(|&round, _contributors| {
-                                    round > self.state.current_round
-                                });
-                                self.future_round_messages
-                                    .retain(|_, message| message.tag.0 > self.state.current_round);
-
-                                // The state changed and thus must be exported.
-                                *should_export_state = true;
-
-                                // Return to account for the state change
-                                return None;
+                                if let Entry::Vacant(entry) =
+                                    self.state.votes.entry((round_number, Step::Precommit))
+                                {
+                                    entry.insert(None);
+                                    self.pending_aggregation_starts
+                                        .insert((round_number, Step::Precommit));
+                                }
                             }
+
+                            // Skip to that round
+                            self.state.current_round = round;
+                            self.state.current_step = Step::Propose;
+                            self.future_contributions
+                                .retain(|&round, _contributors| round > self.state.current_round);
+                            self.future_round_messages
+                                .retain(|_, message| message.tag.0 > self.state.current_round);
+
+                            // The state changed and thus must be exported.
+                            *should_export_state = true;
+
+                            // Return to account for the state change
+                            return None;
                         }
-                    } else {
-                        // TODO: ban the peer
                     }
+                } else {
+                    // TODO: ban the peer
                 }
             }
 
@@ -714,10 +713,10 @@ impl<TProtocol: Protocol> Stream for Tendermint<TProtocol> {
             self.requested_proposals.poll_next_unpin(cx)
         {
             self.pending_proposal_requests.remove(&id);
-            if let Some(signed_proposal) = signed_proposal {
-                if self.process_proposal(signed_proposal).is_some() {
-                    should_export_state = true;
-                }
+            if let Some(signed_proposal) = signed_proposal
+                && self.process_proposal(signed_proposal).is_some()
+            {
+                should_export_state = true;
             }
             // Do nothing if the future ultimately resolved to None or Pending.
         }
@@ -736,16 +735,16 @@ impl<TProtocol: Protocol> Stream for Tendermint<TProtocol> {
         };
 
         // If a message failed to dispatch, try again, as polling the aggregations should have cleared up the buffer.
-        if let Some(message) = failed_message_opt {
-            if let Some(sender) = self.aggregation_senders.get(&message.tag) {
-                match sender.try_send(message.aggregation) {
-                    Ok(()) => {}
-                    Err(mpsc::error::TrySendError::Closed(_aggregation_message)) => {
-                        panic!("Channel was closed unexpectedly.");
-                    }
-                    Err(mpsc::error::TrySendError::Full(_aggregation_message)) => {
-                        log::error!("Dispatching message failed with full channel twice!");
-                    }
+        if let Some(message) = failed_message_opt
+            && let Some(sender) = self.aggregation_senders.get(&message.tag)
+        {
+            match sender.try_send(message.aggregation) {
+                Ok(()) => {}
+                Err(mpsc::error::TrySendError::Closed(_aggregation_message)) => {
+                    panic!("Channel was closed unexpectedly.");
+                }
+                Err(mpsc::error::TrySendError::Full(_aggregation_message)) => {
+                    log::error!("Dispatching message failed with full channel twice!");
                 }
             }
         }

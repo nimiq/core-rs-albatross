@@ -124,10 +124,10 @@ where
         fallback: Arc<DhtFallback<N>>,
     ) -> Result<Option<N::PeerId>, NetworkError<N::Error>> {
         let result = Self::resolve_peer_id_dht(network, validator_address).await;
-        if !matches!(result, Ok(Some(_))) {
-            if let Some(peer_id) = fallback(validator_address.clone()).await {
-                return Ok(Some(peer_id));
-            }
+        if !matches!(result, Ok(Some(_)))
+            && let Some(peer_id) = fallback(validator_address.clone()).await
+        {
+            return Ok(Some(peer_id));
         }
         result
     }
@@ -292,10 +292,10 @@ where
         };
 
         // Clear the peer ID cache only if the error happened for the same Peer ID that we have cached.
-        if let CacheState::Resolved(cached_peer_id) = *cache_entry {
-            if cached_peer_id == *peer_id {
-                *cache_entry = CacheState::Empty(cached_peer_id);
-            }
+        if let CacheState::Resolved(cached_peer_id) = *cache_entry
+            && cached_peer_id == *peer_id
+        {
+            *cache_entry = CacheState::Empty(cached_peer_id);
         }
     }
 }

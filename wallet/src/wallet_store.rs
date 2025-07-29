@@ -26,11 +26,11 @@ impl WalletStore {
         }
     }
 
-    pub fn create_read_transaction(&self) -> MdbxReadTransaction {
+    pub fn create_read_transaction(&self) -> MdbxReadTransaction<'_> {
         self.env.read_transaction()
     }
 
-    pub fn create_write_transaction(&self) -> MdbxWriteTransaction {
+    pub fn create_write_transaction(&self) -> MdbxWriteTransaction<'_> {
         self.env.write_transaction()
     }
 

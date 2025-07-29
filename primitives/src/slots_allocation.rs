@@ -204,7 +204,7 @@ impl Validators {
     }
 
     /// Iterates over the validators.
-    pub fn iter(&self) -> Iter<Validator> {
+    pub fn iter(&self) -> Iter<'_, Validator> {
         self.validators.iter()
     }
 }

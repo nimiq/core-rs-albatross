@@ -26,12 +26,12 @@ pub trait FromDatabaseBytes {
 pub trait AsDatabaseBytes {
     /// Returns the byte representation to be used in key encoding.
     /// In the default implementation, this will also be used for the value bytes.
-    fn as_key_bytes(&self) -> Cow<[u8]>;
+    fn as_key_bytes(&self) -> Cow<'_, [u8]>;
 
     /// Returns the byte representation to be used in value encoding.
     /// This is used if the value needs to be sorted differently in a dup table.
     /// DUP values use a lexicographic sort order.
-    fn as_value_bytes(&self) -> Cow<[u8]> {
+    fn as_value_bytes(&self) -> Cow<'_, [u8]> {
         self.as_key_bytes()
     }
 
@@ -41,7 +41,7 @@ pub trait AsDatabaseBytes {
 }
 
 impl AsDatabaseBytes for () {
-    fn as_key_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<'_, [u8]> {
         Cow::Borrowed(&[])
     }
 
@@ -97,25 +97,25 @@ impl FromDatabaseBytes for Vec<u8> {
 }
 
 impl AsDatabaseBytes for Vec<u8> {
-    fn as_key_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<'_, [u8]> {
         Cow::Borrowed(&self[..])
     }
 }
 
 impl AsDatabaseBytes for String {
-    fn as_key_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<'_, [u8]> {
         Cow::Borrowed(self.as_bytes())
     }
 }
 
 impl AsDatabaseBytes for str {
-    fn as_key_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<'_, [u8]> {
         Cow::Borrowed(self.as_bytes())
     }
 }
 
 impl AsDatabaseBytes for CStr {
-    fn as_key_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<'_, [u8]> {
         Cow::Borrowed(self.to_bytes())
     }
 }
@@ -139,7 +139,7 @@ macro_rules! impl_num_traits {
             }
         }
         impl AsDatabaseBytes for $typ {
-            fn as_key_bytes(&self) -> Cow<[u8]> {
+            fn as_key_bytes(&self) -> Cow<'_, [u8]> {
                 unsafe {
                     #[allow(clippy::size_of_in_element_count)]
                     Cow::Borrowed(slice::from_raw_parts(
@@ -149,7 +149,7 @@ macro_rules! impl_num_traits {
                 }
             }
 
-            fn as_value_bytes(&self) -> Cow<[u8]> {
+            fn as_value_bytes(&self) -> Cow<'_, [u8]> {
                 // It is important to use to_be_bytes here for lexical ordering.
                 Cow::Owned(self.to_be_bytes().to_vec())
             }

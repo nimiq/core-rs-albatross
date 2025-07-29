@@ -257,15 +257,15 @@ impl<N: Network> BlockRequestComponent<N> {
 
                     // If it is a macro block, also check the signatures.
                     let last_block = response.blocks.last().unwrap(); // cannot be empty
-                    if last_block.is_macro() {
-                        if let Err(e) = last_block.verify_validators(&request.epoch_validators) {
-                            log::error!(
-                                last_block = last_block.block_number(),
-                                error = %e,
-                                "Received invalid chain of missing blocks (macro block does not verify)"
-                            );
-                            return false;
-                        }
+                    if last_block.is_macro()
+                        && let Err(e) = last_block.verify_validators(&request.epoch_validators)
+                    {
+                        log::error!(
+                            last_block = last_block.block_number(),
+                            error = %e,
+                            "Received invalid chain of missing blocks (macro block does not verify)"
+                        );
+                        return false;
                     }
 
                     true

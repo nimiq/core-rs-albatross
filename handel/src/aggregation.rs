@@ -483,25 +483,25 @@ where
         }
 
         // Poll the verification future if there is one.
-        if let Some(future) = &mut self.current_verification {
-            if let Poll::Ready((result, contribution)) = future.poll_unpin(cx) {
-                // If a result is produced, unset the future such that a new one can take its place.
-                self.current_verification = None;
+        if let Some(future) = &mut self.current_verification
+            && let Poll::Ready((result, contribution)) = future.poll_unpin(cx)
+        {
+            // If a result is produced, unset the future such that a new one can take its place.
+            self.current_verification = None;
 
-                if result.is_ok() {
-                    // If the contribution was successfully verified, apply it and return the new
-                    // best aggregate.
-                    best_aggregate = Some(self.apply_contribution(contribution))
-                } else {
-                    // Verification failed, ban sender.
-                    warn!(
-                        id = %self.protocol.identify(),
-                        ?result,
-                        ?contribution,
-                        "Rejecting invalid contribution"
-                    );
-                    self.network.ban_node(contribution.origin);
-                }
+            if result.is_ok() {
+                // If the contribution was successfully verified, apply it and return the new
+                // best aggregate.
+                best_aggregate = Some(self.apply_contribution(contribution))
+            } else {
+                // Verification failed, ban sender.
+                warn!(
+                    id = %self.protocol.identify(),
+                    ?result,
+                    ?contribution,
+                    "Rejecting invalid contribution"
+                );
+                self.network.ban_node(contribution.origin);
             }
         };
 

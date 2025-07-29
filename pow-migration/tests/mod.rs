@@ -5,7 +5,6 @@
 #[cfg(feature = "pow-migration-tests")]
 mod pow_migration_test {
     use nimiq_database::mdbx::MdbxDatabase;
-    use nimiq_genesis_builder::config::GenesisConfig;
     use nimiq_keys::Address;
     use nimiq_pow_migration::{
         migrate,

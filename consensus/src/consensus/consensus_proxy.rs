@@ -145,7 +145,7 @@ impl<N: Network> ConsensusProxy<N> {
     /// Subscribe to remote address notification events
     pub async fn subscribe_address_notifications(
         &self,
-    ) -> BoxStream<(AddressNotification, N::PubsubId)> {
+    ) -> BoxStream<'_, (AddressNotification, N::PubsubId)> {
         let txn_stream = self
             .network
             .subscribe_subtopic::<AddressSubscriptionTopic>(
@@ -175,7 +175,7 @@ impl<N: Network> ConsensusProxy<N> {
     ) -> Result<Vec<(Blake2bHash, u32)>, RequestError> {
         let mut obtained_receipts = HashSet::new();
 
-        // If we need to include pre-genesis data, we set the appropiate services flag
+        // If we need to include pre-genesis data, we set the appropriate services flag
         let services = if include_pre_genesis {
             Services::PRE_GENESIS_TRANSACTIONS | Services::TRANSACTION_INDEX
         } else {

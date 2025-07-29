@@ -720,12 +720,12 @@ impl Client {
         start_at: Option<String>,
         min_peers: Option<usize>,
     ) -> Result<PlainTransactionReceiptArrayType, JsError> {
-        if let Some(max) = limit {
-            if max > MAX_TRANSACTIONS_BY_ADDRESS {
-                return Err(JsError::new(
-                    "The maximum number of transaction receipts exceeds the one that is supported",
-                ));
-            }
+        if let Some(max) = limit
+            && max > MAX_TRANSACTIONS_BY_ADDRESS
+        {
+            return Err(JsError::new(
+                "The maximum number of transaction receipts exceeds the one that is supported",
+            ));
         }
 
         let start_at = if let Some(start_at) = start_at {
@@ -792,12 +792,12 @@ impl Client {
             None
         };
 
-        if let Some(max) = limit {
-            if max > MAX_TRANSACTIONS_BY_ADDRESS {
-                return Err(JsError::new(
-                    "The maximum number of transactions exceeds the one that is supported",
-                ));
-            }
+        if let Some(max) = limit
+            && max > MAX_TRANSACTIONS_BY_ADDRESS
+        {
+            return Err(JsError::new(
+                "The maximum number of transactions exceeds the one that is supported",
+            ));
         }
 
         let address = Address::from_any(address)?.take_native();
@@ -835,12 +835,11 @@ impl Client {
         let mut receipts_to_fetch = vec![];
         for (hash, block_number) in receipts.iter() {
             // Skip known transactions that are already considered confirmed.
-            if let Some(known_tx) = known_txs.get(hash) {
-                if matches!(known_tx.state, TransactionState::Confirmed)
-                    && known_tx.block_height == Some(*block_number)
-                {
-                    continue;
-                }
+            if let Some(known_tx) = known_txs.get(hash)
+                && matches!(known_tx.state, TransactionState::Confirmed)
+                && known_tx.block_height == Some(*block_number)
+            {
+                continue;
             }
 
             // Ignore all receipts that are older than since_block_height.
@@ -866,10 +865,10 @@ impl Client {
             }
             // If the known transaction was earlier than the configured cutoff or the earliest
             // retrievable receipt, do not try to verify it.
-            if let Some(block_height) = details.block_height {
-                if block_height < since_block_height {
-                    continue;
-                }
+            if let Some(block_height) = details.block_height
+                && block_height < since_block_height
+            {
+                continue;
             }
 
             receipts_to_fetch.push((hash.clone(), details.block_height));

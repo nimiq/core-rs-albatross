@@ -40,7 +40,7 @@ impl Deref for RawTransactionHash {
     }
 }
 impl AsDatabaseBytes for RawTransactionHash {
-    fn as_key_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<'_, [u8]> {
         self.0.as_key_bytes()
     }
 
@@ -75,7 +75,7 @@ impl Deref for ExecutedTransactionHash {
     }
 }
 impl AsDatabaseBytes for ExecutedTransactionHash {
-    fn as_key_bytes(&self) -> Cow<[u8]> {
+    fn as_key_bytes(&self) -> Cow<'_, [u8]> {
         Cow::Owned(self.deref().0.to_vec())
     }
 

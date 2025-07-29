@@ -65,16 +65,15 @@ impl ConfigFile {
     }
 
     fn create_example(path: &Path) -> io::Result<()> {
-        if let Some(parent) = path.parent() {
-            if parent != Path::new("") {
-                if let Err(error) = fs::create_dir_all(parent) {
-                    log::warn!(
-                        %error,
-                        "Failed to create Nimiq home directory {}",
-                        parent.display(),
-                    );
-                }
-            }
+        if let Some(parent) = path.parent()
+            && parent != Path::new("")
+            && let Err(error) = fs::create_dir_all(parent)
+        {
+            log::warn!(
+                %error,
+                "Failed to create Nimiq home directory {}",
+                parent.display(),
+            );
         }
 
         log::info!("Creating example config at: {}", path.display());
@@ -105,10 +104,10 @@ impl ConfigFile {
     ///
     pub fn find(command_line_opt: Option<&CommandLine>) -> Result<ConfigFile, Error> {
         // If the path was set by the command line, only try this path
-        if let Some(command_line) = command_line_opt {
-            if let Some(path) = &command_line.config {
-                return Self::from_file(path);
-            }
+        if let Some(command_line) = command_line_opt
+            && let Some(path) = &command_line.config
+        {
+            return Self::from_file(path);
         }
 
         // Load config.

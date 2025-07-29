@@ -243,11 +243,11 @@ impl TrieNode {
         Ok(self.value.replace(new_value))
     }
 
-    pub fn iter_children(&self) -> Iter {
+    pub fn iter_children(&self) -> Iter<'_> {
         self.into_iter()
     }
 
-    pub fn iter_children_mut(&mut self) -> IterMut {
+    pub fn iter_children_mut(&mut self) -> IterMut<'_> {
         self.into_iter()
     }
 
