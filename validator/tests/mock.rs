@@ -6,7 +6,6 @@ use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::mdbx::MdbxDatabase;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
-use nimiq_network_interface::request::{MessageMarker, RequestCommon};
 use nimiq_network_libp2p::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::{networks::NetworkId, policy::Policy};
@@ -16,21 +15,6 @@ use nimiq_test_utils::validator::{
 };
 use nimiq_time::timeout;
 use nimiq_utils::spawn;
-use nimiq_validator::aggregation::{
-    skip_block::SignedSkipBlockMessage, update::SerializableLevelUpdate,
-};
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Deserialize, Serialize)]
-struct SkipBlockMessage(SerializableLevelUpdate<SignedSkipBlockMessage>);
-
-impl RequestCommon for SkipBlockMessage {
-    type Kind = MessageMarker;
-    const TYPE_ID: u16 = 2;
-    const MAX_REQUESTS: u32 = 500;
-    const TIME_WINDOW: Duration = Duration::from_millis(500);
-    type Response = ();
-}
 
 #[test(tokio::test)]
 async fn one_validator_can_create_micro_blocks() {
