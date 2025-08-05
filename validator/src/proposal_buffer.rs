@@ -542,11 +542,7 @@ mod test {
 
     use futures::{FutureExt, StreamExt};
     use nimiq_block::MacroHeader;
-    use nimiq_blockchain::Blockchain;
-    use nimiq_blockchain_proxy::BlockchainProxy;
-    use nimiq_consensus::{
-        sync::syncer_proxy::SyncerProxy, BlsCache, Consensus, ConsensusEvent, ConsensusProxy,
-    };
+    use nimiq_consensus::{ConsensusEvent, ConsensusProxy};
     use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
     use nimiq_network_interface::network::Network as NetworkInterface;
     use nimiq_network_mock::{MockHub, MockNetwork};
@@ -556,39 +552,15 @@ mod test {
     use nimiq_test_log::test;
     use nimiq_test_utils::{
         block_production::{TemporaryBlockProducer, SIGNING_KEY},
-        test_network::TestNetwork,
+        consensus::consensus,
     };
     use nimiq_time::{sleep, timeout};
     use nimiq_utils::spawn;
     use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
-    use nimiq_zkp_component::ZKPComponent;
-    use parking_lot::{Mutex, RwLock};
     use tokio::select;
 
     use super::{ProposalAndPubsubId, ProposalBuffer};
     use crate::{aggregation::tendermint::proposal::Header, r#macro::ProposalTopic};
-
-    /// Given a blockchain and a network creates an instance of Consensus.
-    async fn consensus<N: NetworkInterface + TestNetwork>(
-        blockchain: Arc<RwLock<Blockchain>>,
-        net: Arc<N>,
-    ) -> Consensus<N> {
-        let blockchain_proxy = BlockchainProxy::from(&blockchain);
-
-        let zkp_proxy = ZKPComponent::new(blockchain_proxy.clone(), Arc::clone(&net), None)
-            .await
-            .proxy();
-
-        let syncer = SyncerProxy::new_history(
-            blockchain_proxy.clone(),
-            Arc::clone(&net),
-            Arc::new(Mutex::new(BlsCache::new_test())),
-            net.subscribe_events(),
-        )
-        .await;
-
-        Consensus::new(blockchain_proxy, net, syncer, 0, zkp_proxy)
-    }
 
     async fn setup() -> (
         ConsensusProxy<MockNetwork>,

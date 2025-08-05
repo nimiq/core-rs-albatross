@@ -101,6 +101,11 @@ pub enum LiveSyncPeerEvent<TPeerId> {
 }
 
 #[derive(Clone)]
+pub enum SyncEvent<TPeerId> {
+    AddLiveSync(TPeerId),
+}
+
+#[derive(Clone)]
 /// This struct is used to request Epochs IDs (hashes) from other peers
 /// in order to determine their macro chain state relative to us
 pub struct EpochIds<T> {

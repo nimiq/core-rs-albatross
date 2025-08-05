@@ -34,6 +34,7 @@ use crate::{
         RequestBlocksProof, RequestSubscribeToAddress, RequestTransactionReceiptsByAddress,
         RequestTransactionsProof, ResponseBlocksProof,
     },
+    sync::sync_interface::SyncEvent,
     ConsensusEvent,
 };
 
@@ -42,7 +43,8 @@ pub struct ConsensusProxy<N: Network> {
     pub network: Arc<N>,
     pub(crate) established_flag: Arc<AtomicBool>,
     pub(crate) synced_validity_window_flag: Arc<AtomicBool>,
-    pub(crate) events: broadcast::Sender<ConsensusEvent>,
+    pub(crate) consensus_events: broadcast::Sender<ConsensusEvent>,
+    pub(crate) sync_events: broadcast::Sender<SyncEvent<N::PeerId>>,
     pub(crate) request: mpsc::Sender<ConsensusRequest<N>>,
 }
 
@@ -53,7 +55,8 @@ impl<N: Network> Clone for ConsensusProxy<N> {
             network: Arc::clone(&self.network),
             established_flag: Arc::clone(&self.established_flag),
             synced_validity_window_flag: Arc::clone(&self.synced_validity_window_flag),
-            events: self.events.clone(),
+            consensus_events: self.consensus_events.clone(),
+            sync_events: self.sync_events.clone(),
             request: self.request.clone(),
         }
     }
@@ -81,8 +84,12 @@ impl<N: Network> ConsensusProxy<N> {
             && self.synced_validity_window_flag.load(Ordering::Acquire)
     }
 
-    pub fn subscribe_events(&self) -> BroadcastStream<ConsensusEvent> {
-        BroadcastStream::new(self.events.subscribe())
+    pub fn subscribe_consensus_events(&self) -> BroadcastStream<ConsensusEvent> {
+        BroadcastStream::new(self.consensus_events.subscribe())
+    }
+
+    pub fn subscribe_sync_events(&self) -> BroadcastStream<SyncEvent<<N as Network>::PeerId>> {
+        BroadcastStream::new(self.sync_events.subscribe())
     }
 
     /// Subscribe to remote address notification events

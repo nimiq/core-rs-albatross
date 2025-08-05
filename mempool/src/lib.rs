@@ -24,5 +24,7 @@ pub mod mempool;
 mod mempool_metrics;
 /// Mempool transaction module
 pub mod mempool_transactions;
+/// Mempool syncer module
+mod sync;
 /// Verify transaction module
 pub mod verify;

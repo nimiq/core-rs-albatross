@@ -15,9 +15,11 @@ use nimiq_network_interface::network::{CloseReason, Network, NetworkEvent, Subsc
 use nimiq_primitives::policy::Policy;
 use nimiq_time::{interval, Interval};
 use nimiq_utils::stream::FuturesUnordered;
+use tokio::sync::broadcast;
 
 use super::sync_interface::{
     LiveSync, LiveSyncEvent, LiveSyncPeerEvent, LiveSyncPushEvent, MacroSync, MacroSyncReturn,
+    SyncEvent,
 };
 use crate::{
     consensus::ResolveBlockRequest, messages::RequestHead, sync::live::block_queue::BlockSource,
@@ -43,6 +45,9 @@ pub struct Syncer<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> {
 
     /// A proxy to the blockchain
     blockchain: BlockchainProxy,
+
+    /// Sending-half of a broadcast channel for publishing sync events
+    events: broadcast::Sender<SyncEvent<N::PeerId>>,
 
     /// A reference to the network
     network: Arc<N>,
@@ -76,12 +81,14 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
         macro_sync: M,
     ) -> Syncer<N, M, L> {
         let network_events = network.subscribe_events();
+
         Syncer {
             live_sync,
             macro_sync,
             blockchain,
             network,
             network_events,
+            events: broadcast::Sender::new(256),
             outdated_peers: Default::default(),
             incompatible_peers: Default::default(),
             check_interval: interval(Self::CHECK_INTERVAL),
@@ -102,6 +109,7 @@ impl<N: Network, M: MacroSync<N::PeerId>, L: LiveSync<N>> Syncer<N, M, L> {
     pub fn move_peer_into_live_sync(&mut self, peer_id: N::PeerId) {
         debug!(%peer_id, "Adding peer to live sync");
         self.live_sync.add_peer(peer_id);
+        let _ = self.events.send(SyncEvent::AddLiveSync(peer_id));
     }
 
     pub fn num_peers(&self) -> usize {

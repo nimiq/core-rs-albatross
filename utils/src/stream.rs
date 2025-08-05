@@ -49,9 +49,19 @@ impl<F: Future> FuturesOrdered<F> {
     }
     /// Returns the number of futures in the queue.
     ///
-    /// See also [`futures::stream::FuturesOrdered::is_empty`].
+    /// See also [`futures::stream::FuturesOrdered::len`].
     pub fn len(&self) -> usize {
         self.inner.len()
+    }
+    /// Push all the futures produced by the iterator into the back of the queue.
+    ///
+    /// See also [`futures::stream::FuturesOrdered::extend`].
+    pub fn extend<I>(&mut self, iter: I)
+    where
+        I: IntoIterator<Item = F>,
+    {
+        self.inner.extend(iter);
+        self.waker.wake();
     }
     /// Push a future into the back of the queue.
     ///
@@ -116,9 +126,19 @@ impl<F: Future> FuturesUnordered<F> {
     }
     /// Returns the number of futures in the set.
     ///
-    /// See also [`futures::stream::FuturesUnordered::is_empty`].
+    /// See also [`futures::stream::FuturesUnordered::len`].
     pub fn len(&self) -> usize {
         self.inner.len()
+    }
+    /// Push all the futures produced by the iterator into the set of futures.
+    ///
+    /// See also [`futures::stream::FuturesUnordered::extend`].
+    pub fn extend<I>(&mut self, iter: I)
+    where
+        I: IntoIterator<Item = F>,
+    {
+        self.inner.extend(iter);
+        self.waker.wake();
     }
     /// Push a future into the set.
     ///
