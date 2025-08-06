@@ -4878,7 +4878,7 @@ dependencies = [
  "hex",
  "nimiq-collections",
  "nimiq-serde-derive",
- "postcard",
+ "postcard-bytes",
  "serde",
  "serde_derive",
 ]
@@ -5984,9 +5984,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "280dc24453071f1b63954171985a0b0d30058d287960968b9b2aca264c8d4ee6"
 
 [[package]]
-name = "postcard"
-version = "1.1.3"
-source = "git+https://github.com/nimiq/postcard-bytes#fe9a6b87abcd0dd8eeed465340494dc3a4383a1f"
+name = "postcard-bytes"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36f42cd07d89c7a2f57eb5155e47a3fd829b7b770e457daa8022bbfdb5a3e85d"
 dependencies = [
  "cobs",
  "embedded-io 0.4.0",

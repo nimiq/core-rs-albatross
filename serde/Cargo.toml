@@ -15,7 +15,7 @@ workspace = true
 
 [dependencies]
 hex = "0.4"
-postcard = { git = "https://github.com/nimiq/postcard-bytes", default-features = false, features = ["use-std"] }
+postcard-bytes = { version = "0.1", default-features = false, features = ["use-std"] }
 serde = "1.0"
 serde_derive = "1.0"
 
