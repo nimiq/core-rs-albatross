@@ -37,6 +37,10 @@ impl Commitment {
     /// Sums up multiple commitments into one aggregated commitment.
     pub fn sum(commitments: &CommitmentAnyArrayType) -> Result<Commitment, JsError> {
         let commitments = Commitment::unpack_commitments(commitments)?;
+        if commitments.is_empty() {
+            return Err(JsError::new("No commitments provided"));
+        }
+
         let aggregate_commitment =
             nimiq_keys::multisig::commitment::Commitment::sum(commitments.into_iter());
         Ok(Commitment::from(aggregate_commitment))

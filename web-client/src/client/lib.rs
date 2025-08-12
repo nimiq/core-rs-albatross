@@ -287,6 +287,9 @@ impl Client {
             .map_err(|_| JsError::new("listener is not a function"))?;
 
         let addresses: HashSet<_, _> = Client::unpack_addresses(addresses)?.into_iter().collect();
+        if addresses.is_empty() {
+            return Err(JsError::new("No addresses provided"));
+        }
 
         // Add addresses to our global list of subscribed addresses
         {

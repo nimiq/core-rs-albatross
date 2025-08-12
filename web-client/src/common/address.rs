@@ -86,6 +86,10 @@ impl Address {
         num_signers: usize,
     ) -> Result<Address, JsError> {
         let public_keys = PublicKey::unpack_public_keys(public_keys)?;
+        if public_keys.is_empty() {
+            return Err(JsError::new("No public keys provided"));
+        }
+
         let combined_public_keys = combine_public_keys(public_keys, num_signers);
         Ok(Address::from(compute_address(&combined_public_keys)))
     }
