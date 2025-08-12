@@ -223,10 +223,6 @@ impl SignatureProof {
             .dyn_ref()
             .ok_or_else(|| JsError::new("`public_keys` must be an array"))?;
 
-        if array.length() == 0 {
-            return Err(JsError::new("No public keys provided"));
-        }
-
         let mut public_keys = Vec::<_>::with_capacity(array.length().try_into()?);
         for item in array.iter() {
             let public_key = SignatureProof::unpack_public_key(item.unchecked_ref())

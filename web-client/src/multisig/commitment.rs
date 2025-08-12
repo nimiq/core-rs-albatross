@@ -128,10 +128,6 @@ impl Commitment {
             .dyn_ref()
             .ok_or_else(|| JsError::new("`commitments` must be an array"))?;
 
-        if array.length() == 0 {
-            return Err(JsError::new("No commitments provided"));
-        }
-
         let mut commitments = Vec::<_>::with_capacity(array.length().try_into()?);
         for any in array.iter() {
             let commitment = Commitment::from_any(&any.into())?.take_native();
@@ -149,10 +145,6 @@ impl Commitment {
         let array: &Array = js_value
             .dyn_ref()
             .ok_or_else(|| JsError::new("`commitments_list` must be an array"))?;
-
-        if array.length() == 0 {
-            return Err(JsError::new("No commitments list provided"));
-        }
 
         let mut commitments_list = Vec::<_>::with_capacity(array.length().try_into()?);
         for any in array.iter() {

@@ -172,10 +172,6 @@ impl PublicKey {
             .dyn_ref()
             .ok_or_else(|| JsError::new("`keys` must be an array"))?;
 
-        if array.length() == 0 {
-            return Err(JsError::new("No keys provided"));
-        }
-
         let mut keys = Vec::<_>::with_capacity(array.length().try_into()?);
         for any in array.iter() {
             let key = PublicKey::from_any(&any.into())?.take_native();

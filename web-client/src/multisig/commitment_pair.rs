@@ -140,10 +140,6 @@ impl CommitmentPair {
             .dyn_ref()
             .ok_or_else(|| JsError::new("`pairs` must be an array"))?;
 
-        if array.length() == 0 {
-            return Err(JsError::new("No pairs provided"));
-        }
-
         let mut pairs = Vec::<_>::with_capacity(array.length().try_into()?);
         for any in array.iter() {
             let pair = CommitmentPair::from_any(&any.into())?.take_native();

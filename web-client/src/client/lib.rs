@@ -1344,10 +1344,6 @@ impl Client {
             .dyn_ref()
             .ok_or_else(|| JsError::new("`addresses` must be an array"))?;
 
-        if array.length() == 0 {
-            return Err(JsError::new("No addresses provided"));
-        }
-
         let mut addresses = Vec::<_>::with_capacity(array.length().try_into()?);
         for any in array.iter() {
             let address = Address::from_any(&any.into())?.take_native();
