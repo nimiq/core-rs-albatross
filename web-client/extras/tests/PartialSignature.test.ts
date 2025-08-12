@@ -43,4 +43,25 @@ describe('PartialSignature', () => {
 
         expect(partial_signature.serialize().length).toBe(32);
     });
+
+    it('can create a partial signature without other signers', () => {
+        const privateKey = PrivateKey.generate();
+        const publicKey = PublicKey.derive(privateKey);
+
+        const commitmentPairs = [
+            CommitmentPair.generate(),
+            CommitmentPair.generate(),
+        ];
+
+        const partial_signature = PartialSignature.create(
+            privateKey,
+            publicKey,
+            commitmentPairs,
+            [],
+            [],
+            new Uint8Array(139),
+        );
+
+        expect(partial_signature.serialize().length).toBe(32);
+    });
 });
