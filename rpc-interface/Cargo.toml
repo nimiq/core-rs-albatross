@@ -38,6 +38,7 @@ nimiq-blockchain-interface = { workspace = true }
 nimiq-blockchain-proxy = { workspace = true }
 nimiq-bls = { workspace = true, features = ["serde-derive"] }
 nimiq-collections = { workspace = true }
+nimiq-consensus = {workspace = true}
 nimiq-hash = { workspace = true }
 nimiq-jsonrpc-client = { workspace = true }
 nimiq-jsonrpc-core = { workspace = true }

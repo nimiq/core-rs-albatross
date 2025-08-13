@@ -1,4 +1,8 @@
-use std::{fs, io, num::NonZeroU8, sync::Arc};
+use std::{
+    fs, io,
+    num::NonZeroU8,
+    sync::{atomic::AtomicU32, Arc},
+};
 
 use instant::SystemTime;
 use nimiq_block::Block;
@@ -443,6 +447,8 @@ impl ClientInner {
         // Start buffering network events as early as possible
         let network_events = network.subscribe_events();
 
+        let syncer_tracker = Arc::new(AtomicU32::new(0));
+
         let (syncer_proxy, zkp_component) = match config.consensus.sync_mode {
             #[cfg(not(feature = "full-consensus"))]
             SyncMode::History => {
@@ -511,6 +517,7 @@ impl ClientInner {
                     zkp_component.proxy(),
                     network_events,
                     config.consensus.full_sync_threshold,
+                    Arc::clone(&syncer_tracker),
                 )
                 .await;
                 (syncer, zkp_component)
@@ -556,6 +563,7 @@ impl ClientInner {
             syncer_proxy,
             config.consensus.min_peers,
             zkp_component.proxy(),
+            syncer_tracker,
         );
 
         #[cfg(feature = "validator")]

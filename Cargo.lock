@@ -4812,6 +4812,7 @@ dependencies = [
  "nimiq-blockchain-proxy",
  "nimiq-bls",
  "nimiq-collections",
+ "nimiq-consensus",
  "nimiq-hash",
  "nimiq-jsonrpc-client",
  "nimiq-jsonrpc-core",

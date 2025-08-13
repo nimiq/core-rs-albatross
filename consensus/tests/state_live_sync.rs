@@ -1,4 +1,7 @@
-use std::{sync::Arc, task::Poll};
+use std::{
+    sync::{atomic::AtomicU32, Arc},
+    task::Poll,
+};
 
 use futures::{join, poll, Future, Stream, StreamExt};
 use log::info;
@@ -102,6 +105,7 @@ fn get_incomplete_live_sync(
         Arc::clone(&incomplete_blockchain),
         diff_queue,
         QueueConfig::default(),
+        Arc::new(AtomicU32::new(0)),
     );
 
     let live_sync = StateLiveSync::with_queue(

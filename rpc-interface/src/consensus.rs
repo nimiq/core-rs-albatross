@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use nimiq_consensus::consensus::consensus_proxy::ConsensusSyncStatus;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
@@ -15,6 +16,9 @@ pub trait ConsensusInterface {
     // `nimiq_jsonrpc_derive::proxy` requires the receiver type to be a mutable reference.
     #[allow(clippy::wrong_self_convention)]
     async fn is_consensus_established(&self) -> RPCResult<bool, (), Self::Error>;
+
+    /// Returns the status of the sync process
+    async fn get_sync_status(&self) -> RPCResult<ConsensusSyncStatus, (), Self::Error>;
 
     /// Given a serialized transaction, it will return the corresponding transaction struct.
     async fn get_raw_transaction_info(

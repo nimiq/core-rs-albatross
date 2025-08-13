@@ -1,4 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::{atomic::AtomicU32, Arc},
+};
 
 use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, BlockchainConfig};
@@ -100,6 +103,7 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
             syncer,
             1,
             zkp_proxy.proxy(),
+            Arc::new(AtomicU32::new(0)),
         );
 
         Node {

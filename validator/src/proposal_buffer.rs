@@ -538,7 +538,10 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> Clone for ProposalReceiver<T
 
 #[cfg(test)]
 mod test {
-    use std::{sync::Arc, time::Duration};
+    use std::{
+        sync::{atomic::AtomicU32, Arc},
+        time::Duration,
+    };
 
     use futures::{FutureExt, StreamExt};
     use nimiq_block::MacroHeader;
@@ -587,7 +590,14 @@ mod test {
         )
         .await;
 
-        Consensus::new(blockchain_proxy, net, syncer, 0, zkp_proxy)
+        Consensus::new(
+            blockchain_proxy,
+            net,
+            syncer,
+            0,
+            zkp_proxy,
+            Arc::new(AtomicU32::new(0)),
+        )
     }
 
     async fn setup() -> (

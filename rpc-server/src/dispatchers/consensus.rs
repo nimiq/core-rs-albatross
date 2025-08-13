@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use nimiq_blockchain_interface::AbstractBlockchain;
 use nimiq_blockchain_proxy::BlockchainReadProxy;
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
-use nimiq_consensus::ConsensusProxy;
+use nimiq_consensus::{consensus::consensus_proxy::ConsensusSyncStatus, ConsensusProxy};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, Ed25519PublicKey, KeyPair, PrivateKey};
 use nimiq_network_libp2p::Network;
@@ -75,6 +75,10 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn is_consensus_established(&self) -> RPCResult<bool, (), Self::Error> {
         Ok(self.consensus.is_established().into())
+    }
+
+    async fn get_sync_status(&self) -> RPCResult<ConsensusSyncStatus, (), Self::Error> {
+        Ok(self.consensus.get_sync_status().into())
     }
 
     async fn get_raw_transaction_info(

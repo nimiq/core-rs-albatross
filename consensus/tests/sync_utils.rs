@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{atomic::AtomicU32, Arc};
 
 use futures::{future, StreamExt};
 use nimiq_blockchain::{BlockProducer, Blockchain, BlockchainConfig};
@@ -58,6 +58,7 @@ async fn syncer(
                 zkp_prover.proxy(),
                 network.subscribe_events(),
                 0,
+                Arc::new(AtomicU32::new(0)),
             )
             .await
         }
@@ -214,6 +215,7 @@ pub async fn sync_two_peers(
         syncer2,
         1,
         zkp_prover2_proxy,
+        Arc::new(AtomicU32::new(0)),
     );
     let consensus2_proxy = consensus2.proxy();
     let events = blockchain2_proxy.read().notifier_as_stream();

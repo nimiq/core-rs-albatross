@@ -23,6 +23,7 @@ use nimiq_network_interface::{
     request::{OutboundRequestError, RequestError},
 };
 use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy};
+use nimiq_serde::{Deserialize, Serialize};
 use nimiq_transaction::{
     historic_transaction::HistoricTransaction, ControlTransaction, ControlTransactionTopic,
     Transaction, TransactionTopic,
@@ -32,7 +33,7 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use super::{ConsensusRequest, ResolveBlockError, ResolveBlockRequest};
 use crate::{
-    consensus::remote_data_store::RemoteDataStore,
+    consensus::{remote_data_store::RemoteDataStore, SyncProgress},
     messages::{
         AddressNotification, AddressSubscriptionOperation, AddressSubscriptionTopic,
         RequestBlocksProof, RequestSubscribeToAddress, RequestTransactionReceiptsByAddress,
@@ -40,6 +41,19 @@ use crate::{
     },
     ConsensusEvent,
 };
+
+/// This struct is used to track the progress of the consensus sync
+/// and return it to the user.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsensusSyncStatus {
+    pub is_established: bool,
+    pub synced_validity_window: bool,
+    pub current_block: u32,
+    pub remaning_blocks: u32,
+    pub state_sync_progress: u32,
+}
+
 /// Implements the logic for handling consensus-related requests.
 ///
 /// The consensus proxy provides methods for interacting with peers, syncing nodes,
@@ -48,6 +62,7 @@ use crate::{
 pub struct ConsensusProxy<N: Network> {
     pub blockchain: BlockchainProxy,
     pub network: Arc<N>,
+    pub(crate) sync_progress: Arc<SyncProgress>,
     pub(crate) established_flag: Arc<AtomicBool>,
     pub(crate) synced_validity_window_flag: Arc<AtomicBool>,
     pub(crate) events: broadcast::Sender<ConsensusEvent>,
@@ -59,6 +74,7 @@ impl<N: Network> Clone for ConsensusProxy<N> {
         Self {
             blockchain: self.blockchain.clone(),
             network: Arc::clone(&self.network),
+            sync_progress: Arc::clone(&self.sync_progress),
             established_flag: Arc::clone(&self.established_flag),
             synced_validity_window_flag: Arc::clone(&self.synced_validity_window_flag),
             events: self.events.clone(),
@@ -75,6 +91,38 @@ impl<N: Network> ConsensusProxy<N> {
                     .publish::<TransactionTopic>(err.into_inner())
                     .await
             }
+        }
+    }
+
+    /// Returns the current sync status of the consensus.
+    pub fn get_sync_status(&self) -> ConsensusSyncStatus {
+        let is_established = self.is_established();
+        let synced_validity_window = self.blockchain.read().can_enforce_validity_window();
+        let current_block = self
+            .sync_progress
+            .current_block_number
+            .load(Ordering::Acquire);
+        let mut remaning_blocks = self
+            .sync_progress
+            .remaning_blocks_to_sync
+            .load(Ordering::Acquire);
+        let mut state_sync_progress = self
+            .sync_progress
+            .live_sync_progress
+            .load(Ordering::Acquire);
+
+        // If consensus is established, we set the remaning blocks to 0 and the state sync progress to 100
+        if is_established {
+            remaning_blocks = 0;
+            state_sync_progress = 100;
+        }
+
+        ConsensusSyncStatus {
+            is_established,
+            synced_validity_window,
+            current_block,
+            remaning_blocks,
+            state_sync_progress,
         }
     }
 

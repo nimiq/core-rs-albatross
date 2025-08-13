@@ -1,4 +1,7 @@
-use std::{sync::Arc, task::Poll};
+use std::{
+    sync::{atomic::AtomicU32, Arc},
+    task::Poll,
+};
 
 use futures::{poll, Stream, StreamExt};
 use nimiq_blockchain_proxy::BlockchainProxy;
@@ -51,6 +54,7 @@ pub async fn it_can_initialize_with_mock_network() {
         syncer,
         3,
         zkp_component.proxy(),
+        Arc::new(AtomicU32::new(0)),
     );
 
     if let Poll::Ready(_) = poll!(consensus) {

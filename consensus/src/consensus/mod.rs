@@ -9,7 +9,7 @@ use std::{
     future::Future,
     pin::Pin,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU32, Ordering},
         Arc,
     },
     task::{Context, Poll, Waker},
@@ -132,6 +132,14 @@ pub struct ResolveBlockRequest<N: Network> {
 pub enum ConsensusRequest<N: Network> {
     ResolveBlock(ResolveBlockRequest<N>),
 }
+
+/// This struct is used to track the sync progress to reach consensus.
+pub struct SyncProgress {
+    pub current_block_number: AtomicU32,
+    pub remaning_blocks_to_sync: AtomicU32,
+    pub live_sync_progress: Arc<AtomicU32>,
+}
+
 /// Coordinates synchronization between the blockchain and the network.
 /// Tracks peers, handles event notifications, and manages requests for chain data.
 /// Provides channels and flags for other components to maintain chain state.
@@ -140,6 +148,7 @@ pub struct Consensus<N: Network> {
     pub network: Arc<N>,
 
     pub sync: SyncerProxy<N>,
+    pub sync_progress: Arc<SyncProgress>,
 
     events: broadcast::Sender<ConsensusEvent>,
     established_flag: Arc<AtomicBool>,
@@ -196,6 +205,7 @@ impl<N: Network> Consensus<N> {
             syncer,
             Self::MIN_PEERS_ESTABLISHED,
             zkp_proxy,
+            Arc::new(AtomicU32::new(0)),
         )
     }
 
@@ -205,6 +215,7 @@ impl<N: Network> Consensus<N> {
         syncer: SyncerProxy<N>,
         min_peers: usize,
         zkp_proxy: ZKPComponentProxy<N>,
+        syncer_tracker: Arc<AtomicU32>,
     ) -> Self {
         Self::init_network_request_receivers(&network, &blockchain);
 
@@ -221,6 +232,12 @@ impl<N: Network> Consensus<N> {
         }
         let synced_validity_window_flag = Arc::new(AtomicBool::new(synced_validity_window_flag));
 
+        let sync_progress = Arc::new(SyncProgress {
+            current_block_number: AtomicU32::new(0),
+            remaning_blocks_to_sync: AtomicU32::new(0),
+            live_sync_progress: syncer_tracker,
+        });
+
         Consensus {
             blockchain,
             network,
@@ -229,6 +246,7 @@ impl<N: Network> Consensus<N> {
             established_flag,
             #[cfg(feature = "full")]
             last_batch_number: 0,
+            sync_progress,
             synced_validity_window_flag,
             head_requests: None,
             head_requests_time: None,
@@ -323,6 +341,7 @@ impl<N: Network> Consensus<N> {
         ConsensusProxy {
             blockchain: self.blockchain.clone(),
             network: Arc::clone(&self.network),
+            sync_progress: Arc::clone(&self.sync_progress),
             established_flag: Arc::clone(&self.established_flag),
             synced_validity_window_flag: Arc::clone(&self.synced_validity_window_flag),
             events: self.events.clone(),
@@ -556,6 +575,13 @@ impl<N: Network> Future for Consensus<N> {
                             "Catching up to tip of the chain (now at #{}, {} blocks remaining)",
                             block_number, remaining_in_buffer
                         );
+
+                        self.sync_progress
+                            .current_block_number
+                            .store(block_number, Ordering::Relaxed);
+                        self.sync_progress
+                            .remaning_blocks_to_sync
+                            .store(remaining_in_buffer as u32, Ordering::Relaxed);
 
                         if remaining_in_buffer == 0 {
                             self.head_requests_time = None;

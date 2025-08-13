@@ -11,7 +11,7 @@ use std::cmp::max;
 use std::{
     mem,
     pin::Pin,
-    sync::Arc,
+    sync::{atomic::AtomicU32, Arc},
     task::{Context, Poll},
 };
 
@@ -219,6 +219,7 @@ impl<N: Network> SyncerProxy<N> {
         zkp_component_proxy: ZKPComponentProxy<N>,
         network_event_rx: SubscribeEvents<N::PeerId>,
         full_sync_threshold: u32,
+        syncer_tracker: Arc<AtomicU32>,
     ) -> Self {
         // Start from the default configuration for the block queue.
         let mut queue_config = QueueConfig::default();
@@ -250,6 +251,7 @@ impl<N: Network> SyncerProxy<N> {
             Arc::clone(&blockchain),
             diff_queue,
             queue_config,
+            syncer_tracker,
         );
 
         // Set up live sync with state queue.
