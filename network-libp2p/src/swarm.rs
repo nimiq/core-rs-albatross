@@ -5,6 +5,12 @@ use futures::StreamExt;
 use instant::Instant;
 #[cfg(feature = "autonat")]
 use libp2p::autonat::{self, InboundFailure, OutboundFailure};
+#[cfg(feature = "kad")]
+use libp2p::kad::{
+    self, store::RecordStore, BootstrapError, BootstrapOk, GetRecordError, GetRecordOk,
+    InboundRequest, Mode, ProgressStep, PutRecordError, PutRecordOk, QueryId, QueryResult,
+    QueryStats, Quorum, Record,
+};
 #[cfg(all(target_family = "wasm", not(feature = "tokio-websocket")))]
 use libp2p::websocket_websys;
 use libp2p::{
@@ -15,11 +21,6 @@ use libp2p::{
     },
     gossipsub,
     identity::Keypair,
-    kad::{
-        self, store::RecordStore, BootstrapError, BootstrapOk, GetRecordError, GetRecordOk,
-        InboundRequest, Mode, ProgressStep, PutRecordError, PutRecordOk, QueryId, QueryResult,
-        QueryStats, Quorum, Record,
-    },
     noise, ping,
     request_response::{self, InboundRequestId, OutboundRequestId, ResponseChannel},
     swarm::{
@@ -46,14 +47,16 @@ use crate::autonat::NatStatus;
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;
 use crate::{
-    behaviour, dht,
+    behaviour,
     discovery::{self, peer_contacts::PeerContactBook},
-    network_types::{
-        DhtBootStrapState, DhtRecord, DhtResults, GossipsubTopicInfo, NetworkAction, TaskState,
-        ValidateMessage,
-    },
+    network_types::{GossipsubTopicInfo, NetworkAction, TaskState, ValidateMessage},
     rate_limiting::{RateLimitId, RateLimits},
     Config, NetworkError, TlsConfig,
+};
+#[cfg(feature = "kad")]
+use crate::{
+    dht,
+    network_types::{DhtBootStrapState, DhtRecord, DhtResults},
 };
 
 type NimiqSwarm = Swarm<behaviour::Behaviour>;
@@ -122,6 +125,7 @@ pub(crate) async fn swarm_task(
     #[cfg(feature = "metrics")] metrics: Arc<NetworkMetrics>,
 ) {
     let mut task_state = TaskState {
+        #[cfg(feature = "kad")]
         dht_server_mode: force_dht_server_mode,
         dht_quorum: dht_quorum.into(),
         ..Default::default()
@@ -1069,12 +1073,14 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
             let result = swarm.dial(dial_opts).map_err(Into::into);
             output.send(result).ok();
         }
+        #[cfg(feature = "kad")]
         NetworkAction::DhtGet { key, output } => {
-            #[cfg(feature = "kad")]
             let query_id = swarm.behaviour_mut().dht.get_record(key.into());
-            #[cfg(feature = "kad")]
             state.dht_gets.insert(query_id, output);
         }
+        #[cfg(not(feature = "kad"))]
+        NetworkAction::DhtGet { .. } => {}
+        #[cfg(feature = "kad")]
         NetworkAction::DhtPut { key, value, output } => {
             let local_peer_id = Swarm::local_peer_id(swarm);
 
@@ -1085,7 +1091,6 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
                 expires: None, // This only affects local storage. Records are replicated with configured TTL.
             };
 
-            #[cfg(feature = "kad")]
             match swarm.behaviour_mut().dht.put_record(record, Quorum::One) {
                 Ok(query_id) => {
                     // Remember put operation to resolve when we receive a `QueryResult::PutRecord`
@@ -1096,6 +1101,8 @@ fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut Tas
                 }
             }
         }
+        #[cfg(not(feature = "kad"))]
+        NetworkAction::DhtPut { .. } => {}
         NetworkAction::Subscribe {
             topic_name,
             buffer_size,

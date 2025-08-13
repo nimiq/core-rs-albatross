@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use bytes::Bytes;
 #[cfg(feature = "metrics")]
 use instant::Instant;
+#[cfg(feature = "kad")]
+use libp2p::kad::{QueryId, Record};
 use libp2p::{
     gossipsub,
-    kad::{QueryId, Record},
     request_response::{InboundRequestId, OutboundRequestId, ResponseChannel},
     swarm::NetworkInfo,
     Multiaddr, PeerId,
@@ -140,6 +141,7 @@ pub(crate) enum DhtBootStrapState {
 }
 
 /// Enum over all of the possible DHT records values
+#[cfg(feature = "kad")]
 #[derive(Clone, PartialEq)]
 pub enum DhtRecord {
     /// Validator record with its publisher Peer ID,
@@ -147,6 +149,7 @@ pub enum DhtRecord {
     Validator(PeerId, ValidatorRecord<PeerId>, Record),
 }
 
+#[cfg(feature = "kad")]
 impl DhtRecord {
     pub(crate) fn get_signed_record(self) -> Record {
         match self {
@@ -167,6 +170,7 @@ impl DhtRecord {
     }
 }
 
+#[cfg(feature = "kad")]
 impl PartialOrd for DhtRecord {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.get_timestamp().partial_cmp(&other.get_timestamp())
@@ -174,6 +178,7 @@ impl PartialOrd for DhtRecord {
 }
 
 /// DHT record decoding errors
+#[cfg(feature = "kad")]
 #[derive(Debug, Error)]
 pub enum DhtRecordError {
     /// Tag is unknown
@@ -184,6 +189,7 @@ pub enum DhtRecordError {
     DeserializeError(#[from] DeserializeError),
 }
 
+#[cfg(feature = "kad")]
 impl TryFrom<&Record> for DhtRecord {
     type Error = DhtRecordError;
     fn try_from(record: &Record) -> Result<Self, Self::Error> {
@@ -212,6 +218,7 @@ impl TryFrom<&Record> for DhtRecord {
 }
 
 /// DHT results obtained for a specific query ID
+#[cfg(feature = "kad")]
 pub(crate) struct DhtResults {
     /// Number of records obtained
     pub(crate) count: u8,
@@ -230,16 +237,21 @@ pub(crate) struct GossipsubTopicInfo {
 #[derive(Default)]
 pub(crate) struct TaskState {
     /// Senders for DHT (kad) put operations
+    #[cfg(feature = "kad")]
     pub(crate) dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
     /// Senders for DHT (kad) get operations
+    #[cfg(feature = "kad")]
     pub(crate) dht_gets: HashMap<QueryId, oneshot::Sender<Result<Vec<u8>, NetworkError>>>,
     /// Get results for DHT (kad) get operation
+    #[cfg(feature = "kad")]
     pub(crate) dht_get_results: HashMap<QueryId, DhtResults>,
     /// Senders per Gossibsub topic
     pub(crate) gossip_topics: HashMap<gossipsub::TopicHash, GossipsubTopicInfo>,
     /// DHT (kad) has been bootstrapped
+    #[cfg(feature = "kad")]
     pub(crate) dht_bootstrap_state: DhtBootStrapState,
     /// DHT (kad) is in server mode
+    #[cfg(feature = "kad")]
     pub(crate) dht_server_mode: bool,
     /// The NAT status of the local peer
     #[cfg(feature = "autonat")]

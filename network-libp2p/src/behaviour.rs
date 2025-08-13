@@ -2,12 +2,11 @@ use std::{iter, sync::Arc};
 
 #[cfg(feature = "autonat")]
 use libp2p::autonat::v2::{self as autonat, client::Config as AutonatConfig};
+#[cfg(feature = "kad")]
+use libp2p::kad::{self, store::MemoryStore};
 use libp2p::{
-    connection_limits, gossipsub,
-    kad::{self, store::MemoryStore},
-    ping, request_response,
-    swarm::NetworkBehaviour,
-    Multiaddr, PeerId, StreamProtocol,
+    connection_limits, gossipsub, ping, request_response, swarm::NetworkBehaviour, Multiaddr,
+    PeerId, StreamProtocol,
 };
 use parking_lot::RwLock;
 
@@ -56,6 +55,7 @@ impl Behaviour {
         let public_key = config.keypair.public();
         let peer_id = public_key.to_peer_id();
 
+        #[cfg(feature = "kad")]
         // DHT behaviour
         let store = MemoryStore::new(peer_id);
         #[cfg(feature = "kad")]

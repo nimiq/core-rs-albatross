@@ -19,12 +19,15 @@ pub enum NetworkError {
     #[error("Serialization error: {0}")]
     Serialization(#[from] nimiq_serde::DeserializeError),
 
+    #[cfg(feature = "kad")]
     #[error("DHT store error: {0:?}")]
     DhtStore(libp2p::kad::store::Error),
 
+    #[cfg(feature = "kad")]
     #[error("DHT GetRecord error: {0:?}")]
     DhtGetRecord(libp2p::kad::GetRecordError),
 
+    #[cfg(feature = "kad")]
     #[error("DHT PutRecord error: {0:?}")]
     DhtPutRecord(libp2p::kad::PutRecordError),
 
@@ -67,18 +70,21 @@ impl From<tokio::sync::oneshot::error::RecvError> for NetworkError {
     }
 }
 
+#[cfg(feature = "kad")]
 impl From<libp2p::kad::store::Error> for NetworkError {
     fn from(e: libp2p::kad::store::Error) -> Self {
         Self::DhtStore(e)
     }
 }
 
+#[cfg(feature = "kad")]
 impl From<libp2p::kad::GetRecordError> for NetworkError {
     fn from(e: libp2p::kad::GetRecordError) -> Self {
         Self::DhtGetRecord(e)
     }
 }
 
+#[cfg(feature = "kad")]
 impl From<libp2p::kad::PutRecordError> for NetworkError {
     fn from(e: libp2p::kad::PutRecordError) -> Self {
         Self::DhtPutRecord(e)
