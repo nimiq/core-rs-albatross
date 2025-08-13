@@ -1,9 +1,4 @@
-import {
-    PrivateKey,
-    PublicKey,
-    PartialSignature,
-    CommitmentPair,
-} from '@nimiq/core';
+import { CommitmentPair, PartialSignature, PrivateKey, PublicKey } from '@nimiq/core';
 import { describe, expect, it } from 'vitest';
 
 describe('PartialSignature', () => {
@@ -19,7 +14,7 @@ describe('PartialSignature', () => {
         const publicKeys = [
             PublicKey.derive(PrivateKey.generate()),
             PublicKey.derive(PrivateKey.generate()),
-        ]
+        ];
 
         const commitments = [
             [

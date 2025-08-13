@@ -1,8 +1,4 @@
-import {
-    Commitment,
-    CommitmentPair,
-    RandomSecret,
-} from '@nimiq/core';
+import { Commitment, CommitmentPair, RandomSecret } from '@nimiq/core';
 import { describe, expect, it } from 'vitest';
 
 describe('CommitmentPair', () => {
