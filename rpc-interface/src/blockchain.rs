@@ -120,6 +120,14 @@ pub trait BlockchainInterface {
         start_at: Option<Blake2bHash>,
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error>;
 
+    /// Returns the transactions receipts (similar to get transactions by address)
+    async fn get_transactions_receipts_by_address(
+        &self,
+        address: Address,
+        max: Option<u16>,
+        start_at: Option<Blake2bHash>,
+    ) -> RPCResult<Vec<(Blake2bHash, u32)>, (), Self::Error>;
+
     /// Tries to fetch the account at the given address.
     async fn get_account_by_address(
         &self,
