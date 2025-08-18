@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::types::RPCResult;
+use crate::types::{PeerType, RPCResult};
 
 #[nimiq_jsonrpc_derive::proxy(name = "NetworkProxy", rename_all = "camelCase")]
 #[async_trait]
@@ -15,4 +15,7 @@ pub trait NetworkInterface {
 
     /// Returns a list with the IDs of all our peers.
     async fn get_peer_list(&self) -> RPCResult<Vec<String>, (), Self::Error>;
+
+    /// Returns the address book
+    async fn get_address_book(&self) -> RPCResult<Vec<(String, PeerType)>, (), Self::Error>;
 }

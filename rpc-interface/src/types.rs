@@ -49,6 +49,13 @@ impl From<nimiq_transaction::Transaction> for HashOrTx {
     }
 }
 
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+pub enum PeerType {
+    History,
+    Full,
+    Light,
+}
+
 #[derive(Copy, Clone, Debug, SerializeDisplay)]
 pub enum ValidityStartHeight {
     Absolute(u32),

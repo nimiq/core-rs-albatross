@@ -1,9 +1,15 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use nimiq_network_interface::network::Network as InterfaceNetwork;
+use nimiq_network_interface::{
+    network::Network as InterfaceNetwork,
+    peer_info::{NodeType, Services},
+};
 use nimiq_network_libp2p::Network;
-use nimiq_rpc_interface::{network::NetworkInterface, types::RPCResult};
+use nimiq_rpc_interface::{
+    network::NetworkInterface,
+    types::{PeerType, RPCResult},
+};
 
 use crate::error::Error;
 
@@ -38,5 +44,31 @@ impl NetworkInterface for NetworkDispatcher {
             .map(|peer_id| peer_id.to_string())
             .collect::<Vec<_>>()
             .into())
+    }
+
+    async fn get_address_book(&self) -> RPCResult<Vec<(String, PeerType)>, (), Self::Error> {
+        let address_book = self.network.get_address_book();
+
+        let mut rpc_address_book = Vec::new();
+
+        for (peer_id, peer_info) in address_book {
+            let peer_type = if peer_info
+                .get_services()
+                .contains(Services::provided(NodeType::History))
+            {
+                PeerType::History
+            } else if peer_info
+                .get_services()
+                .contains(Services::provided(NodeType::Full))
+            {
+                PeerType::Full
+            } else {
+                PeerType::Light
+            };
+
+            rpc_address_book.push((peer_id.to_string(), peer_type));
+        }
+
+        Ok(rpc_address_book.into())
     }
 }
