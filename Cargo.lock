@@ -432,7 +432,7 @@ dependencies = [
  "nom",
  "num-traits",
  "rusticata-macros",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "time",
 ]
 
@@ -1071,7 +1071,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fa961b519f0b462e3a3b4a34b64d119eeaca1d59af726fe450bbba07a9fc0a1"
 dependencies = [
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -2345,7 +2345,7 @@ dependencies = [
  "rand 0.9.0",
  "ring",
  "socket2 0.5.9",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tinyvec",
  "tokio",
  "tracing",
@@ -2368,7 +2368,7 @@ dependencies = [
  "rand 0.9.0",
  "resolv-conf",
  "smallvec",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio",
  "tracing",
 ]
@@ -3091,7 +3091,7 @@ dependencies = [
  "mdbx-sys",
  "parking_lot",
  "sealed",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -3128,7 +3128,7 @@ dependencies = [
  "multiaddr",
  "pin-project",
  "rw-stream-sink",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -3162,7 +3162,7 @@ dependencies = [
  "quick-protobuf-codec",
  "rand 0.8.5",
  "rand_core 0.6.4",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
  "web-time",
 ]
@@ -3197,7 +3197,7 @@ dependencies = [
  "quick-protobuf",
  "rand 0.8.5",
  "rw-stream-sink",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
  "unsigned-varint 0.8.0",
  "web-time",
@@ -3264,7 +3264,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "sha2",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
  "zeroize",
 ]
@@ -3291,7 +3291,7 @@ dependencies = [
  "serde",
  "sha2",
  "smallvec",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
  "uint",
  "web-time",
@@ -3351,7 +3351,7 @@ dependencies = [
  "rand 0.8.5",
  "snow",
  "static_assertions",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
  "x25519-dalek",
  "zeroize",
@@ -3390,7 +3390,7 @@ dependencies = [
  "ring",
  "rustls",
  "socket2 0.5.9",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio",
  "tracing",
 ]
@@ -3477,7 +3477,7 @@ dependencies = [
  "ring",
  "rustls",
  "rustls-webpki",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "x509-parser",
  "yasna",
 ]
@@ -3512,7 +3512,7 @@ dependencies = [
  "pin-project-lite",
  "rw-stream-sink",
  "soketto",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
  "url",
  "webpki-roots 0.26.11",
@@ -3529,7 +3529,7 @@ dependencies = [
  "js-sys",
  "libp2p-core",
  "send_wrapper 0.6.0",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
  "wasm-bindgen",
  "web-sys",
@@ -3544,7 +3544,7 @@ dependencies = [
  "either",
  "futures",
  "libp2p-core",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
  "yamux 0.12.1",
  "yamux 0.13.4",
@@ -3913,7 +3913,7 @@ dependencies = [
  "rand 0.9.0",
  "serde",
  "tempfile",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
 ]
 
@@ -3943,7 +3943,7 @@ dependencies = [
  "nimiq-vrf",
  "serde",
  "serde_repr",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
 ]
 
@@ -3983,7 +3983,7 @@ dependencies = [
  "rand_chacha 0.9.0",
  "serde",
  "tempfile",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -4006,7 +4006,7 @@ dependencies = [
  "nimiq-vrf",
  "parking_lot",
  "serde",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio-stream",
  "tracing",
 ]
@@ -4049,7 +4049,7 @@ dependencies = [
  "rand 0.9.0",
  "rand_core_compat",
  "serde",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
 ]
 
@@ -4117,7 +4117,7 @@ dependencies = [
  "pin-project",
  "rand 0.9.0",
  "serde",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -4133,7 +4133,7 @@ dependencies = [
  "pprof",
  "rand 0.9.0",
  "tempfile",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
 ]
 
@@ -4216,7 +4216,7 @@ dependencies = [
  "nimiq-trie",
  "nimiq-vrf",
  "serde",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "time",
  "toml",
  "tracing",
@@ -4243,7 +4243,7 @@ dependencies = [
  "parking_lot",
  "rand 0.9.0",
  "serde",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio",
  "tracing",
 ]
@@ -4291,7 +4291,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-tungstenite",
  "url",
@@ -4306,7 +4306,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -4341,7 +4341,7 @@ dependencies = [
  "serde",
  "serde_json",
  "subtle",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio",
  "tower-http",
 ]
@@ -4382,7 +4382,7 @@ dependencies = [
  "rand_core_compat",
  "serde",
  "sha2",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "zeroize",
 ]
 
@@ -4445,7 +4445,7 @@ dependencies = [
  "serde_json",
  "signal-hook",
  "subtle",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "time",
  "tokio",
  "toml",
@@ -4475,7 +4475,7 @@ dependencies = [
  "nimiq-zkp",
  "parking_lot",
  "rand 0.9.0",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -4534,7 +4534,7 @@ dependencies = [
  "parking_lot",
  "prometheus-client 0.24.0",
  "serde",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-metrics",
  "tokio-stream",
@@ -4620,7 +4620,7 @@ dependencies = [
  "nimiq-serde",
  "nimiq-utils",
  "serde",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -4655,7 +4655,7 @@ dependencies = [
  "rand 0.9.0",
  "serde",
  "sha2",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -4678,7 +4678,7 @@ dependencies = [
  "nimiq-utils",
  "parking_lot",
  "serde",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -4733,7 +4733,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "time",
  "tokio",
  "toml",
@@ -4766,7 +4766,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_repr",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
  "tsify",
  "wasm-bindgen",
@@ -4826,7 +4826,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -4867,7 +4867,7 @@ dependencies = [
  "parking_lot",
  "serde",
  "serde_json",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -5068,7 +5068,7 @@ dependencies = [
  "serde",
  "serde_json",
  "syn 2.0.106",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "toml",
  "tracing",
 ]
@@ -5096,7 +5096,7 @@ dependencies = [
  "nimiq-utils",
  "serde",
  "serde_json",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
  "tsify",
  "url",
@@ -5117,7 +5117,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-utils",
  "serde",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -5131,7 +5131,7 @@ dependencies = [
  "nimiq-serde",
  "nimiq-test-log",
  "serde",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
 ]
 
@@ -5156,7 +5156,7 @@ dependencies = [
  "rand 0.9.0",
  "rand_core 0.9.3",
  "serde",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio",
  "tracing",
  "wasm-bindgen-futures",
@@ -5229,7 +5229,7 @@ dependencies = [
  "nimiq-utils",
  "parking_lot",
  "serde",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "time",
  "tokio",
  "tracing",
@@ -5273,7 +5273,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-utils",
  "serde",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -5355,7 +5355,7 @@ dependencies = [
  "rand_core_compat",
  "serde",
  "serde_json",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
  "tracing-subscriber 0.3.19",
 ]
@@ -5441,7 +5441,7 @@ dependencies = [
  "parking_lot",
  "serde",
  "tempfile",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -5473,7 +5473,7 @@ dependencies = [
  "nimiq-utils",
  "rayon",
  "serde",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tracing",
 ]
 
@@ -6023,7 +6023,7 @@ dependencies = [
  "spin",
  "symbolic-demangle",
  "tempfile",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -6215,7 +6215,7 @@ dependencies = [
  "rustc-hash",
  "rustls",
  "socket2 0.5.9",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tokio",
  "tracing",
 ]
@@ -6234,7 +6234,7 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "slab",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "tinyvec",
  "tracing",
  "web-time",
@@ -6405,7 +6405,7 @@ checksum = "dd6f9d3d47bdd2ad6945c5015a226ec6155d0bcdfd8f7cd29f86b71f8de99d2b"
 dependencies = [
  "getrandom 0.2.15",
  "libredox",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -7384,9 +7384,9 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "tempfile"
-version = "3.20.0"
+version = "3.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8a64e3985349f2441a1a9ef0b853f869006c3855f2cda6862a94d26ebb9d6a1"
+checksum = "15b61f8f20e3a6f7e0649d825294eaf317edce30f82cf6026e7e4cb9222a7d1e"
 dependencies = [
  "fastrand",
  "getrandom 0.3.3",
@@ -7406,11 +7406,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.15"
+version = "2.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80d76d3f064b981389ecb4b6b7f45a0bf9fdac1d5b9204c7bd6714fecc302850"
+checksum = "3467d614147380f2e4e374161426ff399c91084acd2363eaf549172b3d5e60c0"
 dependencies = [
- "thiserror-impl 2.0.15",
+ "thiserror-impl 2.0.16",
 ]
 
 [[package]]
@@ -7426,9 +7426,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.15"
+version = "2.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44d29feb33e986b6ea906bd9c3559a856983f92371b3eaa5e83782a351623de0"
+checksum = "6c5e1be1c48b9172ee610da68fd9cd2770e7a4056cb3fc98710ee6906f0c7960"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7920,7 +7920,7 @@ dependencies = [
  "native-tls",
  "rand 0.8.5",
  "sha1",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "utf-8",
 ]
 
@@ -8699,7 +8699,7 @@ dependencies = [
  "nom",
  "oid-registry",
  "rusticata-macros",
- "thiserror 2.0.15",
+ "thiserror 2.0.16",
  "time",
 ]
 
