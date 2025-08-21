@@ -43,6 +43,7 @@ pub struct Config {
     pub only_secure_ws_connections: bool,
     pub allow_loopback_addresses: bool,
     pub dht_quorum: NonZeroU8,
+    pub network_buffer_size: usize,
 }
 
 impl Config {
@@ -62,6 +63,7 @@ impl Config {
         num_initial_connections: usize,
         allow_loopback_addresses: bool,
         dht_quorum: NonZeroU8,
+        network_buffer_size: usize,
     ) -> Self {
         // Hardcoding the minimum number of peers in mesh network before adding more
         // TODO: Maybe change this to a mesh limits configuration argument of this function
@@ -114,6 +116,7 @@ impl Config {
             num_initial_connections,
             allow_loopback_addresses,
             dht_quorum,
+            network_buffer_size,
         }
     }
 }

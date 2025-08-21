@@ -103,6 +103,12 @@ seed_nodes = [
 # Default: 4 
 #num_initial_connections = 4
 
+# Network requests buffer size
+# The buffer size in number of messages for different network requests
+# Default: 1024
+#network_buffer_size = 1024
+
+
 ##############################################################################
 #
 # TLS network configuration:

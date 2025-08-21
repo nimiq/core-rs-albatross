@@ -79,6 +79,7 @@ fn network_config(address: Multiaddr) -> Config {
         only_secure_ws_connections: false,
         allow_loopback_addresses: true,
         dht_quorum: NonZeroU8::new(1).unwrap(),
+        network_buffer_size: 1024,
     }
 }
 

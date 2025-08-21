@@ -190,6 +190,8 @@ pub struct NetworkSettings {
     pub dht_quorum: Option<NonZeroU8>,
     #[serde(default = "NetworkSettings::default_num_initial_connections")]
     pub num_initial_connections: usize,
+    #[serde(default = "NetworkSettings::default_network_buffer_size")]
+    pub network_buffer_size: usize,
 }
 
 impl NetworkSettings {
@@ -211,6 +213,10 @@ impl NetworkSettings {
 
     pub fn default_num_initial_connections() -> usize {
         4
+    }
+
+    pub fn default_network_buffer_size() -> usize {
+        1024
     }
 }
 

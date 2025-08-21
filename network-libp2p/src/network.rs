@@ -67,6 +67,8 @@ pub struct Network {
     required_services: Services,
     /// Reference to PeerContactBook, used to satisfy rpc requests for it.
     contacts: Arc<RwLock<PeerContactBook>>,
+    /// Network buffer sieze
+    buffer_size: usize,
 }
 
 impl Network {
@@ -95,6 +97,7 @@ impl Network {
             ..Default::default()
         };
         let dht_quorum = config.dht_quorum;
+        let buffer_size = config.network_buffer_size;
         // Only force the server mode if we are doing a memory transport.
         // Otherwise expect the regular flow: DHT will get in server mode once a confirmed address is obtained using Autonat.
         // In memory transport we don't have a mechanism that sets the DHT in server mode such as confirming an address
@@ -145,6 +148,7 @@ impl Network {
             #[cfg(feature = "metrics")]
             metrics,
             required_services,
+            buffer_size,
         }
     }
 
@@ -319,9 +323,9 @@ impl Network {
         }
 
         let action_tx = self.action_tx.clone();
+        let buffer_size = self.buffer_size;
         ReceiveStream::WaitingForRegister(Box::pin(async move {
-            // TODO Make buffer size configurable
-            let (tx, rx) = mpsc::channel(1024);
+            let (tx, rx) = mpsc::channel(buffer_size);
 
             action_tx
                 .send(NetworkAction::ReceiveRequests {

@@ -82,6 +82,7 @@ impl TestNetwork for Network {
             1,
             true,
             NonZeroU8::new(1).unwrap(),
+            1024,
         );
         let network = Arc::new(Network::new(config, ()).await);
         network.listen_on(vec![peer_address]).await;

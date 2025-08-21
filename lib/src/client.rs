@@ -351,6 +351,7 @@ impl ClientInner {
                 .network
                 .dht_quorum
                 .unwrap_or(NonZeroU8::new(3).unwrap()),
+            config.network.network_buffer_size,
         );
 
         log::debug!(
