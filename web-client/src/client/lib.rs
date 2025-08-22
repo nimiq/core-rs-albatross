@@ -561,6 +561,16 @@ impl Client {
     ) -> Result<PlainTransactionDetails, JsError> {
         tx.verify(Some(self.network_id))?;
 
+        // First, check if the transaction is already included
+
+        let included = self.get_transaction(tx.hash()).await;
+
+        if let Ok(details) = included {
+            // If the transaction was included we just return its details, using the appropiate type
+            let details: PlainTransactionDetails = serde_wasm_bindgen::from_value(details.into())?;
+            return Ok(details);
+        }
+
         // Check if we are already subscribed to the sender or recipient
         let already_subscribed = self
             .subscribed_addresses
