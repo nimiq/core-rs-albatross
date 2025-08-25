@@ -200,53 +200,64 @@ impl Blockchain {
         let mut block_transactions = vec![];
         let mut block_inherents = vec![];
 
-        let mut prev_batch = 0;
-        let mut prev_block = 0;
+        // The first checkpoint block after genesis is the only macro block that can legitimately
+        // have no history items: rewards are paid one batch late and batch 0 (genesis) is finalized
+        // by definition. Every later macro block carries reward items, burned rewards included.
+        // This relies on every batch minting a non-zero reward, which holds as long as the supply
+        // is not exhausted. A chain whose genesis supply already equals the total supply could not
+        // sync an empty batch.
+        let first_checkpoint = Policy::macro_block_after(Policy::genesis_block_number());
 
         for hist_tx in history.iter().skip(first_new_hist_tx) {
+            // The last block whose state is applied before this history item. Before the first new
+            // history item, this is the last macro block of our head. The in-memory head is stale
+            // after `revert_to_common_state`, but reverts never go below its last macro block.
+            let mut prev_block = block_state.last().map_or(
+                Policy::last_macro_block(this.block_number()),
+                |block_state: &BlockState| block_state.number,
+            );
+
             if hist_tx.block_number > prev_block {
-                // If a macro block does not have any history items, we need to add it here so that
-                // we always commit FinalizeBatch/FinalizeEpoch inherents.
-                // FIXME We're missing the block timestamp to do this correctly.
-                // Also, this works only if a single macro block is missing between history items.
-                let batch_number = Policy::batch_at(hist_tx.block_number);
-                if batch_number > prev_batch
-                    && block_state.last().is_some_and(|block_state: &BlockState| {
-                        !Policy::is_macro_block_at(block_state.number)
-                    })
-                {
+                // If the first checkpoint block is neither part of our chain nor of the history, we
+                // need to add it here so that its FinalizeBatch inherent is still committed.
+                if prev_block < first_checkpoint && hist_tx.block_number > first_checkpoint {
                     debug!(
                         history_item_block_number = hist_tx.block_number,
                         prev_block,
-                        history_item_batch = batch_number,
-                        prev_batch,
-                        last_block = ?block_state.last(),
-                        "Inserting macro block"
+                        "Adding the first checkpoint block manually since there weren't any txs on it."
                     );
-                    if batch_number != prev_batch + 1 {
-                        warn!(
-                            %block,
-                            reason = "missing batch in history",
-                            history_item_block_number = hist_tx.block_number,
-                            history_item_batch = batch_number,
-                            prev_batch,
-                            "Rejecting block",
-                        );
-                        txn.abort();
-                        #[cfg(feature = "metrics")]
-                        this.metrics.note_invalid_block();
-                        return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
-                    }
 
                     block_state.push(BlockState {
-                        number: Policy::macro_block_of(prev_batch).unwrap(),
-                        time: 0,                                        // FIXME
+                        number: first_checkpoint,
+                        // The timestamp is only read when committing transactions to vesting and
+                        // HTLC contracts. This block only commits the FinalizeBatch inherent.
+                        time: 0,
                         protocol_version: this.state.current_version(), // Cannot change, protocol version upgrades only on election blocks.
                     });
                     block_transactions.push(vec![]);
                     block_inherents.push(vec![]);
+
+                    prev_block = first_checkpoint;
                 }
 
+                // Every other macro block must have history items, otherwise we would never commit
+                // its FinalizeBatch/FinalizeEpoch inherents.
+                let next_macro_block = Policy::macro_block_after(prev_block);
+                if hist_tx.block_number > next_macro_block {
+                    warn!(
+                        %block,
+                        reason = "missing macro block in history",
+                        history_item_block_number = hist_tx.block_number,
+                        missing_macro_block = next_macro_block,
+                        "Rejecting block",
+                    );
+                    txn.abort();
+                    #[cfg(feature = "metrics")]
+                    this.metrics.note_invalid_block();
+                    return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
+                }
+
+                // Push the block of the historic transaction.
                 block_state.push(BlockState {
                     number: hist_tx.block_number,
                     time: hist_tx.block_time,
@@ -254,9 +265,6 @@ impl Blockchain {
                 });
                 block_transactions.push(vec![]);
                 block_inherents.push(vec![]);
-
-                prev_batch = batch_number;
-                prev_block = hist_tx.block_number;
             }
 
             match &hist_tx.data {

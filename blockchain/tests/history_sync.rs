@@ -1,11 +1,12 @@
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
+use nimiq_account::Account;
 use nimiq_block::BlockError;
 use nimiq_blockchain::{interface::HistoryInterface, BlockProducer, Blockchain, BlockchainConfig};
 use nimiq_blockchain_interface::{AbstractBlockchain, BlockchainEvent, PushError, PushResult};
-use nimiq_database::mdbx::MdbxDatabase;
+use nimiq_database::{mdbx::MdbxDatabase, traits::WriteTransaction};
 use nimiq_genesis::NetworkId;
-use nimiq_primitives::policy::Policy;
+use nimiq_primitives::{key_nibbles::KeyNibbles, policy::Policy};
 use nimiq_serde::{Deserialize, Serialize};
 use nimiq_test_log::test;
 use nimiq_test_utils::{
@@ -308,7 +309,7 @@ fn history_sync_emits_protocol_upgrade_event_when_version_changes() {
     let upgrade_history = blockchain1
         .read()
         .history_store
-        .get_epoch_transactions(1, None);
+        .get_epoch_transactions(upgrade_block.epoch_number(), None);
 
     let time2 = Arc::new(OffsetTime::new());
     let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
@@ -338,6 +339,573 @@ fn history_sync_emits_protocol_upgrade_event_when_version_changes() {
             BlockchainEvent::EpochFinalized(upgrade_hash.clone()),
             BlockchainEvent::ProtocolUpgrade(upgrade_hash, upgrade_version),
         ],
+    );
+}
+
+#[test]
+fn history_sync_replays_empty_first_batch_when_it_changes_state() {
+    fn seed_current_batch_punished_slot(blockchain: &Arc<RwLock<Blockchain>>) {
+        let blockchain = blockchain.write();
+        let mut staking_contract = blockchain.get_staking_contract();
+        let validator_address = staking_contract
+            .active_validators
+            .keys()
+            .next()
+            .expect("missing active validator")
+            .clone();
+
+        staking_contract
+            .punished_slots
+            .current_batch_punished_slots
+            .clear();
+        staking_contract
+            .punished_slots
+            .previous_batch_punished_slots
+            .clear();
+
+        let mut punished_slots = BTreeSet::new();
+        punished_slots.insert(0);
+        staking_contract
+            .punished_slots
+            .current_batch_punished_slots
+            .insert(validator_address, punished_slots);
+
+        let mut txn = blockchain.write_transaction();
+        let tree = &blockchain.state.accounts.tree;
+        tree.put(
+            &mut (&mut txn).into(),
+            &KeyNibbles::from(&Policy::STAKING_CONTRACT_ADDRESS),
+            Account::Staking(staking_contract),
+        )
+        .unwrap();
+        // `put` leaves the hashes on the path dirty, so recompute them before committing.
+        tree.update_root(&mut (&mut txn).into()).unwrap();
+        txn.commit();
+    }
+
+    let genesis_block_number = Policy::genesis_block_number();
+    let num_macro_blocks = 2;
+
+    // Create a blockchain to produce the macro blocks.
+    let time = Arc::new(OffsetTime::new());
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+    seed_current_batch_punished_slot(&blockchain);
+
+    // Create a second blockchain to push blocks to.
+    let time = Arc::new(OffsetTime::new());
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain2 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env2,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+    seed_current_batch_punished_slot(&blockchain2);
+
+    // Produce the blocks on blockchain1.
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    produce_macro_blocks(&producer, &blockchain, num_macro_blocks);
+
+    // Get the first checkpoint and corresponding history tree transactions.
+    let blockchain_rg = blockchain.read();
+    let election_txs_1 = blockchain_rg.history_store.get_epoch_transactions(1, None);
+
+    let checkpoint_block_1_2 = blockchain_rg
+        .chain_store
+        .get_block_at(
+            Policy::blocks_per_batch() * 2 + genesis_block_number,
+            true,
+            None,
+        )
+        .unwrap();
+
+    // The first checkpoint of the first epoch has no history items of its own. Replaying it still
+    // matters here because its FinalizeBatch clears the seeded punished slots before the next
+    // checkpoint reward is applied.
+    assert_eq!(
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            checkpoint_block_1_2,
+            &election_txs_1
+        ),
+        Ok(PushResult::Extended)
+    );
+}
+
+#[test]
+fn history_sync_replays_missing_first_checkpoint_before_second_batch_history() {
+    let genesis_block_number = Policy::genesis_block_number();
+
+    let time = Arc::new(OffsetTime::new());
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain1 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+
+    // Leave the first batch empty so the first checkpoint is missing from history, then add
+    // transactions in the second batch before producing the target checkpoint.
+    produce_macro_blocks(&producer, &blockchain1, 1);
+    fill_micro_blocks_with_txns(&producer, &blockchain1, 1, 0);
+    produce_macro_blocks(&producer, &blockchain1, 1);
+
+    let blockchain_rg = blockchain1.read();
+    let checkpoint_block_1_2 = blockchain_rg
+        .chain_store
+        .get_block_at(
+            Policy::blocks_per_batch() * 2 + genesis_block_number,
+            true,
+            None,
+        )
+        .unwrap();
+    let checkpoint_txs_1_2 = blockchain_rg.history_store.get_epoch_transactions(1, None);
+
+    assert!(
+        checkpoint_txs_1_2
+            .iter()
+            .all(|hist_tx| hist_tx.block_number > Policy::blocks_per_batch() + genesis_block_number),
+        "test setup must keep the first batch empty",
+    );
+    assert!(
+        checkpoint_txs_1_2
+            .iter()
+            .any(|hist_tx| Policy::batch_at(hist_tx.block_number) == 2),
+        "test setup must retain second-batch history",
+    );
+
+    let time = Arc::new(OffsetTime::new());
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain2 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env2,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+
+    assert_eq!(
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            checkpoint_block_1_2,
+            &checkpoint_txs_1_2
+        ),
+        Ok(PushResult::Extended)
+    );
+    assert_eq!(blockchain_rg.head(), blockchain2.read().head());
+}
+
+#[test]
+fn history_sync_replays_missing_first_checkpoint_between_non_empty_batches() {
+    let genesis_block_number = Policy::genesis_block_number();
+
+    let time = Arc::new(OffsetTime::new());
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain1 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+
+    // Put transactions in both batches, but jump directly to the second checkpoint. The first
+    // checkpoint itself still has no history items and must be replayed between the batches.
+    fill_micro_blocks_with_txns(&producer, &blockchain1, 1, 0);
+    produce_macro_blocks(&producer, &blockchain1, 1);
+    fill_micro_blocks_with_txns(&producer, &blockchain1, 1, 0);
+    produce_macro_blocks(&producer, &blockchain1, 1);
+
+    let blockchain_rg = blockchain1.read();
+    let checkpoint_block_1_2 = blockchain_rg
+        .chain_store
+        .get_block_at(
+            Policy::blocks_per_batch() * 2 + genesis_block_number,
+            true,
+            None,
+        )
+        .unwrap();
+    let checkpoint_txs_1_2 = blockchain_rg.history_store.get_epoch_transactions(1, None);
+
+    assert!(
+        checkpoint_txs_1_2
+            .iter()
+            .any(|hist_tx| Policy::batch_at(hist_tx.block_number) == 1),
+        "test setup must retain first-batch history",
+    );
+    assert!(
+        checkpoint_txs_1_2
+            .iter()
+            .any(|hist_tx| Policy::batch_at(hist_tx.block_number) == 2),
+        "test setup must retain second-batch history",
+    );
+    assert!(
+        checkpoint_txs_1_2.iter().all(|hist_tx| {
+            hist_tx.block_number != Policy::blocks_per_batch() + genesis_block_number
+        }),
+        "test setup must keep the first checkpoint absent from history",
+    );
+
+    let time = Arc::new(OffsetTime::new());
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain2 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env2,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+
+    assert_eq!(
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            checkpoint_block_1_2,
+            &checkpoint_txs_1_2
+        ),
+        Ok(PushResult::Extended)
+    );
+    assert_eq!(blockchain_rg.head(), blockchain2.read().head());
+}
+
+#[test]
+fn history_sync_rejects_missing_non_first_batch_history() {
+    let genesis_block_number = Policy::genesis_block_number();
+    let num_macro_blocks = 3;
+
+    let time = Arc::new(OffsetTime::new());
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    produce_macro_blocks_with_txns(&producer, &blockchain, num_macro_blocks, 1, 0);
+
+    let blockchain_rg = blockchain.read();
+    let election_txs_1 = blockchain_rg.history_store.get_epoch_transactions(1, None);
+    let checkpoint_block_1_3 = blockchain_rg
+        .chain_store
+        .get_block_at(
+            Policy::blocks_per_batch() * 3 + genesis_block_number,
+            true,
+            None,
+        )
+        .unwrap();
+
+    let checkpoint_txs_1_3: Vec<_> = election_txs_1
+        .into_iter()
+        .filter(|hist_tx| {
+            hist_tx.block_number > Policy::blocks_per_batch() * 2 + genesis_block_number
+        })
+        .collect();
+
+    assert!(
+        !checkpoint_txs_1_3.is_empty(),
+        "test setup must retain history after the skipped batch",
+    );
+
+    let time = Arc::new(OffsetTime::new());
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain2 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env2,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+
+    assert_eq!(
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            checkpoint_block_1_3,
+            &checkpoint_txs_1_3
+        ),
+        Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))
+    );
+}
+
+#[test]
+fn history_sync_rejects_missing_non_first_batch_history_after_prior_sync() {
+    let genesis_block_number = Policy::genesis_block_number();
+    let num_macro_blocks = (Policy::batches_per_epoch() + 2) as usize;
+
+    let time = Arc::new(OffsetTime::new());
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    produce_macro_blocks_with_txns(&producer, &blockchain, num_macro_blocks, 1, 0);
+
+    let blockchain_rg = blockchain.read();
+    let election_block_1 = blockchain_rg
+        .chain_store
+        .get_block_at(
+            Policy::blocks_per_epoch() + genesis_block_number,
+            true,
+            None,
+        )
+        .unwrap();
+    let election_txs_1 = blockchain_rg.history_store.get_epoch_transactions(1, None);
+
+    let checkpoint_block_2_2 = blockchain_rg
+        .chain_store
+        .get_block_at(
+            Policy::blocks_per_epoch() + 2 * Policy::blocks_per_batch() + genesis_block_number,
+            true,
+            None,
+        )
+        .unwrap();
+    let checkpoint_txs_2_2: Vec<_> = blockchain_rg
+        .history_store
+        .get_epoch_transactions(2, None)
+        .into_iter()
+        .filter(|hist_tx| {
+            hist_tx.block_number
+                > Policy::blocks_per_epoch() + Policy::blocks_per_batch() + genesis_block_number
+        })
+        .collect();
+
+    assert!(
+        !checkpoint_txs_2_2.is_empty(),
+        "test setup must retain history after the skipped batch",
+    );
+
+    let time = Arc::new(OffsetTime::new());
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain2 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env2,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+
+    assert_eq!(
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            election_block_1,
+            &election_txs_1
+        ),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            checkpoint_block_2_2,
+            &checkpoint_txs_2_2
+        ),
+        Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))
+    );
+}
+
+#[test]
+fn history_sync_does_not_replay_first_checkpoint_when_it_is_the_head() {
+    let genesis_block_number = Policy::genesis_block_number();
+    let num_macro_blocks = 2;
+
+    let time = Arc::new(OffsetTime::new());
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain1 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    produce_macro_blocks_with_txns(&producer, &blockchain1, num_macro_blocks, 1, 0);
+
+    let blockchain_rg = blockchain1.read();
+    let checkpoint_block_1_1 = blockchain_rg
+        .chain_store
+        .get_block_at(
+            Policy::blocks_per_batch() + genesis_block_number,
+            true,
+            None,
+        )
+        .unwrap();
+    let checkpoint_block_1_2 = blockchain_rg
+        .chain_store
+        .get_block_at(
+            Policy::blocks_per_batch() * 2 + genesis_block_number,
+            true,
+            None,
+        )
+        .unwrap();
+    let checkpoint_txs_1_2 = blockchain_rg.history_store.get_epoch_transactions(1, None);
+    let checkpoint_txs_1_1: Vec<_> = checkpoint_txs_1_2
+        .iter()
+        .filter(|hist_tx| hist_tx.block_number <= checkpoint_block_1_1.block_number())
+        .cloned()
+        .collect();
+
+    assert!(
+        checkpoint_txs_1_2
+            .iter()
+            .all(|hist_tx| hist_tx.block_number != checkpoint_block_1_1.block_number()),
+        "test setup must keep the first checkpoint absent from history",
+    );
+
+    let time = Arc::new(OffsetTime::new());
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain2 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env2,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+
+    // Sync to the first checkpoint so that it is already part of the chain.
+    assert_eq!(
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            checkpoint_block_1_1.clone(),
+            &checkpoint_txs_1_1
+        ),
+        Ok(PushResult::Extended)
+    );
+    assert_eq!(blockchain2.read().head(), &checkpoint_block_1_1);
+
+    // The first new history item is in the second batch, but the first checkpoint is our head and
+    // must not be added a second time.
+    assert_eq!(
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            checkpoint_block_1_2,
+            &checkpoint_txs_1_2
+        ),
+        Ok(PushResult::Extended)
+    );
+    assert_eq!(blockchain_rg.head(), blockchain2.read().head());
+}
+
+#[test]
+fn history_sync_rejects_missing_checkpoint_between_batches() {
+    let genesis_block_number = Policy::genesis_block_number();
+    let num_macro_blocks = 3;
+
+    let time = Arc::new(OffsetTime::new());
+    let env = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(
+            env,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+
+    let producer = BlockProducer::new(signing_key(), voting_key());
+    produce_macro_blocks_with_txns(&producer, &blockchain, num_macro_blocks, 1, 0);
+
+    let blockchain_rg = blockchain.read();
+    let election_txs_1 = blockchain_rg.history_store.get_epoch_transactions(1, None);
+    let checkpoint_block_1_3 = blockchain_rg
+        .chain_store
+        .get_block_at(
+            Policy::blocks_per_batch() * 3 + genesis_block_number,
+            true,
+            None,
+        )
+        .unwrap();
+
+    // Strip the reward items of the second checkpoint so that it has no history items at all, while
+    // the batches before and after it still do.
+    let second_checkpoint = Policy::blocks_per_batch() * 2 + genesis_block_number;
+    let checkpoint_txs_1_3: Vec<_> = election_txs_1
+        .iter()
+        .filter(|hist_tx| hist_tx.block_number != second_checkpoint)
+        .cloned()
+        .collect();
+
+    assert!(
+        checkpoint_txs_1_3.len() < election_txs_1.len(),
+        "test setup must strip the history of the second checkpoint",
+    );
+    assert!(
+        checkpoint_txs_1_3
+            .iter()
+            .any(|hist_tx| Policy::batch_at(hist_tx.block_number) == 2),
+        "test setup must retain second-batch history",
+    );
+    assert!(
+        checkpoint_txs_1_3
+            .iter()
+            .any(|hist_tx| Policy::batch_at(hist_tx.block_number) == 3),
+        "test setup must retain third-batch history",
+    );
+
+    let time = Arc::new(OffsetTime::new());
+    let env2 = MdbxDatabase::new_volatile(Default::default()).unwrap();
+    let blockchain2 = Arc::new(RwLock::new(
+        Blockchain::new(
+            env2,
+            BlockchainConfig::default(),
+            NetworkId::UnitAlbatross,
+            time,
+        )
+        .unwrap(),
+    ));
+
+    assert_eq!(
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            checkpoint_block_1_3,
+            &checkpoint_txs_1_3
+        ),
+        Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))
     );
 }
 
