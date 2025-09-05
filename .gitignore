@@ -21,3 +21,5 @@ temp-state
 .vscode
 # Python
 __pycache__/
+# WASM tooling
+web-client/binaryen-version_*/

@@ -58,8 +58,9 @@ function generate() {
     wasm-bindgen --weak-refs --target "$TARGET" --out-name index --out-dir "$OUT_DIR" --no-typescript "$CARGO_OUTPUT"
 
     if [ "$RUN_WASM_OPT" = "true" ]; then
+        echo "Optimizing $TYPE WASM..."
         # Optimize bindgen's WASM output for size
-        wasm-opt -Os -o "$OPT_OUTPUT" "$BINDGEN_OUTPUT"
+        wasm-opt "$BINDGEN_OUTPUT" -Os -o "$OPT_OUTPUT"
         # Replace bindgen's WASM output with the optimized one
         mv "$OPT_OUTPUT" "$BINDGEN_OUTPUT"
     fi
@@ -73,8 +74,27 @@ then
 fi
 if ! command -v wasm-opt &> /dev/null
 then
-    echo "Installing wasm-opt..."
-    cargo install wasm-opt
+    BINARYEN_VERSION=124
+    BINARYEN_FOLDER="binaryen-version_$BINARYEN_VERSION"
+
+    # Test if correct wasm-opt is already downloaded
+    if [ -f "$BINARYEN_FOLDER/wasm-opt" ]; then
+        export PATH="$PATH:$(pwd)/$BINARYEN_FOLDER"
+    else
+        echo "Downloading wasm-opt $BINARYEN_VERSION..."
+        # Download release from GitHub
+        curl https://github.com/WebAssembly/binaryen/releases/download/version_$BINARYEN_VERSION/$BINARYEN_FOLDER-x86_64-linux.tar.gz --location --output binaryen.tar.gz
+        # Extract archive
+        tar -xvzf binaryen.tar.gz
+        # Delete archive
+        rm binaryen.tar.gz
+        # Move wasm-opt binary to root of extracted folder and delete everything else
+        mv ./$BINARYEN_FOLDER/bin/wasm-opt ./$BINARYEN_FOLDER/wasm-opt
+        rm -rf ./$BINARYEN_FOLDER/bin
+        rm -rf ./$BINARYEN_FOLDER/include
+        rm -rf ./$BINARYEN_FOLDER/lib
+        export PATH="$PATH:$(pwd)/$BINARYEN_FOLDER"
+    fi
 fi
 
 contains() { case $2 in *$1* ) return 0;; *) return 1;; esac ;}
