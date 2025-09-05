@@ -46,9 +46,9 @@ self.addEventListener('message', async (event) => {
         return;
     }
 
-    const { type, config } = data;
-    if (type !== 'NIMIQ_INIT') return;
+    if (data.type !== 'NIMIQ_INIT') return;
 
+    let config = data.config;
     if (!config || typeof config !== 'object') config = {};
 
     try {
