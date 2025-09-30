@@ -26,7 +26,7 @@ use super::{
 };
 use crate::{history::HistoryTreeChunk, interface::HistoryIndexInterface, HistoryStore};
 
-// `RawTransactonHash` -> `EpochBasedIndex` (`epoch number || leaf_index`)
+// `RawTransactionHash` -> `EpochBasedIndex` (`epoch number || leaf_index`)
 declare_table!(TxHashTable, "LeafIndexByTxHash", RawTransactionHash => EpochBasedIndex);
 // `Address` -> `EpochBasedIndex` -> `Blake2bHash`
 declare_table!(AddressTable, "TxHashesByAddress", Address => EpochBasedIndex => Blake2bHash);

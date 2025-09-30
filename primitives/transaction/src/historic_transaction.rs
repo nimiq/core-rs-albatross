@@ -242,10 +242,12 @@ impl HistoricTransaction {
 
     /// Unwraps the historic transaction and returns a reference to the underlying reward event.
     pub fn unwrap_reward(&self) -> &RewardEvent {
-        if let HistoricTransactionData::Reward(ev) = &self.data {
-            ev
-        } else {
-            unreachable!()
+        match &self.data {
+            HistoricTransactionData::Reward(ev) => ev,
+            HistoricTransactionData::Basic(..)
+            | HistoricTransactionData::Penalize(..)
+            | HistoricTransactionData::Jail(..)
+            | HistoricTransactionData::Equivocation(..) => unreachable!(),
         }
     }
 
@@ -320,7 +322,7 @@ impl MMRHash<Blake2bHash> for HistoricTransaction {
 pub enum HistoricTransactionData {
     /// A basic transaction. It simply contains the transaction as contained in the block.
     Basic(ExecutedTransaction),
-    /// A reward for an active validator.
+    /// A reward for an active validator or a reward burn caused by punishments.
     Reward(RewardEvent),
     /// A penalty for an inactive or non-responsive validator.
     Penalize(PenalizeEvent),
