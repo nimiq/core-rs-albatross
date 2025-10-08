@@ -367,7 +367,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         }
     }
 
-    async fn get_transactions_receipts_by_address(
+    async fn get_transaction_references_by_address(
         &self,
         address: Address,
         max: Option<u16>,
@@ -396,7 +396,6 @@ impl BlockchainInterface for BlockchainDispatcher {
                 );
             }
 
-            let mut receipts: Vec<_> = receipts.into_iter().collect();
             receipts.sort_unstable_by_key(|receipt| receipt.1);
             receipts.reverse(); // Return newest receipts (highest block_number) first
 

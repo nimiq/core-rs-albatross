@@ -121,7 +121,7 @@ pub trait BlockchainInterface {
     ) -> RPCResult<Vec<ExecutedTransaction>, (), Self::Error>;
 
     /// Returns the transactions receipts (similar to get transactions by address)
-    async fn get_transactions_receipts_by_address(
+    async fn get_transaction_references_by_address(
         &self,
         address: Address,
         max: Option<u16>,
