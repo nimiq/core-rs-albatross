@@ -26,6 +26,13 @@ If you use any bundler for your project, like Webpack or Vite, you should probab
 
 For detailed installation instructions for your bundler/framework, refer to the [Nimiq Developer Center](https://www.nimiq.com/developers/build/web-client/installation).
 
+> [!TIP]
+> For Vite users: Use the included Vite plugin for automatic configuration:
+> ```ts
+> import nimiq from '@nimiq/core/vite'
+> export default defineConfig({ plugins: [nimiq()] })
+> ```
+
 ```js
 // With Webpack: import the package asynchronously:
 const Nimiq = await import('@nimiq/core');
