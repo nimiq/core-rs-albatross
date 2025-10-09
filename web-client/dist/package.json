@@ -26,6 +26,11 @@
       "browser": "./web/index.js",
       "import": "./web/index.js",
       "types": "./types/web.d.ts"
+    },
+    "./vite": {
+      "import": "./vite.js",
+      "require": "./vite.js",
+      "types": "./types/vite.d.ts"
     }
   },
   "homepage": "https://nimiq.com",
@@ -51,6 +56,15 @@
   ],
   "dependencies": {
     "comlink": "^4.4.1",
-    "websocket": "^1.0.34"
+    "websocket": "^1.0.34",
+    "vite-plugin-wasm": "^3.5.0"
+  },
+  "peerDependencies": {
+    "vite": ">=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   }
 }
