@@ -1,10 +1,12 @@
+use std::collections::{BTreeMap, HashSet};
+
 use convert_case::{Case, Casing};
 use quote::ToTokens;
 use schemars::{json_schema, Schema};
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 use syn::{
-    Field, File, GenericArgument, Ident, ItemStruct, Pat, PatIdent, Path, PathArguments,
-    PathSegment, ReturnType, TraitItem, TraitItemFn, Type,
+    Attribute, Field, Fields, File, GenericArgument, Ident, ItemEnum, ItemStruct, Pat, PatIdent,
+    Path, PathArguments, PathSegment, ReturnType, TraitItem, TraitItemFn, Type,
 };
 
 use crate::openrpc::document::{ContentDescriptorObject, ContentDescriptorOrReference, JSONSchema};
@@ -15,6 +17,9 @@ pub struct ParsedItemStruct(ItemStruct);
 /// Represents a parsed Rust trait method.
 #[derive(Clone)]
 pub struct ParsedTraitItemFn(TraitItemFn);
+/// Represents a parsed Rust enum.
+#[derive(Clone)]
+pub struct ParsedItemEnum(ItemEnum);
 
 impl ParsedItemStruct {
     /// Retrieves the name of a Rust struct.
@@ -30,8 +35,8 @@ impl ParsedItemStruct {
     }
 
     /// Generates the properties for the Rust struct in the form of a JSON Object.
-    pub fn properties(&self, structs: &[ParsedItemStruct]) -> Value {
-        let props: Map<String, Value> = self
+    pub fn properties(&self, structs: &[ParsedItemStruct], enums: &[ParsedItemEnum]) -> Value {
+        let mut props: Map<String, Value> = self
             .0
             .fields
             .iter()
@@ -45,37 +50,103 @@ impl ParsedItemStruct {
                 };
                 let inner_type = Self::unwrap_type(path.path.clone(), true);
 
+                // Check if field has #[serde(flatten)] - skip it, will be expanded below
+                if Self::has_serde_flatten(field) {
+                    let type_name = inner_type.1.to_string();
+                    if enums.iter().any(|e| e.title() == type_name) {
+                        return None;
+                    }
+                }
+
                 let mut prop_fields = Map::new();
-                let field_ident = field
-                    .ident
-                    .to_token_stream()
-                    .to_string()
-                    .to_case(Case::Camel);
+                let field_name = field.ident.to_token_stream().to_string();
+                let field_ident = if field_name.starts_with('_') {
+                    field_name
+                } else {
+                    field_name.to_case(Case::Camel)
+                };
 
                 prop_fields.insert("title".into(), Value::String(field_ident.clone()));
-                let schema_ref = structs.iter().find(|s| inner_type.1 == s.title());
-                prop_fields.append(&mut Self::param_to_json_type(field, schema_ref));
+                prop_fields.append(&mut Self::param_to_json_type(field, structs));
 
                 Some((field_ident, Value::Object(prop_fields)))
             })
             .collect();
 
+        // Add discriminator and variant fields for flattened tagged enums
+        for field in &self.0.fields {
+            if !Self::has_serde_flatten(field) {
+                continue;
+            }
+
+            if let Type::Path(path) = &field.ty {
+                let inner_type = Self::unwrap_type(path.path.clone(), true);
+                let type_name = inner_type.1.to_string();
+
+                if let Some(enum_def) = enums.iter().find(|e| e.title() == type_name) {
+                    // Add discriminator field (if enum is tagged)
+                    if let Some(tag_name) = enum_def.discriminator_key() {
+                        let mut type_field = Map::new();
+                        type_field.insert("title".into(), Value::String(tag_name.clone()));
+                        type_field.insert("type".into(), Value::String("string".into()));
+                        type_field
+                            .insert("enum".into(), json!(enum_def.get_discriminator_values()));
+                        props.insert(tag_name, Value::Object(type_field));
+                    }
+
+                    // Add all variant fields (union of all variants)
+                    for (field_name, field_types) in enum_def.get_all_variant_fields() {
+                        let mut field_schema = Map::new();
+                        field_schema.insert("title".into(), Value::String(field_name.clone()));
+
+                        let mut seen = HashSet::new();
+                        let mut schemas = Vec::new();
+                        for field_type in field_types {
+                            let schema_map = Self::type_to_schema(&field_type, structs);
+                            let serialized = serde_json::to_string(&schema_map).unwrap();
+                            if seen.insert(serialized) {
+                                schemas.push(schema_map);
+                            }
+                        }
+
+                        if schemas.len() == 1 {
+                            field_schema.extend(schemas.into_iter().next().unwrap());
+                        } else if !schemas.is_empty() {
+                            let any_of = schemas.into_iter().map(Value::Object).collect();
+                            field_schema.insert("anyOf".into(), Value::Array(any_of));
+                        }
+
+                        props.insert(field_name, Value::Object(field_schema));
+                    }
+                }
+            }
+        }
+
         Value::Object(props)
     }
 
+    /// Check if a field has #[serde(flatten)] attribute
+    fn has_serde_flatten(field: &Field) -> bool {
+        field.attrs.iter().any(|attr| {
+            attr.path().is_ident("serde")
+                && attr.meta.to_token_stream().to_string().contains("flatten")
+        })
+    }
+
     /// Converts a Rust struct property to JSON type.
-    fn param_to_json_type(
-        param: &Field,
-        schema_ref: Option<&ParsedItemStruct>,
-    ) -> Map<String, Value> {
+    fn param_to_json_type(param: &Field, structs: &[ParsedItemStruct]) -> Map<String, Value> {
+        Self::type_to_schema(&param.ty, structs)
+    }
+
+    fn type_to_schema(ty: &Type, structs: &[ParsedItemStruct]) -> Map<String, Value> {
         let mut map = Map::new();
-        match &param.ty {
+        match ty {
             Type::Path(type_path) => {
                 let mut path = type_path.path.clone();
                 let mut ident = path
                     .segments
                     .first()
-                    .expect("Function paramater should have a segment")
+                    .expect("Function parameter should have a segment")
                     .ident
                     .clone();
 
@@ -83,19 +154,24 @@ impl ParsedItemStruct {
                     (path, ident) = Self::unwrap_type(type_path.path.clone(), false);
                 }
 
-                if ident == "Vec" {
+                let inner_for_ref = Self::unwrap_type(path.clone(), true);
+                let schema_ref = structs.iter().find(|s| inner_for_ref.1 == s.title());
+
+                if ident == "Vec" || ident == "BitSet" {
                     let mut items_map = Map::new();
                     if let Some(reference) = schema_ref {
                         items_map.insert(
                             "$ref".into(),
                             Value::String(format!("#/components/schemas/{}", reference.title())),
                         );
+                    } else if ident == "BitSet" {
+                        items_map.insert("type".into(), Value::String("number".into()));
                     } else {
                         items_map.insert("type".into(), Self::map_type(&path));
                     }
 
-                    map.insert("type".to_string(), Value::String("array".into()));
-                    map.insert("items".to_string(), Value::Object(items_map));
+                    map.insert("type".into(), Value::String("array".into()));
+                    map.insert("items".into(), Value::Object(items_map));
                 } else if let Some(reference) = schema_ref {
                     map.insert(
                         "$ref".into(),
@@ -127,21 +203,28 @@ impl ParsedItemStruct {
             | "VrfSeed" => Value::String("string".into()),
             "u8" | "u16" | "u32" | "u64" | "usize" | "Coin" => Value::String("number".into()),
             "bool" => Value::String("boolean".into()),
+            "BitSet" => Value::String("array".into()),
             "AccountAdditionalFields"
-            | "BitSet"
             | "BTreeSet"
             | "S"
             | "T"
             | "BlockAdditionalFields"
-            | "MultiSignature" => Value::String("object".into()),
+            | "EquivocationProof"
+            | "Inherent"
+            | "BlockLog"
+            | "AnyHash"
+            | "MultiSignature"
+            | "TendermintProof"
+            | "MicroJustification" => Value::String("object".into()),
             _ => panic!("{}", inner_ident),
         }
     }
 
     /// Creates a list of Rust struct properties that are mandatory.
     /// This is determined by checking if the type is wrapped in an `Option<T>`.
-    pub fn required_fields(&self) -> Vec<Value> {
-        self.0
+    pub fn required_fields(&self, enums: &[ParsedItemEnum]) -> Vec<Value> {
+        let mut required: Vec<Value> = self
+            .0
             .fields
             .iter()
             .filter_map(|field| {
@@ -149,15 +232,46 @@ impl ParsedItemStruct {
                     return None;
                 }
 
-                Some(Value::String(
-                    field
-                        .ident
-                        .to_token_stream()
-                        .to_string()
-                        .to_case(Case::Camel),
-                ))
+                // Skip flattened enum fields - discriminator will be added below
+                if Self::has_serde_flatten(field)
+                    && let Type::Path(path) = &field.ty
+                {
+                    let inner_type = Self::unwrap_type(path.path.clone(), true);
+                    let type_name = inner_type.1.to_string();
+                    if enums.iter().any(|e| e.title() == type_name) {
+                        return None;
+                    }
+                }
+
+                let field_name = field.ident.to_token_stream().to_string();
+                Some(Value::String(if field_name.starts_with('_') {
+                    field_name
+                } else {
+                    field_name.to_case(Case::Camel)
+                }))
             })
-            .collect()
+            .collect();
+
+        // Add discriminator(s) for flattened tagged enums
+        let mut added = HashSet::new();
+        for field in &self.0.fields {
+            if !Self::has_serde_flatten(field) {
+                continue;
+            }
+
+            if let Type::Path(path) = &field.ty {
+                let inner_type = Self::unwrap_type(path.path.clone(), true);
+                let type_name = inner_type.1.to_string();
+                if let Some(enum_def) = enums.iter().find(|e| e.title() == type_name)
+                    && let Some(tag_name) = enum_def.discriminator_key()
+                    && added.insert(tag_name.clone())
+                {
+                    required.push(Value::String(tag_name));
+                }
+            }
+        }
+
+        required
     }
 
     /// Check if we are dealing with a wrapped type here, e.g. `Vec<u8>`, `Option<String>` and flatten those to its child type.
@@ -267,10 +381,7 @@ impl ParsedTraitItemFn {
 
     /// Determines whether a Rust trait method parameter is required.
     fn param_required(_ty: &Type) -> bool {
-        // At the moment, all params are required even if the type is wrapped in an Option.
-        // if ty.to_token_stream().to_string().contains("Option") {
-        //     return false;
-        // }
+        // All params required in JSON-RPC array, even Option<T> (can be null but must be present)
         true
     }
 
@@ -344,6 +455,17 @@ impl ParsedTraitItemFn {
     /// Generates the schema object for the return type of the Rust trait method.
     fn return_type_schema(ident: &PathSegment, schema_ref: Option<&ParsedItemStruct>) -> Schema {
         let (is_rust_type, json_type) = Self::to_json_type(&ident.ident);
+
+        // Special case for ValidityStartHeight which accepts both string and number
+        if ident.ident == "ValidityStartHeight" {
+            let schema_value = json!({
+                "oneOf": [
+                    { "type": "string" },
+                    { "type": "number" }
+                ]
+            });
+            return serde_json::from_value(schema_value).unwrap();
+        }
 
         if is_rust_type {
             if json_type == "array" {
@@ -442,8 +564,8 @@ impl ParsedTraitItemFn {
         match ident.to_string().as_str() {
             "Vec" | "Option" => {
                 if let PathArguments::AngleBracketed(outer_type) = &path_segment.arguments
-                    && let GenericArgument::Type(Type::Path(inner_type)) =
-                        outer_type.args.first().unwrap()
+                    && let Some(GenericArgument::Type(Type::Path(inner_type))) =
+                        outer_type.args.first()
                 {
                     let segment = inner_type.path.segments.first().unwrap();
                     return (segment.to_owned(), segment.ident.clone());
@@ -470,12 +592,146 @@ impl From<TraitItemFn> for ParsedTraitItemFn {
     }
 }
 
+impl From<ItemEnum> for ParsedItemEnum {
+    fn from(val: ItemEnum) -> Self {
+        ParsedItemEnum(val)
+    }
+}
+
+impl ParsedItemEnum {
+    /// Retrieves the name of a Rust enum.
+    pub fn title(&self) -> String {
+        self.0.ident.to_string()
+    }
+
+    /// Get discriminator enum values from variants, applying serde rename rules
+    fn discriminator_key(&self) -> Option<String> {
+        Self::get_serde_tag(&self.0.attrs)
+    }
+
+    fn get_discriminator_values(&self) -> Vec<String> {
+        let enum_rename_all = Self::get_serde_rename_all(&self.0.attrs);
+        self.0
+            .variants
+            .iter()
+            .map(|variant| {
+                if let Some(rename) = Self::get_serde_rename(&variant.attrs) {
+                    rename
+                } else {
+                    let variant_rename_all = Self::get_serde_rename_all(&variant.attrs);
+                    Self::apply_rename(
+                        &variant.ident.to_string(),
+                        variant_rename_all.as_deref().or(enum_rename_all.as_deref()),
+                    )
+                }
+            })
+            .collect()
+    }
+
+    /// Get all fields from all variants including duplicates. Returned map keeps deterministic order.
+    fn get_all_variant_fields(&self) -> BTreeMap<String, Vec<Type>> {
+        let mut fields: BTreeMap<String, Vec<Type>> = BTreeMap::new();
+        let enum_rename_all = Self::get_serde_rename_all(&self.0.attrs);
+
+        for variant in &self.0.variants {
+            let variant_rename_all = Self::get_serde_rename_all(&variant.attrs);
+            if let Fields::Named(variant_fields) = &variant.fields {
+                for field in &variant_fields.named {
+                    let field_name = Self::resolve_field_name(
+                        field,
+                        enum_rename_all.as_deref(),
+                        variant_rename_all.as_deref(),
+                    );
+                    fields.entry(field_name).or_default().push(field.ty.clone());
+                }
+            }
+        }
+
+        fields
+    }
+
+    /// Extract rename_all strategy from serde attribute
+    fn get_serde_rename_all(attrs: &[Attribute]) -> Option<String> {
+        Self::extract_serde_value(attrs, "rename_all")
+    }
+
+    fn get_serde_rename(attrs: &[Attribute]) -> Option<String> {
+        Self::extract_serde_value(attrs, "rename")
+    }
+
+    fn get_serde_tag(attrs: &[Attribute]) -> Option<String> {
+        Self::extract_serde_value(attrs, "tag")
+    }
+
+    fn extract_serde_value(attrs: &[Attribute], key: &str) -> Option<String> {
+        for attr in attrs {
+            if attr.path().is_ident("serde") {
+                let tokens = attr.meta.to_token_stream().to_string();
+                let needle = format!("{key} = \"");
+                if let Some(start) = tokens.find(&needle) {
+                    let start = start + needle.len();
+                    if let Some(end) = tokens[start..].find('"') {
+                        return Some(tokens[start..start + end].to_string());
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn resolve_field_name(
+        field: &Field,
+        enum_rename_all: Option<&str>,
+        variant_rename_all: Option<&str>,
+    ) -> String {
+        if let Some(rename) = Self::get_serde_rename(&field.attrs) {
+            return rename;
+        }
+
+        let field_rename_all = Self::get_serde_rename_all(&field.attrs);
+        let rename_rule = field_rename_all
+            .as_deref()
+            .or(variant_rename_all)
+            .or(enum_rename_all);
+
+        let ident = field
+            .ident
+            .as_ref()
+            .expect("Named fields must have an ident")
+            .to_string();
+        Self::apply_rename(&ident, rename_rule)
+    }
+
+    /// Apply serde rename rule to a field/variant name
+    fn apply_rename(name: &str, rename_all: Option<&str>) -> String {
+        match rename_all {
+            Some("camelCase") => name.to_case(Case::Camel),
+            Some("kebab-case") => name.to_case(Case::Kebab),
+            Some("snake_case") => name.to_case(Case::Snake),
+            Some("SCREAMING_SNAKE_CASE") => name.to_case(Case::UpperSnake),
+            Some("PascalCase") => name.to_case(Case::Pascal),
+            _ => name.to_string(),
+        }
+    }
+}
+
 /// Filter a syntrax tree and only extract the Rust struct definitions.
 pub fn extract_structs_from_ast(file: &File) -> Vec<ParsedItemStruct> {
     file.items
         .iter()
         .filter_map(|item| match item {
             syn::Item::Struct(item_struct) => Some(item_struct.clone().into()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Filter a syntax tree and only extract the Rust enum definitions.
+pub fn extract_enums_from_ast(file: &File) -> Vec<ParsedItemEnum> {
+    file.items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Enum(item_enum) => Some(item_enum.clone().into()),
             _ => None,
         })
         .collect()

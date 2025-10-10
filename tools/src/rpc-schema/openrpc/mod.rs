@@ -6,7 +6,7 @@ use self::document::{
     Components, ContactObject, InfoObject, LicenseObject, MethodObject, Openrpc, OpenrpcDocument,
     TagObject, TagOrReference,
 };
-use crate::parser::{ParsedItemStruct, ParsedTraitItemFn};
+use crate::parser::{ParsedItemEnum, ParsedItemStruct, ParsedTraitItemFn};
 
 #[allow(unused)]
 pub mod document;
@@ -16,6 +16,7 @@ pub mod document;
 pub struct OpenRpcBuilder {
     open_rpc_doc: OpenrpcDocument,
     structs: Vec<ParsedItemStruct>,
+    enums: Vec<ParsedItemEnum>,
     methods: Vec<(ParsedTraitItemFn, String)>,
 }
 
@@ -23,6 +24,12 @@ impl OpenRpcBuilder {
     /// Adds a schema based on a Rust struct to the OpenRPC document.
     pub fn with_schema(mut self, item_struct: &ParsedItemStruct) -> OpenRpcBuilder {
         self.structs.push(item_struct.clone());
+        self
+    }
+
+    /// Adds an enum to the OpenRPC document.
+    pub fn with_enum(mut self, item_enum: &ParsedItemEnum) -> OpenRpcBuilder {
+        self.enums.push(item_enum.clone());
         self
     }
 
@@ -64,7 +71,7 @@ impl OpenRpcBuilder {
                 tags: None,
             }),
             ..Default::default()
-        }, structs: vec![], methods: vec![]}
+        }, structs: vec![], enums: vec![], methods: vec![]}
     }
 
     /// Builds the final OpenRPC document and returns constructed OpenrpcDocument.
@@ -90,8 +97,14 @@ impl OpenRpcBuilder {
             let mut schema = Map::new();
             schema.insert("title".into(), Value::String(s.title()));
             schema.insert("description".into(), Value::String(s.description()));
-            schema.insert("required".into(), Value::Array(s.required_fields()));
-            schema.insert("properties".into(), s.properties(&self.structs));
+            schema.insert(
+                "required".into(),
+                Value::Array(s.required_fields(&self.enums)),
+            );
+            schema.insert(
+                "properties".into(),
+                s.properties(&self.structs, &self.enums),
+            );
             schemas.insert(s.title(), Some(Value::Object(schema)));
         });
 

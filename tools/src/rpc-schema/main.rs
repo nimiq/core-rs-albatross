@@ -68,9 +68,13 @@ fn main() -> Result<(), Error> {
                     match parse_file(&contents) {
                         Ok(ast) => {
                             let structs = parser::extract_structs_from_ast(&ast);
+                            let enums = parser::extract_enums_from_ast(&ast);
                             let fns = parser::extract_fns_from_ast(&ast);
                             for index in 0..structs.len() {
                                 builder = builder.with_schema(structs.get(index).unwrap());
+                            }
+                            for index in 0..enums.len() {
+                                builder = builder.with_enum(enums.get(index).unwrap());
                             }
                             for index in 0..fns.len() {
                                 builder = builder.with_method(
