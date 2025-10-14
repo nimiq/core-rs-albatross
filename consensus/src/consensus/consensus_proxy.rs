@@ -50,7 +50,7 @@ pub struct ConsensusSyncStatus {
     pub is_established: bool,
     pub synced_validity_window: bool,
     pub current_block: u32,
-    pub remaning_blocks: u32,
+    pub remaining_blocks: u32,
     pub state_sync_progress: u32,
 }
 
@@ -102,18 +102,18 @@ impl<N: Network> ConsensusProxy<N> {
             .sync_progress
             .current_block_number
             .load(Ordering::Acquire);
-        let mut remaning_blocks = self
+        let mut remaining_blocks = self
             .sync_progress
-            .remaning_blocks_to_sync
+            .remaining_blocks_to_sync
             .load(Ordering::Acquire);
         let mut state_sync_progress = self
             .sync_progress
             .live_sync_progress
             .load(Ordering::Acquire);
 
-        // If consensus is established, we set the remaning blocks to 0 and the state sync progress to 100
+        // If consensus is established, we set the remaining blocks to 0 and the state sync progress to 100
         if is_established {
-            remaning_blocks = 0;
+            remaining_blocks = 0;
             state_sync_progress = 100;
         }
 
@@ -121,7 +121,7 @@ impl<N: Network> ConsensusProxy<N> {
             is_established,
             synced_validity_window,
             current_block,
-            remaning_blocks,
+            remaining_blocks,
             state_sync_progress,
         }
     }

@@ -577,7 +577,7 @@ impl<N: Network> Stream for StateQueue<N> {
                         let percentage = (key as f32 / u32::MAX as f32) * 100.0;
 
                         self.sync_progress
-                            .store(percentage as u32, Ordering::Relaxed);
+                            .store(percentage as u32, Ordering::Release);
 
                         log::info!(
                             ?start_key,

@@ -136,7 +136,7 @@ pub enum ConsensusRequest<N: Network> {
 /// This struct is used to track the sync progress to reach consensus.
 pub struct SyncProgress {
     pub current_block_number: AtomicU32,
-    pub remaning_blocks_to_sync: AtomicU32,
+    pub remaining_blocks_to_sync: AtomicU32,
     pub live_sync_progress: Arc<AtomicU32>,
 }
 
@@ -234,7 +234,7 @@ impl<N: Network> Consensus<N> {
 
         let sync_progress = Arc::new(SyncProgress {
             current_block_number: AtomicU32::new(0),
-            remaning_blocks_to_sync: AtomicU32::new(0),
+            remaining_blocks_to_sync: AtomicU32::new(0),
             live_sync_progress: syncer_tracker,
         });
 
@@ -578,10 +578,10 @@ impl<N: Network> Future for Consensus<N> {
 
                         self.sync_progress
                             .current_block_number
-                            .store(block_number, Ordering::Relaxed);
+                            .store(block_number, Ordering::Release);
                         self.sync_progress
-                            .remaning_blocks_to_sync
-                            .store(remaining_in_buffer as u32, Ordering::Relaxed);
+                            .remaining_blocks_to_sync
+                            .store(remaining_in_buffer as u32, Ordering::Release);
 
                         if remaining_in_buffer == 0 {
                             self.head_requests_time = None;
